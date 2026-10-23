@@ -1,63 +1,65 @@
 ---
 name: ux-flow-spec
-description: "Resumate 정보 구조(IA), 유저 플로우, 화면 명세(텍스트 와이어프레임) 작성·수정 가이드. 온보딩, 경력·프로젝트 입력, JD 등록·인사이트, 커리어 채팅, AI 모의 면접 화면의 흐름과 상태(빈 상태, AI 로딩, 에러)를 정의. 유저 플로우, 화면 설계, IA, 사이트맵, 화면 목록, UX 흐름 수정 요청 시 사용. 시각 디자인(Figma, 색상, 컴포넌트 스타일) 작업에는 쓰지 않는다."
+description: "Guide for writing and revising Resumate information architecture (IA), user flows, and screen specs (text wireframes). Defines flows and states (empty, AI loading, error) for onboarding, experience/project entry, JD registration and insights, career chat, and AI mock interview screens. Use for user flows, screen design, IA, sitemaps, screen lists, and UX flow revisions. Korean triggers: 유저 플로우, 화면 설계, 화면 명세, IA, 사이트맵, 화면 목록, UX 흐름 수정. Not for visual design (Figma, colors, component styling)."
 ---
 
-# UX 플로우 & 화면 명세
+# UX Flows & Screen Specs
 
-목표는 구현자가 이 문서만 보고 "어떤 화면이 있고, 각 화면이 무슨 데이터를 보여주며, 어디로 이어지는지" 알 수 있게 하는 것이다. 시각 디자인은 범위 밖이다.
+The goal: an implementer can read only this document and know which screens exist, what data each one shows, and where each one leads. Visual design is out of scope.
 
-## 작성 순서
+## Order of work
 
-1. PRD의 MVP 관통 경로를 먼저 플로우로 그린다. 이것이 뼈대다.
-2. IA(화면 계층과 내비게이션)를 정한다.
-3. 각 화면 명세를 쓴다. 데이터 필드는 data-architect에게 이름을 확인한다.
-4. 나머지 Must/Should 기능의 플로우를 추가한다.
-5. 엣지 상태를 화면마다 채운다.
+1. Draw the PRD's MVP path as a flow first. That's the skeleton.
+2. Define the IA (screen hierarchy and navigation).
+3. Write each screen spec. Confirm data field names with data-architect.
+4. Add flows for the remaining Must/Should features.
+5. Fill in edge states for every screen.
 
-## 도메인 설계 포인트
+## Domain design points
 
-- **온보딩 = 최대 이탈 지점.** 빈 프로필로는 P2·P3가 동작하지 않는다. "최소 입력으로 첫 가치를 보는" 경로(예: 이력서 업로드 → 자동 채움 확인 → 바로 JD 분석)를 설계하고, 단계 수를 적는다.
-- **AI 대기 시간.** 인사이트 생성·면접 피드백은 수 초~수십 초 걸린다. 각 AI 화면에 응답 방식을 명시한다: 스트리밍(채팅, 피드백 텍스트) / 진행 표시 후 완료(구조화 분석) / 백그라운드 + 알림(이력서 파싱 등 긴 작업).
-- **근거 표시.** 인사이트·피드백 화면에는 "이 판단의 근거가 된 내 경력 항목 / JD 문장"을 보여줄 자리를 둔다. 신뢰의 핵심이다.
-- **AI 결과 편집.** AI가 구조화한 경력은 사용자가 확인·수정할 수 있어야 한다. 자동 저장 vs 확인 후 저장을 명시한다.
-- **모의 면접 세션.** 진행 중 이탈 시 이어하기 가능 여부, 세션 종료 후 리포트 화면을 정의한다.
+- **Onboarding = the biggest drop-off point.** P2 and P3 don't work on an empty profile. Design a path where the user sees first value with minimal input (e.g. upload resume → confirm auto-filled data → straight to JD analysis), and state the number of steps.
+- **AI wait time.** Generating insights and interview feedback takes seconds to tens of seconds. State the response mode on every AI screen: streaming (chat, feedback text) / progress then complete (structured analysis) / background + notification (long jobs like resume parsing).
+- **Showing evidence.** Insight and feedback screens need a place to show "the experience items / JD sentences this judgment is based on". It's the core of trust.
+- **Editing AI output.** Users must be able to review and edit experience data that the AI structured. State whether it auto-saves or saves after confirmation.
+- **Mock interview sessions.** Define whether a session can be resumed after leaving mid-way, and the post-session report screen.
 
-## 문서 템플릿
+## Document template
+
+Write the document in Korean; translate the headings below.
 
 ```markdown
-# Resumate 유저 플로우 & 화면 명세 v{N}
+# Resumate User Flows & Screen Specs v{N}
 
 ## 1. IA
-(Mermaid graph 또는 들여쓰기 트리. 화면 ID 표기)
+(Mermaid graph or indented tree, with screen IDs)
 
-## 2. 핵심 플로우
-### FL-01 온보딩 → 첫 인사이트 (MVP 관통 경로)
+## 2. Core flows
+### FL-01 Onboarding → first insight (MVP path)
 ```mermaid
 flowchart TD
-  A[S-01 랜딩] --> B[S-02 가입]
+  A[S-01 Landing] --> B[S-02 Sign up]
   ...
 ```
-- 단계 수: N / 관련 기능: F-P1-01, F-P2-01
+- Steps: N / Related features: F-P1-01, F-P2-01
 
-## 3. 화면 명세
-### S-{번호} {화면명}
-- 목적:
-- 관련 기능: F-P1-01
-- 진입 경로: / 이탈 경로:
-| 구성 요소 | 표시/입력 데이터 (entity.field) | 액션 | 비고 |
-- AI 응답 방식: 스트리밍 / 진행 후 완료 / 백그라운드 / 해당 없음
-- 상태: 빈 상태 / 로딩 / 에러 / 정상
+## 3. Screen specs
+### S-{number} {screen name}
+- Purpose:
+- Related features: F-P1-01
+- Entry points: / Exit points:
+| Component | Displayed/input data (entity.field) | Action | Notes |
+- AI response mode: streaming / progress then complete / background / n/a
+- States: empty / loading / error / normal
 
-## 4. 기능 ↔ 화면 매트릭스
-| 기능 ID | 화면 ID |
-## 5. 결정 필요 목록
-## 6. 변경 기록
+## 4. Feature ↔ screen matrix
+| Feature ID | Screen IDs |
+## 5. Decisions needed
+## 6. Change log
 ```
 
-## 품질 기준
+## Quality bar
 
-- PRD의 모든 Must 기능은 매트릭스에서 최소 한 화면에 매핑된다. 매핑이 없으면 기능이 빠진 것이다.
-- 데이터 필드는 `entity.field` 형식으로 쓰고, entity는 데이터 모델의 테이블명(복수형 snake_case)을 그대로 쓴다(예: `experiences.company_name`). 자유 서술("회사 정보")은 리뷰에서 매칭할 수 없다.
-- 화면 ID(`S-{번호}`)·플로우 ID(`FL-{번호}`)는 바꾸지 않는다.
-- 모든 AI 화면에 로딩·에러 상태가 정의되어 있다. AI 호출은 실패할 수 있다.
+- Every Must feature in the PRD maps to at least one screen in the matrix. A missing mapping means a missing feature.
+- Write data fields as `entity.field`, where entity is the data model's table name as-is (plural snake_case, e.g. `experiences.company_name`). Free-form descriptions ("company info") can't be matched during review.
+- Screen IDs (`S-{number}`) and flow IDs (`FL-{number}`) never change.
+- Every AI screen defines loading and error states. AI calls can fail.

@@ -1,51 +1,57 @@
-# Resumate 제품 컨텍스트 (기획팀 공통 참조)
+# Resumate Product Context (shared reference for the planning team)
 
-모든 기획 에이전트는 작업 시작 시 이 파일을 먼저 읽는다. 여기 적힌 것은 **확정 사항**이고, 그 외는 전부 기획 과정에서 결정한다.
+Every planning agent reads this file before starting work. What is written here is **settled**; everything else is decided during planning.
 
-## 서비스 한 줄 정의
+## One-line definition
 
-사용자의 경력·프로젝트 데이터를 축적하고, 이를 채용공고(JD)와 연결해 지원 전략을 제시하며, AI 모의 면접으로 실전 준비까지 돕는 AI 커리어 관리 서비스.
+An AI career management service that accumulates a user's experience and project data, connects it to job descriptions (JDs) to suggest an application strategy, and prepares the user for real interviews through AI mock interviews.
 
-## 3대 축 (확정)
+## Three pillars (settled)
 
-| 축 | 내용 | 핵심 질문 |
-|----|------|----------|
-| P1. 커리어 데이터 관리 | 경력, 프로젝트, 성과, 스킬 등 사용자 정보의 입력·구조화·관리 | 입력 마찰을 얼마나 줄일 수 있나? AI가 어떻게 구조화를 돕나? |
-| P2. JD 기반 인사이트 & 채팅 | P1 데이터 + JD를 바탕으로 적합도·강점·갭·지원 방향 제시, 채팅으로 문답 | 인사이트의 근거를 어떻게 사용자 데이터에 묶어두나? |
-| P3. AI 모의 면접 | JD·경력 기반 질문, 답변 평가, 피드백 제공 | 어떤 형식(텍스트/음성)과 평가 기준이 실전에 가깝나? |
+| Pillar | Scope | Key question |
+|--------|-------|--------------|
+| P1. Career data management | Entering, structuring, and managing experiences, projects, achievements, skills | How far can we reduce input friction? How does AI help structure the data? |
+| P2. JD-based insights & chat | Fit, strengths, gaps, and application direction from P1 data + a JD; Q&A via chat | How do we keep every insight anchored to the user's own data? |
+| P3. AI mock interview | Questions based on JD and experience, answer evaluation, feedback | Which format (text/voice) and evaluation criteria feel closest to a real interview? |
 
-P1은 P2·P3의 입력이다. P1 데이터 품질이 서비스 전체 품질을 결정한다는 점을 모든 설계에서 의식한다.
+P1 is the input to P2 and P3. P1 data quality determines the quality of the whole service; keep this in mind in every design decision.
 
-## 기술 스택 (확정)
+## Tech stack (settled)
 
-| 영역 | 선택 | 기획 시 의미 |
-|------|------|-------------|
-| 프론트/서버 | Next.js (App Router) on Vercel | Route Handler/Server Action으로 API 구성, 서버리스 실행 시간 제약 고려(긴 AI 작업은 스트리밍 또는 비동기) |
-| DB/Auth/Storage | Supabase (Postgres, Auth, Storage, RLS) | 모든 사용자 데이터 테이블은 RLS로 소유자 격리. 파일(이력서 PDF 등)은 Storage. 필요 시 pgvector 사용 가능 |
-| LLM | Anthropic API (Claude) | 기본 `claude-sonnet-5-5`, 경량 작업 `claude-haiku-5-5`, 고난도 분석 `claude-opus-5-5`. 구조화 출력은 tool use / JSON 스키마로 |
+| Area | Choice | Planning implications |
+|------|--------|----------------------|
+| Frontend/server | Next.js (App Router) on Vercel | APIs via Route Handlers / Server Actions. Serverless execution time limits apply — long AI jobs need streaming or async processing |
+| DB/Auth/Storage | Supabase (Postgres, Auth, Storage, RLS) | Every user-data table isolates owners with RLS. Files (resume PDFs, etc.) go to Storage. pgvector available if needed |
+| LLM | Anthropic API (Claude) | Default `claude-sonnet-5-5`, lightweight tasks `claude-haiku-5-5`, heavy analysis `claude-opus-5-5`. Structured output via tool use / JSON schema |
 
-## 제약과 원칙
+## Constraints and principles
 
-- **기획 단계 전용**: 이 팀은 문서만 만든다. 코드 작성, DB 마이그레이션 적용, 배포는 하지 않는다.
-- **민감 정보**: 경력·이력서는 개인정보다. 개인정보보호법(한국) 관점의 수집 동의, 보관, 삭제 요구를 요구사항에 반영한다.
-- **근거 기반 AI**: AI가 사용자에게 없는 경력을 지어내지 않도록, 모든 AI 출력은 사용자 데이터 또는 JD의 어느 부분에 근거하는지 추적 가능해야 한다.
-- **주 사용자 언어**: 한국어. 한국 채용 시장 관행(자기소개서, 경력기술서, 직무 인터뷰/인성 면접)을 기본 맥락으로 본다.
+- **Planning only**: this team produces documents. No code, no applied DB migrations, no deployments.
+- **Sensitive data**: careers and resumes are personal information. Reflect consent, retention, and deletion requirements from the Korean Personal Information Protection Act (PIPA) in the requirements.
+- **Evidence-based AI**: AI must never invent experience the user does not have. Every AI output must be traceable to a specific part of the user's data or the JD.
+- **Primary user language**: Korean. Korean hiring conventions (자기소개서, 경력기술서, 직무/인성 interviews) are the default context.
 
-## 태깅 규칙 (모든 산출물 공통)
+## Output language
 
-- `[가정]` — 근거 없이 임시로 정한 것. 사용자 확인 전까지 확정 아님
-- `[결정 필요]` — 사용자가 결정해야 하는 항목. 선택지와 추천안을 같이 적는다
-- `[보류]` — MVP 이후로 미룬 것
+All deliverables (`_workspace/` files and `docs/planning/`) are written in **Korean**, since the user and the product are Korean. Translate template headings into Korean. Keep IDs (`F-P1-01`, `S-03`, `AI-02`, `R-05`), table/column names, and JSON keys in English.
 
-## 공통 용어집 (시드)
+## Tagging rules (all deliverables)
 
-용어는 모든 문서에서 동일하게 쓴다. 새 용어가 생기면 product-planner가 PRD 용어집에 추가하고, 다른 팀원은 그것을 따른다.
+Tags stay in Korean so they read naturally inside Korean documents:
 
-| 용어 | 정의 |
-|------|------|
-| 경력 (Experience) | 회사·기간·직무 단위의 재직 이력 |
-| 프로젝트 (Project) | 경력에 속하거나 독립적인 작업 단위. 역할·기여·성과를 포함 |
-| 성과 (Achievement) | 정량/정성 결과. 프로젝트나 경력에 연결 |
-| JD (Job Description) | 사용자가 등록한 채용공고 |
-| 인사이트 (Insight) | JD × 사용자 데이터 분석 결과 (적합도, 강점, 갭, 지원 방향) |
-| 모의 면접 세션 (Interview Session) | 한 번의 모의 면접 진행 단위 (질문·답변·피드백 묶음) |
+- `[가정]` (assumption) — set provisionally without evidence; not final until the user confirms
+- `[결정 필요]` (decision needed) — the user must decide; always list options and a recommendation
+- `[보류]` (deferred) — pushed past the MVP
+
+## Shared glossary (seed)
+
+Use these terms consistently across all documents. When a new term appears, product-planner adds it to the PRD glossary and everyone else follows it.
+
+| Term (KO / EN) | Definition |
+|----------------|------------|
+| 경력 / Experience | A period of employment: company, dates, role |
+| 프로젝트 / Project | A unit of work, inside an experience or standalone, with role, contribution, outcomes |
+| 성과 / Achievement | A quantitative or qualitative result, linked to a project or experience |
+| JD / Job Description | A job posting the user registered |
+| 인사이트 / Insight | Result of analyzing a JD × user data (fit, strengths, gaps, application direction) |
+| 모의 면접 세션 / Interview Session | One mock interview run (a bundle of questions, answers, feedback) |

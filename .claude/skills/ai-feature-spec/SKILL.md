@@ -1,57 +1,59 @@
 ---
 name: ai-feature-spec
-description: "Resumate AI 기능 설계 명세 작성·수정 가이드. 경력 구조화(이력서 파싱), JD 분석·적합도 인사이트, 지원 방향 제시, 커리어 채팅, AI 모의 면접(질문 생성, 꼬리질문, 답변 평가·피드백)의 LLM 설계 — 입력 컨텍스트, 처리 단계, 모델 선택, 프롬프트 전략, 출력 JSON 스키마, 평가 기준, 비용·지연, 가드레일. AI 기능 설계, 프롬프트 설계 방향, LLM 아키텍처, RAG 필요성 판단, 면접 평가 루브릭, AI 명세 수정 요청 시 사용. 실제 프롬프트 코드 구현이나 API 연동 코드 작성에는 쓰지 않는다."
+description: "Guide for writing and revising Resumate AI feature specs. LLM design for career data structuring (resume parsing), JD analysis and fit insights, application direction, career chat, and AI mock interviews (question generation, follow-ups, answer evaluation and feedback) — input context, processing steps, model choice, prompt strategy, output JSON schema, evaluation criteria, cost/latency, guardrails. Use for AI feature design, prompt design direction, LLM architecture, deciding whether RAG is needed, interview evaluation rubrics, and AI spec revisions. Korean triggers: AI 기능 설계, 프롬프트 설계, LLM 구조, RAG 필요성, 면접 평가 루브릭, AI 명세 수정. Not for implementing prompt code or writing API integration code."
 ---
 
-# AI 기능 설계 명세
+# AI Feature Specs
 
-AI 기능마다 "설계 카드" 하나를 쓴다. 카드 하나만 보고 구현자가 프롬프트와 API 호출을 만들 수 있어야 한다.
+Write one "design card" per AI feature. An implementer should be able to build the prompt and API call from the card alone.
 
-## 작성 순서
+## Order of work
 
-1. PRD에서 AI가 관여하는 기능 ID를 모두 뽑는다.
-2. 기능마다 설계 카드를 쓴다. 판단이 필요한 설계 결정은 `references/design-guide.md`를 읽고 정한다.
-3. 카드의 "입력 컨텍스트"를 모아 data-architect에게 필드 목록을 보낸다.
-4. 카드의 "응답 방식"과 "출력 스키마"를 ux-planner에게 공유한다.
-5. 기능 간 공통 요소(사용자 컨텍스트 조립, 근거 표기 방식, 가드레일)를 공통 섹션으로 뺀다.
+1. Pull every feature ID from the PRD that involves AI.
+2. Write a design card per feature. For design decisions that need judgment, read `references/design-guide.md`.
+3. Collect the cards' "input context" and send the field list to data-architect.
+4. Share each card's "response mode" and "output schema" with ux-planner.
+5. Pull elements shared across features (assembling user context, evidence format, guardrails) into a common section.
 
-## 설계 카드 템플릿
+## Design card template
+
+Write cards in Korean; translate the field labels below. Keep JSON keys in English.
 
 ```markdown
-### AI-{번호} {기능명}
-- 관련 기능: F-P2-01 / 관련 화면: S-07
-- 목적: 사용자가 얻는 것 한 문장
-- 트리거: 언제 호출되는가 (사용자 액션 / 데이터 변경 / 배치)
-- 입력 컨텍스트:
-  | 소스 | entity.field | 필수 | 크기 추정(토큰) |
-- 처리 방식: 단일 호출 / 체인(단계 나열) / 도구 사용 에이전트
-- 모델: claude-sonnet-5-5 등 + 선택 이유
-- 응답 방식: 스트리밍 / 동기 / 비동기
-- 프롬프트 전략: 역할, 핵심 지시, 근거 인용 방식, few-shot 필요 여부 (프롬프트 전문은 쓰지 않는다)
-- 출력 스키마:
+### AI-{number} {feature name}
+- Related features: F-P2-01 / Related screens: S-07
+- Purpose: what the user gets, in one sentence
+- Trigger: when it is called (user action / data change / batch)
+- Input context:
+  | Source | entity.field | Required | Size estimate (tokens) |
+- Processing: single call / chain (list steps) / tool-using agent
+- Model: claude-sonnet-5-5 etc. + reason
+- Response mode: streaming / sync / async
+- Prompt strategy: role, key instructions, how evidence is cited, whether few-shot is needed (do not write the full prompt)
+- Output schema:
   ```json
-  { "schema_version": 1, ... , "evidence": [{"source": "experience", "id": "...", "quote": "..."}] }
+  { "schema_version": 1, ... , "evidence": [{"source": "experiences", "id": "...", "quote": "..."}] }
   ```
-- 저장: 테이블/필드, 재생성 시 이력 보존 여부
-- 품질 기준: 좋은 출력의 조건 / 평가 방법
-- 실패 모드 & 가드레일:
-- 비용·지연 추정: 입력 N토큰 + 출력 M토큰 → 호출당 약 $X, 약 Y초
-- 결정 필요:
+- Storage: table/field, whether history is kept on regeneration
+- Quality bar: what a good output looks like / how it is evaluated
+- Failure modes & guardrails:
+- Cost/latency estimate: N input tokens + M output tokens → about $X per call, about Y seconds
+- Decisions needed:
 ```
 
-## 기능별 핵심 고려사항
+## Key considerations per feature
 
-| 기능 | 놓치기 쉬운 점 |
-|------|--------------|
-| 경력 구조화 | 원문에 없는 수치·기간을 채우지 않게. 불확실한 필드는 비워 두고 사용자 확인 요청 |
-| JD 분석 | JD 자체를 먼저 구조화(필수/우대 요건, 직무, 연차)해서 저장하면 인사이트·면접에서 재사용 가능 |
-| 인사이트·지원 방향 | 적합도 점수는 근거 없이 숫자만 주면 신뢰를 잃는다. 요건별 매칭 근거를 같이 출력 |
-| 커리어 채팅 | 어떤 컨텍스트(전체 프로필, 특정 JD, 이전 인사이트)를 대화에 주입하는지, 대화 길이 관리 방법 |
-| 모의 면접 | 질문 생성 근거(JD 요건/내 프로젝트), 꼬리질문 조건, 답변 평가 루브릭, 세션 종료 리포트 구조 |
+| Feature | Easy to miss |
+|---------|-------------|
+| Career structuring | Don't fill in numbers or dates that aren't in the source. Leave uncertain fields empty and ask the user to confirm |
+| JD analysis | Structure the JD itself first (required/preferred qualifications, role, seniority) and store it, so insights and interviews can reuse it |
+| Insights & application direction | A fit score with no evidence loses trust. Output the matching evidence per requirement |
+| Career chat | Which context (full profile, a specific JD, previous insights) gets injected into the conversation, and how conversation length is managed |
+| Mock interview | Basis for each question (JD requirement / user's project), conditions for follow-ups, answer evaluation rubric, structure of the end-of-session report |
 
-## 품질 기준
+## Quality bar
 
-- 모든 카드에 출력 스키마가 있고, 스키마의 각 필드가 저장 위치 또는 화면 요소와 연결된다.
-- 사용자에게 보이는 판단(점수, 강점, 갭, 평가)은 `evidence` 필드를 가진다.
-- 입력 컨텍스트의 모든 `entity.field`가 데이터 모델에 존재한다(리뷰에서 확인됨). entity는 데이터 모델의 테이블명(복수형 snake_case, 예: `projects.role`)을 쓴다.
-- 비용 추정이 있고, 사용자당 월 비용이 PRD 비기능 요구사항의 상한과 비교되어 있다.
+- Every card has an output schema, and every field in it is linked to a storage location or a screen element.
+- Every judgment shown to the user (score, strength, gap, evaluation) has an `evidence` field.
+- Every `entity.field` in the input context exists in the data model (verified in review). Use the data model's table names (plural snake_case, e.g. `projects.role`).
+- There is a cost estimate, and the per-user monthly cost is compared against the ceiling in the PRD's non-functional requirements.

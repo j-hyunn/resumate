@@ -1,78 +1,80 @@
 ---
 name: prd-writing
-description: "Resumate PRD(제품 요구사항 문서) 작성·수정 가이드. 페르소나, 문제 정의, 3대 축(커리어 데이터/JD 인사이트·채팅/모의 면접) 기능 요구사항, MVP 범위, MoSCoW 우선순위, 성공 지표, 비기능 요구사항, 용어집을 다룬다. PRD 작성, 요구사항 정리, MVP 범위 결정, 기능 우선순위, 페르소나 정의, PRD 수정·보완 요청 시 사용. 화면 설계(ux-flow-spec)나 DB 설계(data-model-spec)는 해당 스킬을 쓸 것."
+description: "Guide for writing and revising the Resumate PRD (product requirements document): personas, problem definition, functional requirements for the three pillars (career data / JD insights & chat / mock interview), MVP scope, MoSCoW priorities, success metrics, non-functional requirements, glossary. Use for PRD writing, requirements gathering, MVP scoping, feature prioritization, persona definition, and PRD revisions. Korean triggers: PRD 작성, 요구사항 정리, MVP 범위, 기능 우선순위, 페르소나, PRD 수정·보완. For screen design use ux-flow-spec; for DB design use data-model-spec."
 ---
 
-# PRD 작성
+# PRD Writing
 
-PRD는 기획팀 모든 문서의 기준이다. 다른 팀원이 이 문서만 읽고 "무엇을, 누구를 위해, 어디까지" 만들지 판단할 수 있어야 한다.
+The PRD is the reference for every planning document. Other teammates must be able to read only this document and know what to build, for whom, and how far.
 
-## 작성 순서
+## Order of work
 
-1. `.claude/skills/resumate-planning/references/product-context.md`와 `_workspace/00_input/brief.md`를 읽는다.
-2. 페르소나와 문제부터 쓴다. 기능은 문제에서 나와야 한다 — 기능 목록부터 쓰면 "있으면 좋은 것"이 MVP로 들어온다.
-3. 3대 축별로 기능을 사용자 스토리로 쓴다.
-4. MoSCoW를 붙이고 MVP 선을 긋는다.
-5. 비기능 요구사항, 지표, 용어집, 결정 필요 목록을 채운다.
+1. Read `.claude/skills/resumate-planning/references/product-context.md` and `_workspace/00_input/brief.md`.
+2. Write personas and problems first. Features must come out of problems — if you start from a feature list, nice-to-haves slip into the MVP.
+3. Write features per pillar as user stories.
+4. Apply MoSCoW and draw the MVP line.
+5. Fill in non-functional requirements, metrics, glossary, and the decision-needed list.
 
-## MVP 판단 기준
+## MVP criterion
 
-MVP = **3대 축을 한 번씩 관통하는 가장 얇은 경로**. 예: 경력 1건 입력 → JD 1건 등록 → 인사이트 확인 → 그 JD로 모의 면접 1회.
-- 이 경로에 없는 기능은 Should 이하로 둔다.
-- 입력 마찰을 줄이는 기능(이력서 업로드 자동 채우기 등)은 경로 첫 단계의 이탈을 좌우하므로 Must 후보로 진지하게 검토한다.
+MVP = **the thinnest path that passes through each of the three pillars once**. Example: enter one experience → register one JD → view the insight → run one mock interview for that JD.
+- Features not on this path are Should or lower.
+- Features that reduce input friction (e.g. auto-fill from resume upload) decide drop-off at the first step of the path, so seriously consider them as Must candidates.
 
-## 도메인 체크포인트
+## Domain checkpoints
 
-빠뜨리기 쉬운 항목들이다. 각각 PRD에 결론이나 `[결정 필요]`가 있어야 한다.
-- 타깃: 신입 / 경력 이직 / 직무 전환 중 1차 타깃은?
-- 경력 입력 방식: 직접 입력, 이력서(PDF/DOCX) 업로드 파싱, LinkedIn 등 외부 연동
-- JD 입력 방식: 텍스트 붙여넣기, URL, 이미지(캡처)
-- 산출물: 인사이트만 보여주나, 자기소개서·경력기술서 초안까지 만드나
-- 모의 면접 형식: 텍스트 / 음성, 질문 수, 꼬리질문 여부, 면접 유형(직무/인성)
-- 개인정보: 수집 동의, 보관 기간, 탈퇴 시 삭제 범위, AI 학습 미사용 고지
-- 비용 구조: 무료 사용량 한도, 유료화 여부 `[결정 필요]`로 둬도 됨
+These are easy to miss. Each must end up in the PRD as a conclusion or a `[결정 필요]`.
+- Target: new grads / experienced job changers / career switchers — which is the primary target?
+- Career input: manual entry, resume (PDF/DOCX) upload parsing, external integrations such as LinkedIn
+- JD input: pasted text, URL, image (screenshot)
+- Outputs: insights only, or also drafts of 자기소개서 / 경력기술서?
+- Mock interview format: text / voice, number of questions, follow-up questions, interview type (직무/인성)
+- Privacy: collection consent, retention period, deletion scope on account deletion, notice that data is not used for AI training
+- Cost model: free usage limits, monetization — may be left as `[결정 필요]`
 
-## PRD 템플릿
+## PRD template
+
+Write the PRD in Korean; translate the headings below.
 
 ```markdown
 # Resumate PRD v{N}
 
-## 1. 개요
-- 한 줄 정의 / 해결하려는 문제 / 왜 지금, 왜 AI인가
+## 1. Overview
+- One-line definition / problem we solve / why now, why AI
 
-## 2. 타깃 사용자
-| 페르소나 | 상황 | 핵심 니즈 | 현재 대안과 불만 |
-1차 타깃: {페르소나} — 선택 이유
+## 2. Target users
+| Persona | Situation | Core need | Current alternative and its pain |
+Primary target: {persona} — reason for the choice
 
-## 3. 핵심 시나리오
-MVP 관통 경로를 단계별로 서술
+## 3. Core scenario
+Describe the MVP path step by step
 
-## 4. 기능 요구사항
-### P1. 커리어 데이터 관리
-| ID | 사용자 스토리 | 수용 기준 | 우선순위 | 비고 |
-| F-P1-01 | {사용자}는 {무엇}을 할 수 있다, {왜} | {검증 가능한 조건} | Must | |
-### P2. JD 인사이트 & 채팅
-### P3. AI 모의 면접
-### 공통 (계정, 설정, 개인정보)
+## 4. Functional requirements
+### P1. Career data management
+| ID | User story | Acceptance criteria | Priority | Notes |
+| F-P1-01 | {user} can {do what}, {why} | {verifiable condition} | Must | |
+### P2. JD insights & chat
+### P3. AI mock interview
+### Common (account, settings, privacy)
 
-## 5. MVP 범위
-- 포함 / 제외([보류]) / 경계 판단 근거
+## 5. MVP scope
+- In / out ([보류]) / reasoning for borderline items
 
-## 6. 비기능 요구사항
-- 개인정보·보안 / AI 응답 시간 목표 / 사용자당 AI 비용 상한 / 가용성
+## 6. Non-functional requirements
+- Privacy & security / AI response time targets / per-user AI cost ceiling / availability
 
-## 7. 성공 지표
-| 지표 | 정의 | 목표 | 축 |
-(예: 경력 입력 완료율, JD당 인사이트 확인율, 모의 면접 완주율, 재방문율)
+## 7. Success metrics
+| Metric | Definition | Target | Pillar |
+(e.g. career data completion rate, insight view rate per JD, mock interview completion rate, return rate)
 
-## 8. 용어집
-## 9. 결정 필요 목록
-| ID | 질문 | 선택지 | 추천안과 이유 |
-## 10. 변경 기록
+## 8. Glossary
+## 9. Decisions needed
+| ID | Question | Options | Recommendation and reason |
+## 10. Change log
 ```
 
-## 품질 기준
+## Quality bar
 
-- 기능 ID(`F-P{축}-{번호}`)는 한 번 정하면 바꾸지 않는다. UX·AI·데이터 문서가 이 ID를 참조한다.
-- 수용 기준은 검증 가능해야 한다. "쉽게 입력할 수 있다"(X) → "이력서 PDF 업로드 시 경력·프로젝트 항목이 자동 채워지고 사용자가 수정할 수 있다"(O).
-- `[가정]`이 붙은 항목이 PRD 핵심(1차 타깃, MVP 경로)에 있으면 결정 필요 목록 상단에 올린다.
+- Feature IDs (`F-P{pillar}-{number}`) never change once assigned. UX, AI, and data documents reference them.
+- Acceptance criteria must be verifiable. "Easy to enter" (no) → "Uploading a resume PDF auto-fills experience and project entries, and the user can edit them" (yes).
+- If a `[가정]` sits in the core of the PRD (primary target, MVP path), put it at the top of the decision-needed list.

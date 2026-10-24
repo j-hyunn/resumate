@@ -11,7 +11,7 @@ Bugs in this codebase hide at seams between layers that were written by differen
 
 1. Read the slice plan and teammates' `02_*` notes to get the file list.
 2. As each module lands, check the boundaries it touches (incremental). Don't wait for the whole slice.
-3. Run `bash .claude/skills/backend-integration-qa/scripts/run-checks.sh` from the repo root. It runs typecheck, lint, Vitest, and pgTAP, and prints `SKIP` (with the reason) for anything it can't run.
+3. Run `bash .claude/skills/backend-integration-qa/scripts/run-checks.sh` from the repo root. It runs typecheck, lint, Vitest, and pgTAP, and prints `SKIP` (with the reason) for anything it can't run. Add `--build` after a wiring step so the UI's `pnpm build` runs too.
 4. Log issues, send them to owners, re-check after fixes. At most 2 rounds.
 5. Write the report.
 
@@ -20,7 +20,7 @@ Bugs in this codebase hide at seams between layers that were written by differen
 | # | Boundary | Compare | Typical bug |
 |---|----------|---------|-------------|
 | Q1 | Data model doc ↔ migrations | every table/column/CHECK value/FK/index in the slice's DM sections vs the SQL | CHECK list missing a value the spec added in v3 (e.g. `writing_chat_turn`) |
-| Q2 | Migrations ↔ generated types ↔ queries | `types.ts` regenerated after the last migration (compare column lists); every `.from('x').select('a,b')` / `.rpc()` name exists | stale types hide a renamed column until runtime |
+| Q2 | Migrations ↔ generated types ↔ queries | `database.types.ts` regenerated after the last migration (compare column lists); every `.from('x').select('a,b')` / `.rpc()` name exists | stale types hide a renamed column until runtime |
 | Q3 | RPC signature ↔ callers | arg names (`p_...`), arg types, return jsonb keys vs the TS parsing them | caller reads `readyFlag`, RPC returns `ready` |
 | Q4 | RPC `raise` codes ↔ app error mapping | every `message = '...'` in SQL has a mapping; mapping has no dead codes | limit error surfaces as a generic 500 |
 | Q5 | Contracts ↔ handlers ↔ screen specs | zod request/response vs what the handler actually returns; fields the screen spec shows exist in the response | screen needs `stage_changed_at`, response omits it |
@@ -29,6 +29,8 @@ Bugs in this codebase hide at seams between layers that were written by differen
 | Q8 | Enums DB ↔ TS | each `<table>_<col>_check` list vs `src/lib/contracts/enums.ts` (job_type, feature, status, error_code, stage …) | TS union has a value the DB rejects |
 | Q9 | Usage ledger | for each path that reserves usage: success, model error, schema fail after retry, timeout, stalled, client abort → exactly one of `charged` / `released`; a test exists for each | timeout leaves `reserved` forever, user loses quota |
 | Q10 | Security & privacy | pgTAP: user B can't read/write user A's rows for every new table; `app_ai_writer` can't write career tables (DM-13); security definer RPCs set `search_path` and check ownership; no logging of prompts, responses, or career text (grep `console.` / logger calls in `src/server/ai`, `src/server/jobs`); no secrets in code; `.env.local` not tracked | `console.log(messages)` while debugging |
+
+| Q11 | UI ↔ backend (only when UI screens exist) | `src/types/db.ts` names and enum unions vs generated types and CHECK lists; each `src/lib/data/` function's declared return type vs what the wired service actually returns; `useAiJob` / `useAiStream` return shapes vs the job status response and SSE events; UI `pnpm build` passes after wiring | mock returned `stage_outcome: 'pass'`, DB stores `'offer'` |
 
 Also verify every validator rule V-1 … V-8 that the slice's features use has at least one test proving a bad output is caught.
 
@@ -51,7 +53,7 @@ Also verify every validator rule V-1 … V-8 that the slice's features use has a
 ## 경계면 검사
 | # | 경계 | 결과 | 이슈 |
 |---|------|------|------|
-| Q1 … Q10 | | 통과·이슈·해당 없음 | QA-xx |
+| Q1 … Q11 | | 통과·이슈·해당 없음 | QA-xx |
 
 ## 이슈
 ### QA-01 [Critical|Major|Minor] 제목

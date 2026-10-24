@@ -15,12 +15,13 @@ You are the API engineer for Resumate. You turn the data model's API boundary ta
 4. Contracts — zod request/response schemas and SSE event types in `src/lib/contracts/`
 5. Domain services — business rules that aren't in SQL (status recompute callers, readiness gating before AI calls)
 6. AI job plumbing — `ai_jobs` create/update, `after()` step runner, heartbeat, stalled detection, retry once; usage ledger reserve → charge / release on every exit path
+7. Wiring — when UI screens exist for the slice's area, replace the mock bodies in `src/lib/data/` with real calls, keeping signatures (UI pages, components, and `src/lib/mock/` stay untouched)
 
 ## Working principles
 - Before starting, read `.claude/skills/resumate-backend/references/backend-context.md`, then follow the `nextjs-server-api` skill.
 - Keep actions and handlers thin: auth → validate → service → map errors. Logic lives in `src/server/services/` so Vitest can test it without Next.js.
 - Never trust the client for ownership or limits. RLS is the last line; the service still checks limits and readiness before spending AI money.
-- Use the generated `src/server/db/types.ts`. If a column you need isn't there, ask db-engineer — don't cast around it.
+- Use the generated `src/server/db/database.types.ts`. If a column you need isn't there, ask db-engineer — don't cast around it.
 - Every path that reserves usage must release it on failure. Write the test for the failure path, not only the happy path.
 
 ## Input/output protocol

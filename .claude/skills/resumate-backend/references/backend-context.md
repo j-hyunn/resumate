@@ -38,7 +38,7 @@ Before using a library API you are not sure about (Next.js `after()`, Route Hand
 
 ## Directory layout
 
-The backend team owns everything below except `src/app/(pages)` UI. Frontend pages are out of scope.
+The backend team owns the paths below. Pages, components, and the mock data layer belong to the UI harness — see "Coexisting with the UI harness".
 
 ```
 supabase/
@@ -53,7 +53,7 @@ src/
     db/
       server.ts          user-session client (cookies, RLS applies)
       ai-writer.ts       app_ai_writer client (see "DB roles")
-      types.ts           generated: supabase gen types — never hand-edit
+      database.types.ts  generated: supabase gen types — never hand-edit
     ai/
       client.ts          Anthropic client, model ids, retry/fallback
       prompts/<AI-xx>/   system blocks + prompt_version
@@ -67,6 +67,24 @@ src/
 ```
 
 Test files sit next to the code as `*.test.ts`.
+
+## Coexisting with the UI harness
+
+The `resumate-ui` harness builds the screens in the same Next.js app against a mock data layer (`.claude/skills/resumate-ui/references/ui-context.md`). Both harnesses must be able to run without overwriting each other.
+
+| Path | Owner | Backend may |
+|------|-------|-------------|
+| `src/app/(public)/`, `src/app/(dashboard)/`, `src/components/`, `docs/ui/` | UI | read only |
+| `src/lib/mock/` | UI | read only (it shows what shapes the screens expect) |
+| `src/lib/data/` | UI until wired; backend after the wiring step | replace function bodies in the wiring step only, keeping exported names and signatures |
+| `src/types/db.ts` | UI (hand-mirrored from the data model) | in the wiring step, turn it into re-exports of the generated types (`Tables<'experiences'>` → `Experience`), keeping the names the screens import |
+| `src/app/api/`, `src/app/auth/`, `middleware.ts`, `src/server/`, `src/lib/contracts/`, `supabase/` | backend | everything |
+| `package.json`, `tsconfig.json`, `next.config.*`, `.env.example` | shared | add backend deps, scripts, and env keys; don't remove or change UI entries |
+
+- **Scaffold:** whichever harness runs first creates the app. If `package.json` exists, the backend only adds its dependencies and scripts — it never re-scaffolds or runs `shadcn init`.
+- **Wiring step:** the step that makes a screen use real data (slice-catalog "Wiring"). Before starting it, check `_workspace/ui/` and `docs/ui/screen-status.md` for a UI run in progress on the same area; if one is in progress, wait and tell the user. Run the UI's lint/typecheck/build after wiring, since a signature drift breaks screens, not backend tests.
+- **Client hooks:** the UI's `useAiJob(jobId) → { status, progress, partial, error }` and `useAiStream(request) → { blocks, status, error, cancel }` (ui-implementation `references/patterns.md`) are the frontend side of the job and SSE contracts. Shape the job status response and SSE events so these hooks can switch from the mock to the real endpoint without changing their return shape.
+- A mismatch between the UI's mock shapes and the data model is a spec question, not something to "fix" in either codebase silently — log it in `spec-gaps.md`.
 
 ## Conventions
 

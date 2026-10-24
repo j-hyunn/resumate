@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Run the backend check suite from the repo root. Prints PASS / FAIL / SKIP per check
 # and exits non-zero if any check failed. A check that can't run is SKIP, never PASS.
+# Pass --build to also run `pnpm build` (required after wiring UI screens to the backend).
 set -u
+
+want_build=0
+[ "${1:-}" = "--build" ] && want_build=1
 
 results=()
 failed=0
@@ -27,6 +31,9 @@ else
     if has_script typecheck; then run_check typecheck pnpm -s typecheck; else run_check typecheck pnpm -s exec tsc --noEmit; fi
     if has_script lint; then run_check lint pnpm -s lint; else record lint SKIP "no lint script"; fi
     if has_script test; then run_check vitest pnpm -s test; else run_check vitest pnpm -s exec vitest run; fi
+    if [ $want_build -eq 1 ]; then
+      if has_script build; then run_check build pnpm -s build; else record build SKIP "no build script"; fi
+    fi
   fi
 fi
 

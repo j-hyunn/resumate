@@ -7,14 +7,28 @@ description: "Guide for implementing the Resumate Next.js (App Router) server si
 
 The data model's API boundary table (DM §7) lists every operation with its mechanism. This skill is how to build each row.
 
-## Bootstrap (slice S0, only when `package.json` is missing)
+## Bootstrap (slice S0)
 
-1. `pnpm create next-app@latest . --ts --app --src-dir --eslint --tailwind --use-pnpm --import-alias "@/*"` (drop `--tailwind` only if the user said so). The repo isn't empty (`.claude/`, `docs/`, `_workspace/`): if the CLI refuses a non-empty directory, scaffold into a temp dir in the scratchpad and move the files in without overwriting existing ones.
+The UI harness may already have scaffolded the app (its foundation A0 does the same). Check `package.json` first.
+
+1. **Only when `package.json` is missing:** `pnpm create next-app@latest . --ts --app --src-dir --eslint --tailwind --use-pnpm --import-alias "@/*"` — the same flags the UI harness uses, so its later `shadcn init` works on top. Keep `--tailwind` even though the backend doesn't need it. The repo isn't empty (`.claude/`, `docs/`, `_workspace/`): if the CLI refuses a non-empty directory, scaffold into a temp dir in the scratchpad and move the files in without overwriting existing ones. Don't run `shadcn init` — that's the UI's job.
+   **When `package.json` exists:** skip scaffolding. Only add what's below, and don't remove or change existing dependencies, scripts, or config.
 2. Add: `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `@anthropic-ai/sdk`; dev: `vitest`, `supabase`.
 3. Scripts: `typecheck` (`tsc --noEmit`), `lint`, `test` (`vitest run`), `db:reset`, `db:test`, `db:types`.
 4. `tsconfig` strict. Create the directory layout from backend-context.md with an `index.ts` only where something exports.
 5. `src/server/env.ts`: zod-parse `process.env` once; import env only from here. Mirror every key in `.env.example` with dummy values. Make sure `.env*.local` is in `.gitignore`.
-6. Verify: `pnpm typecheck && pnpm lint && pnpm test` pass on the empty project.
+6. Verify: `pnpm typecheck && pnpm lint && pnpm test` pass (and `pnpm build`, if UI screens already exist).
+
+## Wiring the UI's mock data layer
+
+When a slice's services exist and the UI has screens for that area, the slice ends with a wiring step (backend-context.md "Coexisting with the UI harness"):
+
+1. Confirm no UI run is in progress on that area (`_workspace/ui/`, `docs/ui/screen-status.md`). If one is, stop and tell the leader.
+2. For each `src/lib/data/<entity>.ts` function in the slice's area, keep the exported name, parameters, and return type, and replace the body with a call to the real service / action / RPC. If the real data can't produce the declared return type, that's a contract mismatch: log it in `spec-gaps.md` and leave that function on the mock.
+3. Point `useAiJob` / `useAiStream` at the real job status endpoint and SSE route, keeping their return shapes.
+4. Rewrite `src/types/db.ts` as re-exports of the generated types under the names screens already import (once per table, the first time that table is wired).
+5. Leave `src/lib/mock/` in place — the UI's `?state=` previews still use it.
+6. Run the UI's `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 
 ## Choosing the mechanism
 

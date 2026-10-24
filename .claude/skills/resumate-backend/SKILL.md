@@ -1,6 +1,6 @@
 ---
 name: resumate-backend
-description: "Orchestrator for the Resumate backend implementation team. Coordinates a four-member team — db-engineer (Supabase migrations, RLS, RPC), api-engineer (Next.js Server Actions, Route Handlers, auth, ai_jobs, usage ledger), ai-pipeline-engineer (Claude calls, prompts, evidence validation), backend-qa (boundary cross-checks, tests) — to build the backend slice by slice from docs/planning/. Always use when starting backend work, bootstrapping the project, implementing a feature's server side, building DB schema/API/AI pipelines, or asking 'what's next' on the backend. Follow-ups: always use for backend fixes, re-runs, QA re-checks, continuing to the next slice, re-implementing a slice after planning changes, and improving previous backend output. Korean triggers: 백엔드 작업, 백엔드 구현, 서버 개발, API 개발, DB 구축, 프로젝트 셋업, 다음 슬라이스, 기능 구현(커리어·AI 작성 대화·JD·인사이트·서류·모의 면접), 백엔드 수정, 다시 실행, QA 다시, 기획 변경 반영해서 구현 수정. Not for planning documents (use resumate-planning) or UI pages and components."
+description: "Orchestrator for the Resumate backend implementation team. Coordinates a four-member team — db-engineer (Supabase migrations, RLS, RPC), api-engineer (Next.js Server Actions, Route Handlers, auth, ai_jobs, usage ledger), ai-pipeline-engineer (Claude calls, prompts, evidence validation), backend-qa (boundary cross-checks, tests) — to build the backend slice by slice from docs/planning/. Always use when starting backend work, bootstrapping the project, implementing a feature's server side, building DB schema/API/AI pipelines, or asking 'what's next' on the backend. Follow-ups: always use for backend fixes, re-runs, QA re-checks, continuing to the next slice, re-implementing a slice after planning changes, connecting UI screens' mock data layer to the real backend, and improving previous backend output. Korean triggers: 백엔드 작업, 백엔드 구현, 서버 개발, API 개발, DB 구축, 프로젝트 셋업, 다음 슬라이스, 기능 구현(커리어·AI 작성 대화·JD·인사이트·서류·모의 면접), 백엔드 수정, 다시 실행, QA 다시, 기획 변경 반영해서 구현 수정, 백엔드 연결, mock을 실제 데이터로 교체. Not for planning documents (use resumate-planning) or UI pages, components, and design (use resumate-ui)."
 ---
 
 # Resumate Backend Orchestrator
@@ -16,12 +16,12 @@ Coordinate the four-member backend team to implement Resumate's server side one 
 
 | Teammate | Agent definition | Skill | Owns |
 |----------|------------------|-------|------|
-| db-engineer | `.claude/agents/db-engineer.md` | supabase-migration | `supabase/`, `src/server/db/types.ts` |
-| api-engineer | `.claude/agents/api-engineer.md` | nextjs-server-api | `src/app/api/`, `src/server/{actions,services,jobs,db/*.ts}`, `src/lib/contracts/`, project config |
+| db-engineer | `.claude/agents/db-engineer.md` | supabase-migration | `supabase/`, `src/server/db/database.types.ts` |
+| api-engineer | `.claude/agents/api-engineer.md` | nextjs-server-api | `src/app/api/`, `src/app/auth/`, `middleware.ts`, `src/server/{actions,services,jobs,db/*.ts}`, `src/lib/contracts/`; backend additions to shared config; `src/lib/data/` + `src/types/db.ts` in the wiring step only |
 | ai-pipeline-engineer | `.claude/agents/ai-pipeline-engineer.md` | ai-pipeline-impl (+ claude-api) | `src/server/ai/` |
 | backend-qa | `.claude/agents/backend-qa.md` (`subagent_type: general-purpose`) | backend-integration-qa | `_workspace/backend/{slice}/03_*` |
 
-Spawn every teammate with `model: "opus"`. Every teammate reads `.claude/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner.
+Spawn every teammate with `model: "opus"`. Every teammate reads `.claude/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner. UI-owned paths (pages, components, `src/lib/mock/`, `docs/ui/`) are read-only for the whole team.
 
 Paths are relative to the repository root. **Language:** skills and agent definitions are English; code is English; `_workspace/backend/` files and everything you say to the user are Korean.
 
@@ -29,10 +29,11 @@ Paths are relative to the repository root. **Language:** skills and agent defini
 
 ### Phase 0: Context check
 
-1. Read `_workspace/backend/slices.md` (slice status) and `references/slice-catalog.md`. Check whether `package.json` and `supabase/` exist.
+1. Read `_workspace/backend/slices.md` (slice status) and `references/slice-catalog.md`. Check whether `package.json` and `supabase/` exist. Check `docs/ui/screen-status.md` and `_workspace/ui/` to see which UI areas have screens and whether a UI run is in progress (backend-context.md "Coexisting with the UI harness").
 2. Branch:
    - **No `_workspace/backend/`** → initial run. Create it with `slices.md` (all slices `todo`), empty `spec-gaps.md` and `decisions.md`. Start at S0.
    - **User names a slice or feature** ("AI 작성 대화 구현해줘") → map it to a slice. If an earlier slice it depends on isn't `done`, tell the user and propose doing that first.
+   - **User asks to connect the screens to the backend** ("백엔드 연결해줘", "mock을 실제 데이터로") → run only the wiring step for every slice marked "연결 대기" in `slices.md` whose UI screens now exist.
    - **User says "next" / "continue"** → the first slice that isn't `done`.
    - **User asks to fix or re-check** a slice → partial re-run: re-invoke only the owners of the affected files, then QA on those boundaries.
    - **Planning docs changed since a slice was built** (`git log docs/planning/` newer than the slice's `done` date) → list the affected slices and ask whether to update them before new work.
@@ -46,6 +47,7 @@ Write `_workspace/backend/{slice}/01_plan.md` (Korean) from the catalog row and 
 - Per-teammate task list, and which tasks depend on db-engineer's migration
 - Whether to apply to the Supabase development branch at the end (default: no; yes only if the user asked or said earlier to keep the branch in sync — record the branch's project ref in `decisions.md`)
 - Open `[가정]` from `decisions.md` that this slice touches
+- Wiring: whether the UI area for this slice has screens (slice-catalog "Wiring"). If yes, list the `src/lib/data/` functions to wire; if no, note "연결 대기"
 
 Ask the user only if a `[결정 필요]` item blocks the slice (e.g. D-14 for scoring in S8 — the spec already has a placeholder, so usually it doesn't). Otherwise proceed.
 
@@ -76,6 +78,10 @@ S0 has no AI and no QA boundaries beyond "checks run"; QA just runs the script.
 2. Issues go to owners (SendMessage in team mode; in fallback, re-invoke each owner with its issue list — in parallel when independent).
 3. QA re-checks. **At most 2 rounds.** Anything left stays open in the report.
 4. A Critical issue still open blocks marking the slice `done`. Report it at the top.
+
+### Phase 3.5: Wiring (only if the plan lists functions to wire)
+
+api-engineer wires the listed `src/lib/data/` functions to the real services (nextjs-server-api "Wiring the UI's mock data layer"), then backend-qa runs Q11 and the UI's `pnpm build`. Re-check right before starting that no UI run has started on the area since Phase 0. If one has, skip wiring, mark the slice "연결 대기", and tell the user.
 
 ### Phase 4: Remote branch (only if the plan says so)
 
@@ -117,6 +123,8 @@ docs/planning/* + slice-catalog ─→ [leader] ─→ {slice}/01_plan.md
 | Spec contradiction found | Log in `spec-gaps.md`, follow the data model doc as tie-breaker, tag `[가정]`, report to the user |
 | Teammates disagree on an interface | Leader decides using the spec; record it in `decisions.md` |
 | A teammate wants to apply to the main Supabase project, deploy, or commit | Stop it. Those need the user's explicit request |
+| A teammate edits a UI-owned file (page, component, mock) | Stop it and revert that edit. Ask the user to route the change through `resumate-ui` |
+| UI build breaks after wiring | Revert the wiring for the breaking functions, mark them "연결 대기" with the reason, and report |
 | Unresolved after 2 QA rounds | Leave open in the report; Critical blocks `done`, others don't |
 
 ## Test scenarios

@@ -14,7 +14,7 @@ You are the database engineer for Resumate. The data model document already deci
 3. Roles and grants — `app_ai_writer` column-level grants; security invoker vs definer per RPC
 4. RPC functions — signatures and return shapes from DM §6–7
 5. pgTAP tests — RLS isolation, role limits, RPC behavior, deletion cascades
-6. Generated types — `supabase gen types typescript --local > src/server/db/types.ts` after every schema change
+6. Generated types — `supabase gen types typescript --local > src/server/db/database.types.ts` after every schema change
 
 ## Working principles
 - Before starting, read `.claude/skills/resumate-backend/references/backend-context.md`, then follow the `supabase-migration` skill.
@@ -25,7 +25,7 @@ You are the database engineer for Resumate. The data model document already deci
 
 ## Input/output protocol
 - Input: the slice plan `_workspace/backend/{slice}/01_plan.md`, the data model sections it points to
-- Output: `supabase/migrations/*.sql`, `supabase/tests/*.test.sql`, `src/server/db/types.ts`, notes at `_workspace/backend/{slice}/02_db-engineer_notes.md` (what was built, RPC signatures, deviations)
+- Output: `supabase/migrations/*.sql`, `supabase/tests/*.test.sql`, `src/server/db/database.types.ts`, notes at `_workspace/backend/{slice}/02_db-engineer_notes.md` (what was built, RPC signatures, deviations)
 
 ## Team communication protocol (agent team mode)
 - Send → api-engineer, ai-pipeline-engineer: "types regenerated" + RPC signatures and return shapes as soon as the migration passes locally

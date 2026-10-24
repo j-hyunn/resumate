@@ -13,7 +13,7 @@ The data model document (`docs/planning/04-data-model.md`) is the spec; this ski
 2. Write migrations — one concern per file, in dependency order (tables → triggers → RLS → grants → RPCs).
 3. `supabase db reset` (applies all migrations + `seed.sql` locally).
 4. Write pgTAP tests, `supabase test db`.
-5. `supabase gen types typescript --local > src/server/db/types.ts`.
+5. `supabase gen types typescript --local > src/server/db/database.types.ts`.
 6. Write `02_db-engineer_notes.md` and notify teammates.
 7. Only if the slice plan says so: apply to the Supabase development branch (see "Remote branch").
 

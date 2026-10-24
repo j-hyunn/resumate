@@ -1,6 +1,6 @@
 ---
 name: ux-flow-spec
-description: "Guide for writing and revising Resumate information architecture (IA), user flows, and screen specs (text wireframes). Defines flows and states (empty, AI loading, error) for onboarding, experience/project entry, JD registration and insights, career chat, and AI mock interview screens. Use for user flows, screen design, IA, sitemaps, screen lists, and UX flow revisions. Korean triggers: 유저 플로우, 화면 설계, 화면 명세, IA, 사이트맵, 화면 목록, UX 흐름 수정. Not for visual design (Figma, colors, component styling)."
+description: "Guide for writing and revising Resumate information architecture (IA), user flows, and screen specs (text wireframes). Defines flows and states (empty, AI loading, error) for onboarding, experience/project entry, JD registration and insights, career chat, and AI mock interview screens. Use for user flows, screen design, IA, sitemaps, screen lists, and UX flow revisions. Korean triggers: 유저 플로우, 화면 설계, 화면 명세, IA, 사이트맵, 화면 목록, UX 흐름 수정. Not for visual design (Figma, colors, component styling — use ui-design-system) or screen code (use ui-implementation)."
 ---
 
 # UX Flows & Screen Specs

@@ -36,7 +36,7 @@ All paths are relative to the repository root (`/Users/jehyun/Resumate`).
 2. Branch:
    - **Neither exists** → initial run. Start at Phase 1.
    - **Exists + partial revision request** (e.g. "only redo the mock interview part", "apply the decisions") → partial re-run. Use the table below to pick who to re-invoke; run only that part of Phase 3 + Phase 4 (relevant boundaries only).
-   - **Exists + new planning direction altogether** → new run. Move `_workspace/` to `_workspace_{YYYYMMDD_HHMMSS}/`, then start at Phase 1. Before overwriting `docs/planning/` with new results, confirm git is tracking the changes.
+   - **Exists + new planning direction altogether** → new run. Move the planning files in `_workspace/` (everything except `_workspace/backend/` and `_workspace/ui/`, which belong to the backend and UI harnesses) to `_workspace_{YYYYMMDD_HHMMSS}/`, then start at Phase 1. Before overwriting `docs/planning/` with new results, confirm git is tracking the changes.
 
 | Revision scope | Re-invoke | Then update |
 |----------------|-----------|-------------|

@@ -1,6 +1,6 @@
 # Resumate 하네스
 
-이 저장소에는 하네스가 2개 있다. 구성 위치는 공통이다.
+이 저장소에는 하네스가 3개 있다. 구성 위치는 공통이다.
 
 - 에이전트: `.claude/agents/`
 - 스킬: `.claude/skills/`
@@ -36,10 +36,32 @@
 
 **공통 UI 컨텍스트:** `.claude/skills/resumate-ui/references/ui-context.md` (스택, 디렉터리, 영역 소유권, 데이터 계층 규칙)
 
+## 3. 백엔드 하네스
+
+**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), Claude AI 파이프라인(프롬프트·근거 검증)을 기능 단위 슬라이스(S0~S9)로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다.
+
+**진입점:** `resumate-backend` 스킬 (`.claude/skills/resumate-backend/SKILL.md`)
+
+**트리거:** 백엔드 구현·프로젝트 셋업·DB 구축·API 개발·AI 기능 구현·mock 데이터 계층 연결·백엔드 수정·QA 재실행·다음 슬라이스 진행 요청. 단순 질문은 직접 응답 가능.
+
+**팀:** db-engineer, api-engineer, ai-pipeline-engineer, backend-qa (에이전트 팀, 팀 도구가 없으면 서브 에이전트로 대체)
+
+**범위와 안전 정책:** 로컬 Supabase와 Supabase 개발 브랜치까지만 적용한다. 메인(프로덕션) 프로젝트 적용·배포·커밋은 사용자가 요청할 때만 한다. 화면과 컴포넌트는 UI 하네스 소관이다.
+
+**공통 백엔드 컨텍스트:** `.claude/skills/resumate-backend/references/backend-context.md`, 슬라이스 목록 `references/slice-catalog.md`
+
+**작업 폴더:** `_workspace/backend/` (슬라이스 상태 `slices.md`, 기획 차이 `spec-gaps.md`, 구현 결정 `decisions.md`)
+
 ## 하네스 간 관계
 
 ```
-resumate-planning ──docs/planning/*──→ resumate-ui ──docs/ui/*, src/*──→ (다음: 백엔드)
-        ↑                                   │
-        └──── 기획 확인 필요 (사용자 경유) ────┘
+                       ┌──→ resumate-ui ──── 화면 + mock 데이터 계층(src/lib/data, src/lib/mock)
+resumate-planning ─────┤                                   │  연결 단계: 함수 시그니처는 유지,
+  (docs/planning/*)    └──→ resumate-backend ── DB·API·AI ──┘  구현만 실제 서비스로 교체
+        ↑                          │
+        └── 기획 확인 필요 / spec-gaps.md (사용자 경유) ──┘
 ```
+
+- 기획 문서가 UI와 백엔드 모두의 명세다. 두 하네스 모두 `docs/planning/`을 직접 고치지 않는다. 모순·누락은 UI는 "기획 확인 필요", 백엔드는 `_workspace/backend/spec-gaps.md`로 사용자에게 넘기고, 기획 수정은 `resumate-planning`으로 한다.
+- 두 하네스가 같은 Next.js 앱을 다룬다. 프로젝트 골격은 먼저 실행한 쪽이 만들고, 다른 쪽은 자기 의존성만 추가한다. 파일 소유권은 `backend-context.md`의 "Coexisting with the UI harness"에 있다.
+- 화면 데이터 계층을 실제 백엔드로 바꾸는 작업(연결 단계)은 백엔드 하네스가 한다. UI 실행이 진행 중일 때는 하지 않는다.

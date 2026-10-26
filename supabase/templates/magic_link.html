@@ -1,0 +1,16 @@
+<!--
+  Resumate magic link (F-COM-01). token_hash flow instead of {{ .ConfirmationURL }}:
+  the link works on any device/browser, because /auth/callback verifies the hash
+  with verifyOtp and does not need the PKCE code verifier cookie of the browser
+  that requested it.
+  {{ .RedirectTo }} is the emailRedirectTo the app sent: <origin>/auth/callback?next=<path>.
+  Keep the remote project's template identical (Dashboard → Auth → Email Templates).
+-->
+<html>
+  <body>
+    <h2>Resumate 로그인</h2>
+    <p>아래 링크를 누르면 Resumate에 로그인합니다. 링크는 한 번만 쓸 수 있고 1시간 뒤 만료됩니다.</p>
+    <p><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email">Resumate에 로그인</a></p>
+    <p>직접 요청하지 않았다면 이 메일을 무시해 주세요.</p>
+  </body>
+</html>

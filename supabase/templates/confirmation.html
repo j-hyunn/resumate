@@ -1,0 +1,13 @@
+<!--
+  Resumate sign-up confirmation (F-COM-01). Sent instead of the magic link email to
+  a first-time email when "Confirm email" is enabled (hosted default). Same
+  token_hash link as magic_link.html so it works across devices.
+-->
+<html>
+  <body>
+    <h2>Resumate 가입 확인</h2>
+    <p>아래 링크를 누르면 이메일 확인과 함께 Resumate에 로그인합니다. 링크는 한 번만 쓸 수 있고 1시간 뒤 만료됩니다.</p>
+    <p><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email">이메일 확인하고 시작하기</a></p>
+    <p>직접 요청하지 않았다면 이 메일을 무시해 주세요.</p>
+  </body>
+</html>

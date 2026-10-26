@@ -1,0 +1,27 @@
+# 구현 결정
+
+- 2026-10-24 (S0) Supabase CLI는 프로젝트 devDependency(`supabase` npm 패키지)로 설치하고 `pnpm exec supabase`로 실행한다. 이유: 로컬 Xcode Command Line Tools가 오래되어 Homebrew 설치가 실패함. `run-checks.sh`는 `node_modules/.bin/supabase`를 인식한다.
+- 2026-10-24 (S0) 로컬에 Docker가 없다. 로컬 Supabase 스택(`supabase start`)과 pgTAP은 Docker 설치 전까지 SKIP. S1부터는 pgTAP이 한 번은 돌아야 슬라이스를 `done`으로 둘 수 있다.
+- 2026-10-24 (S0) CLT 업데이트 후 Homebrew로 Supabase CLI 2.122.0을 전역 설치했다. 프로젝트 devDependency(2.121)도 그대로 둔다. `run-checks.sh`는 전역 `supabase`를 먼저 쓰고, 다른 개발 환경과 CI는 `pnpm exec supabase`로 버전을 고정해서 쓴다.
+- 2026-10-24 (S1) Docker 런타임은 Colima 0.10.3(vz, 4CPU/8GB) + Docker CLI 29.9. `colima start`로 띄운다. 맥 재부팅 후에는 `colima start`가 다시 필요하다.
+- 2026-10-24 (S1) Next.js 16은 `middleware.ts` 대신 `proxy.ts` 파일 규칙을 쓴다. 세션 갱신은 루트 `src/proxy.ts`(src 디렉터리 구조 기준 위치는 api-engineer가 Next 문서로 확인)에 둔다. 하네스 문서의 `middleware.ts`는 `proxy.ts`로 읽는다.
+- 2026-10-24 (S1) `next.config.ts`의 `cacheComponents: true`는 유지한다. 인증·쿠키를 쓰는 코드는 Cache Components 규칙(동적 API는 Suspense 경계 안, `'use cache'`에 쿠키 금지)을 따른다.
+- 2026-10-24 (S1, db-engineer 확인) 로컬 스택(CLI 2.122)의 GoTrue는 사용자 세션 JWT를 **ES256(비대칭)**으로 서명하고, PostgREST는 JWKS에 ES256 공개키와 레거시 대칭 키(oct, HS256)를 함께 갖는다. 서버가 레거시 JWT secret으로 HS256 서명한 `role: app_ai_writer`, `sub: <user id>`, `aud: authenticated` 토큰을 PostgREST가 받아들이는 것을 실제 요청으로 확인했다(허용 컬럼 select 200, `display_name`·`consents` 403). 따라서 `createAiWriterClient`는 `SUPABASE_JWT_SECRET` HS256 방식을 쓴다. 원격(호스팅) 프로젝트에서 레거시 secret이 폐기되면 재검토.
+- 2026-10-24 (S1) 내부 헬퍼 함수(트리거 함수, 동의 매핑 등)는 PostgREST에 노출되지 않는 `private` 스키마에 둔다: `private.set_updated_at()`, `private.touch_career_data_updated_at()`, `private.current_uid()`. `app_ai_writer`는 `auth` 스키마 USAGE가 없어 `auth.uid()`를 못 부르므로, `app_ai_writer` 대상 정책과 AI 역할이 실행하는 함수는 `(select private.current_uid())`를 쓴다.
+- 2026-10-24 (S1) `app_ai_writer` 클라이언트(`src/server/db/ai-writer.ts`): `node:crypto`로 HS256 서명한 토큰을 쓴다(`role=app_ai_writer`, `sub`, `aud=authenticated`, `iss`, `exp` ≤ 300초, 요청마다 다른 `jti`). supabase-js `accessToken` 콜백이 요청마다 새로 서명한다. **출시 전 위험**: 호스팅 Supabase에서 레거시 JWT secret을 폐기하면 이 토큰이 거부된다. 그때는 `signAiWriterToken`만 비대칭 키 서명으로 바꾼다.
+- 2026-10-24 (S1) 오류 코드는 S0 계약에 맞춰 소문자(`unauthenticated`, `consent_required` 등)를 쓴다. 로그인·동의 경로 `/login`, `/onboarding/consent`는 `src/lib/contracts/routes.ts`의 [가정] 값이며, UI 하네스가 경로를 정하면 거기에 맞춘다.
+- 2026-10-24 (S1, QA-04) public 스키마의 기본 권한에서 anon·authenticated를 뺐고, 함수 EXECUTE to PUBLIC은 전역으로 회수했다. **S2부터 새 테이블·함수는 public·private 모두 grant를 명시한다.** RLS 정책이나 invoker RPC가 부르는 헬퍼 함수도 `grant execute ... to authenticated`가 필요하다. 허용 목록은 `supabase/tests/grants.test.sql`이 지키며, DM §5가 바뀔 때만 함께 고친다.
+- 2026-10-25 (S2) 커리어 `status`는 DB 트리거가 계산한다(클라이언트 값 무시). 프로젝트는 `project_details` 변경 트리거가 다시 계산한다.
+- 2026-10-25 (S2) `source_writing_chat_id`는 S2에서 uuid 컬럼만 두고, FK는 S4에서 `writing_chats`를 만들 때 추가한다.
+- 2026-10-25 (S2) `get_deletion_impact`의 결과 영향 집계와 `delete_career_item`의 결과 처리는 S2에서 비어 있다. 결과 테이블이 생기는 S3·S5–S7에서 `create or replace`로 확장한다. `writing_chat` 대상은 S4에서 추가한다.
+- 2026-10-25 (S2, QA-S2-02/03) 새 행 id는 클라이언트가 만든다(UUID). 자동 저장 재시도가 같은 id로 오면 중복을 만들지 않는다(멱등 insert). id 검증은 `z.guid()`로 Postgres uuid와 같은 기준을 쓴다.
+- 2026-10-25 (S2, QA-S2-04) 상세 내용 변경 때문에 부모 프로젝트를 다시 계산할 때는, `status`가 실제로 바뀔 때만 `projects.updated_at`을 갱신한다(DM §4.2 "변경됨" 표시는 그대로 유지된다). 상세 내용 저장·삭제 응답은 부모 프로젝트의 `status`와 `updatedAt`을 함께 돌려줘, 화면이 다음 자동 저장의 `expectedUpdatedAt`을 바꿀 수 있게 한다.
+- 2026-10-25 (S2, QA-S2-07) S4에서 `source_writing_chat_id` FK를 추가할 때는 복합 FK `(source_writing_chat_id, user_id)`로 만든다.
+- 2026-10-26 (S3) 구조화 출력은 AI 명세 C-4대로 `output_config.format`(JSON 스키마)을 쓴다. 하네스 `ai-pipeline-impl` 스킬의 "강제 tool 호출" 지침은 명세와 다르다. 명세를 따르고, 하네스 문서는 나중에 고친다.
+- 2026-10-26 (S3) 작업 성공 처리와 사용량 확정은 RPC `complete_ai_job` 하나로 한 트랜잭션에서 한다(성공 후 확정만 실패해 예약이 `reserved`로 남는 경우를 없앤다). 안전망으로 `sweep_stalled_ai_jobs`는 성공한 작업에 남은 예약을 `charged`로 바꾼다.
+- 2026-10-26 (S3) 멈춘 작업은 상태 조회 때 지연 감지하는 것이 주 경로다. Vercel Cron(`/api/cron/stalled-jobs`)은 배포 때 설정한다. Hobby 플랜은 크론이 하루 1회다.
+- 2026-10-26 (S3, QA-S3-01) 사용량 확정·해제는 예약 id 단위로 한다. `complete_ai_job`은 `p_usage_event_id`를 받아 그 예약만 확정한다. 수동 재시도는 작업 행 점유(failed → queued 조건부 update)에 성공한 쪽만 원장을 건드린다. 점유한 쪽은 남은 예약을 먼저 해제한 뒤 새로 예약한다.
+- 2026-10-26 (S3, QA-S3-05) 실행기의 모든 쓰기·정산 조건에 `attempt_count`(실행 세대)를 넣어, 늦게 도착한 이전 실행이 새 실행을 건드리지 못하게 한다.
+- 2026-10-26 (S3, QA-S3-07) 거절 시 서버 측 모델 대체는 사용자 결정 전까지 켜 둔다. 대체가 켜져 있으면 `refused`는 자동 재시도하지 않고, 토큰은 `usage.iterations`까지 합산한다.
+- 2026-10-26 (S3, QA 1차 반영) 위 "sweep이 성공 작업의 남은 예약을 charged로" 결정을 **바꾼다**. `complete_ai_job`이 예약 id 단위로 같은 트랜잭션에서 확정하므로, 성공 작업에 남은 reserved 행은 중복 예약이다. 따라서 sweep은 이를 **released**로 바꾼다(이중 차감 방지). `complete_ai_job`은 4인자(`p_job_id`, `p_usage_event_id`, `p_attempt_count`, `p_progress`)이고, 같은 세대에서 이미 성공한 작업을 다시 호출하면 멱등으로 처리한다.
+- 2026-10-27 (S3 후속, 사용자 결정) AI 명세 C-6대로 거절 시 서버 측 모델 대체를 **끈다**(`REFUSAL_FALLBACKS_ENABLED = false`). 거절(`refused`)이 나오면 그 작업은 바로 실패 처리하고 자동 재시도하지 않는다. 화면에서 재시도를 안내하고, 사용량은 차감하지 않는다. 대체 설정을 다시 켜도 `refused`는 자동 재시도하지 않는다.

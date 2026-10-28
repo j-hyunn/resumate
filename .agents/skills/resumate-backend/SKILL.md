@@ -16,12 +16,12 @@ Coordinate the four-member backend team to implement Resumate's server side one 
 
 | Teammate | Agent definition | Skill | Owns |
 |----------|------------------|-------|------|
-| db-engineer | `.Codex/agents/db-engineer.md` | supabase-migration | `supabase/`, `src/server/db/database.types.ts` |
-| api-engineer | `.Codex/agents/api-engineer.md` | nextjs-server-api | `src/app/api/`, `src/app/auth/`, `middleware.ts`, `src/server/{actions,services,jobs,db/*.ts}`, `src/lib/contracts/`; backend additions to shared config; `src/lib/data/` + `src/types/db.ts` in the wiring step only |
-| ai-pipeline-engineer | `.Codex/agents/ai-pipeline-engineer.md` | ai-pipeline-impl (+ Codex-api) | `src/server/ai/` |
-| backend-qa | `.Codex/agents/backend-qa.md` (`subagent_type: general-purpose`) | backend-integration-qa | `_workspace/backend/{slice}/03_*` |
+| db-engineer | `.codex/agents/db-engineer.toml` | supabase-migration | `supabase/`, `src/server/db/database.types.ts` |
+| api-engineer | `.codex/agents/api-engineer.toml` | nextjs-server-api | `src/app/api/`, `src/app/auth/`, `middleware.ts`, `src/server/{actions,services,jobs,db/*.ts}`, `src/lib/contracts/`; backend additions to shared config; `src/lib/data/` + `src/types/db.ts` in the wiring step only |
+| ai-pipeline-engineer | `.codex/agents/ai-pipeline-engineer.toml` | ai-pipeline-impl (+ Codex-api) | `src/server/ai/` |
+| backend-qa | `.codex/agents/backend-qa.toml` (`subagent_type: general-purpose`) | backend-integration-qa | `_workspace/backend/{slice}/03_*` |
 
-Spawn every teammate with `model: "opus"`. Every teammate reads `.Codex/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner. UI-owned paths (pages, components, `src/lib/mock/`, `docs/ui/`) are read-only for the whole team.
+Spawn every teammate with `model: "opus"`. Every teammate reads `.agents/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner. UI-owned paths (pages, components, `src/lib/mock/`, `docs/ui/`) are read-only for the whole team.
 
 Paths are relative to the repository root. **Language:** skills and agent definitions are English; code is English; `_workspace/backend/` files and everything you say to the user are Korean.
 
@@ -93,7 +93,7 @@ db-engineer applies the slice's migrations to the development branch per the `su
 2. In team mode, shut teammates down and `TeamDelete`.
 3. Report to the user: what was built, check results (say plainly which checks were skipped and why), open issues, new entries in `spec-gaps.md` (these need a planning fix via `resumate-planning`), and the next slice.
 4. Offer to commit. Don't commit unless the user says so.
-5. Ask for feedback on the output and the team flow. If it's about the harness, update the agent/skill and log it in `.Codex/harness/CHANGELOG.md`. AGENTS.md only holds pointers, so don't edit it for this.
+5. Ask for feedback on the output and the team flow. If it's about the harness, update the agent/skill and log it in `.claude/harness/CHANGELOG.md`. AGENTS.md only holds pointers, so don't edit it for this.
 
 ## Data flow
 

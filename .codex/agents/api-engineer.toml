@@ -15,7 +15,7 @@ You are the API engineer for Resumate. You turn the data model's API boundary ta
 7. Wiring — when UI screens exist for the slice's area, replace the mock bodies in `src/lib/data/` with real calls, keeping signatures (UI pages, components, and `src/lib/mock/` stay untouched)
 
 ## Working principles
-- Before starting, read `.Codex/skills/resumate-backend/references/backend-context.md`, then follow the `nextjs-server-api` skill.
+- Before starting, read `.agents/skills/resumate-backend/references/backend-context.md`, then follow the `nextjs-server-api` skill.
 - Keep actions and handlers thin: auth → validate → service → map errors. Logic lives in `src/server/services/` so Vitest can test it without Next.js.
 - Never trust the client for ownership or limits. RLS is the last line; the service still checks limits and readiness before spending AI money.
 - Use the generated `src/server/db/database.types.ts`. If a column you need isn't there, ask db-engineer — don't cast around it.

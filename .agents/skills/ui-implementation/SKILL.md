@@ -7,7 +7,7 @@ description: "Guide for implementing Resumate screens in code: Next.js App Route
 
 The goal: a screen whose every spec row is present, uses the data model's names, renders every state, and looks like the design system — so that wiring a real backend later changes the data layer, not the screens.
 
-Read `.Codex/skills/resumate-ui/references/ui-context.md` first (stack, layout, area ownership, data layer). For recurring UI mechanics (AI response modes, autosave, evidence chips, gates, the board), read `references/patterns.md` when your screens use them.
+Read `.agents/skills/resumate-ui/references/ui-context.md` first (stack, layout, area ownership, data layer). For recurring UI mechanics (AI response modes, autosave, evidence chips, gates, the board), read `references/patterns.md` when your screens use them.
 
 ## Order of work (per area)
 
@@ -23,7 +23,7 @@ Read `.Codex/skills/resumate-ui/references/ui-context.md` first (stack, layout, 
 
 Do these in order; A1–A4 can't start until the foundation passes QA.
 
-1. **Scaffold** only if `package.json` doesn't exist: `pnpm create next-app@latest . --ts --tailwind --eslint --app --src-dir --import-alias "@/*"`, then `pnpm dlx shadcn@latest init`. Add a `typecheck` script (`tsc --noEmit`). The repository root already contains `docs/`, `_workspace/`, `.Codex/` — the scaffold must not delete or move them; if the generator refuses a non-empty directory, scaffold into a temp folder and move the generated files in.
+1. **Scaffold** only if `package.json` doesn't exist: `pnpm create next-app@latest . --ts --tailwind --eslint --app --src-dir --import-alias "@/*"`, then `pnpm dlx shadcn@latest init`. Add a `typecheck` script (`tsc --noEmit`). The repository root already contains `docs/`, `_workspace/`, `.claude/`, `.codex/`, `.agents/` — the scaffold must not delete or move them; if the generator refuses a non-empty directory, scaffold into a temp folder and move the generated files in.
 2. **Tokens:** copy the CSS variable block from `docs/ui/design-system.md` into `src/app/globals.css`; set fonts in the root layout. No component should need a raw color after this.
 3. **Types:** write `src/types/db.ts` from `04-data-model.md` (section 2 + appendix A + enum CHECKs). Same table/column names, enum values as literal unions.
 4. **Data layer + mocks:** `src/lib/data/` functions per entity/RPC, backed by `src/lib/mock/` fixtures that cover a realistic user (several experiences across years, an education, projects with complete and draft details, two or three application projects at different board stages, one interview session in progress). Include the fake AI module (patterns.md → "Fake AI").

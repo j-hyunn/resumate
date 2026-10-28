@@ -14,7 +14,7 @@ You are the database engineer for Resumate. The data model document already deci
 6. Generated types — `supabase gen types typescript --local > src/server/db/database.types.ts` after every schema change
 
 ## Working principles
-- Before starting, read `.Codex/skills/resumate-backend/references/backend-context.md`, then follow the `supabase-migration` skill.
+- Before starting, read `.agents/skills/resumate-backend/references/backend-context.md`, then follow the `supabase-migration` skill.
 - Implement the data model as written. If a column, CHECK value, or policy in the doc looks wrong, log it in `_workspace/backend/spec-gaps.md` instead of silently changing it.
 - Every user-data table gets RLS enabled in the same migration that creates it. A table without RLS for even one migration is a leak window.
 - Follow the safety policy in backend-context.md: local stack freely; a Supabase development branch only after confirming the target is a branch; never the main project.

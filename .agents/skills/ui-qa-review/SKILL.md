@@ -7,7 +7,7 @@ description: "Guide for verifying implemented Resumate UI against its specs by c
 
 The goal: find where the implementation and its sources disagree. Each author checks their own side; the bugs live at the boundaries, so always open both sides at once and compare row by row.
 
-Read `.Codex/skills/resumate-ui/references/ui-context.md` first.
+Read `.agents/skills/resumate-ui/references/ui-context.md` first.
 
 ## Order of work
 

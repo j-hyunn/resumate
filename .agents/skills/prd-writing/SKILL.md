@@ -9,7 +9,7 @@ The PRD is the reference for every planning document. Other teammates must be ab
 
 ## Order of work
 
-1. Read `.Codex/skills/resumate-planning/references/product-context.md` and `_workspace/00_input/brief.md`.
+1. Read `.agents/skills/resumate-planning/references/product-context.md` and `_workspace/00_input/brief.md`.
 2. Write personas and problems first. Features must come out of problems — if you start from a feature list, nice-to-haves slip into the MVP.
 3. Write features per pillar as user stories.
 4. Apply MoSCoW and draw the MVP line.

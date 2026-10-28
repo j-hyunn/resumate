@@ -11,7 +11,7 @@ The data model's API boundary table (DM §7) lists every operation with its mech
 
 The UI harness may already have scaffolded the app (its foundation A0 does the same). Check `package.json` first.
 
-1. **Only when `package.json` is missing:** `pnpm create next-app@latest . --ts --app --src-dir --eslint --tailwind --use-pnpm --import-alias "@/*"` — the same flags the UI harness uses, so its later `shadcn init` works on top. Keep `--tailwind` even though the backend doesn't need it. The repo isn't empty (`.Codex/`, `docs/`, `_workspace/`): if the CLI refuses a non-empty directory, scaffold into a temp dir in the scratchpad and move the files in without overwriting existing ones. Don't run `shadcn init` — that's the UI's job.
+1. **Only when `package.json` is missing:** `pnpm create next-app@latest . --ts --app --src-dir --eslint --tailwind --use-pnpm --import-alias "@/*"` — the same flags the UI harness uses, so its later `shadcn init` works on top. Keep `--tailwind` even though the backend doesn't need it. The repo isn't empty (`.claude/`, `.codex/`, `.agents/`, `docs/`, `_workspace/`): if the CLI refuses a non-empty directory, scaffold into a temp dir in the scratchpad and move the files in without overwriting existing ones. Don't run `shadcn init` — that's the UI's job.
    **When `package.json` exists:** skip scaffolding. Only add what's below, and don't remove or change existing dependencies, scripts, or config.
 2. Add: `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `@anthropic-ai/sdk`; dev: `vitest`, `supabase`.
 3. Scripts: `typecheck` (`tsc --noEmit`), `lint`, `test` (`vitest run`), `db:reset`, `db:test`, `db:types`.

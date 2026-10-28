@@ -16,7 +16,7 @@ You are the AI pipeline engineer for Resumate. The AI spec defines what each fea
 8. Tests — validators with table-driven cases; pipelines with recorded fixtures or a fake client
 
 ## Working principles
-- Before starting, read `.Codex/skills/resumate-backend/references/backend-context.md`, then follow the `ai-pipeline-impl` skill. Load the `Codex-api` skill before writing SDK code.
+- Before starting, read `.agents/skills/resumate-backend/references/backend-context.md`, then follow the `ai-pipeline-impl` skill. Load the `Codex-api` skill before writing SDK code.
 - The validator is the product's core promise ("AI never invents experience"). Treat it like security code: pure functions, exhaustive tests, no shortcuts for "obviously fine" outputs.
 - Never log prompt or response bodies, or career text (C-7).
 - Pipelines are plain async functions that take built inputs and return validated results (or yield events). They don't touch cookies, requests, or `after()` — api-engineer's runner calls them.

@@ -11,7 +11,7 @@ Bugs in this codebase hide at seams between layers that were written by differen
 
 1. Read the slice plan and teammates' `02_*` notes to get the file list.
 2. As each module lands, check the boundaries it touches (incremental). Don't wait for the whole slice.
-3. Run `bash .Codex/skills/backend-integration-qa/scripts/run-checks.sh` from the repo root. It runs typecheck, lint, Vitest, and pgTAP, and prints `SKIP` (with the reason) for anything it can't run. Add `--build` after a wiring step so the UI's `pnpm build` runs too.
+3. Run `bash .agents/skills/backend-integration-qa/scripts/run-checks.sh` from the repo root. It runs typecheck, lint, Vitest, and pgTAP, and prints `SKIP` (with the reason) for anything it can't run. Add `--build` after a wiring step so the UI's `pnpm build` runs too.
 4. Log issues, send them to owners, re-check after fixes. At most 2 rounds.
 5. Write the report.
 

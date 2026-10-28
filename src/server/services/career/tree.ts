@@ -15,6 +15,7 @@ import {
   toProjectDto,
   toSkillDto,
 } from "./mappers";
+import { listActiveWritingChats } from "@/server/services/writing-chat/chat";
 import { mapSaveError } from "./save";
 import { summarizeCareer } from "./summary";
 import { currentYearInSeoul, groupCareerByYear } from "./year-view";
@@ -23,10 +24,10 @@ import { currentYearInSeoul, groupCareerByYear } from "./year-view";
  * S-08 career tree (DM §7 row 1, F-P1-09): all seven career tables read once as
  * the user (RLS), joined and grouped by year in memory (DM §2.4 — tens of rows
  * per user). Drafts are included; the screen shows them with a "작성 중" badge.
- * writing_chats (active) joins in S4.
+ * S4: active writing chats for "작성 중인 AI 대화" (DM §7 row 1).
  */
 export async function getCareerTree(supabase: UserSupabaseClient, now: Date = new Date()): Promise<CareerTreeDto> {
-  const [experiences, educations, projects, details, achievements, skills, links] = await Promise.all([
+  const [experiences, educations, projects, details, achievements, skills, links, activeWritingChats] = await Promise.all([
     supabase.from("experiences").select(EXPERIENCE_COLUMNS).order("start_month", { ascending: false, nullsFirst: false }),
     supabase.from("educations").select(EDUCATION_COLUMNS).order("start_month", { ascending: false, nullsFirst: false }),
     supabase.from("projects").select(PROJECT_COLUMNS).order("start_month", { ascending: false, nullsFirst: false }),
@@ -34,6 +35,7 @@ export async function getCareerTree(supabase: UserSupabaseClient, now: Date = ne
     supabase.from("achievements").select(ACHIEVEMENT_COLUMNS).order("created_at"),
     supabase.from("skills").select(SKILL_COLUMNS).order("name"),
     supabase.from("project_skills").select(PROJECT_SKILL_COLUMNS).order("created_at"),
+    listActiveWritingChats(supabase, now),
   ]);
   for (const res of [experiences, educations, projects, details, achievements, skills, links]) {
     if (res.error) throw mapSaveError(res.error);
@@ -82,5 +84,6 @@ export async function getCareerTree(supabase: UserSupabaseClient, now: Date = ne
     years: groupCareerByYear(tree, currentYearInSeoul(now)),
     summary: summarizeCareer(tree),
     isEmpty: tree.experiences.length === 0 && tree.educations.length === 0 && tree.projects.length === 0,
+    activeWritingChats,
   };
 }

@@ -76,7 +76,9 @@ select is(public.get_deletion_impact('skill', 'aaaaaaaa-6666-0000-0000-000000000
           'skill: its project links');
 
 select throws_ok($$select public.get_deletion_impact('writing_chat', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
-                 'P0001', 'invalid_entity_type', 'writing_chat not supported until S4');
+                 'P0001', 'career_item_not_found', 'writing_chat (S4): an id that is not a chat is not found');
+select throws_ok($$select public.get_deletion_impact('chat', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
+                 'P0001', 'invalid_entity_type', 'unknown entity_type rejected');
 select throws_ok($$select public.get_deletion_impact(null, 'aaaaaaaa-1111-0000-0000-000000000001')$$,
                  'P0001', 'invalid_entity_type', 'null entity_type rejected');
 select throws_ok($$select public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'orphan')$$,
@@ -91,8 +93,10 @@ select throws_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-00
                  'P0001', 'invalid_result_mode', 'unknown result_mode rejected');
 select throws_ok($$select public.delete_career_item('project', 'bbbbbbbb-3333-0000-0000-000000000001')$$,
                  'P0001', 'career_item_not_found', 'A cannot delete B''s project');
-select throws_ok($$select public.delete_career_item('writing_chat', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
+select throws_ok($$select public.delete_career_item('chat', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
                  'P0001', 'invalid_entity_type', 'delete: invalid entity_type');
+select throws_ok($$select public.delete_career_item('writing_chat', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
+                 'P0001', 'career_item_not_found', 'delete: a project id is not a writing chat');
 select is((select count(*)::int from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001'), 1,
           'failed calls deleted nothing');
 

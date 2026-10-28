@@ -1,5 +1,11 @@
 import type { z } from "zod";
-import { DataReadiness, DeleteCareerItemResult, DeletionImpact, type DeleteCareerItemResponse } from "@/lib/contracts/career";
+import {
+  CareerDeletionImpact,
+  DataReadiness,
+  DeleteCareerItemResult,
+  WritingChatDeletionImpact,
+  type DeleteCareerItemResponse,
+} from "@/lib/contracts/career";
 import type { AffiliationMode, DeletableEntityType, ResultMode } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { mapDbError } from "@/server/db/errors";
@@ -26,17 +32,21 @@ export async function getDataReadiness(supabase: UserSupabaseClient | AiWriterSu
   return parseRpc(DataReadiness, data);
 }
 
-export async function getDeletionImpact(
+/** Impact shape by entity type: `writing_chat` → `{ message_count, linked_saved_rows }` (S4, DM §4.2). */
+export type DeletionImpactFor<T extends DeletableEntityType> = T extends "writing_chat" ? WritingChatDeletionImpact : CareerDeletionImpact;
+
+export async function getDeletionImpact<T extends DeletableEntityType>(
   supabase: UserSupabaseClient,
-  input: { entityType: DeletableEntityType; entityId: string; affiliationMode: AffiliationMode },
-): Promise<DeletionImpact> {
+  input: { entityType: T; entityId: string; affiliationMode: AffiliationMode },
+): Promise<DeletionImpactFor<T>> {
   const { data, error } = await supabase.rpc("get_deletion_impact", {
     p_entity_type: input.entityType,
     p_entity_id: input.entityId,
     p_affiliation_mode: input.affiliationMode,
   });
   if (error) throw mapDbError(error);
-  return parseRpc(DeletionImpact, data);
+  const schema = input.entityType === "writing_chat" ? WritingChatDeletionImpact : CareerDeletionImpact;
+  return parseRpc(schema, data) as DeletionImpactFor<T>;
 }
 
 /**

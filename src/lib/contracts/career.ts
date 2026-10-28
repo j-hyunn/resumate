@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ReadinessAiConnection } from "./ai-connection";
+import type { ActiveWritingChatSummary } from "./writing-chat";
 import {
   AFFILIATION_MODES,
   DATA_SUFFICIENCIES,
@@ -288,22 +289,40 @@ export const AffectedApplicationProject = z.object({
   interview_sessions: count,
 });
 
-/** RPC `get_deletion_impact` jsonb (DM §4.2). Snake_case as the RPC returns it. */
-export const DeletionImpact = z.object({
+/** RPC `get_deletion_impact` jsonb for career rows (DM §4.2). Snake_case as the RPC returns it. */
+export const CareerDeletionImpact = z.object({
   cascade: DeletionCascadeCounts,
   affected_results: z.object({ by_application_project: z.array(AffectedApplicationProject) }),
 });
+/**
+ * `entity_type = 'writing_chat'` (S4, DM §4.2): no result impact. `linked_saved_rows` = career rows
+ * saved from the chat; they stay (source_writing_chat_id becomes null, DM §3.4).
+ */
+export const WritingChatDeletionImpact = z.object({
+  message_count: count,
+  linked_saved_rows: count,
+});
+export type CareerDeletionImpact = z.infer<typeof CareerDeletionImpact>;
+export type WritingChatDeletionImpact = z.infer<typeof WritingChatDeletionImpact>;
+export const DeletionImpact = z.union([CareerDeletionImpact, WritingChatDeletionImpact]);
 export type DeletionImpact = z.infer<typeof DeletionImpact>;
 
-/** RPC `delete_career_item` jsonb: what was removed with the target (target itself not counted). */
-export const DeleteCareerItemResult = z.object({
-  entity_type: z.enum(DELETABLE_ENTITY_TYPES),
+const deleteEcho = {
   entity_id: z.guid(),
   affiliation_mode: z.enum(AFFILIATION_MODES),
   result_mode: z.enum(RESULT_MODES),
-  cascade: DeletionCascadeCounts,
-  affected_results: DeletionImpact.shape.affected_results,
-});
+};
+
+/** RPC `delete_career_item` jsonb: what was removed with the target (target itself not counted). */
+export const DeleteCareerItemResult = z.union([
+  z.object({
+    entity_type: z.enum(DELETABLE_ENTITY_TYPES).exclude(["writing_chat"]),
+    ...deleteEcho,
+    cascade: DeletionCascadeCounts,
+    affected_results: CareerDeletionImpact.shape.affected_results,
+  }),
+  z.object({ entity_type: z.literal("writing_chat"), ...deleteEcho, ...WritingChatDeletionImpact.shape }),
+]);
 export type DeleteCareerItemResult = z.infer<typeof DeleteCareerItemResult>;
 
 // ---------- readiness (DM §6, C-09/C-10) ----------
@@ -516,4 +535,6 @@ export type CareerTreeDto = {
   summary: CareerSummary;
   /** True when nothing has been entered yet (S-08 empty state). */
   isEmpty: boolean;
+  /** S-08 "작성 중인 AI 대화" (S4): active writing chats, latest activity first. Visible without an AI key. */
+  activeWritingChats: ActiveWritingChatSummary[];
 };

@@ -47,6 +47,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "project_details"
       referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "achievements_source_writing_chat_fkey"
+      columns: ["source_writing_chat_id","user_id"]
+isOneToOne: false
+      referencedRelation: "writing_chats"
+      referencedColumns: ["id","user_id"]
     }
                   ]
                 },"ai_data_use_consents": {
@@ -255,6 +261,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "projects"
       referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "project_details_source_writing_chat_fkey"
+      columns: ["source_writing_chat_id","user_id"]
+isOneToOne: false
+      referencedRelation: "writing_chats"
+      referencedColumns: ["id","user_id"]
     }
                   ]
                 },"project_skills": {
@@ -307,6 +319,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "experiences"
       referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "projects_source_writing_chat_fkey"
+      columns: ["source_writing_chat_id","user_id"]
+isOneToOne: false
+      referencedRelation: "writing_chats"
+      referencedColumns: ["id","user_id"]
     }
                   ]
                 },"skills": {
@@ -322,6 +340,58 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"writing_chat_messages": {
+                  Row: {
+                    "ai_job_id": string | null,"connection_tier": string | null,"content": string,"created_at": string,"id": string,"model": string | null,"model_tier": string | null,"provider": string | null,"role": string,"sequence": number,"status": string,"updated_at": string,"user_id": string,"writing_chat_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_job_id"?: string | null,"connection_tier"?: string | null,"content": string,"created_at"?: string,"id"?: string,"model"?: string | null,"model_tier"?: string | null,"provider"?: string | null,"role": string,"sequence": number,"status"?: string,"updated_at"?: string,"user_id"?: string,"writing_chat_id": string
+                  }
+                  Update: {
+                    "ai_job_id"?: string | null,"connection_tier"?: string | null,"content"?: string,"created_at"?: string,"id"?: string,"model"?: string | null,"model_tier"?: string | null,"provider"?: string | null,"role"?: string,"sequence"?: number,"status"?: string,"updated_at"?: string,"user_id"?: string,"writing_chat_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "writing_chat_messages_writing_chat_fkey"
+      columns: ["writing_chat_id","user_id"]
+isOneToOne: false
+      referencedRelation: "writing_chats"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
+                },"writing_chats": {
+                  Row: {
+                    "created_at": string,"education_id": string | null,"experience_id": string | null,"id": string,"last_activity_at": string,"last_extracted_sequence": number,"message_count": number,"mode": string,"project_id": string | null,"return_target": Json | null,"saved_at": string | null,"status": string,"structured_draft": NonNullable<Json>,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"last_activity_at"?: string,"last_extracted_sequence"?: number,"message_count"?: number,"mode": string,"project_id"?: string | null,"return_target"?: Json | null,"saved_at"?: string | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"last_activity_at"?: string,"last_extracted_sequence"?: number,"message_count"?: number,"mode"?: string,"project_id"?: string | null,"return_target"?: Json | null,"saved_at"?: string | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "writing_chats_education_fkey"
+      columns: ["education_id","user_id"]
+isOneToOne: false
+      referencedRelation: "educations"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "writing_chats_experience_fkey"
+      columns: ["experience_id","user_id"]
+isOneToOne: false
+      referencedRelation: "experiences"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "writing_chats_project_fkey"
+      columns: ["project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "projects"
+      referencedColumns: ["id","user_id"]
+    }
                   ]
                 }
           }
@@ -343,7 +413,20 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "check_ai_run_allowed":
+            "append_writing_chat_message":
+{ Args: { "p_content": string,"p_writing_chat_id": string }; Returns: {
+              "message_count": number,"message_id": string,"sequence": number
+            }[]
+                           },
+"apply_structured_draft_patch":
+{ Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
+                           },
+"begin_assistant_message":
+{ Args: { "p_ai_job_id": string,"p_connection_tier": string,"p_model": string,"p_model_tier": string,"p_provider": string,"p_writing_chat_id": string }; Returns: {
+              "is_final": boolean,"message_count": number,"message_id": string,"reused": boolean,"sequence": number
+            }[]
+                           },
+"check_ai_run_allowed":
 { Args: { "p_ai_job_id": string }; Returns: string
                            },
 "claim_due_ai_jobs":
@@ -359,6 +442,9 @@ isOneToOne: false
                            },
 "delete_provider_key":
 { Args: { "p_provider": string }; Returns: boolean
+                           },
+"finish_assistant_message":
+{ Args: { "p_content": string,"p_message_id": string,"p_status": string }; Returns: undefined
                            },
 "get_ai_usage_summary":
 { Args: { "p_include_previous"?: boolean,"p_period_month"?: string }; Returns: Json
@@ -379,8 +465,14 @@ isOneToOne: false
               "encryption_version": number,"kek_id": string,"key_ciphertext": string,"key_id": string,"key_nonce": string,"wrapped_dek": string
             }[]
                            },
+"hand_off_writing_chat":
+{ Args: { "p_writing_chat_id": string }; Returns: Json
+                           },
 "mark_provider_key_invalid":
 { Args: { "p_ai_job_id": string,"p_failure_cause": string }; Returns: boolean
+                           },
+"mark_writing_chat_extracted":
+{ Args: { "p_sequence": number,"p_writing_chat_id": string }; Returns: number
                            },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {
@@ -402,8 +494,17 @@ isOneToOne: false
 "save_provider_key":
 { Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
                            },
+"save_writing_chat":
+{ Args: { "p_writing_chat_id": string }; Returns: Json
+                           },
 "set_active_ai_provider":
 { Args: { "p_provider": string }; Returns: undefined
+                           },
+"set_writing_chat_affiliation":
+{ Args: { "p_dismiss_only"?: boolean,"p_education_id"?: string,"p_experience_id"?: string,"p_writing_chat_id": string }; Returns: undefined
+                           },
+"start_writing_chat":
+{ Args: { "p_mode": string,"p_project_id"?: string,"p_return_target"?: Json }; Returns: string
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number

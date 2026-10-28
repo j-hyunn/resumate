@@ -169,8 +169,9 @@ describe("deletion inputs", () => {
       resultMode: "keep_results",
     });
   });
-  it("writing_chat is not deletable in S2", () => {
-    expect(DeletionImpactInput.safeParse({ entityType: "writing_chat", entityId: ID }).success).toBe(false);
+  it("writing_chat is deletable since S4 (대화만 삭제)", () => {
+    expect(DeletionImpactInput.safeParse({ entityType: "writing_chat", entityId: ID }).success).toBe(true);
+    expect(DeletionImpactInput.safeParse({ entityType: "chat", entityId: ID }).success).toBe(false);
   });
 });
 

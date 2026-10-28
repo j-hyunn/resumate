@@ -238,3 +238,32 @@
   - 사용자가 동의를 철회하면 그 공급자·등급의 queued/running 작업에 취소를 요청한다(queued는 시작 전, running은 다음 heartbeat에서 중단).
   - 실행기는 단계마다 db RPC `check_ai_run_allowed(p_ai_job_id)`(app_ai_writer)로 확인하고, 확인 오류면 닫힌 실패(`stalled`)다. 이미 큐에 있던 작업도 `requires_reconsent` 고지 시행·동의 철회 뒤 다음 단계에서 멈춘다(공급자 호출·사용 기록 0).
   - **해소 (decisions.md 2026-10-29)**: 게이트가 `consent_required`면 작업은 `error_code = key_missing`(user_account, failure_cause null → 화면 "AI 연결하기" 잠금)으로 끝난다. `key_invalid` → `key_invalid`, `key_missing` → `key_missing`.
+
+## 2026-10-30 · S4 · AI-12 정리 대기 발화 / 시작 인사 / 스트리밍 재시도
+- 내용: ① AI-12는 "정리 호출 실패 시 직전 미처리 발화 ID 목록을 서버가 관리"한다고 하지만 저장 위치가 없다. ② 고정 시작 인사(AI 메시지)가 메시지 상한 40에 포함되는지 명시가 없다. ③ C-11.3은 재시도 대기를 `next_run_at`으로 예약하라고 하는데, SSE 스트리밍 턴은 응답을 연 채로 예약할 수 없다.
+- 임시 조치 `[가정]`: ① `writing_chats.last_extracted_sequence`를 두고, 그 뒤의 사용자 발화를 다음 정리에 포함한다. ② 시작 인사도 40에 포함한다(AI 메시지 합계 규칙). ③ 스트리밍 턴은 첫 토큰 전의 즉시 재시도(`schema_invalid` / `timeout`)만 하고, 대기가 필요한 원인(분당 한도·장애)은 바로 실패로 끝낸다. `retry_after`를 안내하고 사용자가 "다시 보내기"를 누른다.
+- S5 확장 지점: 게이트 진입 대화의 지원 프로젝트 요건 목록(R-31)은 `jd_requirements`가 생기는 S5에서 넣는다.
+
+## 2026-10-30 · S4 (api) · AI-12 턴 경로 세부 (DM §7 대화 턴, AI-12, C-12, UX S-36)
+- 내용: ① 무료 등급 호출 간격(C-12, 약 6초)은 `next_run_at` 예약을 전제로 하는데, 스트리밍 턴은 예약할 수 없다. ② 무료 등급에서 응답이 실패했을 때 정리를 부를지 정해져 있지 않다. ③ "다시 보내기는 응답만 다시 생성"이라고 하지만, 직전 정리도 실패해 미처리 발화가 남은 경우가 정해져 있지 않다. ④ 메시지 상한: 사용자 메시지는 `message_count ≤ 38`일 때만 받으므로(응답 자리 확보, db 구현) 실제 최대는 39이고 화면의 "n / 40"은 39에서 입력이 막힌다. ⑤ 키 없음·동의 필요로 막힌 메시지 전송의 응답 형태가 없다.
+- 임시 조치 `[가정]`: ① 무료 등급 턴은 요청 안에서 최대 6초를 기다린다(응답 전: 같은 공급자의 마지막 호출이 6초 안이면 남은 시간만, 정리 전: 6초). 재시도 대기와 달리 상한이 6초로 고정돼 60초 예산 안에 든다. ② 무료 등급에서 응답이 실패하면 정리를 부르지 않는다(실패한 키에 호출을 더하지 않음). 발화는 미처리로 남아 다음 턴·다시 보내기에서 정리된다. 유료 등급은 이미 병렬로 시작한 정리를 끝까지 반영한다(이벤트 `draft_patch` → `draft_flags` → `error`). ③ 다시 보내기는 응답을 다시 만들고, 미처리 발화가 있을 때만 정리도 한다(성공한 정리는 다시 부르지 않음, QA-S3a-08). ④ `limitReached` = `message_count ≥ 39`. 상한 직전 턴의 응답은 `begin_assistant_message.is_final`로 마지막 안내를 한다. ⑤ 연결 게이트에 막히면 SSE `error` 이벤트 1개(`key_missing`: 연결 없음·동의 필요, `key_invalid`: 키 무효)로 답한다. 사용자 메시지는 저장하지 않는다(입력창 내용 유지).
+
+## 2026-10-30 · S4 (db) · AI 작성 대화 쓰기 경로·상한·상태 규칙
+- ① **쓰기 경로 (DM §5 대비 더 좁힘)**: DM §5는 `append_writing_chat_message`를 security invoker로, `app_ai_writer`에게 `writing_chats.message_count`·`last_activity_at` 직접 update와 assistant 메시지 insert/update를 준다. invoker로 만들면 사용자에게 메시지 직접 insert·`message_count` update 권한을 줘야 해서 상한(40)을 우회할 수 있다. 임시 조치 `[구현 결정]`: 대화 시작·사용자 메시지·assistant 메시지·정리 완료 표시는 모두 **소유 검사를 하는 security definer RPC**로만 쓰고, 두 테이블에 대한 직접 insert/update 권한은 사용자(`status`, `return_target` 제외)와 `app_ai_writer` 모두에게 주지 않는다. `save_writing_chat`·`hand_off_writing_chat`은 DM대로 invoker(커리어 쓰기는 사용자 RLS), 마지막 상태 변경만 private definer 헬퍼. `service_role`은 select·delete만(90일 정리용).
+- ② **메시지 상한 `[가정]`**: 사용자 메시지는 `message_count <= 38`일 때만 받는다(그 답 AI 메시지 자리 확보). 그래서 실제 최대는 보통 39개다. "40번째가 사용자 메시지이고 답이 없는" 경우를 막기 위함. 상한 안내용으로 `begin_assistant_message`가 `is_final`을 돌려준다.
+- ③ **죽은 스트리밍 턴 `[구현 결정]`**: assistant 행이 `streaming`인데 2분 넘게 갱신이 없거나 그 턴 작업이 이미 끝났으면 죽은 턴으로 본다. 다시 보내기에서 재사용하고, 새 턴이 시작되면 남은 `streaming` 행을 `failed`로 닫는다(함수 강제 종료로 영원히 "응답 중"이 되는 것 방지). 살아 있는 턴이 있는 동안에는 새 사용자 메시지도 `turn_in_progress`로 거부한다(QA-S4-04).
+- ④ **대화 상태 `[가정]`**: `saved`·`handed_off`·`abandoned`는 되돌릴 수 없다. 사용자 직접 상태 변경은 `active → abandoned`(그만두기)만. 그만둔 대화를 다시 이어 하는 흐름은 기획에 없어 막았다(필요하면 `abandoned → active` 허용으로 바꾸기 쉬움).
+- ⑤ **패치 형식 `[구현 결정]`**: DM 2.5는 패치 jsonb 모양을 정하지 않았다. `_workspace/backend/S4/02_db-engineer_notes.md` "패치 계약"으로 정했다. `structured_draft`에 DM에 없는 키 2개를 더했다: 성과 `achievement_key`(사용자 수정·수락 대상 지정용), clarifications `existing_detail_id`(DM 예시는 `detail_key`만). 사용자가 값을 비우면(`value: null`) 필드 객체를 지운다(DM은 비우기를 정의하지 않음. 거절과 달리 `reviewed_at`도 남기지 않음).
+- ⑥ **AI 패치 거부 방식 `[구현 결정]`**: AI 패치는 규칙 위반 op만 건너뛰고 나머지를 반영한다(`rejected[]`로 보고). 사용자 패치는 첫 위반에서 전체 거부. AI-12 "패치 거부"를 필드 단위로 읽었다.
+- ⑦ **소속 제안 반복**: 사용자가 [아니요]로 제안을 지워도 다음 턴 AI가 같은 제안을 다시 낼 수 있다. DB는 막지 않는다(파이프라인이 확정 소속·거절 이력을 보고 다시 내지 않아야 함). 보강 모드에서는 제안을 거부한다(`affiliation_not_editable`, UX S-36 "보강 모드에서는 소속 칸을 읽기 전용").
+- ⑧ **값 길이 `[구현 결정]`**: `projects.name`·`role`, `achievements.metric_name`·`unit`은 컬럼에 길이 제한이 없어 패치에서 각각 100·100·200·50자로 막았다. 스킬 50자는 `skills` CHECK와 같다.
+- ⑨ **시작 인사 문구 `[가정]`**: 고정 문구를 SQL 상수로 두었다(모드별 2종 + 활성 키가 무료 등급이면 "입력 내용이 공급자의 서비스 개선에 쓰일 수 있어요" 안내 추가). 공급자별 고지 문구와 맞는지는 기획 확인 필요.
+- ⑩ **게이트 진입 `return_target`**: `application_project_id`는 S5 전이라 uuid 모양만 검사한다(soft reference). `created_at`은 서버가 넣는다.
+
+## 2026-10-30 · S4 · AI-12 V-9 구현 해석 (ai-pipeline-engineer)
+- 내용: ① V-9f의 "situation 후보로만 둔다"가 구체적이지 않다. ② "알아서 채워 줘" 발화에서 패치를 만들지 않는 규칙이 프롬프트에만 있다. ③ 사용자가 [아니요]로 거절한 소속 제안을 다시 내지 않으려면 거절 기록이 필요하지만 저장 위치가 없다(`set_writing_chat_affiliation(p_dismiss_only)`는 제안만 지움). ④ V-9d "회사·제품명 후보"와 V-9g "제3자 실명"을 판정하는 기준이 없다.
+- 임시 조치 `[가정]`: ① situation이 비어 있으면 같은 값을 `needs_review`로 넣고(수락해야 저장), 차 있으면 버리고 `actor_ambiguous`만 남긴다. ② 출처가 모두 위임 요청 발화면 서버에서도 거부한다(`V-9a.delegation`). ③ 제안은 이번 정리 대상 발화를 출처로 포함할 때만 내고, runner가 거절 id를 넘기면(`declinedAffiliationIds`) 항상 막는다. 확실히 막으려면 `writing_chats`에 거절 목록 컬럼이 필요하다(기획 결정 필요). ④ 접미사 목록과 "성 + 2음절 + 직함" 패턴을 상수로 두었다(`v9-lexicon.ts`). 재현율을 우선했고, 오탐이면 필드만 빈다.
+
+## 2026-10-30 · S4 QA (backend-qa) · UI 패턴 문서의 AI-12 스트림 모양
+- 내용: `.claude/skills/ui-implementation/references/patterns.md`는 AI-12 작성 대화를 C-04 블록 이벤트(`block_started`…`done`)와 `useAiStream → { blocks, status, error, cancel }`로 적고, "월간 대화 한도" 소진 처리도 남아 있다. 기획(AI-12 응답 모드, DM §7 대화 턴)과 S4 구현은 대화 이벤트(`turn_started` → `reply_delta` → `reply_done` → `draft_patch` → `draft_flags` → `turn_done` | `error`)이고 월 한도는 v4에서 폐기됐다(D-34).
+- 임시 조치: 백엔드는 기획대로 둔다. S-36 연결 단계에서 UI 훅은 `blocks` 대신 대화 메시지·정리 결과 상태를 돌려주는 별도 훅이 필요하다. UI 하네스 문서 갱신 필요(리더 → resumate-ui).

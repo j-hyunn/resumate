@@ -55,8 +55,8 @@ export type SkillProficiency = (typeof SKILL_PROFICIENCIES)[number];
 export const ACHIEVEMENT_KINDS = ["quantitative", "qualitative"] as const;
 export type AchievementKind = (typeof ACHIEVEMENT_KINDS)[number];
 
-/** get_deletion_impact / delete_career_item `entity_type` (DM §4.2). `writing_chat` arrives in S4. */
-export const DELETABLE_ENTITY_TYPES = ["experience", "education", "project", "project_detail", "achievement", "skill"] as const;
+/** get_deletion_impact / delete_career_item `entity_type` (DM §4.2; `writing_chat` since S4). */
+export const DELETABLE_ENTITY_TYPES = ["experience", "education", "project", "project_detail", "achievement", "skill", "writing_chat"] as const;
 export type DeletableEntityType = (typeof DELETABLE_ENTITY_TYPES)[number];
 
 /** What happens to projects of a deleted experience/education (DM §4.1). [가정] value names. */
@@ -200,3 +200,53 @@ export const EVIDENCE_SOURCE_TYPES = [
   "user_note",
 ] as const;
 export type EvidenceSourceType = (typeof EVIDENCE_SOURCE_TYPES)[number];
+
+// --- S4: AI writing chat (DM §2.5, AI-12) ---
+
+/** writing_chats.mode CHECK. */
+export const WRITING_CHAT_MODES = ["new_project", "augment_project"] as const;
+export type WritingChatMode = (typeof WRITING_CHAT_MODES)[number];
+
+/** writing_chats.status CHECK: 진행 중 / 저장 완료 / 폼으로 전환 / 그만둠. */
+export const WRITING_CHAT_STATUSES = ["active", "saved", "handed_off", "abandoned"] as const;
+export type WritingChatStatus = (typeof WRITING_CHAT_STATUSES)[number];
+
+/** writing_chat_messages.role CHECK. */
+export const WRITING_CHAT_MESSAGE_ROLES = ["user", "assistant"] as const;
+export type WritingChatMessageRole = (typeof WRITING_CHAT_MESSAGE_ROLES)[number];
+
+/** writing_chat_messages.status CHECK. */
+export const WRITING_CHAT_MESSAGE_STATUSES = ["streaming", "done", "failed"] as const;
+export type WritingChatMessageStatus = (typeof WRITING_CHAT_MESSAGE_STATUSES)[number];
+
+/** structured_draft field object `origin` (DM §2.5). */
+export const DRAFT_FIELD_ORIGINS = ["ai", "user_edit"] as const;
+export type DraftFieldOrigin = (typeof DRAFT_FIELD_ORIGINS)[number];
+
+/** structured_draft field object `review` (DM §2.5 v3.2, R-27). */
+export const DRAFT_FIELD_REVIEWS = ["ok", "needs_review", "accepted"] as const;
+export type DraftFieldReview = (typeof DRAFT_FIELD_REVIEWS)[number];
+
+/** structured_draft `clarifications[].kind` (AI-12 output schema). */
+export const CLARIFICATION_KINDS = ["actor_ambiguous", "number_vague", "period_unclear", "affiliation_unclear"] as const;
+export type ClarificationKind = (typeof CLARIFICATION_KINDS)[number];
+
+/** writing_chats.return_target.feature (DM §2.5 v3.2, U-5). */
+export const RETURN_TARGET_FEATURES = ["insight", "career_description", "cover_letter", "job_interview"] as const;
+export type ReturnTargetFeature = (typeof RETURN_TARGET_FEATURES)[number];
+
+/** structured_draft.project field keys = projects columns (DM §2.5 v3.1). */
+export const DRAFT_PROJECT_FIELDS = ["name", "role", "summary", "start_month", "end_month", "team_size"] as const;
+export type DraftProjectField = (typeof DRAFT_PROJECT_FIELDS)[number];
+
+/** structured_draft.details[].fields keys = project_details columns. */
+export const DRAFT_DETAIL_FIELDS = ["title", "situation", "task", "action", "result", "learnings"] as const;
+export type DraftDetailField = (typeof DRAFT_DETAIL_FIELDS)[number];
+
+/** structured_draft.details[].achievements[] keys = achievements columns (quantitative). */
+export const DRAFT_ACHIEVEMENT_FIELDS = ["metric_name", "value_before", "value_after", "unit"] as const;
+export type DraftAchievementField = (typeof DRAFT_ACHIEVEMENT_FIELDS)[number];
+
+/** AI-12 slot order (진행 단계 표시, `requested_slot`; ids agreed with ai-pipeline `SlotId`). */
+export const WRITING_CHAT_SLOTS = ["basic_info", "situation", "task", "action", "result", "learnings", "next_episode"] as const;
+export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];

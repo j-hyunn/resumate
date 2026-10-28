@@ -52,7 +52,7 @@ function devEnvActive(env: DevAiEnv): boolean {
  * production, the S3a env implementation is used instead (local runs without
  * registering a key). Production always uses the DB path.
  */
-function connections(): {
+export function connections(): {
   context: ProviderContextSource;
   keysFor: (userId: string) => KeySource;
   statusFor: (db: AiWriterSupabaseClient) => KeyStatusReporter;

@@ -61,7 +61,7 @@ export function createUsageRecorder(opts: {
       applicationProjectId: job.applicationProjectId,
       provider: job.provider,
       model: record.model,
-      modelTier: job.modelTier,
+      modelTier: record.modelTier ?? job.modelTier,
       connectionTier: job.connectionTier,
       usage: record.usage,
       outcome: record.outcome,

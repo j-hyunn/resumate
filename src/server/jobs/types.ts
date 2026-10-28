@@ -207,6 +207,11 @@ export type LlmCallRecord = {
   callKey: string | null;
   /** Model actually called. */
   model: string;
+  /**
+   * Tier of this call when it differs from the job's (AI-12: extract = light,
+   * reply = default, one job). Defaults to the job's model_tier.
+   */
+  modelTier?: ModelTier;
   usage: NormalizedUsage;
   outcome: UsageOutcome;
   errorCode: AiErrorCode | null;

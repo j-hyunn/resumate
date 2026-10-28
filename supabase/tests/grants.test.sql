@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(22);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -36,6 +36,7 @@ select is_empty(
 -- S2: SELECT on the 7 career tables, nothing else (DM §5, DM-13: career tables are read-only).
 -- S3: + SELECT on ai_jobs, evidence_links (writes are column-level / RPC).
 -- S3a: usage_events / usage_limits dropped (D-34); + SELECT on ai_usage_records (own rows), ai_price_tables.
+-- S4: + SELECT on writing_chats, writing_chat_messages (writes only through the definer message / patch RPCs).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -47,8 +48,9 @@ select set_eq(
        and not (c.relname = 'profiles' and p.privilege_type = 'SELECT')$$,
   array['experiences:SELECT', 'educations:SELECT', 'projects:SELECT', 'project_details:SELECT',
         'achievements:SELECT', 'skills:SELECT', 'project_skills:SELECT',
-        'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI tables only');
+        'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
+        'writing_chats:SELECT', 'writing_chat_messages:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat tables only');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -56,7 +58,8 @@ select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_
 
 -- QA-S2-05 -> S3 allow list: app_ai_writer column-level writes in public are exactly these
 -- (DM §5: ai_jobs, evidence_links, ai_usage_records insert; career tables and ai_price_tables never).
--- Grows only with DM §5 (S4: writing_chats.message_count / last_activity_at, writing_chat_messages assistant).
+-- Grows only with DM §5. S4: unchanged — DM §5 allows app_ai_writer writing_chats.message_count / last_activity_at and
+-- assistant rows, but S4 writes them only through definer RPCs (begin / finish_assistant_message), so no column grant.
 select set_eq(
   $$select c.relname::text || '.' || a.attname || ':' || p.privilege_type
       from pg_class c
@@ -113,8 +116,33 @@ select set_eq(
      where n.nspname = 'public'
        and has_function_privilege('app_ai_writer', p.oid, 'execute')$$,
   array['get_data_readiness', 'complete_ai_job', 'mark_provider_key_invalid', 'record_provider_key_success',
-        'check_ai_run_allowed'],
-  'app_ai_writer can execute exactly get_data_readiness, complete_ai_job, the two key-status RPCs and check_ai_run_allowed (S3b)');
+        'check_ai_run_allowed',
+        'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs');
+
+-- S4: writing chat RPCs by role (DM §5, §7). Career-writing RPCs (save / hand-off) are user-session only (DM-13).
+select set_eq(
+  $$select p.proname::text || ':' || r.rolname
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public'
+       and p.proname in ('start_writing_chat', 'append_writing_chat_message', 'begin_assistant_message',
+                         'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
+                         'set_writing_chat_affiliation', 'save_writing_chat', 'hand_off_writing_chat')
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['start_writing_chat:authenticated', 'append_writing_chat_message:authenticated',
+        'set_writing_chat_affiliation:authenticated', 'save_writing_chat:authenticated', 'hand_off_writing_chat:authenticated',
+        'apply_structured_draft_patch:authenticated', 'apply_structured_draft_patch:app_ai_writer',
+        'begin_assistant_message:app_ai_writer', 'finish_assistant_message:app_ai_writer',
+        'mark_writing_chat_extracted:app_ai_writer'],
+  'S4 writing chat RPC execute matrix');
+
+-- S4 (DM §2.5): no API / app role can UPDATE writing_chats.structured_draft directly.
+select is_empty(
+  $$select r.rolname from pg_roles r
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'service_role', 'authenticator')
+       and has_column_privilege(r.oid, 'public.writing_chats'::regclass, 'structured_draft', 'UPDATE')$$,
+  'nobody can update writing_chats.structured_draft directly');
 
 -- service_role-only job functions (cron): exactly these in public beyond what authenticated can run.
 select set_eq(

@@ -27,18 +27,13 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_affiliation_mode: { message: "입력값을 확인해 주세요." },
   invalid_result_mode: { message: "입력값을 확인해 주세요." },
   invalid_detail_order: { message: "상세 내용 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  // S3 usage ledger RPCs (reserve_usage, charge_usage, release_usage)
-  usage_limit_reached: { message: "이번 달 사용 한도에 도달했습니다.", status: 429 },
-  usage_limit_missing: { message: "이 기능의 사용 한도 정보가 없어 지금은 실행할 수 없습니다.", status: 503 },
-  invalid_usage_feature: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_usage_units: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_usage_reason: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  usage_event_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_usage_transition: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 409 },
-  // S3 ai_jobs (status guard trigger, request_ai_job_cancel, sweep_stalled_ai_jobs)
+  // S3/S3a ai_jobs (status guard trigger, request_ai_job_cancel, complete_ai_job, sweep_stalled_ai_jobs)
   invalid_ai_job_transition: { message: "이미 끝난 작업입니다.", status: 409 },
   ai_job_not_found: { message: "요청한 항목을 찾을 수 없습니다.", status: 404 },
   invalid_stalled_before: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // S3a claim_due_ai_jobs (cron)
+  invalid_now: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_limit: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
 };
 
 /** Raise names that the frontend sees under a generic code instead of their own. */
@@ -49,11 +44,9 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_affiliation_mode: "invalid_input",
   invalid_result_mode: "invalid_input",
   // Server-side programming errors: the client sees a generic internal error.
-  invalid_usage_feature: "internal_error",
-  invalid_usage_units: "internal_error",
-  invalid_usage_reason: "internal_error",
-  usage_event_not_found: "internal_error",
   invalid_stalled_before: "internal_error",
+  invalid_now: "internal_error",
+  invalid_limit: "internal_error",
   ai_job_not_found: "not_found",
 };
 

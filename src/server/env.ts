@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { AI_PROVIDERS, CONNECTION_TIERS } from "@/lib/contracts/enums";
 
 /**
  * Server-side environment. Import env values only through this module.
@@ -27,14 +28,22 @@ export type PublicEnv = z.infer<typeof PublicEnvSchema>;
 export const ServerEnvSchema = PublicEnvSchema.extend({
   // Signs short-lived app_ai_writer JWTs (DM-13, decided in S1).
   SUPABASE_JWT_SECRET: z.string().min(32),
-  ANTHROPIC_API_KEY: z.string().min(1),
   // Bearer token Vercel Cron sends to /api/cron/* routes.
   CRON_SECRET: z.string().min(16),
-  // Service role key — used ONLY by src/server/jobs/stalled-sweep.ts (cron,
+  // Service role key — used ONLY by src/server/jobs/cron.ts (cron,
   // cross-user). Optional so pages and AI work don't depend on it; the sweep
   // fails closed when it's missing.
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  // There is no service-wide LLM key (BYOK, D-28/D-34). Development only:
+  // one provider + key for local runs before S3b key storage
+  // (src/server/jobs/provider-context.ts). Ignored (dropped) in production,
+  // and the dev key source throws there.
+  AI_DEV_PROVIDER: z.enum(AI_PROVIDERS).optional(),
+  AI_DEV_API_KEY: z.string().min(1).optional(),
+  AI_DEV_CONNECTION_TIER: z.enum(CONNECTION_TIERS).optional(),
 });
+
+const DEV_ONLY_KEYS = ["AI_DEV_PROVIDER", "AI_DEV_API_KEY", "AI_DEV_CONNECTION_TIER"] as const;
 
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;
 
@@ -72,7 +81,10 @@ function parseWith<S extends typeof PublicEnvSchema | typeof ServerEnvSchema>(sc
 
 /** Parses an env source. Pure, so it can be tested without touching process.env. */
 export function parseServerEnv(source: EnvSource): ServerEnv {
-  return parseWith(ServerEnvSchema, source);
+  if (source.NODE_ENV !== "production") return parseWith(ServerEnvSchema, source);
+  const withoutDev: EnvSource = { ...source };
+  for (const key of DEV_ONLY_KEYS) delete withoutDev[key];
+  return parseWith(ServerEnvSchema, withoutDev);
 }
 
 /** Parses only the public Supabase keys. */

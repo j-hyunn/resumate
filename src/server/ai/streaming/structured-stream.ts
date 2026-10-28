@@ -1,7 +1,8 @@
 import type { z } from "zod";
-import type { AiClient, AiRequest, AiResult } from "../client";
-import { AiError, isAiError } from "../errors";
-import { toOutputJsonSchema } from "../structured";
+import { AiError, isAiError, isProviderError } from "../errors";
+import type { Llm, LlmRequest } from "../llm";
+import { toCanonicalJsonSchema } from "../providers/schema";
+import type { AiCallResult } from "../providers/types";
 import type { ValidationReport } from "../validation/report";
 import { BlockExtractor } from "./blocks";
 import type { AiStreamEvent } from "./events";
@@ -22,14 +23,16 @@ import { JsonStreamError } from "./json-incremental";
  * - V-6 in streaming: a schema miss after the stream ends is an `error`
  *   event (`schema_invalid`, retryable). The client restarts the whole
  *   generation (AI-03 "전체 재시도", MVP 단순화); blocks already shown are discarded.
- * - Exactly one terminal event (`done` or `error`). Errors carry C-6 codes only.
+ * - Exactly one terminal event (`done` or `error`). Errors carry C-11 codes only.
+ * - C-11.3: a provider error after the first token is not retryable (`retryable:
+ *   false`), so the partial output isn't regenerated and billed twice.
  */
 export type StructuredStreamOptions<T> = {
-  ai: AiClient;
-  request: Omit<AiRequest, "outputSchema">;
+  llm: Llm;
+  request: Omit<LlmRequest, "outputSchema">;
   schema: z.ZodType<T>;
   validateBlock?: (raw: Record<string, unknown>, blockId: string) => unknown | null;
-  finalize: (value: T, meta: AiResult) => Promise<StreamFinalization> | StreamFinalization;
+  finalize: (value: T, meta: AiCallResult) => Promise<StreamFinalization> | StreamFinalization;
   blockKeys?: { blockId: string; text: string };
 };
 
@@ -43,15 +46,16 @@ export type StreamFinalization = {
 export async function* runStructuredStream<T>(options: StructuredStreamOptions<T>): AsyncGenerator<AiStreamEvent> {
   const extractor = new BlockExtractor(options.blockKeys);
   const hidden = new Set<string>();
-  let meta: AiResult | null = null;
+  let meta: AiCallResult | null = null;
   let final: StreamFinalization;
   try {
-    const outputSchema = toOutputJsonSchema(options.schema);
-    for await (const chunk of options.ai.stream({ ...options.request, outputSchema })) {
-      if (chunk.type === "final") {
+    const outputSchema = toCanonicalJsonSchema(options.schema);
+    for await (const chunk of options.llm.stream({ ...options.request, outputSchema })) {
+      if (chunk.type === "done") {
         meta = chunk.result;
         break;
       }
+      if (chunk.type === "error") throw chunk.error;
       for (const event of extractor.push(chunk.text)) {
         if (event.type === "started") {
           yield { type: "block_started", blockId: event.blockId, path: event.path };
@@ -95,6 +99,17 @@ export const AI_STREAM_TERMINAL_EVENT_TYPES = ["done", "error"] as const;
 
 function toErrorEvent(err: unknown): Extract<AiStreamEvent, { type: "error" }> {
   const mapped = err instanceof JsonStreamError ? new AiError("schema_invalid", { cause: err }) : err;
-  if (isAiError(mapped)) return { type: "error", code: mapped.code, message: mapped.message, retryable: mapped.retryable };
-  return { type: "error", code: "internal_error", message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", retryable: true };
+  if (isAiError(mapped)) {
+    const provider = isProviderError(mapped) ? mapped : null;
+    const retryable = mapped.retryable && (!provider || provider.beforeFirstToken);
+    return {
+      type: "error",
+      code: mapped.code,
+      message: mapped.message,
+      retryable,
+      retryAfter: provider?.retryAfter?.toISOString() ?? null,
+      quotaResetsAt: provider?.quotaResetsAt?.toISOString() ?? null,
+    };
+  }
+  return { type: "error", code: "internal_error", message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", retryable: true, retryAfter: null, quotaResetsAt: null };
 }

@@ -47,7 +47,6 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", s.url);
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", s.anonKey);
     vi.stubEnv("SUPABASE_JWT_SECRET", s.jwtSecret);
-    vi.stubEnv("ANTHROPIC_API_KEY", "test-not-used");
     vi.stubEnv("CRON_SECRET", "test-cron-secret-0000");
     resetServerEnvCache();
   });

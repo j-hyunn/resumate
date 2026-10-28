@@ -119,3 +119,65 @@
 ## 2026-10-28 · S3a · AI C-11.3 / C-12 `next_run_at` 작업을 깨우는 주체
 - 내용: 재시도 대기를 함수 안에서 하지 않고 `next_run_at`으로 예약하라고 하지만, 예약된 작업을 누가 다시 실행하는지 정해져 있지 않다.
 - 임시 조치 `[가정]` (사용자 승인 B-4): 작업 상태 조회(화면 폴링 2초)가 `next_run_at`이 지난 작업을 깨우는 것을 주 경로로, Vercel Cron을 안전망으로 둔다. 사용자가 화면을 떠나면 다음 크론까지 멈춘다(Hobby 플랜은 하루 1회).
+
+## 2026-10-28 · S3a · AI C-13 가격표 초안 ↔ 공급자 공식 가격 (조사 2026-10-28)
+- 내용: C-13 초안의 Claude Sonnet 5.5 캐시 읽기 0.20은 현재 공식 0.10(입력의 0.05배)이다. Haiku 5.5는 캐시 단가가 비어 있었고(공식 쓰기 0.125 / 읽기 0.01), 10만 토큰 초과 장문 구간이 있다. OpenAI·Gemini는 미정이었다.
+- 조치: `S3a/00_model-mapping.md`(사용자 확정)의 값과 버전 3개(`v2026-10-28`, `v2026-12-01`, `v2027-01-01`)를 가격표 시드로 쓴다.
+
+## 2026-10-28 · S3a · 분류되지 않은 예외의 error_code (73행 재검토)
+- 임시 조치 `[가정]`: 공급자 오류 표(C-11.2)에 없는 예외는 `provider_unavailable`(재시도 최대 2회)로 기록하고, 로그에 `unclassified: true`를 남긴다. 시스템 코드 목록(C-11.1)에 "내부 오류"가 없어서다.
+
+## 2026-10-28 · S3a · DM §2.9.3 / AI C-13 장문 구간의 캐시 단가 컬럼
+- 내용: DM·C-13의 가격표에는 장문 구간 단가가 `long_context_input_usd_per_mtok`, `long_context_output_usd_per_mtok` 두 개뿐이다. 그런데 확정된 매핑(`S3a/00_model-mapping.md` §2)에서는 장문 구간에 캐시 읽기 단가도 바뀐다(OpenAI 3모델: 0.02 / 0.10 / 0.20). Claude Haiku 5.5는 캐시 쓰기 단가(0.625)도 바뀐다. C-13 비용 식도 장문 구간에서 캐시 토큰에 어떤 단가를 쓸지 정하지 않았다.
+- 임시 조치 `[가정]`: `ai_price_tables`에 null 허용 컬럼 `long_context_cached_input_usd_per_mtok`, `long_context_cache_write_usd_per_mtok`를 더하고 매핑 값을 시드했다. 비용 계산(api)은 입력이 기준을 넘으면 `long_context_*` 단가를 쓰고, 장문 캐시 단가가 null이면 일반 캐시 단가를 쓰는 것으로 제안한다. 기획에서 DM 2.9.3 표와 C-13 식에 두 컬럼을 반영할지 정해야 한다.
+
+## 2026-10-28 · S3a · AI C-11.2 공급자 오류 표 ↔ 공급자 최신 문서·SDK (ai-pipeline-engineer 확인)
+- 내용: C-11.2는 `[가정: 구현 시 최신 오류 문서로 확인]`이다. 확인 결과 표와 다른 점이 있다.
+  - OpenAI 공식 오류 문서에는 `insufficient_quota`와 일일(RPD) 한도 코드가 없고, 잔액·한도 계열로 `credit_balance_exhausted`, `organization/project_spend_limit_exceeded`, `organization_usage_limit_exceeded`(모두 429)가 있다. 403 "지원하지 않는 국가·지역"은 표에 없다.
+  - Gemini 문서에 402(선불 크레딧 소진)와 snake_case 코드(`quota_exceeded` = 일일 한도, `failed_precondition` 등)가 새로 있다. `API_KEY_INVALID`, `QuotaFailure`(`PerDay`/`PerMinute`), `RetryInfo`는 문서에 없고 실제 응답 본문 관례에 기댄다.
+  - Claude는 402 `billing_error`가 따로 있다.
+  - OpenAI Responses API는 `max_output_tokens` 최솟값이 16이라 C-10.5의 "출력 1~5토큰"을 지킬 수 없다.
+- 임시 조치 `[가정]`: 표의 값과 새 값을 모두 매핑한다. OpenAI 잔액·한도 계열 → `billing_required`, 메시지에 per day/RPD가 있거나 `quota_exceeded` → `daily_quota_exhausted`(초기화 시각은 Retry-After가 있을 때만), 403 지역 미지원 → `billing_required`(Gemini 지역 제한과 같은 원인 3). Gemini 402·`quota_exceeded` → 각각 원인 3·2. Claude 402 → 원인 3. OpenAI 키 검증 2단계는 16토큰. 세부는 `S3a/02_ai-pipeline-engineer_notes.md` §3.
+
+## 2026-10-28 · S3a · AI C-11.3 대기 상한 120초와 공급자 `Retry-After`
+- 내용: "작업당 대기 합계 상한 120초"가 다음 대기를 더하기 전 기준인지, 더한 뒤 기준인지 정해져 있지 않다. 공급자가 120초보다 긴 `Retry-After`를 줄 때의 처리도 없다.
+- 임시 조치 `[가정]`: `이번 실행의 대기 합계 + 다음 대기 ≤ 120초`일 때만 `next_run_at`으로 예약한다. 넘으면 그 원인으로 최종 실패하고 `retry_after`를 기록한다(`src/server/jobs/retry.ts`).
+
+## 2026-10-28 · S3a · 수동 재시도("다시 시도")의 재시도 횟수·대기 예산
+- 내용: 수동 재시도 때 호출당 재시도 횟수와 120초 대기 예산을 다시 시작하는지 정해져 있지 않다. DB 가드는 `retry_count`·`retry_wait_total_ms`를 비우지 않는다.
+- **사용자 확정 (2026-10-28)**: 수동 재시도는 새 실행으로 본다. 호출당 횟수와 대기 예산(120초)은 새로 시작한다(`step_outputs._meta.waitBase`, `retries`). 컬럼 `retry_count`·`retry_wait_total_ms`는 작업 전체 누계로 계속 늘어난다.
+
+## 2026-10-28 · S3a · 실행기 자체 오류(공급자 무관)의 error_code
+- 내용: 단계 밖의 실패(체크포인트 저장 DB 오류, `complete_ai_job` 2회 실패, 등록되지 않은 job type)를 C-11.1의 어떤 코드로 남길지 정해져 있지 않다. 단계 안의 미분류 예외는 앞 항목대로 `provider_unavailable`이다.
+- 임시 조치 `[가정]`: 공급자와 무관하므로 `stalled`(system, "작업이 중단되었습니다", 다시 시도 가능)로 끝낸다. `provider_unavailable`로 두면 화면에 "공급자 장애"가 잘못 보이기 때문이다.
+
+## 2026-10-28 · S3a · 가격표에 없는 모델의 사용 기록
+- 내용: 호출한 모델이 그날 유효한 가격표 버전에 없을 때의 처리가 없다(`price_table_version` not null).
+- 임시 조치 `[가정]`: `price_table_version = 'unpriced'`, `estimated_cost_usd = 0`으로 기록하고 로그 `ai_usage.unpriced`를 남긴다. 화면의 가격표 버전 목록에 `unpriced`가 보일 수 있다(매핑 모델 9개가 모두 시드되어 있어 정상 경로에서는 생기지 않음).
+
+## 2026-10-28 · S3a · 작업 시작 거부 코드 (AI 미연결·키 무효)
+- 내용: 활성 공급자가 없거나 키가 `invalid`일 때 작업 시작 API의 오류 코드가 정해져 있지 않다(화면은 readiness `ai_connection`으로 먼저 잠근다).
+- 임시 조치 `[가정]`: 409 `ai_not_connected` / 409 `key_invalid`, 작업 행을 만들지 않는다. `needs_check`는 실행을 허용한다(UX C-19).
+
+## 2026-10-28 · S3a · 대상 없는 작업과 동시 실행 1개
+- 내용: DB 고유 인덱스는 `target_type`·`target_id`가 null이면 제한하지 않는다. `key_verification`의 대상이 정해져 있지 않다.
+- 임시 조치: 실행기는 대상이 없으면 같은 `input_hash`의 진행 중 작업을 따라간다(이중 클릭 방지, DB 보장은 없음). 기능 슬라이스는 모든 작업에 대상을 넣는다. `key_verification` 대상(예: `target_type = 'ai_provider'`, `target_id` = 키 행 id)은 S3b에서 정한다.
+
+## 2026-10-28 · S3a QA · AI C-10.2 Gemini 구조화 출력 방식
+- 내용: C-10.2는 Gemini를 `responseSchema`(OpenAPI 부분집합, anyOf 미사용)로 적었다. 구현은 `responseJsonSchema`(JSON Schema)를 쓰고, nullable 필드는 `anyOf [T, null]`로 보낸다. SDK 타입 주석상 `anyOf`·`enum`·`additionalProperties`·`propertyOrdering`을 지원한다.
+- 임시 조치 `[가정]`: 구현 그대로 둔다. 실제 키로 스모크 확인이 필요하다. 기획에서 C-10.2 표기를 고칠지 정한다.
+
+## 2026-10-28 · S3a QA · DM §5 app_ai_writer의 ai_usage_records select
+- 내용: DM §5는 app_ai_writer에 `ai_usage_records` insert만 준다. 구현은 본인 행 select를 더했다. C-12 호출 간격(마지막 `occurred_at`) 조회와 `insert … returning`에 필요해서다.
+- 임시 조치 `[가정]`: select 본인(RLS)을 유지한다. DM §5 표에 반영할지 정한다.
+
+## 2026-10-28 · S3a QA · 수동 재시도와 활성 공급자 변경 (F-AI-03 (2))
+- 내용: "진행 중 공급자 변경은 다음 실행부터"인데, 실패 작업의 "다시 시도"가 다음 실행인지 정해져 있지 않다. 지금은 작업 행에 고정된 옛 공급자로 다시 돈다. 그 키를 지웠다면 `key_missing`으로 끝난다.
+- 임시 조치: 구현 그대로 둔다(작업 행 공급자 고정). S3b 전에 결정이 필요하다.
+
+## 2026-10-28 · S3a QA · 스트리밍(SSE) 기능의 첫 토큰 전 자동 재시도 주체 (C-11.3)
+- 내용: C-11.3은 스트리밍 응답의 첫 토큰 전 오류를 자동 재시도하라고 한다. 그런데 SSE 경로는 작업 실행기(`next_run_at`)를 쓰지 않는다. 대기(2~16초, Retry-After)를 열린 연결 안에서 할지, 클라이언트 재요청으로 할지 정해져 있지 않다. S3a에는 SSE 경로 재시도가 없다.
+- 임시 조치: S4 계획에서 정한다.
+
+## 2026-10-28 · S3a · 해소 · 단계 안의 비공급자 예외 (QA-S3a-02)
+- **사용자 확정**: 단계 안에서 난 예외 중 공급자 호출 밖의 것(우리 버그, DB 오류, 검증기 오류 등 `ProviderError`가 아닌 것)은 `stalled`로 끝내고 재시도하지 않는다. 공급자 호출 안에서 난 분류되지 않은 오류만 `provider_unavailable`(최대 2회 재시도)로 둔다. 위 "분류되지 않은 예외의 error_code (73행 재검토)" 항목과 "실행기 자체 오류" 항목은 이 규칙으로 정리된다.

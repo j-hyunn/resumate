@@ -1,6 +1,6 @@
 import { aiErrorEvent, type AiStreamEvent } from "@/lib/contracts/ai";
-import type { AiErrorCode } from "@/lib/contracts/enums";
-import { isAiError, isRetryableAiErrorCode } from "@/server/ai/errors";
+import { AI_ERROR_CODES, type AiErrorCode } from "@/lib/contracts/enums";
+import { isAiError, isProviderError } from "@/server/ai/errors";
 import { AI_STREAM_TERMINAL_EVENT_TYPES } from "@/server/ai/streaming/structured-stream";
 
 /**
@@ -30,17 +30,37 @@ export function formatSseEvent(event: SseEvent): string {
 }
 
 /**
- * Every `error` event goes out in one shape (QA-S3-02): category + the
- * "사용량은 차감되지 않았습니다" message by category, retryable by the server rule.
+ * Every `error` event goes out in one shape (QA-S3-02, v4): code, category,
+ * failureCause, message by code, retryable (manual "다시 시도"), and the
+ * retryAfter / quotaResetsAt times when the pipeline event carried them.
  */
 export function normalizeErrorEvent(event: SseEvent): SseEvent {
   if (event.type !== "error") return event;
-  const code = (event as SseEvent & { code?: unknown }).code;
-  return errorEventFor(typeof code === "string" ? (code as AiErrorCode | "internal_error") : "internal_error");
+  const e = event as SseEvent & { code?: unknown; retryAfter?: unknown; quotaResetsAt?: unknown };
+  // Unknown / retired codes (e.g. v3 `refused`) never reach the client as-is.
+  const code = typeof e.code === "string" && (AI_ERROR_CODES as readonly string[]).includes(e.code) ? (e.code as AiErrorCode) : "internal_error";
+  return errorEventFor(code, {
+    retryAfter: toIso(e.retryAfter),
+    quotaResetsAt: toIso(e.quotaResetsAt),
+  });
 }
 
-function errorEventFor(code: AiErrorCode | "internal_error"): SseEvent {
-  return aiErrorEvent(code, code === "internal_error" ? true : isRetryableAiErrorCode(code));
+function toIso(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "string" ? value : null;
+}
+
+function errorEventFor(code: AiErrorCode | "internal_error", times: { retryAfter?: string | null; quotaResetsAt?: string | null } = {}): SseEvent {
+  return aiErrorEvent(code, times);
+}
+
+/** Error event for a thrown error (a ProviderError keeps its retry / quota times). */
+function errorEventForThrown(error: unknown): SseEvent {
+  if (!isAiError(error)) return errorEventFor("internal_error");
+  return errorEventFor(error.code, {
+    retryAfter: isProviderError(error) ? toIso(error.retryAfter) : null,
+    quotaResetsAt: isProviderError(error) ? toIso(error.quotaResetsAt) : null,
+  });
 }
 
 export function formatSseComment(text: string): string {
@@ -62,8 +82,8 @@ export type CreateSseOptions = {
    * Always runs once after the producer settles. The outcome is decided by the
    * last TERMINAL event actually sent (QA-S3-02): `error` → failed, another
    * terminal (`done`, S4 `turn_done`) → completed, client abort → aborted, no
-   * terminal event → failed (an `error` event is sent for it). Charge the ledger
-   * only on `completed`; release otherwise. Its own errors are swallowed.
+   * terminal event → failed (an `error` event is sent for it). Usage records
+   * are written per provider call by the LLM wrapper, not here. Its own errors are swallowed.
    */
   onFinish?: (outcome: SseOutcome) => Promise<void> | void;
   /** Terminal event names (default: the pipeline's `done` / `error`). After one is sent, later events are dropped. */
@@ -153,7 +173,7 @@ export function createSseResponse(
           outcome = { kind: "aborted" };
         } else {
           const code: AiErrorCode | "internal_error" = thrown && isAiError(thrown.error) ? thrown.error.code : "internal_error";
-          emit(errorEventFor(code));
+          emit(thrown ? errorEventForThrown(thrown.error) : errorEventFor(code));
           outcome = { kind: "failed", code, ...(thrown ? { error: thrown.error } : {}) };
         }
 
@@ -162,7 +182,7 @@ export function createSseResponse(
           try {
             await options.onFinish(outcome);
           } catch {
-            // ledger errors are logged by the caller; the response is already closed
+            // the caller logs its own errors; the response is already closed
           }
         }
       })();

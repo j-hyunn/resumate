@@ -9,8 +9,10 @@ export const maxDuration = 60;
 
 /**
  * `POST /api/ai-jobs/{id}/retry` — 재시도 버튼 on a failed job (ST-AI-FAILED).
- * Reserves usage again and resumes from the failed step (completed steps kept, C-6).
- * Input-category failures (`not_a_jd`, `insufficient_data`, `input_too_long`) → 409 `ai_job_not_retryable`.
+ * Resumes from the failed step with the job's fixed provider (completed steps kept, C-6);
+ * the new run gets fresh C-11.3 retry counts and wait budget. If another job on the same
+ * target is in flight, that job is returned (`inProgress: true`).
+ * Input-category failures (`input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`) → 409 `ai_job_not_retryable`.
  */
 export async function POST(_request: Request, ctx: RouteContext<"/api/ai-jobs/[id]/retry">) {
   try {

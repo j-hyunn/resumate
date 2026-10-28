@@ -5,7 +5,9 @@
 | S0 bootstrap | done | 2026-10-24 | — | 없음 (pgTAP 해당 없음) |
 | S1 foundation | done | 2026-10-24 | 연결 대기 (A1) | 없음 |
 | S2 career data | done | 2026-10-25 | 연결 대기 (A2) | 없음 |
-| S3 AI infrastructure | rework (BYOK) | 2026-10-26 | — | Minor 2 (QA-S3-10, 12 → S4) |
+| S3 AI infrastructure | superseded → S3a/S3b | 2026-10-26 | — | Minor 2 (QA-S3-10, 12 → S4) |
+| S3a AI execution (BYOK) | done | 2026-10-28 | — | Minor 1 (QA-S3a-11 → S3b) |
+| S3b BYOK keys & consent | todo | | | |
 | S4 AI writing chat | todo | | | |
 | S5 application projects & JD | todo | | | |
 | S6 insights | todo | | | |

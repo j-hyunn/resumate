@@ -11,8 +11,8 @@ export const maxDuration = 60;
 /**
  * `POST /api/ai-jobs/{id}/cancel` — the stop button (C-04 / C-03).
  * Sets cancel_requested_at through the user-session RPC; a running job stops
- * at its next heartbeat check, a queued job is finished as canceled here.
- * Usage is released either way.
+ * at its next heartbeat check; a queued job (including one waiting for a
+ * scheduled retry, next_run_at) is finished as canceled here.
  */
 export async function POST(_request: Request, ctx: RouteContext<"/api/ai-jobs/[id]/cancel">) {
   try {

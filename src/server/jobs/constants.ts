@@ -20,8 +20,21 @@ export const STALLED_AFTER_MS = 2 * 60_000;
  */
 export const CONTINUE_CLAIM_GRACE_MS = 10_000;
 
-/** Total tries of one step per run: first try + one automatic retry (C-6 실패 처리). */
-export const MAX_STEP_ATTEMPTS = 2;
+/**
+ * C-12 free-tier call spacing per user and provider [가정: 무료 Gemini 분당 한도 기준 약 6초].
+ * Before each step of a free-tier job the runner checks the user's last call to
+ * the provider and, if it was closer than this, schedules the step via next_run_at.
+ */
+export const FREE_TIER_MIN_INTERVAL_MS = 6_000;
 
-/** Tries for complete_ai_job / release_usage_for_job (network blips); after that the stalled sweep is the safety net. */
-export const LEDGER_SETTLE_TRIES = 2;
+/** Due jobs the cron wakes per run (B-4 safety net); each is continued in its own invocation. */
+export const CRON_DUE_JOBS_LIMIT = 50;
+
+/** Tries for complete_ai_job (network blips); after that the job fails as `stalled`. */
+export const COMPLETE_TRIES = 2;
+
+/**
+ * QA-S3a-03: at the end of an invocation, wait at most this long for provider
+ * calls abandoned by an aborted step and their ai_usage_records inserts.
+ */
+export const USAGE_SETTLE_GRACE_MS = 3_000;

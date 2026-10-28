@@ -1,24 +1,41 @@
-import type { AiJobProgress } from "@/lib/contracts/ai";
-import type { AiErrorCode, AiJobStatus, AiJobType, UsageFeature, UsageReason } from "@/lib/contracts/enums";
+import type { StoredAiJobProgress } from "@/lib/contracts/ai";
+import type {
+  AiErrorCode,
+  AiJobStatus,
+  AiJobType,
+  AiProvider,
+  ConnectionTier,
+  ModelTier,
+  UsageFeature,
+  UsageOutcome,
+  UsageSource,
+} from "@/lib/contracts/enums";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
+import type { KeySource, KeyStatusReporter, ProviderContextSource } from "./provider-context";
 
 /**
- * Job runner types (AI C-6 비동기 작업). The runner depends only on these
- * interfaces; `supabase-store.ts` / `ledger.ts` implement them against the DB,
- * tests use in-memory fakes.
+ * Job runner types (AI C-6 비동기 작업, C-11.3 재시도, C-12 무료 등급, C-13 사용 기록).
+ * The runner depends only on these interfaces; `supabase-store.ts` /
+ * `supabase-usage.ts` implement them against the DB, tests use in-memory fakes.
  */
 
 export type JsonObject = Record<string, unknown>;
 
 /**
  * Runner bookkeeping stored under `step_outputs._meta` (survives yield /
- * continue / manual retry). Stage keys never start with `_`.
+ * continue / scheduled retry / manual retry). Stage keys never start with `_`.
  */
 export type JobMeta = {
-  /** Reservation of the CURRENT run generation (null for no-charge job types). Settled by id (QA-S3-01). */
-  usageEventId: string | null;
-  /** attempt_count at the start of the current run generation (auto-retry budget = attempt_count - runBase). */
+  /** run_generation at the start of the current run (a manual retry starts a new run). */
   runBase: number;
+  /**
+   * retry_wait_total_ms at the start of the current run. The 120 s cap (C-11.3)
+   * applies to `retry_wait_total_ms - waitBase`, so a manual retry gets a fresh
+   * budget while the column stays a job-lifetime total.
+   */
+  waitBase: number;
+  /** Automatic retries per call (stage) and cause in the current run: `{ [stage]: { [code]: n } }`. */
+  retries: Record<string, Partial<Record<AiErrorCode, number>>>;
 };
 
 export const META_KEY = "_meta";
@@ -29,14 +46,27 @@ export type JobRecord = {
   userId: string;
   jobType: AiJobType;
   status: AiJobStatus;
-  progress: AiJobProgress;
+  progress: StoredAiJobProgress;
   params: JsonObject;
+  applicationProjectId: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  /** Fixed at start (F-AI-03 (2)). */
+  provider: AiProvider;
+  modelTier: ModelTier;
+  connectionTier: ConnectionTier;
   /**
-   * Run generation (QA-S3-05): monotonic, never reset. +1 on each automatic
-   * retry and on each manual retry. Every runner write is conditional on it,
+   * Internal run generation (QA-S3-05, spec-gaps 2026-10-28): monotonic, +1 on
+   * every automatic and manual retry. Every runner write is conditional on it,
    * so a late runner of an older generation changes nothing.
    */
-  attemptCount: number;
+  runGeneration: number;
+  /** Automatic retries in total (C-11.3, DM §2.9.1). */
+  retryCount: number;
+  retryWaitTotalMs: number;
+  nextRunAt: string | null;
+  retryAfter: string | null;
+  quotaResetsAt: string | null;
   errorCode: AiErrorCode | null;
   inputHash: string | null;
   cancelRequestedAt: string | null;
@@ -57,19 +87,27 @@ export type NewJob = {
   applicationProjectId: string | null;
   targetType: string | null;
   targetId: string | null;
+  provider: AiProvider;
+  modelTier: ModelTier;
+  connectionTier: ConnectionTier;
   params: JsonObject;
   inputHash: string | null;
   promptVersion: string | null;
   model: string | null;
-  progress: AiJobProgress;
+  progress: StoredAiJobProgress;
   meta: JobMeta;
 };
 
 /** Columns the runner may change (app_ai_writer update grant). */
 export type JobPatch = Partial<{
   status: AiJobStatus;
-  progress: AiJobProgress;
-  attemptCount: number;
+  progress: StoredAiJobProgress;
+  runGeneration: number;
+  retryCount: number;
+  retryWaitTotalMs: number;
+  nextRunAt: string | null;
+  retryAfter: string | null;
+  quotaResetsAt: string | null;
   errorCode: AiErrorCode | null;
   heartbeatAt: string | null;
   startedAt: string | null;
@@ -84,81 +122,162 @@ export type ReusableJobQuery = {
   userId: string;
   applicationProjectId: string | null;
   jobType: AiJobType;
+  provider: AiProvider;
   inputHash: string;
+};
+
+export type InFlightQuery = {
+  userId: string;
+  jobType: AiJobType;
+  target: { type: string; id: string } | null;
+  /** Used only when there is no target (no DB uniqueness then): same input in flight. */
+  inputHash: string | null;
+  applicationProjectId: string | null;
+};
+
+export type ClaimOptions = {
+  now: string;
+  /** Claim only when heartbeat_at is null or older than this. */
+  staleBefore: string;
+  /** Claim even before next_run_at (cancel of a waiting job). Default: only when next_run_at is null or due. */
+  ignoreNextRunAt?: boolean;
 };
 
 /**
  * ai_jobs access for ONE user (the app_ai_writer client is scoped by `sub`).
- * `gen` = the attempt_count the caller holds; writes match only that generation
- * AND an active status (queued/running).
+ * `gen` = the run_generation the caller holds; writes match only that
+ * generation AND an active status (queued/running).
  */
 export interface JobStore {
   get(jobId: string): Promise<JobRecord | null>;
-  /** Latest succeeded job with the same input_hash in the same scope (C-6 재사용). */
+  /** Latest succeeded job with the same provider + input_hash in the same scope (C-6 재사용). */
   findReusable(query: ReusableJobQuery): Promise<{ id: string } | null>;
-  /** A queued/running job with the same input_hash in the same scope (QA-S3-03 double start). */
-  findInFlight(query: ReusableJobQuery): Promise<{ id: string } | null>;
-  /** Inserts a queued job (attempt_count = meta.runBase). Unique in-flight index violation → AppError `conflict`. */
+  /** The queued/running job of the same type on the same target (D-34 동시 실행 1개). */
+  findInFlight(query: InFlightQuery): Promise<{ id: string } | null>;
+  /** Inserts a queued job (run_generation = meta.runBase). In-flight unique violation → AppError `conflict`. */
   insert(job: NewJob): Promise<void>;
   /**
-   * Atomically moves `queued` → `running` when the job's heartbeat is null or
-   * older than `staleBefore` (so two runners can't both claim it).
-   * Returns the claimed row, or null when someone else has it / it isn't queued.
+   * Atomically moves `queued` → `running` (and clears next_run_at) when the
+   * heartbeat is stale enough and the job is due. Returns the claimed row, or
+   * null when someone else has it / it isn't queued / it isn't due yet.
    */
-  claim(jobId: string, opts: { now: string; staleBefore: string }): Promise<JobRecord | null>;
+  claim(jobId: string, opts: ClaimOptions): Promise<JobRecord | null>;
   /** Update of an active job of generation `gen`. Returns false when nothing matched. */
   update(jobId: string, gen: number, patch: JobPatch): Promise<boolean>;
-  /**
-   * Writes the whole checkpoint map + meta (no jsonb merge in PostgREST; the
-   * claimed runner is the only writer of its generation).
-   */
+  /** Writes the whole checkpoint map + meta (+ patch) for generation `gen`. */
   saveStepOutputs(jobId: string, gen: number, outputs: Record<string, unknown>, meta: JobMeta, patch?: JobPatch): Promise<boolean>;
   /** Heartbeat + cancel check. `current: false` when the job left this generation / active status. */
   heartbeat(jobId: string, gen: number, now: string): Promise<{ current: boolean; cancelRequested: boolean }>;
   /** Terminal failed/canceled transition of generation `gen`. False when not matched (lost). */
   finish(jobId: string, gen: number, patch: JobPatch & { status: "failed" | "canceled" }): Promise<boolean>;
   /**
-   * Success + charge of `usageEventId` in ONE transaction (RPC `complete_ai_job`):
-   * running AND attempt_count = gen → succeeded (+ progress). False on
-   * `invalid_ai_job_transition` (another actor or generation won; usage unchanged).
-   * Persist output / usage / model with `update` BEFORE calling this.
+   * running AND run_generation = gen → succeeded (RPC `complete_ai_job`). False
+   * on `invalid_ai_job_transition` (another actor or generation won).
+   * Persist output / model with `update` BEFORE calling this.
    */
-  complete(jobId: string, gen: number, usageEventId: string | null, progress: AiJobProgress): Promise<boolean>;
+  complete(jobId: string, gen: number, progress: StoredAiJobProgress): Promise<boolean>;
   /**
-   * Manual-retry claim: failed AND attempt_count = gen → queued, attempt_count
-   * gen + 1, heartbeat_at = now, step_outputs with the new meta. Only the
-   * winner (true) may touch the ledger.
+   * Manual-retry claim: failed AND run_generation = gen → queued,
+   * run_generation gen + 1, heartbeat_at = now, step_outputs with the new meta.
+   * The DB guard clears error_code / finished_at / retry_after / quota_resets_at.
+   * In-flight unique violation (another job on the target started meanwhile) → AppError `conflict`.
    */
   requeueFailed(jobId: string, gen: number, now: string, outputs: Record<string, unknown>, meta: JobMeta): Promise<boolean>;
 }
 
-export type ReserveInput = {
-  feature: UsageFeature;
-  units: number;
-  reason: UsageReason;
-  jobId: string;
+// ---------------- usage records (C-13) ----------------
+
+/** Provider-normalized token usage (same shape as the ai-pipeline `NormalizedUsage`). */
+export type NormalizedUsage = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteTokens: number;
+  /** Includes reasoning tokens. */
+  outputTokens: number;
+  reasoningTokens: number | null;
+  usageSource: UsageSource;
 };
 
 /**
- * Usage ledger (D-17): reserve → charge | release, per reservation id
- * (QA-S3-01). Charging happens only inside `JobStore.complete` (same
- * transaction as succeeded).
+ * What the LLM wrapper reports after EVERY provider call (each retry attempt and
+ * failed calls included) through `onCall` — agreed with ai-pipeline-engineer
+ * (S3a plan "인터페이스 합의").
  */
-export interface Ledger {
-  /** Returns the usage_event id. Throws `usage_limit_reached` / `usage_limit_missing`. NOT idempotent. */
-  reserve(input: ReserveInput): Promise<string>;
-  /** reserved → released for ONE reservation (idempotent when already released). */
-  release(usageEventId: string): Promise<void>;
-  /** Releases every leftover `reserved` row of a job — only the manual-retry winner, before reserving anew. */
-  releaseJob(jobId: string): Promise<void>;
+export type LlmCallRecord = {
+  callKey: string | null;
+  /** Model actually called. */
+  model: string;
+  usage: NormalizedUsage;
+  outcome: UsageOutcome;
+  errorCode: AiErrorCode | null;
+  latencyMs: number;
+  /** Call end time when the wrapper reports it; the recorder uses its own clock otherwise. */
+  occurredAt?: Date;
+};
+
+/** ai_price_tables row (USD per 1M tokens). */
+export type PriceRow = {
+  version: string;
+  inputUsdPerMtok: number;
+  cachedInputUsdPerMtok: number | null;
+  cacheWriteUsdPerMtok: number | null;
+  outputUsdPerMtok: number;
+  longContextThresholdTokens: number | null;
+  longContextInputUsdPerMtok: number | null;
+  longContextCachedInputUsdPerMtok: number | null;
+  longContextCacheWriteUsdPerMtok: number | null;
+  longContextOutputUsdPerMtok: number | null;
+};
+
+/** One ai_usage_records insert (period_month is computed by the DB). */
+export type UsageRecordRow = {
+  occurredAt: string;
+  feature: UsageFeature;
+  jobType: AiJobType;
+  aiJobId: string | null;
+  callKey: string | null;
+  applicationProjectId: string | null;
+  provider: AiProvider;
+  model: string;
+  modelTier: ModelTier;
+  connectionTier: ConnectionTier;
+  usage: NormalizedUsage;
+  outcome: UsageOutcome;
+  errorCode: AiErrorCode | null;
+  priceTableVersion: string;
+  estimatedCostUsd: number;
+};
+
+/** ai_usage_records / ai_price_tables access for ONE user (app_ai_writer). */
+export interface UsageStore {
+  insert(row: UsageRecordRow): Promise<void>;
+  /** Latest price row with effective_from <= `onDate` (YYYY-MM-DD, KST). */
+  priceFor(provider: AiProvider, model: string, onDate: string): Promise<PriceRow | null>;
+  /** occurred_at of the user's last call to `provider` (C-12 call spacing). */
+  lastCallAt(provider: AiProvider): Promise<string | null>;
 }
 
+// ---------------- steps ----------------
+
+/** What the runner hands the LLM factory (ai-pipeline `createLlm`) per step. */
+export type LlmFactoryInput = {
+  provider: AiProvider;
+  tier: ModelTier;
+  connectionTier: ConnectionTier;
+  keySource: KeySource;
+  jobId: string;
+  /** The step attempt's deadline / cancel signal, applied to every call (QA-S3a-03). */
+  signal: AbortSignal;
+  /** Awaited after every provider call: inserts one ai_usage_records row. Never throws. */
+  onCall: (record: LlmCallRecord) => Promise<void>;
+};
+
 /**
- * What a step receives (agreed with ai-pipeline-engineer, S3 plan
- * "인터페이스 합의"). `ai` is whatever the runner deps create (the Anthropic
- * AiClient in production, a fake in tests).
+ * What a step receives (agreed with ai-pipeline-engineer). `llm` is whatever
+ * `RunnerDeps.createLlm` returns (the provider-neutral `llm` in production, a
+ * fake in tests); it records usage through the runner's `onCall`.
  */
-export type StepContext<TAi = unknown> = {
+export type StepContext<TLlm = unknown> = {
   jobId: string;
   userId: string;
   jobType: AiJobType;
@@ -166,21 +285,28 @@ export type StepContext<TAi = unknown> = {
   params: JsonObject;
   /** Results of completed stages (this run and earlier runs). */
   previous: Readonly<Record<string, unknown>>;
-  ai: TAi;
+  llm: TLlm;
+  provider: AiProvider;
+  modelTier: ModelTier;
+  connectionTier: ConnectionTier;
+  /** True on the free tier (C-12): make calls one after another, never in parallel. */
+  sequential: boolean;
+  /** `{jobType}.{stage}` — prefix for AiRequest.callKey (e.g. `insight.match.2`). */
+  callKeyPrefix: string;
   /** app_ai_writer client for this user (reads allowed columns, writes AI result tables). */
   db: AiWriterSupabaseClient;
   /**
-   * Aborted with reason `"canceled"` (user cancel) or `"timeout"` (step
-   * deadline / invocation budget). Pass it to model calls.
+   * Aborted with reason `"canceled"` (user cancel), `"timeout"` (step
+   * deadline), or `"lost"`. Pass it to provider calls.
    */
   signal: AbortSignal;
   /** Updates ai_jobs.progress `{ stage, done, total }` (+ heartbeat). */
   reportProgress: (done: number, total: number) => Promise<void>;
-  /** 1 for the first try of this step in this run, 2 for the automatic retry. */
+  /** 1 for the first try of this step in this run, +1 per automatic retry. */
   attempt: number;
 };
 
-export type JobStep<TAi = unknown> = {
+export type JobStep<TLlm = unknown> = {
   /** C-6 progress stage key (`match`, `generate`, …). Unique within the job type. */
   stage: string;
   /** Initial `progress.total` for this stage (default 1). */
@@ -188,38 +314,54 @@ export type JobStep<TAi = unknown> = {
   /** Step deadline; default STEP_TIMEOUT_MS. Must stay under the invocation budget. */
   timeoutMs?: number;
   /** Returns a JSON-serializable result (stored as the stage checkpoint). */
-  run: (ctx: StepContext<TAi>) => Promise<unknown>;
+  run: (ctx: StepContext<TLlm>) => Promise<unknown>;
 };
 
-export type JobTypeDefinition<TAi = unknown> = {
+export type JobTypeDefinition<TLlm = unknown> = {
   jobType: AiJobType;
-  steps: JobStep<TAi>[];
-  /** Usage to reserve at start (D-17). Omit for no-charge jobs (AI-01, AI-11, 채점 …). */
-  usage?: { feature: UsageFeature; units: number } | ((params: JsonObject) => { feature: UsageFeature; units: number } | null);
+  /** Model tier for every call of this job type (C-10.1; registry value, fixed into ai_jobs.model_tier). Default `default`. */
+  modelTier?: ModelTier;
+  steps: JobStep<TLlm>[];
+  /**
+   * Free-tier sequential mode (C-12): the same work as `steps`, unfolded into
+   * one provider call per step (e.g. AI-02 match batches, AI-06 one answer per
+   * step). Must depend on params only (resume relies on stable stage keys).
+   * Omit when `steps` already makes one call at a time.
+   */
+  freeTierSteps?: (params: JsonObject) => JobStep<TLlm>[];
   /** Optional final value stored in ai_jobs.output (draft_source_ranking only, DM A.15). */
   output?: (previous: Readonly<Record<string, unknown>>) => unknown;
 };
 
 /** The per-user handles the runner needs. */
-export type UserScope<TAi = unknown> = {
+export type UserScope = {
   store: JobStore;
-  ledger: Ledger;
+  usage: UsageStore;
   db: AiWriterSupabaseClient;
-  ai: TAi;
+  keySource: KeySource;
+  keyStatus: KeyStatusReporter;
 };
 
 export type JobRef = { jobId: string; userId: string };
 
-export type RunnerDeps<TAi = unknown> = {
-  forUser: (userId: string) => UserScope<TAi>;
+export type RunnerDeps<TLlm = unknown> = {
+  forUser: (userId: string) => UserScope;
+  /** Active provider + tier at job start (S3b: ai_provider_keys / profiles). */
+  providerContext: ProviderContextSource;
+  /** Builds the provider-neutral LLM for one step attempt (ai-pipeline `createLlm`). */
+  createLlm: (input: LlmFactoryInput) => TLlm;
+  /** Waits (bounded) for the Llm's open calls and their usage records; force-records the rest (`Llm.settle`). */
+  settleLlm: (llm: TLlm, timeoutMs: number) => Promise<void>;
   /** Registry lookup. */
-  getDefinition: (jobType: AiJobType) => JobTypeDefinition<TAi> | undefined;
+  getDefinition: (jobType: AiJobType) => JobTypeDefinition<TLlm> | undefined;
   /** Schedules work after the response (`after()` in production; immediate in tests). */
   schedule: (task: () => Promise<void>) => void;
   /** Continues a yielded job in a NEW invocation (self-invoke). */
   continueJob: (ref: JobRef) => Promise<void>;
   now?: () => Date;
-  /** Logger for job metadata only (C-7: never prompt or output text). */
+  /** 0 ≤ x < 1, for the retry jitter (C-11.3 "+0~1초 무작위"). */
+  random?: () => number;
+  /** Logger for job metadata only (C-7: never prompt / output text, never a key). */
   log?: (event: string, fields: Record<string, string | number | boolean | null>) => void;
   timing?: Partial<RunnerTiming>;
 };
@@ -229,6 +371,8 @@ export type RunnerTiming = {
   invocationBudgetMs: number;
   stepTimeoutMs: number;
   heartbeatIntervalMs: number;
+  /** Max wait at the end of an invocation for abandoned calls' usage records (QA-S3a-03). */
+  usageSettleGraceMs: number;
 };
 
 export type RunOutcome =
@@ -237,4 +381,5 @@ export type RunOutcome =
   | "failed"
   | "canceled"
   | "yielded"
-  | "lost"; // another actor (stalled sweep) finished the job first
+  | "scheduled" // queued with next_run_at (C-11.3 retry wait or C-12 call spacing)
+  | "lost"; // another actor (stalled sweep, cancel, newer generation) owns the job

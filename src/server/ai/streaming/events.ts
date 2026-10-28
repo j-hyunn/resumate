@@ -21,7 +21,16 @@ export type AiStreamEvent =
   | { type: "block_completed"; blockId: string; block: unknown }
   | { type: "validated"; result: unknown; validationReport: ValidationReport }
   | { type: "done"; meta: AiStreamDoneMeta }
-  | { type: "error"; code: AiErrorCode | "internal_error"; message: string; retryable: boolean };
+  | {
+      type: "error";
+      code: AiErrorCode | "internal_error";
+      message: string;
+      retryable: boolean;
+      /** ProviderError.retryAfter as ISO (rate_limited / provider_unavailable), else null (QA-S3a-01). */
+      retryAfter: string | null;
+      /** ProviderError.quotaResetsAt as ISO (daily_quota_exhausted), else null. */
+      quotaResetsAt: string | null;
+    };
 
 export type AiStreamDoneMeta = {
   promptVersion: string;

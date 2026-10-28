@@ -1,4 +1,4 @@
-import type { AiTextBlock } from "../client";
+import type { AiTextBlock } from "../providers/types";
 
 /**
  * Common system block shared by every generating feature (AI spec C-4, C-5,

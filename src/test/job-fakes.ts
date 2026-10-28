@@ -1,12 +1,36 @@
 import { AppError } from "@/lib/contracts/errors";
-import type { UsageFeature, UsageStatus } from "@/lib/contracts/enums";
+import type { AiErrorCode, AiProvider } from "@/lib/contracts/enums";
+import { ProviderError } from "@/server/ai/errors";
+import { createLlm, type Llm } from "@/server/ai/llm";
+import { silentAiLogger } from "@/server/ai/log";
+import type { AiCallResult, LlmStreamEvent, NormalizedUsage, ProviderAdapter, ProviderCallRequest } from "@/server/ai/providers/types";
+import { UNAVAILABLE_USAGE } from "@/server/ai/providers/types";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
-import type { JobMeta, JobPatch, JobRecord, JobStore, Ledger, NewJob, ReserveInput, ReusableJobQuery, UserScope } from "@/server/jobs/types";
+import type {
+  ClaimOptions,
+  InFlightQuery,
+  JobMeta,
+  JobPatch,
+  JobRecord,
+  JobStore,
+  LlmFactoryInput,
+  NewJob,
+  PriceRow,
+  ReusableJobQuery,
+  UsageRecordRow,
+  UsageStore,
+  UserScope,
+} from "@/server/jobs/types";
+import type { KeySource, KeyStatusReporter } from "@/server/jobs/provider-context";
 
 /**
- * Test-only in-memory ai_jobs store and usage ledger with the same conditional
- * semantics as the DB: writes match status AND attempt_count (generation),
- * claim only queued, complete charges ONE reservation by id, settle only reserved.
+ * Test-only in-memory ai_jobs / ai_usage_records stores with the same
+ * conditional semantics as the DB (S3a): writes match status AND
+ * run_generation, claim only queued AND due, one in-flight job per target,
+ * complete only running of the same generation (idempotent when already
+ * succeeded), failed → queued clears the final-failure fields.
+ * Plus a scripted provider adapter driven through the REAL `createLlm`, so
+ * key lookup, usage records, and the stream contract behave as in production.
  */
 
 const ACTIVE = new Set(["queued", "running"]);
@@ -15,10 +39,6 @@ export class MemoryJobStore implements JobStore {
   readonly jobs = new Map<string, JobRecord>();
   /** Set to make the next N calls of a method throw. */
   failNext: Partial<Record<keyof JobStore, number>> = {};
-  /** The ledger complete() charges (complete_ai_job charges in the same transaction). */
-  ledger?: MemoryLedger;
-  /** Simulates the partial unique in-flight index (QA-S3-03). */
-  uniqueInFlight = true;
 
   constructor(private readonly clock: () => Date) {}
 
@@ -41,11 +61,24 @@ export class MemoryJobStore implements JobStore {
 
   private match(jobId: string, gen: number, statuses: Set<string> = ACTIVE): JobRecord | null {
     const job = this.jobs.get(jobId);
-    return job && statuses.has(job.status) && job.attemptCount === gen ? job : null;
+    return job && statuses.has(job.status) && job.runGeneration === gen ? job : null;
   }
 
-  private sameScope(job: JobRecord, q: ReusableJobQuery) {
-    return job.userId === q.userId && job.jobType === q.jobType && job.inputHash === q.inputHash;
+  private targetTaken(job: Pick<JobRecord, "id" | "userId" | "jobType" | "targetType" | "targetId">): boolean {
+    if (!job.targetType || !job.targetId) return false;
+    for (const other of this.jobs.values()) {
+      if (
+        other.id !== job.id &&
+        other.userId === job.userId &&
+        other.jobType === job.jobType &&
+        other.targetType === job.targetType &&
+        other.targetId === job.targetId &&
+        ACTIVE.has(other.status)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async get(jobId: string) {
@@ -55,24 +88,36 @@ export class MemoryJobStore implements JobStore {
   }
 
   async findReusable(q: ReusableJobQuery) {
-    for (const job of this.jobs.values()) if (this.sameScope(job, q) && job.status === "succeeded") return { id: job.id };
+    for (const job of this.jobs.values()) {
+      if (
+        job.userId === q.userId &&
+        job.jobType === q.jobType &&
+        job.provider === q.provider &&
+        job.inputHash === q.inputHash &&
+        job.applicationProjectId === q.applicationProjectId &&
+        job.status === "succeeded"
+      ) {
+        return { id: job.id };
+      }
+    }
     return null;
   }
 
-  async findInFlight(q: ReusableJobQuery) {
+  async findInFlight(q: InFlightQuery) {
     this.maybeFail("findInFlight");
-    for (const job of this.jobs.values()) if (this.sameScope(job, q) && ACTIVE.has(job.status)) return { id: job.id };
+    for (const job of this.jobs.values()) {
+      if (job.userId !== q.userId || job.jobType !== q.jobType || !ACTIVE.has(job.status)) continue;
+      if (q.target ? job.targetType === q.target.type && job.targetId === q.target.id : q.inputHash !== null && job.inputHash === q.inputHash) {
+        return { id: job.id };
+      }
+    }
     return null;
   }
 
   async insert(job: NewJob) {
     this.maybeFail("insert");
-    if (this.uniqueInFlight && job.inputHash) {
-      for (const other of this.jobs.values()) {
-        if (other.userId === job.userId && other.jobType === job.jobType && other.inputHash === job.inputHash && ACTIVE.has(other.status)) {
-          throw new AppError("conflict");
-        }
-      }
+    if (this.targetTaken({ id: job.id, userId: job.userId, jobType: job.jobType, targetType: job.targetType, targetId: job.targetId })) {
+      throw new AppError("conflict");
     }
     const t = this.clock().toISOString();
     this.jobs.set(job.id, {
@@ -82,7 +127,18 @@ export class MemoryJobStore implements JobStore {
       status: "queued",
       progress: job.progress,
       params: job.params,
-      attemptCount: job.meta.runBase,
+      applicationProjectId: job.applicationProjectId,
+      targetType: job.targetType,
+      targetId: job.targetId,
+      provider: job.provider,
+      modelTier: job.modelTier,
+      connectionTier: job.connectionTier,
+      runGeneration: job.meta.runBase,
+      retryCount: 0,
+      retryWaitTotalMs: 0,
+      nextRunAt: null,
+      retryAfter: null,
+      quotaResetsAt: null,
       errorCode: null,
       inputHash: job.inputHash,
       cancelRequestedAt: null,
@@ -92,16 +148,17 @@ export class MemoryJobStore implements JobStore {
       createdAt: t,
       updatedAt: t,
       stepOutputs: {},
-      meta: { ...job.meta },
+      meta: structuredClone(job.meta),
     });
   }
 
-  async claim(jobId: string, opts: { now: string; staleBefore: string }) {
+  async claim(jobId: string, opts: ClaimOptions) {
     this.maybeFail("claim");
     const job = this.jobs.get(jobId);
     if (!job || job.status !== "queued") return null;
     if (job.heartbeatAt && job.heartbeatAt >= opts.staleBefore) return null;
-    this.apply(job, { status: "running", heartbeatAt: opts.now });
+    if (!opts.ignoreNextRunAt && job.nextRunAt && job.nextRunAt > opts.now) return null;
+    this.apply(job, { status: "running", heartbeatAt: opts.now, nextRunAt: null });
     return structuredClone(job);
   }
 
@@ -118,7 +175,7 @@ export class MemoryJobStore implements JobStore {
     const job = this.match(jobId, gen);
     if (!job) return false;
     job.stepOutputs = structuredClone(outputs);
-    job.meta = { ...meta };
+    job.meta = structuredClone(meta);
     if (patch) this.apply(job, patch);
     return true;
   }
@@ -139,46 +196,74 @@ export class MemoryJobStore implements JobStore {
     return true;
   }
 
-  async complete(jobId: string, gen: number, usageEventId: string | null, progress: JobRecord["progress"]) {
+  async complete(jobId: string, gen: number, progress: JobRecord["progress"]) {
     this.maybeFail("complete");
     const job = this.jobs.get(jobId);
     if (!job) throw new AppError("not_found");
-    if (job.status === "running" && job.attemptCount === gen) {
-      this.apply(job, { status: "succeeded", errorCode: null, progress, finishedAt: this.clock().toISOString() });
-    } else if (!(job.status === "succeeded" && job.attemptCount === gen)) {
-      return false; // invalid_ai_job_transition, usage unchanged
+    if (job.status === "running" && job.runGeneration === gen) {
+      this.apply(job, { status: "succeeded", progress, nextRunAt: null, finishedAt: this.clock().toISOString() });
+      return true;
     }
-    if (usageEventId) this.ledger?.chargeOne(usageEventId, jobId);
-    return true;
+    return job.status === "succeeded" && job.runGeneration === gen; // else invalid_ai_job_transition
   }
 
   async requeueFailed(jobId: string, gen: number, now: string, outputs: Record<string, unknown>, meta: JobMeta) {
     this.maybeFail("requeueFailed");
     const job = this.match(jobId, gen, new Set(["failed"]));
     if (!job) return false;
-    this.apply(job, { status: "queued", errorCode: null, finishedAt: null, heartbeatAt: now, attemptCount: gen + 1 });
-    job.cancelRequestedAt = null; // DB guard clears it on failed → queued
+    if (this.targetTaken(job)) throw new AppError("conflict");
+    // DB guard on failed → queued clears error_code, finished_at, cancel_requested_at, retry_after, quota_resets_at.
+    this.apply(job, {
+      status: "queued",
+      errorCode: null,
+      finishedAt: null,
+      retryAfter: null,
+      quotaResetsAt: null,
+      nextRunAt: null,
+      heartbeatAt: now,
+      runGeneration: gen + 1,
+    });
+    job.cancelRequestedAt = null;
     job.stepOutputs = structuredClone(outputs);
-    job.meta = { ...meta };
+    job.meta = structuredClone(meta);
     return true;
   }
 
   /** Simulates the user's cancel RPC. */
   requestCancel(jobId: string) {
     const job = this.jobs.get(jobId);
-    if (job && ACTIVE.has(job.status)) job.cancelRequestedAt = this.clock().toISOString();
+    if (job && ACTIVE.has(job.status) && !job.cancelRequestedAt) job.cancelRequestedAt = this.clock().toISOString();
+  }
+
+  /** Simulates sweep_stalled_ai_jobs for one job. */
+  sweep(jobId: string) {
+    const job = this.jobs.get(jobId);
+    if (job && ACTIVE.has(job.status)) this.apply(job, { status: "failed", errorCode: "stalled", finishedAt: this.clock().toISOString() });
   }
 }
 
-export type LedgerRow = { id: string; jobId: string; feature: UsageFeature; units: number; status: UsageStatus };
+export const TEST_PRICE: PriceRow = {
+  version: "v-test",
+  inputUsdPerMtok: 1,
+  cachedInputUsdPerMtok: 0.1,
+  cacheWriteUsdPerMtok: null,
+  outputUsdPerMtok: 5,
+  longContextThresholdTokens: null,
+  longContextInputUsdPerMtok: null,
+  longContextCachedInputUsdPerMtok: null,
+  longContextCacheWriteUsdPerMtok: null,
+  longContextOutputUsdPerMtok: null,
+};
 
-export class MemoryLedger implements Ledger {
-  readonly rows: LedgerRow[] = [];
-  failNext: Partial<Record<"reserve" | "release" | "releaseJob", number>> = {};
+export class MemoryUsageStore implements UsageStore {
+  readonly records: (UsageRecordRow & { userId: string })[] = [];
+  failNext: Partial<Record<keyof UsageStore, number>> = {};
+  priceLookups = 0;
+  price: PriceRow | null = TEST_PRICE;
 
-  constructor(private readonly limits: Partial<Record<UsageFeature, number>> = { insight: 10, draft: 20 }) {}
+  constructor(private readonly userId: string) {}
 
-  private maybeFail(method: "reserve" | "release" | "releaseJob") {
+  private maybeFail(method: keyof UsageStore) {
     const n = this.failNext[method] ?? 0;
     if (n > 0) {
       this.failNext[method] = n - 1;
@@ -186,56 +271,131 @@ export class MemoryLedger implements Ledger {
     }
   }
 
-  async reserve(input: ReserveInput) {
-    this.maybeFail("reserve");
-    const limit = this.limits[input.feature];
-    if (limit === undefined) throw new AppError("usage_limit_missing", "사용 한도 정보를 찾을 수 없습니다.", { status: 503 });
-    const used = this.rows
-      .filter((r) => r.feature === input.feature && r.status !== "released")
-      .reduce((sum, r) => sum + r.units, 0);
-    if (used + input.units > limit) throw new AppError("usage_limit_reached", "이번 달 사용 한도에 도달했습니다.", { status: 429 });
-    const id = crypto.randomUUID();
-    this.rows.push({ id, jobId: input.jobId, feature: input.feature, units: input.units, status: "reserved" });
-    return id;
+  async insert(row: UsageRecordRow) {
+    this.maybeFail("insert");
+    this.records.push({ ...structuredClone(row), userId: this.userId });
   }
 
-  async release(usageEventId: string) {
-    this.maybeFail("release");
-    const row = this.rows.find((r) => r.id === usageEventId);
-    if (!row) throw new AppError("usage_event_not_found");
-    if (row.status === "charged") throw new AppError("invalid_usage_transition");
-    row.status = "released";
+  async priceFor() {
+    this.maybeFail("priceFor");
+    this.priceLookups++;
+    return this.price;
   }
 
-  async releaseJob(jobId: string) {
-    this.maybeFail("releaseJob");
-    for (const r of this.rows) if (r.jobId === jobId && r.status === "reserved") r.status = "released";
+  async lastCallAt(provider: AiProvider) {
+    this.maybeFail("lastCallAt");
+    const own = this.records.filter((r) => r.provider === provider).map((r) => r.occurredAt);
+    return own.length ? own.sort().at(-1)! : null;
   }
 
-  /** complete_ai_job's charge half: exactly one reservation. */
-  chargeOne(usageEventId: string, jobId: string) {
-    const row = this.rows.find((r) => r.id === usageEventId && r.jobId === jobId);
-    if (!row) throw new AppError("usage_event_not_found");
-    if (row.status === "released") throw new AppError("invalid_usage_transition");
-    row.status = "charged";
-  }
-
-  statusesOf(jobId: string): UsageStatus[] {
-    return this.rows.filter((r) => r.jobId === jobId).map((r) => r.status);
+  forJob(jobId: string) {
+    return this.records.filter((r) => r.aiJobId === jobId);
   }
 }
 
+// ---------------- scripted provider ----------------
+
+export type ScriptedResponse =
+  /** `delayMs`: answers after this many real ms and ignores the abort signal (a call the step left running). */
+  | { json: unknown; usage?: Partial<NormalizedUsage>; delayMs?: number }
+  | { error: AiErrorCode; retryAfterMs?: number; quotaResetsAt?: Date; usage?: Partial<NormalizedUsage> }
+  | { errorAfterChunks: AiErrorCode; json: unknown; chunks: number }
+  /** Never answers until the call's signal aborts (then: error event). */
+  | { hang: true }
+  /** The adapter itself throws a non-provider error (an SDK defect / unknown failure inside the call). */
+  | { throwRaw: true };
+
+const REPORTED: NormalizedUsage = {
+  inputTokens: 1_000,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  outputTokens: 200,
+  reasoningTokens: null,
+  usageSource: "provider_reported",
+};
+
+/** One provider adapter whose calls consume `responses` in order (shared across jobs). */
+export function createScriptedAdapter(provider: AiProvider, responses: ScriptedResponse[], now: () => number) {
+  const queue = [...responses];
+  const calls: ProviderCallRequest[] = [];
+  const err = (code: AiErrorCode, extra: { retryAfterMs?: number; quotaResetsAt?: Date } = {}) =>
+    new ProviderError(code, {
+      provider,
+      retryAfter: extra.retryAfterMs !== undefined ? new Date(now() + extra.retryAfterMs) : undefined,
+      quotaResetsAt: extra.quotaResetsAt,
+    });
+  const abortCode = (signal?: AbortSignal): AiErrorCode => (signal?.reason === "canceled" ? "canceled" : "timeout");
+
+  async function* stream(call: ProviderCallRequest): AsyncGenerator<LlmStreamEvent> {
+    calls.push(call);
+    const response = queue.shift();
+    if (!response) throw new Error("scripted adapter: no response left");
+    if ("throwRaw" in response) throw new TypeError("unexpected SDK failure");
+    if ("hang" in response) {
+      await new Promise<void>((resolve) => {
+        if (call.signal?.aborted) return resolve();
+        call.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      yield { type: "error", error: err(abortCode(call.signal)), usage: UNAVAILABLE_USAGE };
+      return;
+    }
+    if ("error" in response) {
+      const usage = response.usage ? { ...REPORTED, ...response.usage } : UNAVAILABLE_USAGE;
+      yield { type: "error", error: err(response.error, response).with({ usage }), usage };
+      return;
+    }
+    const text = JSON.stringify(response.json);
+    if ("delayMs" in response && response.delayMs) await new Promise((r) => setTimeout(r, response.delayMs));
+    if ("errorAfterChunks" in response) {
+      for (let i = 0; i < response.chunks; i++) yield { type: "delta", text: text.slice(i, i + 1) };
+      const usage = { ...REPORTED, outputTokens: response.chunks };
+      yield { type: "error", error: err(response.errorAfterChunks).with({ beforeFirstToken: response.chunks === 0, usage }), usage };
+      return;
+    }
+    yield { type: "delta", text };
+    const result: AiCallResult = { text, model: call.model, usage: { ...REPORTED, ...response.usage }, latencyMs: 5 };
+    yield { type: "done", result };
+  }
+
+  const adapter: ProviderAdapter = {
+    id: provider,
+    stream,
+    async complete(call) {
+      for await (const event of stream(call)) {
+        if (event.type === "done") return event.result;
+        if (event.type === "error") throw event.error;
+      }
+      throw new ProviderError("provider_unavailable", { provider, unclassified: true });
+    },
+    verify: async () => ({ ok: true, usage: REPORTED }),
+  };
+  return { adapter, calls, remaining: () => queue.length };
+}
+
+/** RunnerDeps.createLlm over the real createLlm + a scripted adapter. */
+export function scriptedLlmFactory(adapter: ProviderAdapter, now: () => number) {
+  return (input: LlmFactoryInput): Llm =>
+    createLlm({ ...input, logger: silentAiLogger, now, adapters: { [input.provider]: adapter } });
+}
+
+// ---------------- misc ----------------
+
 /** A controllable clock: `advance(ms)` moves time forward (wall clock for the runner). */
-export function fakeClock(start = new Date("2026-10-26T00:00:00.000Z")) {
+export function fakeClock(start = new Date("2026-10-28T00:00:00.000Z")) {
   let t = start.getTime();
   return {
     now: () => new Date(t),
+    ms: () => t,
     advance: (ms: number) => {
       t += ms;
     },
   };
 }
 
-export function memoryScope<TAi>(store: MemoryJobStore, ledger: MemoryLedger, ai: TAi): UserScope<TAi> {
-  return { store, ledger, ai, db: {} as AiWriterSupabaseClient };
+export function memoryScope(
+  store: MemoryJobStore,
+  usage: MemoryUsageStore,
+  keys: { keySource: KeySource; keyStatus: KeyStatusReporter },
+): UserScope {
+  return { store, usage, keySource: keys.keySource, keyStatus: keys.keyStatus, db: {} as AiWriterSupabaseClient };
 }

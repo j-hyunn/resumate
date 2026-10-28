@@ -1,5 +1,5 @@
-import { AiJobProgressSchema } from "@/lib/contracts/ai";
-import type { AiErrorCode, AiJobStatus, AiJobType } from "@/lib/contracts/enums";
+import { StoredAiJobProgressSchema } from "@/lib/contracts/ai";
+import type { AiErrorCode, AiJobStatus, AiJobType, AiProvider, ConnectionTier, ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { Json, TablesUpdate } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
@@ -11,8 +11,8 @@ import { META_KEY, type JobMeta, type JobPatch, type JobRecord, type JobStore, t
  * through app_ai_writer; RLS scopes rows to the token's `sub`).
  *
  * Every runner write is conditional on `status in (queued, running)` AND
- * `attempt_count = gen` (QA-S3-05), so a late runner of an older generation, or
- * one whose job the stalled sweep already failed, changes nothing. The DB
+ * `run_generation = gen` (QA-S3-05), so a late runner of an older generation,
+ * or one whose job the stalled sweep already failed, changes nothing. The DB
  * status guard (`invalid_ai_job_transition`) is the backstop; it is "lost" here.
  */
 
@@ -20,7 +20,7 @@ const ACTIVE: AiJobStatus[] = ["queued", "running"];
 
 /** Explicit columns everywhere (QA-S3-08). */
 const COLUMNS =
-  "id, user_id, job_type, status, progress, params, attempt_count, error_code, input_hash, cancel_requested_at, heartbeat_at, started_at, finished_at, created_at, updated_at, step_outputs";
+  "id, user_id, job_type, status, progress, params, application_project_id, target_type, target_id, provider, model_tier, connection_tier, run_generation, retry_count, retry_wait_total_ms, next_run_at, retry_after, quota_resets_at, error_code, input_hash, cancel_requested_at, heartbeat_at, started_at, finished_at, created_at, updated_at, step_outputs";
 
 type Row = {
   id: string;
@@ -29,7 +29,18 @@ type Row = {
   status: string;
   progress: Json | null;
   params: Json;
-  attempt_count: number;
+  application_project_id: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  provider: string;
+  model_tier: string;
+  connection_tier: string;
+  run_generation: number;
+  retry_count: number;
+  retry_wait_total_ms: number;
+  next_run_at: string | null;
+  retry_after: string | null;
+  quota_resets_at: string | null;
   error_code: string | null;
   input_hash: string | null;
   cancel_requested_at: string | null;
@@ -45,16 +56,17 @@ function asObject(value: Json | null | undefined): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
 }
 
-function parseMeta(value: unknown, attemptCount: number): JobMeta {
+function parseMeta(value: unknown, runGeneration: number, waitTotal: number): JobMeta {
   const m = value && typeof value === "object" ? (value as Partial<JobMeta>) : {};
   return {
-    usageEventId: typeof m.usageEventId === "string" ? m.usageEventId : null,
-    runBase: typeof m.runBase === "number" ? m.runBase : attemptCount,
+    runBase: typeof m.runBase === "number" ? m.runBase : runGeneration,
+    waitBase: typeof m.waitBase === "number" ? m.waitBase : waitTotal,
+    retries: m.retries && typeof m.retries === "object" ? m.retries : {},
   };
 }
 
 export function toJobRecord(row: Row): JobRecord {
-  const progress = AiJobProgressSchema.safeParse(row.progress);
+  const progress = StoredAiJobProgressSchema.safeParse(row.progress);
   const { [META_KEY]: meta, ...stepOutputs } = asObject(row.step_outputs);
   return {
     id: row.id,
@@ -63,7 +75,18 @@ export function toJobRecord(row: Row): JobRecord {
     status: row.status as AiJobStatus,
     progress: progress.success ? progress.data : { stage: null, done: 0, total: 0 },
     params: asObject(row.params),
-    attemptCount: row.attempt_count,
+    applicationProjectId: row.application_project_id,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    provider: row.provider as AiProvider,
+    modelTier: row.model_tier as ModelTier,
+    connectionTier: row.connection_tier as ConnectionTier,
+    runGeneration: row.run_generation,
+    retryCount: row.retry_count,
+    retryWaitTotalMs: row.retry_wait_total_ms,
+    nextRunAt: row.next_run_at,
+    retryAfter: row.retry_after,
+    quotaResetsAt: row.quota_resets_at,
     errorCode: row.error_code as AiErrorCode | null,
     inputHash: row.input_hash,
     cancelRequestedAt: row.cancel_requested_at,
@@ -73,7 +96,7 @@ export function toJobRecord(row: Row): JobRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     stepOutputs,
-    meta: parseMeta(meta, row.attempt_count),
+    meta: parseMeta(meta, row.run_generation, row.retry_wait_total_ms),
   };
 }
 
@@ -85,7 +108,12 @@ export function toUpdateRow(patch: JobPatch): TablesUpdate<"ai_jobs"> {
   const row: TablesUpdate<"ai_jobs"> = {};
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.progress !== undefined) row.progress = patch.progress as Json;
-  if (patch.attemptCount !== undefined) row.attempt_count = patch.attemptCount;
+  if (patch.runGeneration !== undefined) row.run_generation = patch.runGeneration;
+  if (patch.retryCount !== undefined) row.retry_count = patch.retryCount;
+  if (patch.retryWaitTotalMs !== undefined) row.retry_wait_total_ms = patch.retryWaitTotalMs;
+  if (patch.nextRunAt !== undefined) row.next_run_at = patch.nextRunAt;
+  if (patch.retryAfter !== undefined) row.retry_after = patch.retryAfter;
+  if (patch.quotaResetsAt !== undefined) row.quota_resets_at = patch.quotaResetsAt;
   if (patch.errorCode !== undefined) row.error_code = patch.errorCode;
   if (patch.heartbeatAt !== undefined) row.heartbeat_at = patch.heartbeatAt;
   if (patch.startedAt !== undefined) row.started_at = patch.startedAt;
@@ -110,7 +138,7 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
       .from("ai_jobs")
       .update(row)
       .eq("id", jobId)
-      .eq("attempt_count", gen)
+      .eq("run_generation", gen)
       .in("status", statuses)
       .select("id");
     if (error) {
@@ -128,7 +156,13 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
     },
 
     async findReusable(q) {
-      let query = db.from("ai_jobs").select("id").eq("user_id", q.userId).eq("job_type", q.jobType).eq("input_hash", q.inputHash);
+      let query = db
+        .from("ai_jobs")
+        .select("id")
+        .eq("user_id", q.userId)
+        .eq("job_type", q.jobType)
+        .eq("provider", q.provider)
+        .eq("input_hash", q.inputHash);
       query = q.applicationProjectId === null ? query.is("application_project_id", null) : query.eq("application_project_id", q.applicationProjectId);
       const { data, error } = await query
         .eq("status", "succeeded")
@@ -140,8 +174,17 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
     },
 
     async findInFlight(q) {
-      let query = db.from("ai_jobs").select("id").eq("user_id", q.userId).eq("job_type", q.jobType).eq("input_hash", q.inputHash);
-      query = q.applicationProjectId === null ? query.is("application_project_id", null) : query.eq("application_project_id", q.applicationProjectId);
+      let query = db.from("ai_jobs").select("id").eq("user_id", q.userId).eq("job_type", q.jobType);
+      if (q.target) {
+        // Same key as the DB unique index ai_jobs_in_flight_target_key (D-34).
+        query = query.eq("target_type", q.target.type).eq("target_id", q.target.id);
+      } else if (q.inputHash) {
+        // No target → no DB uniqueness; still follow the same input already in flight (double click).
+        query = query.eq("input_hash", q.inputHash);
+        query = q.applicationProjectId === null ? query.is("application_project_id", null) : query.eq("application_project_id", q.applicationProjectId);
+      } else {
+        return null;
+      }
       const { data, error } = await query
         .in("status", ACTIVE)
         .order("created_at", { ascending: false })
@@ -165,7 +208,10 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
         input_hash: job.inputHash,
         prompt_version: job.promptVersion,
         model: job.model,
-        attempt_count: job.meta.runBase,
+        provider: job.provider,
+        model_tier: job.modelTier,
+        connection_tier: job.connectionTier,
+        run_generation: job.meta.runBase,
         step_outputs: toStepOutputsJson({}, job.meta),
       });
       if (error) {
@@ -175,12 +221,15 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
     },
 
     async claim(jobId, opts) {
+      // Due = no next_run_at, or next_run_at has passed (B-4 wake-up); cancel ignores it.
+      const stale = `or(heartbeat_at.is.null,heartbeat_at.lt."${opts.staleBefore}")`;
+      const due = `or(next_run_at.is.null,next_run_at.lte."${opts.now}")`;
       const { data, error } = await db
         .from("ai_jobs")
-        .update({ status: "running", heartbeat_at: opts.now })
+        .update({ status: "running", heartbeat_at: opts.now, next_run_at: null })
         .eq("id", jobId)
         .eq("status", "queued")
-        .or(`heartbeat_at.is.null,heartbeat_at.lt."${opts.staleBefore}"`)
+        .or(opts.ignoreNextRunAt ? stale.slice(3, -1) : `and(${stale},${due})`)
         .select(COLUMNS)
         .maybeSingle();
       if (error) {
@@ -203,7 +252,7 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
         .from("ai_jobs")
         .update({ heartbeat_at: now })
         .eq("id", jobId)
-        .eq("attempt_count", gen)
+        .eq("run_generation", gen)
         .in("status", ACTIVE)
         .select("cancel_requested_at")
         .maybeSingle();
@@ -219,13 +268,11 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
       return updateWhere(jobId, gen, toUpdateRow(patch));
     },
 
-    async complete(jobId, gen, usageEventId, progress) {
+    async complete(jobId, gen, progress) {
       const { error } = await db.rpc("complete_ai_job", {
         p_job_id: jobId,
-        p_attempt_count: gen,
+        p_run_generation: gen,
         p_progress: progress as Json,
-        // null = no-charge job type (the RPC then only does the transition). Generated type says string.
-        p_usage_event_id: usageEventId as string,
       });
       if (error) {
         if (isTransitionError(error)) return false;
@@ -234,14 +281,22 @@ export function createSupabaseJobStore(db: AiWriterSupabaseClient): JobStore {
       return true;
     },
 
-    requeueFailed(jobId, gen, now, outputs, meta) {
-      // The DB guard clears error_code / finished_at / cancel_requested_at on failed → queued.
-      return updateWhere(
-        jobId,
-        gen,
-        { status: "queued", attempt_count: gen + 1, heartbeat_at: now, step_outputs: toStepOutputsJson(outputs, meta) },
-        ["failed"],
-      );
+    async requeueFailed(jobId, gen, now, outputs, meta) {
+      // The DB guard clears error_code / finished_at / cancel_requested_at / retry_after / quota_resets_at.
+      const { data, error } = await db
+        .from("ai_jobs")
+        .update({ status: "queued", run_generation: gen + 1, heartbeat_at: now, next_run_at: null, step_outputs: toStepOutputsJson(outputs, meta) })
+        .eq("id", jobId)
+        .eq("run_generation", gen)
+        .eq("status", "failed")
+        .select("id");
+      if (error) {
+        if (isTransitionError(error)) return false;
+        // Another job on the same target is in flight (ai_jobs_in_flight_target_key).
+        if (error.code === "23505") throw new AppError("conflict", undefined, { cause: error });
+        throw mapDbError(error);
+      }
+      return (data?.length ?? 0) > 0;
     },
   };
 }

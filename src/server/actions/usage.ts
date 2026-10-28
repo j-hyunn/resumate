@@ -1,14 +1,16 @@
 "use server";
 
-import type { UsageSummary } from "@/lib/contracts/ai";
-import { runAction, type ActionResult } from "@/lib/contracts/errors";
+import { GetAiUsageSummaryInputSchema, type AiUsageSummary } from "@/lib/contracts/ai";
+import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import { requireConsentedUser } from "@/server/auth/session";
 import * as usage from "@/server/services/usage";
 
-/** This month's usage per feature (D-17). Screens show "이번 달 {N}회 남음". */
-export async function getUsageSummary(): Promise<ActionResult<UsageSummary>> {
+/** Usage meter for one KST month (F-AI-07, S-42): by feature + by provider/tier, estimated USD. */
+export async function getAiUsageSummary(input: unknown = {}): Promise<ActionResult<AiUsageSummary>> {
+  const parsed = GetAiUsageSummaryInputSchema.safeParse(input ?? {});
+  if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
-    return usage.getUsageSummary(supabase);
+    return usage.getAiUsageSummary(supabase, parsed.data);
   });
 }

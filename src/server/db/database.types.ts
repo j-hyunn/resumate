@@ -51,14 +51,42 @@ isOneToOne: false
                   ]
                 },"ai_jobs": {
                   Row: {
-                    "application_project_id": string | null,"attempt_count": number,"cancel_requested_at": string | null,"created_at": string,"error_category": string | null,"error_code": string | null,"finished_at": string | null,"heartbeat_at": string | null,"id": string,"input_hash": string | null,"job_type": string,"model": string | null,"output": Json | null,"params": NonNullable<Json>,"progress": Json | null,"prompt_version": string | null,"started_at": string | null,"status": string,"step_outputs": NonNullable<Json>,"target_id": string | null,"target_type": string | null,"updated_at": string,"usage": Json | null,"user_id": string
+                    "application_project_id": string | null,"cancel_requested_at": string | null,"connection_tier": string,"created_at": string,"error_category": string | null,"error_code": string | null,"failure_cause": string | null,"finished_at": string | null,"heartbeat_at": string | null,"id": string,"input_hash": string | null,"job_type": string,"model": string | null,"model_tier": string,"next_run_at": string | null,"output": Json | null,"params": NonNullable<Json>,"progress": Json | null,"prompt_version": string | null,"provider": string,"quota_resets_at": string | null,"retry_after": string | null,"retry_count": number,"retry_wait_total_ms": number,"run_generation": number,"started_at": string | null,"status": string,"step_outputs": NonNullable<Json>,"target_id": string | null,"target_type": string | null,"updated_at": string,"usage": Json | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "application_project_id"?: string | null,"attempt_count"?: number,"cancel_requested_at"?: string | null,"created_at"?: string,"error_category"?: never,"error_code"?: string | null,"finished_at"?: string | null,"heartbeat_at"?: string | null,"id"?: string,"input_hash"?: string | null,"job_type": string,"model"?: string | null,"output"?: Json | null,"params"?: NonNullable<Json>,"progress"?: Json | null,"prompt_version"?: string | null,"started_at"?: string | null,"status"?: string,"step_outputs"?: NonNullable<Json>,"target_id"?: string | null,"target_type"?: string | null,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string
+                    "application_project_id"?: string | null,"cancel_requested_at"?: string | null,"connection_tier": string,"created_at"?: string,"error_category"?: never,"error_code"?: string | null,"failure_cause"?: never,"finished_at"?: string | null,"heartbeat_at"?: string | null,"id"?: string,"input_hash"?: string | null,"job_type": string,"model"?: string | null,"model_tier": string,"next_run_at"?: string | null,"output"?: Json | null,"params"?: NonNullable<Json>,"progress"?: Json | null,"prompt_version"?: string | null,"provider": string,"quota_resets_at"?: string | null,"retry_after"?: string | null,"retry_count"?: number,"retry_wait_total_ms"?: number,"run_generation"?: number,"started_at"?: string | null,"status"?: string,"step_outputs"?: NonNullable<Json>,"target_id"?: string | null,"target_type"?: string | null,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string
                   }
                   Update: {
-                    "application_project_id"?: string | null,"attempt_count"?: number,"cancel_requested_at"?: string | null,"created_at"?: string,"error_category"?: never,"error_code"?: string | null,"finished_at"?: string | null,"heartbeat_at"?: string | null,"id"?: string,"input_hash"?: string | null,"job_type"?: string,"model"?: string | null,"output"?: Json | null,"params"?: NonNullable<Json>,"progress"?: Json | null,"prompt_version"?: string | null,"started_at"?: string | null,"status"?: string,"step_outputs"?: NonNullable<Json>,"target_id"?: string | null,"target_type"?: string | null,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string
+                    "application_project_id"?: string | null,"cancel_requested_at"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_category"?: never,"error_code"?: string | null,"failure_cause"?: never,"finished_at"?: string | null,"heartbeat_at"?: string | null,"id"?: string,"input_hash"?: string | null,"job_type"?: string,"model"?: string | null,"model_tier"?: string,"next_run_at"?: string | null,"output"?: Json | null,"params"?: NonNullable<Json>,"progress"?: Json | null,"prompt_version"?: string | null,"provider"?: string,"quota_resets_at"?: string | null,"retry_after"?: string | null,"retry_count"?: number,"retry_wait_total_ms"?: number,"run_generation"?: number,"started_at"?: string | null,"status"?: string,"step_outputs"?: NonNullable<Json>,"target_id"?: string | null,"target_type"?: string | null,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_price_tables": {
+                  Row: {
+                    "cache_write_usd_per_mtok": number | null,"cached_input_usd_per_mtok": number | null,"created_at": string,"effective_from": string,"id": string,"input_usd_per_mtok": number,"long_context_cache_write_usd_per_mtok": number | null,"long_context_cached_input_usd_per_mtok": number | null,"long_context_input_usd_per_mtok": number | null,"long_context_output_usd_per_mtok": number | null,"long_context_threshold_tokens": number | null,"model": string,"output_usd_per_mtok": number,"provider": string,"source_checked_at": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cache_write_usd_per_mtok"?: number | null,"cached_input_usd_per_mtok"?: number | null,"created_at"?: string,"effective_from": string,"id"?: string,"input_usd_per_mtok": number,"long_context_cache_write_usd_per_mtok"?: number | null,"long_context_cached_input_usd_per_mtok"?: number | null,"long_context_input_usd_per_mtok"?: number | null,"long_context_output_usd_per_mtok"?: number | null,"long_context_threshold_tokens"?: number | null,"model": string,"output_usd_per_mtok": number,"provider": string,"source_checked_at": string,"version": string
+                  }
+                  Update: {
+                    "cache_write_usd_per_mtok"?: number | null,"cached_input_usd_per_mtok"?: number | null,"created_at"?: string,"effective_from"?: string,"id"?: string,"input_usd_per_mtok"?: number,"long_context_cache_write_usd_per_mtok"?: number | null,"long_context_cached_input_usd_per_mtok"?: number | null,"long_context_input_usd_per_mtok"?: number | null,"long_context_output_usd_per_mtok"?: number | null,"long_context_threshold_tokens"?: number | null,"model"?: string,"output_usd_per_mtok"?: number,"provider"?: string,"source_checked_at"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_usage_records": {
+                  Row: {
+                    "ai_job_id": string | null,"application_project_id": string | null,"cache_write_tokens": number,"cached_input_tokens": number,"call_key": string | null,"connection_tier": string,"created_at": string,"error_code": string | null,"estimated_cost_usd": number,"feature": string,"id": string,"input_tokens": number,"job_type": string,"model": string,"model_tier": string,"occurred_at": string,"outcome": string,"output_tokens": number,"period_month": string,"price_table_version": string,"provider": string,"reasoning_tokens": number | null,"usage_source": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier": string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd": number,"feature": string,"id"?: string,"input_tokens"?: number,"job_type": string,"model": string,"model_tier": string,"occurred_at"?: string,"outcome": string,"output_tokens"?: number,"period_month"?: string,"price_table_version": string,"provider": string,"reasoning_tokens"?: number | null,"usage_source": string,"user_id"?: string
+                  }
+                  Update: {
+                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd"?: number,"feature"?: string,"id"?: string,"input_tokens"?: number,"job_type"?: string,"model"?: string,"model_tier"?: string,"occurred_at"?: string,"outcome"?: string,"output_tokens"?: number,"period_month"?: string,"price_table_version"?: string,"provider"?: string,"reasoning_tokens"?: number | null,"usage_source"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -233,51 +261,25 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"usage_events": {
-                  Row: {
-                    "ai_job_id": string | null,"created_at": string,"feature": string,"id": string,"period_month": string,"reason": string,"status": string,"units": number,"updated_at": string,"user_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "ai_job_id"?: string | null,"created_at"?: string,"feature": string,"id"?: string,"period_month": string,"reason"?: string,"status"?: string,"units"?: number,"updated_at"?: string,"user_id"?: string
-                  }
-                  Update: {
-                    "ai_job_id"?: string | null,"created_at"?: string,"feature"?: string,"id"?: string,"period_month"?: string,"reason"?: string,"status"?: string,"units"?: number,"updated_at"?: string,"user_id"?: string
-                  }
-                  Relationships: [
-                    
-                  ]
-                },"usage_limits": {
-                  Row: {
-                    "created_at": string,"effective_from": string,"feature": string,"id": string,"monthly_limit": number,"plan": string,"updated_at": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "created_at"?: string,"effective_from": string,"feature": string,"id"?: string,"monthly_limit": number,"plan"?: string,"updated_at"?: string
-                  }
-                  Update: {
-                    "created_at"?: string,"effective_from"?: string,"feature"?: string,"id"?: string,"monthly_limit"?: number,"plan"?: string,"updated_at"?: string
-                  }
-                  Relationships: [
-                    
-                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "charge_usage":
-{ Args: { "p_usage_event_id": string }; Returns: undefined
-                           },
-"charge_usage_for_job":
-{ Args: { "p_ai_job_id": string }; Returns: number
+            "claim_due_ai_jobs":
+{ Args: { "p_limit": number,"p_now": string }; Returns: {
+              "id": string,"user_id": string
+            }[]
                            },
 "complete_ai_job":
-{ Args: { "p_attempt_count": number,"p_job_id": string,"p_progress"?: Json,"p_usage_event_id": string }; Returns: number
+{ Args: { "p_job_id": string,"p_progress"?: Json,"p_run_generation": number }; Returns: undefined
                            },
 "delete_career_item":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string,"p_result_mode"?: string }; Returns: Json
+                           },
+"get_ai_usage_summary":
+{ Args: { "p_include_previous"?: boolean,"p_period_month"?: string }; Returns: Json
                            },
 "get_consent_status":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -290,28 +292,16 @@ isOneToOne: false
 "get_deletion_impact":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string }; Returns: Json
                            },
-"get_usage_summary":
-{ Args: Record<PropertyKey, never>; Returns: Json
-                           },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {
               "agreed_version": string,"consent_type": string,"current_version": string,"needs_consent": boolean,"required": boolean
             }[]
-                           },
-"release_usage":
-{ Args: { "p_usage_event_id": string }; Returns: undefined
-                           },
-"release_usage_for_job":
-{ Args: { "p_ai_job_id": string }; Returns: number
                            },
 "reorder_project_details":
 { Args: { "p_ordered_ids": (string)[],"p_project_id": string }; Returns: undefined
                            },
 "request_ai_job_cancel":
 { Args: { "p_job_id": string }; Returns: Json
-                           },
-"reserve_usage":
-{ Args: { "p_ai_job_id"?: string,"p_feature": string,"p_reason"?: string,"p_units"?: number }; Returns: string
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number

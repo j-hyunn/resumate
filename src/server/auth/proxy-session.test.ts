@@ -23,7 +23,6 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon");
   // QA-06: the proxy needs only the public Supabase keys.
   vi.stubEnv("SUPABASE_JWT_SECRET", "");
-  vi.stubEnv("ANTHROPIC_API_KEY", "");
   vi.stubEnv("CRON_SECRET", "");
   resetServerEnvCache();
   pendingCookies = [];

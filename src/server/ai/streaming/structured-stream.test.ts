@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { careerRowsFixture } from "../__fixtures__/career-rows";
 import { buildCareerPack } from "../context-pack/career-pack";
-import { createFakeAiClient, type FakeResponse } from "../fake-client";
+import { createFakeLlm, type FakeLlmResponse } from "../fake-llm";
 import { finalizeBlockNumbers, validateTextBlock } from "../validation/block";
 import { ModelEvidenceSchema } from "../validation/evidence";
 import { buildAllowedNumbers } from "../validation/numbers";
 import { emptyReport, mergeReports } from "../validation/report";
 import { stripEvidence } from "../storage/evidence-links";
-import type { AiClient } from "../client";
-import { AiError } from "../errors";
+import type { Llm } from "../llm";
 import type { AiStreamEvent } from "./events";
 import { AI_STREAM_TERMINAL_EVENT_TYPES, runStructuredStream } from "./structured-stream";
 
@@ -44,12 +43,12 @@ const output = {
   ],
 };
 
-async function run(responses: FakeResponse[], signal?: AbortSignal, opts: { finalizeThrows?: boolean; ai?: AiClient } = {}) {
-  const ai = opts.ai ?? createFakeAiClient(responses, { chunkSize: 5 });
+async function run(responses: FakeLlmResponse[], signal?: AbortSignal, opts: { finalizeThrows?: boolean; llm?: Llm } = {}) {
+  const llm = opts.llm ?? createFakeLlm(responses, { chunkSize: 5 });
   const events: AiStreamEvent[] = [];
   for await (const e of runStructuredStream({
-    ai,
-    request: { feature: "TEST.stream", promptVersion: "test.v1", model: "claude-sonnet-5-5", system: [], user: [], signal },
+    llm,
+    request: { feature: "TEST.stream", promptVersion: "test.v1", callKey: "test.stream.1", systemBlocks: [], userBlocks: [], signal },
     schema: Draft,
     validateBlock: (raw) => {
       const parsed = Block.safeParse(raw);
@@ -118,18 +117,38 @@ describe("runStructuredStream (C-6 streaming)", () => {
     expect(events.at(-1)).toMatchObject({ type: "error", code: "schema_invalid" });
   });
 
-  it("model error mid-stream → error event with the C-6 code, nothing validated", async () => {
-    const events = await run([{ errorAfterChunks: "model_unavailable", json: output, chunks: 10 }]);
+  it("provider error mid-stream → error event, not retryable after the first token (C-11.3), nothing validated", async () => {
+    const events = await run([{ errorAfterChunks: "provider_unavailable", json: output, chunks: 10 }]);
     expect(events.some((e) => e.type === "block_started")).toBe(true);
-    expect(events.at(-1)).toMatchObject({ type: "error", code: "model_unavailable", retryable: true });
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "provider_unavailable", retryable: false });
     expect(events.filter((e) => e.type === "validated")).toEqual([]);
+  });
+
+  it("provider error before the first token stays retryable", async () => {
+    const events = await run([{ error: "rate_limited" }]);
+    expect(events).toEqual([{ type: "error", code: "rate_limited", message: expect.any(String), retryable: true, retryAfter: null, quotaResetsAt: null }]);
+  });
+
+  it("carries ProviderError retry / quota times as ISO (QA-S3a-01)", async () => {
+    const resetAt = new Date("2026-10-28T07:00:00.000Z");
+    const daily = await run([{ error: "daily_quota_exhausted", quotaResetsAt: resetAt }]);
+    expect(daily.at(-1)).toMatchObject({ type: "error", code: "daily_quota_exhausted", retryable: false, quotaResetsAt: "2026-10-28T07:00:00.000Z", retryAfter: null });
+    const limited = await run([{ error: "rate_limited", retryAfterMs: 30_000 }]);
+    const last = limited.at(-1) as Extract<AiStreamEvent, { type: "error" }>;
+    expect(last.retryAfter).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(last.quotaResetsAt).toBeNull();
+  });
+
+  it("safety block → safety_blocked, never retried (C-11.1 cause 7)", async () => {
+    const events = await run([{ error: "safety_blocked" }]);
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "safety_blocked", retryable: false });
   });
 
   it("user cancel → canceled", async () => {
     const controller = new AbortController();
     controller.abort("canceled");
     const events = await run([{ json: output }], controller.signal);
-    expect(events).toEqual([{ type: "error", code: "canceled", message: expect.any(String), retryable: false }]);
+    expect(events).toEqual([{ type: "error", code: "canceled", message: expect.any(String), retryable: false, retryAfter: null, quotaResetsAt: null }]);
   });
 
   describe("exactly one terminal event, always last (QA-S3-02)", () => {
@@ -137,16 +156,24 @@ describe("runStructuredStream (C-6 streaming)", () => {
     const canceled = new AbortController();
     canceled.abort("canceled");
 
-    /** A client that throws after its final chunk and keeps yielding junk afterwards. */
-    const misbehaving: AiClient = {
+    /** An Llm that keeps yielding junk after its terminal event, then throws. */
+    const misbehaving: Llm = {
+      provider: "anthropic",
+      tier: "default",
+      connectionTier: "paid",
+      modelFor: () => "m",
       complete: () => Promise.reject(new Error("unused")),
+      settle: async () => {},
       stream: () => ({
         async *[Symbol.asyncIterator]() {
           const text = JSON.stringify(output);
-          yield { type: "text_delta" as const, text };
-          yield { type: "final" as const, result: { text, model: "m", usage: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 }, latencyMs: 0, fallbackUsed: false } };
-          yield { type: "text_delta" as const, text: '{"late":' };
-          throw new AiError("model_unavailable");
+          yield { type: "delta" as const, text };
+          yield {
+            type: "done" as const,
+            result: { text, model: "m", usage: { inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: null, usageSource: "provider_reported" as const }, latencyMs: 0 },
+          };
+          yield { type: "delta" as const, text: '{"late":' };
+          throw new Error("late failure");
         },
       }),
     };
@@ -155,11 +182,11 @@ describe("runStructuredStream (C-6 streaming)", () => {
       ["success", () => run([{ json: output }]), "done"],
       ["schema miss", () => run([{ json: { schema_version: 1, blocks: [{ block_id: "x" }] } }]), "error"],
       ["truncated JSON", () => run([{ text: '{"blocks":[' }]), "error"],
-      ["model error mid-stream", () => run([{ errorAfterChunks: "rate_limited", json: output, chunks: 3 }]), "error"],
-      ["model error before output", () => run([{ error: "model_unavailable" }]), "error"],
+      ["provider error mid-stream", () => run([{ errorAfterChunks: "rate_limited", json: output, chunks: 3 }]), "error"],
+      ["provider error before output", () => run([{ error: "provider_unavailable" }]), "error"],
       ["cancel", () => run([{ json: output }], canceled.signal), "error"],
       ["finalize throws (e.g. DB write)", () => run([{ json: output }], undefined, { finalizeThrows: true }), "error"],
-      ["client yields after final", () => run([], undefined, { ai: misbehaving }), "done"],
+      ["llm yields after done", () => run([], undefined, { llm: misbehaving }), "done"],
     ])("%s → one %s, last", async (_, go, terminal) => {
       const events = await go();
       const terminals = events.filter(isTerminal);

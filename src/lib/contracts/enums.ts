@@ -75,9 +75,9 @@ export const READINESS_SUGGESTED_MODES = ["new_project", "augment_project"] as c
 export const DATA_SUFFICIENCIES = ["ok", "thin", "none"] as const;
 export type DataSufficiency = (typeof DATA_SUFFICIENCIES)[number];
 
-// --- S3: AI infrastructure (DM §2.8–2.9, A.14–A.16, AI C-6) ---
+// --- S3 / S3a: AI infrastructure v4 BYOK (DM §2.8–2.9, A.14–A.16, AI C-6, C-10–C-13) ---
 
-/** ai_jobs.job_type CHECK (DM A.15). */
+/** ai_jobs.job_type CHECK (DM §2.9.1 v4: + key_verification). */
 export const AI_JOB_TYPES = [
   "jd_extraction",
   "insight",
@@ -89,6 +89,7 @@ export const AI_JOB_TYPES = [
   "writing_assist",
   "chat_reply",
   "writing_chat_turn",
+  "key_verification",
 ] as const;
 export type AiJobType = (typeof AI_JOB_TYPES)[number];
 
@@ -99,12 +100,36 @@ export type AiJobStatus = (typeof AI_JOB_STATUSES)[number];
 /** Terminal job statuses: nothing runs after these. */
 export const AI_JOB_TERMINAL_STATUSES = ["succeeded", "failed", "canceled"] as const satisfies readonly AiJobStatus[];
 
-/** ai_jobs.error_code CHECK — same list as AI_ERROR_CODES in errors.ts (AI C-6). */
+/** ai_jobs.provider / ai_usage_records.provider / ai_price_tables.provider CHECK (D-28, C-10). */
+export const AI_PROVIDERS = ["openai", "gemini", "anthropic"] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+
+/** ai_jobs.model_tier / ai_usage_records.model_tier CHECK (C-10.1). */
+export const MODEL_TIERS = ["light", "default", "heavy"] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+/** ai_jobs.connection_tier / ai_usage_records.connection_tier CHECK (F-AI-04, C-12). */
+export const CONNECTION_TIERS = ["free", "paid"] as const;
+export type ConnectionTier = (typeof CONNECTION_TIERS)[number];
+
+/** ai_jobs.error_code CHECK — same list as AI_ERROR_CODES in errors.ts (AI C-11.1). */
 export { AI_ERROR_CODES, type AiErrorCode } from "./errors";
 
-/** ai_jobs.error_category (generated column) values. Screens pick ST-AI-FAILED copy by this. */
-export const ERROR_CATEGORIES = ["transient", "input", "timeout", "canceled"] as const;
+/** ai_jobs.error_category (generated column) values (C-11.1). Screens pick ST-AI-FAILED copy by this. */
+export const ERROR_CATEGORIES = ["provider_limit", "user_account", "transient", "input", "system"] as const;
 export type ErrorCategory = (typeof ERROR_CATEGORIES)[number];
+
+/** ai_jobs.failure_cause (generated column) values — F-AI-08 7 causes; null for other codes (C-11.1). */
+export const FAILURE_CAUSES = [
+  "rate_limited",
+  "daily_quota_exhausted",
+  "billing_required",
+  "key_invalid",
+  "model_not_available",
+  "provider_unavailable",
+  "input_rejected",
+] as const;
+export type FailureCause = (typeof FAILURE_CAUSES)[number];
 
 /** ai_jobs.progress.stage values (AI C-6 "진행 단계 값"). */
 export const AI_PROGRESS_STAGES = [
@@ -122,17 +147,28 @@ export const AI_PROGRESS_STAGES = [
 ] as const;
 export type AiProgressStage = (typeof AI_PROGRESS_STAGES)[number];
 
-/** usage_events.feature CHECK (DM §2.9, A.16). */
-export const USAGE_FEATURES = ["insight", "draft", "interview_session", "writing_chat", "chat_message"] as const;
+/** ai_usage_records.feature CHECK (DM §2.9.2, C-13). */
+export const USAGE_FEATURES = [
+  "jd_extraction",
+  "insight",
+  "career_description",
+  "cover_letter",
+  "interview_questions",
+  "interview_evaluation",
+  "writing_chat",
+  "key_verification",
+  "writing_assist",
+  "chat_reply",
+] as const;
 export type UsageFeature = (typeof USAGE_FEATURES)[number];
 
-/** usage_events.status CHECK. A reservation ends as exactly one of charged / released. */
-export const USAGE_STATUSES = ["reserved", "charged", "released"] as const;
-export type UsageStatus = (typeof USAGE_STATUSES)[number];
+/** ai_usage_records.usage_source CHECK. */
+export const USAGE_SOURCES = ["provider_reported", "unavailable"] as const;
+export type UsageSource = (typeof USAGE_SOURCES)[number];
 
-/** usage_events.reason CHECK. */
-export const USAGE_REASONS = ["initial", "explicit_regenerate", "source_change_regenerate", "retake"] as const;
-export type UsageReason = (typeof USAGE_REASONS)[number];
+/** ai_usage_records.outcome CHECK. */
+export const USAGE_OUTCOMES = ["succeeded", "failed"] as const;
+export type UsageOutcome = (typeof USAGE_OUTCOMES)[number];
 
 /** evidence_links.owner_type CHECK (DM A.14). */
 export const EVIDENCE_OWNER_TYPES = [

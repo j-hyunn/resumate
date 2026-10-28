@@ -21,10 +21,14 @@ import { emptyReport, type ValidationReport } from "./report";
 export const ModelEvidenceSchema = z.object({
   source_type: z.enum(EVIDENCE_SOURCE_TYPES),
   ref: z.string(),
-  field: z.string().nullable().optional(),
-  quote: z.string().nullable().optional(),
+  // C-10.2 canonical schema: every property required, absent = explicit null.
+  // `.default(null)` keeps the JSON schema "required + nullable" (io: output)
+  // while still accepting a provider that omits the key (Gemini doesn't enforce it).
+  field: z.string().nullable().default(null),
+  quote: z.string().nullable().default(null),
 });
-export type ModelEvidence = z.infer<typeof ModelEvidenceSchema>;
+/** Validator input: keys may be absent (treated as null), so this is the schema's input type. */
+export type ModelEvidence = z.input<typeof ModelEvidenceSchema>;
 
 export type ValidatedEvidence = {
   source_type: EvidenceSourceType;

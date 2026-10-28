@@ -1,31 +1,50 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFakeAiClient } from "@/server/ai/fake-client";
-import { AiError } from "@/server/ai/errors";
-import type { AiClient } from "@/server/ai/client";
+import { ProviderError } from "@/server/ai/errors";
+import type { Llm } from "@/server/ai/llm";
 import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
 import { requestCancel } from "@/server/services/ai-jobs";
-import { getUsageSummary } from "@/server/services/usage";
+import { getAiUsageSummary } from "@/server/services/usage";
+import { createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
-import { STALLED_AFTER_MS } from "./constants";
-import { createSupabaseLedger } from "./ledger";
+import { FREE_TIER_MIN_INTERVAL_MS, STALLED_AFTER_MS } from "./constants";
+import { kstDate, kstPeriodMonth } from "./cost";
+import {
+  createRecordingKeyStatusReporter,
+  createStaticKeySource,
+  createStaticProviderContext,
+  type ProviderContext,
+} from "./provider-context";
 import { createJobRunner } from "./runner";
 import { createSupabaseJobStore } from "./supabase-store";
-import type { JobRef, JobTypeDefinition } from "./types";
+import { createSupabaseUsageStore } from "./supabase-usage";
+import type { JobRef, JobStep, JobTypeDefinition } from "./types";
 
 /**
- * Runner end-to-end against the local Supabase stack (S3 schema): real ai_jobs
- * rows, real ledger RPCs as app_ai_writer, the user's cancel RPC, and the
- * service-role sweep. Fake job types and a fake model — no Anthropic call.
- * Skips when `supabase start` isn't running or S3 isn't migrated.
+ * Runner v4 end-to-end against the local Supabase stack (S3a schema): real
+ * ai_jobs rows (generated error_category / failure_cause, guard trigger,
+ * in-flight unique index), real ai_usage_records inserts + seeded price
+ * table as app_ai_writer, the user's cancel RPC, the service-role sweep and
+ * claim_due_ai_jobs, and get_ai_usage_summary as the user.
+ * Fake provider adapter through the real createLlm — no provider call.
+ * Skips when `supabase start` isn't running or S3a isn't migrated.
  */
 
 const stack = readLocalSupabase();
-const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "ai_jobs")) : false;
+const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "ai_usage_records")) : false;
 
-describe.skipIf(!ready)("job runner (local stack)", () => {
+/** Seeded price version in effect today (every version carries all 9 models; Sonnet's price is the same in all). */
+function seededVersion(now = new Date()): string {
+  const d = kstDate(now);
+  return d >= "2027-01-01" ? "v2027-01-01" : d >= "2026-12-01" ? "v2026-12-01" : "v2026-10-28";
+}
+
+const PAID: ProviderContext = { provider: "anthropic", connectionTier: "paid", keyStatus: "valid" };
+const FREE: ProviderContext = { provider: "gemini", connectionTier: "free", keyStatus: "valid" };
+
+describe.skipIf(!ready)("job runner v4 (local stack)", () => {
   const s = stack!;
   let admin: SupabaseClient<Database>;
   let userId = "";
@@ -33,97 +52,82 @@ describe.skipIf(!ready)("job runner (local stack)", () => {
   const scheduled: (() => Promise<void>)[] = [];
   const continued: JobRef[] = [];
 
-  let failMode: "none" | "schema" | "input" | "hang" = "none";
+  const step = (stage: string): JobStep<Llm> => ({
+    stage,
+    run: async (ctx) => {
+      const r = await ctx.llm.complete({
+        feature: "TEST",
+        promptVersion: "test.v1",
+        callKey: `${ctx.callKeyPrefix}.1`,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: null,
+        signal: ctx.signal,
+      });
+      return JSON.parse(r.text) as unknown;
+    },
+  });
+  const def: JobTypeDefinition<Llm> = { jobType: "insight", modelTier: "default", steps: [step("match"), step("synthesize")] };
 
-  // Fake pipeline: one model call per step through the fake AiClient.
-  const defs: Record<string, JobTypeDefinition<AiClient>> = {
-    insight: {
-      jobType: "insight",
-      usage: { feature: "insight", units: 1 },
-      steps: [
-        {
-          stage: "match",
-          total: 2,
-          run: async (ctx) => {
-            const r = await ctx.ai.complete({
-              feature: "insight",
-              promptVersion: "test-v1",
-              model: "claude-sonnet-5-5",
-              system: [{ text: "s" }],
-              user: [{ text: "u" }],
-              outputSchema: { type: "object" },
-              signal: ctx.signal,
-            });
-            await ctx.reportProgress(1, 2);
-            return JSON.parse(r.text) as unknown;
-          },
-        },
-        {
-          stage: "synthesize",
-          timeoutMs: 300,
-          run: async (ctx) => {
-            if (failMode === "schema") throw new AiError("schema_invalid");
-            if (failMode === "input") throw new AiError("input_too_long");
-            if (failMode === "hang") return new Promise(() => {});
-            return { previous: Object.keys(ctx.previous) };
-          },
-        },
-      ],
-    },
-    jd_extraction: {
-      jobType: "jd_extraction",
-      steps: [{ stage: "extract", run: async () => ({ ok: true }) }],
-    },
-    interview_questions: {
-      jobType: "interview_questions",
-      usage: { feature: "interview_session", units: 1 },
-      steps: [{ stage: "generate", run: async () => new Promise(() => {}), timeoutMs: 60_000 }],
-    },
-  };
-
-  function makeRunner() {
-    return createJobRunner<AiClient>({
+  function makeRunner(responses: ScriptedResponse[], context: ProviderContext = PAID) {
+    const clock = fakeClock(new Date());
+    const scripted = createScriptedAdapter(context.provider, responses, clock.ms);
+    const keyStatus = createRecordingKeyStatusReporter();
+    const runner = createJobRunner<Llm>({
       forUser: (uid) => {
         const db = createAiWriterClient(uid);
         return {
           db,
           store: createSupabaseJobStore(db),
-          ledger: createSupabaseLedger(db),
-          ai: createFakeAiClient(Array.from({ length: 10 }, () => ({ text: JSON.stringify({ matched: 2 }) }))),
+          usage: createSupabaseUsageStore(db),
+          keySource: createStaticKeySource("sk-integration-test", () => new ProviderError("key_missing")),
+          keyStatus,
         };
       },
-      getDefinition: (t) => defs[t],
+      providerContext: createStaticProviderContext(context),
+      createLlm: scriptedLlmFactory(scripted.adapter, clock.ms),
+      settleLlm: (llm, timeoutMs) => llm.settle(timeoutMs),
+      getDefinition: (t) => (t === "insight" ? def : undefined),
       schedule: (task) => void scheduled.push(task),
       continueJob: async (ref) => void continued.push(ref),
+      now: clock.now,
+      random: () => 0,
       timing: { heartbeatIntervalMs: 50 },
     });
+    return { runner, clock, scripted, keyStatus };
   }
+
+  const target = () => ({ type: "application_project", id: crypto.randomUUID() });
 
   async function drain() {
     while (scheduled.length) await scheduled.shift()!();
   }
 
-  async function usageOf(jobId: string) {
-    const { data, error } = await admin.from("usage_events").select("status").eq("ai_job_id", jobId);
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((r) => r.status);
-  }
-
   async function jobRow(jobId: string) {
     const { data, error } = await admin.from("ai_jobs").select("*").eq("id", jobId).single();
     if (error) throw new Error(error.message);
-    const { _meta, ...stepOutputs } = (data.step_outputs ?? {}) as Record<string, unknown>;
-    return { ...data, step_outputs: stepOutputs, meta: _meta as { usageEventId: string | null; runBase: number } };
+    return data;
+  }
+
+  async function usageRows(jobId: string) {
+    const { data, error } = await admin.from("ai_usage_records").select("*").eq("ai_job_id", jobId).order("occurred_at");
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  }
+
+  async function wake(h: ReturnType<typeof makeRunner>, jobId: string) {
+    const at = (await jobRow(jobId)).next_run_at!;
+    h.clock.advance(Math.max(0, Date.parse(at) - h.clock.ms()));
+    await h.runner.getStatus({ jobId, userId });
+    await drain();
   }
 
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", s.url);
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", s.anonKey);
     vi.stubEnv("SUPABASE_JWT_SECRET", s.jwtSecret);
-    vi.stubEnv("ANTHROPIC_API_KEY", "test-not-used");
     vi.stubEnv("CRON_SECRET", "test-cron-secret-0000");
     resetServerEnvCache();
-    failMode = "none";
     scheduled.length = 0;
     continued.length = 0;
   });
@@ -142,247 +146,201 @@ describe.skipIf(!ready)("job runner (local stack)", () => {
 
   afterAll(async () => {
     if (userId) {
-      // Test rows: service role cleanup (usage_events / ai_jobs aren't cascaded by user deletion in every setup).
-      await admin.from("usage_events").delete().eq("user_id", userId);
       await admin.from("ai_jobs").delete().eq("user_id", userId);
-      await admin.auth.admin.deleteUser(userId);
+      await admin.auth.admin.deleteUser(userId); // cascades ai_usage_records
     }
     resetServerEnvCache();
   });
 
-  it("success: queued → running → succeeded, checkpoints saved, usage charged", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight", params: { x: 1 }, inputHash: `ok-${crypto.randomUUID()}` });
-    expect((await jobRow(jobId)).status).toBe("queued");
-    expect(await usageOf(jobId)).toEqual(["reserved"]);
+  it("success: succeeded row with fixed provider / tiers; one usage row per call priced from the seeded table", async () => {
+    const h = makeRunner([{ json: { a: 1 } }, { json: { b: 2 } }]);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target(), inputHash: `ok-${crypto.randomUUID()}` });
     await drain();
     const row = await jobRow(jobId);
-    expect(row).toMatchObject({ status: "succeeded", error_code: null, attempt_count: 1 });
-    expect(row.started_at).not.toBeNull();
-    expect(row.finished_at).not.toBeNull();
-    expect(row.step_outputs).toEqual({ match: { matched: 2 }, synthesize: { previous: ["match"] } });
-    expect(row.progress).toEqual({ stage: "synthesize", done: 1, total: 1 });
-    expect(await usageOf(jobId)).toEqual(["charged"]);
-    // complete_ai_job again is idempotent (0 leftover rows, still succeeded).
-    const store = createSupabaseJobStore(createAiWriterClient(userId));
-    expect(await store.complete(jobId, row.attempt_count, row.meta.usageEventId, { stage: "synthesize", done: 1, total: 1 })).toBe(true);
-    expect(await usageOf(jobId)).toEqual(["charged"]);
-  });
-
-  it("input_hash reuse returns the succeeded job and reserves nothing", async () => {
-    const runner = makeRunner();
-    const hash = `reuse-${crypto.randomUUID()}`;
-    const first = await runner.startJob({ userId, jobType: "insight", inputHash: hash });
-    await drain();
-    const again = await runner.startJob({ userId, jobType: "insight", inputHash: hash });
-    expect(again).toEqual({ jobId: first.jobId, reused: true, inProgress: false });
-    expect(await usageOf(first.jobId)).toEqual(["charged"]);
-  });
-
-  it("schema_invalid after the retry: failed (category transient), usage released", async () => {
-    failMode = "schema";
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    const row = await jobRow(jobId);
-    expect(row).toMatchObject({ status: "failed", error_code: "schema_invalid", error_category: "transient", attempt_count: 2 });
-    expect(row.step_outputs).toEqual({ match: { matched: 2 } });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-
-    // Manual retry resumes at synthesize and charges a new reservation.
-    failMode = "none";
-    await runner.retryJob({ jobId, userId });
-    await drain();
-    expect((await jobRow(jobId)).status).toBe("succeeded");
-    expect((await usageOf(jobId)).sort()).toEqual(["charged", "released"]);
-  });
-
-  it("input error: failed without retry, released", async () => {
-    failMode = "input";
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    expect(await jobRow(jobId)).toMatchObject({ status: "failed", error_code: "input_too_long", error_category: "input", attempt_count: 1 });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("hanging step: timeout after retry, released", async () => {
-    failMode = "hang";
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    expect(await jobRow(jobId)).toMatchObject({ status: "failed", error_code: "timeout", error_category: "timeout" });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("user cancel RPC during a running step: canceled, released", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "interview_questions" });
-    const run = scheduled.shift()!();
-    // Wait until the step is running, then cancel as the user.
-    await vi.waitFor(async () => expect((await jobRow(jobId)).status).toBe("running"), { timeout: 3_000 });
-    const res = await requestCancel(userClient, jobId);
-    expect(res.cancelRequestedAt).not.toBeNull();
-    await run;
-    expect(await jobRow(jobId)).toMatchObject({ status: "canceled", error_code: "canceled" });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("cancel of a queued job is settled immediately", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    scheduled.length = 0; // the after() never ran
-    await requestCancel(userClient, jobId);
-    const job = await runner.settleCancelIfQueued({ jobId, userId });
-    expect(job?.status).toBe("canceled");
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("sweep (service role RPC) fails a stalled job; the zombie runner can't overwrite it", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    scheduled.length = 0;
-    const old = new Date(Date.now() - STALLED_AFTER_MS - 60_000).toISOString();
-    await admin.from("ai_jobs").update({ status: "running", heartbeat_at: old }).eq("id", jobId);
-    const { data: swept, error } = await admin.rpc("sweep_stalled_ai_jobs", {
-      p_stalled_before: new Date(Date.now() - STALLED_AFTER_MS).toISOString(),
+    expect(row).toMatchObject({
+      status: "succeeded",
+      provider: "anthropic",
+      model_tier: "default",
+      connection_tier: "paid",
+      run_generation: 1,
+      retry_count: 0,
+      next_run_at: null,
+      error_code: null,
+      error_category: null,
+      failure_cause: null,
     });
-    expect(error).toBeNull();
-    expect(swept).toBeGreaterThanOrEqual(1);
-    expect(await jobRow(jobId)).toMatchObject({ status: "failed", error_code: "stalled" });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-
-    // Zombie: a late finish is refused by the conditional update / status guard.
-    const store = createSupabaseJobStore(createAiWriterClient(userId));
-    const zombie = await jobRow(jobId);
-    expect(await store.finish(jobId, zombie.attempt_count, { status: "canceled" })).toBe(false);
-    expect(await store.complete(jobId, zombie.attempt_count, zombie.meta.usageEventId, { stage: "synthesize", done: 1, total: 1 })).toBe(false);
-    expect((await jobRow(jobId)).status).toBe("failed");
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("status read marks a stalled job failed and releases (lazy detection)", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    scheduled.length = 0;
-    const old = new Date(Date.now() - STALLED_AFTER_MS - 60_000).toISOString();
-    await admin.from("ai_jobs").update({ status: "running", heartbeat_at: old }).eq("id", jobId);
-    const job = await runner.getStatus({ jobId, userId });
-    expect(job).toMatchObject({ status: "failed", errorCode: "stalled" });
-    expect(await usageOf(jobId)).toEqual(["released"]);
-  });
-
-  it("another user's job is not visible to the runner scope (RLS via sub)", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    scheduled.length = 0;
-    const otherUser = crypto.randomUUID();
-    await expect(runner.getStatus({ jobId, userId: otherUser })).rejects.toMatchObject({ code: "not_found" });
-    await runner.settleCancelIfQueued({ jobId, userId }); // cleanup path: nothing to cancel
-    await requestCancel(userClient, jobId);
-    await runner.settleCancelIfQueued({ jobId, userId });
-  });
-
-  it("limit: the 6th interview_session reservation is refused and leaves no job row; usage summary counts reserved", async () => {
-    const runner = makeRunner();
-    // Fill the month's interview_session limit (5) with jobs whose after() never runs.
-    const before = await getUsageSummary(userClient);
-    const room = before.features.interview_session.remaining ?? 0;
-    const ids: string[] = [];
-    for (let i = 0; i < room; i++) ids.push((await runner.startJob({ userId, jobType: "interview_questions" })).jobId);
-    scheduled.length = 0;
-    const { count: jobsBefore } = await admin.from("ai_jobs").select("id", { count: "exact", head: true }).eq("user_id", userId);
-    await expect(runner.startJob({ userId, jobType: "interview_questions" })).rejects.toMatchObject({ code: "usage_limit_reached" });
-    const { count: jobsAfter } = await admin.from("ai_jobs").select("id", { count: "exact", head: true }).eq("user_id", userId);
-    expect(jobsAfter).toBe(jobsBefore);
-
-    const summary = await getUsageSummary(userClient);
-    expect(summary.features.interview_session).toMatchObject({ limit: 5, remaining: 0 });
-    expect(summary.features.chat_message.limit).toBeNull();
-
-    // Clean up: cancel them so reservations are released.
-    for (const id of ids) {
-      await requestCancel(userClient, id);
-      await runner.settleCancelIfQueued({ jobId: id, userId });
-      expect(await usageOf(id)).toEqual(["released"]);
+    const rows = await usageRows(jobId);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r).toMatchObject({
+        user_id: userId,
+        feature: "insight",
+        job_type: "insight",
+        provider: "anthropic",
+        model: "claude-sonnet-5-5",
+        model_tier: "default",
+        connection_tier: "paid",
+        outcome: "succeeded",
+        usage_source: "provider_reported",
+        input_tokens: 1000,
+        output_tokens: 200,
+        price_table_version: seededVersion(),
+        period_month: kstPeriodMonth(new Date(r.occurred_at)),
+      });
+      // 1000 × $2 + 200 × $10 per 1M (claude-sonnet-5-5)
+      expect(Number(r.estimated_cost_usd)).toBeCloseTo(0.004, 6);
     }
-    expect((await getUsageSummary(userClient)).features.interview_session.remaining).toBe(5);
-  });
-
-  it("yield → continuation resumes from the checkpoint", async () => {
-    const runner = createJobRunner<AiClient>({
-      forUser: (uid) => {
-        const db = createAiWriterClient(uid);
-        return { db, store: createSupabaseJobStore(db), ledger: createSupabaseLedger(db), ai: createFakeAiClient([{ text: "{\"m\":1}" }]) };
-      },
-      getDefinition: (t) => defs[t],
-      schedule: (task) => void scheduled.push(task),
-      continueJob: async (ref) => void continued.push(ref),
-      // Budget 0: every step after the first in an invocation yields.
-      timing: { invocationBudgetMs: 0 },
-    });
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    expect(await jobRow(jobId)).toMatchObject({ status: "queued", step_outputs: { match: { m: 1 } } });
-    expect(continued).toEqual([{ jobId, userId }]);
-    expect(await runner.runJob({ jobId, userId })).toBe("succeeded");
-    expect(await usageOf(jobId)).toEqual(["charged"]);
-  });
-
-  it("no-charge job: complete_ai_job with a null reservation succeeds without usage rows", async () => {
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "jd_extraction" });
-    await drain();
-    expect((await jobRow(jobId)).status).toBe("succeeded");
-    expect(await usageOf(jobId)).toEqual([]);
-  });
-
-  it("QA-S3-01 concurrent manual retries: one winner, original released + one charged", async () => {
-    failMode = "schema";
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    failMode = "none";
-    const results = await Promise.all([runner.retryJob({ jobId, userId }), runner.retryJob({ jobId, userId })]);
-    expect(results.filter((r) => !r.inProgress)).toHaveLength(1);
-    await drain();
-    expect((await jobRow(jobId)).status).toBe("succeeded");
-    expect((await usageOf(jobId)).sort()).toEqual(["charged", "released"]);
-  });
-
-  it("QA-S3-03 double start race: one job row, the loser's reservation released", async () => {
-    const runner = makeRunner();
-    const hash = `race-${crypto.randomUUID()}`;
-    const [a, b] = await Promise.all([
-      runner.startJob({ userId, jobType: "insight", inputHash: hash }),
-      runner.startJob({ userId, jobType: "insight", inputHash: hash }),
-    ]);
-    expect(a.jobId).toBe(b.jobId);
-    await drain();
-    const { data } = await admin.from("usage_events").select("status, ai_job_id").eq("user_id", userId).eq("status", "reserved");
-    expect(data ?? []).toEqual([]);
-    expect(await usageOf(a.jobId)).toEqual(["charged"]);
-  });
-
-  it("QA-S3-04/05 retry sets heartbeat = now (poll doesn't stall it) and bumps the generation", async () => {
-    failMode = "input";
-    const runner = makeRunner();
-    const { jobId } = await runner.startJob({ userId, jobType: "insight" });
-    await drain();
-    // Make it look old and transient-failed.
-    const old = new Date(Date.now() - STALLED_AFTER_MS * 5).toISOString();
-    await admin.from("ai_jobs").update({ error_code: "model_unavailable", created_at: old }).eq("id", jobId);
-    const before = await jobRow(jobId);
-    failMode = "none";
-    await runner.retryJob({ jobId, userId });
-    scheduled.length = 0;
-    const polled = await runner.getStatus({ jobId, userId });
-    expect(polled.status).toBe("queued");
-    expect(polled.attemptCount).toBe(before.attempt_count + 1);
-    // A late write of the old generation matches nothing.
+    // complete_ai_job again: idempotent for the same generation.
     const store = createSupabaseJobStore(createAiWriterClient(userId));
-    expect(await store.update(jobId, before.attempt_count, { progress: { stage: "x", done: 0, total: 1 } })).toBe(false);
-    await runner.runJob({ jobId, userId });
+    expect(await store.complete(jobId, 1, { stage: "synthesize", done: 1, total: 1 })).toBe(true);
+    expect(await store.complete(jobId, 2, { stage: "synthesize", done: 1, total: 1 })).toBe(false);
+  });
+
+  it("input_hash reuse: same job, no new usage row", async () => {
+    const h = makeRunner([{ json: {} }, { json: {} }]);
+    const hash = `reuse-${crypto.randomUUID()}`;
+    const t = target();
+    const first = await h.runner.startJob({ userId, jobType: "insight", target: t, inputHash: hash });
+    await drain();
+    const again = await h.runner.startJob({ userId, jobType: "insight", target: t, inputHash: hash });
+    expect(again).toEqual({ jobId: first.jobId, reused: true, inProgress: false });
+    expect(await usageRows(first.jobId)).toHaveLength(2);
+  });
+
+  it("rate_limited: scheduled via next_run_at; sweep skips it; claim_due lists it only when due; poll wakes it", async () => {
+    const h = makeRunner([{ error: "rate_limited" }, { json: {} }, { json: {} }]);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    await drain();
+    let row = await jobRow(jobId);
+    expect(row).toMatchObject({ status: "queued", retry_count: 1, retry_wait_total_ms: 2000, run_generation: 2, error_code: null });
+    expect(Date.parse(row.next_run_at!)).toBe(h.clock.ms() + 2000);
+    expect((row.progress as Record<string, unknown>).waiting_retry_until).toBe(new Date(h.clock.ms() + 2000).toISOString());
+
+    // Sweep with a far-future cutoff still leaves the waiting job alone.
+    const swept = await admin.rpc("sweep_stalled_ai_jobs", { p_stalled_before: new Date(Date.now() + 3_600_000).toISOString() });
+    expect(swept.error).toBeNull();
+    expect((await jobRow(jobId)).status).toBe("queued");
+
+    const notYet = await admin.rpc("claim_due_ai_jobs", { p_now: new Date(h.clock.ms() + 1000).toISOString(), p_limit: 100 });
+    expect((notYet.data ?? []).map((r) => r.id)).not.toContain(jobId);
+    const due = await admin.rpc("claim_due_ai_jobs", { p_now: new Date(h.clock.ms() + 2000).toISOString(), p_limit: 100 });
+    expect(due.data).toContainEqual({ id: jobId, user_id: userId });
+    expect((await jobRow(jobId)).status).toBe("queued"); // read-only
+
+    await wake(h, jobId);
+    row = await jobRow(jobId);
+    expect(row).toMatchObject({ status: "succeeded", retry_count: 1, next_run_at: null });
+    const rows = await usageRows(jobId);
+    expect(rows.map((r) => [r.outcome, r.error_code, r.usage_source])).toEqual([
+      ["failed", "rate_limited", "unavailable"],
+      ["succeeded", null, "provider_reported"],
+      ["succeeded", null, "provider_reported"],
+    ]);
+    expect(Number(rows[0]!.estimated_cost_usd)).toBe(0);
+  });
+
+  it("provider_unavailable final failure: generated category / cause, retry_after; manual retry clears it", async () => {
+    const h = makeRunner([{ error: "provider_unavailable" }, { error: "provider_unavailable" }, { error: "provider_unavailable" }, { json: {} }, { json: {} }]);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    await drain();
+    await wake(h, jobId);
+    await wake(h, jobId);
+    let row = await jobRow(jobId);
+    expect(row).toMatchObject({
+      status: "failed",
+      error_code: "provider_unavailable",
+      error_category: "transient",
+      failure_cause: "provider_unavailable",
+      retry_count: 2,
+      retry_wait_total_ms: 6000,
+      next_run_at: null,
+    });
+    expect(Date.parse(row.retry_after!)).toBe(h.clock.ms() + 60_000);
+    expect(await usageRows(jobId)).toHaveLength(3);
+
+    const res = await h.runner.retryJob({ jobId, userId });
+    expect(res.inProgress).toBe(false);
+    row = await jobRow(jobId);
+    expect(row).toMatchObject({ status: "queued", retry_after: null, error_code: null, run_generation: 4 });
+    await drain();
     expect((await jobRow(jobId)).status).toBe("succeeded");
+    expect(await usageRows(jobId)).toHaveLength(5);
+  });
+
+  it("daily quota: quota_resets_at stored, cause daily_quota_exhausted; key_invalid marks the key", async () => {
+    const resets = new Date(Date.now() + 5 * 3_600_000);
+    const h = makeRunner([{ error: "daily_quota_exhausted", quotaResetsAt: resets }, { error: "key_invalid" }]);
+    const a = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    await drain();
+    const rowA = await jobRow(a.jobId);
+    expect(rowA).toMatchObject({ status: "failed", error_category: "provider_limit", failure_cause: "daily_quota_exhausted", retry_count: 0 });
+    expect(Date.parse(rowA.quota_resets_at!)).toBe(resets.getTime());
+    const b = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    await drain();
+    expect(await jobRow(b.jobId)).toMatchObject({ status: "failed", error_category: "user_account", failure_cause: "key_invalid" });
+    expect(h.keyStatus.invalidated).toEqual([b.jobId]);
+  });
+
+  it("one in-flight job per target: a concurrent start follows the winner", async () => {
+    const h = makeRunner([]);
+    const t = target();
+    const [x, y] = await Promise.all([
+      h.runner.startJob({ userId, jobType: "insight", target: t }),
+      h.runner.startJob({ userId, jobType: "insight", target: t }),
+    ]);
+    expect(x.jobId).toBe(y.jobId);
+    expect([x.inProgress, y.inProgress].sort()).toEqual([false, true]);
+    scheduled.length = 0;
+    await admin.from("ai_jobs").update({ status: "canceled", error_code: "canceled" }).eq("id", x.jobId);
+  });
+
+  it("cancel of a job waiting for its retry: user RPC + settle → canceled", async () => {
+    const h = makeRunner([{ error: "rate_limited" }]);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    await drain();
+    expect((await jobRow(jobId)).status).toBe("queued");
+    await requestCancel(userClient, jobId);
+    const after = await h.runner.settleCancelIfQueued({ jobId, userId });
+    expect(after).toMatchObject({ status: "canceled", errorCode: "canceled" });
+    expect(await jobRow(jobId)).toMatchObject({ error_category: "system", failure_cause: null, next_run_at: null });
+  });
+
+  it("free tier: the second step waits ≥ 6 s after the last recorded call (read from ai_usage_records)", async () => {
+    const h = makeRunner([{ json: {} }, { json: {} }], FREE);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    const t0 = h.clock.ms();
+    await drain();
+    const row = await jobRow(jobId);
+    expect(row).toMatchObject({ status: "queued", connection_tier: "free", provider: "gemini", retry_count: 0 });
+    expect(Date.parse(row.next_run_at!)).toBe(t0 + FREE_TIER_MIN_INTERVAL_MS);
+    await wake(h, jobId);
+    expect((await jobRow(jobId)).status).toBe("succeeded");
+    const rows = await usageRows(jobId);
+    expect(rows.map((r) => [r.connection_tier, r.model])).toEqual([
+      ["free", "gemini-3.8-flash"],
+      ["free", "gemini-3.8-flash"],
+    ]);
+  });
+
+  it("lazy stalled detection on the status read", async () => {
+    const h = makeRunner([]);
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    scheduled.length = 0;
+    h.clock.advance(STALLED_AFTER_MS + 1_000);
+    const res = await h.runner.getStatus({ jobId, userId });
+    expect(res).toMatchObject({ status: "failed", errorCode: "stalled" });
+  });
+
+  it("usage meter summary as the user (get_ai_usage_summary)", async () => {
+    const summary = await getAiUsageSummary(userClient);
+    expect(summary.periodMonth).toBe(kstPeriodMonth(new Date()));
+    expect(summary.totals.calls).toBeGreaterThan(0);
+    expect(summary.totals.failedCalls).toBeGreaterThan(0);
+    expect(summary.byFeature.map((f) => f.feature)).toContain("insight");
+    expect(summary.byProvider.map((p) => `${p.provider}/${p.connectionTier}`)).toEqual(expect.arrayContaining(["anthropic/paid", "gemini/free"]));
+    expect(summary.priceTableVersions.map((v) => v.version)).toContain(seededVersion());
+    expect(summary.previousMonth).toBeNull();
+    const withPrev = await getAiUsageSummary(userClient, { includePrevious: true });
+    expect(withPrev.previousMonth?.estimatedCostUsd).toBe(0);
   });
 });

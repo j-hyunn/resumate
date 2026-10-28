@@ -5,7 +5,6 @@ const valid = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
   SUPABASE_JWT_SECRET: "x".repeat(32),
-  ANTHROPIC_API_KEY: "sk-test-value",
   CRON_SECRET: "c".repeat(16),
 };
 
@@ -32,12 +31,34 @@ describe("parseServerEnv", () => {
   it("reports every missing key", () => {
     const err = captureError(() => parseServerEnv({}));
     expect(err.keys.sort()).toEqual(Object.keys(valid).sort());
-    expect(err.message).toContain("ANTHROPIC_API_KEY is missing");
+    expect(err.message).toContain("CRON_SECRET is missing");
   });
 
   it("treats empty and whitespace-only strings as missing", () => {
-    const err = captureError(() => parseServerEnv({ ...valid, ANTHROPIC_API_KEY: "", CRON_SECRET: "   " }));
-    expect(err.keys.sort()).toEqual(["ANTHROPIC_API_KEY", "CRON_SECRET"]);
+    const err = captureError(() => parseServerEnv({ ...valid, SUPABASE_JWT_SECRET: "", CRON_SECRET: "   " }));
+    expect(err.keys.sort()).toEqual(["CRON_SECRET", "SUPABASE_JWT_SECRET"]);
+  });
+
+  it("has no service-wide LLM key (BYOK)", () => {
+    const env = parseServerEnv({ ...valid, ANTHROPIC_API_KEY: "sk-should-be-dropped" });
+    expect(env).not.toHaveProperty("ANTHROPIC_API_KEY");
+  });
+
+  it("accepts the development AI keys outside production", () => {
+    const env = parseServerEnv({ ...valid, AI_DEV_PROVIDER: "gemini", AI_DEV_API_KEY: "dev-key", AI_DEV_CONNECTION_TIER: "free" });
+    expect(env.AI_DEV_PROVIDER).toBe("gemini");
+    expect(env.AI_DEV_CONNECTION_TIER).toBe("free");
+  });
+
+  it("ignores the development AI keys in production (even invalid ones)", () => {
+    const env = parseServerEnv({ ...valid, NODE_ENV: "production", AI_DEV_PROVIDER: "nope", AI_DEV_API_KEY: "dev-key" });
+    expect(env.AI_DEV_PROVIDER).toBeUndefined();
+    expect(env.AI_DEV_API_KEY).toBeUndefined();
+  });
+
+  it("rejects an unknown development provider outside production", () => {
+    const err = captureError(() => parseServerEnv({ ...valid, AI_DEV_PROVIDER: "nope" }));
+    expect(err.keys).toEqual(["AI_DEV_PROVIDER"]);
   });
 
   it("rejects a malformed Supabase URL", () => {
@@ -68,9 +89,9 @@ describe("getServerEnv", () => {
   it("reads process.env once and caches the result", () => {
     for (const [key, value] of Object.entries(valid)) vi.stubEnv(key, value);
     const first = getServerEnv();
-    vi.stubEnv("ANTHROPIC_API_KEY", "changed-after-first-read");
+    vi.stubEnv("CRON_SECRET", "changed-after-first-read");
     expect(getServerEnv()).toBe(first);
-    expect(getServerEnv().ANTHROPIC_API_KEY).toBe(valid.ANTHROPIC_API_KEY);
+    expect(getServerEnv().CRON_SECRET).toBe(valid.CRON_SECRET);
   });
 
   it("throws when process.env is incomplete", () => {
@@ -90,13 +111,12 @@ describe("public env (QA-06)", () => {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: valid.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     });
     expect(env.NEXT_PUBLIC_SUPABASE_URL).toBe(valid.NEXT_PUBLIC_SUPABASE_URL);
-    expect(env).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(env).not.toHaveProperty("CRON_SECRET");
   });
 
   it("getPublicEnv works when AI and cron secrets are missing", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", valid.NEXT_PUBLIC_SUPABASE_URL);
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", valid.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
     vi.stubEnv("CRON_SECRET", "");
     vi.stubEnv("SUPABASE_JWT_SECRET", "");
     expect(getPublicEnv().NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe(valid.NEXT_PUBLIC_SUPABASE_ANON_KEY);

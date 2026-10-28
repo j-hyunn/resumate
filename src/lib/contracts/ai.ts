@@ -3,50 +3,101 @@ import {
   AI_ERROR_CODES,
   AI_JOB_STATUSES,
   AI_JOB_TYPES,
+  AI_PROVIDERS,
+  CONNECTION_TIERS,
   ERROR_CATEGORIES,
+  FAILURE_CAUSES,
+  MODEL_TIERS,
   USAGE_FEATURES,
   type AiErrorCode,
   type ErrorCategory,
+  type FailureCause,
 } from "./enums";
 
 /**
  * AI contracts shared by the server (job runner, SSE routes) and the frontend
  * hooks `useAiJob(jobId) → { status, progress, partial, error }` and
  * `useAiStream(request) → { blocks, status, error, cancel }` (UI patterns §1).
- * Source: AI spec C-6, DM §2.9 / A.15–A.16.
+ * Source: AI spec C-6, C-11–C-13, DM §2.9 (v4 BYOK) / A.15–A.16.
  */
 
-// ---------- error category (mirror of ai_jobs.error_category generated column) ----------
+// ---------- error category / failure cause (mirrors of the ai_jobs generated columns, C-11.1) ----------
 
 const CATEGORY_BY_CODE: Record<AiErrorCode, ErrorCategory> = {
-  model_unavailable: "transient",
-  rate_limited: "transient",
-  schema_invalid: "transient",
-  refused: "transient",
-  not_a_jd: "input",
-  insufficient_data: "input",
+  rate_limited: "provider_limit",
+  daily_quota_exhausted: "provider_limit",
+  billing_required: "user_account",
+  key_invalid: "user_account",
+  key_missing: "user_account",
+  model_not_available: "user_account",
+  provider_unavailable: "transient",
   input_too_long: "input",
-  timeout: "timeout",
-  stalled: "timeout",
-  canceled: "canceled",
+  safety_blocked: "input",
+  insufficient_data: "input",
+  not_a_jd: "input",
+  schema_invalid: "system",
+  timeout: "system",
+  stalled: "system",
+  canceled: "system",
 };
 
-/** Same mapping as the DB generated column (backend-qa compares the two). */
+const FAILURE_CAUSE_BY_CODE: Partial<Record<AiErrorCode, FailureCause>> = {
+  rate_limited: "rate_limited",
+  daily_quota_exhausted: "daily_quota_exhausted",
+  billing_required: "billing_required",
+  key_invalid: "key_invalid",
+  model_not_available: "model_not_available",
+  provider_unavailable: "provider_unavailable",
+  input_too_long: "input_rejected",
+  safety_blocked: "input_rejected",
+};
+
+/** Same mapping as the DB generated column `error_category` (backend-qa compares the two). */
 export function errorCategoryOf(code: AiErrorCode): ErrorCategory {
   return CATEGORY_BY_CODE[code];
 }
 
+/** Same mapping as the DB generated column `failure_cause`: F-AI-08 cause, null for the other codes. */
+export function failureCauseOf(code: AiErrorCode): FailureCause | null {
+  return FAILURE_CAUSE_BY_CODE[code] ?? null;
+}
+
 /**
- * Generic Korean message per category. Screens choose their own ST-AI-FAILED
- * copy by category; this is the fallback in API bodies and SSE `error` events.
- * Failures never charge usage (PRD 6.5), so every failure message says so.
+ * Whether the "다시 시도" button applies (manual retry, C-6 실패 처리): every
+ * failure except the input category (fix the input and start again). Key and
+ * billing causes are retryable once the user fixed the connection.
  */
-export const AI_ERROR_MESSAGES: Record<ErrorCategory, string> = {
-  transient: "AI 응답을 받지 못했습니다. 사용량은 차감되지 않았습니다. 다시 시도해 주세요.",
-  input: "입력 내용으로는 AI 작업을 진행할 수 없습니다. 사용량은 차감되지 않았습니다.",
-  timeout: "AI 작업 시간이 초과되었습니다. 사용량은 차감되지 않았습니다. 다시 시도해 주세요.",
-  canceled: "AI 작업을 중단했습니다. 사용량은 차감되지 않았습니다.",
+export function isManuallyRetryable(code: AiErrorCode): boolean {
+  return errorCategoryOf(code) !== "input" && code !== "canceled";
+}
+
+/**
+ * Generic Korean message per code (fallback in API bodies and SSE `error`
+ * events). Screens choose their own F-AI-08 / ST-AI-FAILED copy by
+ * `failureCause` / `category`. BYOK (D-34): there is no service charge, so the
+ * old "사용량은 차감되지 않았습니다" line is gone — failed provider calls may
+ * still use the user's tokens (C-13).
+ */
+export const AI_ERROR_MESSAGES: Record<AiErrorCode, string> = {
+  rate_limited: "AI 공급자의 분당 요청 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요.",
+  daily_quota_exhausted: "AI 공급자의 일일 한도를 모두 사용했습니다. 한도가 초기화된 뒤 다시 시도해 주세요.",
+  billing_required: "AI 공급자 계정의 잔액이나 결제 상태를 확인해 주세요.",
+  key_invalid: "AI 키가 유효하지 않습니다. 키를 확인해 다시 연결해 주세요.",
+  key_missing: "AI 연결이 필요합니다. 키를 등록한 뒤 다시 시도해 주세요.",
+  model_not_available: "현재 연결 등급에서는 이 AI 모델을 쓸 수 없습니다.",
+  provider_unavailable: "AI 공급자가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.",
+  input_too_long: "입력이 너무 길어 AI가 처리할 수 없습니다.",
+  safety_blocked: "AI 공급자의 안전 정책으로 요청이 처리되지 않았습니다.",
+  insufficient_data: "커리어 데이터가 부족합니다.",
+  not_a_jd: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요.",
+  schema_invalid: "AI 응답을 처리하지 못했습니다. 다시 시도해 주세요.",
+  timeout: "AI 작업 시간이 초과되었습니다. 다시 시도해 주세요.",
+  stalled: "AI 작업이 중단되었습니다. 다시 시도해 주세요.",
+  canceled: "AI 작업을 중단했습니다.",
 };
+
+/** Message for unknown failures (`internal_error`). */
+export const AI_INTERNAL_ERROR_MESSAGE = "AI 작업을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
 // ---------- enums as zod ----------
 
@@ -54,14 +105,31 @@ export const AiJobTypeSchema = z.enum(AI_JOB_TYPES);
 export const AiJobStatusSchema = z.enum(AI_JOB_STATUSES);
 export const AiErrorCodeSchema = z.enum(AI_ERROR_CODES);
 export const ErrorCategorySchema = z.enum(ERROR_CATEGORIES);
+export const FailureCauseSchema = z.enum(FAILURE_CAUSES);
 export const UsageFeatureSchema = z.enum(USAGE_FEATURES);
+export const AiProviderSchema = z.enum(AI_PROVIDERS);
+export const ModelTierSchema = z.enum(MODEL_TIERS);
+export const ConnectionTierSchema = z.enum(CONNECTION_TIERS);
 
 /** Route params: job ids are uuids (same rule as S2 ids). */
 export const AiJobIdSchema = z.guid();
 
 // ---------- async job (C-6 비동기 작업) ----------
 
-/** ai_jobs.progress `{ stage, done, total }`. `stage` is a C-6 stage key; null before the first step. */
+/**
+ * Stored ai_jobs.progress `{ stage, done, total, waiting_retry_until? }` (DM §2.9.1).
+ * `stage` is a C-6 stage key (null before the first step). `waiting_retry_until`
+ * (ISO time) is set while a C-11.3 retry waits (C-12 "한도 대기 중 n초").
+ */
+export const StoredAiJobProgressSchema = z.object({
+  stage: z.string().nullable(),
+  done: z.number().int().min(0),
+  total: z.number().int().min(0),
+  waiting_retry_until: z.string().nullable().optional(),
+});
+export type StoredAiJobProgress = z.infer<typeof StoredAiJobProgressSchema>;
+
+/** Progress as the `useAiJob` hook sees it (`waitingRetryUntil` is a top-level field of the status). */
 export const AiJobProgressSchema = z.object({
   stage: z.string().nullable(),
   done: z.number().int().min(0),
@@ -72,15 +140,23 @@ export type AiJobProgress = z.infer<typeof AiJobProgressSchema>;
 export const AiJobErrorSchema = z.object({
   code: AiErrorCodeSchema,
   category: ErrorCategorySchema,
+  /** F-AI-08 cause (screens pick the cause copy by it); null for system / key_missing codes. */
+  failureCause: FailureCauseSchema.nullable(),
   message: z.string(),
 });
 export type AiJobError = z.infer<typeof AiJobErrorSchema>;
 
 /**
- * `GET /api/ai-jobs/{id}` response — the `useAiJob` shape plus ids.
- * `partial`: results of completed stages a screen may show early (null in S3;
- * features fill it from their own result tables).
- * `canRetry`: failed with a retryable category (transient / timeout).
+ * `GET /api/ai-jobs/{id}` response — the `useAiJob` shape (`status`,
+ * `progress`, `partial`, `error`) plus ids and the v4 fields (S3a plan API 8).
+ * - `partial`: results of completed stages a screen may show early (null until features fill it).
+ * - `errorCategory` / `failureCause`: same as `error.category` / `error.failureCause`, null without an error.
+ * - `retryAfter`: final rate_limited / provider_unavailable failure → "이 시각 이후 다시 시도".
+ * - `quotaResetsAt`: daily_quota_exhausted → provider quota reset time (UTC; screens show KST).
+ * - `waitingRetryUntil`: queued and waiting for an automatic retry (C-12 "한도 대기 중 n초"), else null.
+ * - `provider` / `modelTier` / `connectionTier`: fixed when the job started (F-AI-03 (2)).
+ * - `retryCount`: automatic retries so far (C-11.3).
+ * - `canRetry`: failed and the "다시 시도" button applies (not the input category).
  */
 export const AiJobStatusResponseSchema = z.object({
   jobId: AiJobIdSchema,
@@ -89,7 +165,15 @@ export const AiJobStatusResponseSchema = z.object({
   progress: AiJobProgressSchema,
   partial: z.unknown().nullable(),
   error: AiJobErrorSchema.nullable(),
-  attemptCount: z.number().int().min(0),
+  errorCategory: ErrorCategorySchema.nullable(),
+  failureCause: FailureCauseSchema.nullable(),
+  retryAfter: z.string().nullable(),
+  quotaResetsAt: z.string().nullable(),
+  waitingRetryUntil: z.string().nullable(),
+  provider: AiProviderSchema,
+  modelTier: ModelTierSchema,
+  connectionTier: ConnectionTierSchema,
+  retryCount: z.number().int().min(0),
   cancelRequested: z.boolean(),
   canRetry: z.boolean(),
   updatedAt: z.string(),
@@ -98,9 +182,9 @@ export type AiJobStatusResponse = z.infer<typeof AiJobStatusResponseSchema>;
 
 /**
  * What a feature route returns when it starts an async job.
- * `reused`: same input_hash already succeeded (PRD 6.4) — show that result, no usage.
- * `inProgress`: the same input is already queued/running (double start, QA-S3-03) —
- * follow that job, no new usage.
+ * `reused`: same input_hash already succeeded (PRD 6.4) — show that result, no provider call.
+ * `inProgress`: a job of the same type on the same target is already queued/running
+ * (D-34 동시 실행 1개) — follow that job.
  */
 export const StartAiJobResponseSchema = z.object({
   jobId: AiJobIdSchema,
@@ -166,8 +250,15 @@ export const ErrorEvent = z.object({
   type: z.literal("error"),
   code: z.union([AiErrorCodeSchema, z.literal("internal_error")]),
   category: ErrorCategorySchema,
+  /** F-AI-08 cause, null for system codes and internal_error. */
+  failureCause: FailureCauseSchema.nullable(),
   message: z.string(),
+  /** Whether the "다시 시도" button applies (isManuallyRetryable). */
   retryable: z.boolean(),
+  /** rate_limited / provider_unavailable: earliest time to try again (ISO), else null. */
+  retryAfter: z.string().nullable(),
+  /** daily_quota_exhausted: provider quota reset time (ISO), else null. */
+  quotaResetsAt: z.string().nullable(),
 });
 
 export const AiStreamEventSchema = z.discriminatedUnion("type", [
@@ -189,36 +280,84 @@ export const AI_STREAM_EVENT_TYPES = [
   "error",
 ] as const satisfies readonly AiStreamEventType[];
 
-/** Category of an SSE error code; `internal_error` (unknown failure) is shown as transient. */
+/** Category of an SSE error code; `internal_error` (unknown failure) is a system failure. */
 export function streamErrorCategory(code: AiErrorCode | "internal_error"): ErrorCategory {
-  return code === "internal_error" ? "transient" : errorCategoryOf(code);
+  return code === "internal_error" ? "system" : errorCategoryOf(code);
 }
 
 /**
- * Builds an `error` event from a C-6 code (unknown failures → internal_error / transient).
- * `retryable` comes from the server's rule (`isRetryableAiErrorCode` in
- * src/server/ai/errors, which depends on REFUSAL_FALLBACKS_ENABLED) — contracts
- * don't duplicate it.
+ * Builds the one `error` event shape (QA-S3-02) from a C-11 code. Unknown
+ * failures → `internal_error` / system, retryable.
  */
-export function aiErrorEvent(code: AiErrorCode | "internal_error", retryable: boolean): z.infer<typeof ErrorEvent> {
-  const category = streamErrorCategory(code);
-  return { type: "error", code, category, message: AI_ERROR_MESSAGES[category], retryable };
+export function aiErrorEvent(
+  code: AiErrorCode | "internal_error",
+  times: { retryAfter?: string | null; quotaResetsAt?: string | null } = {},
+): z.infer<typeof ErrorEvent> {
+  if (code === "internal_error") {
+    return {
+      type: "error",
+      code,
+      category: "system",
+      failureCause: null,
+      message: AI_INTERNAL_ERROR_MESSAGE,
+      retryable: true,
+      retryAfter: null,
+      quotaResetsAt: null,
+    };
+  }
+  return {
+    type: "error",
+    code,
+    category: errorCategoryOf(code),
+    failureCause: failureCauseOf(code),
+    message: AI_ERROR_MESSAGES[code],
+    retryable: isManuallyRetryable(code),
+    retryAfter: times.retryAfter ?? null,
+    quotaResetsAt: times.quotaResetsAt ?? null,
+  };
 }
 
-// ---------- usage (D-17, UI "이번 달 {N}회 남음") ----------
+// ---------- usage meter (F-AI-07, C-13, DM §2.9.5) ----------
 
-export const UsageFeatureSummarySchema = z.object({
-  /** null = no monthly limit row for this feature (not reservable, see spec-gaps). */
-  limit: z.number().int().nullable(),
-  /** reserved + charged units this KST month. */
-  used: z.number().int().min(0),
-  remaining: z.number().int().nullable(),
+/** `getAiUsageSummary` input. `periodMonth` = KST month start `YYYY-MM-01` (default: this month). */
+export const GetAiUsageSummaryInputSchema = z.object({
+  periodMonth: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])-01$/)
+    .optional(),
+  includePrevious: z.boolean().optional(),
 });
-export type UsageFeatureSummary = z.infer<typeof UsageFeatureSummarySchema>;
+export type GetAiUsageSummaryInput = z.infer<typeof GetAiUsageSummaryInputSchema>;
 
-export const UsageSummarySchema = z.object({
+const TokenTotals = {
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  estimatedCostUsd: z.number().min(0),
+  calls: z.number().int().min(0),
+};
+
+/** RPC `get_ai_usage_summary` in camelCase (DM §2.9.5). Costs are USD estimates (free tier: paid-equivalent). */
+export const AiUsageSummarySchema = z.object({
   /** KST month start, `YYYY-MM-DD`. */
   periodMonth: z.string(),
-  features: z.record(UsageFeatureSchema, UsageFeatureSummarySchema),
+  asOf: z.string(),
+  totals: z.object({
+    ...TokenTotals,
+    cachedInputTokens: z.number().int().min(0),
+    cacheWriteTokens: z.number().int().min(0),
+    failedCalls: z.number().int().min(0),
+  }),
+  byFeature: z.array(z.object({ feature: UsageFeatureSchema, ...TokenTotals })),
+  byProvider: z.array(z.object({ provider: AiProviderSchema, connectionTier: ConnectionTierSchema, ...TokenTotals })),
+  priceTableVersions: z.array(z.object({ version: z.string(), sourceCheckedAt: z.string() })),
+  /** Only with `includePrevious: true`. */
+  previousMonth: z
+    .object({
+      periodMonth: z.string(),
+      estimatedCostUsd: z.number().min(0),
+      inputTokens: z.number().int().min(0),
+      outputTokens: z.number().int().min(0),
+    })
+    .nullable(),
 });
-export type UsageSummary = z.infer<typeof UsageSummarySchema>;
+export type AiUsageSummary = z.infer<typeof AiUsageSummarySchema>;

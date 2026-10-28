@@ -5,18 +5,26 @@ import type { z } from "zod";
  * `code` is stable and machine-readable; `message` is Korean, user-facing.
  */
 
-/** AI job error codes — AI spec C-6 `error_code`. */
+/**
+ * AI job error codes — AI spec C-11.1 / DM §2.9.1 `ai_jobs.error_code` CHECK (v4).
+ * Provider causes 1–7, `key_missing`, then system codes.
+ */
 export const AI_ERROR_CODES = [
-  "model_unavailable",
   "rate_limited",
-  "schema_invalid",
-  "refused",
-  "not_a_jd",
-  "insufficient_data",
+  "daily_quota_exhausted",
+  "billing_required",
+  "key_invalid",
+  "model_not_available",
+  "provider_unavailable",
   "input_too_long",
+  "safety_blocked",
+  "key_missing",
+  "schema_invalid",
   "timeout",
   "stalled",
   "canceled",
+  "insufficient_data",
+  "not_a_jd",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 

@@ -10,8 +10,9 @@ export const maxDuration = 60;
 
 /**
  * `GET /api/ai-jobs/{id}` — async job status for `useAiJob` (C-6, 2초 폴링).
- * Lazily fails a stalled job (+ releases usage) and resumes a yielded job whose
- * continuation was lost.
+ * Side effects (B-4): wakes a queued job whose next_run_at has passed (C-11.3
+ * retry / C-12 spacing), lazily fails a stalled job, and resumes a yielded job
+ * whose continuation was lost.
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/ai-jobs/[id]">) {
   try {

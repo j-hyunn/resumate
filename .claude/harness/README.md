@@ -28,7 +28,7 @@
 
 **트리거:** UI 작업, 화면 구현, 디자인 시스템, 프론트엔드 구축, Figma 디자인 반영, 화면 수정·이어서·재실행, 기획 변경의 화면 반영, UI QA 이슈 수정.
 
-**범위:** 디자인 시스템 + 화면 코드 + UI QA. 백엔드(Supabase 마이그레이션, 실제 Claude API 연동)는 하지 않고 mock 데이터 계층 뒤에 둔다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
+**범위:** 디자인 시스템 + 화면 코드 + UI QA. 백엔드(Supabase 마이그레이션, 실제 AI 공급자 연동)는 하지 않고 mock 데이터 계층 뒤에 둔다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
 
 **팀:** ui-designer, frontend-engineer(파운데이션 1 + 화면 영역별 인스턴스), ui-qa
 
@@ -38,7 +38,7 @@
 
 ## 3. 백엔드 하네스
 
-**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), Claude AI 파이프라인(프롬프트·근거 검증)을 기능 단위 슬라이스(S0~S9)로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다.
+**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), AI 파이프라인(사용자 본인 키(BYOK)로 OpenAI·Gemini·Claude 중 활성 공급자 1개를 호출하는 어댑터, 프롬프트, 근거 검증)을 기능 단위 슬라이스(S0~S9, S3은 S3a·S3b)로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다.
 
 **진입점:** `resumate-backend` 스킬 (`.claude/skills/resumate-backend/SKILL.md`)
 
@@ -51,6 +51,14 @@
 **공통 백엔드 컨텍스트:** `.claude/skills/resumate-backend/references/backend-context.md`, 슬라이스 목록 `references/slice-catalog.md`
 
 **작업 폴더:** `_workspace/backend/` (슬라이스 상태 `slices.md`, 기획 차이 `spec-gaps.md`, 구현 결정 `decisions.md`)
+
+## Codex 사본
+
+같은 하네스의 Codex용 사본이 있다. 스킬은 `.agents/skills/`, 에이전트는 `.codex/agents/*.toml`(frontmatter `description` → `description`, 본문 → `developer_instructions`)이다.
+
+- 원본은 `.claude/`다. `.claude/skills/`나 `.claude/agents/`를 고치면 **같은 변경을 사본에도 반영**하고, CHANGELOG의 "대상"에 사본도 적는다.
+- 사본의 경로 표기: `.claude/skills/` → `.agents/skills/`, `.claude/agents/<name>.md` → `.codex/agents/<name>.toml`. `.claude/harness/`와 제품 이름(`claude-api` 스킬, `claude-*` 모델 ID, "Claude API")은 바꾸지 않는다.
+- 사본에는 Codex용으로 손본 줄이 있다(예: 빈 디렉터리 목록에 `.codex/`, `.agents/`). 원본에서 통째로 다시 생성하지 말고, 바뀐 부분만 패치로 옮긴다.
 
 ## 하네스 간 관계
 

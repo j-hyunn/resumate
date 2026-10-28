@@ -112,6 +112,10 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 export const CONNECTION_TIERS = ["free", "paid"] as const;
 export type ConnectionTier = (typeof CONNECTION_TIERS)[number];
 
+/** ai_provider_keys.status CHECK (DM §2.11.1): 유효 / 무효(401·403) / 확인 필요(검증 중 한도·일시 오류). */
+export const KEY_STATUSES = ["valid", "invalid", "needs_check"] as const;
+export type KeyStatus = (typeof KEY_STATUSES)[number];
+
 /** ai_jobs.error_code CHECK — same list as AI_ERROR_CODES in errors.ts (AI C-11.1). */
 export { AI_ERROR_CODES, type AiErrorCode } from "./errors";
 

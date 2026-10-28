@@ -49,6 +49,34 @@ isOneToOne: false
       referencedColumns: ["id","user_id"]
     }
                   ]
+                },"ai_data_use_consents": {
+                  Row: {
+                    "agreed_at": string,"connection_tier": string,"created_at": string,"disclosure_version": string,"free_tier_acknowledged": boolean,"id": string,"provider": string,"user_id": string,"withdrawn_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agreed_at"?: string,"connection_tier": string,"created_at"?: string,"disclosure_version": string,"free_tier_acknowledged"?: boolean,"id"?: string,"provider": string,"user_id"?: string,"withdrawn_at"?: string | null
+                  }
+                  Update: {
+                    "agreed_at"?: string,"connection_tier"?: string,"created_at"?: string,"disclosure_version"?: string,"free_tier_acknowledged"?: boolean,"id"?: string,"provider"?: string,"user_id"?: string,"withdrawn_at"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_disclosures": {
+                  Row: {
+                    "connection_tier": string,"created_at": string,"document_path": string,"effective_at": string,"id": string,"provider": string,"requires_free_tier_ack": boolean,"requires_reconsent": boolean,"terms_checked_at": string | null,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "connection_tier": string,"created_at"?: string,"document_path": string,"effective_at": string,"id"?: string,"provider": string,"requires_free_tier_ack"?: boolean,"requires_reconsent"?: boolean,"terms_checked_at"?: string | null,"version": string
+                  }
+                  Update: {
+                    "connection_tier"?: string,"created_at"?: string,"document_path"?: string,"effective_at"?: string,"id"?: string,"provider"?: string,"requires_free_tier_ack"?: boolean,"requires_reconsent"?: boolean,"terms_checked_at"?: string | null,"version"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"ai_jobs": {
                   Row: {
                     "application_project_id": string | null,"cancel_requested_at": string | null,"connection_tier": string,"created_at": string,"error_category": string | null,"error_code": string | null,"failure_cause": string | null,"finished_at": string | null,"heartbeat_at": string | null,"id": string,"input_hash": string | null,"job_type": string,"model": string | null,"model_tier": string,"next_run_at": string | null,"output": Json | null,"params": NonNullable<Json>,"progress": Json | null,"prompt_version": string | null,"provider": string,"quota_resets_at": string | null,"retry_after": string | null,"retry_count": number,"retry_wait_total_ms": number,"run_generation": number,"started_at": string | null,"status": string,"step_outputs": NonNullable<Json>,"target_id": string | null,"target_type": string | null,"updated_at": string,"usage": Json | null,"user_id": string
@@ -73,6 +101,34 @@ isOneToOne: false
                   }
                   Update: {
                     "cache_write_usd_per_mtok"?: number | null,"cached_input_usd_per_mtok"?: number | null,"created_at"?: string,"effective_from"?: string,"id"?: string,"input_usd_per_mtok"?: number,"long_context_cache_write_usd_per_mtok"?: number | null,"long_context_cached_input_usd_per_mtok"?: number | null,"long_context_input_usd_per_mtok"?: number | null,"long_context_output_usd_per_mtok"?: number | null,"long_context_threshold_tokens"?: number | null,"model"?: string,"output_usd_per_mtok"?: number,"provider"?: string,"source_checked_at"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_provider_keys": {
+                  Row: {
+                    "connection_tier": string,"created_at": string,"encryption_version": number,"id": string,"kek_id": string,"key_ciphertext": string,"key_last4": string,"key_nonce": string,"last_failure_at": string | null,"last_failure_cause": string | null,"last_verified_at": string | null,"provider": string,"status": string,"updated_at": string,"user_id": string,"wrapped_dek": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "connection_tier": string,"created_at"?: string,"encryption_version"?: number,"id": string,"kek_id": string,"key_ciphertext": string,"key_last4": string,"key_nonce": string,"last_failure_at"?: string | null,"last_failure_cause"?: string | null,"last_verified_at"?: string | null,"provider": string,"status": string,"updated_at"?: string,"user_id"?: string,"wrapped_dek": string
+                  }
+                  Update: {
+                    "connection_tier"?: string,"created_at"?: string,"encryption_version"?: number,"id"?: string,"kek_id"?: string,"key_ciphertext"?: string,"key_last4"?: string,"key_nonce"?: string,"last_failure_at"?: string | null,"last_failure_cause"?: string | null,"last_verified_at"?: string | null,"provider"?: string,"status"?: string,"updated_at"?: string,"user_id"?: string,"wrapped_dek"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_providers": {
+                  Row: {
+                    "billing_url": string | null,"created_at": string,"dashboard_url": string | null,"display_order": number,"is_available": boolean,"is_recommended": boolean,"key_guide_checked_at": string | null,"key_guide_version": string | null,"provider": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "billing_url"?: string | null,"created_at"?: string,"dashboard_url"?: string | null,"display_order": number,"is_available"?: boolean,"is_recommended"?: boolean,"key_guide_checked_at"?: string | null,"key_guide_version"?: string | null,"provider": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "billing_url"?: string | null,"created_at"?: string,"dashboard_url"?: string | null,"display_order"?: number,"is_available"?: boolean,"is_recommended"?: boolean,"key_guide_checked_at"?: string | null,"key_guide_version"?: string | null,"provider"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -163,17 +219,23 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "career_data_updated_at": string | null,"created_at": string,"desired_job_title": string | null,"display_name": string | null,"id": string,"inactivity_notice_sent_at": string | null,"interested_industries": (string)[],"last_active_at": string | null,"total_years_of_experience": number | null,"updated_at": string
+                    "active_ai_provider": string | null,"career_data_updated_at": string | null,"created_at": string,"desired_job_title": string | null,"display_name": string | null,"id": string,"inactivity_notice_sent_at": string | null,"interested_industries": (string)[],"last_active_at": string | null,"total_years_of_experience": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id": string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
+                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id": string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id"?: string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
+                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id"?: string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "profiles_active_ai_provider_fkey"
+      columns: ["id","active_ai_provider"]
+isOneToOne: false
+      referencedRelation: "ai_provider_keys"
+      referencedColumns: ["user_id","provider"]
+    }
                   ]
                 },"project_details": {
                   Row: {
@@ -264,10 +326,27 @@ isOneToOne: false
                 }
           }
           Views: {
-            [_ in never]: never
+            "ai_provider_keys_public": {
+                  Row: {
+                    "connection_tier": string,"created_at": string,"id": string,"key_last4": string,"last_failure_at": string | null,"last_failure_cause": string | null,"last_verified_at": string | null,"provider": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "connection_tier"?: string | null,"created_at"?: string | null,"id"?: string | null,"key_last4"?: string | null,"last_failure_at"?: string | null,"last_failure_cause"?: string | null,"last_verified_at"?: string | null,"provider"?: string | null,"status"?: string | null,"updated_at"?: string | null
+                         }
+                        Update: {
+                           "connection_tier"?: string | null,"created_at"?: string | null,"id"?: string | null,"key_last4"?: string | null,"last_failure_at"?: string | null,"last_failure_cause"?: string | null,"last_verified_at"?: string | null,"provider"?: string | null,"status"?: string | null,"updated_at"?: string | null
+                         }
+                        Relationships: [
+                    
+                  ]
+                }
           }
           Functions: {
-            "claim_due_ai_jobs":
+            "check_ai_run_allowed":
+{ Args: { "p_ai_job_id": string }; Returns: string
+                           },
+"claim_due_ai_jobs":
 { Args: { "p_limit": number,"p_now": string }; Returns: {
               "id": string,"user_id": string
             }[]
@@ -277,6 +356,9 @@ isOneToOne: false
                            },
 "delete_career_item":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string,"p_result_mode"?: string }; Returns: Json
+                           },
+"delete_provider_key":
+{ Args: { "p_provider": string }; Returns: boolean
                            },
 "get_ai_usage_summary":
 { Args: { "p_include_previous"?: boolean,"p_period_month"?: string }; Returns: Json
@@ -292,16 +374,36 @@ isOneToOne: false
 "get_deletion_impact":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string }; Returns: Json
                            },
+"get_provider_key_secret":
+{ Args: { "p_ai_job_id": string }; Returns: {
+              "encryption_version": number,"kek_id": string,"key_ciphertext": string,"key_id": string,"key_nonce": string,"wrapped_dek": string
+            }[]
+                           },
+"mark_provider_key_invalid":
+{ Args: { "p_ai_job_id": string,"p_failure_cause": string }; Returns: boolean
+                           },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {
               "agreed_version": string,"consent_type": string,"current_version": string,"needs_consent": boolean,"required": boolean
             }[]
+                           },
+"record_provider_key_check":
+{ Args: { "p_failure_cause"?: string,"p_provider": string,"p_result_status": string }; Returns: Json
+                           },
+"record_provider_key_success":
+{ Args: { "p_ai_job_id": string }; Returns: boolean
                            },
 "reorder_project_details":
 { Args: { "p_ordered_ids": (string)[],"p_project_id": string }; Returns: undefined
                            },
 "request_ai_job_cancel":
 { Args: { "p_job_id": string }; Returns: Json
+                           },
+"save_provider_key":
+{ Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
+                           },
+"set_active_ai_provider":
+{ Args: { "p_provider": string }; Returns: undefined
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number

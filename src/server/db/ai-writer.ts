@@ -38,18 +38,23 @@ export type AiWriterClaims = {
   jti: string;
 };
 
-/** Pure: builds and signs the JWT. Exported for tests. */
-export function signAiWriterToken(
+/**
+ * Pure: builds and signs a short-lived HS256 JWT for a non-login DB role granted
+ * to authenticator (`app_ai_writer`, `app_key_reader`), `sub = userId`.
+ * Exported for tests and for the key-reader client.
+ */
+export function signRoleToken<R extends string>(
+  role: R,
   userId: string,
-  options: { secret: string; issuer: string; now?: Date; ttlSeconds?: number },
+  options: { secret: string; issuer: string; now?: Date; ttlSeconds?: number; maxTtlSeconds: number },
 ): string {
-  if (!UUID_RE.test(userId)) throw new Error("signAiWriterToken: userId must be a uuid");
-  const ttl = Math.min(options.ttlSeconds ?? AI_WRITER_TOKEN_TTL_SECONDS, AI_WRITER_TOKEN_TTL_SECONDS);
+  if (!UUID_RE.test(userId)) throw new Error(`sign ${role} token: userId must be a uuid`);
+  const ttl = Math.min(options.ttlSeconds ?? options.maxTtlSeconds, options.maxTtlSeconds);
   const iat = Math.floor((options.now ?? new Date()).getTime() / 1000);
-  const claims: AiWriterClaims = {
-    role: AI_WRITER_ROLE,
+  const claims = {
+    role,
     sub: userId,
-    aud: "authenticated",
+    aud: "authenticated" as const,
     iss: options.issuer,
     iat,
     exp: iat + ttl,
@@ -59,6 +64,14 @@ export function signAiWriterToken(
   const payload = base64url(JSON.stringify(claims));
   const signature = createHmac("sha256", options.secret).update(`${header}.${payload}`).digest("base64url");
   return `${header}.${payload}.${signature}`;
+}
+
+/** Pure: builds and signs the app_ai_writer JWT. Exported for tests. */
+export function signAiWriterToken(
+  userId: string,
+  options: { secret: string; issuer: string; now?: Date; ttlSeconds?: number },
+): string {
+  return signRoleToken(AI_WRITER_ROLE, userId, { ...options, maxTtlSeconds: AI_WRITER_TOKEN_TTL_SECONDS });
 }
 
 /**

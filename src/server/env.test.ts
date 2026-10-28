@@ -23,6 +23,26 @@ describe("parseServerEnv", () => {
     expect(parseServerEnv(valid)).toEqual(valid);
   });
 
+  it("accepts a 32-byte base64 KEK and refuses others without echoing the value (B-2)", () => {
+    const kek = Buffer.from(Array.from({ length: 32 }, (_, i) => (i * 37 + 11) % 256)).toString("base64");
+    expect(parseServerEnv({ ...valid, AI_KEY_KEK_BASE64: kek, AI_KEY_KEK_ID: "env-v1" })).toMatchObject({ AI_KEY_KEK_ID: "env-v1" });
+    const short = Buffer.alloc(16, 7).toString("base64");
+    const err = captureError(() => parseServerEnv({ ...valid, AI_KEY_KEK_BASE64: short }));
+    expect(err.keys).toEqual(["AI_KEY_KEK_BASE64"]);
+    expect(err.message).not.toContain(short);
+    expect(captureError(() => parseServerEnv({ ...valid, AI_KEY_KEK_ID: "bad id with spaces" })).keys).toEqual(["AI_KEY_KEK_ID"]);
+  });
+
+  it("refuses the published example KEK and low-entropy KEKs (QA-S3b-04)", () => {
+    for (const bad of ["ZHVtbXktZHVtbXktZHVtbXktZHVtbXktZHVtbXktMDA=", Buffer.alloc(32, 7).toString("base64")]) {
+      const err = captureError(() => parseServerEnv({ ...valid, AI_KEY_KEK_BASE64: bad, AI_KEY_KEK_ID: "env-v1" }));
+      expect(err.keys).toEqual(["AI_KEY_KEK_BASE64"]);
+      expect(err.message).not.toContain(bad);
+    }
+    // The shipped .env.example leaves it empty → treated as missing (optional), so key handling fails closed.
+    expect(parseServerEnv({ ...valid, AI_KEY_KEK_BASE64: "", AI_KEY_KEK_ID: "env-v1" }).AI_KEY_KEK_BASE64).toBeUndefined();
+  });
+
   it("drops keys that are not part of the schema", () => {
     const env = parseServerEnv({ ...valid, UNRELATED_SECRET: "nope" });
     expect(env).not.toHaveProperty("UNRELATED_SECRET");

@@ -1,4 +1,6 @@
 -- S2 get_data_readiness() (DM §6 v3, D-01 v3, U-5).
+-- S3b: + ai_connection (DM §6 v4). The S2 cases run with a valid active key for A so the writing_chat
+-- branches stay reachable; the no-key / invalid-key branches are at the end.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
@@ -16,11 +18,19 @@ values ('bbbbbbbb-3333-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-0000000
 insert into public.project_details (user_id, project_id, title, situation, action)
 values ('bbbbbbbb-0000-0000-0000-000000000002', 'bbbbbbbb-3333-0000-0000-000000000001', 't', 's', 'a');
 
+-- S3b: A has a valid active Gemini key (written as owner; the key RPCs are tested elsewhere).
+insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek,
+                                     kek_id, key_last4, status)
+values ('aaaaaaaa-9999-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free',
+        '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'valid');
+update public.profiles set active_ai_provider = 'gemini' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
 -- 1. empty account
 select is(public.get_data_readiness(), jsonb_build_object(
+  'ai_connection', '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free"}'::jsonb,
   'counts', jsonb_build_object(
     'complete_experiences', 0, 'complete_educations', 0, 'complete_projects', 0,
     'projects_without_complete_detail', 0, 'complete_project_details', 0, 'draft_project_details', 0,
@@ -111,6 +121,65 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is(public.get_data_readiness() #> '{features,insight,ready}', 'true'::jsonb,
           'app_ai_writer can run get_data_readiness for the user');
 select is(public.get_data_readiness() #>> '{counts,complete_experiences}', '1', 'app_ai_writer sees A''s counts only');
+
+-- 9. S3b ai_connection branches. Make A not ready again (project back under the draft experience).
+reset role;
+update public.projects set education_id = null, experience_id = 'aaaaaaaa-1111-0000-0000-000000000002'
+ where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+
+-- needs_check still allows AI runs (UX C-19) → writing_chat kept.
+reset role;
+update public.ai_provider_keys set status = 'needs_check' where id = 'aaaaaaaa-9999-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select is(public.get_data_readiness() -> 'ai_connection',
+          '{"active_provider": "gemini", "key_status": "needs_check", "connection_tier": "free"}'::jsonb,
+          'ai_connection reports needs_check');
+select is(public.get_data_readiness() #>> '{features,insight,next_action}', 'writing_chat',
+          'needs_check key → writing_chat still offered');
+
+-- invalid key → form, no suggested_* keys.
+reset role;
+update public.ai_provider_keys set status = 'invalid' where id = 'aaaaaaaa-9999-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select is(public.get_data_readiness() #> '{features,insight}',
+          '{"ready": false, "missing": ["complete_project"], "hints": [], "next_action": "form"}'::jsonb,
+          'invalid key → next_action form without suggested_mode');
+select is(public.get_data_readiness() #> '{features,culture_fit_interview}',
+          '{"ready": true, "data_sufficiency": "thin"}'::jsonb, 'culture fit has no next_action even without a usable key');
+
+-- app_ai_writer sees the same ai_connection (definer helper; it has no ai_provider_keys privilege).
+reset role;
+set local role app_ai_writer;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
+select is(public.get_data_readiness() -> 'ai_connection',
+          '{"active_provider": "gemini", "key_status": "invalid", "connection_tier": "free"}'::jsonb,
+          'app_ai_writer gets A''s ai_connection');
+
+-- key deleted → FK clears active provider → all null, form.
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select ok(public.delete_provider_key('gemini'), 'A deletes the key');
+select is(public.get_data_readiness() -> 'ai_connection',
+          '{"active_provider": null, "key_status": null, "connection_tier": null}'::jsonb,
+          'no active provider → ai_connection all null');
+select is(public.get_data_readiness() #>> '{features,draft,next_action}', 'form', 'no key → form');
+select is(public.get_data_readiness() #>> '{features,job_interview,next_action}', 'form', 'no key → form (job_interview)');
+
+-- B's key never shows in A's ai_connection.
+reset role;
+insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek,
+                                     kek_id, key_last4, status)
+values ('bbbbbbbb-9999-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'openai', 'paid',
+        '\x01', '\x02', '\x03', 'env-v1', 'wxyz', 'valid');
+update public.profiles set active_ai_provider = 'openai' where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select is(public.get_data_readiness() #>> '{ai_connection,active_provider}', null, 'B''s active key not visible to A');
 
 -- 8. auth errors
 reset role;

@@ -358,6 +358,13 @@ export type RunnerDeps<TLlm = unknown> = {
   schedule: (task: () => Promise<void>) => void;
   /** Continues a yielded job in a NEW invocation (self-invoke). */
   continueJob: (ref: JobRef) => Promise<void>;
+  /**
+   * QA-S3b-01 run-time gate, checked before every step (so also at claim): null
+   * = may call the provider; otherwise the job ends `failed` with that code and
+   * no call is made. Production wiring waits for a DB check callable by
+   * app_ai_writer (S3b notes); consent withdrawal also cancels in-flight jobs.
+   */
+  checkRunAllowed?: (job: JobRecord) => Promise<AiErrorCode | null>;
   now?: () => Date;
   /** 0 ≤ x < 1, for the retry jitter (C-11.3 "+0~1초 무작위"). */
   random?: () => number;
@@ -367,12 +374,16 @@ export type RunnerDeps<TLlm = unknown> = {
 };
 
 export type RunnerTiming = {
-  /** Wall-clock budget of one invocation (T-14: under 60 s). */
+  /** Wall-clock end of one invocation incl. the running step and the final settle (T-14: under 60 s). */
   invocationBudgetMs: number;
   stepTimeoutMs: number;
   heartbeatIntervalMs: number;
   /** Max wait at the end of an invocation for abandoned calls' usage records (QA-S3a-03). */
   usageSettleGraceMs: number;
+  /** Worst-case total settle wait reserved at the end of the budget (QA-S3a-11). */
+  settleWorstMs: number;
+  /** A first step shortened to fit the budget never gets less than this. */
+  minStepTimeoutMs: number;
 };
 
 export type RunOutcome =

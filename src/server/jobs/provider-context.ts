@@ -1,4 +1,5 @@
-import { AI_PROVIDERS, CONNECTION_TIERS, type AiProvider, type ConnectionTier } from "@/lib/contracts/enums";
+import { AppError } from "@/lib/contracts/errors";
+import { AI_PROVIDERS, CONNECTION_TIERS, type AiProvider, type ConnectionTier, type FailureCause } from "@/lib/contracts/enums";
 
 /**
  * Where the runner gets the user's AI connection and key (S3a plan API 1).
@@ -12,7 +13,8 @@ import { AI_PROVIDERS, CONNECTION_TIERS, type AiProvider, type ConnectionTier } 
  */
 
 /** ai_provider_keys.status (DM §2.11.1). */
-export type KeyStatus = "valid" | "invalid" | "needs_check";
+export type { KeyStatus } from "@/lib/contracts/enums";
+import type { KeyStatus } from "@/lib/contracts/enums";
 
 export type ProviderContext = {
   provider: AiProvider;
@@ -23,6 +25,25 @@ export type ProviderContext = {
 /** The user's active provider + tier, read at job start and fixed into ai_jobs (F-AI-03 (2)). Null = not connected. */
 export interface ProviderContextSource {
   forUser(userId: string): Promise<ProviderContext | null>;
+  /**
+   * QA-S3b-01: gate for running a job that is FIXED to `provider` (manual
+   * retry). The provider stays the job's (F-AI-03 (2)) even when the active
+   * provider changed, but its key must still exist, not be invalid, and have a
+   * current run-time consent. Throws AppError (409) `key_missing` /
+   * `key_invalid` / `ai_consent_required`.
+   */
+  assertJobRunnable(userId: string, job: { provider: AiProvider; connectionTier: ConnectionTier }): Promise<void>;
+}
+
+/** 409 errors of the run gates (same codes as startJob / the AI spec). */
+export function runGateError(code: "key_missing" | "key_invalid" | "ai_consent_required"): AppError {
+  const message =
+    code === "key_missing"
+      ? "AI 연결이 필요합니다. 키를 등록한 뒤 다시 시도해 주세요."
+      : code === "key_invalid"
+        ? "AI 키가 유효하지 않습니다. 키를 확인해 다시 연결해 주세요."
+        : "AI 데이터 사용 고지에 다시 동의해 주세요.";
+  return new AppError(code, message, { status: 409 });
 }
 
 /**
@@ -31,18 +52,60 @@ export interface ProviderContextSource {
  * `key_missing` when the key is gone (deleted mid-run, D-36).
  */
 export interface KeySource {
-  forJob(jobId: string): Promise<string>;
+  /**
+   * `provider` = the job's fixed provider (the runner passes ai_jobs.provider).
+   * The envelope key source needs it for the AAD (user_id|provider|key id).
+   */
+  forJob(jobId: string, provider?: AiProvider): Promise<string>;
 }
 
-/** C-11.1 cause 4: marks the job's key invalid (S3b: RPC mark_provider_key_invalid). */
+/** Key causes a provider call can report (C-11.1 failure_cause minus input_rejected; DB private.is_key_failure_cause). */
+export const KEY_FAILURE_CAUSES = [
+  "rate_limited",
+  "daily_quota_exhausted",
+  "billing_required",
+  "key_invalid",
+  "model_not_available",
+  "provider_unavailable",
+] as const satisfies readonly FailureCause[];
+export type KeyFailureCause = (typeof KEY_FAILURE_CAUSES)[number];
+
+export function isKeyFailureCause(cause: FailureCause | null): cause is KeyFailureCause {
+  return cause !== null && (KEY_FAILURE_CAUSES as readonly string[]).includes(cause);
+}
+
+/** Key status updates from job runs (DM 2.11.3; S3b: app_ai_writer RPCs). */
 export interface KeyStatusReporter {
+  /** C-11.1 cause 4: key → invalid (RPC mark_provider_key_invalid(job, 'key_invalid')). */
   markInvalid(jobId: string): Promise<void>;
+  /** Final failure with another key cause: last_failure_* only, status kept (mark_provider_key_invalid(job, cause)). */
+  recordFailure(jobId: string, cause: Exclude<KeyFailureCause, "key_invalid">): Promise<void>;
+  /** Job succeeded: a needs_check key returns to valid (RPC record_provider_key_success; no-op otherwise). */
+  recordSuccess(jobId: string): Promise<void>;
 }
 
 // ---------------- fakes (tests) ----------------
 
-export function createStaticProviderContext(context: ProviderContext | null): ProviderContextSource {
-  return { forUser: async () => context };
+/**
+ * Test fake. `runnable` decides the manual-retry gate per fixed provider; by
+ * default a job is runnable unless the static context is the same provider
+ * with an invalid key.
+ */
+export function createStaticProviderContext(
+  context: ProviderContext | null,
+  runnable?: (job: { provider: AiProvider; connectionTier: ConnectionTier }) => AppError | null,
+): ProviderContextSource {
+  return {
+    forUser: async () => context,
+    async assertJobRunnable(_userId, job) {
+      const err = runnable
+        ? runnable(job)
+        : context?.provider === job.provider && context.keyStatus === "invalid"
+          ? runGateError("key_invalid")
+          : null;
+      if (err) throw err;
+    },
+  };
 }
 
 export function createStaticKeySource(key: string | null, onMissing: () => Error): KeySource {
@@ -54,12 +117,26 @@ export function createStaticKeySource(key: string | null, onMissing: () => Error
   };
 }
 
-export function createRecordingKeyStatusReporter(): KeyStatusReporter & { invalidated: string[] } {
+export function createRecordingKeyStatusReporter(): KeyStatusReporter & {
+  invalidated: string[];
+  failures: { jobId: string; cause: KeyFailureCause }[];
+  successes: string[];
+} {
   const invalidated: string[] = [];
+  const failures: { jobId: string; cause: KeyFailureCause }[] = [];
+  const successes: string[] = [];
   return {
     invalidated,
+    failures,
+    successes,
     async markInvalid(jobId) {
       invalidated.push(jobId);
+    },
+    async recordFailure(jobId, cause) {
+      failures.push({ jobId, cause });
+    },
+    async recordSuccess(jobId) {
+      successes.push(jobId);
     },
   };
 }
@@ -114,6 +191,10 @@ export function createDevEnvProviderContext(env: DevAiEnv): ProviderContextSourc
         : "paid";
       return { provider, connectionTier, keyStatus: "valid" };
     },
+    async assertJobRunnable(_userId, job) {
+      assertNotProduction(env);
+      if (devProvider(env) !== job.provider || !env.apiKey) throw runGateError("key_missing");
+    },
   };
 }
 
@@ -133,6 +214,13 @@ export function createDevEnvKeyStatusReporter(env: DevAiEnv, log: (event: string
       assertNotProduction(env);
       // No key row in development: just surface it. The key itself is never logged.
       log("ai_key.invalid_dev", { jobId });
+    },
+    async recordFailure(jobId, cause) {
+      assertNotProduction(env);
+      log("ai_key.failure_dev", { jobId, cause });
+    },
+    async recordSuccess() {
+      assertNotProduction(env);
     },
   };
 }

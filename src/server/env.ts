@@ -25,6 +25,18 @@ export const PublicEnvSchema = z.object({
 
 export type PublicEnv = z.infer<typeof PublicEnvSchema>;
 
+/**
+ * QA-S3b-04: KEK values that are public (a value once shipped in .env.example)
+ * or obviously not random (one repeated byte, or fewer than 16 distinct bytes)
+ * are refused — with them a DB copy alone would reveal every key (NFR-KEY-02).
+ */
+const PUBLISHED_EXAMPLE_KEKS = new Set(["ZHVtbXktZHVtbXktZHVtbXktZHVtbXktZHVtbXktMDA="]);
+export function isUsableKek(base64: string): boolean {
+  if (PUBLISHED_EXAMPLE_KEKS.has(base64)) return false;
+  const bytes = Buffer.from(base64, "base64");
+  return new Set(bytes).size >= 16;
+}
+
 export const ServerEnvSchema = PublicEnvSchema.extend({
   // Signs short-lived app_ai_writer JWTs (DM-13, decided in S1).
   SUPABASE_JWT_SECRET: z.string().min(32),
@@ -41,6 +53,17 @@ export const ServerEnvSchema = PublicEnvSchema.extend({
   AI_DEV_PROVIDER: z.enum(AI_PROVIDERS).optional(),
   AI_DEV_API_KEY: z.string().min(1).optional(),
   AI_DEV_CONNECTION_TIER: z.enum(CONNECTION_TIERS).optional(),
+  // BYOK key-encryption key (DM 2.11.2, decisions B-2). PRE-LAUNCH STAND-IN:
+  // a 32-byte master key (base64) from an encrypted env var + its id/version
+  // written to ai_provider_keys.kek_id. Replace with a cloud KMS before launch
+  // (src/server/keys/kms.ts). Optional here so pages don't depend on it; key
+  // registration and AI runs fail closed (internal_error) when it's missing.
+  AI_KEY_KEK_BASE64: z
+    .string()
+    .refine((v) => /^[A-Za-z0-9+/]+={0,2}$/.test(v) && Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64")
+    .refine((v) => isUsableKek(v), "must be randomly generated (published example / low-entropy value)")
+    .optional(),
+  AI_KEY_KEK_ID: z.string().regex(/^[A-Za-z0-9._:-]{1,64}$/).optional(),
 });
 
 const DEV_ONLY_KEYS = ["AI_DEV_PROVIDER", "AI_DEV_API_KEY", "AI_DEV_CONNECTION_TIER"] as const;

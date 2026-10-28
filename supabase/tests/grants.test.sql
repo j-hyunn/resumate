@@ -2,9 +2,9 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(20);
 
--- anon table privileges in public: only SELECT on policy_versions.
+-- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -13,16 +13,16 @@ select set_eq(
                                  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p (privilege_type)
      where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
        and has_table_privilege('anon', c.oid, p.privilege_type)$$,
-  array['policy_versions:SELECT'],
-  'anon has only SELECT on policy_versions in public');
+  array['policy_versions:SELECT', 'ai_disclosures:SELECT'],
+  'anon has only SELECT on policy_versions and ai_disclosures in public');
 
 -- anon column-level privileges: none.
 select is_empty(
   $$select table_name, column_name, privilege_type
       from information_schema.column_privileges
      where table_schema = 'public' and grantee = 'anon'
-       and table_name <> 'policy_versions'$$,
-  'anon has no column privileges outside policy_versions');
+       and table_name not in ('policy_versions', 'ai_disclosures')$$,
+  'anon has no column privileges outside policy_versions / ai_disclosures');
 
 -- public functions anon can execute: none.
 select is_empty(
@@ -112,8 +112,9 @@ select set_eq(
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and has_function_privilege('app_ai_writer', p.oid, 'execute')$$,
-  array['get_data_readiness', 'complete_ai_job'],
-  'app_ai_writer can execute exactly get_data_readiness and complete_ai_job in public (S3a: no ledger)');
+  array['get_data_readiness', 'complete_ai_job', 'mark_provider_key_invalid', 'record_provider_key_success',
+        'check_ai_run_allowed'],
+  'app_ai_writer can execute exactly get_data_readiness, complete_ai_job, the two key-status RPCs and check_ai_run_allowed (S3b)');
 
 -- service_role-only job functions (cron): exactly these in public beyond what authenticated can run.
 select set_eq(
@@ -146,6 +147,86 @@ select is_empty(
        and (d.defaclnamespace = 'public'::regnamespace or d.defaclnamespace = 0)
        and a.grantee in ('anon'::regrole, 'authenticated'::regrole, 0)$$,
   'no default privileges to anon / authenticated / PUBLIC for postgres objects in public');
+
+-- S3b (DM-16, DM 2.11.1): no role other than the owner holds any privilege on the 4 ciphertext columns.
+select is_empty(
+  $$select r.rolname, a.attname, p.privilege_type
+      from pg_roles r
+      cross join pg_attribute a
+      cross join lateral (values ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')) p (privilege_type)
+     where a.attrelid = 'public.ai_provider_keys'::regclass
+       and a.attname in ('key_ciphertext', 'key_nonce', 'wrapped_dek', 'kek_id')
+       and r.rolname not in ('postgres', 'supabase_admin')
+       and not r.rolsuper
+       and not pg_has_role(r.oid, 'pg_read_all_data', 'usage')
+       and not pg_has_role(r.oid, 'pg_write_all_data', 'usage')
+       and has_column_privilege(r.oid, a.attrelid, a.attnum, p.privilege_type)$$,
+  'no app / API role has any privilege on the ai_provider_keys ciphertext columns');
+
+-- Platform roles that bypass grants through the predefined pg_read_all_data / pg_write_all_data
+-- (can't be revoked per column). Pinned so a new member is noticed; DM 2.11.2 relies on the KEK living
+-- outside the DB for these (spec-gaps 2026-10-29).
+select set_eq(
+  $$select r.rolname::text from pg_roles r
+     where r.rolname not in ('postgres', 'supabase_admin', 'pg_read_all_data', 'pg_write_all_data')
+       and not r.rolsuper
+       and (pg_has_role(r.oid, 'pg_read_all_data', 'usage') or pg_has_role(r.oid, 'pg_write_all_data', 'usage'))$$,
+  array['supabase_etl_admin', 'supabase_read_only_user'],
+  'only supabase_etl_admin / supabase_read_only_user inherit pg_read_all_data / pg_write_all_data');
+
+-- S3b: ai_provider_keys table-level privileges: authenticated DELETE only (select is column-level);
+-- nothing for anon, app_ai_writer, app_key_reader, service_role.
+select set_eq(
+  $$select r.rolname::text || ':' || p.privilege_type
+      from pg_roles r
+      cross join lateral (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
+                                 ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p (privilege_type)
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'service_role')
+       and has_table_privilege(r.oid, 'public.ai_provider_keys'::regclass, p.privilege_type)$$,
+  array['authenticated:DELETE'],
+  'ai_provider_keys table privileges = authenticated DELETE only');
+
+-- authenticated column-level SELECT on ai_provider_keys = DM 2.11.1 screen columns exactly; no INSERT / UPDATE.
+select set_eq(
+  $$select a.attname::text || ':' || p.privilege_type
+      from pg_attribute a
+      cross join lateral (values ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')) p (privilege_type)
+     where a.attrelid = 'public.ai_provider_keys'::regclass and a.attnum > 0 and not a.attisdropped
+       and has_column_privilege('authenticated', a.attrelid, a.attnum, p.privilege_type)$$,
+  array(select col || ':SELECT' from unnest(array['id', 'provider', 'connection_tier', 'key_last4', 'status',
+    'last_verified_at', 'last_failure_cause', 'last_failure_at', 'created_at', 'updated_at']) col),
+  'authenticated: ai_provider_keys SELECT on the 10 metadata columns only');
+
+-- app_key_reader: no table / column privilege anywhere in public, and exactly one executable function.
+select is_empty(
+  $$select c.relname
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname in ('public', 'private', 'auth', 'storage')
+       and c.relkind in ('r', 'v', 'm', 'p', 'f')
+       and (has_table_privilege('app_key_reader', c.oid, 'SELECT')
+            or has_table_privilege('app_key_reader', c.oid, 'INSERT')
+            or has_table_privilege('app_key_reader', c.oid, 'UPDATE')
+            or has_table_privilege('app_key_reader', c.oid, 'DELETE')
+            or has_any_column_privilege('app_key_reader', c.oid, 'SELECT')
+            or has_any_column_privilege('app_key_reader', c.oid, 'INSERT')
+            or has_any_column_privilege('app_key_reader', c.oid, 'UPDATE'))$$,
+  'app_key_reader has no table or column privileges');
+select set_eq(
+  $$select p.oid::regprocedure::text
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname in ('public', 'private')
+       and has_function_privilege('app_key_reader', p.oid, 'execute')$$,
+  array['get_provider_key_secret(uuid)'],
+  'app_key_reader can execute exactly get_provider_key_secret in public / private');
+
+-- get_provider_key_secret: app_key_reader only.
+select set_eq(
+  $$select r.rolname::text
+      from pg_roles r
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'service_role', 'authenticator')
+       and has_function_privilege(r.oid, 'public.get_provider_key_secret(uuid)', 'execute')$$,
+  array['app_key_reader'],
+  'get_provider_key_secret is executable by app_key_reader only');
 
 select * from finish();
 rollback;

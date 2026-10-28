@@ -216,8 +216,13 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
     expect(Date.parse(row.next_run_at!)).toBe(h.clock.ms() + 2000);
     expect((row.progress as Record<string, unknown>).waiting_retry_until).toBe(new Date(h.clock.ms() + 2000).toISOString());
 
-    // Sweep with a far-future cutoff still leaves the waiting job alone.
-    const swept = await admin.rpc("sweep_stalled_ai_jobs", { p_stalled_before: new Date(Date.now() + 3_600_000).toISOString() });
+    // The sweep still leaves a waiting job alone, even one whose heartbeat is long past the cutoff.
+    // Test isolation (S3b QA round 2): the sweep RPC is global (cron), so never pass a future cutoff —
+    // it would stall other test files' fresh jobs running in parallel. Backdate THIS job's heartbeat
+    // instead and sweep with a cutoff in the past that no fresh job can match.
+    const dayAgo = new Date(Date.now() - 24 * 3_600_000).toISOString();
+    expect((await admin.from("ai_jobs").update({ heartbeat_at: dayAgo }).eq("id", jobId)).error).toBeNull();
+    const swept = await admin.rpc("sweep_stalled_ai_jobs", { p_stalled_before: new Date(Date.now() - 12 * 3_600_000).toISOString() });
     expect(swept.error).toBeNull();
     expect((await jobRow(jobId)).status).toBe("queued");
 

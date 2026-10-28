@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ReadinessAiConnection } from "./ai-connection";
 import {
   AFFILIATION_MODES,
   DATA_SUFFICIENCIES,
@@ -349,6 +350,8 @@ export const DataReadiness = z.object({
     job_interview: ReadinessFeature,
     culture_fit_interview: z.object({ ready: z.boolean(), data_sufficiency: z.enum(DATA_SUFFICIENCIES) }),
   }),
+  /** DM §6 v4: AI connection state (F-AI-06 lock). No active provider or an invalid key → next_action is `form`. */
+  ai_connection: ReadinessAiConnection,
 });
 export type DataReadiness = z.infer<typeof DataReadiness>;
 

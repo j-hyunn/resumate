@@ -34,6 +34,22 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // S3a claim_due_ai_jobs (cron)
   invalid_now: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_limit: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // S3b key RPCs (save_provider_key, record_provider_key_check, delete_provider_key, set_active_ai_provider)
+  consent_required: { message: "AI 데이터 사용 고지에 다시 동의해 주세요.", status: 409 },
+  key_not_found: { message: "등록된 키가 없는 공급자예요.", status: 404 },
+  key_id_mismatch: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
+  invalid_provider: { message: "입력값을 확인해 주세요." },
+  invalid_connection_tier: { message: "입력값을 확인해 주세요." },
+  // Server-built arguments: a mismatch here is our bug, not the user's input.
+  invalid_verification_result: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_result_status: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_failure_cause: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_key_id: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_ai_job_state: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  key_not_available: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // ai_data_use_consents insert guard (S3b): the disclosure changed while the user read it.
+  unknown_disclosure_version: { message: "고지 내용이 바뀌었어요. 새 고지를 확인하고 다시 동의해 주세요.", status: 409 },
+  disclosure_version_not_current: { message: "고지 내용이 바뀌었어요. 새 고지를 확인하고 다시 동의해 주세요.", status: 409 },
 };
 
 /** Raise names that the frontend sees under a generic code instead of their own. */
@@ -48,6 +64,18 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_now: "internal_error",
   invalid_limit: "internal_error",
   ai_job_not_found: "not_found",
+  consent_required: "ai_consent_required",
+  key_id_mismatch: "conflict",
+  invalid_provider: "invalid_input",
+  invalid_connection_tier: "invalid_input",
+  invalid_verification_result: "internal_error",
+  invalid_result_status: "internal_error",
+  invalid_failure_cause: "internal_error",
+  invalid_key_id: "internal_error",
+  invalid_ai_job_state: "internal_error",
+  key_not_available: "internal_error",
+  unknown_disclosure_version: "ai_disclosure_changed",
+  disclosure_version_not_current: "ai_disclosure_changed",
 };
 
 export function mapDbError(error: DbError): AppError {

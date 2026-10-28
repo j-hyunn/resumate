@@ -1,9 +1,17 @@
+import { LLM_SETTLE_GRACE_MS } from "@/server/ai/llm";
+
 /**
  * Job runner timing (AI C-6, T-14). Named constants so QA and ops can find them.
  */
 
-/** One function invocation stays under 60 s (C-6). The route exports maxDuration = 60; we stop starting steps before this. */
-export const INVOCATION_BUDGET_MS = 55_000;
+/**
+ * One function invocation stays under 60 s (C-6, maxDuration = 60). QA-S3a-11:
+ * this is the point by which EVERYTHING must be done — the running step's
+ * deadline AND the end-of-invocation usage settle (USAGE_SETTLE_WORST_MS).
+ * A step starts only when `elapsed + its timeout + settle worst ≤ budget`
+ * (the first step of an invocation is shortened to fit instead). 2 s margin.
+ */
+export const INVOCATION_BUDGET_MS = 58_000;
 
 /** Default deadline of one step (one model call or a small batch). Aborts with reason "timeout". */
 export const STEP_TIMEOUT_MS = 45_000;
@@ -38,3 +46,13 @@ export const COMPLETE_TRIES = 2;
  * calls abandoned by an aborted step and their ai_usage_records inserts.
  */
 export const USAGE_SETTLE_GRACE_MS = 3_000;
+
+/**
+ * QA-S3a-11: worst-case wait of the end-of-invocation settle — the runner's
+ * `settle(USAGE_SETTLE_GRACE_MS)` plus the LLM's own grace for inserts already
+ * in flight (`LLM_SETTLE_GRACE_MS` = 2 s, src/server/ai/llm.ts) = 5 s.
+ */
+export const USAGE_SETTLE_WORST_MS = USAGE_SETTLE_GRACE_MS + LLM_SETTLE_GRACE_MS;
+
+/** A first step shortened to fit the budget never gets less than this. */
+export const MIN_STEP_TIMEOUT_MS = 5_000;

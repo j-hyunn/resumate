@@ -203,8 +203,12 @@ describe("DataReadiness", () => {
         job_interview: { ready: false, missing: ["complete_experience", "complete_project"], hints: [], next_action: "form" },
         culture_fit_interview: { ready: true, data_sufficiency: "thin" },
       },
+      ai_connection: { active_provider: "gemini", key_status: "needs_check", connection_tier: "free" },
     };
     expect(DataReadiness.safeParse(sample).success).toBe(true);
+    // DM §6 v4: no active key → all three null.
+    expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: null, key_status: null, connection_tier: null } }).success).toBe(true);
+    expect(DataReadiness.safeParse({ ...sample, ai_connection: undefined }).success).toBe(false);
   });
   it("a ready feature needs no next_action", () => {
     const f = DataReadiness.shape.features.shape.insight;

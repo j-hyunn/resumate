@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { errorCategoryOf, type StartAiJobResponse, type StoredAiJobProgress } from "@/lib/contracts/ai";
+import { errorCategoryOf, failureCauseOf, type StartAiJobResponse, type StoredAiJobProgress } from "@/lib/contracts/ai";
 import type { AiErrorCode, AiJobType, AiProvider, ConnectionTier, ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { AiError, isAiError, ProviderError } from "@/server/ai/errors";
@@ -13,7 +13,10 @@ import {
   STALLED_AFTER_MS,
   STEP_TIMEOUT_MS,
   USAGE_SETTLE_GRACE_MS,
+  USAGE_SETTLE_WORST_MS,
+  MIN_STEP_TIMEOUT_MS,
 } from "./constants";
+import { isKeyFailureCause, type KeyFailureCause } from "./provider-context";
 import { stepsFor } from "./registry";
 import { decideRetry, retriesFor, withRetry } from "./retry";
 import { createPriceCache, createUsageRecorder } from "./usage-recorder";
@@ -80,6 +83,8 @@ const DEFAULT_TIMING: RunnerTiming = {
   stepTimeoutMs: STEP_TIMEOUT_MS,
   heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
   usageSettleGraceMs: USAGE_SETTLE_GRACE_MS,
+  settleWorstMs: USAGE_SETTLE_WORST_MS,
+  minStepTimeoutMs: MIN_STEP_TIMEOUT_MS,
 };
 
 /** Abort reasons used on the step signal (same convention as src/server/ai/errors `signalReason`). */
@@ -228,6 +233,11 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     const notRetryable = () => new AppError("ai_job_not_retryable", "다시 시도할 수 없는 작업입니다.", { status: 409 });
     if (isActive(job.status)) return { jobId: job.id, reused: false, inProgress: true };
     if (job.status !== "failed" || !job.errorCode || errorCategoryOf(job.errorCode) === "input") throw notRetryable();
+    // QA-S3b-05: a key check is re-run from the connection screen, never requeued (no registry step).
+    if (job.jobType === "key_verification") throw notRetryable();
+    // QA-S3b-01: same gate as a new run, on the job's FIXED provider (F-AI-03 (2)): key present and
+    // not invalid, consent current. Never send career data after consent was withdrawn.
+    await deps.providerContext.assertJobRunnable(ref.userId, { provider: job.provider, connectionTier: job.connectionTier });
 
     const gen = job.runGeneration + 1;
     let won: boolean;
@@ -368,7 +378,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
             provider: claimed.provider,
             tier: claimed.modelTier,
             connectionTier: claimed.connectionTier,
-            keySource: scope.keySource,
+            // Bind the job's provider: the envelope key source builds the AAD from it (DM 2.11.2).
+            keySource: { forJob: (id: string) => scope.keySource.forJob(id, claimed.provider) },
             jobId: claimed.id,
             signal,
             onCall,
@@ -387,11 +398,17 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
             continue;
           }
 
-          const stepTimeout = step.timeoutMs ?? timing.stepTimeoutMs;
+          // QA-S3a-11: the step's deadline AND the final usage settle must end inside the budget.
+          let stepTimeout = step.timeoutMs ?? timing.stepTimeoutMs;
           const elapsed = now().getTime() - invocationStart;
-          if (ranThisInvocation > 0 && elapsed + stepTimeout > timing.invocationBudgetMs) {
-            await write(store.update(claimed.id, gen, { status: "queued", heartbeatAt: iso() }));
-            return await continueLater(claimed);
+          const room = timing.invocationBudgetMs - timing.settleWorstMs - elapsed;
+          if (stepTimeout > room) {
+            if (ranThisInvocation > 0) {
+              await write(store.update(claimed.id, gen, { status: "queued", heartbeatAt: iso() }));
+              return await continueLater(claimed);
+            }
+            // First step of this invocation: shorten it instead of yielding forever.
+            stepTimeout = Math.max(room, Math.min(timing.minStepTimeoutMs, stepTimeout));
           }
 
           // C-12: free tier keeps a minimum spacing per user and provider; wait via next_run_at, not here.
@@ -401,6 +418,21 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
               await write(store.update(claimed.id, gen, { status: "queued", nextRunAt: runAt.toISOString(), heartbeatAt: iso() }));
               log("ai_job.spaced", { jobId: claimed.id, stage: step.stage });
               return "scheduled";
+            }
+          }
+
+          // QA-S3b-01: key / consent may have changed since start or while queued.
+          if (deps.checkRunAllowed) {
+            let blocked: AiErrorCode | null = null;
+            try {
+              blocked = await deps.checkRunAllowed(claimed);
+            } catch {
+              log("ai_job.run_gate_error", { jobId: claimed.id });
+              blocked = "stalled"; // fail closed: no provider call without a positive answer
+            }
+            if (blocked) {
+              log("ai_job.run_gate_blocked", { jobId: claimed.id, errorCode: blocked });
+              return await finish("failed", blocked);
             }
           }
 
@@ -447,7 +479,12 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
             random,
           });
 
-          if (decision.kind === "fail") return await finish("failed", error.code, decision);
+          if (decision.kind === "fail") {
+            // Other key causes update last_failure_* (status kept), DM 2.11.3. key_invalid was handled above.
+            const cause = failureCauseOf(error.code);
+            if (isKeyFailureCause(cause) && cause !== "key_invalid") await reportKeyFailure(scope, claimed.id, cause);
+            return await finish("failed", error.code, decision);
+          }
 
           retryCount += 1;
           meta = { ...meta, retries: withRetry(meta.retries, step.stage, error.code) };
@@ -494,6 +531,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
         if (completed === undefined) return await finish("failed", "stalled");
         if (!completed) return lost();
         log("ai_job.succeeded", { jobId: claimed.id, jobType: claimed.jobType, provider: claimed.provider });
+        // DM 2.11.3: a needs_check key becomes valid after a successful run (no-op otherwise).
+        await reportKeySuccess(scope, claimed.id);
         return "succeeded";
       } catch (err) {
         if (err instanceof LostJob) return lost();
@@ -523,6 +562,22 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
       await scope.keyStatus.markInvalid(jobId);
     } catch {
       log("ai_job.mark_key_invalid_failed", { jobId });
+    }
+  }
+
+  async function reportKeyFailure(scope: UserScope, jobId: string, cause: Exclude<KeyFailureCause, "key_invalid">): Promise<void> {
+    try {
+      await scope.keyStatus.recordFailure(jobId, cause);
+    } catch {
+      log("ai_job.key_failure_report_failed", { jobId });
+    }
+  }
+
+  async function reportKeySuccess(scope: UserScope, jobId: string): Promise<void> {
+    try {
+      await scope.keyStatus.recordSuccess(jobId);
+    } catch {
+      log("ai_job.key_success_report_failed", { jobId });
     }
   }
 

@@ -181,3 +181,60 @@
 
 ## 2026-10-28 · S3a · 해소 · 단계 안의 비공급자 예외 (QA-S3a-02)
 - **사용자 확정**: 단계 안에서 난 예외 중 공급자 호출 밖의 것(우리 버그, DB 오류, 검증기 오류 등 `ProviderError`가 아닌 것)은 `stalled`로 끝내고 재시도하지 않는다. 공급자 호출 안에서 난 분류되지 않은 오류만 `provider_unavailable`(최대 2회 재시도)로 둔다. 위 "분류되지 않은 예외의 error_code (73행 재검토)" 항목과 "실행기 자체 오류" 항목은 이 규칙으로 정리된다.
+
+## 2026-10-29 · S3b · DM 2.11.6 `ai_disclosures` 초기 버전 / 2.11.3 `save_provider_key` 인자
+- 내용: ① 공급자·등급별 고지의 초기 버전 값·문서 경로가 정해져 있지 않다. ② 키 암호화의 AAD에 키 행 id가 들어가는데(2.11.2), `save_provider_key` 인자에 id가 없어 새 키를 저장하기 전에 서버가 id를 알 수 없다.
+- 임시 조치 `[가정]`: ① 6행(3 공급자 × 2 등급) `v2026-10-29`, `document_path = '/policies/ai/{provider}/{tier}/{version}'`. 실제 고지 문구는 법무 확인(D-39) 후 확정. ② `save_provider_key`에 `p_key_id` 인자를 추가한다(서버가 생성, 교체 시 기존 id 유지).
+
+## 2026-10-29 · S3b · DM 2.11.1 / 2.11.2 "운영자 SQL 역할도 암호 컬럼 select 없음" ↔ Postgres 기본 역할
+- 내용: 컬럼 grant로 `anon`·`authenticated`·`app_ai_writer`·`app_key_reader`·`service_role`의 암호 컬럼 권한은 0으로 만들었다. 그러나 Supabase 플랫폼 역할 `supabase_read_only_user`, `supabase_etl_admin`은 Postgres 기본 역할 `pg_read_all_data`(·`pg_write_all_data`)의 구성원이라 컬럼 grant와 무관하게 모든 테이블을 읽는다. 테이블 소유자(`postgres`)와 슈퍼유저도 마찬가지다. 컬럼 단위로 막을 방법이 없다.
+- 임시 조치 `[가정]`: DM 2.11.2의 설계(KEK가 DB 밖 KMS에만 있어 DB 역할을 다 가져도 암호문뿐)를 이 역할들에 대한 보호 근거로 본다. pgTAP(`grants.test.sql`)이 앱·API 역할의 암호 컬럼 권한 0과, 우회 가능한 플랫폼 역할 목록(위 2개)을 고정해 새 구성원이 생기면 실패하게 했다. 기획에서 DM 2.11.1 문구("운영자 SQL 역할 모두 select 권한 없음")를 "운영자 역할도 KEK 없이는 암호문만 볼 수 있음"으로 고칠지 정한다. 출시 전 KMS 전환(B-2)이 이 전제의 조건이다.
+
+## 2026-10-29 · S3b · DM 2.11.3 `save_provider_key` / `record_provider_key_check` 인자 세부
+- 내용: ① `limited` 저장 시 `last_failure_cause`를 기록하라고 하지만 인자 목록에 원인이 없다. ② `record_provider_key_check(provider, result_status, failure_cause)`의 `result_status` 값 목록이 없다. ③ 성공 시 `last_failure_*`를 비울지 정해져 있지 않다. ④ "첫 키면 활성 공급자 설정"의 "첫 키" 기준이 없다(모든 키를 지운 뒤 다시 등록한 경우).
+- 임시 조치 `[가정]`: ① `p_failure_cause`(limited일 때 `rate_limited`/`daily_quota_exhausted`/`provider_unavailable` 필수, valid면 null)와 `p_encryption_version`(기본 1)을 추가. ② `result_status ∈ (valid, failed)`, failed면 원인 6값 중 하나(`input_rejected` 제외). ③ `record_provider_key_check` 성공은 표 그대로 `status`·`last_verified_at`만 바꾸고 실패 기록은 이력으로 남긴다. `save_provider_key`(새 키 저장)는 새 키이므로 valid면 실패 필드를 비운다. ④ "활성 공급자가 null일 때 저장되는 키"를 첫 키로 본다.
+
+## 2026-10-29 · S3b · DM 2.11.3 "needs_check 키는 다음 성공 실행 시 valid" — 실행 주체
+- 내용: 성공 실행으로 `needs_check → valid`를 되돌리는 RPC가 표에 없다. `record_provider_key_check`는 사용자 세션 RPC라 작업 실행기(`app_ai_writer`)가 부를 수 없다.
+- 임시 조치 `[가정]`: `record_provider_key_success(p_ai_job_id)`(app_ai_writer 전용, security definer)를 추가했다. 작업이 본인 것이고 `running`/`succeeded`이며 키가 `needs_check`일 때만 `valid` + `last_verified_at = now()`. 암호 컬럼을 읽지 않는다. DM 2.11.3 표와 §5 app_ai_writer 실행 목록에 넣을지 기획에서 정한다.
+
+## 2026-10-29 · S3b · DM 2.11.2 `get_provider_key_secret` 반환 — 키 없음과 거부의 구분
+- 내용: "그 외는 거부"라고만 하고, 실행 중 키 삭제(→ `key_missing`, 2.11.2 4)와 작업 조건 불충족을 앱이 어떻게 구분하는지 없다. 반환 컬럼에 AAD용 키 id도 없다.
+- 임시 조치 `[가정]`: 작업 조건(본인·running·heartbeat 2분 이내) 불충족 → 오류 `P0001 key_not_available`. 작업은 정상인데 그 공급자 키 행이 없으면 0행 → 앱이 `key_missing`. 반환에 `key_id`를 더했다.
+
+## 2026-10-29 · S3b · DM §6 v4 readiness — `form`으로 바꿀 때 `suggested_*` 처리
+- 내용: 활성 공급자가 없거나 키가 invalid면 `next_action = form`이라고만 한다. 같은 조건에서 `suggested_mode`·`suggested_project_id`를 남길지 정해져 있지 않다.
+- 임시 조치 `[가정]`: `form`일 때는 S2 규칙("`suggested_*`는 `writing_chat`일 때만")에 맞춰 넣지 않는다. `needs_check`는 실행 허용(UX C-19)이므로 S2 판정 그대로.
+
+## 2026-10-29 · S3b · DM 2.11.1 화면 조회 컬럼에 `user_id` 없음
+- 내용: 화면 조회 컬럼 목록에 `user_id`가 없어 authenticated는 `user_id`를 select할 수 없다(`select('*')`도 42501). security invoker인 `delete_provider_key`는 `user_id`로 거를 수 없다.
+- 조치(구현 결정): 목록대로 두고, `delete_provider_key`는 `provider`로만 거르고 본인 범위는 RLS(`ai_provider_keys_delete_own`)에 맡긴다. 화면·서버는 뷰 `ai_provider_keys_public`을 쓴다. 운영자(`service_role`)에는 `user_id`를 포함한 메타 컬럼 select만 줬다.
+
+## 2026-10-29 · S3b · DM 2.11.5 실행 시점 재동의 판정
+- 내용: 키 등록·등급 변경 때는 "최신 활성 동의의 고지 버전 = 현재 버전"을, AI 실행 때는 "`requires_reconsent = true`인 새 버전이면 재동의"를 말한다. 두 규칙이 다르다(`requires_reconsent = false`인 새 버전이 나오면 등록은 막히고 실행은 허용).
+- 임시 조치: DB(`save_provider_key`)는 등록 규칙(정확히 현재 버전)을 강제한다. 실행 시점 판정은 api가 사용자 세션으로 한다(노트 S3b/02_db-engineer_notes.md "실행 시점 동의 확인"). `ai_disclosures` 첫 버전의 `effective_at`은 배포 즉시 유효하도록 2026-10-28 00:00 KST로 넣었다(버전 이름은 `v2026-10-29`).
+
+## 2026-10-29 · S3b (api) · S-40 "등급 변경"의 서버 경로
+- 내용: S-40 카드 메뉴에 "등급 변경 → C-21 재동의"가 있지만 DM 2.11.3에 등급만 바꾸는 RPC가 없다. `save_provider_key`는 암호문을 새로 받아야 한다.
+- 임시 조치 `[가정]`: `recheckProviderKey({ provider, connectionTier, disclosureVersion })`로 처리한다. 새 등급 동의(현재 고지 버전) 확인 → 저장된 키를 실행 시점 경로로 복호화해 검증 → `valid`/`limited`면 같은 행 id로 다시 암호화해 `save_provider_key`(이전 등급 동의 철회는 RPC가 함). 검증 실패면 등급은 그대로 두고 `record_provider_key_check`로 상태만 갱신한다. 사용자는 키를 다시 붙여넣지 않는다.
+
+## 2026-10-29 · S3b (api) · 키 검증의 사용 기록과 작업 상태 (C-10.5, NFR-KEY-04)
+- 내용: C-10.5는 "확인 호출 토큰을 미터에 기록"이라고만 한다. 1단계(모델 조회)는 토큰이 없다. 검증 작업(`key_verification`)의 종료 상태도 정해져 있지 않다.
+- 임시 조치 `[가정]`: 2단계 생성 호출만 `ai_usage_records` 1행(`feature = key_verification`, 실패 호출 포함)으로 남기고 1단계는 기록하지 않는다. 작업 상태: 등록·교체·등급 변경에서 저장했으면(`valid`/`limited`) `succeeded`, 저장 안 함이면 `failed` + 원인 코드. "다시 확인"은 `valid`만 `succeeded`, 그 밖은 `failed` + 원인. 검증 상한 시간은 목표(유료 5초·무료 10초)와 별도로 15초·20초에서 끊는다. 상한 초과(어댑터 `timeout`)는 공급자 장애(원인 6)로 보고 `provider_unavailable`로 바꾼다: 1단계면 저장하지 않고 "잠시 후 다시", 2단계(인증 통과)면 R-38의 장애와 같게 `limited`(`needs_check`)로 저장한다(QA-S3b-02).
+
+## 2026-10-29 · S3b (api) · 작업 최종 실패 시 키 상태 갱신 범위 (DM 2.11.3)
+- 내용: `mark_provider_key_invalid`는 `billing_required`·`daily_quota_exhausted` 등은 `last_failure_*`만 갱신한다고 되어 있지만, 실행기가 어떤 원인일 때 부를지 정해져 있지 않다.
+- 임시 조치 `[가정]`: 작업이 키 원인 6값(`rate_limited`, `daily_quota_exhausted`, `billing_required`, `key_invalid`, `model_not_available`, `provider_unavailable`) 중 하나로 **최종 실패**할 때만 부른다(자동 재시도 중간에는 부르지 않음). 성공한 작업은 `record_provider_key_success`(db 제안 채택)로 `needs_check → valid`.
+
+## 2026-10-29 · S3b · DM 2.11.3 키 RPC 실행 주체 (QA-S3b-06, 설계)
+- 내용: `save_provider_key`·`record_provider_key_check`는 "서버 액션(사용자 세션)"이 부르는 RPC라서 authenticated에 실행 권한이 있다. 그래서 브라우저가 사용자 JWT로 직접 부를 수도 있다(검증을 거치지 않은 암호문 저장, 상태 임의 변경).
+- 영향: 본인 행만 바뀐다. 남의 키나 원문 노출은 없다. 직접 부르면 자기 키가 쓸 수 없는 상태가 될 뿐이다.
+- 임시 조치: 그대로 둔다. 막으려면 이 두 RPC를 서버 전용 역할로 옮기고 서버가 사용자 id를 넘겨야 한다. DM 2.11.3의 실행 주체를 바꾸는 일이라 기획 판단이 필요하다.
+
+## 2026-10-29 · S3b QA (api) · 수동 재시도·실행 중 동의 철회 게이트 (QA-S3b-01)
+- 내용: F-AI-04 (5)·DM 2.11.5는 재동의가 필요하면 "다음 AI 실행 전"에 막으라고 하지만, 수동 재시도와 이미 큐에 있는 작업을 어떻게 다룰지 정해져 있지 않다. 실행기(app_ai_writer)는 동의·키 메타를 읽을 권한이 없다.
+- 임시 조치 `[가정]`:
+  - 수동 재시도는 **작업에 고정된 공급자**로 다시 돈다(F-AI-03 (2)). 단, 그 공급자의 키가 없으면 409 `key_missing`, 무효면 409 `key_invalid`, 키의 **현재 등급** 동의가 실행 규칙을 못 맞추면 409 `ai_consent_required`로 거부한다. 등급은 키 기준이다(실제 데이터가 그 등급 정책으로 나간다).
+  - 사용자가 동의를 철회하면 그 공급자·등급의 queued/running 작업에 취소를 요청한다(queued는 시작 전, running은 다음 heartbeat에서 중단).
+  - 실행기는 단계마다 db RPC `check_ai_run_allowed(p_ai_job_id)`(app_ai_writer)로 확인하고, 확인 오류면 닫힌 실패(`stalled`)다. 이미 큐에 있던 작업도 `requires_reconsent` 고지 시행·동의 철회 뒤 다음 단계에서 멈춘다(공급자 호출·사용 기록 0).
+  - **해소 (decisions.md 2026-10-29)**: 게이트가 `consent_required`면 작업은 `error_code = key_missing`(user_account, failure_cause null → 화면 "AI 연결하기" 잠금)으로 끝난다. `key_invalid` → `key_invalid`, `key_missing` → `key_missing`.

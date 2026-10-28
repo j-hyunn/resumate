@@ -18,6 +18,7 @@ import {
   createRecordingKeyStatusReporter,
   createStaticKeySource,
   createStaticProviderContext,
+  runGateError,
   type ProviderContext,
 } from "./provider-context";
 import { createJobRunner } from "./runner";
@@ -95,6 +96,8 @@ type SetupOpts = {
   context?: ProviderContext | null;
   key?: string | null;
   timing?: RunnerDeps["timing"];
+  runnable?: Parameters<typeof createStaticProviderContext>[1];
+  checkRunAllowed?: RunnerDeps["checkRunAllowed"];
 };
 
 function setup(definition: JobTypeDefinition<Llm>, opts: SetupOpts = {}) {
@@ -110,7 +113,8 @@ function setup(definition: JobTypeDefinition<Llm>, opts: SetupOpts = {}) {
   const logs: { event: string; fields: Record<string, unknown> }[] = [];
   const runner = createJobRunner<Llm>({
     forUser: () => memoryScope(store, usage, { keySource, keyStatus }),
-    providerContext: createStaticProviderContext(context),
+    providerContext: createStaticProviderContext(context, opts.runnable),
+    checkRunAllowed: opts.checkRunAllowed,
     createLlm: scriptedLlmFactory(scripted.adapter, clock.ms),
     settleLlm: (llm, timeoutMs) => llm.settle(timeoutMs),
     getDefinition: (t) => (t === definition.jobType ? definition : undefined),
@@ -817,5 +821,188 @@ describe("invocation budget", () => {
     expect(h.continued).toEqual([{ jobId, userId: USER }]);
     expect(await h.runner.runJob({ jobId, userId: USER })).toBe("succeeded");
     expect(h.records(jobId)).toHaveLength(2);
+  });
+});
+
+describe("S3b key status reports (DM 2.11.3)", () => {
+  it("success → recordSuccess once (needs_check → valid is the RPC's job)", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [okJson] });
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+    expect(h.keyStatus.successes).toEqual([jobId]);
+    expect(h.keyStatus.failures).toEqual([]);
+  });
+
+  it.each<AiErrorCode>(["billing_required", "model_not_available", "daily_quota_exhausted"])("final %s → recordFailure with that cause, not invalid", async (code) => {
+    const h = setup(def([llmStep("match")]), { responses: [{ error: code }] });
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: code });
+    expect(h.keyStatus.failures).toEqual([{ jobId, cause: code }]);
+    expect(h.keyStatus.invalidated).toEqual([]);
+    expect(h.keyStatus.successes).toEqual([]);
+  });
+
+  it("key_invalid → markInvalid only; input / system causes report nothing", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "key_invalid" }, { error: "safety_blocked" }] });
+    const a = await start(h);
+    await h.drain();
+    const b = await start(h, { target: { type: "application_project", id: "99999999-9999-4999-8999-999999999999" } });
+    await h.drain();
+    expect(h.keyStatus.invalidated).toEqual([a.jobId]);
+    expect(h.keyStatus.failures).toEqual([]);
+    expect(h.job(b.jobId).errorCode).toBe("safety_blocked");
+  });
+
+  it("a reporter that throws never changes the job outcome", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [okJson] });
+    h.keyStatus.recordSuccess = async () => {
+      throw new Error("db down");
+    };
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+    expect(h.logs.some((l) => l.event === "ai_job.key_success_report_failed")).toBe(true);
+  });
+});
+
+describe("QA-S3a-11 invocation budget includes the step deadline and the settle wait", () => {
+  function twoSteps(firstTakesMs: number) {
+    const step = (stage: string, advance: number): JobStep<Llm> => ({
+      stage,
+      timeoutMs: 40_000,
+      run: async (ctx) => {
+        await callLlm(ctx, 1);
+        h.clock.advance(advance);
+        return {};
+      },
+    });
+    const h: H = setup(def([step("match", firstTakesMs), step("synthesize", 0)]), {
+      responses: [okJson, okJson],
+      timing: { invocationBudgetMs: 58_000, settleWorstMs: 5_000 },
+    });
+    return h;
+  }
+
+  it("does not start a step whose deadline + settle worst would pass the budget (15 + 40 + 5 > 58)", async () => {
+    const h = twoSteps(15_000);
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId).status).toBe("queued");
+    expect(h.continued).toEqual([{ jobId, userId: USER }]);
+  });
+
+  it("13 s in, a 40 s step still fits (13 + 40 + 5 = 58)", async () => {
+    const h = twoSteps(13_000);
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+    expect(h.continued).toEqual([]);
+  });
+
+  it("the first step of an invocation is shortened to fit instead of running past the budget", async () => {
+    // Room = 300 - 100 = 200 ms: the 60 s deadline becomes 200 ms, the hanging call times out
+    // quickly; its automatic retry (timeout: 1) no longer fits → continued in a new invocation.
+    const h = setup(def([llmStep("match", 1, { timeoutMs: 60_000 })]), {
+      responses: [{ hang: true }, { hang: true }],
+      timing: { invocationBudgetMs: 300, settleWorstMs: 100, minStepTimeoutMs: 50, usageSettleGraceMs: 10 },
+    });
+    const t = Date.now();
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(Date.now() - t).toBeLessThan(5_000);
+    expect(h.job(jobId)).toMatchObject({ status: "queued", retryCount: 1 });
+    expect(h.records(jobId)).toHaveLength(1);
+    expect(h.records(jobId)[0]).toMatchObject({ outcome: "failed", errorCode: "timeout" });
+  });
+});
+
+describe("QA-S3b-01 / -05 run gates", () => {
+  async function failedJob(h: H) {
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "billing_required" });
+    return jobId;
+  }
+
+  it.each([
+    ["consent withdrawn", "ai_consent_required"],
+    ["key deleted", "key_missing"],
+    ["key invalid", "key_invalid"],
+  ] as const)("manual retry refused when %s: 409, job stays failed, no provider call", async (_name, code) => {
+    let gate: AppError | null = null;
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }, okJson], runnable: () => gate });
+    const jobId = await failedJob(h);
+    gate = runGateError(code);
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code, status: 409 });
+    await h.drain();
+    expect(h.job(jobId).status).toBe("failed");
+    expect(h.scripted.calls).toHaveLength(1);
+  });
+
+  it("manual retry stays on the job's fixed provider after the active provider changed (F-AI-03 (2))", async () => {
+    const seen: string[] = [];
+    // Active is now OpenAI; the job is Anthropic and Anthropic's key + consent are still fine.
+    const h = setup(def([llmStep("match")]), {
+      responses: [{ error: "billing_required" }, okJson],
+      runnable: (job) => (seen.push(job.provider), null),
+    });
+    const jobId = await failedJob(h);
+    await h.runner.retryJob({ jobId, userId: USER });
+    await h.drain();
+    expect(seen).toEqual(["anthropic"]);
+    expect(h.job(jobId)).toMatchObject({ status: "succeeded", provider: "anthropic" });
+  });
+
+  it("key_verification jobs are not retryable (QA-S3b-05)", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [] });
+    const id = "00000000-0000-4000-8000-0000000000aa";
+    await h.store.insert({
+      id,
+      userId: USER,
+      jobType: "key_verification",
+      applicationProjectId: null,
+      targetType: "ai_provider",
+      targetId: "00000000-0000-5000-8000-0000000000bb",
+      provider: "anthropic",
+      modelTier: "default",
+      connectionTier: "paid",
+      params: {},
+      inputHash: null,
+      promptVersion: null,
+      model: null,
+      progress: { stage: "verify", done: 0, total: 1 },
+      meta: { runBase: 1, waitBase: 0, retries: {} },
+    });
+    await h.store.finish(id, 1, { status: "failed", errorCode: "key_invalid" });
+    await expect(h.runner.retryJob({ jobId: id, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+    expect(h.job(id).status).toBe("failed");
+  });
+
+  it("run-time gate blocks before any provider call (claim and each step)", async () => {
+    let calls = 0;
+    const h = setup(def([llmStep("match"), llmStep("synthesize")]), {
+      responses: [okJson, okJson],
+      checkRunAllowed: async () => (++calls === 2 ? "key_missing" : null),
+    });
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "key_missing" });
+    expect(h.scripted.calls).toHaveLength(1); // step 2 never called the provider
+    expect(h.keyStatus.successes).toEqual([]);
+  });
+
+  it("run-time gate errors fail closed (stalled, no call)", async () => {
+    const h = setup(def([llmStep("match")]), {
+      responses: [okJson],
+      checkRunAllowed: async () => {
+        throw new Error("db down");
+      },
+    });
+    const { jobId } = await start(h);
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+    expect(h.scripted.calls).toHaveLength(0);
   });
 });

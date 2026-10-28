@@ -616,3 +616,208 @@ R-27·R-28은 구현 전에 데이터 모델 한 절(2.5·3.3)만 고치면 닫�
 | F-AP-06 (2) | 게이트 대화가 JD를 참고해 관련 경험부터 묻기(R-31로 AI 반영 필요) | PRD |
 | 커리어 채팅(Should) 월 메시지 한도 | 출시 시 정함 | PRD D-12, AI 요청 |
 | 그 밖 | 성능 목표(6.3), 지표 목표치(7장), V-9e 겹침 40% 등 AI 품질 임계값, 평가 세트 규모 | 각 문서 |
+
+---
+---
+
+# BYOK 리뷰 라운드 1 (2026-10-26)
+
+> 작성: spec-reviewer. 새 리뷰 주기(BYOK)의 라운드 1. 대상: PRD **v4**, UX **v5**, AI **v4**, 데이터 모델 **v4**. 기준: `00_input/brief.md` "기획 변경 3차: BYOK"(확정 사항 = 사용자 범위: BYOK 전용, 공급자 3개, AI는 선택, 사용량 표시는 **미터 + 한도 초과 안내 두 가지만**, 예산 상한·응답 헤더 실시간 한도 표시·관리자 키 잔액 조회 제외). 문서는 고치지 않았다. 이슈 번호는 R-36부터 잇는다.
+
+## 요약
+
+- 이슈 **9건: Critical 0 / Major 3 / Minor 6**
+- 담당별: ux-planner 2 (M1·m1) / ai-feature-designer 2 (M1·m1) / product-planner 3 (M1·m2) / data-architect 2 (m2)
+- 데이터 모델 v4의 rename(U5-1~U5-14, A4-1~A4-12)은 UX v5·AI v4에 **반영되지 않았다**(두 문서가 데이터 v3.2를 기준으로 먼저 나옴). 담당별 1건씩(R-36, R-37)으로 묶었다.
+- 사용자 범위 준수: 예산 상한(F-AI-12)·실시간 헤더 한도(F-AI-13)·관리자 키 잔액(F-AI-14)은 네 문서 모두 **Won't/제외**로 일치하고 화면 자리도 없다. 서비스 무료 한도·차감·"N회 남음"·D-12는 PRD·UX·데이터에서 폐기 확인(잔여 문구 2곳은 R-37·R-43). 범위를 조금 넘는 표시 3건은 사용자 결정으로 올렸다(R-44, UB-2·UB-3).
+- 사용자 결정: **4건**(UB-1~UB-4).
+
+## 경계별 결과
+
+| 경계 | 결과 | 이슈 |
+|------|------|------|
+| B1 PRD Must → 화면 | 통과. F-AI-01~09가 S-40·S-41·S-42·C-18~C-21에 매핑. 키 없는 동작(PRD 3.3) 9행 모두 UX C-18 진입점 표·S-15·S-33·C-14 변형으로 대응 | — |
+| B2 화면 → 데이터 | 실패: U5 rename 미반영, 세션 목록 "실행 공급자" 원천 없음, 미터 공급자 필터용 집계 없음 | R-36, R-40, R-41 |
+| B3 AI 입력 → 데이터 | 통과(게이트 대화 요건 목록 = `jd_requirements`, R-31 해소) | — |
+| B4 AI 출력 → 저장 | 실패: A4 rename 미반영(`meter_feature`, 단가 컬럼, `key_validation`) | R-37 |
+| B5 AI 출력 → 화면 | 부분: 재시도 정책 값이 문서마다 다름 | R-39 |
+| B6 응답 모드 | 통과. 키 확인 동기(유료 5초 / 무료 10초 — UX는 "최대 5초"만, R-41), 무료 등급 순차 + `next_run_at` 예약 | R-41 |
+| B7 기능 → 데이터 | 통과(데이터 6.1에 F-AI-01~09 행) | — |
+| B8 용어 | 부분: "연결 확인"·"실행 공급자"·"키 연결 단계" 용어집 미등록 | R-42 |
+| B9 MVP 범위 | 부분: 미터 표시 범위·공급자 출시 게이트가 사용자 원문보다 넓거나 좁음 | R-44 |
+| B10 개인정보·삭제·키 보안 | 통과(봉투 암호화 + 외부 KMS, 암호 컬럼 grant 없음, `app_key_reader` + 실행 중 작업에 묶인 `get_provider_key_secret`, 즉시 hard delete, 동의 철회 기록, 탈퇴 집계 포함). 사용 기록 보관 13개월이 PRD 보유 표에 없음 | R-42 |
+| B11 비용 | 통과. 운영자 AI 비용 0, 운영자 상한·한도 개념 삭제. AI 7장은 미터 규모 추정으로만 남음 | — |
+
+## 집중 점검 결과
+
+| 항목 | 결과 |
+|------|------|
+| 키 없는 동작 PRD 3.3 ↔ UX C-18 ↔ 데이터 `ai_connection` | 화면별 동작은 일치(기존 결과 열람·편집 유지 D-36, 보드·폼·공고 원문 키 불필요, 미터 빈 상태). 데이터는 `get_data_readiness().ai_connection{active_provider, key_status, connection_tier}`와 "키 없음·무효면 `next_action = form`"을 제공하는데 UX C-18·C-09가 이 필드를 판정 원천으로 적지 않음 → R-41 |
+| 키 생애주기(등록·확인·교체·삭제·동의·활성 공급자) | PRD F-AI-01~04 ↔ UX S-40/S-41/FL-20 ↔ 데이터 `save_provider_key` / `record_provider_key_check` / `mark_provider_key_invalid` / `delete_provider_key` / `set_active_ai_provider`, `ai_data_use_consents`, `profiles.active_ai_provider`(FK set null, 자동 전환 없음) 일치. **불일치 1건**: 등록 검증 중 429·일일 한도일 때 저장 여부 → R-38 |
+| 사용량 미터 AI C-13 ↔ `ai_usage_records`·`get_ai_usage_summary` ↔ UX S-42 | 필드 구성은 일치. 이름 불일치(A4·U5) → R-36·R-37. S-42 "가격표 기준일"은 `effective_from`이 아니라 `source_checked_at`(U5-7). 공급자 행 → 기능 표 거르기는 집계에 없음 → R-41 |
+| 오류 분류 AI C-11 ↔ `error_code`/`error_category`/`failure_cause` ↔ UX C-20 | 7원인 의미는 일치. 값 이름 `invalid_key`·`model_unavailable`(UX) ↔ `key_invalid`·`model_not_available`(데이터·AI), UX의 시스템 원인 `error_category` 3범주 ↔ 5값(`system` 등), `key_missing`(실행 중 키 삭제) 화면 상태 없음 → R-36 |
+| 무료 등급 순차 모드 | AI C-12 ↔ 데이터 `ai_jobs.connection_tier`·`next_run_at`·`progress.waiting_retry_until` ↔ UX C-03 일치. 재시도 횟수만 불일치 → R-39 |
+| 운영비 개념 잔여 | PRD: 폐기 정리 완료. UX: S-36 데이터 줄 `usage_event_id`(U5-12). AI: AI-11 "무차감", AI-05 "사용량 미차감", 요청 5 문구. 데이터: 3.3 "새 보강 대화 … (1회 차감)" → R-36·R-37·R-43 |
+| 공급자·모델 배지 | 데이터 메타 `provider`·`model`·`model_tier`·`connection_tier`(결과 테이블 8곳 + `job_descriptions.extraction_*`). UX는 `ai_provider`/`ai_model`(U5-8), 세션 목록 열은 원천 없음 → R-36·R-40 |
+
+## 이슈
+
+### R-36 [Major] UX v5: 데이터 모델 v4 rename U5-1~U5-14 미반영
+- 담당: ux-planner
+- 위치·내용(데이터 v4 11.2 ↔ UX v5):
+  - U5-1~3 `tier` → `connection_tier`: C-19 배지, C-21 기록, S-40 데이터 줄, S-41 ①, S-42 데이터 줄, 요청 절 1·3·4 (`ai_usage_records`는 `model_tier`도 추가)
+  - U5-5·6·7 미터 필드: S-42 데이터 줄 `succeeded` → `outcome`(+`error_code`), `created_at` → `occurred_at`, `cache_write_tokens`·`reasoning_tokens`·`usage_source`·`job_type`·`call_key` 추가, 가격표 기준일은 **`source_checked_at`**(S-42 "기준일 {effective_from}"을 바꿈)
+  - U5-8 결과 메타: C-19 결과 배지·S-36 대화 공급자 표시 `ai_provider`/`ai_model` → `provider`/`model`/`model_tier`
+  - U5-9·10·11 원인 값: C-20 표·S-41 ③·C-18 아래 문단의 `invalid_key` → `key_invalid`, `model_unavailable` → `model_not_available`, `last_failure_cause` 같은 7값
+  - U5-12: S-36 데이터 줄의 `usage_event_id`(null = 차감 전) 삭제
+  - U5-13: C-20 "(시스템)" 행·공통 상태 ST-AI-FAILED의 `error_category`(`transient` / `input` / `timeout`) → 5값(`provider_limit` / `user_account` / `transient` / `input` / `system`). 시스템 문구는 `error_category = 'system'` + `error_code`(`timeout` 등)로 고른다
+  - U5-14: `last_failure_at`(S-40 카드 무효 상태 시각), **`error_code = 'key_missing'`**(실행 중 키 삭제) 상태를 C-20 또는 C-18에 추가 — "키가 삭제되어 작업을 끝냈어요. 입력은 저장돼 있어요" + AI 연결하기
+  - 그 밖: S-40 "(또는 `ai_settings.active_provider`)" 대안 삭제(데이터: `profiles.active_ai_provider`만), 화면 조회는 `ai_provider_keys_public` 뷰, 머리글 기준 "데이터 모델 v3.2"·`[확인 필요: data-architect]` 표식 정리
+- 수정 제안: 위치별 일괄 치환. 구조 변경은 `key_missing` 상태 1행뿐.
+
+### R-37 [Major] AI v4: 데이터 모델 v4 rename A4-1~A4-10 미반영 + 차감 문구 잔여
+- 담당: ai-feature-designer
+- 위치·내용:
+  - A4-1·2: C-13 표 `meter_feature` → `feature`, 값 `key_validation` → `key_verification`(C-10.5 본문 "기능 `key_validation`"도), 요청 절 4
+  - A4-3~7: C-13 가격표 문단·변경 이력 아래 표의 `input_per_mtok` / `cached_input_per_mtok` / `cache_write_per_mtok` / `output_per_mtok` → `*_usd_per_mtok`, 장문 구간 단가 2개 추가
+  - A4-9·10: C-11.1 표에 `key_missing`(category `user_account`, `failure_cause` null, 재시도 없음) 행이 없다. `failure_cause`(7값 generated), `quota_resets_at`(C-11.2 초기화 시각 저장처), `retry_after`(C-12 "N분 후" 저장처) 명시
+  - `[제안]` 표식(C-11.1 `error_category`, C-12 `next_run_at`, C-13 기록·가격표), 머리글 "데이터 모델 v3.2 기준"
+  - 차감 잔여: AI-11 트리거 "**무차감.**", AI-05 "끝내 실패하면 … 사용량 미차감", 요청(ux) 5의 "재시도 무차감 문구" 언급
+- 수정 제안: 일괄 치환, C-11.1에 `key_missing` 행 추가, 차감 표현 삭제(필요하면 "호출 없음"·"토큰 기록 없음"으로).
+
+### R-38 [Major] 키 등록 검증에서 한도 응답(429·일일 한도)이 나왔을 때 저장 여부가 문서마다 다르다
+- 담당: product-planner (F-AI-01 수용 기준이 기준)
+- 근거: PRD F-AI-01 (2) "실패하면 원인 … 을 보여 주며 저장하지 않는다" / 데이터 2.11.2 "검증한 뒤, **성공했을 때만** 암호화해 저장" ↔ AI C-10.5 단계 2 "429 → (1)/(2) (**저장은 허용하고 '한도 상태' 표시** `[가정]`)" ↔ UX S-41 ③ "`daily_quota_exhausted`, 키는 유효할 수 있음 — 저장 여부는 AI 명세 결정 `[가정]`". 데이터 `ai_provider_keys.status`에는 `needs_check`(검증 중 일시 오류·한도)가 이미 있다.
+- 영향: Gemini 무료(기본 추천 경로) 사용자가 그날 한도를 다 쓴 상태로 키를 연결하면 "연결 실패"가 되어 연결 자체를 못 한다.
+- 수정 제안(팀 해결): F-AI-01 (2)를 "인증 실패·권한 없음·형식 오류(키 무효), 결제 필요, 모델 불가면 저장하지 않는다. 인증은 통과했으나 분당·일일 한도(429)나 공급자 장애면 **저장하고 `status = 'needs_check'` + `last_failure_cause`**로 표시, 다음 실행 또는 '다시 확인'에서 갱신"으로 정한다. 데이터 2.11.2 "성공했을 때만" 문장과 UX S-41 ③ `[가정]`을 이에 맞춘다.
+
+### R-39 [Minor] 자동 재시도 횟수가 문서 안팎에서 다르다
+- 담당: ai-feature-designer
+- 근거: AI C-11.1 #6 `provider_unavailable` "백오프 최대 2회" ↔ C-12 "자동 재시도 (원인 1·6) … **호출당 최대 4회**, 작업당 대기 합계 120초" ↔ UX C-20 `provider_unavailable` "서버 자동 재시도 **1회** 후 표시". C-12는 무료 등급 절인데 C-11.1 #1은 유료 등급도 "C-12" 백오프를 참조해, 유료 등급 재시도 규칙이 어느 쪽인지 불분명.
+- 수정 제안: 원인(1·6) × 등급(무료·유료) 재시도 표 하나로 정하고 UX C-20 문구가 그 값을 따르게 리더가 전달.
+
+### R-40 [Minor] 면접 세션 목록의 "실행 공급자" 열에 데이터 원천이 없다
+- 담당: data-architect
+- 근거: PRD F-P3-15·요청(data-architect) 4 "AI 결과(인사이트, 초안, **면접 세션**, 대화 메시지)에 실행 공급자·모델", UX C-19 "S-37·S-20 세션 목록 '실행 공급자' 열" ↔ 데이터 v4 11.1 #4: 메타는 `interview_questions`, `answer_evaluations`, `session_feedbacks`에만, `interview_sessions`에는 없다. 질문 생성과 채점이 다른 공급자일 수 있다(F-AI-03 (2)).
+- 수정 제안: `interview_sessions`에 `question_provider`·`evaluation_provider`(+ model_tier)를 두거나, "목록 표시 = 질문 생성 공급자(`interview_questions` 첫 행), 결과 화면 = 채점 공급자(`session_feedbacks`)" 규칙을 6.1·A.12에 적는다.
+
+### R-41 [Minor] UX v5: 판정·표시의 데이터 원천 연결 정리
+- 담당: ux-planner
+- 근거와 위치:
+  1. C-18·C-09: 잠금·폼 경로 판정을 "활성 공급자 키 없음"으로만 적었다. 데이터는 `get_data_readiness().ai_connection`(`active_provider`, `key_status`, `connection_tier`)과 "키 없음·`invalid`면 `next_action = 'form'`"을 준다. `key_status = 'needs_check'`일 때 동작(실행 허용 + 배지 주의)이 없다.
+  2. S-42 공급자별 표 "행 → 기능별 표를 그 공급자로 거르기": `get_ai_usage_summary`는 `by_feature`와 `by_provider`를 따로만 준다(교차 집계 없음). 사용자 범위도 "기능별"이다.
+  3. C-03 무료 등급 "(n초)" 대기 표시의 원천 `progress.waiting_retry_until`, C-20 "{N}분 뒤"의 `retry_after`, "{초기화 시각}"의 `quota_resets_at`을 명시.
+  4. S-41 ③ "최대 5초" — 무료 등급 목표는 10초(AI C-10.5·C-12, PRD 6.4).
+- 수정 제안: 1·3·4는 문구·데이터 줄 보강. 2는 필터 상호작용을 빼거나(권고, 범위 안) data-architect에 교차 집계를 요청.
+
+### R-42 [Minor] PRD v4: 다른 문서가 올린 결정·용어·보유 기간 미기록
+- 담당: product-planner
+- 근거:
+  - UX D-UX-14~17(키 연결 단계형, 잠금 범위, 연결 후 자동 실행 없음, 미터 기간 이번 달 + 지난달), UX 요청 2(OpenAI·Claude 등급 기본값 "유료"), 데이터 D-DM-09(`ai_usage_records` 보관 13개월 `[가정]`), D-DM-10(봉투 암호화 + 외부 KMS, Vault 비권고), 데이터 11.4-3(키 삭제 시 동의 철회 기록), AI D-AI-12(고성능 등급 MVP 미배정)·D-AI-13(애매한 429는 분당으로 재시도)이 PRD 9장에 없다.
+  - F-AI-07 (2) 기능 목록에 "연결 확인"이 없다(NFR-KEY-04 `[가정]`·UX S-42·AI·데이터는 포함).
+  - 용어집에 "연결 확인", "실행 공급자", "키 연결 단계"(UX 요청 3) 없음.
+  - 사용 기록 13개월 보관이 6.1 개인정보·보유 표(NFR-PRV-06)에 없다.
+- 수정 제안: 9.2에 위 항목을 상태와 함께 기록, F-AI-07 (2)에 "연결 확인" 추가, 용어 3개 등록, NFR-PRV-06에 사용 기록 보관 기간(`[가정]`) 추가. D-DM-10은 NFR-KEY-02·07과 맞으므로 팀 확정 가능.
+
+### R-43 [Minor] 데이터 모델: 차감 문구 잔여
+- 담당: data-architect
+- 근거: 3.3 "같은 프로젝트에 새 보강 대화는 새 `writing_chats` 행(**1회 차감**)", 8.1 T-10 행의 사용량 세부 문구(이력 행이라면 "v4 폐기" 표시 필요).
+- 수정 제안: "(1회 차감)" 삭제, 8.1 T-10 행에 "v4: 차감 폐기(D-34), 상한 40 CHECK 확정" 표기.
+
+### R-44 [Minor] 사용자 범위와 크기가 다른 표시·게이트 3건
+- 담당: product-planner (사용자 결정으로 확정 필요 — UB-2·UB-3)
+- 근거:
+  1. 사용자 원문 미터: "이번 달 Resumate에서 쓴 토큰 / 예상 비용을 **기능별로**". PRD F-AI-07·UX S-42는 **공급자별 표**, **지난달 비교**(D-UX-17), 호출 수, S-40 요약 한 줄을 더한다. 공급자별은 무료 등급 "청구되지 않을 수 있음" 표시와 공급자 전환 시 필요하지만, 지난달 비교는 원문 밖이다.
+  2. 재시도 대기 표시 "공급자 요청 한도로 잠시 기다리는 중 (n초)"(UX C-03·C-20, `waiting_retry_until`)는 공급자 `Retry-After`를 쓴다. 제외된 "응답 헤더 기반 실시간 분당 한도 표시"(남은 요청 수)와는 다른 것(실패 안내의 일부)으로 판단하지만, 사용자에게 한 줄 확인을 권한다.
+  3. 사용자 확정 "공급자 3개 연동" ↔ PRD D-38 "평가 세트를 통과 못 한 공급자는 '준비 중'"(데이터 `ai_providers.is_available`) — 출시 때 3개 미만이 열릴 수 있다.
+- 수정 제안: 사용자 결정 UB-2·UB-3 답에 따라 F-AI-07·D-38을 확정. 2는 PRD F-AI-08 (1)에 "재시도 대기 시간 표시는 남은 한도 표시가 아니다" 한 줄.
+
+## 사용자 결정 (BYOK — 사용자만 정할 수 있는 것)
+
+| # | 질문 | 선택지 | 권고 |
+|---|------|--------|------|
+| UB-1 | 모의 면접 점수 산정 방식(D-14, 이전부터 대기) | 사용자 정의 | 사용자 정의 대기. 점수 자리·"점수 산정 방식 준비 중"·서버 계산 구조는 준비됨 |
+| UB-2 | 사용량 미터의 표시 범위 | (a) 기능별 + 공급자별 + 지난달 비교(현재 설계) (b) 기능별 + 공급자별(이번 달만) (c) 기능별만(원문 그대로) | **(b)**. 공급자별은 무료 등급 "청구되지 않을 수 있음" 표시와 공급자 전환에 필요하다. 지난달 비교는 "두 가지만"의 취지보다 넓어 Could로 미룬다 |
+| UB-3 | 공급자 출시 게이트(D-38) | (a) 세 공급자 모두 평가 세트를 통과해야 열고, 통과 전에는 "준비 중"(출시 때 3개 미만 가능) (b) 세 공급자 모두 출시 시 연다(평가는 출시 전에 반드시 끝낸다) (c) 평가와 무관하게 셋 다 연다 | **(a)**. 근거 기반 원칙(없는 경험을 지어내지 않음)을 공급자마다 확인해야 한다. 다만 사용자 확정 "3개 연동"과 다를 수 있어 승인이 필요하다. 일정은 "세 공급자 평가 완료 후 출시"를 목표로 |
+| UB-4 | Gemini 무료 키를 기본 추천 경로로 둘지(brief 3차 리더 해석) | (a) 추천 + 무료 등급 데이터 사용(Google 제품 개선 활용·사람 검토 가능) 별도 동의 (b) 추천하지 않고 세 공급자를 동등하게 (c) 추천 + 고지만(별도 동의 없음) | **(a)**. 사용자 원문 "제미나이는 무료 API를 제공하기 때문에 더 괜찮다"와 맞고, 무료 등급 데이터 정책은 별도 체크로 알린다. 고지 문구는 출시 전 최신 약관으로 확정(D-10) |
+
+- 사용자 결정이 아닌 것: D-39(공급자 전송의 법적 성격)는 **법무**, D-DM-09(사용 기록 13개월)·D-DM-10(KMS)·R-38(검증 중 한도 응답 시 저장)·D-AI-12·13·D-UX-14~17은 **팀 확정** 대상이다.
+- 이전부터 남은 `[가정]`(D-16 미응답 허용 + 경고, 컬처핏 예외, 묶이지 않은 대화 90일)은 사용자가 답하지 않은 항목으로 그대로 둔다.
+
+---
+---
+
+# BYOK 리뷰 라운드 2 (2026-10-26) — 이번 주기 최종
+
+> 작성: spec-reviewer. 대상: PRD **v4.1**, UX **v5.1**, AI **v4.1**, 데이터 모델 **v4.1**. 문서는 고치지 않았다. 이번 주기의 마지막 라운드라 남은 항목은 "미해결(잔여)"로 리더에게 넘긴다.
+
+## 요약
+
+- R-36~R-44(9건): **해결 7 / 부분 해결 2 (R-37, R-38) / 미해결 0**. 부분 해결 2건은 문장 하나씩 남은 흔적이다.
+- 신규: **Minor 3건 (R-45 data, R-46 ux, R-47 product)**. Critical·Major 없음.
+- 사용자 결정 4건(UB-1~UB-4)은 그대로. PRD 9.0에 `[결정 필요]`로 올라 있고, UB-2~UB-4는 권고안을 `[가정]`으로 적용해 네 문서가 같은 설계를 쓴다.
+
+## R-36~R-44 재검토
+
+| ID | 담당 | 판정 | 근거 / 남은 일 |
+|----|------|------|----------------|
+| R-36 | ux | **해결** | UX v5.1: `connection_tier`, 사용 기록 `outcome`·`occurred_at`·추가 필드, 가격표 기준일 `source_checked_at`, 결과 메타 `provider`/`model`/`model_tier`, `key_invalid`·`model_not_available`, `error_category` 5값, `key_missing` 상태, 뷰 `ai_provider_keys_public`, `usage_event_id` 삭제. (흔적: S-36 데이터 줄 머리 "데이터 모델 v3 2.5" 표기 — R-46) |
+| R-37 | ai | **부분 해결** | A4-1~A4-10 반영(`feature`, `key_verification`, `*_usd_per_mtok`, 장문 구간 단가, `key_missing` 행, `failure_cause`·`quota_resets_at`·`retry_after` 저장 위치), AI-11·AI-05 차감 문구 삭제. **잔여**: C-6 "`error_code` 범주 (화면 3범주 … 데이터 모델 v2): 일시적 — `model_unavailable`, …, `refused`" 문단이 C-11.1과 충돌(옛 값·옛 3범주). 요청 절 7 "게이트 진입 배너(R-32) — v3.2a부터 미회신"은 UX v4.2b에서 반영됨 |
+| R-38 | product | **부분 해결** | PRD F-AI-01 (2), AI C-10.5 저장 규칙, 데이터 `save_provider_key`(`verification_result` = `valid` / `limited`)·`record_provider_key_check`, UX S-41 ③ "확인 보류(저장함)"가 같은 규칙. **잔여(data-architect)**: 데이터 2.11.2 마지막 문단 "등록·교체는 … 검증한 뒤, **성공했을 때만** 암호화해 저장한다"가 2.11.3과 충돌 |
+| R-39 | ai | **해결** | AI C-11.3 원인별 표 하나(등급 무관: `rate_limited` 4회, `provider_unavailable` 2회, `schema_invalid`·`timeout` 1회, 그 밖 0회, 작업당 대기 합계 120초, 스트리밍은 첫 토큰 전 오류만). UX C-20·C-03이 같은 값. 데이터 `retry_count`·`next_run_at`·`progress.waiting_retry_until`·`retry_after`로 표현(대기 합계 저장처는 R-45) |
+| R-40 | data | **해결** | `interview_sessions.question_provider`·`question_model`·`evaluation_provider`·`evaluation_model` + 목록 표시 규칙(채점 시작 후 채점 공급자, 다르면 둘 다). AI-05/AI-06·07이 기록, UX C-19·S-20·S-37·S-22가 같은 규칙 |
+| R-41 | ux | **해결** | C-18·C-09 판정 원천 `get_data_readiness().ai_connection`, `needs_check` = 실행 허용 + 주의 배지(ST-AI-KEY-CHECK), S-42 공급자 행 필터 삭제, `waiting_retry_until`·`retry_after`·`quota_resets_at` 명시, 검증 예상 시간 유료 5초 / 무료 10초 |
+| R-42 | product | **해결** | PRD 9.2에 D-UX-14~17, D-DM-09·10, D-AI-12·13, 키 삭제 시 동의 철회 기록. F-AI-07 (2)에 "연결 확인", 용어집에 연결 확인·실행 공급자·키 연결 단계·확인 필요, NFR-PRV-06에 사용 기록 13개월 `[가정]` |
+| R-43 | data | **해결** | 3.3 "(1회 차감)" 삭제, T-10 행 v4 폐기 표기 |
+| R-44 | product | **해결** | 미터 = 이번 달 + 기능별·공급자별(지난달 비교 Could, UB-2 `[가정]`), F-AI-08 (1)에 "재시도 대기 표시는 F-AI-13(실시간 한도 표시)이 아니다" 명시, D-38 `[가정]`(UB-3). 사용자 결정으로 넘김 |
+
+## 집중 점검
+
+| 항목 | 결과 |
+|------|------|
+| `ai_provider_keys_public` 뷰 | 데이터 2.11.1에 정의됨: 화면 조회 컬럼 10개(`id`, `provider`, `connection_tier`, `key_last4`, `status`, `last_verified_at`, `last_failure_cause`, `last_failure_at`, `created_at`, `updated_at`)만 담은 security invoker 뷰. UX S-40 데이터 줄과 컬럼 일치. 5장 RLS 표·9장 목록에는 없음 → R-45에서 한 줄 보강 권고 |
+| `verification_result` valid / limited, `needs_check` | 네 문서 일치: 인증 통과 + 한도(분당·일일)·공급자 장애면 `limited` → `needs_check`로 저장·활성화 허용, 키 무효·결제·모델 불가면 저장 안 함, "다시 확인"·다음 실행은 `record_provider_key_check`(성공 → `valid`, `key_invalid` → `invalid`, 그 밖 → `needs_check`). readiness: `needs_check`는 `next_action`을 바꾸지 않음(UX C-09·데이터 6장 일치). 흔적은 R-38 잔여 1문장 |
+| 면접 세션 공급자 필드 | AI ↔ 데이터 ↔ UX 일치(R-40) |
+| 재시도 규칙 | AI C-11.3 ↔ UX C-20·C-03 ↔ 데이터 `ai_jobs` 컬럼 일치. 작업당 대기 합계 120초를 단계 사이(서버리스 실행이 나뉨)에 어디에 누적하는지 없음 → R-45 |
+| 미터 범위 | PRD F-AI-07 (1) "이번 달만", AI C-13 "이번 달만", 데이터 `get_ai_usage_summary(period_month, include_previous default false)`, UX S-42 "이번 달만·지난달 대비 없음·공급자 행 필터 없음" 일치. PRD 아래 요청 절(v4 원 요청) 3번에 "지난달 비교"가 남음 → R-47 |
+| 운영비 문구 잔여 | 본문은 정리됨. 남은 것은 이력·폐기 표기와 AI C-6 문단(R-37 잔여), PRD 요청 절(R-47)뿐 |
+
+## 신규 이슈
+
+### R-45 [Minor] 데이터: 재시도 대기 합계 저장처, RPC 서명, 뷰 표기
+- 담당: data-architect
+- 근거: AI C-11.3 "작업당 대기 합계 상한 120초(원인 1·6 합산)" — 단계가 `next_run_at`으로 나뉘어 실행되므로 누적값을 DB에 남겨야 하는데 `ai_jobs.progress`는 `{stage, done, total, waiting_retry_until}`뿐이다. `save_provider_key(provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id, key_last4, disclosure_version)` 서명에 본문이 말하는 `verification_result` 인자가 없다. `ai_provider_keys_public` 뷰가 5장 RLS 표·9장 목록에 없다. (R-38 잔여: 2.11.2 "성공했을 때만 저장" 문장)
+- 수정 제안: `progress.retry_wait_total_s`(또는 `ai_jobs.retry_wait_total_s` 컬럼) 추가, `save_provider_key` 서명에 `verification_result` 추가, 뷰를 5장·9장에 한 줄, 2.11.2 문장을 2.11.3 규칙으로 교체.
+
+### R-46 [Minor] UX: 결과 배지의 모델 표시 결정 미기록 + 머리 표기
+- 담당: ux-planner
+- 근거: UX 요청(ai-feature-designer) 1 "결과 배지에 모델 원래 이름을 보일지, 단계 이름만 보일지"가 열린 채. S-36 데이터 줄 머리 "데이터 모델 v3 2.5".
+- **권고(담당 결정용)**: 배지 본문은 **"공급자 · 단계 이름"**(예: "Gemini · 기본", `provider` + `model_tier`), **원래 모델 ID(`model`)는 툴팁·결과 상세 정보에** 둔다. 이유: (1) 모델 ID는 공급자별로 길고 자주 바뀌어(`[가정]` 매핑은 운영자가 갱신) 배지가 읽기 어렵고 사용자는 고를 수도 없다(D-31, F-AI-10 Won't). (2) 반면 사용자는 공급자 청구서·대시보드와 대조할 때 실제 모델 ID가 필요하고, 결과의 실행 공급자·모델을 기록·표시한다는 F-AI-03 (3)의 취지(투명성)도 툴팁으로 충족된다. (3) 단계 이름은 공급자가 달라도 같은 말이라 "어느 결과가 더 무거운 모델로 만들어졌나"를 비교하기 쉽다. 결정을 D-UX-18로 기록하고 PRD 용어집 "실행 공급자" 정의와 맞춘다.
+
+### R-47 [Minor] PRD: 아래 요청 절의 지난달 비교 문구
+- 담당: product-planner
+- 근거: PRD "다른 팀원에게 요청 (v4 반영 사항)" ux-planner 3 "사용량 미터 화면(F-AI-07): 이번 달 기능별·공급자별 … **지난달 비교** …"가 v4.1 F-AI-07 (1) "이번 달만, 지난달 비교는 Could"와 충돌(v4.1 추가 요청 절은 맞음).
+- 수정 제안: v4 요청 3번에 "(v4.1: 지난달 비교는 Could, UB-2)" 표기 또는 삭제.
+
+## 미해결로 넘기는 항목 (리더 전달)
+
+| ID | 심각도 | 담당 | 남은 일 |
+|----|--------|------|---------|
+| R-37 잔여 | Minor | ai-feature-designer | C-6 `error_code` 범주 문단을 C-11.1로 대체(옛 `model_unavailable`·`refused`·3범주 삭제), 요청 7 정리 |
+| R-38 잔여 | Minor | data-architect | 2.11.2 "성공했을 때만 저장" 문장 교체(R-45와 함께) |
+| R-45 | Minor | data-architect | 대기 합계 저장처, `save_provider_key` 서명, 뷰 표기 |
+| R-46 | Minor | ux-planner | 모델 표시 결정 기록(권고: 단계 이름 + 툴팁에 모델 ID), 머리 표기 |
+| R-47 | Minor | product-planner | 요청 절 문구 |
+
+모두 문장 수준이며 설계 충돌은 없다.
+
+## 사용자 결정 (최종, BYOK 주기)
+
+| # | 질문 | 선택지 | 권고 (현재 문서 적용 상태) |
+|---|------|--------|----------------------------|
+| UB-1 | 모의 면접 점수 산정 방식(D-14) | 사용자 정의 | 사용자 정의 대기. 점수 자리·"점수 산정 방식 준비 중"·서버 계산 구조 준비됨 |
+| UB-2 | 사용량 미터 표시 범위 | (a) 기능별 + 공급자별 + 지난달 비교 (b) 기능별 + 공급자별, 이번 달만 (c) 기능별만 | **(b)** — 네 문서에 `[가정]`으로 적용. (a)로 바뀌면 `include_previous = true`와 화면 한 줄만 추가 |
+| UB-3 | 공급자 출시 게이트(D-38) | (a) 평가 통과 전 "준비 중"(출시 때 3개 미만 가능) (b) 셋 다 출시 시 연다(평가는 출시 전 완료) (c) 평가와 무관하게 연다 | **(a) + 세 공급자 평가 완료 후 출시를 목표** — `[가정]` 적용(`ai_providers.is_available`) |
+| UB-4 | Gemini 무료 키를 기본 추천 경로로 | (a) 추천 + 무료 등급 데이터 사용 별도 동의 (b) 추천 없이 동등 (c) 추천 + 고지만 | **(a)** — `[가정]` 적용(F-AI-05, C-21 별도 체크) |
+
+- 사용자 결정이 아닌 것: D-39(공급자 전송의 법적 성격)는 법무. 남은 `[가정]`(D-16 미응답 허용 + 경고, 컬처핏 예외, 묶이지 않은 대화 90일, 사용 기록 13개월, 검증 순서 Gemini → Claude → OpenAI, 성능·지표 수치)은 이전과 같다.

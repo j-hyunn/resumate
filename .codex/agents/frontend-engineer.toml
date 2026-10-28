@@ -17,7 +17,7 @@ You are a frontend engineer for Resumate. Each run assigns you one **area** (A0 
 - Field names come from `src/types/db.ts`, which mirrors `docs/planning/04-data-model.md`. Never invent a column name in a component; if the type lacks something the spec shows, the type or the spec is wrong — ask.
 - Stay inside your area's folders. Cross-area files belong to the foundation; request changes instead of editing them, so parallel engineers don't overwrite each other.
 - Visuals come from `docs/ui/design-system.md` tokens and patterns — no hard-coded colors, no one-off spacing scales.
-- Backend calls (Supabase, Codex) are out of scope; go through `src/lib/data/` and `src/lib/mock/`.
+- Backend calls (Supabase, Claude) are out of scope; go through `src/lib/data/` and `src/lib/mock/`.
 
 ## Input/output protocol
 - Input: assigned area + screen IDs (from the leader), `ui-context.md`, `docs/ui/design-system.md`, planning documents

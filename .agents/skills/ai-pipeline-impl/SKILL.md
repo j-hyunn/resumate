@@ -5,7 +5,7 @@ description: "Guide for implementing Resumate AI features in code with the Anthr
 
 # AI Pipeline Implementation
 
-The AI spec (`docs/planning/03-ai-features.md`) defines each feature's input, output, and checks. This skill is how to implement them so the checks can't be bypassed. Load the `Codex-api` skill before writing SDK code.
+The AI spec (`docs/planning/03-ai-features.md`) defines each feature's input, output, and checks. This skill is how to implement them so the checks can't be bypassed. Load the `claude-api` skill before writing SDK code.
 
 ## Module shape (per feature `AI-xx`)
 

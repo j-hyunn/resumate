@@ -45,6 +45,21 @@ describe("splitJdSentences (C-2)", () => {
     expect(splitJdSentences("")).toEqual([]);
     expect(splitJdSentences("\n- \n***\n")).toEqual([]);
   });
+
+  it("QA-S5-01: any Unicode letter or number counts as content (Cyrillic, Arabic, Thai)", () => {
+    const ru = "Разработчик бэкенда\nОпыт работы с базами данных";
+    expect(splitJdSentences(ru).map((s) => s.text)).toEqual(["Разработчик бэкенда", "Опыт работы с базами данных"]);
+    const ar = "مطور برمجيات";
+    expect(splitJdSentences(ar)).toEqual([{ sid: "S1", text: ar, start: 0, end: ar.length }]);
+    expect(splitJdSentences("นักพัฒนาซอฟต์แวร์").map((s) => s.sid)).toEqual(["S1"]);
+    expect(splitJdSentences("Ⅲ").map((s) => s.sid)).toEqual(["S1"]); // Unicode number
+  });
+
+  it("QA-S5-01: symbol-only text still yields no sentences", () => {
+    expect(splitJdSentences("----")).toEqual([]);
+    expect(splitJdSentences("• • •")).toEqual([]);
+    expect(splitJdSentences("★☆★\n!!! ???\n→ ← ↑")).toEqual([]);
+  });
 });
 
 describe("buildJdContext", () => {

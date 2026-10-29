@@ -40,7 +40,15 @@ export function createSupabaseUsageStore(db: AiWriterSupabaseClient): UsageStore
   return {
     async insert(row) {
       const { error } = await db.from("ai_usage_records").insert(toUsageInsert(row));
-      if (error) throw mapDbError(error);
+      if (!error) return;
+      // S5 / FL-06: the project was deleted while its job ran. The call still used the user's tokens, so the
+      // record is kept without the project reference (same end state as the FK's on delete set null).
+      if (error.code === "23503" && row.applicationProjectId !== null) {
+        const retry = await db.from("ai_usage_records").insert(toUsageInsert({ ...row, applicationProjectId: null }));
+        if (!retry.error) return;
+        throw mapDbError(retry.error);
+      }
+      throw mapDbError(error);
     },
 
     async priceFor(provider, model, onDate): Promise<PriceRow | null> {

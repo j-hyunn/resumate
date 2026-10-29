@@ -267,3 +267,29 @@
 ## 2026-10-30 · S4 QA (backend-qa) · UI 패턴 문서의 AI-12 스트림 모양
 - 내용: `.claude/skills/ui-implementation/references/patterns.md`는 AI-12 작성 대화를 C-04 블록 이벤트(`block_started`…`done`)와 `useAiStream → { blocks, status, error, cancel }`로 적고, "월간 대화 한도" 소진 처리도 남아 있다. 기획(AI-12 응답 모드, DM §7 대화 턴)과 S4 구현은 대화 이벤트(`turn_started` → `reply_delta` → `reply_done` → `draft_patch` → `draft_flags` → `turn_done` | `error`)이고 월 한도는 v4에서 폐기됐다(D-34).
 - 임시 조치: 백엔드는 기획대로 둔다. S-36 연결 단계에서 UI 훅은 `blocks` 대신 대화 메시지·정리 결과 상태를 돌려주는 별도 훅이 필요하다. UI 하네스 문서 갱신 필요(리더 → resumate-ui).
+
+## 2026-10-31 · S5 (api) · 지원 프로젝트·JD 동기 추출
+- ① **동기 추출의 대기 재시도 `[가정]`**: AI 명세 C-6 동기 모드는 재시도 대기를 정하지 않았다. 동기 요청 안에서는 `next_run_at` 예약을 못 하므로, C-11.3 정책이 대기를 요구하면 5초 이하일 때만 요청 안에서 기다린 뒤 다시 부르고, 더 길면 최종 실패로 끝낸다(`retry_after` = C-11.3 최종 값, rate_limited 최소 1분·provider_unavailable +1분). 즉시 재시도(timeout 1회)는 그대로. 전체 30초 상한.
+- ② **실패 응답 모양 `[구현 결정]`**: 동기 추출 라우트는 C-11 실패(연결 게이트 포함)를 HTTP 200 `{ data: { status: 'failed', jobId, error, jd } }`로 돌려준다(`error` = SSE `error` 이벤트와 같은 필드). 이미 추출됨·진행 중은 409 JSON 오류(`already_extracted`, `extraction_in_progress`). 화면은 C-20을 `error.category`/`failureCause`로 고른다.
+- ③ **클라이언트 끊김 `[구현 결정]`**: 추출 중 브라우저가 요청을 끊어도 호출은 끝까지 진행해 결과를 저장한다(사용자 키 토큰은 이미 쓰였고 결과가 다음 화면에서 쓰임). 중단은 `cancel_requested_at`(프로젝트 삭제 등)과 30초 상한만.
+- ④ **삭제 중 실행 `[구현 결정]`**: 프로젝트 삭제로 작업 행이 사라지면 heartbeat·반영·종료 쓰기가 0행이 되고, 이를 `canceled`로 다룬다. 그 뒤에 남기는 사용 기록은 FK 위반(23503) 시 `application_project_id = null`로 다시 넣는다(DM 4.1 "사용 기록 유지"와 같은 결과).
+- ⑤ **범용 재시도 제외**: `POST /api/ai-jobs/{id}/retry`는 `jd_extraction` 작업을 409 `ai_job_not_retryable`로 거부한다. 추출 재시도는 같은 추출 라우트를 다시 부르는 것(새 작업)이다.
+
+## 2026-10-31 · S5 (db) · 지원 프로젝트·JD 스키마 세부
+- ① **AI 쓰기 경로 (DM §5·계획 대비 더 좁힘) `[구현 결정]`**: 계획은 `app_ai_writer`에 `application_projects.name/name_source/last_activity_at`, `job_descriptions.extraction_status` 직접 update를 준다. S4와 같이 직접 권한은 주지 않고, `begin/apply/fail_jd_extraction`(security definer + 소유 검사)만 쓴다. `app_ai_writer`는 `application_projects`를 컬럼 단위로 읽고 `memo`는 읽지 못한다(메모는 AI 입력이 아님 `[가정]`).
+- ② **추출 실패 시 이름 `[가정 1 해석]`**: "추출 실패 때도 같은 이름"을 DB가 채운다. `fail_jd_extraction`이 null 이름을 키 없는 생성과 같은 규칙(회사명·포지션명 둘 다 있으면 "회사명 – 포지션명"(`user`), 아니면 "새 기업 JD (YYYY-MM-DD)"(`default`, 프로젝트 생성일 KST))으로 채운다. 기본 이름은 이후 추출 성공 때 AI 이름으로 바뀐다.
+- ③ **길이 상한 `[가정]`**: 기획에 없는 `company_name`·`position_title` ≤ 200자, `jd_requirements.content` ≤ 500자, 요건 키워드 1~100자, 요건 ≤ 200개, `detected_language` 1~16자, 해시 ≤ 128자. 합성 이름은 앞 100자.
+- ④ **추출 결과 `ai_run_allowed`**: `create_application_project` 반환에 `ai_run_allowed`(= `check_ai_run_allowed`와 같은 기준: 활성 공급자, 키 `invalid` 아님, 실행 동의)를 더했다. `needs_check` 키도 허용된다(S3b와 같음). 서버 액션 `shouldExtract`가 이 값을 쓰면 DB 이름 규칙과 어긋나지 않는다.
+- ⑤ **같은 단계 이동 + 결과**: `move_application_stage(closed → closed, outcome)`은 DM 1단계대로 아무것도 하지 않는다(결과는 `set_application_outcome`). `interview_prompt`는 실제로 이동했을 때만 준다.
+- ⑥ **`extraction_in_progress`**: `ai_jobs_in_flight_target_key`가 같은 JD의 살아 있는 작업을 1개로 묶으므로, 실제로는 이전 작업이 끝난 뒤에만 새 작업이 생긴다. 이 오류는 방어용이다.
+- ⑦ **S6로 넘김**: `evidence_links` 삽입 가드의 `jd_requirement`/`jd_sentence` 출처 검사와, 요건 삭제 시 근거 인용문 삭제 트리거는 근거를 처음 쓰는 S6에서 넣는다(지금은 요건이 재추출로만 지워지고, 재추출은 실패 뒤에만 일어나 지울 요건이 없다).
+
+## 2026-10-31 · S5 (ai) · AI-01 JD 요건 추출·R-31 게이트 요건 (ai-pipeline-engineer)
+- ① **prompt_version 표기 `[구현 결정]`**: S5 계획은 `AI-01@1`이지만 C-4 예시(`ai-02.match.v1`)와 S4 규칙(`ai-12.reply.v1+common.v1`)에 맞춰 `ai-01.extract.v1+common.v1`로 했다. 공통 블록 버전이 접미사로 붙어 공통 문구가 바뀌면 모든 기능의 버전이 함께 바뀐다.
+- ② **`requirements_hash`에 `importance` 포함 `[구현 결정]`**: 계획은 `category·content·source_sids`. 중요도는 이후 기능 프롬프트에 "중요"로 렌더링되어 출력에 영향을 주므로 넣었다. 행 id는 넣지 않는다(추출 시점에 없음). 규칙은 `computeRequirementsHash` 한 곳이고 `buildJdContext`도 같은 값을 쓴다(이전에는 행 id가 섞여 추출 시 값과 달라질 수 있었음).
+- ③ **AI-01 출력 길이 상한 `[가정]`**: 요건 text ≤ 300자, keywords ≤ 10개(각 ≤ 60자), 요건 ≤ 100개, tech_keywords ≤ 60개, other_sids ≤ 1,000개, warnings ≤ 5개(각 ≤ 200자), 회사명·포지션명 ≤ 200자. 넘으면 V-6 불일치 → 1회 재시도 → `schema_invalid`. DB 상한(content ≤ 500, 요건 ≤ 200)보다 엄격하다.
+- ④ **문장 0개 → `not_a_jd` `[가정 S5-4 확장]`**: 분할기는 유니코드 문자·숫자가 있는 구간만 문장으로 본다(QA-S5-01 수정 후 키릴·아랍·태국 문자 포함). 기호만 있는 원문은 문장 0개로 저장되고, AI-01은 모델을 호출하지 않고 `not_a_jd`로 끝낸다(사용 기록 없음). 요건 0개 + `is_likely_jd = false`도 `not_a_jd`(재시도 없음), 요건 0개 + `is_likely_jd = true`는 1회 재시도 후 `schema_invalid`.
+- ⑤ **`seniority` 수치 가드 없음**: 카드에 규칙이 없어 `min_years`/`max_years`가 인용 문장에 숫자로 있는지는 검사하지 않는다(sid 실재·`min ≤ max`만). 영문 "five years" 같은 표기 때문에 단순 숫자 대조는 보류. 필요하면 기획에서 규칙을 정해 주면 추가한다.
+- ⑥ **AI-12 프롬프트 버전 `[구현 결정]`**: 응답 `ai-12.reply.v1` → `v2`(R-31 `<gate_requirements>` 블록·주제 전용 지시). QA-S5-04로 공통 규칙(SHARED_RULES)의 데이터 블록 목록에 `<gate_requirements>`를 넣어 정리 문구도 바뀌었으므로 정리 `ai-12.extract.v1` → `v2`도 올렸다(정리 호출은 요건 블록을 여전히 받지 않음). 둘 다 아직 출시 전이라 같은 슬라이스 안에서 v2로 묶었다.
+- ⑦ **R-31 "근거가 약해 보이는 요건" `[가정 S5-7]`**: 요건 키워드가 스킬 이름과 정확히 같지 않고 프로젝트·상세 텍스트에도 포함되지 않으면(NFKC·소문자·공백/구두점 제거 후 비교, 2글자 미만 키워드는 스킬 정확 일치만) 약함. 키워드 0개 요건도 약함.
+- ⑧ **QA 1차 (2026-10-31)**: 문장 0개 JD도 저장한다(`sentences = []` 허용, QA-S5-01). `jd_extraction` 작업이 성공하지 못하고 끝나면(sweep의 stalled 포함) DB 트리거가 그 작업으로 `running` 중인 JD를 `failed`로 바꾸고 대체 이름을 넣는다(QA-S5-02, C-6 stalled 경로 `[구현 결정]`). AI 회사명·포지션명은 sid가 JD에 있을 때만 쓰고, 없으면 값을 버린다(QA-S5-05).

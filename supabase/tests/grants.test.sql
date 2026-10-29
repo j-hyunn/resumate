@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(27);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -37,6 +37,8 @@ select is_empty(
 -- S3: + SELECT on ai_jobs, evidence_links (writes are column-level / RPC).
 -- S3a: usage_events / usage_limits dropped (D-34); + SELECT on ai_usage_records (own rows), ai_price_tables.
 -- S4: + SELECT on writing_chats, writing_chat_messages (writes only through the definer message / patch RPCs).
+-- S5: + SELECT on job_descriptions, jd_requirements (application_projects is column-level without memo;
+--     JD extraction writes only through begin / apply / fail_jd_extraction).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -49,8 +51,9 @@ select set_eq(
   array['experiences:SELECT', 'educations:SELECT', 'projects:SELECT', 'project_details:SELECT',
         'achievements:SELECT', 'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
-        'writing_chats:SELECT', 'writing_chat_messages:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat tables only');
+        'writing_chats:SELECT', 'writing_chat_messages:SELECT',
+        'job_descriptions:SELECT', 'jd_requirements:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD tables only');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -117,8 +120,69 @@ select set_eq(
        and has_function_privilege('app_ai_writer', p.oid, 'execute')$$,
   array['get_data_readiness', 'complete_ai_job', 'mark_provider_key_invalid', 'record_provider_key_success',
         'check_ai_run_allowed',
-        'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs');
+        'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
+        'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction RPCs');
+
+-- S5 (DM §5, §7): application / JD RPC execute matrix. Stage and outcome RPCs are user-session only; JD
+-- extraction RPCs are app_ai_writer only.
+select set_eq(
+  $$select p.proname::text || ':' || r.rolname
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public'
+       and p.proname in ('create_application_project', 'move_application_stage', 'set_application_outcome',
+                         'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction')
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['create_application_project:authenticated', 'move_application_stage:authenticated',
+        'set_application_outcome:authenticated', 'begin_jd_extraction:app_ai_writer',
+        'apply_jd_extraction:app_ai_writer', 'fail_jd_extraction:app_ai_writer'],
+  'S5 application / JD RPC execute matrix');
+
+-- S5 (DM §5): user-session write privileges on the application tables. application_projects: DELETE +
+-- UPDATE (name, deadline, memo) only; stage events / JD / requirements: none (RPC + cascade only).
+select set_eq(
+  $$select c.relname::text || ':' || p.privilege_type
+      from pg_class c
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where c.oid in ('public.application_projects'::regclass, 'public.application_stage_events'::regclass,
+                     'public.job_descriptions'::regclass, 'public.jd_requirements'::regclass)
+       and has_table_privilege('authenticated', c.oid, p.privilege_type)$$,
+  array['application_projects:DELETE'],
+  'authenticated: table-level writes on application tables = application_projects DELETE only');
+select set_eq(
+  $$select c.relname::text || '.' || a.attname || ':' || p.privilege_type
+      from pg_class c
+      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+      cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
+     where c.oid in ('public.application_projects'::regclass, 'public.application_stage_events'::regclass,
+                     'public.job_descriptions'::regclass, 'public.jd_requirements'::regclass)
+       and has_column_privilege('authenticated', c.oid, a.attnum, p.privilege_type)$$,
+  array['application_projects.name:UPDATE', 'application_projects.deadline:UPDATE', 'application_projects.memo:UPDATE'],
+  'authenticated: column writes on application tables = name / deadline / memo UPDATE');
+
+-- S5 (DM §5 운영자): no API / app role can write stage columns or stage events directly.
+select is_empty(
+  $$select r.rolname, a.attname
+      from pg_roles r
+      cross join pg_attribute a
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'service_role', 'authenticator')
+       and a.attrelid = 'public.application_projects'::regclass
+       and a.attname in ('stage', 'stage_outcome', 'stage_changed_at')
+       and has_column_privilege(r.oid, a.attrelid, a.attnum, 'UPDATE')
+    union all
+    select r.rolname, p.privilege_type
+      from pg_roles r
+      cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'service_role', 'authenticator')
+       and (has_table_privilege(r.oid, 'public.application_stage_events'::regclass, p.privilege_type)
+            or has_any_column_privilege(r.oid, 'public.application_stage_events'::regclass, p.privilege_type))$$,
+  'nobody can write application_projects.stage* or application_stage_events directly');
+
+-- S5: app_ai_writer reads the project header but not the user's memo.
+select ok(has_column_privilege('app_ai_writer', 'public.application_projects', 'name', 'SELECT')
+          and not has_column_privilege('app_ai_writer', 'public.application_projects', 'memo', 'SELECT'),
+          'app_ai_writer: application_projects name readable, memo not');
 
 -- S4: writing chat RPCs by role (DM §5, §7). Career-writing RPCs (save / hand-off) are user-session only (DM-13).
 select set_eq(

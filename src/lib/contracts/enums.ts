@@ -250,3 +250,44 @@ export type DraftAchievementField = (typeof DRAFT_ACHIEVEMENT_FIELDS)[number];
 /** AI-12 slot order (진행 단계 표시, `requested_slot`; ids agreed with ai-pipeline `SlotId`). */
 export const WRITING_CHAT_SLOTS = ["basic_info", "situation", "task", "action", "result", "learnings", "next_episode"] as const;
 export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
+
+// --- S5: application projects & JD (DM §2.6, A.5–A.7, AI-01) ---
+
+/** application_projects.stage CHECK (F-ST-01, board column order). */
+export const APPLICATION_STAGES = ["before_apply", "document", "assignment", "job_interview", "culture_fit_interview", "closed"] as const;
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
+/** application_projects.stage_outcome CHECK (null = 결과 미기록; only with stage = closed). */
+export const STAGE_OUTCOMES = ["passed", "failed"] as const;
+export type StageOutcome = (typeof STAGE_OUTCOMES)[number];
+
+/** Interview columns that open the C-14 popup (F-ST-04). */
+export const INTERVIEW_STAGES = ["job_interview", "culture_fit_interview"] as const satisfies readonly ApplicationStage[];
+
+/** application_stage_events.event_type CHECK (F-ST-05). */
+export const STAGE_EVENT_TYPES = ["created", "stage_changed", "outcome_changed"] as const;
+export type StageEventType = (typeof STAGE_EVENT_TYPES)[number];
+
+/** application_projects.name_source CHECK (null = 추출 대기). */
+export const NAME_SOURCES = ["user", "ai", "default"] as const;
+export type NameSource = (typeof NAME_SOURCES)[number];
+
+/** job_descriptions.company_name_source / position_title_source CHECK. */
+export const JD_FIELD_SOURCES = ["user", "ai"] as const;
+export type JdFieldSource = (typeof JD_FIELD_SOURCES)[number];
+
+/** job_descriptions.extraction_status CHECK (pending = 추출 전, 키 없음 포함; D-30). */
+export const JD_EXTRACTION_STATUSES = ["pending", "running", "succeeded", "failed"] as const;
+export type JdExtractionStatus = (typeof JD_EXTRACTION_STATUSES)[number];
+
+/** jd_requirements.category CHECK (주요 업무 / 자격요건 / 우대사항). */
+export const REQUIREMENT_CATEGORIES = ["responsibility", "required", "preferred"] as const;
+export type RequirementCategory = (typeof REQUIREMENT_CATEGORIES)[number];
+
+/** jd_requirements.importance CHECK. */
+export const REQUIREMENT_IMPORTANCES = ["high", "normal"] as const;
+export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
+
+/** jd_requirements.origin CHECK. */
+export const REQUIREMENT_ORIGINS = ["ai", "user"] as const;
+export type RequirementOrigin = (typeof REQUIREMENT_ORIGINS)[number];

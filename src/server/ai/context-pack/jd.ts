@@ -22,7 +22,8 @@ const BULLET = /^(?:[-*•·▪■□○●◦✓✔☑➢▶►※>]+|\(?\d{1,2
 /**
  * Splits by line breaks, then within a line after `.`, `!`, `?`, `。` followed
  * by whitespace (so "3.5년" and "Node.js" stay whole). Empty and
- * marker-only segments are skipped. IDs are S1, S2, … in text order.
+ * marker-/symbol-only segments are skipped, so a symbol-only raw text yields []
+ * (stored as is; AI-01 then ends with not_a_jd without a call). IDs are S1, S2, … in text order.
  */
 export function splitJdSentences(raw: string): JdSentence[] {
   const sentences: JdSentence[] = [];
@@ -36,7 +37,8 @@ export function splitJdSentences(raw: string): JdSentence[] {
     while (start < end && /\s/.test(raw[start])) start++;
     if (end <= start) return;
     const text = raw.slice(start, end);
-    if (!/[0-9A-Za-z가-힣ぁ-んァ-ン一-龥]/.test(text)) return;
+    // QA-S5-01: any Unicode letter or number is content (Cyrillic, Arabic, Thai …); symbol-only segments are skipped.
+    if (!/[\p{L}\p{N}]/u.test(text)) return;
     sentences.push({ sid: `S${sentences.length + 1}`, text, start, end });
   };
 
@@ -75,6 +77,30 @@ export type JdRequirementInput = {
   sort_order: number;
   updated_at: string | null;
 };
+
+/**
+ * `job_descriptions.requirements_hash` (C-6) — the single rule, used both when
+ * AI-01 results are applied (apply_jd_extraction p_result) and when later
+ * features build their JD context, so the two always agree. Row ids are not
+ * part of it (they don't exist yet at extraction time); importance is, since
+ * it is rendered into prompts ("중요"). Order = sort_order.
+ */
+export function computeRequirementsHash(
+  requirements: readonly Pick<JdRequirementInput, "category" | "content" | "importance" | "source_sids" | "sort_order">[],
+): string {
+  const ordered = requirements.map((r, i) => ({ r, i })).sort((a, b) => a.r.sort_order - b.r.sort_order || a.i - b.i);
+  return hashCanonical({
+    v: REQUIREMENTS_HASH_VERSION,
+    requirements: ordered.map(({ r }) => ({
+      category: r.category,
+      content: r.content,
+      importance: r.importance,
+      source_sids: [...r.source_sids].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)) || (a < b ? -1 : a > b ? 1 : 0)),
+    })),
+  });
+}
+
+export const REQUIREMENTS_HASH_VERSION = 1;
 
 export type JdContext = {
   /** `<jd>…</jd>` user block. Never log it. */
@@ -164,9 +190,7 @@ export function buildJdContext(input: {
   return {
     text: out.join("\n"),
     aliases,
-    requirementsHash: hashCanonical(
-      requirements.map((r) => ({ id: r.id, category: r.category, content: r.content, importance: r.importance, source_sids: [...r.source_sids] })),
-    ),
+    requirementsHash: computeRequirementsHash(requirements),
     numberTexts,
   };
 }

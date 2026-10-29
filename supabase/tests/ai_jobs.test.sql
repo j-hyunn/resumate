@@ -295,7 +295,7 @@ insert into public.ai_jobs (id, user_id, job_type, status, heartbeat_at, created
   -- queued, due now (B): claimed
   ('b1000000-0000-0000-0000-000000000014', 'b0000000-0000-0000-0000-000000000002', 'cover_letter', 'queued', now() - interval '10 minutes', now() - interval '20 minutes', now() - interval '1 second', 'openai', 'default', 'paid'),
   -- queued, not due yet: not swept, not claimed
-  ('a1000000-0000-0000-0000-000000000015', 'a0000000-0000-0000-0000-000000000001', 'jd_extraction', 'queued', now() - interval '10 minutes', now() - interval '20 minutes', now() + interval '1 minute', 'openai', 'light', 'paid');
+  ('a1000000-0000-0000-0000-000000000015', 'a0000000-0000-0000-0000-000000000001', 'interview_questions', 'queued', now() - interval '10 minutes', now() - interval '20 minutes', now() + interval '1 minute', 'openai', 'light', 'paid');
 
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';

@@ -955,7 +955,7 @@ describe("QA-S3b-01 / -05 run gates", () => {
     expect(h.job(jobId)).toMatchObject({ status: "succeeded", provider: "anthropic" });
   });
 
-  it.each(["key_verification", "writing_chat_turn"] as const)("%s jobs are not requeued by the generic retry (QA-S3b-05, S4 다시 보내기)", async (jobType) => {
+  it.each(["key_verification", "writing_chat_turn", "jd_extraction"] as const)("%s jobs are not requeued by the generic retry (QA-S3b-05, S4 다시 보내기, S5 sync route)", async (jobType) => {
     const h = setup(def([llmStep("match")]), { responses: [] });
     const id = "00000000-0000-4000-8000-0000000000aa";
     await h.store.insert({

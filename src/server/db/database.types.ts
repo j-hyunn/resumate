@@ -95,7 +95,13 @@ isOneToOne: false
                     "application_project_id"?: string | null,"cancel_requested_at"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_category"?: never,"error_code"?: string | null,"failure_cause"?: never,"finished_at"?: string | null,"heartbeat_at"?: string | null,"id"?: string,"input_hash"?: string | null,"job_type"?: string,"model"?: string | null,"model_tier"?: string,"next_run_at"?: string | null,"output"?: Json | null,"params"?: NonNullable<Json>,"progress"?: Json | null,"prompt_version"?: string | null,"provider"?: string,"quota_resets_at"?: string | null,"retry_after"?: string | null,"retry_count"?: number,"retry_wait_total_ms"?: number,"run_generation"?: number,"started_at"?: string | null,"status"?: string,"step_outputs"?: NonNullable<Json>,"target_id"?: string | null,"target_type"?: string | null,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "ai_jobs_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
                   ]
                 },"ai_price_tables": {
                   Row: {
@@ -151,7 +157,53 @@ isOneToOne: false
                     "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd"?: number,"feature"?: string,"id"?: string,"input_tokens"?: number,"job_type"?: string,"model"?: string,"model_tier"?: string,"occurred_at"?: string,"outcome"?: string,"output_tokens"?: number,"period_month"?: string,"price_table_version"?: string,"provider"?: string,"reasoning_tokens"?: number | null,"usage_source"?: string,"user_id"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "ai_usage_records_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
+                },"application_projects": {
+                  Row: {
+                    "created_at": string,"deadline": string | null,"duplicated_from_id": string | null,"id": string,"last_activity_at": string,"memo": string | null,"name": string | null,"name_source": string | null,"stage": string,"stage_changed_at": string,"stage_outcome": string | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"deadline"?: string | null,"duplicated_from_id"?: string | null,"id"?: string,"last_activity_at"?: string,"memo"?: string | null,"name"?: string | null,"name_source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"stage_outcome"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"deadline"?: string | null,"duplicated_from_id"?: string | null,"id"?: string,"last_activity_at"?: string,"memo"?: string | null,"name"?: string | null,"name_source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"stage_outcome"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "application_projects_duplicated_from_fkey"
+      columns: ["duplicated_from_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
+                },"application_stage_events": {
+                  Row: {
+                    "application_project_id": string,"created_at": string,"event_type": string,"from_outcome": string | null,"from_stage": string | null,"id": string,"to_outcome": string | null,"to_stage": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "application_project_id": string,"created_at"?: string,"event_type": string,"from_outcome"?: string | null,"from_stage"?: string | null,"id"?: string,"to_outcome"?: string | null,"to_stage": string,"user_id"?: string
+                  }
+                  Update: {
+                    "application_project_id"?: string,"created_at"?: string,"event_type"?: string,"from_outcome"?: string | null,"from_stage"?: string | null,"id"?: string,"to_outcome"?: string | null,"to_stage"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "application_stage_events_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
                   ]
                 },"consents": {
                   Row: {
@@ -193,7 +245,13 @@ isOneToOne: false
                     "application_project_id"?: string,"created_at"?: string,"id"?: string,"item_key"?: string,"owner_id"?: string,"owner_type"?: string,"quote"?: string | null,"quote_adjusted"?: boolean,"sort_order"?: number,"source_deleted_at"?: string | null,"source_field"?: string | null,"source_id"?: string,"source_label"?: string | null,"source_locator"?: Json | null,"source_snapshot_at"?: string | null,"source_type"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "evidence_links_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
                   ]
                 },"experiences": {
                   Row: {
@@ -208,6 +266,52 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"jd_requirements": {
+                  Row: {
+                    "category": string,"content": string,"created_at": string,"id": string,"importance": string,"is_user_edited": boolean,"job_description_id": string,"keywords": (string)[],"origin": string,"sort_order": number,"source_sids": (string)[],"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category": string,"content": string,"created_at"?: string,"id"?: string,"importance"?: string,"is_user_edited"?: boolean,"job_description_id": string,"keywords"?: (string)[],"origin"?: string,"sort_order"?: number,"source_sids": (string)[],"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "category"?: string,"content"?: string,"created_at"?: string,"id"?: string,"importance"?: string,"is_user_edited"?: boolean,"job_description_id"?: string,"keywords"?: (string)[],"origin"?: string,"sort_order"?: number,"source_sids"?: (string)[],"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "jd_requirements_job_description_fkey"
+      columns: ["job_description_id","user_id"]
+isOneToOne: false
+      referencedRelation: "job_descriptions"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
+                },"job_descriptions": {
+                  Row: {
+                    "application_project_id": string,"company_name": string | null,"company_name_source": string | null,"created_at": string,"detected_language": string | null,"extraction": Json | null,"extraction_job_id": string | null,"extraction_model": string | null,"extraction_provider": string | null,"extraction_status": string,"id": string,"position_title": string | null,"position_title_source": string | null,"raw_text": string,"raw_text_hash": string,"requirements_hash": string | null,"sentences": NonNullable<Json>,"tech_keywords": Json | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "application_project_id": string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text": string,"raw_text_hash": string,"requirements_hash"?: string | null,"sentences": NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "application_project_id"?: string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text"?: string,"raw_text_hash"?: string,"requirements_hash"?: string | null,"sentences"?: NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "job_descriptions_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "job_descriptions_extraction_job_fkey"
+      columns: ["extraction_job_id","user_id"]
+isOneToOne: false
+      referencedRelation: "ai_jobs"
+      referencedColumns: ["id","user_id"]
+    }
                   ]
                 },"policy_versions": {
                   Row: {
@@ -418,6 +522,9 @@ isOneToOne: false
               "message_count": number,"message_id": string,"sequence": number
             }[]
                            },
+"apply_jd_extraction":
+{ Args: { "p_ai_job_id": string,"p_job_description_id": string,"p_model": string,"p_provider": string,"p_result": Json,"p_run_generation": number }; Returns: Json
+                           },
 "apply_structured_draft_patch":
 { Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
                            },
@@ -425,6 +532,9 @@ isOneToOne: false
 { Args: { "p_ai_job_id": string,"p_connection_tier": string,"p_model": string,"p_model_tier": string,"p_provider": string,"p_writing_chat_id": string }; Returns: {
               "is_final": boolean,"message_count": number,"message_id": string,"reused": boolean,"sequence": number
             }[]
+                           },
+"begin_jd_extraction":
+{ Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: undefined
                            },
 "check_ai_run_allowed":
 { Args: { "p_ai_job_id": string }; Returns: string
@@ -437,11 +547,17 @@ isOneToOne: false
 "complete_ai_job":
 { Args: { "p_job_id": string,"p_progress"?: Json,"p_run_generation": number }; Returns: undefined
                            },
+"create_application_project":
+{ Args: { "p_company_name"?: string,"p_deadline"?: string,"p_id": string,"p_name"?: string,"p_position_title"?: string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json }; Returns: Json
+                           },
 "delete_career_item":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string,"p_result_mode"?: string }; Returns: Json
                            },
 "delete_provider_key":
 { Args: { "p_provider": string }; Returns: boolean
+                           },
+"fail_jd_extraction":
+{ Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: boolean
                            },
 "finish_assistant_message":
 { Args: { "p_content": string,"p_message_id": string,"p_status": string }; Returns: undefined
@@ -474,6 +590,9 @@ isOneToOne: false
 "mark_writing_chat_extracted":
 { Args: { "p_sequence": number,"p_writing_chat_id": string }; Returns: number
                            },
+"move_application_stage":
+{ Args: { "p_application_project_id": string,"p_outcome"?: string,"p_to_stage": string }; Returns: Json
+                           },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {
               "agreed_version": string,"consent_type": string,"current_version": string,"needs_consent": boolean,"required": boolean
@@ -499,6 +618,9 @@ isOneToOne: false
                            },
 "set_active_ai_provider":
 { Args: { "p_provider": string }; Returns: undefined
+                           },
+"set_application_outcome":
+{ Args: { "p_application_project_id": string,"p_outcome": string }; Returns: Json
                            },
 "set_writing_chat_affiliation":
 { Args: { "p_dismiss_only"?: boolean,"p_education_id"?: string,"p_experience_id"?: string,"p_writing_chat_id": string }; Returns: undefined

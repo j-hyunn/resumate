@@ -22,7 +22,7 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 insert into public.ai_jobs (id, job_type, status, run_generation, next_run_at, progress, provider, model_tier, connection_tier) values
   ('a1000000-0000-0000-0000-000000000001', 'cover_letter', 'running', 1, now(), '{"stage":"a","done":0,"total":1}', 'openai', 'default', 'paid'),
   ('a1000000-0000-0000-0000-000000000002', 'cover_letter', 'queued', 0, null, null, 'openai', 'default', 'paid'),
-  ('a1000000-0000-0000-0000-000000000003', 'jd_extraction', 'running', 2, null, '{"stage":"x","done":1,"total":2}', 'gemini', 'light', 'free');
+  ('a1000000-0000-0000-0000-000000000003', 'interview_questions', 'running', 2, null, '{"stage":"x","done":1,"total":2}', 'gemini', 'light', 'free');
 insert into public.ai_jobs (id, job_type, status, error_code, provider, model_tier, connection_tier) values
   ('a1000000-0000-0000-0000-000000000004', 'insight', 'failed', 'timeout', 'openai', 'default', 'paid');
 

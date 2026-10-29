@@ -12,6 +12,7 @@ import {
   type StructuredDraft,
 } from "../schemas/structured-draft";
 import { detectSensitive, isDelegationRequest, type V9Context, type V9Message } from "../validation/v9";
+import type { GateRequirement } from "./gate-requirements";
 import {
   computeFocusSlots,
   type ExistingDetailState,
@@ -34,7 +35,8 @@ import {
  * Only this conversation, its draft, the augment target, the candidates'
  * names and periods, and the desired job title go to the model — no other
  * project content, no JD (AI-12 "게이트 진입 외에는 … 넣지 않는다"; the
- * gate's requirement list is an S5 extension point). No name or contact (C-7).
+ * gate's requirement list (R-31) goes to the reply call only, see
+ * prompts/AI-12 replyUserBlocks). No name or contact (C-7).
  */
 
 export type WritingChatMode = "new_project" | "augment_project";
@@ -97,6 +99,12 @@ export type WritingChatTurnInput = {
   } | null;
   desiredJobTitle: string | null;
   gate: { feature: GateFeature; missing: readonly ReadinessMissing[] } | null;
+  /**
+   * R-31: selectGateRequirements() for return_target.application_project_id.
+   * Reply call only, and only while `gate` is set; empty / omitted → no block.
+   * Never a source: extract and V-9 never see it.
+   */
+  gateRequirements?: readonly GateRequirement[];
   requestedSlot: RequestedSlot | null;
   /**
    * begin_assistant_message `is_final`: this reply is the last message the

@@ -21,6 +21,7 @@ import {
   type WritingChatSaveResult,
 } from "@/lib/contracts/writing-chat";
 import { mapDbError } from "@/server/db/errors";
+import { assertApplicationProjectOwned } from "@/server/services/application/db";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { loadActiveConsents, loadDisclosures, mayRunWithConsent } from "@/server/services/ai-connection/consent";
 import { loadActiveProvider, loadKeyMetas } from "@/server/services/ai-connection/keys";
@@ -46,6 +47,8 @@ function internal(cause: unknown): AppError {
 /** start_writing_chat: chat row + the fixed greeting (no AI call, counts as message 1). */
 export async function startWritingChat(supabase: UserSupabaseClient, input: z.output<typeof StartWritingChatInput>): Promise<{ writingChatId: string }> {
   const rt = input.returnTarget;
+  // S5 (R-31): the gate's application project must be the user's (RLS read; `not_found` otherwise).
+  if (rt) await assertApplicationProjectOwned(supabase, rt.applicationProjectId);
   const { data, error } = await supabase.rpc("start_writing_chat", {
     p_mode: input.mode,
     ...(input.mode === "augment_project" ? { p_project_id: input.projectId } : {}),

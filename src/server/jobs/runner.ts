@@ -235,7 +235,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     if (job.status !== "failed" || !job.errorCode || errorCategoryOf(job.errorCode) === "input") throw notRetryable();
     // QA-S3b-05: a key check is re-run from the connection screen, never requeued (no registry step).
     // S4: a writing chat turn is retried by "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1), never requeued.
-    if (job.jobType === "key_verification" || job.jobType === "writing_chat_turn") throw notRetryable();
+    // S5: a sync JD extraction is retried by calling POST /api/application-projects/{id}/jd-extraction again (new job).
+    if (job.jobType === "key_verification" || job.jobType === "writing_chat_turn" || job.jobType === "jd_extraction") throw notRetryable();
     // QA-S3b-01: same gate as a new run, on the job's FIXED provider (F-AI-03 (2)): key present and
     // not invalid, consent current. Never send career data after consent was withdrawn.
     await deps.providerContext.assertJobRunnable(ref.userId, { provider: job.provider, connectionTier: job.connectionTier });

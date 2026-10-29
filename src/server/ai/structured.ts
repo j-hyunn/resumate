@@ -25,10 +25,20 @@ export type StructuredResult<T> = {
   attempts: number;
 };
 
+export type StructuredOptions<T> = {
+  /**
+   * Feature-level acceptance after zod (e.g. AI-01 "0 requirements left after
+   * validation"): false spends the same single V-6 retry; the second miss
+   * throws schema_invalid. It may throw its own AiError to stop at once.
+   */
+  accept?: (value: T) => boolean;
+};
+
 export async function generateStructured<S extends z.ZodType>(
   llm: Llm,
   request: Omit<LlmRequest, "outputSchema">,
   schema: S,
+  options: StructuredOptions<z.infer<S>> = {},
 ): Promise<StructuredResult<z.infer<S>>> {
   const outputSchema = toCanonicalJsonSchema(schema);
   let usage: AiCallResult["usage"] | null = null;
@@ -46,7 +56,7 @@ export async function generateStructured<S extends z.ZodType>(
     }
     usage = usage ? addUsage(usage, meta.usage) : meta.usage;
     const parsed = parseStructured(meta.text, schema);
-    if (parsed.ok) return { value: parsed.value, meta: { ...meta, usage }, attempts: attempt };
+    if (parsed.ok && (options.accept?.(parsed.value) ?? true)) return { value: parsed.value, meta: { ...meta, usage }, attempts: attempt };
   }
   throw new AiError("schema_invalid", { retryable: false });
 }

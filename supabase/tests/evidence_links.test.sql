@@ -37,6 +37,10 @@ insert into public.achievements (id, project_detail_id, metric_name, value_after
   values ('a0000000-5555-0000-0000-000000000001', 'a0000000-4444-0000-0000-000000000001', 'p95', 120, '지연 감소');
 insert into public.skills (id, name) values ('a0000000-6666-0000-0000-000000000001', 'Postgres');
 reset role;
+-- S5: evidence_links.application_project_id is a composite FK; A's application project for the links below.
+insert into public.application_projects (id, user_id, name, name_source)
+  values ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'P', 'user'),
+         ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000002', 'P', 'user');
 
 -- app_ai_writer inserts links for A.
 set local role app_ai_writer;
@@ -68,22 +72,22 @@ select is((select count(*)::int from public.evidence_links where user_id = 'a000
 
 -- CHECKs
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'experience', 'a0000000-1111-0000-0000-000000000001', 'company_name')$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'experience', 'a0000000-1111-0000-0000-000000000001', 'company_name')$$,
                  '23514', null, 'source_field must be allowed for source_type (V-2)');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'project_detail', 'a0000000-4444-0000-0000-000000000001', null)$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_detail', 'a0000000-4444-0000-0000-000000000001', null)$$,
                  '23514', null, 'project_detail needs a field');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'jd_sentence', gen_random_uuid(), 'action')$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'jd_sentence', gen_random_uuid(), 'action')$$,
                  '23514', null, 'jd_sentence has no field');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'writing_chat_message', gen_random_uuid())$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'writing_chat_message', gen_random_uuid())$$,
                  '23514', null, 'writing_chat_message is not an evidence source (DM-15)');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values (gen_random_uuid(), 'writing_chat', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
                  '23514', null, 'owner_type CHECK');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field, source_deleted_at)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name', now())$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name', now())$$,
                  '42501', null, 'app_ai_writer cannot set source_deleted_at');
 select throws_ok($$insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('b0000000-0000-0000-0000-000000000002', gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
@@ -93,7 +97,7 @@ select throws_ok($$delete from public.evidence_links$$, '42501', null, 'app_ai_w
 
 -- Insert guard: missing source -> stored as deleted, quote dropped.
 select lives_ok($$insert into public.evidence_links (id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field, quote)
-                  values ('e0000000-0000-0000-0000-000000000010', gen_random_uuid(), 'insight', gen_random_uuid(), 'k',
+                  values ('e0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k',
                           'project_detail', gen_random_uuid(), 'action', '사라진 원문')$$,
                 'link to a missing source is accepted');
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000010'$$,
@@ -105,7 +109,7 @@ set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"app_ai_writer"}';
 select is((select count(*)::int from public.evidence_links), 0, 'app_ai_writer B sees no A links');
 select lives_ok($$insert into public.evidence_links (id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field, quote)
-                  values ('e0000000-0000-0000-0000-000000000011', gen_random_uuid(), 'insight', gen_random_uuid(), 'k',
+                  values ('e0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', 'insight', gen_random_uuid(), 'k',
                           'experience', 'a0000000-1111-0000-0000-000000000001', 'summary', '결제 플랫폼')$$,
                 'B link to A source accepted');
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000011'$$,
@@ -117,7 +121,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is((select count(*)::int from public.evidence_links), 10, 'A sees own links');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                   values (gen_random_uuid(), 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
                  '42501', null, 'user cannot insert links');
 select throws_ok($$update public.evidence_links set quote = null$$, '42501', null, 'user cannot update links');
 select throws_ok($$delete from public.evidence_links$$, '42501', null, 'user cannot delete links');

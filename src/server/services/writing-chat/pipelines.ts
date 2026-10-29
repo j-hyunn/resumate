@@ -1,3 +1,4 @@
+import { selectGateRequirements, type GateRequirement, type GateRequirementRow } from "@/server/ai/context-pack/gate-requirements";
 import { buildWritingChatContext, type WritingChatContext, type WritingChatTurnInput } from "@/server/ai/context-pack/writing-chat";
 import { extract, reply } from "@/server/ai/pipelines/AI-12";
 import { isEmptyDraftPatch } from "@/server/ai/schemas/structured-draft";
@@ -5,6 +6,7 @@ import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career/rpc";
 import type { AiLogger } from "@/server/ai/log";
+import type { RequirementCategory, RequirementImportance } from "@/lib/contracts/enums";
 import type { Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
@@ -45,11 +47,13 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
       : undefined;
 
   let gate: WritingChatTurnInput["gate"] = null;
+  let gateRequirements: GateRequirement[] = [];
   if (chat.returnTarget) {
-    const readiness = await getDataReadiness(db);
+    const [readiness, requirements] = await Promise.all([getDataReadiness(db), loadGateRequirements(db, chat.returnTarget.application_project_id)]);
     const key = chat.returnTarget.feature === "insight" ? "insight" : chat.returnTarget.feature === "job_interview" ? "job_interview" : "draft";
     const f = readiness.features[key];
     gate = { feature: chat.returnTarget.feature, missing: f.ready ? [] : f.missing };
+    gateRequirements = requirements;
   }
 
   const p = project.data;
@@ -81,7 +85,43 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
       : null,
     desiredJobTitle: profile.data?.desired_job_title ?? null,
     gate,
+    gateRequirements,
   };
+}
+
+/**
+ * R-31 (S5): the gate's JD requirements for the reply call — high importance
+ * first, then requirements with weak career evidence (ai `selectGateRequirements`).
+ * No JD, no requirements yet, or the project was deleted → [] (no block).
+ * Reads as app_ai_writer (RLS: this user's rows only); never writes.
+ */
+export async function loadGateRequirements(db: AiWriterSupabaseClient, applicationProjectId: string): Promise<GateRequirement[]> {
+  const jd = await db.from("job_descriptions").select("id").eq("application_project_id", applicationProjectId).maybeSingle();
+  if (jd.error) throw mapDbError(jd.error);
+  if (!jd.data) return [];
+  const [reqs, skills, projects, details] = await Promise.all([
+    db.from("jd_requirements").select("id, category, content, keywords, importance, sort_order").eq("job_description_id", jd.data.id).order("sort_order"),
+    db.from("skills").select("name, normalized_name"),
+    db.from("projects").select("name, role, summary").eq("status", "complete"),
+    db.from("project_details").select("title, situation, task, action, result").eq("status", "complete"),
+  ]);
+  for (const r of [reqs, skills, projects, details]) if (r.error) throw mapDbError(r.error);
+  const rows: GateRequirementRow[] = (reqs.data ?? []).map((r) => ({
+    id: r.id,
+    category: r.category as RequirementCategory,
+    content: r.content,
+    keywords: r.keywords ?? [],
+    importance: r.importance as RequirementImportance,
+    sort_order: r.sort_order,
+  }));
+  if (rows.length === 0) return [];
+  const texts: string[] = [];
+  for (const p of projects.data ?? []) texts.push(...[p.name, p.role, p.summary].filter((t): t is string => !!t));
+  for (const d of details.data ?? []) texts.push(...[d.title, d.situation, d.task, d.action, d.result].filter((t): t is string => !!t));
+  return selectGateRequirements(rows, {
+    skillNames: (skills.data ?? []).map((s) => s.normalized_name ?? s.name),
+    texts,
+  });
 }
 
 export function toTurnInput(snap: TurnSnapshot, loaded: Loaded): WritingChatTurnInput {

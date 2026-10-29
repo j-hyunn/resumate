@@ -21,6 +21,10 @@ select lives_ok($$select id, status, progress, error_code, error_category, failu
                 'authenticated: read ai_jobs');
 select lives_ok($$select * from public.ai_usage_records$$, 'authenticated: read ai_usage_records');
 select lives_ok($$select * from public.evidence_links$$, 'authenticated: read evidence_links');
+-- S5: evidence_links / ai_jobs reference application_projects (composite FK); the user creates one.
+select lives_ok($$select public.create_application_project('aaaaaaaa-8888-0000-0000-000000000001', 'JD 원문', 'h',
+                   '[{"sid":"S1","text":"JD 원문","start":0,"end":5}]'::jsonb, null, null, 'P')$$,
+                'authenticated: create application project');
 reset role;
 
 -- app_ai_writer first: the full runner path.
@@ -53,7 +57,7 @@ select lives_ok($$update public.ai_jobs set status = 'running', next_run_at = nu
                    where id = 'aaaaaaaa-7777-0000-0000-000000000001' and run_generation = 2$$,
                 'app_ai_writer: resume');
 select lives_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                  values (gen_random_uuid(), 'insight', gen_random_uuid(), 'strengths.0', 'skill',
+                  values ('aaaaaaaa-8888-0000-0000-000000000001', 'insight', gen_random_uuid(), 'strengths.0', 'skill',
                           'aaaaaaaa-6666-0000-0000-000000000001', 'name')$$,
                 'app_ai_writer: insert evidence link (source guard)');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000001', 2)$$, 'app_ai_writer: complete_ai_job');

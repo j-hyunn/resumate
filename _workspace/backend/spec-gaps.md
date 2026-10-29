@@ -393,3 +393,48 @@
 - ⑭ **(QA 1차) 무료 등급 간격은 요청 안에서 대기 `[가정]`** (C-12, QA-S7-03): 동기·스트리밍 경로는 `next_run_at` 예약을 할 수 없어 요청 안에서 최대 6초 기다린다. 기다린 만큼 생성 예산(58초)이 줄어 AI-03이 무료 등급에서 `timeout`으로 끝날 가능성이 커진다(④와 같은 문제). 보정 호출이 간격 때문에 들어갈 자리가 없으면 보정 없이 저장(`char_adjust_needed`).
 - ⑮ **(QA 1차) 빈 편집 저장 허용 `[구현 결정]`** (QA-S7-06): 블록을 모두 지운 저장도 편집본(빈 화면)으로 남는다. AI 원본으로 돌아가려면 "다시 생성"뿐이다(되돌리기 기능은 명세에 없다).
 - ⑯ **(QA 1차) 외부 중지 = 취소 `[구현 결정]`** (QA-S7-09): 생성 중 커리어 삭제(결과 삭제/초기화)·초안 삭제·프로젝트 삭제로 결과 행이 없어지거나 초기화되면 그 실행은 `canceled`로 끝나고 실패 안내를 보이지 않는다. 이미 쓴 토큰은 사용 기록에 남는다.
+
+## 2026-11-03 · S8 (ai) · 모의 면접 AI 파이프라인 (ai-pipeline-engineer)
+- ① **질문 단위 판정 + 남은 개수 재생성 `[가정]`** (AI-05 처리 방식 "규칙 위반 시 1회 재생성", 계획 `[가정]` 3): 질문은 스트림에서 닫히는 즉시 저장되므로 세트 전체를 다시 만들 수 없다. 그래서 4.1 세트 구성 규칙을 **받을 때마다의 가능성 검사**로 바꿨다(이 질문을 받으면 남은 칸으로 최소 개수를 채울 수 없으면 버림). 버린 질문만큼 1회 재생성하고, 재생성 호출에서는 구성 규칙을 완화해 받는다(경고 `composition_relaxed`/`composition_unmet`). 그래도 질문 수가 모자라면 `schema_invalid`(retryable false)로 끝나고 저장된 질문은 남는다("남은 질문 다시 만들기").
+- ② **질문 속 수치 V-5는 치환 대신 질문 폐기 `[구현 결정]`** (C-3 V-5 "치환"): 질문 문장에 `[수치 확인 필요]`가 들어가면 면접 질문으로 쓸 수 없어, 그 질문을 버리고 재생성 요청에 해당 숫자를 알린다. `intent`·`good_answer_signals`는 치환한다.
+- ③ **중복 규칙의 "주 대상" `[가정]`** (4.1 "같은 프로젝트를 주 대상으로 하는 질문 최대 2개, 같은 상세 내용 1개, 같은 요건 1개"): 주 대상 = 질문 근거 중 첫 경력 근거(상세 내용·성과면 그 상위 프로젝트)와 `target_requirement_refs`(없으면 gap refs)의 첫 번째. 직무 면접에만 적용. 이전 실행에서 저장된 질문은 api가 `evidence_sources`를 넘길 때만 프로젝트·상세 내용 중복을 함께 본다(요건은 항상).
+- ④ **C-7 금지 주제·컬처핏 고유명사·회고 인용 검사는 규칙 기반 `[가정]`**: 금지 주제는 단어 목록(나이·결혼/출산·가족·종교·출신 지역·정치·건강, "장애 대응"·"건강성" 같은 직무어는 제외). 컬처핏 `experience`가 아닌 질문은 경력 팩의 회사·기관·전공·프로젝트명·직급·직책·부서(JD나 희망 직무에 있는 말 제외)와 JD에 없는 숫자를 쓰면 버린다. 회고(learnings) 근거는 질문 문장이 "배웠다고 정리하셨는데"류 표현일 때만 남긴다. 평가 세트로 보정 필요.
+- ⑤ **project_deep_dive의 근거 `[구현 결정]`** (4.1 v3 "사실 전제는 action/result/성과에서만"): 상세 내용 `action`·`result` 또는 성과 근거가 없으면 버린다. `requirement_fit`은 요건 + 사실 경력 근거, `gap_probe`는 gap 요건 1개 이상이 필요하다. 컬처핏 `jd` 앵커는 조직·업무 방식 문장(S 번호) 근거, `general`은 근거를 지운다.
+- ⑥ **AI-06 `consistency_notes` 원소 모양 `[가정]`** (카드에 원소 정의 없음): `{text, answer_quotes, evidence}`. 사실 경력 근거(learnings 제외) 1개 이상이 없으면 버린다. 저장 result에는 `{text, answer_quotes}`만, 근거는 `consistency_notes.<n>`.
+- ⑦ **AI-06 답변 인용도 evidence_links로 `[구현 결정]`** (계획 item_key 목록 확장): 등급·강점의 `answer_quotes`는 result에 문자열로 남기고(화면 표시), 같은 인용을 `interview_answer` 근거 행(`criteria.<key>`, `strengths.<n>`)으로도 저장한다. 등급의 인용이 모두 V-3에서 떨어지고 `missing`도 없으면 서버 문구("답변에서 이 판단의 근거 구간을 확인하지 못했습니다.", `missing_filled: true`)를 넣는다 `[가정]`.
+- ⑧ **AI-06 criteria 규칙은 V-6로 취급 `[구현 결정]`**: 4키 누락·중복, `job_relevance` 밖의 `not_applicable`은 1회 재시도 후 `schema_invalid`. 개선 답변 예시 V-5 재생성은 호출 전체를 1회 다시 한다(평가 결과도 새 출력으로 교체). 함수 예산이 빠듯하면 api가 `numberRegeneration: false`로 끌 수 있고, 그때는 바로 치환한다.
+- ⑨ **AI-06 개선할 점(improvements)은 근거가 없어도 유지 `[구현 결정]`** (C-3 V-4 "피드백 항목"): 답변에 대한 행동 조언이라 경력 근거가 없는 경우(컬처핏 none)가 정상이다. 잘한 점(strengths)은 답변 인용이 없으면 버린다.
+- ⑩ **AI-07 미응답 처리 `[구현 결정]`**: `unanswered_note`는 서버 문구로 덮어쓴다("미응답 N문항(3번 질문)은 답변이 없어 평가하지 않았습니다."). 강점·약점·다음 연습(retry_question 제외)·headline이 미응답 질문 번호(Q-n, "n번 질문")를 언급하면 그 항목을 버린다(headline은 고정 문구로 교체). 제출했지만 평가 실패한 질문도 강점·약점 ref에서 뺀다. `add_data`의 질문 ref는 평가된 답변만.
+- ⑪ **AI-07 저장 키 `[구현 결정]`**: result의 `question_refs`→`question_ids`(UUID), `requirement_refs`→`requirement_ids`, `question_ref`→`question_id`로 바꿔 저장한다(C-3 별칭→UUID). 문장 속 Q-n은 "n번 질문", REQ-n은 요건 내용으로 바꾼다. AI-07에는 근거 행이 없다(`evidence: []`). `hashes.career_snapshot_hash`는 세션 값을 api가 넘긴다.
+- ⑫ **AI-05 `data_sufficiency` 출력은 무시 `[구현 결정]`**: 서버 판정값(세션)을 쓰고, 모델 값이 다르면 `data_sufficiency_overridden`만 센다. 컬처핏 `ok`에서 experience 앵커 50% 미만은 `experience_anchor_below_target`만 센다(목표치).
+
+## 2026-11-03 · S8 (db) · 모의 면접 스키마·RPC 세부 (db-engineer)
+- ① **세션 내부 컬럼 추가 `[구현 결정]`** (DM A.12): `question_job_id`·`question_run_generation`·`evaluation_job_id`·`evaluation_run_generation`. 생성·채점을 소유한 작업과 실행 세대를 세션에 두어 S6 QA-S6-01 재시도 규칙(같은 세대 실패는 다시 열지 않음, 수동 재시도는 다시 엶)을 그대로 적용한다. 작업 FK는 복합 `(…, user_id)` `on delete set null`. 질문·평가·종합 행에도 `run_generation`.
+- ② **세트 단위 AI 메타 저장 자리 없음** (DM §0, A.12): AI 메타는 질문 행마다 저장한다. `complete_interview_questions`가 받는 세트 단위 `validation_report`(구성 규칙 경고 등)·`usage`는 세션에 컬럼이 없어 저장하지 않는다. 화면·운영에서 세트 경고가 필요하면 DM에 자리가 필요하다.
+- ③ **길이·개수 상한 `[가정]`**: `question_text`·`intent` 1~1000자, `good_answer_signals` 문자열 0~10개(각 ≤300), `focus_criteria`는 4키 중 0~4개, 대상 요건·보완 요건 각 ≤20, `weak_requirement_ids` ≤50, `score_method_version` ≤100.
+- ④ **답변 편집 조건에 `status = 'in_progress'` 추가 `[가정]`** (A.13 "draft + 미제출 + 생성 완료"): 그만둔(`abandoned`) 세션도 미제출이지만 답변을 고칠 수 없게 했다. RLS로 막으므로 조건 밖 update는 오류가 아니라 0행이다.
+- ⑤ **"응답됨" = 공백 아닌 글자가 있음 `[구현 결정]`**: 제출의 미응답 판정과 `answered_count` 모두 `answer_text ~ '\S'`(줄바꿈·탭 포함 공백만이면 미응답).
+- ⑥ **제출 전 `score_status` null, 미응답은 제출 때 `unanswered` `[구현 결정]`** (C-17): 응답 답변은 평가 저장 때 `pending_method`, 평가 실패 때 `not_scored`. 응답 0개면 세션 `completed` + `not_scored` + `score_counted_count = 0`(채점 작업 없음, AI-07 미호출).
+- ⑦ **다시 채점 범위 `[가정]`** (계획 [가정] 1·2): 평가 성공이 없는 응답 답변만 다시 평가하고, 종합(AI-07)은 **항상 다시** 한다(답변 평가가 바뀌면 종합도 바뀌므로). 다시 채점을 시작하면 종합 행은 `pending`(이전 result는 행에 남음), 세션 `score_status`·`completed_at`·`result_viewed_at`을 비운다. 종합이 실패하면 세션은 `evaluation_failed`. `completed`인데 다시 할 답변이 없으면 `interview_evaluation_not_needed`.
+- ⑧ **결과 확인 표시(`result_viewed_at`)는 `completed`일 때만 `[가정]`**: 채점 중·채점 실패 화면을 열어도 "새 결과" 표식은 남는다. 다시 채점이 시작되면 null로 되돌린다.
+- ⑨ **세션 삭제 시 진행 작업 취소 요청 `[구현 결정]`**: 세션 delete 트리거가 그 세션 대상 queued/running 질문·채점 작업에 `cancel_requested_at`을 기록한다(사용자 삭제, `delete_results`, 프로젝트 연쇄 모두). 그만두기는 질문 생성 작업만 취소 요청한다.
+- ⑩ **V-8 DB 방어 `[구현 결정]`**: 직무 면접 질문 근거의 `project_detail.learnings`를 거부한다(컬처핏은 회고 인용 허용). 답변 평가·종합의 근거는 제한하지 않는다(컬처핏 개선 답변 마무리 회고, C-9).
+- ⑪ **`interview_answer` 근거 출처 `[구현 결정]`** (C-3 ANS-n): `source_id` = `interview_answers.id`, 같은 지원 프로젝트의 답변만(아니면 `invalid_evidence_source`), `source_field`는 null(DB CHECK). 답변 삭제 시 "원본 삭제됨" 트리거.
+- ⑫ **보드 팝업 `interview_prompt` 확장 `[구현 결정]`** (DM §2.6 5, C-14): `in_progress_session_id` 외에 `in_progress_session {session_id, interview_type, answered_count, question_count, generation_status, last_activity_at}`를 더했다. 작성 중 세션은 유형과 무관하게 프로젝트당 1개라, 옮긴 열 유형과 다를 수 있다.
+- ⑬ **세션 `data_sufficiency` not null `[구현 결정]`** (A.12에 not null 표기 없음): 생성 RPC가 항상 서버 판정값을 받는다.
+- ⑭ **자동 저장과 세션 삭제의 교착 가능성 `[가정]`**: 답변 수정 트리거는 답변 → 세션 순으로 잠그고, 세션 삭제 연쇄는 세션 → 답변 순이다. 같은 세션을 지우는 순간 자동 저장이 겹치면 Postgres 교착 감지(1초)가 한쪽을 `40P01`로 끝낸다(세션은 어차피 없어진다). 제출 RPC는 답변 → 세션 순으로 잠가 이 문제를 피했다.
+
+## 2026-11-03 · S8 (api) · 모의 면접 작업·라우트·조회 (api-engineer)
+- ① **답변 일부의 최종 실패 판정 `[가정]`** (AI-06 "해당 답변만 재시도, 그래도 실패하면 not_scored", 계획 `[가정]` 2): 실행기가 그 오류로 더는 자동 재시도하지 않을 때(C-11.3 정책·120초 상한, `ctx.wouldRetry`) 그 답변을 `fail_answer_evaluation`(`not_scored`)으로 닫고 나머지로 진행한다. 단 **키·계정·공급자 한도 원인**(`user_account`·`provider_limit` 범주: `key_invalid`·`key_missing`·`billing_required`·`model_not_available`·`rate_limited`·`daily_quota_exhausted`)은 종합도 같은 이유로 실패하므로 답변을 닫지 않고 작업 전체를 실패시킨다(세션 `evaluation_failed`, 저장된 평가 보존). 단계 마감 시간(timeout)으로 끊긴 경우도 작업 단위 재시도 규칙을 따른다.
+- ② **모든 답변이 실패하면 작업 실패 코드 = 첫 실패 답변의 원인 `[구현 결정]`**: `complete_interview_evaluation`이 `evaluation_failed`를 돌려주면 작업을 그 코드로 실패시킨다(재시도 없음). AI-07은 호출하지 않는다.
+- ③ **질문 생성은 함수 실행 1번 = 공급자 호출 1번 `[구현 결정]`** (C-6 60초, C-12): 첫 호출이 모자라면 남은 개수 재생성을 다음 실행(STEP_CONTINUE)에서 한다. 그래서 무료 등급은 재생성 전에도 호출 간격(6초)을 지킨다. 재생성 후에도 모자라면 `schema_invalid`(retryable false), 저장된 질문은 남는다.
+- ④ **"남은 질문 다시 만들기"·"다시 채점"은 새 작업 `[구현 결정]`**: 실패한 작업을 다시 큐에 넣지 않고 같은 세션을 대상으로 새 `interview_questions`/`interview_evaluation` 작업을 시작한다(begin RPC가 실패 세션을 다시 엶). 공용 `/api/ai-jobs/{id}/retry`도 그대로 동작한다(DB의 실행 세대 재오픈 규칙).
+- ⑤ **세션 생성 직후 작업 시작이 실패하면 빈 세션을 지운다 `[구현 결정]`**: 연결 게이트를 먼저 보지만, 그 사이 키가 바뀌는 등으로 `startJob`이 실패하면 질문이 0개인 방금 만든 세션을 삭제하고 오류를 돌려준다(작업 없는 `generating` 세션이 남지 않게).
+- ⑥ **제출 후 채점 작업 시작이 실패하면 세션은 `evaluating`으로 남고 조회는 `evaluation_failed`로 보인다 `[가정]`**: 남은 작업 규칙(진행 중 작업 없음 = 실패)으로 처리하고, "다시 채점"으로 새 작업을 시작한다.
+- ⑦ **실행 공급자 필터 `[가정]`** (S-37 필터 "실행 공급자" `[가정]`): 화면에 보이는 공급자(단일 또는 질문·채점 둘 다) 중 하나라도 같으면 포함한다. 상태 필터는 남은 작업 규칙을 적용한 **표시 상태**로 거른다.
+- ⑧ **새 결과 표식 = 제출됨 + 완료/채점 실패 + `result_viewed_at` null `[구현 결정]`**: DB는 `completed`일 때만 열람을 기록하므로(db ⑧) 채점 실패 세션은 표식이 계속 남는다. 결과 조회(`getInterviewResult`)는 처음 열 때 `mark_interview_result_viewed`를 부르고 `firstView: true`를 돌려준다.
+- ⑨ **S-20 세션 목록의 실행 공급자 `[확인 필요]` 해소 방식**: UX S-20은 `interview_sessions.provider`를 적었지만 DM v4.1 규칙(채점 시작 후 `evaluation_*`, 아니면 `question_*`, 다르면 둘 다)을 따랐다. 계약 `ExecutionProviderView`.
+- ⑩ **답변지(S-33) 질문에 근거 칩 포함 `[구현 결정]`**: 질문 근거(`evidence_links` `interview_question`)는 비공개 컬럼이 아니므로 제출 전에도 보여 준다. `intent`·`good_answer_signals`는 응답 어디에도 없다(결과 화면 `intent`만 제출 후 `get_interview_question_reveals`로).
+- ⑪ **C-14 팝업 계약 확장**: `InterviewPrompt`에 `inProgressSession {sessionId, interviewType, answeredCount, questionCount, generationStatus, lastActivityAt}`를 더했다(기존 `inProgressSessionId` 유지).
+- ⑫ **진행 단계 값 `complete` 추가 `[가정]`** (AI C-6 "진행 단계 값": AI-05 `generate`, 채점 `evaluate → summarize → score`): 두 면접 작업의 마지막 단계(질문 세트 확정 / 채점 마감, 호출 없음)가 `progress.stage = complete`로 끝난다. 앞 단계 `prepare`도 같은 방식(S6 ⑫). C-6 목록에 반영 요청.
+- ⑬ **AI-06 재생성 최종 실패 시 첫 평가 사용 `[구현 결정]`** (QA-S8-01): V-5 재생성 호출이 재시도 없이 실패하면(키·한도 원인 제외) 답변을 `not_scored`로 두지 않고 첫 평가 결과를 `[수치 확인 필요]` 치환으로 저장한다(C-3 V-5 대체 규칙).

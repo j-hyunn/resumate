@@ -329,6 +329,16 @@ export type StepContext<TLlm = unknown> = {
    * serialized; a lost job aborts the step.
    */
   savePartial: (value: unknown) => Promise<void>;
+  /**
+   * S8: would the runner automatically retry this step if it threw `err` now?
+   * Same C-11.3 decision the runner makes after a failed step (policy per
+   * cause, retries this stage already had in this run, the 120 s wait cap,
+   * streams cut after the first token). Lets a step that does several
+   * independent units (AI-06 answers) finish a unit as failed instead of
+   * failing the whole job once no retry is left. A cancel / deadline / lost
+   * abort is never "retried" (false).
+   */
+  wouldRetry: (err: unknown) => boolean;
 };
 
 /**

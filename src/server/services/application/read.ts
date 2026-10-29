@@ -30,6 +30,7 @@ import { AppError } from "@/lib/contracts/errors";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
+import { loadInterviewProgress } from "@/server/services/interview/progress";
 import { loadDraftCounts } from "@/server/services/drafts/progress";
 import { loadInsightProgress } from "@/server/services/insight/progress";
 import { parseSentences } from "./db";
@@ -84,8 +85,16 @@ function jdOf(row: ProjectRow): JdEmbed | null {
 export async function loadProgress(supabase: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, ApplicationProgress>> {
   const out = new Map<string, ApplicationProgress>();
   if (ids.length === 0) return out;
-  const [insight, drafts] = await Promise.all([loadInsightProgress(supabase, ids), loadDraftCounts(supabase, ids)]);
-  for (const id of ids) out.set(id, { insight: insight.get(id) ?? "none", draftCount: drafts.get(id) ?? 0, interviewCount: 0, interviewInProgress: false });
+  const [insight, drafts, interviews] = await Promise.all([loadInsightProgress(supabase, ids), loadDraftCounts(supabase, ids), loadInterviewProgress(supabase, ids)]);
+  for (const id of ids) {
+    const interview = interviews.get(id);
+    out.set(id, {
+      insight: insight.get(id) ?? "none",
+      draftCount: drafts.get(id) ?? 0,
+      interviewCount: interview?.interviewCount ?? 0,
+      interviewInProgress: interview?.interviewInProgress ?? false,
+    });
+  }
   return out;
 }
 

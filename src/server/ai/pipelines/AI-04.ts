@@ -6,7 +6,7 @@ import { buildJdContext, type JdRequirementInput, type JdSentence } from "../con
 import type { YearMonth } from "../context-pack/months";
 import { filterCareerRows, sourceLabel } from "../context-pack/selection";
 import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
-import { isProviderError } from "../errors";
+import { isAiError } from "../errors";
 import { computeInputHash } from "../input-hash";
 import type { Llm } from "../llm";
 import { silentAiLogger, type AiLogger } from "../log";
@@ -637,8 +637,10 @@ async function* finalizeStream(
       correctionApplied = true;
       addToReport(report, { length_adjusted: 1, number_violations: draft.unsupportedNumbers.length });
     } catch (err) {
-      // A user cancel ends the run; any other failure keeps the first draft (flagged) instead of losing it.
-      if (isProviderError(err) && err.code === "canceled") throw err;
+      // A user cancel ends the run — from the provider call or from the runner's
+      // free-tier spacing wait (plain AiError, QA-S7-10). Any other failure keeps
+      // the first draft (flagged) instead of losing it.
+      if (isAiError(err) && err.code === "canceled") throw err;
       addToReport(report, { length_adjust_failed: 1 });
     }
   }

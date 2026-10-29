@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(39);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -41,6 +41,7 @@ select is_empty(
 --     JD extraction writes only through begin / apply / fail_jd_extraction).
 -- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
 -- S7: + SELECT on drafts, draft_sections, draft_section_sources (writes only through the S7 definer RPCs).
+-- S8: + SELECT on the 5 interview tables (writes only through the S8 definer RPCs).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -55,8 +56,10 @@ select set_eq(
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
         'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT',
-        'drafts:SELECT', 'draft_sections:SELECT', 'draft_section_sources:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + draft tables only');
+        'drafts:SELECT', 'draft_sections:SELECT', 'draft_section_sources:SELECT',
+        'interview_sessions:SELECT', 'interview_questions:SELECT', 'interview_answers:SELECT',
+        'answer_evaluations:SELECT', 'session_feedbacks:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + draft + interview tables only');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -127,8 +130,11 @@ select set_eq(
         'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction',
         'begin_insight', 'complete_insight', 'fail_insight',
         'begin_career_description', 'complete_career_description', 'fail_career_description',
-        'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft RPCs');
+        'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section',
+        'begin_interview_questions', 'save_interview_question', 'complete_interview_questions',
+        'fail_interview_questions', 'begin_interview_evaluation', 'save_answer_evaluation', 'fail_answer_evaluation',
+        'save_session_feedback', 'complete_interview_evaluation'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + S8 interview RPCs');
 
 -- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
 -- are app_ai_writer only.
@@ -415,6 +421,74 @@ select set_eq(
        and has_function_privilege(r.oid, 'public.get_provider_key_secret(uuid)', 'execute')$$,
   array['app_key_reader'],
   'get_provider_key_secret is executable by app_key_reader only');
+
+-- S8 (DM §5, A.12 / A.13): interview RPC execute matrix. User-session RPCs vs app_ai_writer generation / evaluation.
+select set_eq(
+  $$select p.proname::text || ':' || r.rolname
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public'
+       and p.proname in ('create_interview_session', 'abandon_interview_session', 'mark_interview_result_viewed',
+                         'submit_interview_session', 'get_interview_question_reveals',
+                         'begin_interview_questions', 'save_interview_question', 'complete_interview_questions',
+                         'fail_interview_questions', 'begin_interview_evaluation', 'save_answer_evaluation',
+                         'fail_answer_evaluation', 'save_session_feedback', 'complete_interview_evaluation')
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['create_interview_session:authenticated', 'abandon_interview_session:authenticated',
+        'mark_interview_result_viewed:authenticated', 'submit_interview_session:authenticated',
+        'get_interview_question_reveals:authenticated',
+        'begin_interview_questions:app_ai_writer', 'save_interview_question:app_ai_writer',
+        'complete_interview_questions:app_ai_writer', 'fail_interview_questions:app_ai_writer',
+        'begin_interview_evaluation:app_ai_writer', 'save_answer_evaluation:app_ai_writer',
+        'fail_answer_evaluation:app_ai_writer', 'save_session_feedback:app_ai_writer',
+        'complete_interview_evaluation:app_ai_writer'],
+  'S8 interview RPC execute matrix');
+
+-- S8: user-session writes on the interview tables = interview_sessions DELETE + interview_answers.answer_text UPDATE.
+select set_eq(
+  $$select c.relname::text || ':' || p.privilege_type
+      from pg_class c
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where c.oid in ('public.interview_sessions'::regclass, 'public.interview_questions'::regclass,
+                     'public.interview_answers'::regclass, 'public.answer_evaluations'::regclass,
+                     'public.session_feedbacks'::regclass)
+       and has_table_privilege('authenticated', c.oid, p.privilege_type)$$,
+  array['interview_sessions:DELETE'],
+  'authenticated: table-level writes on interview tables = interview_sessions DELETE only');
+select set_eq(
+  $$select c.relname::text || '.' || a.attname || ':' || p.privilege_type
+      from pg_class c
+      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+      cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
+     where c.oid in ('public.interview_sessions'::regclass, 'public.interview_questions'::regclass,
+                     'public.interview_answers'::regclass, 'public.answer_evaluations'::regclass,
+                     'public.session_feedbacks'::regclass)
+       and has_column_privilege('authenticated', c.oid, a.attnum, p.privilege_type)$$,
+  array['interview_answers.answer_text:UPDATE'],
+  'authenticated: column writes on interview tables = interview_answers.answer_text only (score slots never)');
+
+-- S8: no other API / app role writes the interview tables directly (service_role keeps SELECT / DELETE).
+select is_empty(
+  $$select r.rolname, c.oid::regclass::text, p.privilege_type
+      from pg_roles r
+      cross join (values ('public.interview_sessions'::regclass), ('public.interview_questions'::regclass),
+                         ('public.interview_answers'::regclass), ('public.answer_evaluations'::regclass),
+                         ('public.session_feedbacks'::regclass)) c (oid)
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where r.rolname in ('anon', 'app_ai_writer', 'app_key_reader', 'authenticator', 'service_role')
+       and not (r.rolname = 'service_role' and p.privilege_type = 'DELETE')
+       and (has_table_privilege(r.oid, c.oid, p.privilege_type)
+            or (p.privilege_type in ('INSERT', 'UPDATE') and has_any_column_privilege(r.oid, c.oid, p.privilege_type)))$$,
+  'nobody but the user session (DM §5) writes the interview tables directly');
+
+-- S8 (A.13): intent / good_answer_signals are never readable by the user session or anon; app_ai_writer reads them.
+select ok(not has_column_privilege('authenticated', 'public.interview_questions', 'intent', 'SELECT')
+          and not has_column_privilege('authenticated', 'public.interview_questions', 'good_answer_signals', 'SELECT')
+          and not has_table_privilege('authenticated', 'public.interview_questions', 'SELECT')
+          and not has_any_column_privilege('anon', 'public.interview_questions', 'SELECT')
+          and has_column_privilege('app_ai_writer', 'public.interview_questions', 'intent', 'SELECT')
+          and has_column_privilege('app_ai_writer', 'public.interview_questions', 'good_answer_signals', 'SELECT'),
+          'interview_questions private columns: no user grant, app_ai_writer reads');
 
 select * from finish();
 rollback;

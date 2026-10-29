@@ -142,8 +142,17 @@ export type SetApplicationOutcomeInput = z.input<typeof SetApplicationOutcomeInp
 
 export type InterviewPrompt = {
   interviewType: "job" | "culture_fit";
-  /** S8 fills it (C-14 "이어서 쓰기"); null until then. */
+  /** C-14 "이어서 쓰기": this project's in-progress session (any type, at most one); null when none. */
   inProgressSessionId: string | null;
+  /** S8: "작성 중인 면접이 있어요({유형}, n/N 작성)". Null when none. */
+  inProgressSession: {
+    sessionId: string;
+    interviewType: "job" | "culture_fit";
+    answeredCount: number;
+    questionCount: number;
+    generationStatus: "generating" | "ready" | "failed";
+    lastActivityAt: string | null;
+  } | null;
 };
 
 export type StageChangeResult = {

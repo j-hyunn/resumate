@@ -41,9 +41,9 @@ select ok((select stage_changed_at > now() - interval '1 minute' and last_activi
 
 -- 5. Interview prompts (C-14).
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'job_interview') -> 'interview_prompt',
-          '{"interview_type":"job","in_progress_session_id":null}'::jsonb, 'job interview prompt');
+          '{"interview_type":"job","in_progress_session_id":null,"in_progress_session":null}'::jsonb, 'job interview prompt');
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'culture_fit_interview') -> 'interview_prompt',
-          '{"interview_type":"culture_fit","in_progress_session_id":null}'::jsonb, 'culture fit prompt');
+          '{"interview_type":"culture_fit","in_progress_session_id":null,"in_progress_session":null}'::jsonb, 'culture fit prompt');
 
 -- 3. Closed with an outcome.
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'closed', 'failed') ->> 'stage_outcome',

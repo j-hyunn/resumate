@@ -142,7 +142,6 @@ export const AI_PROGRESS_STAGES = [
   "match",
   "synthesize",
   "synthesize_regen",
-  "synthesize",
   "validate",
   "rank",
   "generate",
@@ -152,6 +151,8 @@ export const AI_PROGRESS_STAGES = [
   "evaluate",
   "summarize",
   "score",
+  // S8 [가정, spec-gaps S8 (api) ⑫]: last step of both interview jobs (save the set / close the evaluation, no call).
+  "complete",
 ] as const;
 export type AiProgressStage = (typeof AI_PROGRESS_STAGES)[number];
 
@@ -349,3 +350,67 @@ export type SelectionOrigin = (typeof SELECTION_ORIGINS)[number];
 /** AI-11 `rankings[].relevance`. */
 export const RANKING_RELEVANCES = ["high", "medium", "low"] as const;
 export type RankingRelevance = (typeof RANKING_RELEVANCES)[number];
+
+// --- S8: mock interview (DM A.12–A.13, AI-05 / AI-06 / AI-07) ---
+
+/** interview_sessions.interview_type CHECK (U-7; no default). */
+export const INTERVIEW_TYPES = ["job", "culture_fit"] as const;
+export type InterviewType = (typeof INTERVIEW_TYPES)[number];
+
+/** interview_sessions.question_count CHECK (default 5). */
+export const INTERVIEW_QUESTION_COUNTS = [3, 5, 7] as const;
+export type InterviewQuestionCount = (typeof INTERVIEW_QUESTION_COUNTS)[number];
+
+/** interview_sessions.status CHECK: 작성 중 / 채점 중 / 완료 / 채점 실패 / 그만둠. */
+export const INTERVIEW_SESSION_STATUSES = ["in_progress", "evaluating", "completed", "evaluation_failed", "abandoned"] as const;
+export type InterviewSessionStatus = (typeof INTERVIEW_SESSION_STATUSES)[number];
+
+/** interview_sessions.generation_status CHECK. */
+export const INTERVIEW_GENERATION_STATUSES = ["generating", "ready", "failed"] as const;
+export type InterviewGenerationStatus = (typeof INTERVIEW_GENERATION_STATUSES)[number];
+
+/** interview_questions.source_kind CHECK (AI-05: job 3 + culture_fit 6). */
+export const INTERVIEW_SOURCE_KINDS = [
+  "project_deep_dive",
+  "requirement_fit",
+  "gap_probe",
+  "collaboration",
+  "conflict",
+  "failure_growth",
+  "values",
+  "org_adaptation",
+  "motivation_career",
+] as const;
+export type InterviewSourceKind = (typeof INTERVIEW_SOURCE_KINDS)[number];
+
+/** interview_questions.anchor CHECK. */
+export const INTERVIEW_ANCHORS = ["experience", "jd", "general"] as const;
+export type InterviewAnchor = (typeof INTERVIEW_ANCHORS)[number];
+
+/** interview_answers.status CHECK. */
+export const INTERVIEW_ANSWER_STATUSES = ["draft", "submitted", "unanswered"] as const;
+export type InterviewAnswerStatus = (typeof INTERVIEW_ANSWER_STATUSES)[number];
+
+/** interview_sessions.score_status CHECK (AI 4.3: session scores never `unanswered`). */
+export const SESSION_SCORE_STATUSES = ["pending_method", "scored", "not_scored"] as const;
+export type SessionScoreStatus = (typeof SESSION_SCORE_STATUSES)[number];
+
+/** interview_answers.score_status CHECK. */
+export const ANSWER_SCORE_STATUSES = ["pending_method", "scored", "unanswered", "not_scored"] as const;
+export type AnswerScoreStatus = (typeof ANSWER_SCORE_STATUSES)[number];
+
+/** answer_evaluations.status / session_feedbacks.status CHECK. */
+export const INTERVIEW_RESULT_STATUSES = ["pending", "succeeded", "failed"] as const;
+export type InterviewResultStatus = (typeof INTERVIEW_RESULT_STATUSES)[number];
+
+/** AI 4.2 rubric keys (AI-06 `criteria[].key`, `focus_criteria`). */
+export const EVALUATION_CRITERIA_KEYS = ["specificity", "intent_fit", "structure", "job_relevance"] as const;
+export type EvaluationCriteriaKey = (typeof EVALUATION_CRITERIA_KEYS)[number];
+
+/** AI-06 `criteria[].grade` (`not_applicable` only for `job_relevance`). */
+export const EVALUATION_GRADES = ["excellent", "good", "fair", "poor", "not_applicable"] as const;
+export type EvaluationGrade = (typeof EVALUATION_GRADES)[number];
+
+/** AI-07 `next_practice[].type`. */
+export const NEXT_PRACTICE_TYPES = ["retry_question", "focus_session", "add_data"] as const;
+export type NextPracticeType = (typeof NEXT_PRACTICE_TYPES)[number];

@@ -481,6 +481,19 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
             onProgress: (p) => {
               lastProgress = p;
             },
+            // S8: the decision below, for a step that wants to know before throwing.
+            wouldRetry: (err, signal) => {
+              const failure = classifyStepError(err, signal);
+              if ("lost" in failure || failure.error.code === "canceled") return false;
+              const decision = decideRetry({
+                error: failure.error,
+                retriesSoFar: retriesFor(meta.retries, step.stage, failure.error.code),
+                waitUsedMs: waitTotal - meta.waitBase,
+                now: now(),
+                random,
+              });
+              return decision.kind !== "fail";
+            },
           });
           // Let a savePartial still in flight land before the next conditional write.
           await partialChain.catch(() => false);
@@ -659,6 +672,7 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
       partial: unknown;
       persistPartial: (value: unknown) => Promise<boolean>;
       onProgress: (progress: StoredAiJobProgress) => void;
+      wouldRetry: (err: unknown, signal: AbortSignal) => boolean;
     },
   ): Promise<{ ok: true; value: unknown } | { ok: false; failure: ReturnType<typeof classifyStepError> }> {
     const controller = new AbortController();
@@ -709,6 +723,7 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
           else extra.onProgress(progress);
         },
         partial: extra.partial,
+        wouldRetry: (err) => extra.wouldRetry(err, controller.signal),
         savePartial: async (value) => {
           if (controller.signal.aborted) throw new StepAborted(String(controller.signal.reason));
           const ok = await extra.persistPartial(value);

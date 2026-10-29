@@ -16,8 +16,9 @@ select set_eq(
   $$select tgname::text from pg_trigger where tgname like '%_evidence_source_deleted' and not tgisinternal$$,
   array['experiences_evidence_source_deleted', 'educations_evidence_source_deleted', 'projects_evidence_source_deleted',
         'project_details_evidence_source_deleted', 'achievements_evidence_source_deleted', 'skills_evidence_source_deleted',
-        'jd_requirements_evidence_source_deleted', 'job_descriptions_evidence_source_deleted'],
-  'deletion trigger on each career / JD (S6) evidence source table');
+        'jd_requirements_evidence_source_deleted', 'job_descriptions_evidence_source_deleted',
+        'interview_answers_evidence_source_deleted'],
+  'deletion trigger on each career / JD (S6) / interview answer (S8) evidence source table');
 
 -- A's career data (as the user).
 set local role authenticated;

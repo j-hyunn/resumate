@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { a, AS_OF, careerRowsFixture, IDS, JD_ID, JD_UPDATED_AT, jdParts, koText } from "../__fixtures__/S7/drafts";
+import { AiError } from "../errors";
 import { createFakeLlm, type FakeLlmResponse } from "../fake-llm";
 import { toCanonicalJsonSchema } from "../providers/schema";
 import { Ai04AdjustOutputSchema, Ai04OutputSchema } from "../schemas/AI-04";
@@ -264,6 +265,24 @@ describe("streamCoverLetterSection (AI-04)", () => {
     expect(failed.events.at(-1)?.type).toBe("done");
     expect(failed.payload).toMatchObject({ correction_applied: false, char_adjust_needed: true, ai_char_count: 300 });
     expect(failed.payload.meta.validation_report).toMatchObject({ length_adjust_failed: 1 });
+  });
+
+  it("QA-S7-10: a cancel during the runner's spacing wait before the adjust call (plain AiError) ends the run, nothing persisted", async () => {
+    const ctx = context(question({ char_limit: 100 }));
+    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
+    const ev = [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
+    const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", koText(300), ev)] });
+    const fake = createFakeLlm([{ json: long }], { chunkSize: 13 });
+    // The job runner's free-tier spaceCall throws AiError("canceled") (not a ProviderError) before the call goes out.
+    const llm = { ...fake, complete: async () => Promise.reject(new AiError("canceled")) };
+    const persisted: CompleteCoverLetterSectionPayload[] = [];
+    const events: AiStreamEvent[] = [];
+    for await (const e of streamCoverLetterSection({ context: ctx }, { llm, persist: async (p) => (persisted.push(p), { resultId: SECTION_ID }) })) {
+      events.push(e);
+    }
+    expect(events.map((e) => e.type)).toContain("adjusting_length");
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "canceled" });
+    expect(persisted).toEqual([]);
   });
 
   it("invented numbers without a correction call are replaced and flagged", async () => {

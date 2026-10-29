@@ -55,7 +55,7 @@ describe("BlockExtractor", () => {
       ],
     });
     const { events } = collect(text, 5);
-    const b1 = events.filter((e) => e.blockId === "b1");
+    const b1 = events.filter((e) => e.type !== "value" && e.blockId === "b1");
     expect(b1[0]).toEqual({ type: "started", blockId: "b1", path: "sections.0.summary" });
     expect(b1.filter((e) => e.type === "delta").map((e) => (e.type === "delta" ? e.text : "")).join("")).toBe("첫 블록입니다");
     expect(b1.at(-1)).toEqual({ type: "completed", blockId: "b1", path: "sections.0.summary", raw: { block_id: "b1", text: "첫 블록입니다", evidence: [] } });

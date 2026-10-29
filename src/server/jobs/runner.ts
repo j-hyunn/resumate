@@ -53,6 +53,16 @@ import { STEP_CONTINUE } from "./types";
  * LLM wrapper per call, independent of how the job ends.
  */
 
+
+/** Jobs that run inside one request and are retried by calling their route again, never requeued. */
+const REQUEST_SCOPED_JOB_TYPES: ReadonlySet<string> = new Set([
+  "key_verification", // QA-S3b-05: re-run from the connection screen
+  "writing_chat_turn", // S4: "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1)
+  "jd_extraction", // S5: POST /api/application-projects/{id}/jd-extraction again
+  "draft_source_ranking", // S7: POST /api/application-projects/{id}/draft-source-ranking
+  "career_description", // S7: POST /api/application-projects/{id}/career-descriptions
+  "cover_letter", // S7: POST /api/draft-sections/{id}/generate
+]);
 export type StartJobInput = {
   userId: string;
   jobType: AiJobType;
@@ -241,10 +251,9 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     const notRetryable = () => new AppError("ai_job_not_retryable", "다시 시도할 수 없는 작업입니다.", { status: 409 });
     if (isActive(job.status)) return { jobId: job.id, reused: false, inProgress: true };
     if (job.status !== "failed" || !job.errorCode || errorCategoryOf(job.errorCode) === "input") throw notRetryable();
-    // QA-S3b-05: a key check is re-run from the connection screen, never requeued (no registry step).
-    // S4: a writing chat turn is retried by "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1), never requeued.
-    // S5: a sync JD extraction is retried by calling POST /api/application-projects/{id}/jd-extraction again (new job).
-    if (job.jobType === "key_verification" || job.jobType === "writing_chat_turn" || job.jobType === "jd_extraction") throw notRetryable();
+    // S7 (QA-S7-02): drafts run inside their request (AI-11 sync, AI-03 / AI-04 SSE) with no registry step;
+    // "다시 시도" calls the generation route again (a new job; a career description gets a new draft row).
+    if (REQUEST_SCOPED_JOB_TYPES.has(job.jobType)) throw notRetryable();
     // QA-S3b-01: same gate as a new run, on the job's FIXED provider (F-AI-03 (2)): key present and
     // not invalid, consent current. Never send career data after consent was withdrawn.
     await deps.providerContext.assertJobRunnable(ref.userId, { provider: job.provider, connectionTier: job.connectionTier });

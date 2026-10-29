@@ -201,3 +201,31 @@ describe("runStructuredStream (C-6 streaming)", () => {
     });
   });
 });
+
+describe("runStructuredStream S7 extensions", () => {
+  const Schema = z.object({ sources: z.array(z.object({ id: z.string() })), blocks: z.array(Block) });
+  const value = { sources: [{ id: "a" }], blocks: [{ block_id: "b1", text: "본문", evidence: [], placeholders: [] }] };
+
+  it("emits watched values before later blocks, and finalize generators can yield before validated", async () => {
+    const llm = createFakeLlm([{ json: value }], { chunkSize: 4 });
+    const events: AiStreamEvent[] = [];
+    for await (const e of runStructuredStream({
+      llm,
+      request: { feature: "TEST", promptVersion: "t.v1", callKey: "t", systemBlocks: [], userBlocks: [] },
+      schema: Schema,
+      watchPaths: ["sources"],
+      onValue: (path, v) => [{ type: "sources_selected", selectionMode: "ai", questionClass: null, sources: (v as unknown[]).length ? [] : [] }],
+      validateBlock: (raw, _id, at) => ({ path: at.path, text: raw.text }),
+      finalize: async function* () {
+        yield { type: "adjusting_length", charCount: 1, charLimit: 1, countBasis: "with_spaces", reasons: ["length"] } as AiStreamEvent;
+        return { result: {}, validationReport: emptyReport() };
+      },
+    })) {
+      events.push(e);
+    }
+    const types = events.map((e) => e.type);
+    expect(types.indexOf("sources_selected")).toBeLessThan(types.indexOf("block_started"));
+    expect(types.slice(-3)).toEqual(["adjusting_length", "validated", "done"]);
+    expect(events.find((e) => e.type === "block_completed")).toMatchObject({ block: { path: "blocks.0", text: "본문" } });
+  });
+});

@@ -271,14 +271,21 @@ export const AiStreamEventSchema = z.discriminatedUnion("type", [
 ]);
 export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>;
 export type AiStreamEventType = AiStreamEvent["type"];
+/**
+ * Pipeline stream event names (mirror of src/server/ai/streaming/events.ts). S7 adds the AI-04
+ * `sources_selected` / `adjusting_length`; their schemas (and the route-level `generation_started`,
+ * `preparing`) are in `draft.ts` (`DraftStreamEventSchema`).
+ */
 export const AI_STREAM_EVENT_TYPES = [
   "block_started",
   "block_delta",
   "block_completed",
+  "sources_selected",
+  "adjusting_length",
   "validated",
   "done",
   "error",
-] as const satisfies readonly AiStreamEventType[];
+] as const satisfies readonly (AiStreamEventType | "sources_selected" | "adjusting_length")[];
 
 /** Category of an SSE error code; `internal_error` (unknown failure) is a system failure. */
 export function streamErrorCategory(code: AiErrorCode | "internal_error"): ErrorCategory {

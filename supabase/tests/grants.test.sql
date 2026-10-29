@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(34);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -40,6 +40,7 @@ select is_empty(
 -- S5: + SELECT on job_descriptions, jd_requirements (application_projects is column-level without memo;
 --     JD extraction writes only through begin / apply / fail_jd_extraction).
 -- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
+-- S7: + SELECT on drafts, draft_sections, draft_section_sources (writes only through the S7 definer RPCs).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -53,8 +54,9 @@ select set_eq(
         'achievements:SELECT', 'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
-        'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight tables only');
+        'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT',
+        'drafts:SELECT', 'draft_sections:SELECT', 'draft_section_sources:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + draft tables only');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -123,8 +125,76 @@ select set_eq(
         'check_ai_run_allowed',
         'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
         'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction',
-        'begin_insight', 'complete_insight', 'fail_insight'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight RPCs');
+        'begin_insight', 'complete_insight', 'fail_insight',
+        'begin_career_description', 'complete_career_description', 'fail_career_description',
+        'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft RPCs');
+
+-- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
+-- are app_ai_writer only.
+select set_eq(
+  $$select p.proname::text || ':' || r.rolname
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public'
+       and p.proname in ('create_cover_letter_draft', 'add_cover_letter_question', 'delete_cover_letter_question',
+                         'reorder_cover_letter_questions', 'set_section_sources',
+                         'begin_career_description', 'complete_career_description', 'fail_career_description',
+                         'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section')
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['create_cover_letter_draft:authenticated', 'add_cover_letter_question:authenticated',
+        'delete_cover_letter_question:authenticated', 'reorder_cover_letter_questions:authenticated',
+        'set_section_sources:authenticated',
+        'begin_career_description:app_ai_writer', 'complete_career_description:app_ai_writer',
+        'fail_career_description:app_ai_writer', 'begin_cover_letter_section:app_ai_writer',
+        'complete_cover_letter_section:app_ai_writer', 'fail_draft_section:app_ai_writer'],
+  'S7 draft RPC execute matrix');
+
+-- S7 (DM §5): user-session write privileges on the draft tables = drafts DELETE + UPDATE (title, edited_at,
+-- first_copied_at), draft_sections UPDATE (question_text, char_limit, count_basis, user_note, edited_content).
+select set_eq(
+  $$select c.relname::text || ':' || p.privilege_type
+      from pg_class c
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where c.oid in ('public.drafts'::regclass, 'public.draft_sections'::regclass,
+                     'public.draft_section_sources'::regclass)
+       and has_table_privilege('authenticated', c.oid, p.privilege_type)$$,
+  array['drafts:DELETE'],
+  'authenticated: table-level writes on draft tables = drafts DELETE only');
+select set_eq(
+  $$select c.relname::text || '.' || a.attname || ':' || p.privilege_type
+      from pg_class c
+      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+      cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
+     where c.oid in ('public.drafts'::regclass, 'public.draft_sections'::regclass,
+                     'public.draft_section_sources'::regclass)
+       and has_column_privilege('authenticated', c.oid, a.attnum, p.privilege_type)$$,
+  array['drafts.title:UPDATE', 'drafts.edited_at:UPDATE', 'drafts.first_copied_at:UPDATE',
+        'draft_sections.question_text:UPDATE', 'draft_sections.char_limit:UPDATE',
+        'draft_sections.count_basis:UPDATE', 'draft_sections.user_note:UPDATE',
+        'draft_sections.edited_content:UPDATE'],
+  'authenticated: column writes on draft tables = DM §5 user columns only');
+
+-- S7: no other API / app role writes the draft tables (service_role keeps SELECT / DELETE).
+select is_empty(
+  $$select r.rolname, c.oid::regclass::text, p.privilege_type
+      from pg_roles r
+      cross join (values ('public.drafts'::regclass), ('public.draft_sections'::regclass),
+                         ('public.draft_section_sources'::regclass)) c (oid)
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where r.rolname in ('anon', 'app_ai_writer', 'app_key_reader', 'authenticator', 'service_role')
+       and not (r.rolname = 'service_role' and p.privilege_type = 'DELETE')
+       and (has_table_privilege(r.oid, c.oid, p.privilege_type)
+            or (p.privilege_type in ('INSERT', 'UPDATE') and has_any_column_privilege(r.oid, c.oid, p.privilege_type)))$$,
+  'nobody but the user session (DM §5 columns) writes the draft tables directly');
+
+-- S7: ai_content is never user-writable (AI original, AI-03 / AI-04 storage).
+select ok(not has_column_privilege('authenticated', 'public.draft_sections', 'ai_content', 'UPDATE')
+          and not has_column_privilege('authenticated', 'public.draft_sections', 'status', 'UPDATE')
+          and not has_column_privilege('authenticated', 'public.draft_sections', 'template_key', 'UPDATE')
+          and not has_column_privilege('authenticated', 'public.drafts', 'status', 'UPDATE')
+          and not has_column_privilege('authenticated', 'public.drafts', 'options', 'UPDATE'),
+          'authenticated cannot update ai_content / status / template_key / options');
 
 -- S6 (DM §5, A.8): insight RPCs are app_ai_writer only.
 select set_eq(

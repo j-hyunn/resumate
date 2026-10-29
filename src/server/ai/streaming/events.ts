@@ -1,4 +1,5 @@
 import type { AiErrorCode } from "@/lib/contracts/errors";
+import type { CountBasis, DraftSourceRole, QuestionClass } from "@/lib/contracts/enums";
 import type { ValidationReport } from "../validation/report";
 
 /**
@@ -19,6 +20,21 @@ export type AiStreamEvent =
   | { type: "block_started"; blockId: string; path: string }
   | { type: "block_delta"; blockId: string; text: string }
   | { type: "block_completed"; blockId: string; block: unknown }
+  | {
+      /** S7 AI-04: the question's sources, validated, once the model's `sources` array closes (before paragraphs). */
+      type: "sources_selected";
+      selectionMode: "ai" | "user";
+      questionClass: QuestionClass | null;
+      sources: SelectedSourceView[];
+    }
+  | {
+      /** S7 AI-04: the draft is outside ±10% of the limit (or has unsupported numbers); one correction call runs. */
+      type: "adjusting_length";
+      charCount: number;
+      charLimit: number;
+      countBasis: CountBasis;
+      reasons: Array<"length" | "numbers">;
+    }
   | { type: "validated"; result: unknown; validationReport: ValidationReport }
   | { type: "done"; meta: AiStreamDoneMeta }
   | {
@@ -39,4 +55,31 @@ export type AiStreamDoneMeta = {
   resultId: string | null;
 };
 
-export const AI_STREAM_EVENT_TYPES = ["block_started", "block_delta", "block_completed", "validated", "done", "error"] as const;
+export const AI_STREAM_EVENT_TYPES = [
+  "block_started",
+  "block_delta",
+  "block_completed",
+  "sources_selected",
+  "adjusting_length",
+  "validated",
+  "done",
+  "error",
+] as const;
+
+/** One AI-04 source as screens show it (C-11 "사용한 경력·프로젝트"); ids are UUIDs. */
+export type SelectedSourceView = {
+  sort_order: number;
+  role: DraftSourceRole;
+  experience_id: string | null;
+  education_id: string | null;
+  project_id: string | null;
+  project_detail_ids: string[];
+  /** "회사명 › 프로젝트명" (server-built from the rows). */
+  label: string;
+  rationale: string;
+  reuse_reason: string | null;
+  requirement_ids: string[];
+};
+
+/** S7 name used in the notes: the stream events of AI-03 / AI-04 (= AiStreamEvent incl. sources_selected, adjusting_length). */
+export type S7StreamEvent = AiStreamEvent;

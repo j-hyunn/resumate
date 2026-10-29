@@ -66,6 +66,11 @@ export class IncrementalJsonParser {
     return events;
   }
 
+  /** The value parsed so far (containers attach to their parent when they open). Read-only use. */
+  partial(): unknown {
+    return this.root;
+  }
+
   end(): unknown {
     const events: JsonEvent[] = [];
     if (this.mode === "literal") this.finishLiteral(events);

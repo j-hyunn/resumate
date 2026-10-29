@@ -13,7 +13,9 @@ import { IncrementalJsonParser, type JsonEvent, type JsonPath } from "./json-inc
 export type RawBlockEvent =
   | { type: "started"; blockId: string; path: string }
   | { type: "delta"; blockId: string; text: string }
-  | { type: "completed"; blockId: string; path: string; raw: Record<string, unknown> };
+  | { type: "completed"; blockId: string; path: string; raw: Record<string, unknown> }
+  /** A value at a watched path closed (S7: AI-04 `sources` arrive before the paragraphs). */
+  | { type: "value"; path: string; value: unknown };
 
 type OpenObject = { blockId: string | null; bufferedText: string };
 
@@ -25,12 +27,25 @@ export class BlockExtractor {
   private readonly parser = new IncrementalJsonParser();
   private readonly open = new Map<string, OpenObject>();
 
-  constructor(private readonly keys: { blockId: string; text: string } = { blockId: "block_id", text: "text" }) {}
+  private readonly watch: ReadonlySet<string>;
+
+  constructor(
+    private readonly keys: { blockId: string; text: string } = { blockId: "block_id", text: "text" },
+    /** Path keys (`pathKey`, e.g. "sources", "question_class") reported once as `value` events when they close. */
+    watch: readonly string[] = [],
+  ) {
+    this.watch = new Set(watch);
+  }
 
   push(chunk: string): RawBlockEvent[] {
     const out: RawBlockEvent[] = [];
     for (const event of this.parser.push(chunk)) this.handle(event, out);
     return out;
+  }
+
+  /** Partially parsed root so far (for reading a block's parent keys, e.g. `project_ref`). */
+  partial(): unknown {
+    return this.parser.partial();
   }
 
   /** Complete parsed value (throws JsonStreamError on truncated/invalid JSON). */
@@ -39,6 +54,10 @@ export class BlockExtractor {
   }
 
   private handle(event: JsonEvent, out: RawBlockEvent[]): void {
+    if (this.watch.size && (event.type === "close" || event.type === "value")) {
+      const key = pathKey(event.path);
+      if (this.watch.has(key)) out.push({ type: "value", path: key, value: event.value });
+    }
     if (event.type === "open" && event.kind === "object") {
       this.open.set(pathKey(event.path), { blockId: null, bufferedText: "" });
       return;

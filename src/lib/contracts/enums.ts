@@ -295,3 +295,57 @@ export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
 /** jd_requirements.origin CHECK. */
 export const REQUIREMENT_ORIGINS = ["ai", "user"] as const;
 export type RequirementOrigin = (typeof REQUIREMENT_ORIGINS)[number];
+
+// --- S7: drafts (DM A.9–A.11, AI-03 / AI-04 / AI-11) ---
+
+/** drafts.draft_type CHECK. */
+export const DRAFT_TYPES = ["career_description", "cover_letter"] as const;
+export type DraftType = (typeof DRAFT_TYPES)[number];
+
+/** drafts.status CHECK: 문항 입력 중 / 생성 중 / 완료 / 일부 실패 / 실패. */
+export const DRAFT_STATUSES = ["composing", "generating", "ready", "partially_failed", "failed"] as const;
+export type DraftStatus = (typeof DRAFT_STATUSES)[number];
+
+/** draft_sections.section_kind CHECK (v3: + education). */
+export const DRAFT_SECTION_KINDS = ["experience", "education", "standalone_projects", "cover_letter_question"] as const;
+export type DraftSectionKind = (typeof DRAFT_SECTION_KINDS)[number];
+
+/** draft_sections.status CHECK. */
+export const DRAFT_SECTION_STATUSES = ["pending", "generating", "ready", "failed"] as const;
+export type DraftSectionStatus = (typeof DRAFT_SECTION_STATUSES)[number];
+
+/** draft_sections.template_key CHECK (기본 3문항 시드; null = 사용자 추가 문항). */
+export const COVER_LETTER_TEMPLATE_KEYS = ["motivation", "job_competency", "future_plan"] as const;
+export type CoverLetterTemplateKey = (typeof COVER_LETTER_TEMPLATE_KEYS)[number];
+
+/** draft_sections.count_basis CHECK: 공백 포함 / 공백 제외. */
+export const COUNT_BASES = ["with_spaces", "without_spaces"] as const;
+export type CountBasis = (typeof COUNT_BASES)[number];
+
+/** draft_sections.source_selection_mode CHECK. */
+export const SOURCE_SELECTION_MODES = ["ai", "user"] as const;
+export type SourceSelectionMode = (typeof SOURCE_SELECTION_MODES)[number];
+
+/** draft_sections.question_class CHECK (AI-04 `question_class`). */
+export const QUESTION_CLASSES = ["motivation", "job_competency", "future_plan", "experience_story"] as const;
+export type QuestionClass = (typeof QUESTION_CLASSES)[number];
+
+/** draft_sections.ai_content[].block_kind (A.10). */
+export const DRAFT_BLOCK_KINDS = ["header", "summary", "role_line", "bullet", "paragraph"] as const;
+export type DraftBlockKind = (typeof DRAFT_BLOCK_KINDS)[number];
+
+/** draft_section_sources.role CHECK. */
+export const DRAFT_SOURCE_ROLES = ["primary", "supporting"] as const;
+export type DraftSourceRole = (typeof DRAFT_SOURCE_ROLES)[number];
+
+/** draft_section_sources.origin CHECK. */
+export const DRAFT_SOURCE_ORIGINS = ["ai", "user"] as const;
+export type DraftSourceOrigin = (typeof DRAFT_SOURCE_ORIGINS)[number];
+
+/** drafts.options.selection_origin (C-11 출처 표시: 인사이트 우선순위 / AI가 고름 / 직접 고름). */
+export const SELECTION_ORIGINS = ["insight", "ai_ranking", "user"] as const;
+export type SelectionOrigin = (typeof SELECTION_ORIGINS)[number];
+
+/** AI-11 `rankings[].relevance`. */
+export const RANKING_RELEVANCES = ["high", "medium", "low"] as const;
+export type RankingRelevance = (typeof RANKING_RELEVANCES)[number];

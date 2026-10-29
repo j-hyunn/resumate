@@ -31,9 +31,20 @@ export type StructuredStreamOptions<T> = {
   llm: Llm;
   request: Omit<LlmRequest, "outputSchema">;
   schema: z.ZodType<T>;
-  validateBlock?: (raw: Record<string, unknown>, blockId: string) => unknown | null;
-  finalize: (value: T, meta: AiCallResult) => Promise<StreamFinalization> | StreamFinalization;
+  validateBlock?: (raw: Record<string, unknown>, blockId: string, at: { path: string; root: unknown }) => unknown | null;
+  /**
+   * Full validation (+ persistence). May be an async generator that yields
+   * non-terminal events first (AI-04 `adjusting_length`) and returns the finalization.
+   */
+  finalize: (
+    value: T,
+    meta: AiCallResult,
+  ) => Promise<StreamFinalization> | StreamFinalization | AsyncGenerator<AiStreamEvent, StreamFinalization, void>;
   blockKeys?: { blockId: string; text: string };
+  /** Paths reported to `onValue` as soon as they close (before the stream ends). */
+  watchPaths?: readonly string[];
+  /** Events to emit for a watched value (e.g. AI-04 `sources_selected`). */
+  onValue?: (path: string, value: unknown, root: unknown) => AiStreamEvent[];
 };
 
 export type StreamFinalization = {
@@ -44,7 +55,7 @@ export type StreamFinalization = {
 };
 
 export async function* runStructuredStream<T>(options: StructuredStreamOptions<T>): AsyncGenerator<AiStreamEvent> {
-  const extractor = new BlockExtractor(options.blockKeys);
+  const extractor = new BlockExtractor(options.blockKeys, options.watchPaths ?? []);
   const hidden = new Set<string>();
   let meta: AiCallResult | null = null;
   let final: StreamFinalization;
@@ -57,12 +68,14 @@ export async function* runStructuredStream<T>(options: StructuredStreamOptions<T
       }
       if (chunk.type === "error") throw chunk.error;
       for (const event of extractor.push(chunk.text)) {
-        if (event.type === "started") {
+        if (event.type === "value") {
+          for (const e of options.onValue?.(event.path, event.value, extractor.partial()) ?? []) yield e;
+        } else if (event.type === "started") {
           yield { type: "block_started", blockId: event.blockId, path: event.path };
         } else if (event.type === "delta") {
           if (!hidden.has(event.blockId)) yield { type: "block_delta", blockId: event.blockId, text: event.text };
         } else {
-          const block = options.validateBlock ? options.validateBlock(event.raw, event.blockId) : event.raw;
+          const block = options.validateBlock ? options.validateBlock(event.raw, event.blockId, { path: event.path, root: extractor.partial() }) : event.raw;
           if (block === null) hidden.add(event.blockId);
           yield { type: "block_completed", blockId: event.blockId, block };
         }
@@ -80,7 +93,17 @@ export async function* runStructuredStream<T>(options: StructuredStreamOptions<T
     const parsed = options.schema.safeParse(json);
     if (!parsed.success) throw new AiError("schema_invalid");
 
-    final = await options.finalize(parsed.data, meta);
+    const finalized = options.finalize(parsed.data, meta);
+    if (isAsyncGenerator(finalized)) {
+      let step = await finalized.next();
+      while (!step.done) {
+        yield step.value;
+        step = await finalized.next();
+      }
+      final = step.value;
+    } else {
+      final = await finalized;
+    }
   } catch (err) {
     // Terminal event #1 of 1 (QA-S3-02): nothing follows an error.
     yield toErrorEvent(err);
@@ -93,6 +116,10 @@ export async function* runStructuredStream<T>(options: StructuredStreamOptions<T
     type: "done",
     meta: { promptVersion: options.request.promptVersion, model: final.model ?? meta.model, resultId: final.resultId ?? null },
   };
+}
+
+function isAsyncGenerator<E, R>(value: unknown): value is AsyncGenerator<E, R, void> {
+  return typeof value === "object" && value !== null && typeof (value as AsyncGenerator).next === "function" && Symbol.asyncIterator in value;
 }
 
 export const AI_STREAM_TERMINAL_EVENT_TYPES = ["done", "error"] as const;

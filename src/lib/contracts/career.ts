@@ -279,7 +279,7 @@ export const DeletionCascadeCounts = z.object({
   writing_chats: count,
 });
 
-/** v2 shape per application project (DM §4.2). Always `[]` in S2 (result tables come later). */
+/** v2 shape per application project (DM §4.2). S6: `insights` = distinct insights whose evidence points at the deleted rows (only projects with ≥ 1); drafts / draft_sections / interview_sessions stay 0 until S7–S8. */
 export const AffectedApplicationProject = z.object({
   application_project_id: z.guid(),
   name: z.string(),

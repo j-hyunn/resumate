@@ -1,12 +1,19 @@
 import { AI_ERROR_MESSAGES, errorCategoryOf, failureCauseOf, isManuallyRetryable, type AiJobStatusResponse } from "@/lib/contracts/ai";
+import { insightJobPartial } from "@/server/services/insight/partial";
 import type { JobRecord } from "./types";
+
+/** Feature partial results for `useAiJob().partial` (S6: AI-02 stage-1 verdicts). Null when the feature has none. */
+export function jobPartial(job: JobRecord): unknown {
+  if (job.jobType === "insight") return insightJobPartial(job);
+  return null;
+}
 
 /**
  * ai_jobs row → `useAiJob` response (+ v4 fields, S3a plan API 8).
  * `step_outputs`, params, and hashes stay server-side; `partial` is filled per
  * feature from its own result tables.
  */
-export function toAiJobStatusResponse(job: JobRecord, partial: unknown = null): AiJobStatusResponse {
+export function toAiJobStatusResponse(job: JobRecord, partial: unknown = jobPartial(job)): AiJobStatusResponse {
   const ended = job.status === "failed" || job.status === "canceled";
   const code = ended ? job.errorCode : null;
   const category = code ? errorCategoryOf(code) : null;

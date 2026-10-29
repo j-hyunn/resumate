@@ -9,8 +9,8 @@
 | S3a AI execution (BYOK) | done | 2026-10-28 | — | 없음 (QA-S3a-11은 S3b에서 해결) |
 | S3b BYOK keys & consent | done | 2026-10-29 | 연결 대기 (AI 연결 설정·미터·잠금 상태) | 설계 차이 1 (QA-S3b-06, 기획 판단) |
 | S4 AI writing chat | done | 2026-10-30 | 연결 대기 (A2: S-36, S-08) | 없음 (사용자 확인 [가정] 6건) |
-| S5 application projects & JD | done | 2026-10-31 | 연결 대기 (A3, A4) | Minor 1 (QA-S5-06 교착 가능성) · 사용자 확인 [가정] 8건 |
-| S6 insights | todo | | | |
+| S5 application projects & JD | done | 2026-10-31 | 연결 대기 (A3, A4) | 없음 (QA-S5-06은 S6에서 해결) · 사용자 확인 [가정] 8건 |
+| S6 insights | done | 2026-11-01 | 연결 대기 (A3) | 없음 · 사용자 확인 [가정] 8건, 기획 확인 2건 |
 | S7 documents | todo | | | |
 | S8 mock interview | todo | | | |
 | S9 account & retention | todo | | | |

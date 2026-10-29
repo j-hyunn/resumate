@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(29);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -39,6 +39,7 @@ select is_empty(
 -- S4: + SELECT on writing_chats, writing_chat_messages (writes only through the definer message / patch RPCs).
 -- S5: + SELECT on job_descriptions, jd_requirements (application_projects is column-level without memo;
 --     JD extraction writes only through begin / apply / fail_jd_extraction).
+-- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -52,8 +53,8 @@ select set_eq(
         'achievements:SELECT', 'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
-        'job_descriptions:SELECT', 'jd_requirements:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD tables only');
+        'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight tables only');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -121,8 +122,33 @@ select set_eq(
   array['get_data_readiness', 'complete_ai_job', 'mark_provider_key_invalid', 'record_provider_key_success',
         'check_ai_run_allowed',
         'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
-        'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction RPCs');
+        'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction',
+        'begin_insight', 'complete_insight', 'fail_insight'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight RPCs');
+
+-- S6 (DM §5, A.8): insight RPCs are app_ai_writer only.
+select set_eq(
+  $$select p.proname::text || ':' || r.rolname
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public'
+       and p.proname in ('begin_insight', 'complete_insight', 'fail_insight')
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['begin_insight:app_ai_writer', 'complete_insight:app_ai_writer', 'fail_insight:app_ai_writer'],
+  'S6 insight RPC execute matrix');
+
+-- S6: no API / app role writes insights directly (RPCs + cascade + delete_career_item's definer helper only);
+-- service_role keeps SELECT / DELETE.
+select is_empty(
+  $$select r.rolname, p.privilege_type
+      from pg_roles r
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+     where r.rolname in ('anon', 'authenticated', 'app_ai_writer', 'app_key_reader', 'authenticator', 'service_role')
+       and not (r.rolname = 'service_role' and p.privilege_type = 'DELETE')
+       and (has_table_privilege(r.oid, 'public.insights'::regclass, p.privilege_type)
+            or (p.privilege_type in ('INSERT', 'UPDATE')
+                and has_any_column_privilege(r.oid, 'public.insights'::regclass, p.privilege_type)))$$,
+  'nobody writes insights directly (service_role: SELECT / DELETE only)');
 
 -- S5 (DM §5, §7): application / JD RPC execute matrix. Stage and outcome RPCs are user-session only; JD
 -- extraction RPCs are app_ai_writer only.

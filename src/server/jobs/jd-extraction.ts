@@ -7,7 +7,8 @@ import type { UserSupabaseClient } from "@/server/db/types";
 import { createDbRunGate } from "@/server/services/ai-connection/keys";
 import { createJdExtractionDb } from "@/server/services/application/db";
 import type { JdExtractionDeps, JdExtractor } from "@/server/services/application/extraction";
-import { connections, logJobEvent } from "./app-runner";
+import { connections } from "./connections";
+import { logJobEvent } from "./log";
 import { createSupabaseJobStore } from "./supabase-store";
 import { createSupabaseUsageStore } from "./supabase-usage";
 

@@ -282,6 +282,20 @@ describe("ensureJdExtracted — project deleted mid-run (FL-06)", () => {
     expect(t.keyStatus.successes).toHaveLength(0);
   });
 
+  it("QA-S6-08: the caller's abort (insight job cancel / deadline) stops the call; extraction job canceled, no retry", async () => {
+    const t = setup({ responses: [{ hang: true }, { json: KO_BACKEND.output }] });
+    const caller = new AbortController();
+    const run = ensureJdExtracted(t.deps, PROJECT, { signal: caller.signal });
+    await new Promise((r) => setTimeout(r, 10));
+    caller.abort("timeout");
+    const r = await run;
+    expect(r).toMatchObject({ status: "failed", code: "canceled" });
+    const [job] = onlyJob(t.store);
+    expect(job!.status).toBe("canceled");
+    expect(t.adapter.calls).toHaveLength(1); // the second scripted response stays unused
+    expect(t.usage.forJob(job!.id)).toHaveLength(1);
+  });
+
   it("heartbeat sees the job row gone (cascade) → call aborted, canceled", async () => {
     const t = setup({ responses: [{ hang: true }] });
     t.deps.timing = { heartbeatMs: 5 };

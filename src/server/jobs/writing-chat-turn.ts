@@ -7,7 +7,8 @@ import { createDbRunGate } from "@/server/services/ai-connection/keys";
 import { createTurnChatDb } from "@/server/services/writing-chat/db";
 import { createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
 import type { TurnDeps } from "@/server/services/writing-chat/types";
-import { connections, logJobEvent } from "./app-runner";
+import { connections } from "./connections";
+import { logJobEvent } from "./log";
 import { createSupabaseJobStore } from "./supabase-store";
 import { createSupabaseUsageStore } from "./supabase-usage";
 

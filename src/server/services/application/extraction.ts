@@ -248,7 +248,18 @@ async function openJob(
  * AppError for non-AI refusals (not_found, extraction_in_progress); returns
  * `failed` for every C-11 failure (connection gate included).
  */
-export async function ensureJdExtracted(deps: JdExtractionDeps, applicationProjectId: string): Promise<EnsureJdResult> {
+export async function ensureJdExtracted(
+  deps: JdExtractionDeps,
+  applicationProjectId: string,
+  options: {
+    /**
+     * QA-S6-08: the caller's abort (S6 insight `prepare` step: user cancel /
+     * step deadline / lost). Aborting stops the extraction's calls and retries
+     * and ends its job `canceled`.
+     */
+    signal?: AbortSignal;
+  } = {},
+): Promise<EnsureJdResult> {
   const now = deps.now ?? (() => new Date());
   const log = deps.log ?? (() => {});
   const timing: JdExtractionTiming = { ...DEFAULT_TIMING, ...deps.timing };
@@ -318,8 +329,11 @@ export async function ensureJdExtracted(deps: JdExtractionDeps, applicationProje
   }
   log("jd_extraction.started", { jobId, provider: job.provider, connectionTier: job.connectionTier, sentences: jd.sentences.length });
 
-  // ---- run (heartbeat → cancel / lost; deadline) ----
+  // ---- run (heartbeat → cancel / lost; deadline; caller abort) ----
   const runAbort = new AbortController();
+  const onCallerAbort = () => runAbort.abort("canceled");
+  if (options.signal?.aborted) onCallerAbort();
+  else options.signal?.addEventListener("abort", onCallerAbort, { once: true });
   let lost = false;
   const beat = setInterval(() => {
     void deps.store
@@ -400,6 +414,7 @@ export async function ensureJdExtracted(deps: JdExtractionDeps, applicationProje
     }
   } finally {
     clearInterval(beat);
+    options.signal?.removeEventListener("abort", onCallerAbort);
   }
 
   let result: EnsureJdResult;

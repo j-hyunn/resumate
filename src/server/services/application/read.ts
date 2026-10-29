@@ -30,6 +30,7 @@ import { AppError } from "@/lib/contracts/errors";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
+import { loadInsightProgress } from "@/server/services/insight/progress";
 import { parseSentences } from "./db";
 
 /**
@@ -76,19 +77,22 @@ function jdOf(row: ProjectRow): JdEmbed | null {
 }
 
 /**
- * Extension point for S6–S8: insight state, draft count, interview sessions.
- * S5 has no result tables, so every project is `none / 0 / 0 / false`.
+ * Feature progress per project (S-13, S-39, S-31). S6: insight state
+ * (services/insight/read.ts). S7–S8 fill draft and interview counts.
  */
-export async function loadProgress(_supabase: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, ApplicationProgress>> {
+export async function loadProgress(supabase: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, ApplicationProgress>> {
   const out = new Map<string, ApplicationProgress>();
-  for (const id of ids) out.set(id, { insight: "none", draftCount: 0, interviewCount: 0, interviewInProgress: false });
+  if (ids.length === 0) return out;
+  const insight = await loadInsightProgress(supabase, ids);
+  for (const id of ids) out.set(id, { insight: insight.get(id) ?? "none", draftCount: 0, interviewCount: 0, interviewInProgress: false });
   return out;
 }
 
 const EMPTY_PROGRESS: ApplicationProgress = { insight: "none", draftCount: 0, interviewCount: 0, interviewInProgress: false };
 
-export function toListItem(row: ProjectRow, progress: ApplicationProgress = EMPTY_PROGRESS, failure: JdExtractionFailure | null = null): ApplicationProjectListItem {
+export function toListItem(row: ProjectRow, progress: ApplicationProgress = EMPTY_PROGRESS, jobs: ReadonlyMap<string, ExtractionJobRow> = new Map()): ApplicationProjectListItem {
   const jd = jdOf(row);
+  const extraction = jd ? resolveExtraction(jd, jobs) : { status: "pending" as JdExtractionStatus, failure: null };
   const companyName = jd?.company_name ?? null;
   const positionTitle = jd?.position_title ?? null;
   return {
@@ -104,8 +108,8 @@ export function toListItem(row: ProjectRow, progress: ApplicationProgress = EMPT
     stageChangedAt: row.stage_changed_at,
     lastActivityAt: row.last_activity_at,
     createdAt: row.created_at,
-    extractionStatus: (jd?.extraction_status ?? "pending") as JdExtractionStatus,
-    lastExtractionFailure: jd?.extraction_status === "failed" ? failure : null,
+    extractionStatus: extraction.status,
+    lastExtractionFailure: extraction.status === "failed" ? extraction.failure : null,
     progress,
   };
 }
@@ -122,12 +126,9 @@ function base(supabase: UserSupabaseClient) {
 }
 
 async function withProgress(supabase: UserSupabaseClient, rows: ProjectRow[]): Promise<ApplicationProjectListItem[]> {
-  const failedJobIds = rows.flatMap((r) => {
-    const jd = jdOf(r);
-    return jd?.extraction_status === "failed" && jd.extraction_job_id ? [jd.extraction_job_id] : [];
-  });
-  const [progress, failures] = await Promise.all([loadProgress(supabase, rows.map((r) => r.id)), loadExtractionFailures(supabase, failedJobIds)]);
-  return rows.map((r) => toListItem(r, progress.get(r.id), failures.get(jdOf(r)?.extraction_job_id ?? "") ?? null));
+  const jobIds = rows.flatMap((r) => extractionJobToCheck(jdOf(r)));
+  const [progress, jobs] = await Promise.all([loadProgress(supabase, rows.map((r) => r.id)), loadExtractionJobs(supabase, jobIds)]);
+  return rows.map((r) => toListItem(r, progress.get(r.id), jobs));
 }
 
 const FAILURE_JOB_COLUMNS = "id, status, error_code, retry_after, quota_resets_at, finished_at";
@@ -137,16 +138,45 @@ const FAILURE_JOB_COLUMNS = "id, status, error_code, retry_after, quota_resets_a
  * extraction (`extraction_job_id`) — failed, or canceled (deleted / refused),
  * or closed as stalled by the sweep (the DB trigger then marks the JD failed).
  */
-export async function loadExtractionFailures(supabase: UserSupabaseClient, jobIds: readonly string[]): Promise<Map<string, JdExtractionFailure>> {
-  const out = new Map<string, JdExtractionFailure>();
+export type ExtractionJobRow = { id: string; status: string; error_code: string | null; retry_after: string | null; quota_resets_at: string | null; finished_at: string | null };
+
+/** Jobs whose state decides a JD's shown extraction status: `failed` (the failure) and `running` (still alive?). */
+export function extractionJobToCheck(jd: { extraction_status: string; extraction_job_id: string | null } | null): string[] {
+  return jd && (jd.extraction_status === "failed" || jd.extraction_status === "running") && jd.extraction_job_id ? [jd.extraction_job_id] : [];
+}
+
+export async function loadExtractionJobs(supabase: UserSupabaseClient, jobIds: readonly string[]): Promise<Map<string, ExtractionJobRow>> {
+  const out = new Map<string, ExtractionJobRow>();
   if (jobIds.length === 0) return out;
   const { data, error } = await supabase.from("ai_jobs").select(FAILURE_JOB_COLUMNS).in("id", [...new Set(jobIds)]);
   if (error) throw mapDbError(error);
-  for (const row of data ?? []) {
-    const failure = toFailure(row);
-    if (failure) out.set(row.id, failure);
-  }
+  for (const row of data ?? []) out.set(row.id, row);
   return out;
+}
+
+/**
+ * The extraction status to show (S6, QA-S5-06 follow-up): the "job ended →
+ * JD failed" trigger skips locked rows, so a JD can rarely stay `running`
+ * after its job ended. A `running` JD whose job is terminal and not
+ * succeeded — or gone — is shown as `failed` with that job's failure
+ * (`stalled` when the job row no longer exists). A `failed` JD shows its
+ * job's failure as before (QA-S5-02).
+ */
+export function resolveExtraction(
+  jd: { extraction_status: string; extraction_job_id: string | null },
+  jobs: ReadonlyMap<string, ExtractionJobRow>,
+): { status: JdExtractionStatus; failure: JdExtractionFailure | null } {
+  const status = jd.extraction_status as JdExtractionStatus;
+  const job = jd.extraction_job_id ? jobs.get(jd.extraction_job_id) : undefined;
+  if (status === "failed") return { status, failure: job ? toFailure(job) : null };
+  if (status !== "running") return { status, failure: null };
+  if (!job) {
+    if (!jd.extraction_job_id) return { status, failure: null };
+    const event = toAiFailure(aiErrorEvent("stalled"));
+    return { status: "failed", failure: { ...event, jobId: jd.extraction_job_id, failedAt: null } };
+  }
+  if (job.status === "failed" || job.status === "canceled") return { status: "failed", failure: toFailure(job) };
+  return { status, failure: null };
 }
 
 /** S-13: 최근 활동순(기본) / 마감일순 (마감일 없는 행은 뒤), optional stage filter [가정]. */
@@ -188,20 +218,20 @@ async function loadProject(supabase: UserSupabaseClient, id: string): Promise<Pr
 export async function getApplicationHub(supabase: UserSupabaseClient, id: string): Promise<ApplicationHub> {
   const row = await loadProject(supabase, id);
   const jd = jdOf(row)!;
-  const [progress, failures, count] = await Promise.all([
+  const [progress, jobs, count] = await Promise.all([
     loadProgress(supabase, [row.id]),
-    loadExtractionFailures(supabase, jd.extraction_status === "failed" && jd.extraction_job_id ? [jd.extraction_job_id] : []),
+    loadExtractionJobs(supabase, extractionJobToCheck(jd)),
     supabase.from("jd_requirements").select("id", { count: "exact", head: true }).eq("job_description_id", jd.id),
   ]);
   if (count.error) throw mapDbError(count.error);
   return {
-    ...toListItem(row, progress.get(row.id), failures.get(jd.extraction_job_id ?? "") ?? null),
+    ...toListItem(row, progress.get(row.id), jobs),
     memo: row.memo,
     companyNameSource: jd.company_name_source as JdFieldSource | null,
     positionTitleSource: jd.position_title_source as JdFieldSource | null,
     jd: {
       jobDescriptionId: jd.id,
-      extractionStatus: jd.extraction_status as JdExtractionStatus,
+      extractionStatus: resolveExtraction(jd, jobs).status,
       requirementCount: count.count ?? 0,
       extractionProvider: jd.extraction_provider as AiProvider | null,
       extractionModel: jd.extraction_model,
@@ -258,14 +288,15 @@ export async function getJdView(supabase: UserSupabaseClient, applicationProject
   if (error) throw mapDbError(error);
   if (!jd) throw notFound();
 
-  const [reqs, failures] = await Promise.all([
+  const [reqs, jobs] = await Promise.all([
     supabase
       .from("jd_requirements")
       .select("id, category, content, keywords, importance, source_sids, sort_order, origin, is_user_edited")
       .eq("job_description_id", jd.id)
       .order("sort_order"),
-    loadExtractionFailures(supabase, jd.extraction_status === "failed" && jd.extraction_job_id ? [jd.extraction_job_id] : []),
+    loadExtractionJobs(supabase, extractionJobToCheck(jd)),
   ]);
+  const resolved = resolveExtraction(jd, jobs);
   if (reqs.error) throw mapDbError(reqs.error);
 
   const extraction = asObject(jd.extraction);
@@ -291,13 +322,13 @@ export async function getJdView(supabase: UserSupabaseClient, applicationProject
     companyNameSource: jd.company_name_source as JdFieldSource | null,
     positionTitle: jd.position_title,
     positionTitleSource: jd.position_title_source as JdFieldSource | null,
-    extractionStatus: jd.extraction_status as JdExtractionStatus,
+    extractionStatus: resolved.status,
     requirements,
     techKeywords: parseTechKeywords(jd.tech_keywords),
     seniority: succeeded ? parseSeniority(extraction) : null,
     isLikelyJd: succeeded && typeof extraction.is_likely_jd === "boolean" ? extraction.is_likely_jd : null,
     extractionWarnings: succeeded ? stringArray(extraction.warnings) : [],
     extractedBy: succeeded && jd.extraction_provider && jd.extraction_model ? { provider: jd.extraction_provider as AiProvider, model: jd.extraction_model } : null,
-    lastFailure: jd.extraction_status === "failed" ? (failures.get(jd.extraction_job_id ?? "") ?? null) : null,
+    lastFailure: resolved.status === "failed" ? resolved.failure : null,
   };
 }

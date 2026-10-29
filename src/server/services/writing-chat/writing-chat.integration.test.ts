@@ -170,7 +170,9 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     // No key in this test user: reading works, sending is locked (PRD 3.3).
     expect(chat.connection.lock).toBe("ai_not_connected");
     expect(chat.canSend).toBe(false);
-    const tree = await getCareerTree(user);
+    // QA-S6-05: `now` fixed to the chat's own last_activity_at (DB clock), so host/DB clock skew can't flip the day count.
+    const lastActivity = await user.from("writing_chats").select("last_activity_at").eq("id", chatId).single();
+    const tree = await getCareerTree(user, new Date(lastActivity.data!.last_activity_at));
     expect(tree.activeWritingChats.map((c) => c.id)).toContain(chatId);
     expect(tree.activeWritingChats.find((c) => c.id === chatId)?.daysUntilAutoDelete).toBe(90);
   });

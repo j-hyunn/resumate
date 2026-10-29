@@ -62,6 +62,7 @@ function parseMeta(value: unknown, runGeneration: number, waitTotal: number): Jo
     runBase: typeof m.runBase === "number" ? m.runBase : runGeneration,
     waitBase: typeof m.waitBase === "number" ? m.waitBase : waitTotal,
     retries: m.retries && typeof m.retries === "object" ? m.retries : {},
+    ...(m.partials && typeof m.partials === "object" && !Array.isArray(m.partials) ? { partials: m.partials } : {}),
   };
 }
 

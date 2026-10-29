@@ -81,6 +81,8 @@ describe("mappers", () => {
     const now = new Date("2026-10-30T00:00:00Z");
     expect(daysUntilAutoDelete({ projectId: null, status: "active", lastActivityAt: "2026-10-30T00:00:00Z" }, now)).toBe(90);
     expect(daysUntilAutoDelete({ projectId: null, status: "abandoned", lastActivityAt: "2026-08-01T00:00:00Z" }, now)).toBe(0);
+    // QA-S6-05: last activity slightly after `now` (DB clock ahead) stays 90, not 91.
+    expect(daysUntilAutoDelete({ projectId: null, status: "active", lastActivityAt: new Date(now.getTime() + 52).toISOString() }, now)).toBe(90);
     expect(daysUntilAutoDelete({ projectId: U1, status: "active", lastActivityAt: "2026-10-30T00:00:00Z" }, now)).toBeNull();
     expect(daysUntilAutoDelete({ projectId: null, status: "saved", lastActivityAt: "2026-10-30T00:00:00Z" }, now)).toBeNull();
   });

@@ -267,6 +267,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"insights": {
+                  Row: {
+                    "ai_job_id": string | null,"application_project_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"id": string,"input_hash": string | null,"is_latest": boolean,"match_stage_result": Json | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"requirements_hash": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null,"version_no": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_job_id"?: string | null,"application_project_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no": number
+                  }
+                  Update: {
+                    "ai_job_id"?: string | null,"application_project_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "insights_ai_job_fkey"
+      columns: ["ai_job_id","user_id"]
+isOneToOne: false
+      referencedRelation: "ai_jobs"
+      referencedColumns: ["id","user_id"]
+    },{
+      foreignKeyName: "insights_application_project_fkey"
+      columns: ["application_project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "application_projects"
+      referencedColumns: ["id","user_id"]
+    }
+                  ]
                 },"jd_requirements": {
                   Row: {
                     "category": string,"content": string,"created_at": string,"id": string,"importance": string,"is_user_edited": boolean,"job_description_id": string,"keywords": (string)[],"origin": string,"sort_order": number,"source_sids": (string)[],"updated_at": string,"user_id": string
@@ -533,6 +559,9 @@ isOneToOne: false
               "is_final": boolean,"message_count": number,"message_id": string,"reused": boolean,"sequence": number
             }[]
                            },
+"begin_insight":
+{ Args: { "p_ai_job_id": string,"p_application_project_id": string }; Returns: string
+                           },
 "begin_jd_extraction":
 { Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: undefined
                            },
@@ -547,6 +576,9 @@ isOneToOne: false
 "complete_ai_job":
 { Args: { "p_job_id": string,"p_progress"?: Json,"p_run_generation": number }; Returns: undefined
                            },
+"complete_insight":
+{ Args: { "p_ai_job_id": string,"p_insight_id": string,"p_payload": Json,"p_run_generation": number }; Returns: Json
+                           },
 "create_application_project":
 { Args: { "p_company_name"?: string,"p_deadline"?: string,"p_id": string,"p_name"?: string,"p_position_title"?: string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json }; Returns: Json
                            },
@@ -555,6 +587,9 @@ isOneToOne: false
                            },
 "delete_provider_key":
 { Args: { "p_provider": string }; Returns: boolean
+                           },
+"fail_insight":
+{ Args: { "p_ai_job_id": string,"p_insight_id": string }; Returns: boolean
                            },
 "fail_jd_extraction":
 { Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: boolean

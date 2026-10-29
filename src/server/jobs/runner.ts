@@ -33,6 +33,7 @@ import type {
   RunnerTiming,
   UserScope,
 } from "./types";
+import { STEP_CONTINUE } from "./types";
 
 /**
  * ai_jobs lifecycle v4 (AI C-6, C-11.3, C-12, C-13; S3a plan "계약 — API").
@@ -130,8 +131,15 @@ function isActive(status: string): boolean {
   return status === "queued" || status === "running";
 }
 
-function emptyMeta(runBase: number, waitBase: number): JobMeta {
-  return { runBase, waitBase, retries: {} };
+function emptyMeta(runBase: number, waitBase: number, partials?: Record<string, unknown>): JobMeta {
+  return partials && Object.keys(partials).length > 0 ? { runBase, waitBase, retries: {}, partials } : { runBase, waitBase, retries: {} };
+}
+
+function withoutKey<T>(record: Record<string, T> | undefined, key: string): Record<string, T> | undefined {
+  if (!record || !(key in record)) return record;
+  const { [key]: _drop, ...rest } = record;
+  void _drop;
+  return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
 export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
@@ -244,7 +252,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     const gen = job.runGeneration + 1;
     let won: boolean;
     try {
-      won = await scope.store.requeueFailed(job.id, job.runGeneration, iso(), job.stepOutputs, emptyMeta(gen, job.retryWaitTotalMs));
+      // S6: per-call work saved by an unfinished stage (savePartial) is kept, like completed stages (C-6).
+      won = await scope.store.requeueFailed(job.id, job.runGeneration, iso(), job.stepOutputs, emptyMeta(gen, job.retryWaitTotalMs, job.meta.partials));
     } catch (err) {
       if (err instanceof AppError && err.code === "conflict") {
         const other = job.targetType && job.targetId
@@ -313,6 +322,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     let retryCount = claimed.retryCount;
     let waitTotal = claimed.retryWaitTotalMs;
     let meta: JobMeta = claimed.meta;
+    /** Last progress this run wrote (a continued / resumed stage keeps its done/total). */
+    let lastProgress: StoredAiJobProgress = claimed.progress;
 
     /**
      * QA-S3a-03: every Llm this run created (one per step attempt, bound to the
@@ -414,7 +425,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
           }
 
           // C-12: free tier keeps a minimum spacing per user and provider; wait via next_run_at, not here.
-          if (claimed.connectionTier === "free") {
+          const willCall = typeof step.callsProvider === "function" ? step.callsProvider(outputs) : step.callsProvider !== false;
+          if (claimed.connectionTier === "free" && willCall) {
             const runAt = await nextFreeTierSlot(scope, claimed);
             if (runAt) {
               await write(store.update(claimed.id, gen, { status: "queued", nextRunAt: runAt.toISOString(), heartbeatAt: iso() }));
@@ -439,19 +451,50 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
           }
 
           const total = step.total ?? 1;
-          await write(store.update(claimed.id, gen, { progress: { stage: step.stage, done: 0, total }, heartbeatAt: iso() }));
+          // A stage resumed with saved partial work (S6) keeps the done/total it reported.
+          const resumed = lastProgress.stage === step.stage && meta.partials?.[step.stage] !== undefined;
+          const startProgress = resumed ? { stage: step.stage, done: lastProgress.done, total: lastProgress.total } : { stage: step.stage, done: 0, total };
+          await write(store.update(claimed.id, gen, { progress: startProgress, heartbeatAt: iso() }));
+          lastProgress = startProgress;
           ranThisInvocation++;
 
           const attempt = 1 + Object.values(meta.retries[step.stage] ?? {}).reduce((a, n) => a + (n ?? 0), 0);
-          const result = await runStepGuarded(scope, claimed, gen, step, outputs, attempt, stepTimeout, llmFor);
+          // S6 savePartial: serialized writes of the latest meta (runner-owned), conditional on the current generation.
+          let partialChain: Promise<boolean> = Promise.resolve(true);
+          const persistPartial = (value: unknown): Promise<boolean> => {
+            meta = { ...meta, partials: { ...(meta.partials ?? {}), [step.stage]: value } };
+            partialChain = partialChain.then((okSoFar) => (okSoFar ? store.saveStepOutputs(claimed.id, gen, outputs, meta, { heartbeatAt: iso() }) : false));
+            return partialChain;
+          };
+          const result = await runStepGuarded(scope, claimed, gen, step, outputs, attempt, stepTimeout, llmFor, {
+            partial: meta.partials?.[step.stage] ?? null,
+            persistPartial,
+            onProgress: (p) => {
+              lastProgress = p;
+            },
+          });
+          // Let a savePartial still in flight land before the next conditional write.
+          await partialChain.catch(() => false);
+          if (result.ok && result.value === STEP_CONTINUE) {
+            // One unit done (S6, C-12 free tier): the next unit is a new call — its own C-11.3 retry budget.
+            meta = { ...meta, retries: withoutKey(meta.retries, step.stage) ?? {} };
+            await write(store.saveStepOutputs(claimed.id, gen, outputs, meta, { heartbeatAt: iso() }));
+            continue; // same step: spacing, run gate and budget checks run again first
+          }
           if (result.ok) {
             outputs[step.stage] = result.value ?? null;
+            const partials = withoutKey(meta.partials, step.stage);
+            meta = partials ? { ...meta, partials } : { runBase: meta.runBase, waitBase: meta.waitBase, retries: meta.retries };
+            // A step that reported its own total (e.g. match batches) ends at that total.
+            const endTotal = lastProgress.stage === step.stage ? Math.max(total, lastProgress.total) : total;
+            const doneProgress = { stage: step.stage, done: endTotal, total: endTotal };
             await write(
               store.saveStepOutputs(claimed.id, gen, outputs, meta, {
-                progress: { stage: step.stage, done: total, total },
+                progress: doneProgress,
                 heartbeatAt: iso(),
               }),
             );
+            lastProgress = doneProgress;
             i++;
             continue;
           }
@@ -509,7 +552,7 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
               retryWaitTotalMs: waitTotal,
               nextRunAt: runAt,
               heartbeatAt: iso(),
-              progress: { stage: step.stage, done: 0, total, waiting_retry_until: runAt },
+              progress: { stage: step.stage, done: lastProgress.stage === step.stage ? lastProgress.done : 0, total: lastProgress.stage === step.stage ? lastProgress.total : total, waiting_retry_until: runAt },
             }),
           );
           return "scheduled";
@@ -603,6 +646,11 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     attempt: number,
     stepTimeout: number,
     llmFor: (signal: AbortSignal) => TLlm,
+    extra: {
+      partial: unknown;
+      persistPartial: (value: unknown) => Promise<boolean>;
+      onProgress: (progress: StoredAiJobProgress) => void;
+    },
   ): Promise<{ ok: true; value: unknown } | { ok: false; failure: ReturnType<typeof classifyStepError> }> {
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(ABORT_TIMEOUT), stepTimeout);
@@ -644,9 +692,21 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
         db: scope.db,
         signal: controller.signal,
         attempt,
+        runGeneration: gen,
         reportProgress: async (done, total) => {
-          const ok = await scope.store.update(job.id, gen, { progress: { stage: step.stage, done, total }, heartbeatAt: iso() });
+          const progress = { stage: step.stage, done, total };
+          const ok = await scope.store.update(job.id, gen, { progress, heartbeatAt: iso() });
           if (!ok) controller.abort(ABORT_LOST);
+          else extra.onProgress(progress);
+        },
+        partial: extra.partial,
+        savePartial: async (value) => {
+          if (controller.signal.aborted) throw new StepAborted(String(controller.signal.reason));
+          const ok = await extra.persistPartial(value);
+          if (!ok) {
+            controller.abort(ABORT_LOST);
+            throw new StepAborted(ABORT_LOST);
+          }
         },
       });
       // A step that ignores the signal must not hold the runner: race it. Its

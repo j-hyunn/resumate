@@ -82,6 +82,12 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   already_extracted: { message: "이미 요건을 정리한 공고예요.", status: 409 },
   extraction_in_progress: { message: "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
   user_edited_requirements_exist: { message: "직접 수정한 요건이 있어 다시 정리할 수 없어요.", status: 409 },
+  // S6 insights (db notes "RPC 시그니처")
+  insight_not_found: { message: "인사이트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  insight_in_progress: { message: "인사이트를 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
+  jd_not_extracted: { message: "공고 요건을 먼저 정리해야 해요.", status: 409 },
+  invalid_insight_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  invalid_evidence_source: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // server-built arguments
   invalid_raw_text_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sentences: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
@@ -162,6 +168,8 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_raw_text_hash: "internal_error",
   invalid_sentences: "internal_error",
   invalid_extraction_result: "internal_error",
+  invalid_insight_payload: "internal_error",
+  invalid_evidence_source: "internal_error",
 };
 
 export function mapDbError(error: DbError): AppError {

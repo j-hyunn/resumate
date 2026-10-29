@@ -122,11 +122,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * S-08 / S-36 "{N}일 뒤 자동 삭제" (DM §3.4 [가정] 90 days after the last
  * activity). Only chats without a project (`project_id` null) that are active
- * or abandoned; rounded up, never below 0.
+ * or abandoned; rounded up, between 0 and WRITING_CHAT_RETENTION_DAYS.
  */
 export function daysUntilAutoDelete(chat: { projectId: string | null; status: WritingChatStatus; lastActivityAt: string }, now: Date): number | null {
   if (chat.projectId !== null) return null;
   if (chat.status !== "active" && chat.status !== "abandoned") return null;
   const deleteAt = Date.parse(chat.lastActivityAt) + WRITING_CHAT_RETENTION_DAYS * DAY_MS;
-  return Math.max(0, Math.ceil((deleteAt - now.getTime()) / DAY_MS));
+  // QA-S6-05: a DB clock slightly ahead of the app's must not show 91 days for a chat created just now.
+  return Math.min(WRITING_CHAT_RETENTION_DAYS, Math.max(0, Math.ceil((deleteAt - now.getTime()) / DAY_MS)));
 }

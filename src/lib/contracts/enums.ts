@@ -137,7 +137,11 @@ export type FailureCause = (typeof FAILURE_CAUSES)[number];
 
 /** ai_jobs.progress.stage values (AI C-6 "진행 단계 값"). */
 export const AI_PROGRESS_STAGES = [
+  // S6 [가정, spec-gaps S6 (api) ⑫]: AI-02 first step (D-30 JD extraction first + begin_insight) and the V-5 regeneration call.
+  "prepare",
   "match",
+  "synthesize",
+  "synthesize_regen",
   "synthesize",
   "validate",
   "rank",

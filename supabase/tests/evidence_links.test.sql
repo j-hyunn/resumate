@@ -15,8 +15,9 @@ select policies_are('public', 'evidence_links',
 select set_eq(
   $$select tgname::text from pg_trigger where tgname like '%_evidence_source_deleted' and not tgisinternal$$,
   array['experiences_evidence_source_deleted', 'educations_evidence_source_deleted', 'projects_evidence_source_deleted',
-        'project_details_evidence_source_deleted', 'achievements_evidence_source_deleted', 'skills_evidence_source_deleted'],
-  'deletion trigger on each career evidence source table');
+        'project_details_evidence_source_deleted', 'achievements_evidence_source_deleted', 'skills_evidence_source_deleted',
+        'jd_requirements_evidence_source_deleted', 'job_descriptions_evidence_source_deleted'],
+  'deletion trigger on each career / JD (S6) evidence source table');
 
 -- A's career data (as the user).
 set local role authenticated;
@@ -41,28 +42,33 @@ reset role;
 insert into public.application_projects (id, user_id, name, name_source)
   values ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'P', 'user'),
          ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000002', 'P', 'user');
+-- S6: jd_sentence links must point at the project's JD with a valid locator.
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences)
+  values ('f0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
+          'c0000000-0000-0000-0000-000000000001', '결제 경험 우대', 'h', '[{"sid":"S1","text":"결제 경험 우대","start":0,"end":8}]');
 
 -- app_ai_writer inserts links for A.
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 
-create temp table t_links (id uuid, source_type text, source_id uuid, source_field text, quote text);
+create temp table t_links (id uuid, source_type text, source_id uuid, source_field text, quote text, source_locator jsonb);
 insert into t_links values
-  ('e0000000-0000-0000-0000-000000000001', 'experience', 'a0000000-1111-0000-0000-000000000001', 'summary', '결제 플랫폼'),
-  ('e0000000-0000-0000-0000-000000000002', 'education', 'a0000000-2222-0000-0000-000000000001', 'description', '컴퓨터공학'),
-  ('e0000000-0000-0000-0000-000000000003', 'project', 'a0000000-3333-0000-0000-000000000001', 'summary', '결제'),
-  ('e0000000-0000-0000-0000-000000000004', 'project_detail', 'a0000000-4444-0000-0000-000000000002', 'action', 'a2'),
-  ('e0000000-0000-0000-0000-000000000005', 'achievement', 'a0000000-5555-0000-0000-000000000001', 'description', '지연 감소'),
-  ('e0000000-0000-0000-0000-000000000006', 'skill', 'a0000000-6666-0000-0000-000000000001', 'name', null),
-  ('e0000000-0000-0000-0000-000000000007', 'project_detail', 'a0000000-4444-0000-0000-000000000001', 'action', '인덱스 재설계'),
-  ('e0000000-0000-0000-0000-000000000008', 'profile', 'a0000000-0000-0000-0000-000000000001', 'desired_job_title', null),
-  ('e0000000-0000-0000-0000-000000000009', 'jd_sentence', 'f0000000-0000-0000-0000-000000000001', null, '결제 경험');
+  ('e0000000-0000-0000-0000-000000000001', 'experience', 'a0000000-1111-0000-0000-000000000001', 'summary', '결제 플랫폼', null),
+  ('e0000000-0000-0000-0000-000000000002', 'education', 'a0000000-2222-0000-0000-000000000001', 'description', '컴퓨터공학', null),
+  ('e0000000-0000-0000-0000-000000000003', 'project', 'a0000000-3333-0000-0000-000000000001', 'summary', '결제', null),
+  ('e0000000-0000-0000-0000-000000000004', 'project_detail', 'a0000000-4444-0000-0000-000000000002', 'action', 'a2', null),
+  ('e0000000-0000-0000-0000-000000000005', 'achievement', 'a0000000-5555-0000-0000-000000000001', 'description', '지연 감소', null),
+  ('e0000000-0000-0000-0000-000000000006', 'skill', 'a0000000-6666-0000-0000-000000000001', 'name', null, null),
+  ('e0000000-0000-0000-0000-000000000007', 'project_detail', 'a0000000-4444-0000-0000-000000000001', 'action', '인덱스 재설계', null),
+  ('e0000000-0000-0000-0000-000000000008', 'profile', 'a0000000-0000-0000-0000-000000000001', 'desired_job_title', null, null),
+  ('e0000000-0000-0000-0000-000000000009', 'jd_sentence', 'f0000000-0000-0000-0000-000000000001', null, '결제 경험',
+   '{"sid":"S1","start":0,"end":5}');
 
 select lives_ok($$insert into public.evidence_links
                     (id, application_project_id, owner_type, owner_id, item_key, sort_order, source_type, source_id,
-                     source_field, quote, source_snapshot_at, source_label)
+                     source_field, quote, source_snapshot_at, source_label, source_locator)
                   select id, 'c0000000-0000-0000-0000-000000000001', 'insight', 'd0000000-0000-0000-0000-000000000001',
-                         'strengths.0', 0, source_type, source_id, source_field, quote, now(), 'label'
+                         'strengths.0', 0, source_type, source_id, source_field, quote, now(), 'label', source_locator
                     from t_links$$,
                 'app_ai_writer inserts links for each source type');
 select is((select count(*)::int from public.evidence_links where source_deleted_at is null), 9,

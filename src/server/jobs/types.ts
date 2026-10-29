@@ -36,6 +36,12 @@ export type JobMeta = {
   waitBase: number;
   /** Automatic retries per call (stage) and cause in the current run: `{ [stage]: { [code]: n } }`. */
   retries: Record<string, Partial<Record<AiErrorCode, number>>>;
+  /**
+   * S6: work a step saved before it finished (`ctx.savePartial`), by stage —
+   * e.g. AI-02 match batches that already succeeded. Survives automatic and
+   * manual retries; dropped when the stage completes.
+   */
+  partials?: Record<string, unknown>;
 };
 
 export const META_KEY = "_meta";
@@ -309,7 +315,31 @@ export type StepContext<TLlm = unknown> = {
   reportProgress: (done: number, total: number) => Promise<void>;
   /** 1 for the first try of this step in this run, +1 per automatic retry. */
   attempt: number;
+  /**
+   * ai_jobs.run_generation this attempt runs under (QA-S3-05). Pass it to
+   * result RPCs that guard late runs (S6 `complete_insight`).
+   */
+  runGeneration: number;
+  /** What this stage saved with `savePartial` in an earlier attempt / invocation (null when nothing). */
+  partial: unknown;
+  /**
+   * S6 (QA-S3a-08 rule): persists validated per-call work of an unfinished
+   * stage (e.g. one AI-02 match batch) so a retry or the next invocation
+   * doesn't call again for it. Storage-form data only (QA-S3-08). Writes are
+   * serialized; a lost job aborts the step.
+   */
+  savePartial: (value: unknown) => Promise<void>;
 };
+
+/**
+ * S6: returned by a step that did one unit of its work and wants to be run
+ * again (free tier C-12: one provider call per run, so call spacing, the
+ * invocation budget, and per-call retry counts apply between units). The
+ * step's progress lives in `savePartial`; the stage completes when the step
+ * returns anything else.
+ */
+export const STEP_CONTINUE: unique symbol = Symbol.for("resumate.job.step_continue");
+export type StepContinue = typeof STEP_CONTINUE;
 
 export type JobStep<TLlm = unknown> = {
   /** C-6 progress stage key (`match`, `generate`, …). Unique within the job type. */
@@ -318,6 +348,12 @@ export type JobStep<TLlm = unknown> = {
   total?: number;
   /** Step deadline; default STEP_TIMEOUT_MS. Must stay under the invocation budget. */
   timeoutMs?: number;
+  /**
+   * False for a step that never calls a provider (S6 `validate`), or a
+   * function of the completed stages for a step that calls only sometimes
+   * (S6 `synthesize_regen`): when false, the C-12 free-tier spacing is skipped. Default true.
+   */
+  callsProvider?: boolean | ((previous: Readonly<Record<string, unknown>>) => boolean);
   /** Returns a JSON-serializable result (stored as the stage checkpoint). */
   run: (ctx: StepContext<TLlm>) => Promise<unknown>;
 };

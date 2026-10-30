@@ -2,17 +2,19 @@
 
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
-- 최종 정리: 2026-10-28
-- 반영한 사용자 피드백: 초기 인터뷰 + 수정 피드백 1·2차 + 결정 10건(2026-10-24) + BYOK 전환(2026-10-26) + BYOK 결정(2026-10-28) (`_workspace/00_input/brief.md`)
+- 최종 정리: 2026-11-06
+- 반영한 사용자 피드백: 초기 인터뷰 + 수정 피드백 1·2차 + 결정 10건(2026-10-24) + BYOK 전환(2026-10-26) + BYOK 결정(2026-10-28) (`_workspace/00_input/brief.md`) + **백엔드 구현 차이 결정 24건(2026-11-05)** (`_workspace/00_input/planning-decisions-2026-11-05.md`)
+- 2026-11-05 개정: 백엔드 S0~S9 구현 중 기획과 달랐던 부분(사용자 결정 A1~A24, 구현이 정한 내용 B, 구현 기본값 C는 `[가정]`, 공급자 문서·가격 변경 D)을 네 문서에 반영했다
+- 2026-11-06 추가 (사용자가 판단 위임 → 리더 판단): DM 2.11.7에 같은 행 다시 시도 409 `ai_connection_changed`·판정 순서, 경로 ⑤ 요청 범위 작업 시작(동의 필요 = `key_missing`)을 더하고 UX C-20에 맞췄다(문서 버전 그대로, 리뷰어 재검토 없음)
 
 ## 문서 목록
 
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
-| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.2 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.2 | ux-planner |
-| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.2 | ai-feature-designer |
-| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.1a | data-architect |
+| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.3 | product-planner |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.3 | ux-planner |
+| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.3 | ai-feature-designer |
+| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.2 | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |
 
 ## MVP 한 문단 요약
@@ -36,12 +38,21 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 - 초기~결정 반영 사이클: 리뷰 2라운드 + 확인 패스, 이슈 35건 모두 해결
 - BYOK 사이클: 리뷰 2라운드, 이슈 12건(R-36~R-47) 모두 해결. 마지막 5건(R-37·R-38 잔여, R-45~R-47)은 담당자 보고와 검색으로 확인했고 리뷰어 재검토는 거치지 않았다
-- **미해결 이슈 0건, Critical 0건**
+- 백엔드 구현 반영 사이클(2026-11-05): 리뷰 2라운드 + A1 변경 확인 1회, 이슈 19건(R-48~R-66). R-49·R-60은 라운드 2 뒤, R-63~R-66은 A1 변경 확인 뒤 담당자·리더가 고쳤다(리뷰어 재검토 없음, grep으로만 확인). R-48은 사용자의 A1 변경으로 폐기
+- **미해결 이슈 2건(모두 Minor), Critical 0건**
+  - R-61: UX S-25 재진입 행에 "판정 방법은 데이터 모델 확인 요청"이 남아 있음(DM 6.1에서 이미 정의됨). `profile_missing` 화면 처리 없음
+  - R-62: 작업 원본 요청 절의 "(해소)" 표시 정리가 일부만 됨(작업 원본만, `docs/planning/`에는 요청 절 없음)
 
 ## 남은 결정
 
 - 사용자 결정 1건: D-14 모의 면접 점수 산식 (추후 정의)
+- 출시 전 확정 2건: D-10 정책·AI 고지 문구(시작 인사 무료 등급 문장 포함), KMS 공급사
 - 법무 확인 1건: D-39 공급자 전송의 국외 이전 해당 여부 (확인 전까지 국외 이전으로 보고 고지)
 - 출시 조건: 세 공급자(Gemini / Claude / OpenAI) 모두 평가 세트 통과
 
 내용은 [decisions.md](decisions.md)에 있다.
+
+## 남은 일
+
+- **백엔드 후속 수정 ★ 14건**(A1·A2·A5·A6·A7·A10·A11·A13·A18·A19·A20·A22·A23·A24)과 리뷰 중 생긴 확인 항목 5건. 목록은 [decisions.md](decisions.md) 4장. `resumate-backend`로 처리한다
+- **UI 하네스 문서**: `resumate-ui`의 `patterns.md`가 AI-12를 C-04 블록 이벤트와 "월간 대화 한도"로 설명한다. 실제는 대화 이벤트(`turn_started` → `reply_delta` → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`)이고 한도는 폐기됐다. S-36을 연결하기 전에 `resumate-ui`로 고친다(기획 범위 밖)

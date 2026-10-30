@@ -38,6 +38,14 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   consent_required: { message: "AI 데이터 사용 고지에 다시 동의해 주세요.", status: 409 },
   key_not_found: { message: "등록된 키가 없는 공급자예요.", status: 404 },
   key_id_mismatch: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
+  // R2 retry_ai_job (DM 2.11.7 path ②, same codes and copy as runGateError in jobs/provider-context.ts)
+  key_missing: { message: "AI 연결이 필요합니다. 키를 등록한 뒤 다시 시도해 주세요.", status: 409 },
+  key_invalid: { message: "AI 키가 유효하지 않습니다. 키를 확인해 다시 연결해 주세요.", status: 409 },
+  ai_consent_required: { message: "AI 데이터 사용 고지에 다시 동의해 주세요.", status: 409 },
+  ai_job_not_retryable: { message: "다시 시도할 수 없는 작업입니다.", status: 409 },
+  // QA-R2-01: the active provider / tier changed while the retry was being prepared (twice in a row).
+  ai_connection_changed: { message: "AI 연결이 방금 바뀌었어요. 다시 시도해 주세요.", status: 409 },
+  invalid_run_meta: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_provider: { message: "입력값을 확인해 주세요." },
   invalid_connection_tier: { message: "입력값을 확인해 주세요." },
   // Server-built arguments: a mismatch here is our bug, not the user's input.
@@ -196,6 +204,7 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_source: "invalid_input",
   protected_field: "conflict",
   invalid_ai_metadata: "internal_error",
+  invalid_run_meta: "internal_error",
   invalid_ai_job: "internal_error",
   invalid_message_status: "internal_error",
   invalid_message_state: "internal_error",

@@ -501,3 +501,22 @@
 - ⑦ **키 저장의 `p_disclosure_version` `[구현 결정]`** (A20): 서버가 사용자의 최신 유효 동의 행의 버전을 넘긴다. 클라이언트가 보내는 `disclosureVersion`은 계약에 남아 있지만(등급 변경 refine 포함) 더 이상 판정에 쓰지 않는다. 화면이 보던 버전과 정확히 같아야 한다는 옛 규칙은 없어졌다.
 - ⑧ **S-10 "AI 작성 대화 기록" 목록 신설** (A6): `listProjectWritingChats({ projectId })` — 그 프로젝트의 모든 상태 대화. 이전 슬라이스에는 이 목록 서비스가 없었다.
 - ⑨ **재개 멱등 `[구현 결정]`** (A6): 이미 `active`인 대화의 재개는 성공으로 돌려준다(두 번 누름·다른 탭). `saved`·`handed_off`는 409 `writing_chat_not_resumable`.
+
+## 2026-11-06 · R2 (db) · 같은 행 다시 시도 = 활성 공급자 (A1 변경·A1 세부·R-63·R-64) (db-engineer)
+
+- ① **`retry_ai_job` 실행 역할 = `app_ai_writer` `[구현 결정]`** (R2 계획은 `authenticated`): 러너 저장소가 이미 app_ai_writer 클라이언트로 작업 행을 다루고, 사용자 세션이 `p_model`·`p_run_meta`를 임의로 넣지 못하게 하려는 것. 소유 검사는 JWT sub(`private.current_uid()`). DM 7장 "W: ai_jobs"와 충돌 없음.
+- ② **면접 질문 행 다시 열기 = 세션의 저장된 질문 삭제 `[가정]`** (decisions `[가정]` "면접 질문 행 다시 열기", DM 2.9.1 R-63): 공급자·등급이 달라진 다시 시도에서 그 세션의 `interview_questions`를 지우고(빈 답변 행은 cascade, 근거는 소유자 트리거로 함께 삭제) `generation_status = generating`, `question_run_generation = 새 세대`로 연다. 새 실행은 1번부터 다시 만든다. 답변은 생성이 `ready`여야 고칠 수 있으므로(정책 `interview_answers_update_own`) 지워지는 답변은 늘 빈 초안이다. 방어로 내용이 있거나 `draft`가 아닌 답변의 질문은 지우지 않는다.
+- ③ **이미 끝난 결과 묶음은 다시 열지 않음 `[가정]`** (R-63 "성공이던 행도 다시 연다"의 예외): 인사이트 `ready`, 세션 질문 `ready`, 평가 `completed`인데 작업만 `failed`인 경우(complete_* 성공 뒤 작업 완료 처리만 실패 — 드묾)는 공급자가 달라도 그대로 둔다. 한 결과는 이미 한 공급자 출력으로 완결돼 섞일 일이 없고, 열면 사용자가 보던 최신 인사이트·답변이 사라지기 때문. 평가는 `evaluation_failed`/`evaluating` 세션에서만 이 작업의 `answer_evaluations`(성공 포함)·`session_feedbacks`를 `pending`으로 연다.
+- ④ **다르면 결과 행을 RPC 안에서 바로 연다 `[구현 결정]`** (DM "begin_*가 고른다"): 인사이트 `failed` 행 → `generating`, 평가는 `interview_evaluation_open`(세션 `evaluating`)까지 retry RPC가 한다. 공급자 메타(`provider`·`model_tier`·`connection_tier`, 세션 `evaluation_provider`·`evaluation_model`)도 이때 새 값으로 쓴다. 이렇게 하면 시작 전에 다시 실패해도 끝 트리거가 연 행을 `failed`로 닫아 상태가 어긋나지 않는다. 같으면 지금처럼 begin/save/complete의 세대 검사가 실패 행만 늦게 연다.
+- ⑤ **`input_hash` 갱신 `[가정]`** (DM 2.9.1 "갱신 시점·방식은 구현 선택"): 공급자나 모델이 바뀌면 retry RPC가 `null`로 비운다(재사용 인덱스에 옛 해시가 남지 않게). 새 해시가 필요하면 러너가 쓴다(app_ai_writer update 권한 있음).
+- ⑥ **`restarted` 판정은 공급자·연결 등급만** (DM 문구 "활성 공급자·등급"): 같은 공급자에서 모델 id만 바뀐 경우(라우팅 표 변경)는 처음부터 다시 하지 않는다. `model`·`model_tier` 컬럼은 갱신한다.
+- ⑦ **권한 회수 없음**: 사용자 세션은 원래 `ai_jobs` update 권한이 없다. app_ai_writer의 `status`·`run_generation`·`step_outputs` update는 러너의 다른 전이(running·failed·자동 재시도)가 쓰므로 남긴다. 따라서 app_ai_writer가 직접 `failed → queued`로 바꾸는 길은 DB에서 막지 않았다(기존 pgTAP 픽스처 다수가 이 길을 씀). 실제 공급자 호출 전 `check_ai_run_allowed`가 키·동의를 다시 본다. 대신 가드 트리거가 **공급자·`model_tier`·`connection_tier` 변경을 `failed → queued` 전이에서만 허용**한다(진행 중 작업의 공급자 고정, F-AI-03 (2)).
+
+## 2026-11-06 · R2 (api) · 같은 행 다시 시도 = 활성 공급자 (api-engineer)
+
+- ① **경로 ① 거부 코드가 2.11.7 표와 다른 새 작업 시작 경로 `[가정]` 현행 유지** (DM 2.11.7 ①, R-64): 인사이트·면접 시작은 표대로 409 `ai_not_connected`/`ai_consent_required`/`key_invalid`. 그러나 S5 JD 요건 추출(`POST /api/application-projects/{id}/jd-extraction`, 동기)은 200 `{ status: 'failed', jobId: null, error: key_missing | key_invalid }`로, 서류 3종 생성(SSE: AI-11 정렬은 실패 응답, 경력기술서·자소서 문항은 SSE `error`)은 `key_missing`/`key_invalid`로 답한다(키 없음·동의 필요를 `key_missing` 하나로 합침 — 2.11.7 ④와 같은 방식). 표의 ①은 "생성·시작 Route Handler, HTTP 409, 작업 행 없음"이라 이 요청 범위 경로들이 ①인지 ④식인지 표가 말하지 않는다. 화면(UX C-20)은 두 코드 모두 "AI 연결 필요"로 이끌지만 동의 필요일 때 C-21을 바로 여는지가 갈린다. 바꾸지 않았다. 표에 요청 범위 경로(동기 JSON·SSE) 행을 더하거나 ①로 묶을지 정하기를 권한다.
+- ② **다시 시도 배지 미리보기 `[구현 결정]`** (UX C-20·S-40, decisions "A1 세부"): 작업 상태 응답에 `retry: { provider, fromScratch }`를 더했다(실패·재시도 가능일 때만). `provider`는 동의 판정 없이 지금 활성 공급자(없으면 null). 요청 범위 작업은 `fromScratch` 늘 false. UX 문서에 응답 필드 이름이 없어 계약 이름은 api가 정했다.
+- ③ **다시 시도 응답 `restarted` `[구현 결정]`**: `POST /api/ai-jobs/{id}/retry` 응답에 `restarted`(처음부터인지)를 더했다. DM 7장 응답 모양에 없는 필드.
+- ④ **R2 QA 해소 (QA-R2-01)**: `retry_ai_job`에 `p_expected_provider`·`p_expected_connection_tier`, 어긋나면 `ai_connection_changed`(행 그대로) → 러너가 한 번 다시 읽어 재호출, 또 어긋나면 409 `ai_connection_changed`. 아래 옛 기록은 참고용. ~~**활성 공급자 경쟁 `[가정]`**~~: 서버가 활성 공급자를 읽고 모델을 정한 뒤 `retry_ai_job` 사이에 활성 공급자가 바뀌면 새 공급자에 옛 공급자 모델 id가 기록될 수 있다(드묾, 실패 후 다시 시도로 회복). 로그만 남긴다.
+- ⑤ **`input_hash`는 다시 시도 뒤 비어 있음** (db 노트 ⑤ 연장): 러너는 새 해시를 다시 쓰지 않는다. 그 작업의 성공 결과는 이후 같은 입력 재사용(C-6)에 걸리지 않는다(다음 시작이 한 번 더 실행될 수 있음 — 비용만).
+- ⑧ **QA-01 `ai_connection_changed` `[구현 결정]`** (DM 2.11.7 경로 ② 표에 없는 코드): `retry_ai_job`이 `p_expected_provider`(필수)·`p_expected_connection_tier`(선택)를 받고, 게이트 통과 뒤 활성 연결이 그 값과 다르면 행을 바꾸지 않고 P0001 `ai_connection_changed`로 거부한다(호출자가 고른 모델 id와 공급자가 어긋나는 경쟁 방지). API 응답 코드이며 `ai_jobs.error_code` 값이 아니다. 2.11.7 표에 "연결이 바뀜(재시도 가능)" 행 추가 여부를 기획에 묻는다.

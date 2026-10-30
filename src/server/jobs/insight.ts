@@ -19,7 +19,7 @@ export const productionInsightPipeline = createAi02InsightPipeline(consoleAiLogg
 
 /**
  * D-30 inside the job: ensureJdExtracted with the S5 deps, except the
- * connection is the insight job's FIXED provider + tier (F-AI-03 (2); the
+ * connection is the current run's provider + tier (fixed while it runs, F-AI-03 (2); the
  * step may run in a cron / continue invocation without the user's cookies)
  * and the JD is read through app_ai_writer (select grant on job_descriptions).
  * check_ai_run_allowed still gates the extraction job (key / consent now).

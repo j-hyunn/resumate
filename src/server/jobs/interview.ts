@@ -38,7 +38,7 @@ import { logJobEvent } from "./log";
 /**
  * Production wiring of the S8 interview jobs: the ai-pipeline AI-05 / 06 / 07
  * functions behind the jobs' narrow pipeline interface (ids, never aliases),
- * D-30 extraction with the job's fixed provider (same as the S6 insight job).
+ * D-30 extraction with the current run's provider (same as the S6 insight job).
  */
 
 /**

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput, MoveApplicationStageInput } from "@/lib/contracts/application";
+import type { ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { ProviderError } from "@/server/ai/errors";
@@ -10,7 +11,8 @@ import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
 import { productionInterviewPipelines } from "@/server/jobs/interview";
-import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext } from "@/server/jobs/provider-context";
+import { resolveModel } from "@/server/ai/providers/models";
+import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext, type ProviderContext } from "@/server/jobs/provider-context";
 import { createJobRunner } from "@/server/jobs/runner";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
@@ -19,6 +21,7 @@ import { createJdExtractionDb } from "@/server/services/application/db";
 import { ensureJdExtracted } from "@/server/services/application/extraction";
 import { loadProgress } from "@/server/services/application/read";
 import { createApplicationProject, deleteApplicationProject, moveApplicationStage } from "@/server/services/application/write";
+import { connectTestProvider } from "@/test/ai-connection-db";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
@@ -107,6 +110,16 @@ const AI06_OUTPUT = {
   score: { status: "pending_method", value: null, max: null, method_version: null, rationale: null },
 };
 
+/** R2 retry run on another provider: different texts so the test can tell the two runs apart. */
+const AI05_OUTPUT_B = {
+  ...AI05_OUTPUT,
+  questions: [
+    q({ order: 1, source_kind: "values", text: "함께 일하고 싶은 동료는 어떤 사람인가요?", intent: "협업 가치 확인" }),
+    q({ order: 2, source_kind: "failure_growth", text: "가장 크게 배운 실패는 무엇인가요?", intent: "실패 학습 확인" }),
+    q({ order: 3, source_kind: "conflict", text: "팀 결정에 동의하지 않았던 때를 말해 주세요.", intent: "이견 조율 확인" }),
+  ],
+};
+
 const AI07_OUTPUT = {
   schema_version: 2,
   headline: "경청하는 태도는 좋지만 구체 사례가 필요합니다.",
@@ -140,12 +153,12 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     return { id: data.user.id, client };
   }
 
-  function harness(uid = userId, client = user) {
+  function harness(uid = userId, client = user, active: ProviderContext = { provider: "anthropic", connectionTier: "paid", keyStatus: "valid" }) {
     const scheduled: (() => Promise<void>)[] = [];
     const adapter = lazyAdapter(queue);
     const createLlm = (input: Parameters<ReturnType<typeof scriptedLlmFactory>>[0]): Llm => scriptedLlmFactory(adapter, Date.now)(input);
     const keySource = createStaticKeySource(FAKE_KEY, () => new ProviderError("key_missing"));
-    const providerContext = createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" });
+    const providerContext = createStaticProviderContext(active);
     const log = (event: string, fields: Record<string, unknown>) => void logs.push(JSON.stringify({ event, ...fields }));
     const deps: InterviewJobDeps<unknown, unknown> = {
       pipelines: productionInterviewPipelines as InterviewJobDeps<unknown, unknown>["pipelines"],
@@ -189,7 +202,7 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     async function drain() {
       while (scheduled.length) await scheduled.shift()!();
     }
-    return { startDeps, drain };
+    return { startDeps, drain, runner };
   }
 
   beforeEach(() => {
@@ -212,6 +225,8 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     ({ id: userId, client: user } = await newUser("interview"));
     ({ id: otherId, client: other } = await newUser("interview-other"));
     await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: project, rawText: KO_BACKEND.raw }));
+    // R2: retry_ai_job reads the active connection from the DB (C-11.4).
+    await connectTestProvider(admin, user, userId, "anthropic", "paid");
   });
 
   afterAll(async () => {
@@ -367,6 +382,94 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     expect((await listInterviewSessions(other, {})).sessions).toEqual([]);
     await deleteInterviewSession(user, { sessionId: second.data.sessionId });
     expect((await loadProgress(user, [project])).get(project)?.interviewCount).toBe(1);
+  });
+
+  describe("R2 (C-11.4, R-63): a failed job retried on another ACTIVE provider redoes everything on it", () => {
+    const OPENAI: ProviderContext = { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+    const project2 = crypto.randomUUID();
+    let session2 = "";
+
+    beforeAll(async () => {
+      await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: project2, rawText: KO_BACKEND.raw }));
+    });
+
+    afterAll(async () => {
+      queue.length = 0;
+      await connectTestProvider(admin, user, userId, "anthropic", "paid");
+    });
+
+    it("interview_questions: 2 questions saved then failed → retried on openai: the old questions are gone, 3 new ones, session question_provider/model = openai", async () => {
+      // Stream ends with billing_required right before the 3rd question (2 saved).
+      const text = JSON.stringify(AI05_OUTPUT);
+      queue.push({ json: KO_BACKEND.output }, { errorAfterChunks: "billing_required", json: AI05_OUTPUT, chunks: text.indexOf('{"order":3') });
+      const first = harness();
+      const out = await startInterviewSession(first.startDeps, project2, { interviewType: "culture_fit", questionCount: 3 });
+      if (out.kind !== "started") throw new Error("not started");
+      session2 = out.data.sessionId;
+      await first.drain();
+      expect(queue).toHaveLength(0);
+      const failed = await admin.from("ai_jobs").select("status, error_code, provider").eq("id", out.data.jobId).single();
+      expect(failed.data).toEqual({ status: "failed", error_code: "billing_required", provider: "anthropic" });
+      const before = await admin.from("interview_questions").select("question_text").eq("session_id", session2).order("sequence");
+      expect(before.data?.map((r) => r.question_text)).toEqual(AI05_OUTPUT.questions.slice(0, 2).map((x) => x.text));
+
+      await connectTestProvider(admin, user, userId, "openai", "paid");
+      queue.push({ json: AI05_OUTPUT_B });
+      const h = harness(userId, user, OPENAI);
+      const retried = await h.runner.retryJob({ jobId: out.data.jobId, userId });
+      expect(retried).toEqual({ jobId: out.data.jobId, reused: false, inProgress: false, restarted: true });
+      await h.drain();
+      expect(queue).toHaveLength(0);
+
+      const job = await admin.from("ai_jobs").select("status, provider, model, model_tier").eq("id", out.data.jobId).single();
+      expect(job.data).toMatchObject({ status: "succeeded", provider: "openai" });
+      const model = resolveModel("openai", job.data!.model_tier as ModelTier);
+      expect(job.data!.model).toBe(model);
+      const after = await admin.from("interview_questions").select("sequence, question_text").eq("session_id", session2).order("sequence");
+      expect(after.data).toEqual(AI05_OUTPUT_B.questions.map((x) => ({ sequence: x.order, question_text: x.text })));
+      expect((await admin.from("interview_answers").select("id").eq("session_id", session2)).data).toHaveLength(3);
+      const session = await admin.from("interview_sessions").select("generation_status, question_provider, question_model").eq("id", session2).single();
+      expect(session.data).toEqual({ generation_status: "ready", question_provider: "openai", question_model: model });
+    });
+
+    it("interview_evaluation: one answer scored, then failed → retried on openai: both answers re-scored, summary made, all provider values = openai", async () => {
+      const sheet = await getAnswerSheet(user, { sessionId: session2 });
+      for (const item of sheet.items.slice(0, 2)) await saveInterviewAnswer(user, { answerId: item.answer!.id, answerText: ANSWER });
+      // Evaluation starts on anthropic (static start context); the DB's active provider is openai now.
+      queue.push({ json: AI06_OUTPUT }, { error: "billing_required" });
+      const first = harness();
+      const submitted = await submitInterviewSession(first.startDeps, session2);
+      await first.drain();
+      expect(queue).toHaveLength(0);
+      const jobId = submitted.jobId!;
+      expect((await admin.from("ai_jobs").select("status, error_code, provider").eq("id", jobId).single()).data).toEqual({
+        status: "failed",
+        error_code: "billing_required",
+        provider: "anthropic",
+      });
+      const scored = await admin.from("answer_evaluations").select("status, provider").eq("ai_job_id", jobId);
+      expect(scored.data?.filter((e) => e.status === "succeeded")).toEqual([{ status: "succeeded", provider: "anthropic" }]);
+
+      queue.push({ json: AI06_OUTPUT }, { json: AI06_OUTPUT }, { json: AI07_OUTPUT });
+      const h = harness(userId, user, OPENAI);
+      const retried = await h.runner.retryJob({ jobId, userId });
+      expect(retried).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
+      await h.drain();
+      expect(queue).toHaveLength(0); // both answers called again on openai + the summary
+
+      expect((await admin.from("ai_jobs").select("status, provider").eq("id", jobId).single()).data).toEqual({ status: "succeeded", provider: "openai" });
+      const evaluations = await admin.from("answer_evaluations").select("status, provider").eq("session_id", session2);
+      expect(evaluations.data).toEqual([
+        { status: "succeeded", provider: "openai" },
+        { status: "succeeded", provider: "openai" },
+      ]);
+      const feedback = await admin.from("session_feedbacks").select("status, provider").eq("session_id", session2).single();
+      expect(feedback.data).toEqual({ status: "succeeded", provider: "openai" });
+      const session = await admin.from("interview_sessions").select("status, evaluation_provider").eq("id", session2).single();
+      expect(session.data).toEqual({ status: "completed", evaluation_provider: "openai" });
+      const usage = await admin.from("ai_usage_records").select("provider").eq("ai_job_id", jobId).order("occurred_at");
+      expect(usage.data?.slice(-3).map((u) => u.provider)).toEqual(["openai", "openai", "openai"]);
+    });
   });
 
   it("project delete cascades the sessions", async () => {

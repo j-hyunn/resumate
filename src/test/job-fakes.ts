@@ -1,5 +1,5 @@
 import { AppError } from "@/lib/contracts/errors";
-import type { AiErrorCode, AiProvider } from "@/lib/contracts/enums";
+import type { AiErrorCode, AiProvider, ConnectionTier } from "@/lib/contracts/enums";
 import { ProviderError } from "@/server/ai/errors";
 import { createLlm, type Llm } from "@/server/ai/llm";
 import { silentAiLogger } from "@/server/ai/log";
@@ -16,6 +16,8 @@ import type {
   LlmFactoryInput,
   NewJob,
   PriceRow,
+  RequeueFailedInput,
+  RequeueFailedResult,
   ReusableJobQuery,
   UsageRecordRow,
   UsageStore,
@@ -207,11 +209,26 @@ export class MemoryJobStore implements JobStore {
     return job.status === "succeeded" && job.runGeneration === gen; // else invalid_ai_job_transition
   }
 
-  async requeueFailed(jobId: string, gen: number, now: string, outputs: Record<string, unknown>, meta: JobMeta) {
+  /**
+   * The user's active connection as `retry_ai_job` reads it (profiles.active_ai_provider +
+   * that key's tier). Default: the job's own connection (a same-provider retry).
+   */
+  activeConnection: (() => { provider: AiProvider; connectionTier: ConnectionTier } | null) | null = null;
+  /** Requeue calls seen (model / tier the runner routed). */
+  readonly requeues: RequeueFailedInput[] = [];
+
+  async requeueFailed(input: RequeueFailedInput): Promise<RequeueFailedResult | null> {
     this.maybeFail("requeueFailed");
-    const job = this.match(jobId, gen, new Set(["failed"]));
-    if (!job) return false;
+    this.requeues.push(structuredClone(input));
+    const job = this.match(input.jobId, input.expectedGeneration, new Set(["failed"]));
+    if (!job) return null;
+    const active = this.activeConnection ? this.activeConnection() : { provider: job.provider, connectionTier: job.connectionTier };
+    if (!active) throw new AppError("key_missing", undefined, { status: 409 });
+    if (active.provider !== input.expectedProvider || active.connectionTier !== input.expectedConnectionTier) {
+      throw new AppError("ai_connection_changed", undefined, { status: 409 });
+    }
     if (this.targetTaken(job)) throw new AppError("conflict");
+    const restarted = active.provider !== job.provider || active.connectionTier !== job.connectionTier;
     // DB guard on failed → queued clears error_code, finished_at, cancel_requested_at, retry_after, quota_resets_at.
     this.apply(job, {
       status: "queued",
@@ -220,14 +237,26 @@ export class MemoryJobStore implements JobStore {
       retryAfter: null,
       quotaResetsAt: null,
       nextRunAt: null,
-      heartbeatAt: now,
-      runGeneration: gen + 1,
+      heartbeatAt: this.clock().toISOString(),
+      runGeneration: input.expectedGeneration + 1,
     });
     job.cancelRequestedAt = null;
-    job.stepOutputs = structuredClone(outputs);
-    job.meta = structuredClone(meta);
-    return true;
+    job.provider = active.provider;
+    job.connectionTier = active.connectionTier;
+    job.modelTier = input.modelTier;
+    this.models.set(job.id, input.model);
+    const partials = job.meta.partials;
+    if (restarted) {
+      job.stepOutputs = {};
+      job.meta = structuredClone(input.meta);
+    } else {
+      job.meta = structuredClone(partials && Object.keys(partials).length > 0 ? { ...input.meta, partials } : input.meta);
+    }
+    return { restarted, provider: active.provider, connectionTier: active.connectionTier, runGeneration: job.runGeneration };
   }
+
+  /** ai_jobs.model as the last requeue set it (JobRecord has no model). */
+  readonly models = new Map<string, string>();
 
   /** Simulates the user's cancel RPC. */
   requestCancel(jobId: string) {

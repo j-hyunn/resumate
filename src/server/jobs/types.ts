@@ -57,7 +57,7 @@ export type JobRecord = {
   applicationProjectId: string | null;
   targetType: string | null;
   targetId: string | null;
-  /** Fixed at start (F-AI-03 (2)). */
+  /** The current run's provider: fixed while it runs (F-AI-03 (2)); a manual retry sets the active one (C-11.4, R2). */
   provider: AiProvider;
   modelTier: ModelTier;
   connectionTier: ConnectionTier;
@@ -183,13 +183,46 @@ export interface JobStore {
    */
   complete(jobId: string, gen: number, progress: StoredAiJobProgress): Promise<boolean>;
   /**
-   * Manual-retry claim: failed AND run_generation = gen → queued,
-   * run_generation gen + 1, heartbeat_at = now, step_outputs with the new meta.
-   * The DB guard clears error_code / finished_at / retry_after / quota_resets_at.
+   * Manual retry (DM 2.9.1 case (1), A1 changed in R2; RPC `retry_ai_job` as app_ai_writer —
+   * this store's forUser-scoped client, owner = JWT sub; the user session can't execute it):
+   * failed AND run_generation = expectedGeneration → queued, run_generation + 1,
+   * provider / connection_tier = the user's ACTIVE ones (read by the DB, never
+   * from the caller), model / model_tier = `model` / `modelTier`.
+   * - provider or connection tier changed → `restarted: true`: step_outputs is
+   *   only `{ _meta: meta }` and every result row the job saved is reopened (R-63).
+   * - same → stage outputs and `_meta.partials` are kept, the rest of `_meta`
+   *   becomes `meta`, and only the failed result rows are reopened.
+   * Returns null when the row is no longer failed at that generation (lost race).
+   * Refusals (path ②, DM 2.11.7): AppError 409 `key_missing` / `ai_consent_required` /
+   * `key_invalid`, then `ai_connection_changed` (active ≠ expectedProvider / expectedConnectionTier);
+   * `ai_job_not_retryable` for a job type outside the three async ones.
    * In-flight unique violation (another job on the target started meanwhile) → AppError `conflict`.
    */
-  requeueFailed(jobId: string, gen: number, now: string, outputs: Record<string, unknown>, meta: JobMeta): Promise<boolean>;
+  requeueFailed(input: RequeueFailedInput): Promise<RequeueFailedResult | null>;
 }
+
+export type RequeueFailedInput = {
+  jobId: string;
+  expectedGeneration: number;
+  model: string;
+  modelTier: ModelTier;
+  /**
+   * QA-R2-01: the active provider / tier `model` was routed for. The RPC refuses with
+   * AppError 409 `ai_connection_changed` (row untouched) when the active connection differs.
+   */
+  expectedProvider: AiProvider;
+  expectedConnectionTier: ConnectionTier;
+  /** New run bookkeeping (no partials; the store keeps the old partials when not restarted). */
+  meta: JobMeta;
+};
+
+export type RequeueFailedResult = {
+  /** true = provider or connection tier differed: starts from the first step (C-11.4). */
+  restarted: boolean;
+  provider: AiProvider;
+  connectionTier: ConnectionTier;
+  runGeneration: number;
+};
 
 // ---------------- usage records (C-13) ----------------
 

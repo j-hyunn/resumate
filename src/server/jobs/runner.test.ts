@@ -18,7 +18,6 @@ import {
   createRecordingKeyStatusReporter,
   createStaticKeySource,
   createStaticProviderContext,
-  runGateError,
   type ProviderContext,
 } from "./provider-context";
 import { createJobRunner } from "./runner";
@@ -93,17 +92,26 @@ function def(steps: JobStep<Llm>[], extra: Partial<JobTypeDefinition<Llm>> = {})
 
 type SetupOpts = {
   responses?: ScriptedResponse[];
-  context?: ProviderContext | null;
+  /** A function is read on every call (tests change the active connection or make it throw). */
+  context?: ProviderContext | null | (() => ProviderContext | null);
   key?: string | null;
   timing?: RunnerDeps["timing"];
-  runnable?: Parameters<typeof createStaticProviderContext>[1];
   checkRunAllowed?: RunnerDeps["checkRunAllowed"];
+  /** Overrides the static provider context built from `context`. */
+  providerContext?: RunnerDeps["providerContext"];
 };
 
 function setup(definition: JobTypeDefinition<Llm>, opts: SetupOpts = {}) {
   const clock = fakeClock();
-  const context = opts.context === undefined ? PAID : opts.context;
+  const contextOpt = opts.context === undefined ? PAID : opts.context;
+  const readContext = typeof contextOpt === "function" ? contextOpt : () => contextOpt;
+  const context = readContext();
   const store = new MemoryJobStore(clock.now);
+  // retry_ai_job reads the same active connection as the provider context.
+  store.activeConnection = () => {
+    const c = readContext();
+    return c ? { provider: c.provider, connectionTier: c.connectionTier } : null;
+  };
   const usage = new MemoryUsageStore(USER);
   const scripted = createScriptedAdapter(context?.provider ?? "anthropic", opts.responses ?? [], clock.ms);
   const keyStatus = createRecordingKeyStatusReporter();
@@ -113,7 +121,7 @@ function setup(definition: JobTypeDefinition<Llm>, opts: SetupOpts = {}) {
   const logs: { event: string; fields: Record<string, unknown> }[] = [];
   const runner = createJobRunner<Llm>({
     forUser: () => memoryScope(store, usage, { keySource, keyStatus }),
-    providerContext: createStaticProviderContext(context, opts.runnable),
+    providerContext: opts.providerContext ?? createStaticProviderContext(readContext),
     checkRunAllowed: opts.checkRunAllowed,
     createLlm: scriptedLlmFactory(scripted.adapter, clock.ms),
     settleLlm: (llm, timeoutMs) => llm.settle(timeoutMs),
@@ -751,7 +759,7 @@ describe("manual retry", () => {
     const gen = h.job(jobId).runGeneration;
 
     const res = await h.runner.retryJob({ jobId, userId: USER });
-    expect(res).toEqual({ jobId, reused: false, inProgress: false });
+    expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: false });
     expect(h.job(jobId)).toMatchObject({ status: "queued", runGeneration: gen + 1, retryAfter: null, errorCode: null });
     expect(h.job(jobId).meta).toEqual({ runBase: gen + 1, waitBase: 6_000, retries: {} });
     await h.drain();
@@ -783,7 +791,7 @@ describe("manual retry", () => {
     const other = await start(h);
     expect(other.inProgress).toBe(false);
     const res = await h.runner.retryJob({ jobId: failed.jobId, userId: USER });
-    expect(res).toEqual({ jobId: other.jobId, reused: false, inProgress: true });
+    expect(res).toEqual({ jobId: other.jobId, reused: false, inProgress: true, restarted: false });
     expect(h.job(failed.jobId).status).toBe("failed");
   });
 
@@ -799,6 +807,118 @@ describe("manual retry", () => {
   it("not found", async () => {
     const h = setup(def([llmStep("match")]));
     await expect(h.runner.retryJob({ jobId: "00000000-0000-4000-8000-00000000ffff", userId: USER })).rejects.toBeInstanceOf(AppError);
+  });
+
+  it("C-11.4 (A1, R2): same active provider + tier → resumes, keeps partials, routes the model like a new job", async () => {
+    const h = setup(def([llmStep("match"), llmStep("synthesize")], { modelTier: "heavy" }), { responses: [okJson, { error: "billing_required" }, okJson] });
+    const { jobId } = await start(h);
+    await h.drain();
+    h.job(jobId).meta = { ...h.job(jobId).meta, partials: { synthesize: { unit: 1 } } };
+    const gen = h.job(jobId).runGeneration;
+    const res = await h.runner.retryJob({ jobId, userId: USER });
+    expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: false });
+    expect(h.store.requeues).toEqual([
+      {
+        jobId,
+        expectedGeneration: gen,
+        model: resolveModel("anthropic", "heavy"),
+        modelTier: "heavy",
+        expectedProvider: "anthropic",
+        expectedConnectionTier: "paid",
+        meta: { runBase: gen + 1, waitBase: 0, retries: {} },
+      },
+    ]);
+    expect(Object.keys(h.job(jobId).stepOutputs)).toEqual(["match"]);
+    expect(h.job(jobId).meta.partials).toEqual({ synthesize: { unit: 1 } });
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+    expect(h.records(jobId).map((r) => r.callKey)).toEqual(["insight.match.1", "insight.synthesize.1", "insight.synthesize.1"]);
+  });
+
+  it("C-11.4 (A1, R2): another active provider → restarted from the first step on it, step outputs + partials dropped", async () => {
+    let active: ProviderContext = PAID;
+    const h = setup(def([llmStep("match"), llmStep("synthesize")]), {
+      responses: [okJson, { error: "billing_required" }, okJson, okJson],
+      context: () => active,
+    });
+    const { jobId } = await start(h);
+    await h.drain();
+    h.job(jobId).meta = { ...h.job(jobId).meta, partials: { synthesize: { unit: 1 } } };
+    active = { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+    const res = await h.runner.retryJob({ jobId, userId: USER });
+    expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
+    expect(h.store.requeues[0]).toMatchObject({ model: resolveModel("openai", "default"), modelTier: "default" });
+    expect(h.store.models.get(jobId)).toBe(resolveModel("openai", "default"));
+    expect(h.job(jobId)).toMatchObject({ status: "queued", provider: "openai", connectionTier: "paid", stepOutputs: {} });
+    expect(h.job(jobId).meta.partials).toBeUndefined();
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "succeeded", provider: "openai" });
+    // match ran again on the new provider.
+    expect(h.records(jobId).map((r) => r.callKey)).toEqual(["insight.match.1", "insight.synthesize.1", "insight.match.1", "insight.synthesize.1"]);
+    expect(h.logs.find((l) => l.event === "ai_job.retried")?.fields).toMatchObject({ provider: "openai", restarted: true });
+  });
+
+  it("C-11.4 (A1, R2): only the connection tier changed → restarted too", async () => {
+    let active: ProviderContext = PAID;
+    const h = setup(def([llmStep("match"), llmStep("synthesize")]), { responses: [okJson, { error: "billing_required" }, okJson, okJson], context: () => active });
+    const { jobId } = await start(h);
+    await h.drain();
+    active = { ...PAID, connectionTier: "free" };
+    const res = await h.runner.retryJob({ jobId, userId: USER });
+    expect(res.restarted).toBe(true);
+    expect(h.job(jobId)).toMatchObject({ provider: "anthropic", connectionTier: "free", stepOutputs: {} });
+  });
+
+  it("QA-R2-01: active connection changed between our read and the RPC → re-read once, RPC again with the new model", async () => {
+    let active: ProviderContext = PAID;
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }, okJson], context: () => active });
+    const { jobId } = await start(h);
+    await h.drain();
+    // The RPC sees openai on its first call (the user switched in another tab after our read).
+    let rpcCalls = 0;
+    h.store.activeConnection = () => {
+      rpcCalls += 1;
+      if (rpcCalls === 1) active = { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+      return { provider: active.provider, connectionTier: active.connectionTier };
+    };
+    const res = await h.runner.retryJob({ jobId, userId: USER });
+    expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
+    expect(h.store.requeues.map((r) => [r.expectedProvider, r.model])).toEqual([
+      ["anthropic", resolveModel("anthropic", "default")],
+      ["openai", resolveModel("openai", "default")],
+    ]);
+    expect(h.job(jobId)).toMatchObject({ status: "queued", provider: "openai" });
+    expect(h.store.models.get(jobId)).toBe(resolveModel("openai", "default"));
+    expect(h.logs.some((l) => l.event === "ai_job.retry_connection_changed")).toBe(true);
+  });
+
+  it("QA-R2-01: changed again on the second attempt → 409 ai_connection_changed, job stays failed, nothing scheduled", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }] });
+    const { jobId } = await start(h);
+    await h.drain();
+    // The DB always sees a different active connection than the one the runner read.
+    h.store.activeConnection = () => ({ provider: "gemini", connectionTier: "free" });
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_connection_changed", status: 409 });
+    expect(h.store.requeues).toHaveLength(2);
+    expect(h.job(jobId)).toMatchObject({ status: "failed", provider: "anthropic" });
+    expect(h.scheduled).toHaveLength(0);
+  });
+
+  it("lost race inside the RPC (row no longer failed): follows the active run, else 409", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }] });
+    const { jobId } = await start(h);
+    await h.drain();
+    const job = h.job(jobId);
+    const original = h.store.requeueFailed.bind(h.store);
+    h.store.requeueFailed = async (input) => {
+      job.status = "queued";
+      return original(input);
+    };
+    expect(await h.runner.retryJob({ jobId, userId: USER })).toEqual({ jobId, reused: false, inProgress: true, restarted: false });
+    job.status = "succeeded";
+    h.store.requeueFailed = async () => null;
+    job.status = "failed";
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable" });
   });
 });
 
@@ -928,31 +1048,64 @@ describe("QA-S3b-01 / -05 run gates", () => {
 
   it.each([
     ["consent withdrawn", "ai_consent_required"],
-    ["key deleted", "key_missing"],
-    ["key invalid", "key_invalid"],
-  ] as const)("manual retry refused when %s: 409, job stays failed, no provider call", async (_name, code) => {
-    let gate: AppError | null = null;
-    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }, okJson], runnable: () => gate });
+    ["no active provider / key", "key_missing"],
+    ["active key invalid", "key_invalid"],
+  ] as const)("manual retry refused when %s (DM 2.11.7 path ②): 409, job stays failed, no provider call", async (_name, code) => {
+    let active: () => ProviderContext | null = () => PAID;
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }, okJson], context: () => active() });
     const jobId = await failedJob(h);
-    gate = runGateError(code);
+    active =
+      code === "ai_consent_required"
+        ? () => {
+            throw new AppError("ai_consent_required", undefined, { status: 409 });
+          }
+        : code === "key_missing"
+          ? () => null
+          : () => ({ ...PAID, keyStatus: "invalid" });
     await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code, status: 409 });
     await h.drain();
-    expect(h.job(jobId).status).toBe("failed");
+    expect(h.job(jobId)).toMatchObject({ status: "failed", provider: "anthropic" });
+    expect(h.store.requeues).toHaveLength(0);
     expect(h.scripted.calls).toHaveLength(1);
   });
 
-  it("manual retry stays on the job's fixed provider after the active provider changed (F-AI-03 (2))", async () => {
-    const seen: string[] = [];
-    // Active is now OpenAI; the job is Anthropic and Anthropic's key + consent are still fine.
+  it("QA-R2-03: key invalid AND consent required → key_invalid first (the DB's order), no RPC", async () => {
+    let both = false;
     const h = setup(def([llmStep("match")]), {
-      responses: [{ error: "billing_required" }, okJson],
-      runnable: (job) => (seen.push(job.provider), null),
+      responses: [{ error: "billing_required" }],
+      providerContext: {
+        forUser: async () => {
+          if (both) throw new AppError("ai_consent_required", undefined, { status: 409 });
+          return PAID;
+        },
+        peekActive: async () => (both ? { ...PAID, keyStatus: "invalid" } : PAID),
+      },
     });
     const jobId = await failedJob(h);
-    await h.runner.retryJob({ jobId, userId: USER });
+    both = true;
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "key_invalid", status: 409 });
+    expect(h.store.requeues).toHaveLength(0);
+    expect(h.job(jobId).status).toBe("failed");
+  });
+
+  it("the gate looks at the ACTIVE provider, not the job's: old provider's key gone, new one fine → runs", async () => {
+    let active: ProviderContext = PAID;
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }, okJson], context: () => active });
+    const jobId = await failedJob(h);
+    active = { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+    const res = await h.runner.retryJob({ jobId, userId: USER });
+    expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
     await h.drain();
-    expect(seen).toEqual(["anthropic"]);
-    expect(h.job(jobId)).toMatchObject({ status: "succeeded", provider: "anthropic" });
+    expect(h.job(jobId)).toMatchObject({ status: "succeeded", provider: "openai", connectionTier: "paid" });
+  });
+
+  it("refusal from the RPC itself (state changed after our read) surfaces as 409 and leaves the job failed", async () => {
+    const h = setup(def([llmStep("match")]), { responses: [{ error: "billing_required" }] });
+    const jobId = await failedJob(h);
+    h.store.activeConnection = () => null; // the store fake raises key_missing like retry_ai_job
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "key_missing", status: 409 });
+    expect(h.job(jobId).status).toBe("failed");
+    expect(h.scheduled).toHaveLength(0);
   });
 
   it.each(["key_verification", "writing_chat_turn", "jd_extraction", "draft_source_ranking", "career_description", "cover_letter"] as const)("%s jobs are not requeued by the generic retry (QA-S3b-05, S4 다시 보내기, S5 sync route, QA-S7-02 draft routes)", async (jobType) => {

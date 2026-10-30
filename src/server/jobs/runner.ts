@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { errorCategoryOf, failureCauseOf, type StartAiJobResponse, type StoredAiJobProgress } from "@/lib/contracts/ai";
+import { errorCategoryOf, failureCauseOf, type RetryAiJobResponse, type StartAiJobResponse, type StoredAiJobProgress } from "@/lib/contracts/ai";
 import type { AiErrorCode, AiJobType, AiProvider, ConnectionTier, ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { AiError, isAiError, ProviderError } from "@/server/ai/errors";
@@ -16,7 +16,7 @@ import {
   USAGE_SETTLE_WORST_MS,
   MIN_STEP_TIMEOUT_MS,
 } from "./constants";
-import { isKeyFailureCause, type KeyFailureCause } from "./provider-context";
+import { isKeyFailureCause, runGateError, type KeyFailureCause, type ProviderContext } from "./provider-context";
 import { stepsFor } from "./registry";
 import { decideRetry, retriesFor, withRetry } from "./retry";
 import { createPriceCache, createUsageRecorder } from "./usage-recorder";
@@ -28,6 +28,7 @@ import type {
   JobStep,
   JobTypeDefinition,
   JsonObject,
+  RequeueFailedResult,
   RunOutcome,
   RunnerDeps,
   RunnerTiming,
@@ -149,6 +150,13 @@ function isActive(status: string): boolean {
   return status === "queued" || status === "running";
 }
 
+/** Internal signal of retryJob: follow another in-flight job on the same target. */
+class FollowJob extends Error {
+  constructor(readonly jobId: string) {
+    super("follow in-flight job");
+  }
+}
+
 function emptyMeta(runBase: number, waitBase: number, partials?: Record<string, unknown>): JobMeta {
   return partials && Object.keys(partials).length > 0 ? { runBase, waitBase, retries: {}, partials } : { runBase, waitBase, retries: {} };
 }
@@ -246,54 +254,111 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
   }
 
   /**
-   * Manual retry (재시도 버튼) of a failed job: claim failed → queued
-   * (run_generation = seen, conditional) with a fresh run (per-call retry counts
-   * and the 120 s wait budget start over). Checkpoints are kept, so it resumes
-   * from the failed step (C-6). If another job on the same target started
-   * meanwhile, that job is returned (QA-S3-12).
+   * Manual retry (재시도 버튼) of a failed async job — same row (DM 2.9.1 case (1)).
+   * C-11.4 / A1 (changed in R2): it runs on the ACTIVE provider + tier at click
+   * time, not the job's earlier one. Gate = path ② of DM 2.11.7: no active
+   * provider / key → `key_missing`, consent → `ai_consent_required`, invalid
+   * key → `key_invalid` (409, job stays failed). The RPC `retry_ai_job`
+   * re-reads the active connection itself and decides `restarted`: provider or
+   * tier differs → step_outputs dropped and every saved result row reopened
+   * (R-63); same → completed steps kept, only failed rows reopened (C-6).
+   * Either way the run is fresh for C-11.3 (per-call counts, 120 s budget).
+   * If another job on the same target started meanwhile, that job is returned (QA-S3-12).
    */
-  async function retryJob(ref: JobRef): Promise<StartAiJobResponse> {
+  async function retryJob(ref: JobRef): Promise<RetryAiJobResponse> {
     const scope = deps.forUser(ref.userId);
     const job = await scope.store.get(ref.jobId);
     if (!job) throw new AppError("not_found");
     const notRetryable = () => new AppError("ai_job_not_retryable", "다시 시도할 수 없는 작업입니다.", { status: 409 });
-    if (isActive(job.status)) return { jobId: job.id, reused: false, inProgress: true };
+    const following = (jobId: string): RetryAiJobResponse => ({ jobId, reused: false, inProgress: true, restarted: false });
+    if (isActive(job.status)) return following(job.id);
     if (job.status !== "failed" || !job.errorCode || errorCategoryOf(job.errorCode) === "input") throw notRetryable();
     // S7 (QA-S7-02): drafts run inside their request (AI-11 sync, AI-03 / AI-04 SSE) with no registry step;
     // "다시 시도" calls the generation route again (a new job; a career description gets a new draft row).
     if (REQUEST_SCOPED_JOB_TYPES.has(job.jobType)) throw notRetryable();
-    // QA-S3b-01: same gate as a new run, on the job's FIXED provider (F-AI-03 (2)): key present and
-    // not invalid, consent current. Never send career data after consent was withdrawn.
-    await deps.providerContext.assertJobRunnable(ref.userId, { provider: job.provider, connectionTier: job.connectionTier });
+    const def = definitionOf(job.jobType);
 
-    const gen = job.runGeneration + 1;
-    let won: boolean;
-    try {
-      // S6: per-call work saved by an unfinished stage (savePartial) is kept, like completed stages (C-6).
-      won = await scope.store.requeueFailed(job.id, job.runGeneration, iso(), job.stepOutputs, emptyMeta(gen, job.retryWaitTotalMs, job.meta.partials));
-    } catch (err) {
-      if (err instanceof AppError && err.code === "conflict") {
-        const other = job.targetType && job.targetId
-          ? await scope.store.findInFlight({
-              userId: ref.userId,
-              jobType: job.jobType,
-              target: { type: job.targetType, id: job.targetId },
-              inputHash: null,
-              applicationProjectId: job.applicationProjectId,
-            })
-          : null;
-        if (other) return { jobId: other.id, reused: false, inProgress: true };
+    const modelTier = def.modelTier ?? "default";
+
+    /**
+     * Path ② gate on the ACTIVE connection (never send career data after consent was withdrawn),
+     * in the DB's order key_missing → key_invalid → ai_consent_required (retry_ai_job,
+     * check_ai_run_allowed; QA-R2-03). forUser throws ai_consent_required itself. The RPC repeats
+     * all three checks under the row lock. (Path ① keeps forUser's own order: consent first.)
+     */
+    const activeContext = async () => {
+      const key = await deps.providerContext.peekActive(ref.userId);
+      if (!key) throw runGateError("key_missing");
+      if (key.keyStatus === "invalid") throw runGateError("key_invalid");
+      const context = await deps.providerContext.forUser(ref.userId);
+      if (!context) throw runGateError("key_missing");
+      if (context.keyStatus === "invalid") throw runGateError("key_invalid");
+      return context;
+    };
+
+    /**
+     * One RPC attempt with the model routed for `context` (same routing as a new job). QA-R2-01:
+     * the RPC refuses with `ai_connection_changed` when the active provider / tier is no longer
+     * the one the model was chosen for, so a provider never gets another provider's model id.
+     */
+    const requeue = async (context: ProviderContext): Promise<RequeueFailedResult | null> => {
+      try {
+        return await scope.store.requeueFailed({
+          jobId: job.id,
+          expectedGeneration: job.runGeneration,
+          model: resolveModel(context.provider, modelTier),
+          modelTier,
+          expectedProvider: context.provider,
+          expectedConnectionTier: context.connectionTier,
+          // The store keeps the old partials (S6 per-call work) unless the run restarts.
+          meta: emptyMeta(job.runGeneration + 1, job.retryWaitTotalMs),
+        });
+      } catch (err) {
+        if (err instanceof AppError && err.code === "conflict") {
+          const other = job.targetType && job.targetId
+            ? await scope.store.findInFlight({
+                userId: ref.userId,
+                jobType: job.jobType,
+                target: { type: job.targetType, id: job.targetId },
+                inputHash: null,
+                applicationProjectId: job.applicationProjectId,
+              })
+            : null;
+          if (other) throw new FollowJob(other.id);
+        }
+        throw err;
       }
+    };
+
+    let result: RequeueFailedResult | null;
+    try {
+      try {
+        result = await requeue(await activeContext());
+      } catch (err) {
+        // The connection changed between our read and the RPC: read it once more and try again.
+        // A second change in a row → 409 ai_connection_changed (the user just retries).
+        if (!(err instanceof AppError && err.code === "ai_connection_changed")) throw err;
+        log("ai_job.retry_connection_changed", { jobId: job.id });
+        result = await requeue(await activeContext());
+      }
+    } catch (err) {
+      if (err instanceof FollowJob) return following(err.jobId);
       throw err;
     }
-    if (!won) {
+    if (!result) {
       const current = await scope.store.get(ref.jobId);
-      if (current && isActive(current.status)) return { jobId: current.id, reused: false, inProgress: true };
+      if (current && isActive(current.status)) return following(current.id);
       throw notRetryable();
     }
-    log("ai_job.retried", { jobId: job.id, runGeneration: gen });
+    log("ai_job.retried", {
+      jobId: job.id,
+      runGeneration: result.runGeneration,
+      provider: result.provider,
+      connectionTier: result.connectionTier,
+      restarted: result.restarted,
+    });
     scheduleRun(ref);
-    return { jobId: job.id, reused: false, inProgress: false };
+    return { jobId: job.id, reused: false, inProgress: false, restarted: result.restarted };
   }
 
   function scheduleRun(ref: JobRef, opts?: RunOptions): void {

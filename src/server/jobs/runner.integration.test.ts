@@ -6,7 +6,14 @@ import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
 import { requestCancel } from "@/server/services/ai-jobs";
+import { CreateApplicationProjectInput } from "@/lib/contracts/application";
+import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
+import { resolveModel } from "@/server/ai/providers/models";
+import { withdrawAiDataUseConsent } from "@/server/services/ai-connection/consent";
+import { deleteProviderKey } from "@/server/services/ai-connection/keys";
+import { createApplicationProject } from "@/server/services/application/write";
 import { getAiUsageSummary } from "@/server/services/usage";
+import { connectTestProvider, markTestKeyInvalid } from "@/test/ai-connection-db";
 import { createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { FREE_TIER_MIN_INTERVAL_MS, STALLED_AFTER_MS } from "./constants";
@@ -99,6 +106,16 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
 
   const target = () => ({ type: "application_project", id: crypto.randomUUID() });
 
+  /**
+   * R2: retry_ai_job only requeues an insight job that belongs to a real application project
+   * (DM 2.9.1 case (1)), so retry tests start the job on one.
+   */
+  async function projectJob() {
+    const id = crypto.randomUUID();
+    await createApplicationProject(userClient, CreateApplicationProjectInput.parse({ id, rawText: KO_BACKEND.raw }));
+    return { applicationProjectId: id, target: { type: "application_project", id } };
+  }
+
   async function drain() {
     while (scheduled.length) await scheduled.shift()!();
   }
@@ -142,6 +159,8 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
     userClient = createClient<Database>(s.url, s.anonKey, { auth: { persistSession: false } });
     const signIn = await userClient.auth.signInWithPassword({ email, password });
     if (signIn.error) throw new Error(`signIn failed: ${signIn.error.code}`);
+    // R2: retry_ai_job reads the active connection from the DB (C-11.4).
+    await connectTestProvider(admin, userClient, userId, "anthropic", "paid");
   });
 
   afterAll(async () => {
@@ -246,7 +265,7 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
 
   it("provider_unavailable final failure: generated category / cause, retry_after; manual retry clears it", async () => {
     const h = makeRunner([{ error: "provider_unavailable" }, { error: "provider_unavailable" }, { error: "provider_unavailable" }, { json: {} }, { json: {} }]);
-    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", target: target() });
+    const { jobId } = await h.runner.startJob({ userId, jobType: "insight", ...(await projectJob()) });
     await drain();
     await wake(h, jobId);
     await wake(h, jobId);
@@ -347,5 +366,75 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
     expect(summary.previousMonth).toBeNull();
     const withPrev = await getAiUsageSummary(userClient, { includePrevious: true });
     expect(withPrev.previousMonth?.estimatedCostUsd).toBe(0);
+  });
+
+  describe("R2 manual retry on the ACTIVE provider (C-11.4, A1 changed; retry_ai_job)", () => {
+    const OPENAI: ProviderContext = { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+
+    /** A job that failed at synthesize after match was checkpointed. */
+    async function failedAtSynthesize() {
+      const h = makeRunner([{ json: { m: 1 } }, { error: "billing_required" }]);
+      const { jobId } = await h.runner.startJob({ userId, jobType: "insight", ...(await projectJob()) });
+      await drain();
+      const row = await jobRow(jobId);
+      expect(row).toMatchObject({ status: "failed", error_code: "billing_required", provider: "anthropic" });
+      expect(Object.keys(row.step_outputs as object).sort()).toEqual(["_meta", "match"]);
+      return { jobId, gen: row.run_generation };
+    }
+
+    it("same active provider + tier → resumes from synthesize, match kept, fresh run meta", async () => {
+      const { jobId, gen } = await failedAtSynthesize();
+      const h = makeRunner([{ json: { s: 1 } }]);
+      const res = await h.runner.retryJob({ jobId, userId });
+      expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: false });
+      const row = await jobRow(jobId);
+      expect(row).toMatchObject({ status: "queued", run_generation: gen + 1, provider: "anthropic", connection_tier: "paid", model_tier: "default", model: resolveModel("anthropic", "default"), error_code: null });
+      expect(row.step_outputs).toMatchObject({ match: { m: 1 }, _meta: { runBase: gen + 1, retries: {} } });
+      await drain();
+      expect((await jobRow(jobId)).status).toBe("succeeded");
+      expect(h.scripted.calls).toHaveLength(1); // only synthesize
+    });
+
+    it("another active provider → restarted: provider / model / tier columns replaced, step_outputs only _meta, both steps run again", async () => {
+      const { jobId, gen } = await failedAtSynthesize();
+      await connectTestProvider(admin, userClient, userId, "openai", "paid");
+      try {
+        const h = makeRunner([{ json: { m: 2 } }, { json: { s: 2 } }], OPENAI);
+        const res = await h.runner.retryJob({ jobId, userId });
+        expect(res).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
+        const row = await jobRow(jobId);
+        expect(row).toMatchObject({ status: "queued", run_generation: gen + 1, provider: "openai", connection_tier: "paid", model: resolveModel("openai", "default") });
+        expect(Object.keys(row.step_outputs as object)).toEqual(["_meta"]);
+        await drain();
+        const done = await jobRow(jobId);
+        expect(done).toMatchObject({ status: "succeeded", provider: "openai" });
+        expect(h.scripted.calls).toHaveLength(2);
+        const usage = await usageRows(jobId);
+        expect(usage.slice(-2).map((u) => u.provider)).toEqual(["openai", "openai"]);
+      } finally {
+        await connectTestProvider(admin, userClient, userId, "anthropic", "paid");
+      }
+    });
+
+    it("path ② refusals come from the DB on the ACTIVE provider: 409, job stays failed, no call", async () => {
+      const { jobId, gen } = await failedAtSynthesize();
+      const h = makeRunner([]);
+      const expectRefused = async (code: string) => {
+        await expect(h.runner.retryJob({ jobId, userId })).rejects.toMatchObject({ code, status: 409 });
+        expect(await jobRow(jobId)).toMatchObject({ status: "failed", run_generation: gen, provider: "anthropic" });
+      };
+      try {
+        await withdrawAiDataUseConsent(userClient, { provider: "anthropic", connectionTier: "paid" }, () => {});
+        await expectRefused("ai_consent_required");
+        await connectTestProvider(admin, userClient, userId, "anthropic", "paid");
+        await markTestKeyInvalid(admin, userId, "anthropic");
+        await expectRefused("key_invalid");
+        await deleteProviderKey(userClient, "anthropic");
+        await expectRefused("key_missing");
+        expect(h.scripted.calls).toHaveLength(0);
+      } finally {
+        await connectTestProvider(admin, userClient, userId, "anthropic", "paid");
+      }
+    });
   });
 });

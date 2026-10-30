@@ -12,7 +12,9 @@ import type { Ai02MatchOutput, Ai02SynthesisOutput } from "@/server/ai/schemas/A
 import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
-import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext } from "@/server/jobs/provider-context";
+import type { ModelTier } from "@/lib/contracts/enums";
+import { resolveModel } from "@/server/ai/providers/models";
+import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext, type ProviderContext } from "@/server/jobs/provider-context";
 import { createJobRunner } from "@/server/jobs/runner";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
@@ -21,6 +23,7 @@ import { ensureJdExtracted } from "@/server/services/application/extraction";
 import { loadProgress } from "@/server/services/application/read";
 import { createApplicationProject, deleteApplicationProject } from "@/server/services/application/write";
 import { getDeletionImpact, saveAchievement, saveExperience, saveProject, saveProjectDetail } from "@/server/services/career";
+import { connectTestProvider } from "@/test/ai-connection-db";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
@@ -162,12 +165,12 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     };
   }
 
-  function harness() {
+  function harness(active: ProviderContext = { provider: "anthropic", connectionTier: "paid", keyStatus: "valid" }) {
     const scheduled: (() => Promise<void>)[] = [];
     const adapter = lazyAdapter(queue);
     const createLlm = (input: Parameters<ReturnType<typeof scriptedLlmFactory>>[0]): Llm => scriptedLlmFactory(adapter, Date.now)(input);
     const keySource = createStaticKeySource(FAKE_KEY, () => new ProviderError("key_missing"));
-    const providerContext = createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" });
+    const providerContext = createStaticProviderContext(active);
     const log = (event: string, fields: Record<string, unknown>) => void logs.push(JSON.stringify({ event, ...fields }));
     const definition = createInsightJobDefinition({
       pipeline,
@@ -232,6 +235,8 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     admin = createClient<Database>(s.url, s.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     ({ id: userId, client: user } = await newUser("insight"));
     ({ id: otherId, client: otherUser } = await newUser("insight-other"));
+    // R2: retry_ai_job reads the active connection from the DB (C-11.4).
+    await connectTestProvider(admin, user, userId, "anthropic", "paid");
   });
 
   afterAll(async () => {
@@ -395,10 +400,42 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(extraction.data).toHaveLength(1);
   });
 
+  it("R2 (C-11.4, R-63): a failed run retried on another active provider overwrites the same insights row with the new provider", async () => {
+    queue.push({ error: "billing_required" });
+    const first = harness();
+    const out = await first.start(user, userId, project, true);
+    if (out.kind !== "started" || out.data.reused) throw new Error("expected a job");
+    await first.drain();
+    const jobId = out.data.jobId;
+    const failedRow = await admin.from("insights").select("id, status, provider").eq("ai_job_id", jobId).single();
+    expect(failedRow.data).toMatchObject({ status: "failed", provider: "anthropic" });
+
+    await connectTestProvider(admin, user, userId, "openai", "paid");
+    try {
+      queue.push(matchResponse(), synthesisResponse());
+      const h = harness({ provider: "openai", connectionTier: "paid", keyStatus: "valid" });
+      const retried = await h.runner.retryJob({ jobId, userId });
+      expect(retried).toEqual({ jobId, reused: false, inProgress: false, restarted: true });
+      await h.drain();
+      expect(queue).toHaveLength(0);
+      const job = await admin.from("ai_jobs").select("status, provider, model, model_tier, connection_tier").eq("id", jobId).single();
+      expect(job.data).toMatchObject({ status: "succeeded", provider: "openai", connection_tier: "paid" });
+      expect(job.data?.model).toBe(resolveModel("openai", job.data!.model_tier as ModelTier));
+      const rows = await admin.from("insights").select("id, status, is_latest, provider, model").eq("ai_job_id", jobId);
+      expect(rows.data).toHaveLength(1);
+      expect(rows.data![0]).toMatchObject({ id: failedRow.data!.id, status: "ready", is_latest: true, provider: "openai", model: job.data!.model });
+      const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
+      expect(view.insight).toMatchObject({ provider: "openai" });
+    } finally {
+      await connectTestProvider(admin, user, userId, "anthropic", "paid");
+    }
+  });
+
   it("deletion impact counts insights per application project (§4.2)", async () => {
     const impact = await getDeletionImpact(user, { entityType: "project_detail", entityId: ids.detail, affiliationMode: "keep_projects" });
     expect(impact.affected_results.by_application_project).toEqual([
-      expect.objectContaining({ application_project_id: project, insights: 3, drafts: 0, draft_sections: 0, interview_sessions: 0 }),
+      // v1, v2, v3 (QA-S6-01 retry) + the R2 cross-provider retry row.
+      expect.objectContaining({ application_project_id: project, insights: 4, drafts: 0, draft_sections: 0, interview_sessions: 0 }),
     ]);
   });
 

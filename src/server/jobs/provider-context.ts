@@ -22,17 +22,25 @@ export type ProviderContext = {
   keyStatus: KeyStatus;
 };
 
-/** The user's active provider + tier, read at job start and fixed into ai_jobs (F-AI-03 (2)). Null = not connected. */
+/** The user's active provider + tier (display only, no key status). */
+export type ActiveConnection = { provider: AiProvider; connectionTier: ConnectionTier };
+
 export interface ProviderContextSource {
+  /**
+   * The active provider + tier + key status, read when a run starts — a new
+   * job (written into the row) and a same-row manual retry alike (C-11.4,
+   * A1 changed in R2). Null = no active provider or no key for it. Throws
+   * AppError 409 `ai_consent_required` when the active key's current tier
+   * lacks a current consent (A20).
+   */
   forUser(userId: string): Promise<ProviderContext | null>;
   /**
-   * QA-S3b-01: gate for running a job that is FIXED to `provider` (manual
-   * retry). The provider stays the job's (F-AI-03 (2)) even when the active
-   * provider changed, but its key must still exist, not be invalid, and have a
-   * current run-time consent. Throws AppError (409) `key_missing` /
-   * `key_invalid` / `ai_consent_required`.
+   * Same read without the consent rule: the retry badge (UX C-20 / S-40) and
+   * the key checks of the same-row retry gate, which go key_missing →
+   * key_invalid → ai_consent_required like `retry_ai_job` / `check_ai_run_allowed`
+   * (QA-R2-03). Never the only gate of a run — the consent rule is `forUser`.
    */
-  assertJobRunnable(userId: string, job: { provider: AiProvider; connectionTier: ConnectionTier }): Promise<void>;
+  peekActive(userId: string): Promise<ProviderContext | null>;
 }
 
 /** 409 errors of the run gates (same codes as startJob / the AI spec). */
@@ -53,7 +61,7 @@ export function runGateError(code: "key_missing" | "key_invalid" | "ai_consent_r
  */
 export interface KeySource {
   /**
-   * `provider` = the job's fixed provider (the runner passes ai_jobs.provider).
+   * `provider` = the current run's provider (the runner passes ai_jobs.provider, fixed while it runs).
    * The envelope key source needs it for the AAD (user_id|provider|key id).
    */
   forJob(jobId: string, provider?: AiProvider): Promise<string>;
@@ -87,23 +95,28 @@ export interface KeyStatusReporter {
 // ---------------- fakes (tests) ----------------
 
 /**
- * Test fake. `runnable` decides the manual-retry gate per fixed provider; by
- * default a job is runnable unless the static context is the same provider
- * with an invalid key.
+ * Test fake. `context` may be a function (read on every call) so a test can
+ * change the active connection, or throw (e.g. consent required) mid-test.
  */
-export function createStaticProviderContext(
-  context: ProviderContext | null,
-  runnable?: (job: { provider: AiProvider; connectionTier: ConnectionTier }) => AppError | null,
-): ProviderContextSource {
+export function createStaticProviderContext(context: ProviderContext | null | (() => ProviderContext | null)): ProviderContextSource {
+  const fn = typeof context === "function" ? context : () => context;
+  // A function that throws simulates consent required; peekActive (no consent rule) then sees
+  // the connection last read successfully.
+  let lastGood: ProviderContext | null = null;
+  const read = () => {
+    const c = fn();
+    lastGood = c;
+    return c;
+  };
   return {
-    forUser: async () => context,
-    async assertJobRunnable(_userId, job) {
-      const err = runnable
-        ? runnable(job)
-        : context?.provider === job.provider && context.keyStatus === "invalid"
-          ? runGateError("key_invalid")
-          : null;
-      if (err) throw err;
+    forUser: async () => read(),
+    async peekActive() {
+      try {
+        return read();
+      } catch {
+        // The fake's "consent required" error: the key itself is still there.
+        return lastGood;
+      }
     },
   };
 }
@@ -191,9 +204,8 @@ export function createDevEnvProviderContext(env: DevAiEnv): ProviderContextSourc
         : "paid";
       return { provider, connectionTier, keyStatus: "valid" };
     },
-    async assertJobRunnable(_userId, job) {
-      assertNotProduction(env);
-      if (devProvider(env) !== job.provider || !env.apiKey) throw runGateError("key_missing");
+    async peekActive(userId) {
+      return this.forUser(userId);
     },
   };
 }

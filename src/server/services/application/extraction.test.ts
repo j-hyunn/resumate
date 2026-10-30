@@ -132,7 +132,7 @@ describe("ensureJdExtracted — refusals before any call", () => {
 
   it("consent no longer current → key_missing (decisions 2026-10-29)", async () => {
     const t = setup();
-    t.deps.providerContext = { forUser: async () => Promise.reject(new AppError("ai_consent_required")), assertJobRunnable: async () => {} };
+    t.deps.providerContext = { forUser: async () => Promise.reject(new AppError("ai_consent_required")), peekActive: async () => null };
     expect(await ensureJdExtracted(t.deps, PROJECT)).toMatchObject({ status: "failed", code: "key_missing" });
   });
 

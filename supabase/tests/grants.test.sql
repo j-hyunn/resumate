@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(41);
+select plan(42);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -130,8 +130,9 @@ select set_eq(
         'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section',
         'begin_interview_questions', 'save_interview_question', 'complete_interview_questions',
         'fail_interview_questions', 'begin_interview_evaluation', 'save_answer_evaluation', 'fail_answer_evaluation',
-        'save_session_feedback', 'complete_interview_evaluation'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + S8 interview RPCs');
+        'save_session_feedback', 'complete_interview_evaluation',
+        'retry_ai_job'],
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + S8 interview RPCs + R2 retry_ai_job');
 
 -- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
 -- are app_ai_writer only.
@@ -474,6 +475,15 @@ select set_eq(
         'fail_answer_evaluation:app_ai_writer', 'save_session_feedback:app_ai_writer',
         'complete_interview_evaluation:app_ai_writer'],
   'S8 interview RPC execute matrix');
+
+-- R2 (A1 change, DM 2.9.1 case (1)): retry_ai_job is the job runner's (app_ai_writer) only.
+select set_eq(
+  $$select r.rolname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated'), ('service_role'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
+     where n.nspname = 'public' and p.proname = 'retry_ai_job'
+       and has_function_privilege(r.rolname, p.oid, 'execute')$$,
+  array['app_ai_writer'],
+  'R2 retry_ai_job: execute = app_ai_writer only');
 
 -- S8: user-session writes on the interview tables = interview_sessions DELETE + interview_answers.answer_text UPDATE.
 select set_eq(

@@ -450,9 +450,10 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
     expect(r2.key).toMatchObject({ status: "needs_check", lastFailureCause: "provider_unavailable" });
   });
 
-  it("run gate for a fixed-provider job (QA-S3b-01): consent withdrawal cancels in-flight jobs and blocks retry", async () => {
+  it("run gate on the ACTIVE provider (QA-S3b-01, C-11.4 R2): consent withdrawal cancels in-flight jobs and blocks the next run", async () => {
     const source = createDbProviderContextSource(async () => user);
-    await source.assertJobRunnable(userId, { provider: "gemini", connectionTier: "paid" });
+    await expect(source.forUser(userId)).resolves.toEqual({ provider: "gemini", connectionTier: "paid", keyStatus: "valid" });
+    await expect(source.peekActive(userId)).resolves.toEqual({ provider: "gemini", connectionTier: "paid", keyStatus: "valid" });
     // A queued job on gemini/paid…
     const store = createSupabaseJobStore(createAiWriterClient(userId));
     const id = crypto.randomUUID();
@@ -477,13 +478,13 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
     // Cancel requested: the runner ends it as canceled at claim / next heartbeat, before any call.
     const { data: job } = await admin.from("ai_jobs").select("status, cancel_requested_at").eq("id", id).single();
     expect(job?.cancel_requested_at).not.toBeNull();
-    await expect(source.assertJobRunnable(userId, { provider: "gemini", connectionTier: "paid" })).rejects.toMatchObject({ code: "ai_consent_required", status: 409 });
-    // Key deleted → key_missing.
-    await expect(source.assertJobRunnable(userId, { provider: "anthropic", connectionTier: "paid" })).resolves.toBeUndefined();
+    await expect(source.forUser(userId)).rejects.toMatchObject({ code: "ai_consent_required", status: 409 });
+    // The retry badge still names the active provider (display only, no consent rule).
+    await expect(source.peekActive(userId)).resolves.toEqual({ provider: "gemini", connectionTier: "paid", keyStatus: "valid" });
+    // A non-active provider's key doesn't matter any more (every run uses the active one).
     await deleteProviderKey(user, "anthropic");
-    await expect(source.assertJobRunnable(userId, { provider: "anthropic", connectionTier: "paid" })).rejects.toMatchObject({ code: "key_missing" });
     await consent("gemini", "paid");
-    await source.assertJobRunnable(userId, { provider: "gemini", connectionTier: "paid" });
+    await expect(source.forUser(userId)).resolves.toMatchObject({ provider: "gemini", connectionTier: "paid" });
   });
 
   it("run-time gate (check_ai_run_allowed): consent withdrawn while queued → key_missing, 0 provider calls, 0 usage rows", async () => {

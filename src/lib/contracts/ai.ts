@@ -154,10 +154,28 @@ export type AiJobError = z.infer<typeof AiJobErrorSchema>;
  * - `retryAfter`: final rate_limited / provider_unavailable failure → "이 시각 이후 다시 시도".
  * - `quotaResetsAt`: daily_quota_exhausted → provider quota reset time (UTC; screens show KST).
  * - `waitingRetryUntil`: queued and waiting for an automatic retry (C-12 "한도 대기 중 n초"), else null.
- * - `provider` / `modelTier` / `connectionTier`: fixed when the job started (F-AI-03 (2)).
+ * - `provider` / `modelTier` / `connectionTier`: the current run's values — fixed while it runs
+ *   (F-AI-03 (2)); a same-row manual retry replaces them with the active ones (C-11.4, A1 R2).
  * - `retryCount`: automatic retries so far (C-11.3).
  * - `canRetry`: failed and the "다시 시도" button applies (not the input category).
+ * - `retry`: badge preview for that button (UX C-20 / S-40), null unless `canRetry`.
  */
+/**
+ * Retry badge preview (UX C-20 / S-40, decisions "A1 세부"): which provider "다시 시도" will use.
+ * - `provider`: the ACTIVE provider now (C-11.4: every retry runs on it); null = no active
+ *   provider / key (the button leads to "AI 연결 필요").
+ * - `fromScratch`: a same-row retry (insight / interview_questions / interview_evaluation)
+ *   whose active provider or connection tier differs from the job's → "{provider}로 처음부터
+ *   다시 해요". Always false for request-scoped jobs (their retry is a new job anyway) and
+ *   when `provider` is null.
+ * Display only; the retry request re-checks everything.
+ */
+export const AiJobRetryPreviewSchema = z.object({
+  provider: AiProviderSchema.nullable(),
+  fromScratch: z.boolean(),
+});
+export type AiJobRetryPreview = z.infer<typeof AiJobRetryPreviewSchema>;
+
 export const AiJobStatusResponseSchema = z.object({
   jobId: AiJobIdSchema,
   jobType: AiJobTypeSchema,
@@ -176,6 +194,7 @@ export const AiJobStatusResponseSchema = z.object({
   retryCount: z.number().int().min(0),
   cancelRequested: z.boolean(),
   canRetry: z.boolean(),
+  retry: AiJobRetryPreviewSchema.nullable(),
   updatedAt: z.string(),
 });
 export type AiJobStatusResponse = z.infer<typeof AiJobStatusResponseSchema>;
@@ -192,6 +211,17 @@ export const StartAiJobResponseSchema = z.object({
   inProgress: z.boolean(),
 });
 export type StartAiJobResponse = z.infer<typeof StartAiJobResponseSchema>;
+
+/**
+ * `POST /api/ai-jobs/{id}/retry` response (202). `restarted`: the run starts from the first
+ * step because the active provider or connection tier differs from the job's (C-11.4, R-63);
+ * false when resuming from the failed step, and when following another in-flight job
+ * (`inProgress: true`). `reused` is always false.
+ */
+export const RetryAiJobResponseSchema = StartAiJobResponseSchema.extend({
+  restarted: z.boolean(),
+});
+export type RetryAiJobResponse = z.infer<typeof RetryAiJobResponseSchema>;
 
 /** `POST /api/ai-jobs/{id}/cancel` response. Cancel is a request; the runner stops at the next check. */
 export const CancelAiJobResponseSchema = z.object({

@@ -9,7 +9,7 @@ import { AI_PROVIDERS, CONNECTION_TIERS, type AiErrorCode, type AiProvider, type
 import { AppError } from "@/lib/contracts/errors";
 import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
-import { runGateError, type KeyFailureCause, type KeyStatusReporter, type ProviderContext, type ProviderContextSource } from "@/server/jobs/provider-context";
+import { type KeyFailureCause, type KeyStatusReporter, type ProviderContext, type ProviderContextSource } from "@/server/jobs/provider-context";
 import { consentRequired, consentStateOf, loadActiveConsents, loadDisclosures, mayRunWithConsent } from "./consent";
 
 /**
@@ -175,6 +175,7 @@ export async function setActiveAiProvider(supabase: UserSupabaseClient, userId: 
 /**
  * Real `ProviderContextSource` (S3a notes "남은 일"): active provider + key
  * status + tier from the user session, plus the run-time consent rule.
+ * Used for new jobs and same-row retries alike (C-11.4, A1 changed in R2).
  * `clientFor` must return a client of THE SAME user (user-session client in a
  * request); a mismatch is refused.
  */
@@ -191,16 +192,12 @@ export function createDbProviderContextSource(clientFor: (userId: string) => Pro
       if (!mayRunWithConsent(disclosures, consents, active, tier, new Date())) throw consentRequired();
       return { provider: active, connectionTier: tier, keyStatus: key.status as KeyStatus };
     },
-    async assertJobRunnable(userId, job) {
+    async peekActive(userId) {
       const supabase = await clientFor(userId);
-      const [key] = await loadKeyMetas(supabase, job.provider);
-      if (!key) throw runGateError("key_missing");
-      if (key.status === "invalid") throw runGateError("key_invalid");
-      // The data goes out under the key's CURRENT tier (its data-use policy), so its consent is what
-      // must be current. A tier change already withdrew the old tier's consent (save_provider_key).
-      const tier = key.connection_tier as ConnectionTier;
-      const [disclosures, consents] = await Promise.all([loadDisclosures(supabase, job.provider), loadActiveConsents(supabase, job.provider)]);
-      if (!mayRunWithConsent(disclosures, consents, job.provider, tier, new Date())) throw consentRequired();
+      const active = await loadActiveProvider(supabase, userId);
+      if (!active) return null;
+      const [key] = await loadKeyMetas(supabase, active);
+      return key ? { provider: active, connectionTier: key.connection_tier as ConnectionTier, keyStatus: key.status as KeyStatus } : null;
     },
   };
 }

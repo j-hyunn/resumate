@@ -22,6 +22,13 @@ describe("mapDbError", () => {
     [{ code: "P0001", message: "invalid_affiliation_mode" }, "invalid_input", 400],
     [{ code: "P0001", message: "invalid_result_mode" }, "invalid_input", 400],
     [{ code: "P0001", message: "invalid_detail_order" }, "invalid_detail_order", 409],
+    // R2 retry_ai_job (DM 2.11.7 path ②)
+    [{ code: "P0001", message: "key_missing" }, "key_missing", 409],
+    [{ code: "P0001", message: "key_invalid" }, "key_invalid", 409],
+    [{ code: "P0001", message: "ai_consent_required" }, "ai_consent_required", 409],
+    [{ code: "P0001", message: "ai_job_not_retryable" }, "ai_job_not_retryable", 409],
+    [{ code: "P0001", message: "invalid_run_meta" }, "internal_error", 500],
+    [{ code: "P0001", message: "ai_connection_changed" }, "ai_connection_changed", 409],
     [{ code: "P0001", message: "some_unlisted_raise" }, "internal_error", 500],
     [{ code: "XX000", message: "internal" }, "internal_error", 500],
   ])("%o → %s", (input, code, status) => {

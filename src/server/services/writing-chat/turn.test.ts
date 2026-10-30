@@ -76,7 +76,7 @@ function setup(opts: {
   const sleeps: number[] = [];
   const llmTiers: string[] = [];
   const providerContext = opts.contextError
-    ? { forUser: async () => Promise.reject(opts.contextError), assertJobRunnable: async () => {} }
+    ? { forUser: async () => Promise.reject(opts.contextError), peekActive: async () => null }
     : createStaticProviderContext(context);
   const deps: TurnDeps = {
     userId: USER,

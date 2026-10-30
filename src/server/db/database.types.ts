@@ -992,6 +992,9 @@ isOneToOne: false
 "request_ai_job_cancel":
 { Args: { "p_job_id": string }; Returns: Json
                            },
+"retry_ai_job":
+{ Args: { "p_ai_job_id": string,"p_expected_connection_tier"?: string,"p_expected_provider": string,"p_expected_run_generation": number,"p_model": string,"p_model_tier": string,"p_run_meta": Json }; Returns: Json
+                           },
 "save_answer_evaluation":
 { Args: { "p_ai_job_id": string,"p_answer_id": string,"p_payload": Json,"p_run_generation": number }; Returns: Json
                            },

@@ -18,11 +18,13 @@ import {
   createDevEnvKeySource,
   createDevEnvProviderContext,
   createDevEnvKeyStatusReporter,
+  createStaticProviderContext,
   DevAiEnvInProductionError,
   readDevAiEnv,
 } from "./provider-context";
 import { decideRetry } from "./retry";
-import { toAiJobStatusResponse } from "./status";
+import { loadActiveForPreview, retryPreviewOf, toAiJobStatusResponse } from "./status";
+import { parseRetryResult } from "./supabase-store";
 import { toUsageInsert } from "./supabase-usage";
 import type { JobRecord, NormalizedUsage, PriceRow } from "./types";
 
@@ -137,6 +139,55 @@ describe("status response", () => {
     const res = toAiJobStatusResponse({ ...base, errorCode: "key_missing", retryAfter: null });
     expect(res.error).toMatchObject({ category: "user_account", failureCause: null });
     expect(res.canRetry).toBe(true);
+  });
+});
+
+describe("retry badge preview (C-11.4, A1 R2, UX C-20 / S-40)", () => {
+  it("same active provider + tier → resume; another provider or tier → from scratch", () => {
+    expect(retryPreviewOf(base, { provider: "gemini", connectionTier: "free" })).toEqual({ provider: "gemini", fromScratch: false });
+    expect(retryPreviewOf(base, { provider: "openai", connectionTier: "free" })).toEqual({ provider: "openai", fromScratch: true });
+    expect(retryPreviewOf(base, { provider: "gemini", connectionTier: "paid" })).toEqual({ provider: "gemini", fromScratch: true });
+  });
+
+  it("no active provider → provider null; request-scoped jobs never 'from scratch'; null unless the button applies", () => {
+    expect(retryPreviewOf(base, null)).toEqual({ provider: null, fromScratch: false });
+    expect(retryPreviewOf({ ...base, jobType: "career_description" }, { provider: "openai", connectionTier: "paid" })).toEqual({ provider: "openai", fromScratch: false });
+    expect(retryPreviewOf({ ...base, errorCode: "safety_blocked" }, { provider: "openai", connectionTier: "paid" })).toBeNull();
+    expect(retryPreviewOf({ ...base, status: "running", errorCode: null }, { provider: "openai", connectionTier: "paid" })).toBeNull();
+  });
+
+  it("status response carries it and matches the contract", () => {
+    const res = toAiJobStatusResponse(base, null, { provider: "anthropic", connectionTier: "paid" });
+    expect(AiJobStatusResponseSchema.parse(res)).toEqual(res);
+    expect(res.retry).toEqual({ provider: "anthropic", fromScratch: true });
+    expect(toAiJobStatusResponse({ ...base, status: "succeeded", errorCode: null }).retry).toBeNull();
+  });
+
+  it("loadActiveForPreview reads only for a retryable failed job and swallows errors (display only)", async () => {
+    let reads = 0;
+    const source = createStaticProviderContext(() => {
+      reads += 1;
+      return { provider: "openai", connectionTier: "paid", keyStatus: "valid" };
+    });
+    await expect(loadActiveForPreview({ ...base, status: "running", errorCode: null }, source, USER)).resolves.toBeNull();
+    expect(reads).toBe(0);
+    await expect(loadActiveForPreview(base, source, USER)).resolves.toMatchObject({ provider: "openai", connectionTier: "paid" });
+    const failing = { forUser: async () => null, peekActive: async () => Promise.reject(new Error("db down")) };
+    await expect(loadActiveForPreview(base, failing, USER)).resolves.toBeNull();
+  });
+});
+
+describe("retry_ai_job result parsing", () => {
+  it("requeued → result; not requeued → null; malformed → internal_error", () => {
+    expect(parseRetryResult({ requeued: true, restarted: true, status: "queued", provider: "openai", model: "m", model_tier: "default", connection_tier: "paid", run_generation: 5 })).toEqual({
+      restarted: true,
+      provider: "openai",
+      connectionTier: "paid",
+      runGeneration: 5,
+    });
+    expect(parseRetryResult({ requeued: false, status: "running", run_generation: 4 })).toBeNull();
+    expect(() => parseRetryResult({ requeued: true, restarted: "yes", provider: "openai", connection_tier: "paid", run_generation: 5 })).toThrow();
+    expect(() => parseRetryResult({ requeued: true, restarted: false, provider: "mistral", connection_tier: "paid", run_generation: 5 })).toThrow();
   });
 });
 

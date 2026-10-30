@@ -31,7 +31,6 @@
 | 구현이 정한 상한·기본값 | 입력·출력 길이 상한, JD 기본 이름·길이 경고, 보관 13개 달·크론 시각, 탈퇴 증빙 HMAC 등 (`spec-gaps-summary.md` C) | 각 문서 `[가정]`, DM 4.5, AI C-14 |
 | 탈퇴 미완료 판정 | `profiles` 없음 + `account_deletion_logs` 행 있음 → S-25 "탈퇴 마무리" (`get_account_deletion_state`) | DM 6.1 |
 | 새 작업 시작 경로의 동의 거부 코드 | `ai_consent_required` / 키 없음 `ai_not_connected` (구현과 같음, 2026-11-06 확인) | DM 2.11.7 |
-| 실행 전 동의 확인 (R-67, 리더 판단 2026-11-06, **사용자 확인 권장**) | readiness `ai_connection.consent_required`로 화면이 실행 전에 C-21을 연다. S-40 "동의 필요" 상태. 서버 코드는 그대로 ★ | DM 6장·2.11.7, UX C-18·C-20·S-40, PRD F-AI-03 (2) |
 | 성능·지표 목표, AI 품질 임계값 | PRD 6.3·7장, AI 6장 | — |
 
 ## 3. 확정된 결정
@@ -162,7 +161,7 @@
 | A1 세부 | 같은 행 다시 시도에서 활성 공급자·등급이 작업 행에 기록된 값과 **다르면** `step_outputs`를 비우고 처음부터 다시 실행하며, 그 작업이 이미 저장한 결과 행(면접 질문·답변 평가·종합 등)도 모두 새 결과로 덮어쓴다(R-63). **같으면** 끝난 단계는 건너뛰고 실패한 행만 다시 연다. 다시 시도 버튼 배지는 활성 공급자, 다르면 "{활성 공급자}로 처음부터 다시 해요" (리더 판단) |
 | R-64 | 거부 코드: 같은 행 다시 시도 = `key_missing`/`ai_consent_required`/`key_invalid`, 새 작업 시작 = `ai_not_connected`/`ai_consent_required`/`key_invalid` (DM 2.11.7) |
 | 2026-11-06 거부 코드 | (사용자가 판단 위임 → 리더 판단, 2026-11-06) DM 2.11.7: 경로 ② 같은 행 다시 시도에 409 `ai_connection_changed` 추가(활성 공급자·등급을 읽은 뒤 기록 전에 바뀜, 서버가 한 번 다시 읽고도 어긋날 때만, 작업 행 `failed` 유지, 화면 "AI 연결이 방금 바뀌었어요. 다시 시도해 주세요."), 판정 순서 `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed`. 새 경로 ⑤ 요청 범위 작업 시작(JD 요건 추출·서류 3종)은 동의 필요를 `key_missing`으로 합침(현재 구현과 같음) |
-| R-67 | (리더 판단 2026-11-06, `[가정]`, **사용자 확인 권장**) 실행 전 동의 확인: `get_data_readiness().ai_connection.consent_required`(boolean)로 화면이 활성 공급자·등급의 (재)동의 필요를 미리 알고, 모든 AI 실행 전에 C-21을 먼저 연다. S-40 활성 카드에 "동의 필요" 상태·"동의하기". 서버 코드는 그대로(③④⑤는 `key_missing`) — 화면은 `key_missing`을 받으면 readiness를 다시 읽어 동의 필요면 C-21로 보냄. 대안 (b) 경로 ⑤를 409 `ai_consent_required`로 바꾸기는 채택 안 함 |
+| R-67 | (**사용자 확정 2026-11-06**, 리더 제안 (a) 채택) 실행 전 동의 확인: `get_data_readiness().ai_connection.consent_required`(boolean)로 화면이 활성 공급자·등급의 (재)동의 필요를 미리 알고, 모든 AI 실행 전에 C-21을 먼저 연다. S-40 활성 카드에 "동의 필요" 상태·"동의하기". 서버 코드는 그대로(③④⑤는 `key_missing`) — 화면은 `key_missing`을 받으면 readiness를 다시 읽어 동의 필요면 C-21로 보냄. 대안 (b) 경로 ⑤를 409 `ai_consent_required`로 바꾸기는 채택 안 함 |
 | R-69 | 같은 행 다시 시도 `ai_job_not_retryable`(409) 대상을 구현에 맞춤: 요청 범위 작업, 입력 원인 실패(`input_too_long`·`safety_blocked`·`insufficient_data`·`not_a_jd`), `failed`가 아닌 행. 연결 게이트보다 먼저 판정. 입력 원인 실패는 입력을 고친 뒤 새로 실행(UX C-20) |
 | R-70 | 공급자가 다른 같은 행 다시 시도의 결과 행 다시 열기는 `retry_ai_job` 안에서(구현 기준). 끝난 결과 묶음은 그대로, 면접 질문은 지우고 다시 만듦, `input_hash` 비움 `[가정]` |
 | R-49 | 거부 코드는 DM 2.11.7 한 표가 기준. 동의 필요를 `ai_consent_required`로 따로 내는 곳은 409로 바로 거부하는 경로뿐, 실행 중 확인과 대화 턴은 `key_missing`으로 합침 |
@@ -192,7 +191,7 @@
 | A22 | `interview_sessions.question_validation_report`·`question_usage` 컬럼과 저장 |
 | A23 | AI-11 실패 시 최신순 대체 제거, 체크 없음 + `selection_origin = user` |
 | A24 | `app_ai_writer`의 `evidence_links` INSERT 권한 회수 |
-| R-67 | `get_data_readiness().ai_connection.consent_required` 추가(활성 공급자·키 현재 등급의 2.11.5 재동의 판정, `private.ai_consent_allows_run`과 같은 기준) `[가정]` — 리더 판단, 사용자 확인 후 구현 |
+| R-67 | `get_data_readiness().ai_connection.consent_required` 추가(활성 공급자·키 현재 등급의 2.11.5 재동의 판정, `private.ai_consent_allows_run`과 같은 기준) — 사용자 확정 2026-11-06, 백엔드 R3에서 구현 |
 
 - A1(다시 시도 = 활성 공급자, 공급자가 다르면 `step_outputs` 비우고 결과 행 다시 열기)은 **구현됨**(백엔드 R2, 42f7611, 2026-11-06).
 

@@ -18,6 +18,7 @@ import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import type { JobStep, JobTypeDefinition } from "@/server/jobs/types";
 import { createEnvelopeKeySource } from "@/server/keys/key-source";
 import { EnvKms } from "@/server/keys/kms";
+import { getDataReadiness } from "@/server/services/career/rpc";
 import { createScriptedAdapter, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { getAiDisclosure, recordAiDataUseConsent, withdrawAiDataUseConsent } from "./consent";
@@ -396,7 +397,13 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
   it("readiness exposes ai_connection (DM §6 v4)", async () => {
     const { data, error } = await user.rpc("get_data_readiness");
     expect(error).toBeNull();
-    expect((data as { ai_connection: unknown }).ai_connection).toEqual({ active_provider: "gemini", key_status: "valid", connection_tier: "paid" });
+    expect((data as { ai_connection: unknown }).ai_connection).toEqual({ active_provider: "gemini", key_status: "valid", connection_tier: "paid", consent_required: false });
+    // R3 (R-67): parsed through the contract, and withdrawing the active tier's consent flips consent_required.
+    expect((await getDataReadiness(user)).ai_connection.consent_required).toBe(false);
+    await withdrawAiDataUseConsent(user, { provider: "gemini", connectionTier: "paid" });
+    expect((await getDataReadiness(user)).ai_connection).toMatchObject({ active_provider: "gemini", connection_tier: "paid", consent_required: true });
+    await consent("gemini", "paid");
+    expect((await getDataReadiness(user)).ai_connection.consent_required).toBe(false);
   });
 
   it("one verification in flight per user and provider; a dead one is closed as stalled and replaced", async () => {

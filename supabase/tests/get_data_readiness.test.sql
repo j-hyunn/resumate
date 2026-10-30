@@ -1,6 +1,7 @@
 -- S2 get_data_readiness() (DM §6 v3, D-01 v3, U-5).
 -- S3b: + ai_connection (DM §6 v4). The S2 cases run with a valid active key for A so the writing_chat
 -- branches stay reachable; the no-key / invalid-key branches are at the end.
+-- R3: A has no consent row here, so consent_required is true; its branches are in readiness_consent_required.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
@@ -30,7 +31,7 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 
 -- 1. empty account
 select is(public.get_data_readiness(), jsonb_build_object(
-  'ai_connection', '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free"}'::jsonb,
+  'ai_connection', '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": true}'::jsonb,
   'counts', jsonb_build_object(
     'complete_experiences', 0, 'complete_educations', 0, 'complete_projects', 0,
     'projects_without_complete_detail', 0, 'complete_project_details', 0, 'draft_project_details', 0,
@@ -135,7 +136,7 @@ update public.ai_provider_keys set status = 'needs_check' where id = 'aaaaaaaa-9
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() -> 'ai_connection',
-          '{"active_provider": "gemini", "key_status": "needs_check", "connection_tier": "free"}'::jsonb,
+          '{"active_provider": "gemini", "key_status": "needs_check", "connection_tier": "free", "consent_required": true}'::jsonb,
           'ai_connection reports needs_check');
 select is(public.get_data_readiness() #>> '{features,insight,next_action}', 'writing_chat',
           'needs_check key → writing_chat still offered');
@@ -156,7 +157,7 @@ reset role;
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 select is(public.get_data_readiness() -> 'ai_connection',
-          '{"active_provider": "gemini", "key_status": "invalid", "connection_tier": "free"}'::jsonb,
+          '{"active_provider": "gemini", "key_status": "invalid", "connection_tier": "free", "consent_required": true}'::jsonb,
           'app_ai_writer gets A''s ai_connection');
 
 -- key deleted → FK clears active provider → all null, form.
@@ -165,7 +166,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select ok(public.delete_provider_key('gemini'), 'A deletes the key');
 select is(public.get_data_readiness() -> 'ai_connection',
-          '{"active_provider": null, "key_status": null, "connection_tier": null}'::jsonb,
+          '{"active_provider": null, "key_status": null, "connection_tier": null, "consent_required": null}'::jsonb,
           'no active provider → ai_connection all null');
 select is(public.get_data_readiness() #>> '{features,draft,next_action}', 'form', 'no key → form');
 select is(public.get_data_readiness() #>> '{features,job_interview,next_action}', 'form', 'no key → form (job_interview)');

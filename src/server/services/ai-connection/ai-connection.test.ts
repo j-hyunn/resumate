@@ -93,9 +93,11 @@ describe("contracts", () => {
   });
 
   it("isAiLocked (F-AI-06)", () => {
-    expect(isAiLocked({ active_provider: null, key_status: null, connection_tier: null })).toBe(true);
-    expect(isAiLocked({ active_provider: "gemini", key_status: "invalid", connection_tier: "free" })).toBe(true);
-    expect(isAiLocked({ active_provider: "gemini", key_status: "needs_check", connection_tier: "free" })).toBe(false);
+    expect(isAiLocked({ active_provider: null, key_status: null, connection_tier: null, consent_required: null })).toBe(true);
+    expect(isAiLocked({ active_provider: "gemini", key_status: "invalid", connection_tier: "free", consent_required: false })).toBe(true);
+    expect(isAiLocked({ active_provider: "gemini", key_status: "needs_check", connection_tier: "free", consent_required: false })).toBe(false);
+    // R3: consent_required does not lock — the screen opens C-21 before running instead.
+    expect(isAiLocked({ active_provider: "gemini", key_status: "valid", connection_tier: "free", consent_required: true })).toBe(false);
   });
 
   it("enum lists mirror the DB CHECKs", () => {

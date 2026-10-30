@@ -199,6 +199,14 @@ export const ReadinessAiConnection = z.object({
   active_provider: provider.nullable(),
   key_status: z.enum(KEY_STATUSES).nullable(),
   connection_tier: connectionTier.nullable(),
+  /**
+   * R3 (R-67, DM §6 `ai_connection.consent_required`): true when the active provider's
+   * (provider, active key tier) needs a data-use consent under the 2.11.5 re-consent rule
+   * (`private.ai_consent_allows_run`, same check as `check_ai_run_allowed` / `retry_ai_job`).
+   * null when there is no active provider or key. Required + nullable: the RPC always sends it.
+   * Does not feed `isAiLocked` — screens open C-21 before running instead of locking.
+   */
+  consent_required: z.boolean().nullable(),
 });
 export type ReadinessAiConnection = z.infer<typeof ReadinessAiConnection>;
 

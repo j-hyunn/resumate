@@ -204,11 +204,14 @@ describe("DataReadiness", () => {
         job_interview: { ready: false, missing: ["complete_experience", "complete_project"], hints: [], next_action: "form" },
         culture_fit_interview: { ready: true, data_sufficiency: "thin" },
       },
-      ai_connection: { active_provider: "gemini", key_status: "needs_check", connection_tier: "free" },
+      ai_connection: { active_provider: "gemini", key_status: "needs_check", connection_tier: "free", consent_required: true },
     };
     expect(DataReadiness.safeParse(sample).success).toBe(true);
-    // DM §6 v4: no active key → all three null.
-    expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: null, key_status: null, connection_tier: null } }).success).toBe(true);
+    // DM §6 v4: no active key → all four null (R3 adds consent_required).
+    expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: null, key_status: null, connection_tier: null, consent_required: null } }).success).toBe(true);
+    // R3: consent_required is required (the RPC always sends it), boolean or null only.
+    expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: "gemini", key_status: "valid", connection_tier: "free" } }).success).toBe(false);
+    expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: "gemini", key_status: "valid", connection_tier: "free", consent_required: "yes" } }).success).toBe(false);
     expect(DataReadiness.safeParse({ ...sample, ai_connection: undefined }).success).toBe(false);
   });
   it("R1 A18: project_fields hint → form + suggested_project_id (DM §6 v4.2 example)", () => {

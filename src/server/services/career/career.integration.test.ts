@@ -227,7 +227,7 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     const p = await saveProject(carol, SaveProjectInput.parse({ id: newId(), affiliation: { type: "experience", id: exp.id }, name: "정산 개선", startMonth: "2024-01" }));
     await saveProjectDetail(carol, SaveProjectDetailInput.parse({ id: newId(), projectId: p.id, title: "배치 시간", situation: "정산 배치가 느렸다", action: "쿼리를 나눠 병렬 처리했다" }));
     const r = await getDataReadiness(carol);
-    expect(r.ai_connection.active_provider).toBeNull();
+    expect(r.ai_connection).toEqual({ active_provider: null, key_status: null, connection_tier: null, consent_required: null });
     for (const f of [r.features.insight, r.features.draft, r.features.job_interview]) {
       expect(f).toMatchObject({ ready: false, next_action: "form", suggested_project_id: p.id });
       expect(f.hints).toContain("project_fields");

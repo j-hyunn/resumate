@@ -64,6 +64,16 @@ export const ServerEnvSchema = PublicEnvSchema.extend({
     .refine((v) => isUsableKek(v), "must be randomly generated (published example / low-entropy value)")
     .optional(),
   AI_KEY_KEK_ID: z.string().regex(/^[A-Za-z0-9._:-]{1,64}$/).optional(),
+  // HMAC key for account_deletion_logs.subject_hash (S9, D-DM-02: the log holds
+  // only HMAC(user id), never the id or email). At least 32 characters, random.
+  // Optional so pages don't depend on it; account deletion fails closed
+  // (internal_error, nothing deleted) when it's missing. Changing it only
+  // affects new log rows — the hash is never looked up again.
+  ACCOUNT_DELETION_HASH_SECRET: z
+    .string()
+    .min(32)
+    .refine((v) => new Set(v).size >= 16, "must be randomly generated (low-entropy value)")
+    .optional(),
 });
 
 const DEV_ONLY_KEYS = ["AI_DEV_PROVIDER", "AI_DEV_API_KEY", "AI_DEV_CONNECTION_TIER"] as const;

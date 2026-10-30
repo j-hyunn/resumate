@@ -43,6 +43,17 @@ describe("parseServerEnv", () => {
     expect(parseServerEnv({ ...valid, AI_KEY_KEK_BASE64: "", AI_KEY_KEK_ID: "env-v1" }).AI_KEY_KEK_BASE64).toBeUndefined();
   });
 
+  it("ACCOUNT_DELETION_HASH_SECRET: optional, ≥ 32 chars, not low-entropy (S9)", () => {
+    expect(parseServerEnv({ ...valid, ACCOUNT_DELETION_HASH_SECRET: "" })).not.toHaveProperty("ACCOUNT_DELETION_HASH_SECRET", expect.anything());
+    const good = "Zq3v9LmX2pR7tK1wY8nB4cH6dF0sJ5gAeU";
+    expect(parseServerEnv({ ...valid, ACCOUNT_DELETION_HASH_SECRET: good }).ACCOUNT_DELETION_HASH_SECRET).toBe(good);
+    for (const bad of ["short-secret", "a".repeat(40)]) {
+      const err = captureError(() => parseServerEnv({ ...valid, ACCOUNT_DELETION_HASH_SECRET: bad }));
+      expect(err.keys).toEqual(["ACCOUNT_DELETION_HASH_SECRET"]);
+      expect(err.message).not.toContain(bad);
+    }
+  });
+
   it("drops keys that are not part of the schema", () => {
     const env = parseServerEnv({ ...valid, UNRELATED_SECRET: "nope" });
     expect(env).not.toHaveProperty("UNRELATED_SECRET");

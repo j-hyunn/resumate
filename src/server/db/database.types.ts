@@ -23,7 +23,21 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "achievements": {
+            "account_deletion_logs": {
+                  Row: {
+                    "created_at": string,"db_deleted_at": string | null,"id": string,"reason": string,"requested_at": string,"storage_deleted_at": string | null,"subject_hash": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"db_deleted_at"?: string | null,"id"?: string,"reason": string,"requested_at"?: string,"storage_deleted_at"?: string | null,"subject_hash": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"db_deleted_at"?: string | null,"id"?: string,"reason"?: string,"requested_at"?: string,"storage_deleted_at"?: string | null,"subject_hash"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"achievements": {
                   Row: {
                     "created_at": string,"description": string | null,"experience_id": string | null,"id": string,"kind": string | null,"metric_name": string | null,"project_detail_id": string | null,"source_writing_chat_id": string | null,"status": string,"unit": string | null,"updated_at": string,"user_id": string,"value_after": number | null,"value_before": number | null
                   }
@@ -868,6 +882,9 @@ isOneToOne: false
 "create_interview_session":
 { Args: { "p_application_project_id": string,"p_data_sufficiency": string,"p_interview_type": string,"p_question_count": number,"p_session_id"?: string }; Returns: Json
                            },
+"delete_account":
+{ Args: { "p_subject_hash": string }; Returns: Json
+                           },
 "delete_career_item":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string,"p_result_mode"?: string }; Returns: Json
                            },
@@ -897,6 +914,9 @@ isOneToOne: false
                            },
 "finish_assistant_message":
 { Args: { "p_content": string,"p_message_id": string,"p_status": string }; Returns: undefined
+                           },
+"get_account_deletion_summary":
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "get_ai_usage_summary":
 { Args: { "p_include_previous"?: boolean,"p_period_month"?: string }; Returns: Json
@@ -936,6 +956,18 @@ isOneToOne: false
                            },
 "move_application_stage":
 { Args: { "p_application_project_id": string,"p_outcome"?: string,"p_to_stage": string }; Returns: Json
+                           },
+"purge_old_account_deletion_logs":
+{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
+                           },
+"purge_old_ai_jobs":
+{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
+                           },
+"purge_old_ai_usage_records":
+{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
+                           },
+"purge_unlinked_writing_chats":
+{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
                            },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {

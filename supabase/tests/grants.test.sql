@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(41);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -310,17 +310,48 @@ select is_empty(
        and has_column_privilege(r.oid, 'public.writing_chats'::regclass, 'structured_draft', 'UPDATE')$$,
   'nobody can update writing_chats.structured_draft directly');
 
--- service_role-only job functions (cron): exactly these in public beyond what authenticated can run.
+-- service_role-only functions (cron), catalog-wide (QA-S9-04 (c)): every public function service_role can execute
+-- that no API role (anon / authenticated / app_ai_writer / app_key_reader) can. A new cron RPC must be added here.
 select set_eq(
-  $$select p.proname::text
+  $$select p.oid::regprocedure::text
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('sweep_stalled_ai_jobs', 'claim_due_ai_jobs')
        and has_function_privilege('service_role', p.oid, 'execute')
+       and not has_function_privilege('anon', p.oid, 'execute')
        and not has_function_privilege('authenticated', p.oid, 'execute')
-       and not has_function_privilege('app_ai_writer', p.oid, 'execute')$$,
-  array['sweep_stalled_ai_jobs', 'claim_due_ai_jobs'],
-  'sweep / claim_due are service_role only');
+       and not has_function_privilege('app_ai_writer', p.oid, 'execute')
+       and not has_function_privilege('app_key_reader', p.oid, 'execute')$$,
+  array['sweep_stalled_ai_jobs(timestamp with time zone)',
+        'claim_due_ai_jobs(timestamp with time zone,integer)',
+        'purge_unlinked_writing_chats(timestamp with time zone,integer)',
+        'purge_old_ai_jobs(timestamp with time zone,integer)',
+        'purge_old_ai_usage_records(timestamp with time zone,integer)',
+        'purge_old_account_deletion_logs(timestamp with time zone,integer)'],
+  'service_role-only public functions = sweep / claim_due (S3a) + the 4 S9 retention purges');
+
+-- QA-S9-04 (b): public functions the user session can execute, catalog-wide. Grows only with a user-session RPC
+-- in DM §5 / §7.
+select set_eq(
+  $$select distinct p.proname::text
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and has_function_privilege('authenticated', p.oid, 'execute')$$,
+  array['abandon_interview_session', 'add_cover_letter_question', 'append_writing_chat_message',
+        'apply_structured_draft_patch', 'create_application_project', 'create_cover_letter_draft',
+        'create_interview_session', 'delete_account', 'delete_career_item', 'delete_cover_letter_question',
+        'delete_provider_key', 'get_account_deletion_summary', 'get_ai_usage_summary', 'get_consent_status',
+        'get_data_readiness', 'get_deletion_impact', 'get_interview_question_reveals', 'hand_off_writing_chat',
+        'mark_interview_result_viewed', 'move_application_stage', 'record_consents', 'record_provider_key_check',
+        'reorder_cover_letter_questions', 'reorder_project_details', 'request_ai_job_cancel', 'save_provider_key',
+        'save_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
+        'set_writing_chat_affiliation', 'start_writing_chat', 'submit_interview_session'],
+  'authenticated can execute exactly the S1–S9 user-session RPCs in public');
+
+-- QA-S9-04 (a): every table in public has RLS enabled (a new table without RLS fails here).
+select is_empty(
+  $$select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity$$,
+  'every public table has row level security enabled');
 
 -- QA-S3-06: app_ai_writer reads profiles.updated_at (profile evidence snapshot).
 select ok(has_column_privilege('app_ai_writer', 'public.profiles', 'updated_at', 'SELECT'),

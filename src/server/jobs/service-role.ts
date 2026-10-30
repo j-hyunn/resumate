@@ -1,0 +1,48 @@
+import "server-only";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { AppError } from "@/lib/contracts/errors";
+import type { Database } from "@/server/db/database.types";
+import { getServerEnv } from "@/server/env";
+
+/**
+ * The ONLY module that creates a service-role Supabase client (backend-context
+ * "DB roles": the service role is not used for request paths). Callers and why:
+ *
+ * - `cron.ts` (S3a): sweep_stalled_ai_jobs / claim_due_ai_jobs — the cron sees
+ *   every user's jobs, which no user-scoped token can.
+ * - `retention.ts` (S9): purge_* RPCs (NFR-PRV-06, DM §4.4) — cross-user
+ *   cleanup, granted to service_role only.
+ * - `services/account` via `deleteAuthUser` below (S9, FL-07): only the
+ *   Auth admin API can delete an `auth.users` row. Public data is deleted
+ *   earlier by the user-session RPC `delete_account`, not with this key.
+ *
+ * No table is read or written directly with this client.
+ */
+
+export type ServiceRoleClient = SupabaseClient<Database>;
+
+export function createServiceRoleClient(clientInfo: string): ServiceRoleClient {
+  const env = getServerEnv();
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new AppError("internal_error", undefined, { status: 500, cause: new Error("SUPABASE_SERVICE_ROLE_KEY missing") });
+  }
+  return createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { "X-Client-Info": clientInfo } },
+  });
+}
+
+/** Result of an Auth admin delete. `alreadyGone` = the user was deleted by an earlier attempt (idempotent retry). */
+export type AuthUserDeleteResult = { alreadyGone: boolean };
+
+/**
+ * FL-07 step 4: `auth.admin.deleteUser(userId)` (hard delete). A 404
+ * (`user_not_found`) counts as success so a retried deletion passes.
+ * Throws an AppError without the Auth message (no PII in errors or logs).
+ */
+export async function deleteAuthUser(userId: string, client: ServiceRoleClient = createServiceRoleClient("resumate-account-deletion")): Promise<AuthUserDeleteResult> {
+  const { error } = await client.auth.admin.deleteUser(userId);
+  if (!error) return { alreadyGone: false };
+  if (error.status === 404 || error.code === "user_not_found") return { alreadyGone: true };
+  throw new AppError("internal_error", undefined, { status: 500, cause: new Error(`auth admin deleteUser failed (status ${error.status ?? "?"}, code ${error.code ?? "?"})`) });
+}

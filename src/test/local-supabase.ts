@@ -12,6 +12,8 @@ export type LocalSupabase = {
   anonKey: string;
   serviceRoleKey: string;
   jwtSecret: string;
+  /** Superuser Postgres URL (S9 fixtures via psql). Absent in older CLI output. */
+  dbUrl?: string;
 };
 
 function candidates(): string[] {
@@ -30,7 +32,13 @@ export function readLocalSupabase(): LocalSupabase | null {
       });
       const json = JSON.parse(out.slice(out.indexOf("{"))) as Record<string, string | undefined>;
       if (json.API_URL && json.ANON_KEY && json.SERVICE_ROLE_KEY && json.JWT_SECRET) {
-        return { url: json.API_URL, anonKey: json.ANON_KEY, serviceRoleKey: json.SERVICE_ROLE_KEY, jwtSecret: json.JWT_SECRET };
+        return {
+          url: json.API_URL,
+          anonKey: json.ANON_KEY,
+          serviceRoleKey: json.SERVICE_ROLE_KEY,
+          jwtSecret: json.JWT_SECRET,
+          ...(json.DB_URL ? { dbUrl: json.DB_URL } : {}),
+        };
       }
     } catch {
       // not installed or stack not running — try the next binary
@@ -63,4 +71,26 @@ export async function hasTable(stack: LocalSupabase, table: string): Promise<boo
   } catch {
     return false;
   }
+}
+
+/** True when `psql` is on PATH (S9 integration fixtures). */
+export function hasPsql(): boolean {
+  try {
+    execFileSync("psql", ["--version"], { stdio: "ignore", timeout: 5_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Test-only: runs SQL as the local superuser and returns stdout (`-At`, one row
+ * per line, `|`-separated). `vars` become psql variables (`:'name'`).
+ */
+export function runPsql(dbUrl: string, input: { sql?: string; file?: string }, vars: Record<string, string> = {}): string {
+  const args = ["-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-d", dbUrl];
+  for (const [k, v] of Object.entries(vars)) args.push("-v", `${k}=${v}`);
+  if (input.file) args.push("-f", input.file);
+  else args.push("-c", input.sql ?? "");
+  return execFileSync("psql", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 }).trim();
 }

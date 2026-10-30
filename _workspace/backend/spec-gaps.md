@@ -438,3 +438,32 @@
 - ⑪ **C-14 팝업 계약 확장**: `InterviewPrompt`에 `inProgressSession {sessionId, interviewType, answeredCount, questionCount, generationStatus, lastActivityAt}`를 더했다(기존 `inProgressSessionId` 유지).
 - ⑫ **진행 단계 값 `complete` 추가 `[가정]`** (AI C-6 "진행 단계 값": AI-05 `generate`, 채점 `evaluate → summarize → score`): 두 면접 작업의 마지막 단계(질문 세트 확정 / 채점 마감, 호출 없음)가 `progress.stage = complete`로 끝난다. 앞 단계 `prepare`도 같은 방식(S6 ⑫). C-6 목록에 반영 요청.
 - ⑬ **AI-06 재생성 최종 실패 시 첫 평가 사용 `[구현 결정]`** (QA-S8-01): V-5 재생성 호출이 재시도 없이 실패하면(키·한도 원인 제외) 답변을 `not_scored`로 두지 않고 첫 평가 결과를 `[수치 확인 필요]` 치환으로 저장한다(C-3 V-5 대체 규칙).
+
+## 2026-11-04 · S9 (api) · 계정 탈퇴·보관 크론 (api-engineer)
+- ① **탈퇴 확인 방식 `[가정]`** (UX FL-07 "확인 문구", S-25에 입력 문구 정의 없음): 문구 입력 대신 체크 플래그 `DeleteAccountInput { confirm: true }`(strict)로 받는다. 화면이 고정 문구 입력을 원하면 화면에서 비교한 뒤 같은 플래그를 보낸다. UX S-25에 확인 방식 명시 요청.
+- ② **탈퇴 후 이동 경로 `[가정]`**: FL-07 "→ S-01"을 `/`(공개 랜딩)로 두고 응답 `redirectTo`로 돌려준다(`ACCOUNT_DELETED_REDIRECT`). S-01 경로가 다르면 contracts 한 곳만 고친다.
+- ③ **탈퇴·요약은 약관 동의 게이트 없이 로그인만 확인 `[구현 결정]`**: 새 약관 미동의 상태에서도 탈퇴할 수 있어야 하고, auth 삭제 실패 뒤 재시도 때는 동의 행이 이미 지워져 있기 때문이다.
+- ④ **`subject_hash` = HMAC-SHA256(`ACCOUNT_DELETION_HASH_SECRET`, `"account:" + user id`) hex `[가정]`** (계획 `[가정]` 3): 도메인 구분 접두사를 붙였다. 재가입 추적에는 쓰지 않는다. 비밀값이 없으면 아무것도 지우지 않고 `internal_error`로 실패한다.
+- ⑤ **auth 삭제 실패 시 오류 코드 `account_deletion_incomplete`(500) `[구현 결정]`**: public 데이터는 이미 지워졌고 세션은 남겨 둔다(쿠키 정리 안 함). 같은 화면에서 다시 시도하면 RPC가 멱등으로 통과하고(로그 추가 없음) auth 삭제를 다시 한다. 이미 지워진 auth 사용자(404)는 성공으로 본다. 화면 문구 "계정 정보 삭제를 마치지 못했어요. 잠시 후 다시 시도해 주세요." — UX에 이 상태 문구 추가 요청.
+- ⑥ **크론 일정 `[가정]`** (계획 `[가정]` 2): `vercel.json`에 `/api/cron/retention` 매일 03:00 KST(`0 18 * * *` UTC), `/api/cron/ai-jobs` 매일 02:00 KST(`0 17 * * *`). Hobby 플랜은 크론이 하루 1회·시각 오차 최대 1시간이라 ai-jobs 크론은 안전망 역할만 한다(B-4: 주 경로는 상태 폴링). Pro로 바꾸면 ai-jobs는 `*/5 * * * *` 권장.
+- ⑦ **보관 크론 배치 `[구현 결정]`**: RPC 한 번에 5,000행, 꽉 차면 같은 실행에서 최대 4번까지 이어 부르고 남은 행은 다음 실행에 넘긴다(`hasMore`). 한 정리가 실패해도 나머지는 실행하고 끝에 500을 돌려준다.
+- ⑧ **교착 재시도 후 오류 `account_deletion_busy`(503) `[구현 결정]`** (QA-S9-01): `delete_account`가 40P01이면 한 번 다시 부르고, 또 실패하면 이 코드로 "다른 작업과 겹쳐 탈퇴를 마치지 못했어요. 지운 것은 없어요. 잠시 후 다시 시도해 주세요."를 낸다. UX S-25 오류 문구에 추가 요청.
+
+## 2026-11-04 · S9 (db) · 탈퇴·보관 정리 (db-engineer)
+- ① **DM-1 "탈퇴 = auth.users 연쇄" 전제와 실제 순서가 다르다 `[구현 결정]`** (DM §4.1·6.1 F-COM-05 "W `auth.users` delete(전체 연쇄)"): 모든 사용자 테이블은 `auth.users`에서 연쇄되고 `profiles`에서는 아무것도 연쇄되지 않는다. 계획대로 public 데이터는 `delete_account`가 28개 `user_id` 테이블과 `profiles`를 **명시적으로** 지우고, `auth.users` 삭제는 그 뒤 서버가 한다. 연쇄는 안전망으로 남는다. DM 6.1 표현을 "RPC가 public 전체 삭제 → auth 사용자 삭제(연쇄는 안전망)"로 고치기를 권한다.
+- ② **로그 행은 RPC 마지막에 한 번만 쓴다 `[구현 결정]`** (계획 3단계 "insert → 삭제 → `db_deleted_at` 기록"): 한 트랜잭션이라 순서와 무관하게 결과가 같아 insert 한 번에 `requested_at`·`db_deleted_at`를 함께 넣는다. `subject_hash`는 unique이고 같은 hash로 다시 부르면 첫 행을 유지한다(멱등). 형식은 소문자 hex 64자(HMAC-SHA256)로 CHECK한다.
+- ③ **진행 중 작업은 취소 표시 없이 행째 삭제 `[구현 결정]`** (계획 3-1 "취소를 요청한다"): 같은 트랜잭션에서 작업 행이 지워지므로 `cancel_requested_at`은 의미가 없다. 실행기는 heartbeat에서 lost로 멈추고 키 복호화도 거절된다. api가 미리 `request_ai_job_cancel`을 별도 커밋으로 부르는 것은 선택이다.
+- ④ **교착 가능성은 두 경로에 남는다 `[가정]`** (QA 1차 QA-S9-02로 고침)
+  - S5~S8 실행기와 S4 턴 시작·발화 추가(대화 → 메시지)와는 같은 잠금 순서다. 탈퇴는 대화를 id 순서로 먼저 잠그고, 그 다음 메시지를 지운다.
+  - 반대 방향이 남는 경로는 두 가지다.
+    - S4 `finish_assistant_message`(메시지 → 대화). S4 안에 두 순서가 모두 있어서 어느 쪽을 골라도 한쪽과는 반대가 된다.
+    - 다른 탭에서 커리어를 자동 저장하는 경우(커리어 행 → `profiles` 갱신).
+  - 겹치면 40P01이 난다. 데이터는 롤백되고, api가 한 번 재시도한다(RPC 멱등).
+- ⑤ **90일 지난 작업 정리 시 결과 행의 `updated_at`이 바뀐다 `[가정]`** (DM §2.9.1 보관 90일): 결과 테이블의 작업 FK가 `on delete set null`이라 `set_updated_at` 트리거가 돈다. 낙관적 동시성(`expectedUpdatedAt`)은 커리어 테이블만 쓰므로 화면 충돌은 없다. 결과 화면이 `updated_at`을 "수정됨"으로 보이면 오해가 생길 수 있다.
+- ⑥ **미연결 대화 정리는 진행 중 턴이 있는 대화를 건너뛴다 `[구현 결정]`** (DM §3.4): 대상 작업이 queued/running이면 90일이 지나도 남긴다. 기준은 "90일보다 오래됨"(정확히 90일은 남김)이다.
+- ⑦ **사용 기록 13개월 = 이번 KST 달 포함 13개 달 `[가정]`** (D-DM-09): `period_month < (p_now의 KST 달 1일 − 12개월)`이면 지운다. 매월 배치가 아니라 매일 크론에서 같은 기준으로 돈다.
+- ⑧ **정리 RPC 한 번에 최대 `p_limit`(기본 5000, 1~50000)행을 지운다 `[구현 결정]`**: 잠긴 행은 건너뛴다(`skip locked`). 반환값이 `p_limit`과 같으면 남은 행이 있을 수 있다.
+
+## 2026-11-04 · S9 (QA) · 탈퇴 미완료 상태 복구 경로·AI 쓰기 권한 정리 (backend-qa)
+- ① **`account_deletion_incomplete` 뒤 S-25 재진입 경로가 없다 `[UX 확인 필요]`** (FL-07, S-25; api spec-gaps S9 ⑤): auth 삭제가 실패하면 public 데이터(동의·`profiles` 포함)는 이미 없고 세션은 남는다. 같은 화면에서 바로 재시도하면 되지만, 화면을 떠나면 대시보드 레이아웃의 동의 게이트(`src/server/auth/session.ts:42-54` `requireConsentedUserOrRedirect`)가 S-03으로 보내므로 약관에 다시 동의해야 S-25에 닿는다. UX에 이 상태의 진입 경로(예: 로그인 직후 "탈퇴 마무리" 안내, S-25를 동의 게이트 밖에 두기)를 정해 달라고 요청한다. A1 연결 때 반영.
+- ② **`app_ai_writer`의 `evidence_links` 직접 INSERT 컬럼 권한은 쓰는 곳이 없다 `[기획 확인]`** (DM §5, DM-13): 모든 근거 저장은 S6~S8 definer RPC(`complete_insight`·`complete_*`·`save_*`) 안에서 하고, 앱 코드에서 `app_ai_writer`로 `evidence_links`에 직접 쓰는 경로가 없다. 직접 INSERT는 `run_generation` 확인을 거치지 않으므로 DM §5에서 이 권한을 빼는 방안을 검토해 달라(같은 사용자 범위라 Critical은 아님).

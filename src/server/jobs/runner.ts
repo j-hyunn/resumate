@@ -54,14 +54,22 @@ import { STEP_CONTINUE } from "./types";
  */
 
 
-/** Jobs that run inside one request and are retried by calling their route again, never requeued. */
-const REQUEST_SCOPED_JOB_TYPES: ReadonlySet<string> = new Set([
+/**
+ * Jobs that run inside one request and are retried by calling their route again, never requeued.
+ * Invariant (QA-S9-06, tested): every AI_JOB_TYPES value is either registered
+ * (definitions.ts) or listed here.
+ */
+export const REQUEST_SCOPED_JOB_TYPES: ReadonlySet<AiJobType> = new Set<AiJobType>([
   "key_verification", // QA-S3b-05: re-run from the connection screen
   "writing_chat_turn", // S4: "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1)
   "jd_extraction", // S5: POST /api/application-projects/{id}/jd-extraction again
   "draft_source_ranking", // S7: POST /api/application-projects/{id}/draft-source-ranking
   "career_description", // S7: POST /api/application-projects/{id}/career-descriptions
   "cover_letter", // S7: POST /api/draft-sections/{id}/generate
+  // QA-S9-06: reserved DB values (Should features) with no producer yet. Kept out of the
+  // generic retry / cron continue path until a feature defines how they run.
+  "writing_assist",
+  "chat_reply",
 ]);
 export type StartJobInput = {
   userId: string;

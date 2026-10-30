@@ -144,6 +144,8 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   interview_questions_incomplete: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_interview_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   answer_not_evaluable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // S9 delete_account: the server computes the hash, so a bad one is our bug.
+  invalid_subject_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
 };
 
 /** Raise names that the frontend sees under a generic code instead of their own. */
@@ -157,6 +159,7 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_stalled_before: "internal_error",
   invalid_now: "internal_error",
   invalid_limit: "internal_error",
+  invalid_subject_hash: "internal_error",
   ai_job_not_found: "not_found",
   consent_required: "ai_consent_required",
   key_id_mismatch: "conflict",

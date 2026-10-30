@@ -116,9 +116,18 @@ const limitReached = () =>
   new AppError("message_limit_reached", "대화가 길어져 더 보낼 수 없어요. 지금까지 내용을 저장하거나 폼으로 옮겨 이어서 써 주세요.", { status: 409 });
 const nothingToRetry = () => new AppError("nothing_to_retry", "다시 보낼 응답이 없어요.", { status: 409 });
 
-/** Whether the chat can take one more full turn (user + reply ≤ 40). */
+/**
+ * Whether the chat can take one more full turn (user + reply ≤ 40). R1 A5 (DM §2.5):
+ * `message_count` counts user + AI messages but not the greeting, so a user message is
+ * accepted while `message_count ≤ 38` and the 40th message is that turn's reply.
+ */
 export function hasRoomForTurn(messageCount: number): boolean {
   return messageCount + MESSAGES_PER_TURN <= WRITING_CHAT_MESSAGE_LIMIT;
+}
+
+/** Messages left until "n / 40" reaches 40 (greeting excluded, R1 A5). */
+export function remainingMessages(messageCount: number): number {
+  return Math.max(0, WRITING_CHAT_MESSAGE_LIMIT - messageCount);
 }
 
 function lastOf<T>(items: readonly T[]): T | undefined {
@@ -620,6 +629,7 @@ export async function runTurn(
       type: "turn_done",
       jobId: job.id,
       messageCount: turn.messageCount,
+      remainingMessages: remainingMessages(turn.messageCount),
       limitReached: !hasRoomForTurn(turn.messageCount),
       draftStatus,
       draftUpdated: draftStatus !== "failed",

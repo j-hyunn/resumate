@@ -4,7 +4,6 @@ import type { Llm, LlmRequest } from "@/server/ai/llm";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
 import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext, type ProviderContext } from "@/server/jobs/provider-context";
 import type { LlmFactoryInput } from "@/server/jobs/types";
-import type { EnsureJdResult } from "@/server/services/application/extraction";
 import { createDraftStore } from "@/server/services/drafts/db";
 import type { DraftAiDeps, DraftPipelines, PipelineStreamEvent, StreamDeps } from "@/server/services/drafts/types";
 import { fakeSupabase, type FakeDb } from "./fake-supabase";
@@ -133,7 +132,6 @@ export function fakeDraftPipelines(seen: Seen): DraftPipelines {
         includedExperienceIds: [EXP],
         includedEducationIds: [],
       }),
-      fallback: () => ({ includedProjectIds: [PRJ1, PRJ2], projectOrder: [PRJ1, PRJ2], includedExperienceIds: [EXP], includedEducationIds: [] }),
     },
     careerDescription: {
       tier: "default",
@@ -178,7 +176,6 @@ export function draftKit(opts: {
   context?: ProviderContext | null;
   responses?: ScriptedResponse[];
   provider?: AiProvider;
-  ensureJd?: (id: string) => Promise<EnsureJdResult>;
   readiness?: boolean;
   gate?: DraftAiDeps["runGate"];
 }) {
@@ -191,7 +188,6 @@ export function draftKit(opts: {
   const llmFactory = scriptedLlmFactory(adapter.adapter, clock.ms);
   const db: FakeDb = fakeSupabase(opts.tables ?? {}, opts.rpc);
   const seen: Seen = { persisted: [], adjustFailed: 0, contexts: [] };
-  const ensureCalls: string[] = [];
   const sleeps: number[] = [];
   const deps: DraftAiDeps = {
     userId: USER,
@@ -206,11 +202,6 @@ export function draftKit(opts: {
     createLlm: (input: LlmFactoryInput) => llmFactory(input),
     drafts: createDraftStore(db.client as AiWriterSupabaseClient),
     pipelines: fakeDraftPipelines(seen),
-    ensureJd: async (id) => {
-      ensureCalls.push(id);
-      if (opts.ensureJd) return opts.ensureJd(id);
-      return { status: "already_extracted" };
-    },
     loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [{ id: PRJ1 } as never, { id: PRJ2 } as never], projectDetails: [], achievements: [], skills: [], projectSkills: [] }),
     getReadiness: async () =>
       ({
@@ -225,7 +216,7 @@ export function draftKit(opts: {
       clock.advance(ms);
     },
   };
-  return { clock, store, usage, keyStatus, adapter, db, seen, deps, ensureCalls, sleeps };
+  return { clock, store, usage, keyStatus, adapter, db, seen, deps, sleeps };
 }
 
 /** Base rows: project, JD (extracted), one requirement. */

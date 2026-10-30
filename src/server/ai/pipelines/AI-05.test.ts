@@ -6,13 +6,16 @@ import { createFakeLlm, type FakeLlmResponse } from "../fake-llm";
 import { toCanonicalJsonSchema } from "../providers/schema";
 import { Ai05OutputSchema } from "../schemas/AI-05";
 import type { DataSufficiencyLevel, QuestionCount } from "../schemas/interview-common";
+import type { NormalizedUsage } from "../providers/types";
 import type { SaveInterviewQuestionPayload } from "../storage/interview";
 import {
   AI05_PROMPT_VERSION,
   buildCompleteInterviewQuestionsPayload,
   buildInterviewQuestionContext,
+  accumulateQuestionSetRecord,
   emptySequences,
   generateInterviewQuestions,
+  premisesUserFacts,
   runInterviewQuestions,
   type ExistingInterviewQuestion,
   type InterviewQuestionContext,
@@ -93,6 +96,30 @@ describe("AI-05 job interview", () => {
     expect(complete).toMatchObject({ weak_requirement_ids: [reqId(8)], insight_id: "60000000-0000-4000-8000-000000000001", career_snapshot_hash: ctx.base.careerSnapshotHash });
   });
 
+  it("A22: complete payload carries the set-level validation_report and usage top-level (and in meta)", async () => {
+    const ctx = context();
+    const usage = { inputTokens: 100, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 50, reasoningTokens: 0, usageSource: "provider_reported" } satisfies NormalizedUsage;
+    const first = accumulateQuestionSetRecord(null, { report: { questions_total: 6, questions_dropped: 2, dropped_composition: 2 }, usage });
+    const set = accumulateQuestionSetRecord(first, { report: { questions_total: 2, composition_relaxed: 1 }, usage: { ...usage, outputTokens: 30 } });
+    expect(set).toMatchObject({ attempts: 2, report: { questions_total: 8, questions_dropped: 2, dropped_composition: 2, composition_relaxed: 1 } });
+    expect(set.usage).toMatchObject({ inputTokens: 200, outputTokens: 80 });
+    // Usage missing on one call keeps the other's.
+    expect(accumulateQuestionSetRecord(first, { report: {}, usage: null }).usage).toEqual(first.usage);
+
+    const complete = buildCompleteInterviewQuestionsPayload({ context: ctx, weakRequirementIds: [], model: "m", usage: set.usage, report: set.report, attempts: set.attempts, provider: "anthropic", connectionTier: "paid" });
+    expect(complete.validation_report).toEqual({ questions_total: 8, questions_dropped: 2, dropped_composition: 2, composition_relaxed: 1, attempts: 2, regenerated: 1 });
+    expect(complete.usage).toEqual(set.usage);
+    expect(complete.meta.validation_report).toEqual(complete.validation_report);
+    expect(complete.meta.usage).toEqual(complete.usage);
+    // Counts only: no text values anywhere in the report.
+    expect(Object.values(complete.validation_report ?? {}).every((v) => typeof v === "number")).toBe(true);
+
+    const bare = buildCompleteInterviewQuestionsPayload({ context: ctx, weakRequirementIds: [], model: "m", provider: "anthropic", connectionTier: "paid" });
+    expect(bare).toMatchObject({ validation_report: null, usage: null });
+    const single = buildCompleteInterviewQuestionsPayload({ context: ctx, weakRequirementIds: [], model: "m", attempts: 1, provider: "anthropic", connectionTier: "paid" });
+    expect(single.validation_report).toEqual({ attempts: 1, regenerated: 0 });
+  });
+
   it("forbidden topic, invented number, learnings premise and unknown refs are dropped (per question)", async () => {
     const ctx = context();
     const set = jobSet(ctx);
@@ -113,6 +140,58 @@ describe("AI-05 job interview", () => {
       evidence_removed_v1_ref: 1,
     });
     expect(result.unsupportedNumbers).toEqual(["4321배"]);
+  });
+
+  it("A11: every fact-premised job question needs action/result/성과 evidence; a gap_probe that premises nothing is exempt", async () => {
+    const ctx = context();
+    const set = jobSet(ctx);
+    const req = (n: number) => ({ source_type: "jd_requirement", ref: R(ctx, n), field: null, quote: null });
+    const bad = [
+      // requirement_fit premised on a situation only (팀 맥락일 수 있음).
+      q({ source_kind: "requirement_fit", text: "장애 대응이 사람마다 달랐던 상황에서 어떤 원칙을 세우셨나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), det(ctx, IDS.detPay2, "situation", "야간 장애 대응이 사람마다 달랐다")] }),
+      // requirement_fit on the profile's wish only (A10: not a career fact → no experience evidence).
+      q({ source_kind: "requirement_fit", text: "백엔드 개발자로서 장애 대응 요건을 어떻게 충족하시나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }] }),
+      // gap_probe citing a project summary as its "similar experience".
+      q({ source_kind: "gap_probe", anchor: "jd", text: "응답 속도 개선 경험을 메시지 큐 운영에 어떻게 연결하시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8), { source_type: "project", ref: a(ctx.aliases, "project", IDS.prjPay), field: "summary", quote: "결제 승인 응답 속도 개선" }] }),
+      // gap_probe naming a project with no fact evidence at all.
+      q({ source_kind: "gap_probe", anchor: "jd", text: "결제 승인 API 개선 때처럼 메시지 큐 장애를 다뤄 보셨나요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8)] }),
+      // gap_probe anchored on experience with a skill tag only.
+      q({ source_kind: "gap_probe", anchor: "experience", text: "Spring Boot로 비동기 처리를 해 보셨는데 메시지 큐는 어떻게 다루시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8), { source_type: "skill", ref: a(ctx.aliases, "skill", IDS.sklSpring), field: "name", quote: null }] }),
+    ];
+    const { saved, result } = await gen(ctx, [{ json: ai05Output("job", [...bad, ...set]) }]);
+    expect(result).toMatchObject({ dropped: 5, remaining: 0 });
+    expect(result.report).toMatchObject({ dropped_fact_premise_unsupported: 4, dropped_anchor_evidence_missing: 1 });
+    expect(saved.map((s) => s.question_text)).toEqual(set.map((x) => x.text));
+    // The jobSet gap_probe ("…경험이 데이터에 보이지 않는데…", anchor jd, no career evidence) premises nothing → saved.
+    expect(saved[3]).toMatchObject({ source_kind: "gap_probe", anchor: "jd" });
+  });
+
+  it("A11: gap_probe pointing at similar experience is kept when that evidence is an action/result", async () => {
+    const ctx = context({ count: 3 });
+    const set = jobSet(ctx);
+    const gap = q({
+      source_kind: "gap_probe",
+      anchor: "experience",
+      text: "런북을 작성하신 경험을 메시지 큐 운영 장애에는 어떻게 적용하시겠어요?",
+      target_gap_requirement_refs: [R(ctx, 8)],
+      evidence: [{ source_type: "jd_requirement", ref: R(ctx, 8), field: null, quote: null }, det(ctx, IDS.detPay2, "action", "런북을 작성하고 알림 규칙을 정리했다")],
+    });
+    const rf = q({ ...set[2], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 3), field: null, quote: null }, det(ctx, IDS.detSettle, "action", "정산 배치를 청크 단위로 재설계했다")] });
+    const { saved, result } = await gen(ctx, [{ json: ai05Output("job", [set[0], rf, gap]) }]);
+    expect(result).toMatchObject({ dropped: 0, remaining: 0 });
+    expect(saved.map((s) => s.source_kind)).toEqual(["project_deep_dive", "requirement_fit", "gap_probe"]);
+  });
+
+  it.each<[string, Parameters<typeof premisesUserFacts>, boolean]>([
+    ["project_deep_dive always", ["project_deep_dive", "experience", 0, 0], true],
+    ["requirement_fit always", ["requirement_fit", "experience", 0, 0], true],
+    ["gap_probe, jd anchor, nothing about the user", ["gap_probe", "jd", 0, 0], false],
+    ["gap_probe, experience anchor", ["gap_probe", "experience", 0, 0], true],
+    ["gap_probe with factual career evidence", ["gap_probe", "jd", 1, 0], true],
+    ["gap_probe naming a career proper noun", ["gap_probe", "jd", 0, 1], true],
+    ["culture fit kinds are out of scope (4.1 culture rules)", ["collaboration", "experience", 1, 1], false],
+  ])("premisesUserFacts: %s → %s", (_, args, expected) => {
+    expect(premisesUserFacts(...args)).toBe(expected);
   });
 
   it("duplicates: same project ≤ 2, same detail 1, same requirement 1, same text", async () => {

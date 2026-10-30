@@ -50,11 +50,6 @@ export function deriveSelection(aliases: AliasMap, includedProjectIds: readonly 
   };
 }
 
-/** "최신 경력순 전체 선택" (AI-03 기본 선택 (3), AI-11 실패 시): pack order, at most 8. */
-export function fallbackSelectionFromAliases(aliases: AliasMap): DraftSourceSelection {
-  return deriveSelection(aliases, packProjects(aliases).map((p) => p.id));
-}
-
 /** Insight `strategy.project_priorities` (AI-03 기본 선택 (1)): by rank; projects gone from the pack are skipped. */
 export function selectionFromPrioritiesWithAliases(aliases: AliasMap, priorities: ReadonlyArray<{ project_id: string; rank: number }>): DraftSourceSelection {
   const ids = [...priorities].sort((a, b) => a.rank - b.rank).map((p) => p.project_id);

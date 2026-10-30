@@ -30,11 +30,18 @@ export type SaveInterviewQuestionPayload = {
   evidence: PayloadEvidence[];
 };
 
-/** complete_interview_questions.p_payload. */
+/**
+ * complete_interview_questions.p_payload. R1 A22 (db R1 notes): top-level
+ * `validation_report` / `usage` → interview_sessions.question_validation_report
+ * / question_usage (set level: counts only, no text; summed token usage of the
+ * calls that made the set). Object or null; null when unknown.
+ */
 export type CompleteInterviewQuestionsPayload = {
   weak_requirement_ids: string[];
   insight_id: string | null;
   career_snapshot_hash: string;
+  validation_report: Record<string, number> | null;
+  usage: NormalizedUsage | null;
   meta: PayloadMeta;
 };
 

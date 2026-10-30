@@ -113,13 +113,13 @@ select throws_ok($$insert into public.ai_data_use_consents (user_id, provider, c
                  '42501', null, 'cannot insert a consent for another user');
 
 reset role;  -- private helper: owner only
-select ok(private.has_current_ai_consent('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
-          'has_current_ai_consent: true for the current version');
+select ok(private.ai_consent_allows_run('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
+          'ai_consent_allows_run (R1 A20 shared rule): true for the current version');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 reset role;  -- private helper: owner only
-select ok(not private.has_current_ai_consent('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid'),
-          'has_current_ai_consent: false without a row');
+select ok(not private.ai_consent_allows_run('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid'),
+          'ai_consent_allows_run: false without a row');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
@@ -129,7 +129,7 @@ select lives_ok($$update public.ai_data_use_consents set withdrawn_at = '2000-01
 select ok((select withdrawn_at > now() - interval '1 minute' from public.ai_data_use_consents
             where id = 'aaaaaaaa-5555-0000-0000-000000000001'), 'withdrawn_at is the server time');
 reset role;  -- private helper: owner only
-select ok(not private.has_current_ai_consent('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
+select ok(not private.ai_consent_allows_run('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
           'withdrawn consent no longer counts');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
@@ -144,7 +144,7 @@ select throws_ok($$delete from public.ai_data_use_consents$$, '42501', null, 'no
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
                   values ('gemini', 'free', 'v2026-10-29', true)$$, 're-consent inserts a new row');
 reset role;  -- private helper: owner only
-select ok(private.has_current_ai_consent('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
+select ok(private.ai_consent_allows_run('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
           're-consent counts again');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';

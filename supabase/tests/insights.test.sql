@@ -441,8 +441,8 @@ select throws_ok($$insert into public.insights (user_id, application_project_id,
                    values ('b0000000-0000-0000-0000-000000000002', 'a0000000-aaaa-0000-0000-000000000001', 70)$$,
                  '23503', null, 'composite FK: project of another user');
 
--- ── direct evidence inserts: JD source guard ────────────────────────────
-set local role app_ai_writer;
+-- ── evidence inserts: JD source guard ───────────────────────────────────
+-- R1 A24: app_ai_writer has no direct INSERT; the guard is exercised as the owner (the result RPC path) with A's JWT.
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 create function pg_temp.ins_jd(p_type text, p_source uuid, p_locator jsonb, p_project uuid default 'a0000000-aaaa-0000-0000-000000000001')
 returns uuid language sql as $f$

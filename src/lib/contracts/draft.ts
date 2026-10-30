@@ -104,36 +104,42 @@ export type DraftSourceRankingItem = {
 };
 
 /**
- * 200 `{ data }` (C-6 동기, F-DOC-01 기본 선택; AI-03 트리거 (1)–(3)):
- * - `origin: 'insight'` — latest ready insight's `strategy.project_priorities` (no AI call).
- * - `origin: 'ai_ranking'` — AI-11 result (`reused: true` = same career/requirements hash, no call).
- * - `origin: 'fallback'` — AI-11 failed / not possible: newest-first full selection, silently
- *   (`fallback: true`, no error screen; AI-11 "조용히 넘어간다").
- * The screen pre-checks these ids; when the user changes them, generation sends `selectionOrigin: 'user'`.
+ * 200 `{ data }` (C-6 동기, F-DOC-01 기본 선택; AI-03 트리거 (1)–(3); R1 A23):
+ * - `selectionOrigin: 'insight'` — latest ready insight's `strategy.project_priorities` (no AI call).
+ * - `selectionOrigin: 'ai_ranking'` — AI-11 result (`reused: true` = same career/requirements hash, no call).
+ * - `selectionOrigin: 'user'` + `failed: true` — AI-11 failed or was not possible (A23: no substitute
+ *   selection). Every id list is empty: the screen shows the list unchecked, without an error
+ *   screen, and the user picks (UX S-17 / C-11). Generation then sends `selectionOrigin: 'user'`.
+ * The screen pre-checks the ids of a successful answer; when the user changes them, generation
+ * sends `selectionOrigin: 'user'`.
  *
- * Errors: 401, 404, 422 `insufficient_data` (+ readiness, F-AP-06; never calls AI). Everything else
- * (incl. a JD being extracted elsewhere) is the silent fallback.
+ * Errors: 401, 404, 422 `insufficient_data` (+ readiness, F-AI-06; never calls AI). Everything else
+ * (key missing / invalid, provider, schema, JD not extracted or being extracted, ranking already
+ * running) is the `failed` answer above. Requirements are never extracted inside this request
+ * (A13): the screen runs the extraction route first.
  */
 export type DraftSourceRankingResponse = {
-  origin: SelectionOrigin | "fallback";
-  fallback: boolean;
+  selectionOrigin: SelectionOrigin;
+  /** A23: AI-11 failed → empty selection, `selectionOrigin: 'user'`. */
+  failed: boolean;
   reused: boolean;
-  /** ai_jobs id of the AI-11 run (null for insight / fallback without a call). */
+  /** ai_jobs id of the AI-11 run (null for insight / a failure without a call). */
   jobId: string | null;
-  /** Insight the priorities came from (origin insight). */
+  /** Insight the priorities came from (selectionOrigin insight). */
   insightId: string | null;
   includedExperienceIds: string[];
   includedEducationIds: string[];
   includedProjectIds: string[];
   /** Project order for the draft (= includedProjectIds order). */
   projectOrder: string[];
-  /** AI-11 rankings (origin ai_ranking), null otherwise. */
+  /** AI-11 rankings (selectionOrigin ai_ranking), null otherwise. */
   ranking: DraftSourceRankingItem[] | null;
   /**
-   * Why the fallback was used (logs / analytics only; the screen shows nothing): a C-11 code,
-   * `key_missing` / `key_invalid` (no AI), `jd_not_extracted`, or `no_rankable_projects`.
+   * Why it failed (logs / analytics only; the screen shows nothing): a C-11 code, `key_missing` /
+   * `key_invalid` (no AI), `jd_not_extracted`, `extraction_in_progress`, `ranking_in_progress`, or
+   * `no_rankable_projects`. Null unless `failed`.
    */
-  fallbackReason: string | null;
+  reason: string | null;
 };
 
 // ---------- AI-03 career description: POST /api/application-projects/{id}/career-descriptions (SSE) ----------
@@ -176,11 +182,8 @@ export const GenerationStartedEvent = z.object({
   connectionTier: z.string(),
 });
 
-/** D-30: the JD has no requirements yet; extraction runs first ("공고 요건을 정리하고 있어요"). */
-export const PreparingEvent = z.object({
-  type: z.literal("preparing"),
-  stage: z.literal("jd_extraction"),
-});
+// R1 A13: no `preparing` event — generation never extracts requirements; a JD without them is
+// refused before the stream (409 `jd_not_extracted` / `extraction_in_progress`).
 
 /** One chosen source as streamed (AI-04 `sources_selected`; ids, not aliases). */
 export const StreamedSourceSchema = z.object({
@@ -264,7 +267,6 @@ export const DraftValidatedEvent = z.object({
 
 export const DraftStreamEventSchema = z.discriminatedUnion("type", [
   GenerationStartedEvent,
-  PreparingEvent,
   SourcesSelectedEvent,
   BlockStartedEvent,
   BlockDeltaEvent,
@@ -277,7 +279,6 @@ export const DraftStreamEventSchema = z.discriminatedUnion("type", [
 export type DraftStreamEvent = z.infer<typeof DraftStreamEventSchema>;
 export const DRAFT_STREAM_EVENT_TYPES = [
   "generation_started",
-  "preparing",
   "sources_selected",
   "block_started",
   "block_delta",

@@ -3,6 +3,7 @@ import { careerRowsFixture } from "../__fixtures__/career-rows";
 import { AliasMap } from "../context-pack/aliases";
 import { buildCareerPack } from "../context-pack/career-pack";
 import { buildJdContext, splitJdSentences } from "../context-pack/jd";
+import { isCareerSupportEvidence, type EvidenceSourceType } from "../evidence-rules";
 import { buildSelectionScope, checkEvidence, validateItem, type EvidenceContext, type ModelEvidence } from "./evidence";
 
 const pack = buildCareerPack(careerRowsFixture(), { asOf: { year: 2026, month: 10 } });
@@ -82,6 +83,9 @@ describe("validateItem V-4", () => {
   const bad: ModelEvidence = { ...action, ref: "DET-99" };
   const jdOnly: ModelEvidence = { source_type: "jd_requirement", ref: "REQ-1" };
   const learn: ModelEvidence = { source_type: "project_detail", ref: "DET-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
+  const wish: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" };
+  const industries: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "interested_industries", quote: null };
+  const years: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "total_years_of_experience", quote: null };
 
   it.each<[string, Parameters<typeof validateItem>[0], string, string[]]>([
     ["judgment with evidence → keep", { key: "strengths.0", kind: "judgment", evidence: [action] }, "keep", []],
@@ -90,6 +94,13 @@ describe("validateItem V-4", () => {
     ["match without evidence → downgrade", { key: "requirement_matches.REQ-1", kind: "match", evidence: [bad] }, "downgrade", []],
     ["draft block without evidence → flag", { key: "p3-b1", kind: "draft_block", evidence: [], text: "x" }, "flag", ["evidence_check_needed"]],
     ["reference item may have none", { key: "gaps.0", kind: "reference", evidence: [jdOnly] }, "keep", []],
+    // A10 (C-3 V-4 v4.3): profile wishes never count as support; total_years_of_experience does.
+    ["judgment on desired_job_title only → drop (A10)", { key: "strategy.positioning", kind: "judgment", evidence: [wish] }, "drop", []],
+    ["judgment on interested_industries only → drop (A10)", { key: "strengths.0", kind: "judgment", evidence: [industries] }, "drop", []],
+    ["match on profile wishes only → downgrade (A10)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [wish, industries] }, "downgrade", []],
+    ["draft block on desired_job_title only → flag (A10)", { key: "q1-p1", kind: "draft_block", evidence: [wish], text: "x" }, "flag", ["evidence_check_needed"]],
+    ["match on total_years_of_experience → keep (연차 근거)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [years] }, "keep", []],
+    ["judgment on wish + action → keep", { key: "strengths.0", kind: "judgment", evidence: [wish, action] }, "keep", []],
     [
       "learnings never the sole support (reflection_only judgment)",
       { key: "strengths.0", kind: "judgment", evidence: [learn], learnings: "reflection_only" },
@@ -153,5 +164,27 @@ describe("buildSelectionScope (V-7)", () => {
     expect(scope.has("DET-1")).toBe(false);
     expect(scope.has("EXP-2")).toBe(false);
     expect(scope.has("SKL-3")).toBe(false); // manual skill isn't under a selected project
+  });
+});
+
+describe("isCareerSupportEvidence (A10)", () => {
+  it.each<[string, { source_type: string; field: string | null }, boolean]>([
+    ["profile desired_job_title", { source_type: "profile", field: "desired_job_title" }, false],
+    ["profile interested_industries", { source_type: "profile", field: "interested_industries" }, false],
+    ["profile total_years_of_experience", { source_type: "profile", field: "total_years_of_experience" }, true],
+    ["detail action", { source_type: "project_detail", field: "action" }, true],
+    ["skill", { source_type: "skill", field: "name" }, true],
+    ["jd sentence", { source_type: "jd_sentence", field: null }, false],
+    ["jd requirement", { source_type: "jd_requirement", field: null }, false],
+    ["unknown type", { source_type: "nope", field: null }, false],
+  ])("%s → %s", (_, e, expected) => {
+    expect(isCareerSupportEvidence(e)).toBe(expected);
+  });
+
+  it("a feature's own support set still excludes profile wishes", () => {
+    const onlyProfile = new Set<EvidenceSourceType>(["profile"]);
+    expect(isCareerSupportEvidence({ source_type: "profile", field: "desired_job_title" }, onlyProfile)).toBe(false);
+    expect(isCareerSupportEvidence({ source_type: "profile", field: "total_years_of_experience" }, onlyProfile)).toBe(true);
+    expect(isCareerSupportEvidence({ source_type: "skill", field: "name" }, onlyProfile)).toBe(false);
   });
 });

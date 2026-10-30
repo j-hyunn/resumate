@@ -69,7 +69,8 @@ export type ResultMode = (typeof RESULT_MODES)[number];
 
 /** get_data_readiness `missing` / `hints` / `next_action` / `suggested_mode` values (DM §6). */
 export const READINESS_MISSING = ["complete_experience", "complete_project"] as const;
-export const READINESS_HINTS = ["complete_project_detail", "profile"] as const;
+/** R1 A18: `project_fields` = a draft project missing name/role → `next_action: form` + `suggested_project_id` (S-10). */
+export const READINESS_HINTS = ["complete_project_detail", "project_fields", "profile"] as const;
 export const READINESS_NEXT_ACTIONS = ["writing_chat", "form"] as const;
 export const READINESS_SUGGESTED_MODES = ["new_project", "augment_project"] as const;
 export const DATA_SUFFICIENCIES = ["ok", "thin", "none"] as const;

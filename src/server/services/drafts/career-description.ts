@@ -21,14 +21,16 @@ import type { CareerDescriptionPlan, DraftAiDeps, DraftOptionsRow, PipelineStrea
  *
  * prepareCareerDescription (before the stream; plain JSON errors):
  *   ownership → readiness `features.draft` (422) → options → plan (server
- *   section order; empty → 422 `empty_selection`) → JD state (409 while it is
- *   being extracted elsewhere) → connection gate (blocked → one SSE `error`,
- *   F-AI-08 lock) → input_hash reuse of an identical ready draft unless
- *   "다시 생성" (C-6).
+ *   section order; empty → 422 `empty_selection`) → JD requirements (R1 A13:
+ *   409 `extraction_in_progress` while extracting, 409 `jd_not_extracted`
+ *   when not extracted — no provider call, no job; the screen runs the
+ *   extraction route first, UX FL-03 / AI C-6) → connection gate (blocked →
+ *   one SSE `error`, F-AI-08 lock) → input_hash reuse of an identical ready
+ *   draft unless "다시 생성" (C-6).
  *
  * runCareerDescription (inside the stream; never throws):
- *   (`preparing` + D-30 extraction) → ai_jobs `career_description` (target =
- *   the new draft id) → begin_career_description → `generation_started` →
+ *   ai_jobs `career_description` (target = the new draft id; the whole 58 s
+ *   budget is generation's, A13) → begin_career_description → `generation_started` →
  *   AI-03 stream (block events) → persist = complete_career_description →
  *   `validated` → complete_ai_job → `done`. Failure → fail_career_description
  *   + job failed + `error` (no partial blocks kept: whole retry, AI-03 MVP 단순화).
@@ -65,7 +67,15 @@ export type PreparedCareerDescription =
   | { kind: "insufficient_data"; readiness: ReadinessFeature };
 
 export const emptySelection = () => new AppError("empty_selection", "포함할 경력이나 프로젝트를 하나 이상 골라 주세요.", { status: 422 });
-const extractionInProgress = () => new AppError("extraction_in_progress", "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", { status: 409 });
+export const extractionInProgress = () => new AppError("extraction_in_progress", "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", { status: 409 });
+/** R1 A13 (AI C-6, AI-03): generation never extracts; the screen calls the extraction route first. */
+export const jdNotExtracted = () => new AppError("jd_not_extracted", "공고 요건을 먼저 정리해야 해요.", { status: 409 });
+
+/** A13: requirements must already exist before any generation request (no provider call otherwise). */
+export function assertJdExtracted(jd: DraftJd): void {
+  if (jd.extractionStatus === "running") throw extractionInProgress();
+  if (jd.extractionStatus !== "succeeded") throw jdNotExtracted();
+}
 
 function nowMs(deps: DraftAiDeps): number {
   return (deps.now ?? (() => new Date()))().getTime();
@@ -125,7 +135,7 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
 
   const jd = await loadDraftJd(user, applicationProjectId);
   if (!jd) throw new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
-  if (jd.extractionStatus === "running") throw extractionInProgress();
+  assertJdExtracted(jd);
 
   const context = await deps.providerContext.forUser(deps.userId).catch((err: unknown) => {
     if (err instanceof AppError) return null;
@@ -137,7 +147,7 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
   const insight = await loadLatestInsightSignal(user, applicationProjectId);
 
   let reusedDraftId: string | null = null;
-  if (!input.regeneratedFromId && jd.extractionStatus === "succeeded") {
+  if (!input.regeneratedFromId) {
     const requirements = await loadRequirements(user, jd.jobDescriptionId);
     const ctx = pipeline.buildContext({ careerRows, plan, jobDescriptionId: jd.jobDescriptionId, requirements, insightSignal: insightSignalForAi03(insight) });
     const inputHash = pipeline.inputHash({
@@ -248,32 +258,7 @@ export async function runCareerDescription(deps: DraftAiDeps, prepared: Extract<
   const run = prepared.run!;
   const job = run.job;
   try {
-    // D-30: requirements first (inside the open job: its own jd_extraction job and key report).
-    let jd = prepared.jd;
-    if (jd.extractionStatus !== "succeeded") {
-      safeEmit({ type: "preparing", stage: "jd_extraction" });
-      let extracted;
-      try {
-        extracted = await deps.ensureJd(apId, run.signal);
-      } catch (err) {
-        log("career_description.extraction_refused", { jobId: job.id, code: err instanceof AppError ? String(err.code) : "unknown" });
-        await run.fail({ code: "stalled", retryAfter: null, quotaResetsAt: null });
-        safeEmit(errorEvent({ code: "stalled" }));
-        return;
-      }
-      if (extracted.status === "failed") {
-        await run.fail(extracted, { reportKeyStatus: false });
-        safeEmit(errorEvent(extracted));
-        return;
-      }
-      const reloaded = await loadDraftJd(deps.writer, apId);
-      if (!reloaded || reloaded.extractionStatus !== "succeeded") {
-        await run.fail({ code: "stalled", retryAfter: null, quotaResetsAt: null });
-        safeEmit(errorEvent({ code: "stalled" }));
-        return;
-      }
-      jd = reloaded;
-    }
+    const jd = prepared.jd;
     const requirements = await loadRequirements(deps.writer, jd.jobDescriptionId);
     const ctx = pipeline.buildContext({
       careerRows: prepared.careerRows,

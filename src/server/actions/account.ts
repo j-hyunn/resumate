@@ -1,8 +1,10 @@
 "use server";
 
-import { ACCOUNT_DELETED_REDIRECT, DeleteAccountInput, type AccountDeletionSummary, type DeleteAccountResult } from "@/lib/contracts/account";
+import { ACCOUNT_DELETED_REDIRECT, DeleteAccountInput, type AccountDeletionSummary, type AccountStatus, type DeleteAccountResult } from "@/lib/contracts/account";
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
+import { loadAccountState } from "@/server/auth/account-state";
 import { requireUser } from "@/server/auth/session";
+import { accountProfileMissing } from "@/server/services/account/state";
 import { getServerEnv } from "@/server/env";
 import { createServiceRoleClient, deleteAuthUser, type ServiceRoleClient } from "@/server/jobs/service-role";
 import * as account from "@/server/services/account";
@@ -17,6 +19,19 @@ import { signOut } from "@/server/services/auth";
 function log(event: string, fields: Record<string, unknown>): void {
   // No user id, email, key, or content (C-7, NFR-KEY-05, D-DM-02).
   console.info(JSON.stringify({ event, ...fields }));
+}
+
+/**
+ * S-25 entry state (R1 A7, outside the consent gate): `deletion_incomplete` → the screen shows
+ * only "탈퇴 마무리하기" (= `deleteAccount({ confirm: true })`, idempotent) and 로그아웃.
+ */
+export async function getAccountStatus(): Promise<ActionResult<AccountStatus>> {
+  return runAction(async () => {
+    const { supabase, user } = await requireUser();
+    const state = await loadAccountState(supabase, user.id);
+    if (state === "profile_missing") throw accountProfileMissing();
+    return { state };
+  });
 }
 
 /** S-25 삭제 범위 (DM §4.3) + NFR-KEY-09 hint flag. */

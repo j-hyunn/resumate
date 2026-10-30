@@ -29,6 +29,14 @@ export const COMMON_SYSTEM_PROMPT = `당신은 Resumate의 커리어 분석·작
 개인정보
 - 동료·고객 담당자 등 제3자의 개인 이름을 쓰지 않습니다. 건강·종교·노조 활동 등 민감한 내용은 출력에 옮기지 않습니다.`;
 
+/**
+ * AI spec C-3 V-4 (v4.3, A10): profile wishes are context, not facts. Not part
+ * of the common block (AI-01/AI-11/AI-12 have no V-4 judgment); the features
+ * that judge the user's career (AI-02, AI-03, AI-04, AI-05, AI-06) embed it
+ * in their own system text, so changing it bumps those prompt versions.
+ */
+export const PROFILE_PREFERENCE_RULE = `- 프로필의 희망 직무(desired_job_title)와 관심 산업(interested_industries)은 사용자가 원하는 방향을 알려 주는 문맥 참고일 뿐 경력 사실이 아닙니다. 판정·강점·지원 방향·본인 기여의 근거로 쓰지 않고 evidence에도 그것만으로 근거를 삼지 않습니다. 총 경력 연수(total_years_of_experience)는 연차 판단의 근거로 쓸 수 있습니다.`;
+
 export function commonSystemBlock(): AiTextBlock {
   return { text: COMMON_SYSTEM_PROMPT };
 }

@@ -85,7 +85,7 @@ select lives_ok($$select set_config('t.chat', public.start_writing_chat('new_pro
                 'start new_project chat with return_target');
 select is((select (message_count, status, mode, project_id is null, structured_draft = private.writing_chat_empty_draft())::text
              from public.writing_chats where id = current_setting('t.chat')::uuid),
-          '(1,active,new_project,t,t)', 'chat starts active with the greeting counted and an empty draft skeleton');
+          '(0,active,new_project,t,t)', 'chat starts active with count 0 (greeting not counted, R1 A5) and an empty draft skeleton');
 select is((select return_target - 'created_at' from public.writing_chats where id = current_setting('t.chat')::uuid),
           '{"application_project_id":"aaaaaaaa-7777-0000-0000-000000000001","feature":"job_interview","params":{"question_count":5}}'::jsonb,
           'return_target normalized');
@@ -123,7 +123,7 @@ select throws_ok($$select * from public.append_writing_chat_message(current_sett
 select throws_ok($$select * from public.append_writing_chat_message(gen_random_uuid(), 'hi')$$,
                  'P0001', 'writing_chat_not_found', 'unknown chat');
 select results_eq($$select sequence, message_count from public.append_writing_chat_message(current_setting('t.chat')::uuid, '  결제 프로젝트였어요 ')$$,
-                  $$values (2::smallint, 2::smallint)$$, 'user message = sequence 2, count 2');
+                  $$values (2::smallint, 1::smallint)$$, 'user message = sequence 2, count 1 (greeting not counted)');
 select is((select content from public.writing_chat_messages where writing_chat_id = current_setting('t.chat')::uuid and sequence = 2),
           '결제 프로젝트였어요', 'content stored trimmed');
 
@@ -183,7 +183,7 @@ select throws_ok($$select * from public.begin_assistant_message(current_setting(
 
 select results_eq($$select sequence, message_count, reused, is_final from public.begin_assistant_message(current_setting('t.chat')::uuid,
                     'aaaaaaaa-5555-0000-0000-000000000001', 'gemini', 'gemini-flash', 'default', 'free')$$,
-                  $$values (3::smallint, 3::smallint, false, false)$$, 'begin: new streaming row, count 3');
+                  $$values (3::smallint, 2::smallint, false, false)$$, 'begin: new streaming row (sequence 3), count 2');
 select set_config('t.reply', (select id::text from public.writing_chat_messages
                                 where writing_chat_id = current_setting('t.chat')::uuid and sequence = 3), true);
 select is((select (status, content, ai_job_id, provider, model, model_tier, connection_tier)::text
@@ -209,7 +209,7 @@ select throws_ok($$select public.finish_assistant_message(
 -- 다시 보내기: same row, count unchanged.
 select results_eq($$select message_id, sequence, message_count, reused from public.begin_assistant_message(current_setting('t.chat')::uuid,
                     'aaaaaaaa-5555-0000-0000-000000000001', 'anthropic', 'claude-sonnet-5-5', 'default', 'paid')$$,
-                  $$select current_setting('t.reply')::uuid, 3::smallint, 3::smallint, true$$,
+                  $$select current_setting('t.reply')::uuid, 3::smallint, 2::smallint, true$$,
                   'resend reuses the failed row without counting');
 select is((select (status, content, provider)::text from public.writing_chat_messages where id = current_setting('t.reply')::uuid),
           '(streaming,"",anthropic)', 'resent row is streaming again with the new provider');
@@ -270,7 +270,7 @@ set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 select results_eq($$select sequence, message_count, reused from public.begin_assistant_message(current_setting('t.chat')::uuid,
                     'aaaaaaaa-5555-0000-0000-000000000001', 'gemini', 'gemini-flash', 'default', 'free')$$,
-                  $$values (5::smallint, 5::smallint, true)$$, 'a streaming row older than 2 minutes is reused');
+                  $$values (5::smallint, 4::smallint, true)$$, 'a streaming row older than 2 minutes is reused');
 
 -- QA-S4-04: no user message while a live turn is streaming (two tabs).
 reset role;
@@ -328,10 +328,34 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$update public.writing_chats set status = 'abandoned' where id = current_setting('t.aug')::uuid$$,
                 'user abandons a chat');
-select throws_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.aug')::uuid$$,
-                 'P0001', 'invalid_writing_chat_transition', 'abandoned is final');
 select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.aug')::uuid, 'x')$$,
                  'P0001', 'writing_chat_not_active', 'no messages after abandoning');
+-- R1 A6: abandoned -> active (다시 이어 하기) by the user session; only back to active.
+select throws_ok($$update public.writing_chats set status = 'saved' where id = current_setting('t.aug')::uuid$$,
+                 'P0001', 'invalid_writing_chat_transition', 'abandoned -> saved refused');
+select throws_ok($$update public.writing_chats set status = 'handed_off' where id = current_setting('t.aug')::uuid$$,
+                 'P0001', 'invalid_writing_chat_transition', 'abandoned -> handed_off refused');
+reset role;
+update public.writing_chats set last_activity_at = now() - interval '30 days' where id = current_setting('t.aug')::uuid;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select lives_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.aug')::uuid$$,
+                'user resumes an abandoned chat (A6)');
+select results_eq($$select status, last_activity_at > now() - interval '1 minute', message_count
+                     from public.writing_chats where id = current_setting('t.aug')::uuid$$,
+                  $$values ('active'::text, true, 2::smallint)$$, 'resumed: active, last_activity_at = now(), count carried over (2)');
+select results_eq($$select message_count from public.append_writing_chat_message(current_setting('t.aug')::uuid, '이어서 할게요')$$,
+                  $$values (3::smallint)$$, 'messages accepted again after resuming (count continues)');
+select lives_ok($$update public.writing_chats set status = 'abandoned' where id = current_setting('t.aug')::uuid$$,
+                'abandon again');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
+select is_empty($$update public.writing_chats set status = 'active' where id = current_setting('t.aug')::uuid returning id$$,
+                'B cannot resume A''s chat');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$update public.writing_chats set return_target = null where id = current_setting('t.aug')::uuid$$,
                 'return_target stays updatable');
 select throws_ok($$update public.writing_chats set return_target = '{"feature":"board"}' where id = current_setting('t.aug')::uuid$$,

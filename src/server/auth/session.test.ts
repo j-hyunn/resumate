@@ -7,7 +7,10 @@ const redirect = vi.fn((url: string) => {
   throw Object.assign(new Error("NEXT_REDIRECT"), { url });
 });
 
+const accountState = vi.fn();
+
 vi.mock("next/navigation", () => ({ redirect: (url: string) => redirect(url) }));
+vi.mock("./account-state", () => ({ loadAccountState: () => accountState() }));
 vi.mock("@/server/db/server", () => ({
   createSupabaseServerClient: async () => {
     const r = getUser();
@@ -16,7 +19,7 @@ vi.mock("@/server/db/server", () => ({
   },
 }));
 
-const { requireConsentedUser, requireConsentedUserOrRedirect, requireUser } = await import("./session");
+const { requireActiveUser, requireConsentedUser, requireConsentedUserOrRedirect, requireUser, requireUserForAccountDeletion, requireUserForConsentPage } = await import("./session");
 
 const consented = [{ consent_type: "terms", required: true, current_version: "v", agreed_version: "v", needs_consent: false }];
 const needs = [{ consent_type: "terms", required: true, current_version: "v", agreed_version: null, needs_consent: true }];
@@ -25,6 +28,8 @@ beforeEach(() => {
   getUser.mockReset();
   rpc.mockReset();
   redirect.mockClear();
+  accountState.mockReset();
+  accountState.mockResolvedValue("active");
 });
 
 describe("requireUser", () => {
@@ -67,5 +72,61 @@ describe("requireConsentedUserOrRedirect (QA-07)", () => {
     rpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "down" } });
     await expect(requireConsentedUserOrRedirect("/board")).rejects.toBeInstanceOf(AppError);
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("R1 A7 account state gate", () => {
+  it("actions: deletion_incomplete → account_deletion_incomplete (403) before the consent gate", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    accountState.mockResolvedValue("deletion_incomplete");
+    await expect(requireConsentedUser()).rejects.toMatchObject({ code: "account_deletion_incomplete", status: 403 });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("pages: deletion_incomplete → S-25 instead of the consent page / original URL", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    rpc.mockResolvedValue({ data: needs, error: null });
+    accountState.mockResolvedValue("deletion_incomplete");
+    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/settings/account/delete" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("profile_missing [가정] → account_profile_missing, never the consent gate", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    accountState.mockResolvedValue("profile_missing");
+    await expect(requireConsentedUser()).rejects.toMatchObject({ code: "account_profile_missing" });
+    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ code: "account_profile_missing" });
+  });
+  it("S-25 is outside the consent gate: consent never checked; returns the state", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    rpc.mockResolvedValue({ data: needs, error: null });
+    accountState.mockResolvedValue("deletion_incomplete");
+    await expect(requireUserForAccountDeletion()).resolves.toMatchObject({ accountState: "deletion_incomplete" });
+    accountState.mockResolvedValue("active");
+    await expect(requireUserForAccountDeletion()).resolves.toMatchObject({ accountState: "active" });
+    expect(rpc).not.toHaveBeenCalled();
+    getUser.mockReturnValue({ data: { user: null }, error: null });
+    await expect(requireUserForAccountDeletion()).rejects.toMatchObject({ url: "/login?next=%2Fsettings%2Faccount%2Fdelete" });
+  });
+});
+
+describe("QA-R1-02: consent page / consent actions check the account state, not consent", () => {
+  it("requireActiveUser: deletion_incomplete → 403 account_deletion_incomplete; active → no consent check", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    rpc.mockResolvedValue({ data: needs, error: null });
+    accountState.mockResolvedValue("deletion_incomplete");
+    await expect(requireActiveUser()).rejects.toMatchObject({ code: "account_deletion_incomplete", status: 403 });
+    accountState.mockResolvedValue("active");
+    await expect(requireActiveUser()).resolves.toMatchObject({ user: { id: "u" } });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+  it("requireUserForConsentPage: deletion_incomplete → S-25; needs consent → stays (no redirect)", async () => {
+    getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
+    rpc.mockResolvedValue({ data: needs, error: null });
+    accountState.mockResolvedValue("deletion_incomplete");
+    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/settings/account/delete" });
+    accountState.mockResolvedValue("active");
+    await expect(requireUserForConsentPage()).resolves.toMatchObject({ user: { id: "u" } });
+    expect(redirect).toHaveBeenCalledTimes(1);
+    getUser.mockReturnValue({ data: { user: null }, error: null });
+    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/login?next=%2Fonboarding%2Fconsent" });
   });
 });

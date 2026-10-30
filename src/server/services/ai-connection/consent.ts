@@ -8,14 +8,13 @@ import type { UserSupabaseClient } from "@/server/db/types";
 /**
  * AI data-use consent (F-AI-04, DM 2.11.5 재동의 판정).
  *
- * Two different questions:
- * - **Save a key / change tier / make active** (strict): the latest active
- *   consent for (provider, tier) must cite the CURRENT disclosure version —
- *   the same rule `save_provider_key` enforces.
- * - **Run AI** (job start): an active consent must exist, and no disclosure
- *   with `requires_reconsent = true` may have taken effect after the agreed
- *   version (DM 2.11.5 "고지 버전이 바뀌면(requires_reconsent = true) 다음 AI
- *   실행 전에 재동의"). A wording-only update doesn't block running.
+ * R1 A20 (DM v4.2 2.11.5 통일): saving a key, changing tier, activating, and
+ * running AI all use ONE rule — `mayRunWithConsent`, the TS mirror of the DB
+ * helper `private.ai_consent_allows_run` (used by `save_provider_key` and
+ * `check_ai_run_allowed`):
+ *   1. the latest not-withdrawn consent for (provider, tier) must exist, and
+ *   2. no disclosure with `requires_reconsent = true` may have taken effect
+ *      after the agreed version. A wording-only update blocks nothing.
  */
 
 export type DisclosureRow = {
@@ -71,7 +70,7 @@ export function latestActiveConsent(rows: ConsentRow[], provider: AiProvider, ti
   );
 }
 
-/** Strict state (save / tier change / activation). Pure. */
+/** S-40 consent state per tier. `needsConsent` uses the unified rule (A20). Pure. */
 export function consentStateOf(
   disclosures: DisclosureRow[],
   activeConsents: ConsentRow[],
@@ -86,11 +85,11 @@ export function consentStateOf(
     currentVersion: current?.version ?? null,
     agreedVersion: agreed?.disclosure_version ?? null,
     agreedAt: agreed?.agreed_at ?? null,
-    needsConsent: !current || !agreed || agreed.disclosure_version !== current.version,
+    needsConsent: !mayRunWithConsent(disclosures, activeConsents, provider, tier, now),
   };
 }
 
-/** Run-time rule (job start). Pure. */
+/** The unified re-consent rule (A20): key save, tier change, activation, and every AI run. Pure. */
 export function mayRunWithConsent(
   disclosures: DisclosureRow[],
   activeConsents: ConsentRow[],

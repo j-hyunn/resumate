@@ -221,6 +221,20 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     expect(b.features.draft).toMatchObject({ ready: false, next_action: "form" });
   });
 
+  it("R1 A18: a project with a complete detail but no role → hints project_fields, form + suggested_project_id (no key needed)", async () => {
+    const carol = await signedInUser("career-c");
+    const exp = await saveExperience(carol, SaveExperienceInput.parse({ id: newId(), companyName: "감마", startMonth: "2022-01", jobPosition: "백엔드", isCurrent: true }));
+    const p = await saveProject(carol, SaveProjectInput.parse({ id: newId(), affiliation: { type: "experience", id: exp.id }, name: "정산 개선", startMonth: "2024-01" }));
+    await saveProjectDetail(carol, SaveProjectDetailInput.parse({ id: newId(), projectId: p.id, title: "배치 시간", situation: "정산 배치가 느렸다", action: "쿼리를 나눠 병렬 처리했다" }));
+    const r = await getDataReadiness(carol);
+    expect(r.ai_connection.active_provider).toBeNull();
+    for (const f of [r.features.insight, r.features.draft, r.features.job_interview]) {
+      expect(f).toMatchObject({ ready: false, next_action: "form", suggested_project_id: p.id });
+      expect(f.hints).toContain("project_fields");
+      expect(f).not.toHaveProperty("suggested_mode");
+    }
+  });
+
   it("career tree groups by year (experience 2023→now, project in 2024)", async () => {
     const tree = await getCareerTree(alice, new Date("2026-10-25T00:00:00Z"));
     const y2024 = tree.years.find((y) => y.year === 2024)!;

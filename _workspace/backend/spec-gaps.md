@@ -467,3 +467,37 @@
 ## 2026-11-04 · S9 (QA) · 탈퇴 미완료 상태 복구 경로·AI 쓰기 권한 정리 (backend-qa)
 - ① **`account_deletion_incomplete` 뒤 S-25 재진입 경로가 없다 `[UX 확인 필요]`** (FL-07, S-25; api spec-gaps S9 ⑤): auth 삭제가 실패하면 public 데이터(동의·`profiles` 포함)는 이미 없고 세션은 남는다. 같은 화면에서 바로 재시도하면 되지만, 화면을 떠나면 대시보드 레이아웃의 동의 게이트(`src/server/auth/session.ts:42-54` `requireConsentedUserOrRedirect`)가 S-03으로 보내므로 약관에 다시 동의해야 S-25에 닿는다. UX에 이 상태의 진입 경로(예: 로그인 직후 "탈퇴 마무리" 안내, S-25를 동의 게이트 밖에 두기)를 정해 달라고 요청한다. A1 연결 때 반영.
 - ② **`app_ai_writer`의 `evidence_links` 직접 INSERT 컬럼 권한은 쓰는 곳이 없다 `[기획 확인]`** (DM §5, DM-13): 모든 근거 저장은 S6~S8 definer RPC(`complete_insight`·`complete_*`·`save_*`) 안에서 하고, 앱 코드에서 `app_ai_writer`로 `evidence_links`에 직접 쓰는 경로가 없다. 직접 INSERT는 `run_generation` 확인을 거치지 않으므로 DM §5에서 이 권한을 빼는 방안을 검토해 달라(같은 사용자 범위라 Critical은 아님).
+
+## 2026-11-05 · R1 (ai) · 기획 결정 A10·A11·A22·A23 반영 (ai-pipeline-engineer)
+- **R1 해소** S6 (qa) ① V-4 희망 정보 포함 여부 → A10 확정: `profile.desired_job_title`·`interested_industries`는 V-4 근거 수에 넣지 않는다(`isCareerSupportEvidence`). `total_years_of_experience`는 유지. AI-02·03·04·05·06 프롬프트 버전을 올렸다.
+- **R1 해소** S7 (api) ⑤·⑥ AI-11 대체 선택 → A23 확정: `fallbackSelection` 삭제, `emptyDraftSourceSelection()` 추가(실패 = 체크 없는 목록, `selection_origin = user`).
+- **R1 해소** S8 (ai) ⑤ requirement_fit 사실 근거 → A11 확정: 모든 직무 질문의 사실 전제는 action·result·성과에서만(`fact_premise_unsupported`로 버림).
+- ① **희망 정보 근거는 세지 않을 뿐 지우지 않는다 `[구현 결정]`** (C-3 V-4 v4.3): 다른 사실 근거로 살아남은 판단 항목에는 희망 정보 근거가 `evidence_links`에 함께 저장될 수 있다. 근거 칩에서도 빼야 하면 기획에서 정해 달라(검증 단계에서 제거 규칙 추가).
+- ② **gap_probe "사실을 전제함" 판별 `[가정]`** (§4.1 A11은 판별 방법이 없음): anchor `experience`, 사실 경력 근거(희망 정보·회고 제외), 질문 문장의 경력 고유명사 중 하나라도 있으면 사실 전제로 본다. 셋 다 없으면 "비슷한 경험이 있다면" 형태로 보고 면제.
+- ③ **세트 단위 `question_usage`·`question_validation_report`는 생성 호출 전체 합 `[구현 결정]`** (DM A.12 A22 "세트를 만든 호출들의 토큰 합계"): `accumulateQuestionSetRecord`로 호출마다 누적하고 `attempts`·`regenerated`를 보고서에 넣는다. api 실행기가 누적값을 넘겨야 한다(지금은 마지막 호출 값).
+
+## 2026-11-05 · R1 (db) · 기획 결정 A5·A6·A7·A18·A19·A20·A22·A24 반영 (db-engineer)
+- **R1 해소** 2026-10-30 S4 ② · S4 (db) ② 시작 인사와 메시지 상한 → A5 확정: 인사는 세지 않는다. `start_writing_chat`이 0으로 시작하고 기존 행은 인사 행이 있으면 1을 뺐다(`20261105000100`). 사용자 메시지 수락 `≤ 38`, `is_final`(40번째 답) 규칙은 그대로 → 실제 최대 40.
+- **R1 해소** S4 (db) ④ 그만둔 대화 → A6 확정: `abandoned → active`를 사용자 세션 직접 update로 허용, 트리거가 `last_activity_at = now()`(`20261105000200`). `saved`·`handed_off`는 그대로 최종, `abandoned`에서 나가는 길은 `active`뿐.
+- **R1 해소** 2026-10-25 S2 `suggested_mode` 필드 누락 프로젝트 · S3b readiness `form` 시 `suggested_*` → A18 확정: `hints`에 `project_fields`, `next_action = form` + `suggested_project_id`(예외적으로 form에 id를 준다), DM 6장 판정 순서 ①~⑤로 바꿨다(`20261105000400`).
+- **R1 해소** S3b DM 2.11.3 키 RPC 실행 주체(QA-S3b-06) → A19 확정: `save_provider_key`·`record_provider_key_check`가 `p_user_id`를 받고 service_role만 실행(`20261105000500`). 옛 시그니처는 지웠다.
+- **R1 해소** S3b DM 2.11.5 재동의 판정 → A20 확정: `save_provider_key`가 `check_ai_run_allowed`와 같은 `private.ai_consent_allows_run`을 쓴다. `private.has_current_ai_consent`는 지웠다.
+- **R1 해소** S8 (db) ② 세트 단위 AI 메타 → A22 확정: `interview_sessions.question_validation_report`·`question_usage`(jsonb null, object CHECK), `complete_interview_questions`가 `p_payload.validation_report`·`usage`로 쓴다(`20261105000600`).
+- **R1 해소** S9 (QA) ② `evidence_links` 직접 INSERT → A24 확정: `app_ai_writer` insert 컬럼 grant와 `evidence_links_insert_ai_writer` 정책을 없앴다(`20261105000700`).
+- **R1 해소(db 쪽)** S9 (QA) ① 탈퇴 미완료 재진입 → A7: `get_account_deletion_state` 추가(`20261105000300`). 세션 게이트 연결은 api.
+- ① **`get_account_deletion_state`는 `p_subject_hash`도 받는다 `[구현 결정]`** (DM 6.1 시그니처는 `(p_user_id)`만): hash는 서버의 HMAC 비밀값으로 만들고 DB는 비밀값을 모른다(`delete_account(p_subject_hash)`와 같은 이유). 서버가 `delete_account`에 쓰는 것과 같은 함수로 계산해 넘긴다. hash 형식(소문자 hex 64자)은 프로필이 있어도 검사한다. DM 6.1 시그니처를 `(p_user_id, p_subject_hash)`로 고치기를 권한다.
+- ② **`save_provider_key.p_disclosure_version`은 형식상 인자 `[구현 결정]`** (DM 2.11.3 인자 유지 + 2.11.5 v4.2 통일 규칙): 판정은 동의 행 기준이라 이 값은 그 공급자·등급의 알려진 고지 버전이기만 하면 된다(null·없는 버전이면 `consent_required`). 현재 버전이든 동의한 버전이든 통과한다.
+- ③ **키 RPC 소유 검사 = `p_user_id`의 `profiles` 행 존재 `[구현 결정]`** (DM 2.11.3 "`p_user_id` 소유 검사"): 프로필이 없으면 `user_not_found`, null이면 기존 매핑 그대로 42501 `not_authenticated`. 모든 읽기·쓰기를 `p_user_id`로 거른다. service_role이 다른 사용자 id를 넘기는 것은 서버 책임이다(세션 확인 후 호출).
+- ④ **`project_fields` hint 조건 `[가정]`** (DM 6장은 "draft 프로젝트가 있으면"만 말함): `complete_projects = 0`일 때만 넣는다(`complete_project_detail`과 같은 조건 계열). 대상은 포함 규칙(소속 경력·교육이 draft면 제외)을 적용하고 complete 상세 내용이 있으며 `name` 또는 `role`이 공백인 draft 프로젝트. 경력이 없으면(판정 ①) hint는 붙지만 `suggested_project_id`는 주지 않는다.
+
+## 2026-11-05 · R1 (api) · 기획 결정 A5·A6·A7·A13·A18·A19·A20·A22·A23 반영 (api-engineer)
+
+- ① **`profile_missing` 처리 `[가정]`** (DM v4.2 6.1, UX v5.3 S-25 — 화면 처리 없음, 리뷰 R-61): 프로필도 탈퇴 기록도 없는 세션은 가입 트리거 실패 같은 서버 이상으로 본다. 로그인 콜백은 로그아웃 후 S-02 `?error=auth_callback`, 동의 게이트 액션·페이지는 `account_profile_missing`(500), S-25 진입 판정도 같은 오류. 동의 게이트로 보내지 않는다.
+- ② **S-25 경로 `[가정]`**: `ROUTES.accountDeletion = "/settings/account/delete"`. 이 페이지는 `requireUserForAccountDeletion()`(로그인만 확인, 동의 게이트 밖)을 써야 한다. 탈퇴 미완료면 대시보드 게이트(`requireConsentedUserOrRedirect`)가 원래 URL·S-03보다 먼저 이 경로로 보내고, 동의 게이트 액션은 `account_deletion_incomplete`(403)로 거부한다. "다른 메뉴 이동 없음"은 이 게이트로 보장된다.
+- ③ **`get_account_deletion_state` 인자** (DM 6.1은 `p_user_id`만): db 구현대로 `p_subject_hash`(delete_account와 같은 HMAC)도 넘긴다. DM 시그니처 정정 필요(db 노트와 같은 항목).
+- ④ **로그인 콜백에서 판정 실패 시 `[구현 결정]`**: 상태 조회가 실패하면 로그인은 그대로 진행하고(보통 흐름), 게이트가 있는 페이지·액션이 다시 판정해 실패를 드러낸다.
+- ⑤ **AI-11 응답 필드 이름 변경** (A23, UX S-17·C-11): `origin`/`fallback`/`fallbackReason` → `selectionOrigin`(`insight`/`ai_ranking`/`user`)/`failed`/`reason`. 실패면 네 목록 모두 빈 배열, `ranking: null`. UI 연결 전이라 화면 영향 없음. 요건 미추출(`jd_not_extracted`)·추출 중(`extraction_in_progress`)도 AI-11 실패로 같은 모양으로 답한다(오류 화면 없음, AI v4.3 AI-11 "실패로 보는 경우").
+- ⑥ **서류 생성 요청의 요건 상태 `[구현 결정]`** (A13): 요건 추출 중이면 기존 409 `extraction_in_progress`, 추출 전·실패면 409 `jd_not_extracted`. 둘 다 작업·공급자 호출 없음. SSE `preparing` 이벤트는 없앴다(계약에서도 삭제).
+- ⑦ **키 저장의 `p_disclosure_version` `[구현 결정]`** (A20): 서버가 사용자의 최신 유효 동의 행의 버전을 넘긴다. 클라이언트가 보내는 `disclosureVersion`은 계약에 남아 있지만(등급 변경 refine 포함) 더 이상 판정에 쓰지 않는다. 화면이 보던 버전과 정확히 같아야 한다는 옛 규칙은 없어졌다.
+- ⑧ **S-10 "AI 작성 대화 기록" 목록 신설** (A6): `listProjectWritingChats({ projectId })` — 그 프로젝트의 모든 상태 대화. 이전 슬라이스에는 이 목록 서비스가 없었다.
+- ⑨ **재개 멱등 `[구현 결정]`** (A6): 이미 `active`인 대화의 재개는 성공으로 돌려준다(두 번 누름·다른 탭). `saved`·`handed_off`는 409 `writing_chat_not_resumable`.

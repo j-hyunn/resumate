@@ -1,5 +1,5 @@
 import type { AiTextBlock } from "../../providers/types";
-import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
+import { COMMON_PROMPT_VERSION, PROFILE_PREFERENCE_RULE, commonSystemBlock } from "../common";
 import { ALIAS_RULE } from "../drafts-common";
 
 /**
@@ -7,7 +7,7 @@ import { ALIAS_RULE } from "../drafts-common";
  * Blocks (C-8): system [common] → [AI-03] / user [<career_data> selected items] → [<jd>]
  * → [<reference> insight / ranking signals, optional] → [<task> structure, order, tone].
  */
-export const AI03_PROMPT_VERSION = `ai-03.generate.v1+${COMMON_PROMPT_VERSION}`;
+export const AI03_PROMPT_VERSION = `ai-03.generate.v2+${COMMON_PROMPT_VERSION}`;
 
 export const AI03_SYSTEM = `이 기능: 경력기술서 초안
 역할: 국내 경력직 경력기술서 작성 전문가
@@ -33,6 +33,7 @@ export const AI03_SYSTEM = `이 기능: 경력기술서 초안
 근거
 - summary, role_line, 불릿마다 evidence를 1개 이상 답니다. 근거는 <career_data>의 항목만 씁니다(JD는 근거가 아닙니다).
 - situation·task·action·result·summary·description 근거에는 quote(원문 그대로)를 넣습니다. 성과 수치는 {source_type: "achievement", field: "metric"}로 답니다.
+${PROFILE_PREFERENCE_RULE}
 - 불릿의 requirement_refs에는 관련 JD 요건의 REQ 번호를 넣습니다(없으면 빈 배열).
 
 출력 구조

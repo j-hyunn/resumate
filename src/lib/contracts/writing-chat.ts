@@ -321,8 +321,12 @@ export const WritingChatDto = z.object({
   educationId: uuid.nullable(),
   status: z.enum(WRITING_CHAT_STATUSES),
   structuredDraft: StructuredDraft,
+  /** "n / 40": user + AI messages, the greeting excluded (R1 A5, DM §2.5). */
   messageCount: z.number().int(),
   messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
+  /** 40 − messageCount (≥ 0). */
+  remainingMessages: z.number().int().nonnegative(),
+  /** No room for another turn (messageCount > 38): the input is disabled. */
   limitReached: z.boolean(),
   lastActivityAt: isoDateTime,
   savedAt: isoDateTime.nullable(),
@@ -339,19 +343,51 @@ export const WritingChatDto = z.object({
 });
 export type WritingChatDto = z.infer<typeof WritingChatDto>;
 
-/** S-08 "작성 중인 AI 대화" row. */
+/** S-08 "작성 중인 AI 대화" / "그만둔 AI 대화" row (R1 A6: `status` tells the two groups apart). */
 export const ActiveWritingChatSummary = z.object({
   id: uuid,
   mode: z.enum(WRITING_CHAT_MODES),
+  /** `active` (작성 중) or `abandoned` (그만둔 대화 — "다시 이어 하기"). */
+  status: z.enum(["active", "abandoned"]),
   projectId: uuid.nullable(),
   /** augment_project target name (null for new_project). */
   projectName: z.string().nullable(),
   lastActivityAt: isoDateTime,
+  /** Greeting excluded (R1 A5). */
   messageCount: z.number().int(),
   messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
   daysUntilAutoDelete: z.number().int().nullable(),
 });
 export type ActiveWritingChatSummary = z.infer<typeof ActiveWritingChatSummary>;
+/** Alias: the S-08 list rows cover both groups. */
+export type WritingChatSummary = ActiveWritingChatSummary;
+
+/** S-08 lists (R1 A6): active chats, then abandoned ones not yet auto-deleted; latest activity first each. */
+export const WritingChatLists = z.object({
+  active: z.array(ActiveWritingChatSummary),
+  abandoned: z.array(ActiveWritingChatSummary),
+});
+export type WritingChatLists = z.infer<typeof WritingChatLists>;
+
+/** S-10 "AI 작성 대화 기록" (R1 A6): chats bound to one project, every status. */
+export const ProjectWritingChatSummary = z.object({
+  id: uuid,
+  mode: z.enum(WRITING_CHAT_MODES),
+  /** active → 이어 하기 / abandoned → "다시 이어 하기" / saved · handed_off → read-only. */
+  status: z.enum(WRITING_CHAT_STATUSES),
+  lastActivityAt: isoDateTime,
+  savedAt: isoDateTime.nullable(),
+  messageCount: z.number().int(),
+  messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
+});
+export type ProjectWritingChatSummary = z.infer<typeof ProjectWritingChatSummary>;
+
+export const ProjectWritingChatsInput = z.object({ projectId: uuid });
+export type ProjectWritingChatsInput = z.input<typeof ProjectWritingChatsInput>;
+
+/** "다시 이어 하기" (R1 A6): abandoned → active. */
+export const ResumeWritingChatResult = z.object({ writingChatId: uuid, status: z.literal("active"), lastActivityAt: isoDateTime });
+export type ResumeWritingChatResult = z.infer<typeof ResumeWritingChatResult>;
 
 export const StartWritingChatResult = z.object({ writingChatId: uuid });
 export type StartWritingChatResult = z.infer<typeof StartWritingChatResult>;
@@ -429,6 +465,8 @@ export const TurnDoneEvent = z.object({
   type: z.literal("turn_done"),
   jobId: uuid,
   messageCount: z.number().int(),
+  /** 40 − messageCount (R1 A5). */
+  remainingMessages: z.number().int().nonnegative(),
   limitReached: z.boolean(),
   /**
    * Preview this turn (QA-S4-05): `updated` (draft_patch sent), `unchanged` (nothing pending, e.g. a

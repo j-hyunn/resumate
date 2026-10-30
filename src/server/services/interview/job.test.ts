@@ -195,10 +195,32 @@ function fakePipelines(db: FakeInterviewDb, calls: string[], b: Behavior): Inter
         const toSave = empty.slice(0, plan.save ?? empty.length);
         for (const seq of toSave) await deps.onQuestion({ sequence: seq });
         if (plan.throwAfter) throw plan.throwAfter;
-        return { remaining: empty.length - toSave.length, weakRequirementIds: [`weak-${input.attempt}`], model: "m", usage: null, report: {}, unsupportedNumbers: [] };
+        return {
+          remaining: empty.length - toSave.length,
+          weakRequirementIds: [`weak-${input.attempt}`],
+          model: "m",
+          usage: { inputTokens: 10 },
+          report: { questions_total: toSave.length },
+          unsupportedNumbers: [],
+        };
       },
       snapshot: () => ({ interviewType: "job", insightId: null, careerSnapshotHash: `career-${++snapshots}`, requirementIds: [] }),
-      completePayload: (input) => ({ weak: input.run.weakRequirementIds, provider: input.provider, hash: input.snapshot.careerSnapshotHash }),
+      // R1 A22: fake fold = sums (production: ai accumulateQuestionSetRecord).
+      accumulate: (prev, attempt) => ({
+        report: Object.fromEntries(
+          [...new Set([...Object.keys(prev?.report ?? {}), ...Object.keys(attempt.report)])].map((k) => [k, (prev?.report[k] ?? 0) + (attempt.report[k] ?? 0)]),
+        ),
+        usage: { inputTokens: ((prev?.usage as { inputTokens?: number } | null)?.inputTokens ?? 0) + ((attempt.usage as { inputTokens?: number } | null)?.inputTokens ?? 0) },
+        attempts: (prev?.attempts ?? 0) + 1,
+      }),
+      completePayload: (input) => ({
+        weak: input.run.weakRequirementIds,
+        provider: input.provider,
+        hash: input.snapshot.careerSnapshotHash,
+        validation_report: input.run.report,
+        usage: input.run.usage,
+        attempts: input.run.attempts,
+      }),
     },
     evaluation: {
       promptVersion: "ai-06.test",
@@ -319,7 +341,7 @@ describe("interview_questions job (AI-05)", () => {
     expect(h.db.questions.size).toBe(5);
     expect(h.db.answers.size).toBe(5); // an empty answer per question
     expect(h.db.generation).toBe("ready");
-    expect(h.db.completedQuestions).toEqual([{ weak: ["weak-0"], provider: "anthropic", hash: "career-1" }]);
+    expect(h.db.completedQuestions).toEqual([{ weak: ["weak-0"], provider: "anthropic", hash: "career-1", validation_report: { questions_total: 5 }, usage: { inputTokens: 10 }, attempts: 1 }]);
     expect(h.usage.forJob(jobId)).toHaveLength(1);
     expect(job.stepOutputs.generate).toMatchObject({ weakRequirementIds: ["weak-0"] });
   });
@@ -330,7 +352,10 @@ describe("interview_questions job (AI-05)", () => {
     await h.drain();
     expect(h.job(jobId).status).toBe("succeeded");
     expect(h.calls).toEqual(["generate.0:0", "generate.1:3"]);
-    expect(h.db.completedQuestions).toEqual([{ weak: ["weak-0", "weak-1"], provider: "anthropic", hash: "career-1" }]);
+    // R1 A22: the set-level report / usage add up both calls (not just the last one).
+    expect(h.db.completedQuestions).toEqual([
+      { weak: ["weak-0", "weak-1"], provider: "anthropic", hash: "career-1", validation_report: { questions_total: 5 }, usage: { inputTokens: 20 }, attempts: 2 },
+    ]);
     expect(h.usage.forJob(jobId)).toHaveLength(2);
   });
 

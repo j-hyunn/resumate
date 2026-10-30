@@ -66,7 +66,8 @@ select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_
           'app_ai_writer cannot read profiles.display_name');
 
 -- QA-S2-05 -> S3 allow list: app_ai_writer column-level writes in public are exactly these
--- (DM §5: ai_jobs, evidence_links, ai_usage_records insert; career tables and ai_price_tables never).
+-- (DM §5 v4.2: ai_jobs, ai_usage_records insert; career tables and ai_price_tables never).
+-- R1 A24: evidence_links INSERT removed — evidence is written only inside the result RPCs.
 -- Grows only with DM §5. S4: unchanged — DM §5 allows app_ai_writer writing_chats.message_count / last_activity_at and
 -- assistant rows, but S4 writes them only through definer RPCs (begin / finish_assistant_message), so no column grant.
 select set_eq(
@@ -91,12 +92,8 @@ select set_eq(
     select 'ai_usage_records.' || col || ':INSERT' from unnest(array['id', 'user_id', 'occurred_at', 'feature',
       'job_type', 'ai_job_id', 'call_key', 'application_project_id', 'provider', 'model', 'model_tier',
       'connection_tier', 'input_tokens', 'cached_input_tokens', 'cache_write_tokens', 'output_tokens',
-      'reasoning_tokens', 'usage_source', 'outcome', 'error_code', 'price_table_version', 'estimated_cost_usd']) col
-    union all
-    select 'evidence_links.' || col || ':INSERT' from unnest(array['id', 'user_id', 'application_project_id',
-      'owner_type', 'owner_id', 'item_key', 'sort_order', 'source_type', 'source_id', 'source_locator', 'source_field',
-      'quote', 'quote_adjusted', 'source_snapshot_at', 'source_label']) col),
-  'app_ai_writer column-level INSERT / UPDATE / REFERENCES in public = S3a allow list');
+      'reasoning_tokens', 'usage_source', 'outcome', 'error_code', 'price_table_version', 'estimated_cost_usd']) col),
+  'app_ai_writer column-level INSERT / UPDATE / REFERENCES in public = ai_jobs + ai_usage_records (R1 A24: no evidence_links)');
 
 -- authenticated: no write privilege at all on the AI tables (cancel goes through an RPC).
 select is_empty(
@@ -326,8 +323,11 @@ select set_eq(
         'purge_unlinked_writing_chats(timestamp with time zone,integer)',
         'purge_old_ai_jobs(timestamp with time zone,integer)',
         'purge_old_ai_usage_records(timestamp with time zone,integer)',
-        'purge_old_account_deletion_logs(timestamp with time zone,integer)'],
-  'service_role-only public functions = sweep / claim_due (S3a) + the 4 S9 retention purges');
+        'purge_old_account_deletion_logs(timestamp with time zone,integer)',
+        'save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)',
+        'record_provider_key_check(uuid,text,text,text)',
+        'get_account_deletion_state(uuid,text)'],
+  'service_role-only public functions = sweep / claim_due (S3a) + the 4 S9 retention purges + R1 server-only RPCs (A19 key save / check, A7 deletion state)');
 
 -- QA-S9-04 (b): public functions the user session can execute, catalog-wide. Grows only with a user-session RPC
 -- in DM §5 / §7.
@@ -341,11 +341,11 @@ select set_eq(
         'create_interview_session', 'delete_account', 'delete_career_item', 'delete_cover_letter_question',
         'delete_provider_key', 'get_account_deletion_summary', 'get_ai_usage_summary', 'get_consent_status',
         'get_data_readiness', 'get_deletion_impact', 'get_interview_question_reveals', 'hand_off_writing_chat',
-        'mark_interview_result_viewed', 'move_application_stage', 'record_consents', 'record_provider_key_check',
-        'reorder_cover_letter_questions', 'reorder_project_details', 'request_ai_job_cancel', 'save_provider_key',
+        'mark_interview_result_viewed', 'move_application_stage', 'record_consents',
+        'reorder_cover_letter_questions', 'reorder_project_details', 'request_ai_job_cancel',
         'save_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
         'set_writing_chat_affiliation', 'start_writing_chat', 'submit_interview_session'],
-  'authenticated can execute exactly the S1–S9 user-session RPCs in public');
+  'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role)');
 
 -- QA-S9-04 (a): every table in public has RLS enabled (a new table without RLS fails here).
 select is_empty(

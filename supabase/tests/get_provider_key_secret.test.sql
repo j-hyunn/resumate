@@ -101,7 +101,7 @@ select throws_ok($$update public.ai_jobs set heartbeat_at = now()$$, '42501', nu
 select throws_ok($$select public.get_data_readiness()$$, '42501', null, 'app_key_reader: no get_data_readiness');
 select throws_ok($$select public.mark_provider_key_invalid('aaaaaaaa-7777-0000-0000-000000000001', 'key_invalid')$$,
                  '42501', null, 'app_key_reader: no mark_provider_key_invalid');
-select throws_ok($$select public.save_provider_key('gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
                  '42501', null, 'app_key_reader: no save_provider_key');
 select throws_ok($$select private.current_uid()$$, '42501', null, 'app_key_reader: no private schema');
 reset role;

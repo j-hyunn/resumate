@@ -114,6 +114,24 @@ describe("completeAuthCallback", () => {
   it("code + consented, no next → /career", async () => {
     await expect(completeAuthCallback(fakeClient(), params({ code: "abc" }))).resolves.toBe("/career");
   });
+  it("R1 A7: unfinished deletion → S-25 before the consent gate and next (consent not even checked)", async () => {
+    const c = fakeClient();
+    c.rpc.mockResolvedValue({ data: consentRows(true), error: null });
+    await expect(completeAuthCallback(c, params({ code: "abc", next: "/board" }), async () => "deletion_incomplete")).resolves.toBe("/settings/account/delete");
+    expect(c.rpc).not.toHaveBeenCalled();
+  });
+  it("R1 A7 [가정]: profile_missing → signed out, login error; active → the usual flow", async () => {
+    const c = fakeClient();
+    await expect(completeAuthCallback(c, params({ code: "abc" }), async () => "profile_missing")).resolves.toBe("/login?error=auth_callback");
+    expect(c.auth.signOut).toHaveBeenCalled();
+    await expect(completeAuthCallback(fakeClient(), params({ code: "abc", next: "/board" }), async () => "active")).resolves.toBe("/board");
+    // A state lookup failure doesn't block sign-in (gated pages re-check).
+    await expect(
+      completeAuthCallback(fakeClient(), params({ code: "abc", next: "/board" }), async () => {
+        throw new Error("down");
+      }),
+    ).resolves.toBe("/board");
+  });
   it("code + consent needed → consent page with next", async () => {
     const c = fakeClient();
     c.rpc.mockResolvedValue({ data: consentRows(true), error: null });

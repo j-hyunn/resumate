@@ -14,16 +14,18 @@ import type { DraftAiDeps, DraftSourceSelection, RankingItemRow } from "./types"
  * (C-6 동기, F-DOC-01; AI-03 트리거 (1)–(3); S7 plan "계약 — API" 1).
  *
  * Order: ownership → readiness `features.draft` (422, never AI) → (1) latest
- * ready insight → `project_priorities` (no call) → D-30 JD extraction when
- * needed → (2) the same career + requirements hash already ranked
- * (ai_jobs.output of a succeeded `draft_source_ranking`, no call) → AI-11
- * (light tier, meter `career_description`) → (3) on ANY failure the newest-
- * first full selection, silently (`fallback: true`, AI-11 "조용히 넘어간다").
+ * ready insight → `project_priorities` (no call) → JD requirements must
+ * already exist (R1 A13: never extracted here; the screen calls the
+ * extraction route first) → (2) the same career + requirements hash already
+ * ranked (ai_jobs.output of a succeeded `draft_source_ranking`, no call) →
+ * AI-11 (light tier, meter `career_description`) → (3) on ANY failure no
+ * substitute selection (R1 A23): empty lists, `selectionOrigin: 'user'`,
+ * `failed: true` — the screen shows the list unchecked (UX S-17 / C-11).
  */
 
 export const RANKING_JOB_TYPE = "draft_source_ranking" as const;
 export const RANKING_STAGE = "rank";
-/** C-6 sync [가정] 30 s: whole route incl. a D-30 extraction stays under maxDuration 60. */
+/** C-6 sync [가정] 30 s (A13: no extraction inside this request). */
 const RANKING_CALL_TIMEOUT_MS = 20_000;
 const RANKING_BUDGET_MS = 25_000;
 
@@ -35,14 +37,16 @@ function toItem(r: RankingItemRow): DraftSourceRankingItem {
   return { projectId: r.project_id, relevance: r.relevance, include: r.include, requirementIds: r.requirement_ids, reason: r.reason };
 }
 
+const EMPTY_SELECTION: DraftSourceSelection = { includedExperienceIds: [], includedEducationIds: [], includedProjectIds: [], projectOrder: [] };
+
 function response(
-  origin: DraftSourceRankingResponse["origin"],
+  selectionOrigin: DraftSourceRankingResponse["selectionOrigin"],
   selection: DraftSourceSelection,
-  extra: Partial<Pick<DraftSourceRankingResponse, "reused" | "jobId" | "insightId" | "fallbackReason">> & { ranking?: RankingItemRow[] | null },
+  extra: Partial<Pick<DraftSourceRankingResponse, "reused" | "jobId" | "insightId" | "reason">> & { failed?: boolean; ranking?: RankingItemRow[] | null },
 ): DraftSourceRankingResponse {
   return {
-    origin,
-    fallback: origin === "fallback",
+    selectionOrigin,
+    failed: extra.failed ?? false,
     reused: extra.reused ?? false,
     jobId: extra.jobId ?? null,
     insightId: extra.insightId ?? null,
@@ -51,8 +55,13 @@ function response(
     includedProjectIds: selection.includedProjectIds,
     projectOrder: selection.projectOrder,
     ranking: extra.ranking ? extra.ranking.map(toItem) : null,
-    fallbackReason: extra.fallbackReason ?? null,
+    reason: extra.reason ?? null,
   };
+}
+
+/** A23: the failed answer — nothing checked, the user picks (`selectionOrigin: 'user'`). */
+export function failedRanking(reason: string, jobId: string | null = null): DraftSourceRankingResponse {
+  return response("user", EMPTY_SELECTION, { failed: true, reason, jobId });
 }
 
 /** Latest succeeded ranking job output with this hash (C-6 재사용; `ai_jobs_reuse_idx`). */
@@ -82,9 +91,9 @@ export async function rankDraftSourcesForProject(deps: DraftAiDeps, applicationP
 
   const careerRows = await deps.loadCareerRows(user);
   const pipeline = deps.pipelines.ranking;
-  const fallback = (reason: string, jobId: string | null = null): RankingOutcome => {
-    log("draft_ranking.fallback", { applicationProjectId, reason, jobId });
-    return { kind: "ok", data: response("fallback", pipeline.fallback(careerRows), { fallbackReason: reason, jobId }) };
+  const fail = (reason: string, jobId: string | null = null): RankingOutcome => {
+    log("draft_ranking.failed", { applicationProjectId, reason, jobId });
+    return { kind: "ok", data: failedRanking(reason, jobId) };
   };
 
   // (1) Latest insight → its priorities (no call).
@@ -93,28 +102,18 @@ export async function rankDraftSourcesForProject(deps: DraftAiDeps, applicationP
     const selection = pipeline.fromInsight(insight.projectPriorities, careerRows);
     if (selection.includedProjectIds.length > 0) return { kind: "ok", data: response("insight", selection, { insightId: insight.insightId }) };
   }
-  if (careerRows.projects.length === 0) return fallback("no_rankable_projects");
+  if (careerRows.projects.length === 0) return fail("no_rankable_projects");
 
-  // D-30: requirements first.
-  let jd = await loadDraftJd(user, applicationProjectId);
+  // A13: requirements must already exist (no extraction here; a failure, not an error screen).
+  const jd = await loadDraftJd(user, applicationProjectId);
   if (!jd) throw new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
-  if (jd.extractionStatus !== "succeeded") {
-    let extracted;
-    try {
-      extracted = await deps.ensureJd(applicationProjectId);
-    } catch (err) {
-      if (err instanceof AppError && err.code === "extraction_in_progress") return fallback("extraction_in_progress");
-      throw err;
-    }
-    if (extracted.status === "failed") return fallback(extracted.code, extracted.jobId);
-    jd = await loadDraftJd(user, applicationProjectId);
-    if (!jd || jd.extractionStatus !== "succeeded") return fallback("jd_not_extracted");
-  }
+  if (jd.extractionStatus === "running") return fail("extraction_in_progress");
+  if (jd.extractionStatus !== "succeeded") return fail("jd_not_extracted");
   const requirements = await loadRequirements(user, jd.jobDescriptionId);
 
   const context = await deps.providerContext.forUser(deps.userId).catch(() => null);
-  if (!context) return fallback("key_missing");
-  if (context.keyStatus === "invalid") return fallback("key_invalid");
+  if (!context) return fail("key_missing");
+  if (context.keyStatus === "invalid") return fail("key_invalid");
   const model = resolveModel(context.provider, pipeline.tier);
   const ctx = pipeline.buildContext({ careerRows, jobDescriptionId: jd.jobDescriptionId, requirements });
   const inputHash = pipeline.inputHash({ provider: context.provider, model, careerSnapshotHash: ctx.careerSnapshotHash, requirementsHash: ctx.requirementsHash });
@@ -147,10 +146,10 @@ export async function rankDraftSourcesForProject(deps: DraftAiDeps, applicationP
       () => new AppError("ranking_in_progress", "기본 선택을 만들고 있어요.", { status: 409 }),
     );
   } catch (err) {
-    if (err instanceof AppError && err.code === "ranking_in_progress") return fallback("ranking_in_progress");
+    if (err instanceof AppError && err.code === "ranking_in_progress") return fail("ranking_in_progress");
     throw err;
   }
-  if (opened.kind === "blocked") return fallback(opened.code, opened.jobId);
+  if (opened.kind === "blocked") return fail(opened.code, opened.jobId);
 
   const run = new AiRun(deps, opened.job, { budgetMs: RANKING_BUDGET_MS });
   try {
@@ -162,11 +161,11 @@ export async function rankDraftSourcesForProject(deps: DraftAiDeps, applicationP
     });
     if (!result.ok) {
       await run.fail(result.failure);
-      return fallback(result.failure.code, opened.job.id);
+      return fail(result.failure.code, opened.job.id);
     }
     const value = result.value;
     await run.succeed({ stage: RANKING_STAGE, done: 1, total: 1 }, { output: value.output, promptVersion: value.promptVersion, model: value.model });
-    if (value.includedProjectIds.length === 0) return fallback("no_rankable_projects", opened.job.id);
+    if (value.includedProjectIds.length === 0) return fail("no_rankable_projects", opened.job.id);
     return { kind: "ok", data: response("ai_ranking", value, { jobId: opened.job.id, ranking: value.ranking }) };
   } finally {
     await run.close();

@@ -4,7 +4,7 @@
 -- which only app_ai_writer can create and is exercised there first).
 begin;
 create extension if not exists pgtap with schema extensions;
-grant usage on schema extensions to app_ai_writer, app_key_reader;
+grant usage on schema extensions to app_ai_writer, app_key_reader, service_role;
 select no_plan();
 
 insert into auth.users (id, email, aud, role) values
@@ -24,18 +24,40 @@ select lives_ok($$select * from public.ai_provider_keys_public$$, 'authenticated
 select lives_ok($$select * from public.ai_data_use_consents$$, 'authenticated: read consents');
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
                   values ('gemini', 'free', 'v2026-10-29', true)$$, 'authenticated: record consent (guard trigger)');
-select lives_ok($$select public.save_provider_key('gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm01', 'v2026-10-29', 'valid',
-                                                  'aaaaaaaa-9999-0000-0000-000000000001')$$, 'authenticated: save_provider_key');
+reset role;
+-- R1 A19: key save / check run as service_role with p_user_id (first call by that role).
+set local role service_role;
+set local request.jwt.claims = '{"role":"service_role"}';
+select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm01', 'v2026-10-29', 'valid',
+                                                  'aaaaaaaa-9999-0000-0000-000000000001')$$, 'service_role: save_provider_key');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$select id, provider, connection_tier, key_last4, status, last_verified_at, last_failure_cause, last_failure_at,
                          created_at, updated_at from public.ai_provider_keys$$, 'authenticated: read key metadata columns');
 select lives_ok($$select active_ai_provider from public.profiles$$, 'authenticated: read active provider');
 select lives_ok($$select public.get_data_readiness()$$, 'authenticated: readiness with ai_connection');
-select lives_ok($$select public.record_provider_key_check('gemini', 'failed', 'rate_limited')$$, 'authenticated: record_provider_key_check');
+reset role;
+-- R1 A19: key save / check run as service_role with p_user_id (first call by that role).
+set local role service_role;
+set local request.jwt.claims = '{"role":"service_role"}';
+select lives_ok($$select public.record_provider_key_check('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'failed', 'rate_limited')$$,
+                'service_role: record_provider_key_check');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
                   values ('openai', 'paid', 'v2026-10-29')$$, 'authenticated: second consent');
-select lives_ok($$select public.save_provider_key('openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-10-29', 'limited',
+reset role;
+-- R1 A19: key save / check run as service_role with p_user_id (first call by that role).
+set local role service_role;
+set local request.jwt.claims = '{"role":"service_role"}';
+select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-10-29', 'limited',
                                                   'aaaaaaaa-9999-0000-0000-000000000002', 'provider_unavailable')$$,
-                'authenticated: save limited key');
+                'service_role: save limited key');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$select public.set_active_ai_provider('openai')$$, 'authenticated: set_active_ai_provider');
 select lives_ok($$update public.ai_data_use_consents set withdrawn_at = now()
                    where provider = 'openai' and withdrawn_at is null$$, 'authenticated: withdraw consent');

@@ -273,8 +273,8 @@ export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>;
 export type AiStreamEventType = AiStreamEvent["type"];
 /**
  * Pipeline stream event names (mirror of src/server/ai/streaming/events.ts). S7 adds the AI-04
- * `sources_selected` / `adjusting_length`; their schemas (and the route-level `generation_started`,
- * `preparing`) are in `draft.ts` (`DraftStreamEventSchema`).
+ * `sources_selected` / `adjusting_length`; their schemas (and the route-level `generation_started`)
+ * are in `draft.ts` (`DraftStreamEventSchema`).
  */
 export const AI_STREAM_EVENT_TYPES = [
   "block_started",

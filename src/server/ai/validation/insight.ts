@@ -1,5 +1,5 @@
 import type { AliasMap } from "../context-pack/aliases";
-import { CAREER_SUPPORT_SOURCE_TYPES, isReflectionEvidence } from "../evidence-rules";
+import { isActionResultEvidence, isCareerSupportEvidence, isReflectionEvidence } from "../evidence-rules";
 import type {
   Ai02Gap,
   Ai02Match,
@@ -95,14 +95,13 @@ export type ValidatedMatch = {
 };
 
 function isCareerFact(e: ValidatedEvidence): boolean {
-  return CAREER_SUPPORT_SOURCE_TYPES.has(e.source_type) && !isReflectionEvidence(e);
+  // A10: profile wishes (희망 직무·관심 산업) are context, not a fact.
+  return isCareerSupportEvidence(e) && !isReflectionEvidence(e);
 }
 
 /** Card 가드레일: `met` needs a detail action/result or an achievement among its evidence. */
 export function supportsMet(evidence: readonly ValidatedEvidence[]): boolean {
-  return evidence.some(
-    (e) => e.source_type === "achievement" || (e.source_type === "project_detail" && (e.field === "action" || e.field === "result")),
-  );
+  return evidence.some(isActionResultEvidence);
 }
 
 /**

@@ -18,7 +18,7 @@ import { getDataReadiness } from "@/server/services/career";
 import type { z } from "zod";
 import { assertNotGenerating } from "./active";
 import { AiRun, asCancelIfStopped, isTargetGone, openAiJob, type CallFailure } from "./ai-run";
-import { REQUEST_BUDGET_MS } from "./career-description";
+import { REQUEST_BUDGET_MS, assertJdExtracted } from "./career-description";
 import { DraftRpcError, loadDraftJd, loadLatestInsightSignal, loadRequirements, type DraftJd } from "./db";
 import type { CoverLetterQuestionInput, DraftAiDeps, PipelineStreamEvent, UserSourceInput } from "./types";
 
@@ -34,11 +34,12 @@ import type { CoverLetterQuestionInput, DraftAiDeps, PipelineStreamEvent, UserSo
  * Generation (`POST /api/draft-sections/{id}/generate`, SSE, one question per
  * request — "전체 생성" = the screen calls it per question in order, so one
  * function run stays under 60 s [가정 S7-1]):
- *   prepare: section → readiness (422) → JD state (409 while extracting
- *   elsewhere) → ai_jobs `cover_letter` (target = the question; one in flight
+ *   prepare: section → readiness (422) → JD requirements (R1 A13: 409
+ *   `extraction_in_progress` / `jd_not_extracted`, no provider call — the
+ *   screen extracts first) → ai_jobs `cover_letter` (target = the question; one in flight
  *   per question → 409 `section_in_progress`) + run gate (blocked → one SSE
  *   `error`, F-AI-08 lock).
- *   run: (`preparing` + D-30 extraction) → begin_cover_letter_section →
+ *   run: begin_cover_letter_section (whole 58 s budget, A13) →
  *   `generation_started` → AI-04 stream (`sources_selected` → paragraph block
  *   events → (`adjusting_length`)) → persist = complete_cover_letter_section
  *   (replaces the AI text, clears the edited text [가정 S7-4]) → `validated`
@@ -186,7 +187,7 @@ export async function prepareCoverLetterSection(deps: DraftAiDeps, sectionId: st
 
   const jd = await loadDraftJd(deps.user, section.application_project_id);
   if (!jd) throw notFound();
-  if (jd.extractionStatus === "running") throw new AppError("extraction_in_progress", "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", { status: 409 });
+  assertJdExtracted(jd);
 
   const pipeline = deps.pipelines.coverLetter;
   const opened = await openAiJob(
@@ -263,32 +264,7 @@ export async function runCoverLetterSection(deps: DraftAiDeps, prepared: Extract
   };
 
   try {
-    // D-30: requirements first (its own jd_extraction job and usage record).
-    let jd = prepared.jd;
-    if (jd.extractionStatus !== "succeeded") {
-      safeEmit({ type: "preparing", stage: "jd_extraction" });
-      let extracted;
-      try {
-        extracted = await deps.ensureJd(apId, run.signal);
-      } catch (err) {
-        log("cover_letter.extraction_refused", { jobId: job.id, code: err instanceof AppError ? String(err.code) : "unknown" });
-        await run.fail({ code: "stalled", ...NO_TIMES });
-        safeEmit(errorEvent({ code: "stalled" }));
-        return;
-      }
-      if (extracted.status === "failed") {
-        await run.fail(extracted, { reportKeyStatus: false });
-        safeEmit(errorEvent(extracted));
-        return;
-      }
-      const reloaded = await loadDraftJd(deps.writer, apId);
-      if (!reloaded || reloaded.extractionStatus !== "succeeded") {
-        await run.fail({ code: "stalled", ...NO_TIMES });
-        safeEmit(errorEvent({ code: "stalled" }));
-        return;
-      }
-      jd = reloaded;
-    }
+    const jd = prepared.jd;
 
     const mode: "ai" | "user" = section.source_selection_mode === "user" ? "user" : "ai";
     const [requirements, careerRows, sources, insight] = await Promise.all([

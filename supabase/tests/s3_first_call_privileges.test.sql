@@ -56,10 +56,11 @@ select lives_ok($$update public.ai_jobs set status = 'queued', run_generation = 
 select lives_ok($$update public.ai_jobs set status = 'running', next_run_at = null
                    where id = 'aaaaaaaa-7777-0000-0000-000000000001' and run_generation = 2$$,
                 'app_ai_writer: resume');
-select lives_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+-- R1 A24: no direct evidence insert (links come from the result RPCs, see s6 / s7 first-call tests).
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                   values ('aaaaaaaa-8888-0000-0000-000000000001', 'insight', gen_random_uuid(), 'strengths.0', 'skill',
                           'aaaaaaaa-6666-0000-0000-000000000001', 'name')$$,
-                'app_ai_writer: insert evidence link (source guard)');
+                 '42501', null, 'app_ai_writer: direct evidence insert refused (A24)');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000001', 2)$$, 'app_ai_writer: complete_ai_job');
 select lives_ok($$insert into public.ai_jobs (id, job_type, provider, model_tier, connection_tier)
                   values ('aaaaaaaa-7777-0000-0000-000000000002', 'insight', 'openai', 'default', 'paid')$$,
@@ -77,7 +78,7 @@ select lives_ok($$select public.request_ai_job_cancel('aaaaaaaa-7777-0000-0000-0
                 'authenticated: request_ai_job_cancel');
 select lives_ok($$delete from public.skills where id = 'aaaaaaaa-6666-0000-0000-000000000001'$$,
                 'authenticated: delete evidence source (deletion trigger)');
-select is((select count(*)::int from public.evidence_links where source_deleted_at is not null), 1, 'link marked deleted');
+select is((select count(*)::int from public.evidence_links), 0, 'no evidence row was written directly');
 reset role;
 
 -- service_role: sweep, claim_due.

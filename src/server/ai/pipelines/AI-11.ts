@@ -8,7 +8,6 @@ import type { YearMonth } from "../context-pack/months";
 import {
   MAX_DRAFT_PROJECTS,
   deriveSelection,
-  fallbackSelectionFromAliases,
   packProjects,
   selectionFromPrioritiesWithAliases,
   type DraftSourceSelection,
@@ -125,7 +124,8 @@ const RELEVANCE_RANK: Record<RankingRelevance, number> = { high: 0, medium: 1, l
 /**
  * One call → validated ranking. No valid project ranking at all counts as a
  * V-6 miss (one retry, then AiError("schema_invalid", retryable: false));
- * the route then falls back to `fallbackSelection` (card 응답 모드).
+ * the route then answers with no default selection (`emptyDraftSourceSelection`,
+ * `selection_origin = user`; AI spec AI-11 실패 처리 v4.3, A23).
  */
 export async function rankDraftSources(input: { context: RankingContext }, deps: Ai11Deps): Promise<DraftSourceRankingResult> {
   const { context } = input;
@@ -233,9 +233,13 @@ export function selectionFromInsightPriorities(
   return selectionFromPrioritiesWithAliases(buildCareerPack(careerRows, { asOf }).aliases, priorities);
 }
 
-/** AI-03 기본 선택 (3) / AI-11 실패: "최신 경력순 전체 선택" (pack order, ≤ 8). */
-export function fallbackSelection(careerRows: CareerRows, asOf?: YearMonth): DraftSourceSelection {
-  return fallbackSelectionFromAliases(buildCareerPack(careerRows, { asOf }).aliases);
+/**
+ * AI-03 기본 선택 (3) / AI-11 실패 (v4.3, A23 — 확정 2026-11-05): no
+ * fallback. Nothing is checked; the user picks (`selection_origin = user`).
+ * Replaces the former "최신 경력순 전체 선택" fallback.
+ */
+export function emptyDraftSourceSelection(): DraftSourceSelection {
+  return { includedProjectIds: [], projectOrder: [], includedExperienceIds: [], includedEducationIds: [] };
 }
 
 /** C-6 input_hash: career_snapshot_hash + requirements_hash (+ feature, prompt, provider, model). */

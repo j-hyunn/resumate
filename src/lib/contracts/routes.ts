@@ -12,6 +12,11 @@ export const ROUTES = {
   home: "/career",
   /** OAuth / magic link callback (Route Handler). */
   authCallback: "/auth/callback",
+  /**
+   * S-25 회원 탈퇴 — OUTSIDE the consent gate (R1 A7). [가정] path; the page must use
+   * `requireUserForAccountDeletion`, not the consented-user gate.
+   */
+  accountDeletion: "/settings/account/delete",
 } as const;
 
 /** Paths that need a signed-in user. The proxy redirects anonymous requests to login. */

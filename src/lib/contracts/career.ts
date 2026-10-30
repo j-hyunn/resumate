@@ -537,4 +537,6 @@ export type CareerTreeDto = {
   isEmpty: boolean;
   /** S-08 "작성 중인 AI 대화" (S4): active writing chats, latest activity first. Visible without an AI key. */
   activeWritingChats: ActiveWritingChatSummary[];
+  /** S-08 "그만둔 AI 대화" (R1 A6): abandoned chats not yet auto-deleted, latest activity first ("다시 이어 하기"). */
+  abandonedWritingChats: ActiveWritingChatSummary[];
 };

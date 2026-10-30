@@ -489,14 +489,14 @@ isOneToOne: false
                   ]
                 },"interview_sessions": {
                   Row: {
-                    "abandoned_at": string | null,"answered_count": number,"application_project_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"created_at": string,"data_sufficiency": string,"evaluation_job_id": string | null,"evaluation_model": string | null,"evaluation_provider": string | null,"evaluation_run_generation": number | null,"generation_status": string,"id": string,"insight_id": string | null,"interview_type": string,"last_activity_at": string,"question_count": number,"question_job_id": string | null,"question_model": string | null,"question_provider": string | null,"question_run_generation": number | null,"result_viewed_at": string | null,"score_counted_count": number | null,"score_max": number | null,"score_method_version": string | null,"score_rationale": string | null,"score_status": string | null,"score_value": number | null,"source_session_id": string | null,"status": string,"submitted_at": string | null,"unanswered_count": number,"updated_at": string,"user_id": string,"weak_requirement_ids": (string)[]
+                    "abandoned_at": string | null,"answered_count": number,"application_project_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"created_at": string,"data_sufficiency": string,"evaluation_job_id": string | null,"evaluation_model": string | null,"evaluation_provider": string | null,"evaluation_run_generation": number | null,"generation_status": string,"id": string,"insight_id": string | null,"interview_type": string,"last_activity_at": string,"question_count": number,"question_job_id": string | null,"question_model": string | null,"question_provider": string | null,"question_run_generation": number | null,"question_usage": Json | null,"question_validation_report": Json | null,"result_viewed_at": string | null,"score_counted_count": number | null,"score_max": number | null,"score_method_version": string | null,"score_rationale": string | null,"score_status": string | null,"score_value": number | null,"source_session_id": string | null,"status": string,"submitted_at": string | null,"unanswered_count": number,"updated_at": string,"user_id": string,"weak_requirement_ids": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency": string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type": string,"last_activity_at"?: string,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
+                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency": string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type": string,"last_activity_at"?: string,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"question_usage"?: Json | null,"question_validation_report"?: Json | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
                   }
                   Update: {
-                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency"?: string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type"?: string,"last_activity_at"?: string,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
+                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency"?: string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type"?: string,"last_activity_at"?: string,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"question_usage"?: Json | null,"question_validation_report"?: Json | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -915,6 +915,9 @@ isOneToOne: false
 "finish_assistant_message":
 { Args: { "p_content": string,"p_message_id": string,"p_status": string }; Returns: undefined
                            },
+"get_account_deletion_state":
+{ Args: { "p_subject_hash": string,"p_user_id": string }; Returns: string
+                           },
 "get_account_deletion_summary":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -975,7 +978,7 @@ isOneToOne: false
             }[]
                            },
 "record_provider_key_check":
-{ Args: { "p_failure_cause"?: string,"p_provider": string,"p_result_status": string }; Returns: Json
+{ Args: { "p_failure_cause"?: string,"p_provider": string,"p_result_status": string,"p_user_id": string }; Returns: Json
                            },
 "record_provider_key_success":
 { Args: { "p_ai_job_id": string }; Returns: boolean
@@ -996,7 +999,7 @@ isOneToOne: false
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
                            },
 "save_provider_key":
-{ Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
+{ Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_user_id": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
                            },
 "save_session_feedback":
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json

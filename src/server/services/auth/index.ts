@@ -1,4 +1,5 @@
 import type { AuthError, EmailOtpType } from "@supabase/supabase-js";
+import type { AccountState } from "@/lib/contracts/account";
 import type { SendMagicLinkResult, SignInWithGoogleResult } from "@/lib/contracts/auth";
 import { AppError } from "@/lib/contracts/errors";
 import { LOGIN_ERRORS, ROUTES, safeNextPath, withNext } from "@/lib/contracts/routes";
@@ -89,13 +90,20 @@ function withLoginError(code: (typeof LOGIN_ERRORS)[number]): string {
 
 /**
  * /auth/callback: exchanges the PKCE code (OAuth and magic link) or verifies a
- * token_hash link, then picks where to go (UX S-02/S-03):
+ * token_hash link, then picks where to go (UX S-02/S-03, L-01 첫 화면):
+ * - R1 A7: unfinished account deletion → S-25 "탈퇴 마무리", before the consent
+ *   gate and `next`; `profile_missing` [가정] → signed out, S-02 `?error=auth_callback`
  * - required consent missing/outdated → S-03 with `next`
  * - otherwise → `next` (same-origin path) or S-08
  * - any failure → S-02 with `?error=auth_callback`
  * Returns a same-origin path.
  */
-export async function completeAuthCallback(supabase: AuthClient, params: CallbackParams): Promise<string> {
+export async function completeAuthCallback(
+  supabase: AuthClient,
+  params: CallbackParams,
+  /** R1 A7: own-profile read, then (only without one) the deletion state. Production: `loadAccountState`. */
+  accountState?: () => Promise<AccountState>,
+): Promise<string> {
   const next = safeNextPath(params.next);
   if (params.providerError) return LOGIN_CALLBACK_ERROR;
 
@@ -107,6 +115,21 @@ export async function completeAuthCallback(supabase: AuthClient, params: Callbac
     if (error) return LOGIN_CALLBACK_ERROR;
   } else {
     return LOGIN_CALLBACK_ERROR;
+  }
+
+  if (accountState) {
+    let state: AccountState;
+    try {
+      state = await accountState();
+    } catch {
+      // Can't judge the account: the gated pages re-check (and fail visibly) — go on as usual.
+      state = "active";
+    }
+    if (state === "deletion_incomplete") return ROUTES.accountDeletion;
+    if (state === "profile_missing") {
+      await signOut(supabase);
+      return LOGIN_CALLBACK_ERROR;
+    }
   }
 
   try {

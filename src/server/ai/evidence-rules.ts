@@ -93,3 +93,36 @@ export const CAREER_SUPPORT_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new 
   "interview_answer",
   "user_note",
 ]);
+
+/**
+ * AI spec C-3 V-4 (v4.3, A10 — 확정 2026-11-05): the profile's wishes
+ * (희망 직무·관심 산업) say what the user wants, not what they did. They are
+ * context only and never count as support for a judgment, strength, or
+ * positioning. `total_years_of_experience` stays a fact (연차 판정 근거).
+ */
+export const PROFILE_PREFERENCE_FIELDS: readonly string[] = ["desired_job_title", "interested_industries"];
+
+export function isProfilePreferenceEvidence(e: { source_type: string; field?: string | null }): boolean {
+  return e.source_type === "profile" && e.field != null && PROFILE_PREFERENCE_FIELDS.includes(e.field);
+}
+
+/**
+ * Whether one (validated) evidence object counts as support for a claim about
+ * the user (V-4): its source type is in `types` (default: career sources) and
+ * it is not a profile wish (A10). Reflections (C-9) are checked separately.
+ */
+export function isCareerSupportEvidence(
+  e: { source_type: string; field?: string | null },
+  types: ReadonlySet<EvidenceSourceType> = CAREER_SUPPORT_SOURCE_TYPES,
+): boolean {
+  return isEvidenceSourceType(e.source_type) && types.has(e.source_type) && !isProfilePreferenceEvidence(e);
+}
+
+/**
+ * A fact a question or a `met` verdict may rest on: a detail's action / result
+ * or an achievement (AI spec AI-02 판정 기준, 4.1 사실 전제 v3 / A11).
+ * Situation, task, summaries, skill tags and learnings are not enough.
+ */
+export function isActionResultEvidence(e: { source_type: string; field?: string | null }): boolean {
+  return e.source_type === "achievement" || (e.source_type === "project_detail" && (e.field === "action" || e.field === "result"));
+}

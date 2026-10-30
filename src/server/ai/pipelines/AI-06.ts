@@ -3,7 +3,7 @@ import type { CareerRows } from "../context-pack/career-rows";
 import { buildInterviewBase, type InterviewBase } from "../context-pack/interview";
 import type { JdRequirementInput, JdSentence } from "../context-pack/jd";
 import type { YearMonth } from "../context-pack/months";
-import { CAREER_SUPPORT_SOURCE_TYPES, WHOLE_SOURCE_FIELD, isEvidenceSourceType, isReflectionEvidence, type EvidenceSourceType } from "../evidence-rules";
+import { WHOLE_SOURCE_FIELD, isCareerSupportEvidence, isEvidenceSourceType, isReflectionEvidence, type EvidenceSourceType } from "../evidence-rules";
 import { computeInputHash } from "../input-hash";
 import type { Llm } from "../llm";
 import { silentAiLogger, type AiLogger } from "../log";
@@ -267,7 +267,7 @@ export function validateEvaluation(output: Ai06Output, context: AnswerEvaluation
     for (const note of output.consistency_notes) {
       const checked = validateItem({ key: "consistency", kind: "judgment", evidence: note.evidence, learnings: "forbidden" }, { aliases, learnings: "forbidden" });
       addToReport(report, checked.report);
-      const factual = checked.outcome.evidence.filter((e) => CAREER_SUPPORT_SOURCE_TYPES.has(e.source_type) && e.source_type !== "interview_answer" && !isReflectionEvidence(e));
+      const factual = checked.outcome.evidence.filter((e) => isCareerSupportEvidence(e) && e.source_type !== "interview_answer" && !isReflectionEvidence(e));
       if (checked.outcome.action === "drop" || !factual.length) {
         addToReport(report, { consistency_notes_dropped_no_evidence: 1 });
         continue;

@@ -219,10 +219,14 @@ select throws_ok(format($$select public.complete_interview_questions('a0000000-5
                  'P0001', 'invalid_interview_payload', 'complete: invalid ' || p::text)
   from (values ('{"weak_requirement_ids":["a0000000-8888-0000-0000-000000000003"]}'::jsonb),
                ('{"insight_id":"a0000000-9999-0000-0000-000000000001"}'), ('{"career_snapshot_hash":""}'),
-               ('{"meta":null}')) t (p);
+               ('{"meta":null}'),
+               -- R1 A22: set-level validation_report / usage must be objects (or null / absent).
+               ('{"validation_report":"ok"}'), ('{"usage":[1]}')) t (p);
 select results_eq($$select r ->> 'generation_status', r ->> 'question_provider', r ->> 'question_model'
                       from public.complete_interview_questions('a0000000-5e55-0000-0000-000000000001',
-                        'a0000000-7777-0000-0000-000000000001', 2, current_setting('t.done')::jsonb) r$$,
+                        'a0000000-7777-0000-0000-000000000001', 2, current_setting('t.done')::jsonb
+                          || '{"validation_report":{"composition_relaxed":true,"warnings":["composition_relaxed"]},
+                               "usage":{"input_tokens":1200,"output_tokens":340}}'::jsonb) r$$,
                   $$values ('ready'::text, 'gemini'::text, 'gm'::text)$$, 'complete: ready');
 select is(public.complete_interview_questions('a0000000-5e55-0000-0000-000000000001',
             'a0000000-7777-0000-0000-000000000001', 2, current_setting('t.done')::jsonb) ->> 'reason', 'stale_run',
@@ -235,6 +239,11 @@ select results_eq($$select generation_status, weak_requirement_ids, career_snaps
                       from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000001'$$,
                   $$values ('ready'::text, '{a0000000-8888-0000-0000-000000000002}'::uuid[], 'ch'::text, 'gemini'::text)$$,
                   'session after complete (job succeeded: trigger leaves a ready set alone)');
+select results_eq($$select question_validation_report, question_usage
+                      from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000001'$$,
+                  $$values ('{"composition_relaxed":true,"warnings":["composition_relaxed"]}'::jsonb,
+                           '{"input_tokens":1200,"output_tokens":340}'::jsonb)$$,
+                  'R1 A22: set validation report / usage stored on the session');
 select set_config('t.a1', (select a.id::text from public.interview_answers a join public.interview_questions q on q.id = a.question_id
                             where q.session_id = 'a0000000-5e55-0000-0000-000000000001' and q.sequence = 1), true);
 select set_config('t.a2', (select a.id::text from public.interview_answers a join public.interview_questions q on q.id = a.question_id
@@ -637,6 +646,9 @@ select lives_ok(format($$select public.save_interview_question('a0000000-5e55-00
 select lives_ok($$select public.complete_interview_questions('a0000000-5e55-0000-0000-000000000005',
                   'a0000000-7777-0000-0000-000000000051', 1, current_setting('t.done')::jsonb)$$, 'S5 ready');
 reset role;
+select results_eq($$select question_validation_report, question_usage
+                      from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000005'$$,
+                  $$values (null::jsonb, null::jsonb)$$, 'R1 A22: report / usage absent in the payload -> null');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select results_eq($$select r ->> 'status', (r ->> 'answered_count')::int, (r ->> 'unanswered_count')::int,

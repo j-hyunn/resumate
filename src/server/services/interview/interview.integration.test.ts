@@ -243,8 +243,15 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     expect(queue).toHaveLength(0);
     const job = await admin.from("ai_jobs").select("status, job_type, target_type, target_id, error_code").eq("id", out.data.jobId).single();
     expect(job.data).toMatchObject({ status: "succeeded", job_type: "interview_questions", target_type: "interview_session", target_id: sessionId });
-    const session = await admin.from("interview_sessions").select("generation_status, question_provider, status").eq("id", sessionId).single();
+    const session = await admin
+      .from("interview_sessions")
+      .select("generation_status, question_provider, status, question_validation_report, question_usage")
+      .eq("id", sessionId)
+      .single();
     expect(session.data).toMatchObject({ generation_status: "ready", question_provider: "anthropic", status: "in_progress" });
+    // R1 A22: the set-level validation report and usage are stored on the session (counts only).
+    expect(session.data!.question_validation_report).toMatchObject({ attempts: 1 });
+    expect(session.data!.question_usage).toEqual(expect.objectContaining({ inputTokens: expect.any(Number) }));
     expect((await admin.from("interview_answers").select("id").eq("session_id", sessionId)).data).toHaveLength(3);
   });
 

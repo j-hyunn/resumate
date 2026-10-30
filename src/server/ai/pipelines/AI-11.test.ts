@@ -11,7 +11,7 @@ import {
   buildRankingContext,
   computeDraftSourceRankingInputHash,
   DraftSourceRankingOutputSchema,
-  fallbackSelection,
+  emptyDraftSourceSelection,
   rankDraftSources,
   selectionFromInsightPriorities,
   selectionFromRankingOutput,
@@ -103,11 +103,10 @@ describe("rankDraftSources (AI-11)", () => {
 });
 
 describe("selection helpers", () => {
-  it("fallback = pack order (latest experience first), parents derived", () => {
-    const s = fallbackSelection(careerRowsFixture(), AS_OF);
-    expect(s.includedProjectIds).toEqual([IDS.prjSettle, IDS.prjPay, IDS.prjEdu, IDS.prjSide]);
-    expect(s.includedExperienceIds).toEqual([IDS.expA]);
-    expect(s.includedEducationIds).toEqual([IDS.edu]);
+  it("AI-11 failure has no fallback selection: nothing checked (A23)", () => {
+    expect(emptyDraftSourceSelection()).toEqual({ includedProjectIds: [], projectOrder: [], includedExperienceIds: [], includedEducationIds: [] });
+    // A fresh object each call (callers may mutate their copy).
+    expect(emptyDraftSourceSelection()).not.toBe(emptyDraftSourceSelection());
   });
 
   it("insight priorities by rank; unknown projects skipped", () => {

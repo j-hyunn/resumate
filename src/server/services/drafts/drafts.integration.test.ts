@@ -39,8 +39,9 @@ import type { DraftAiDeps, DraftPipelines } from "./types";
 
 /**
  * S7 end-to-end against the local stack (S7 plan API 6 "로컬 DB 통합"):
- * ranking (D-30 extraction first → AI-11 failure → silent fallback; then AI-11
- * → ai_ranking + ai_jobs.output → reuse) → AI-03 career description (real
+ * ranking (R1 A13: unextracted JD → failed answer without a call; the screen's
+ * separate extraction; AI-11 failure → R1 A23 empty answer, selectionOrigin user;
+ * then AI-11 → ai_ranking + ai_jobs.output → reuse) → AI-03 career description (real
  * pipeline, scripted model output built from the same context) → evidence →
  * regenerate = a new row → cover letter seed → AI-04 generate → user sources →
  * edit → regenerate clears the edit → copy → progress → deletion impact →
@@ -115,29 +116,36 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
       createLlm,
       drafts: createDraftStore(writer),
       pipelines,
-      ensureJd: (id, signal) =>
-        ensureJdExtracted(
-          {
-            userId: uid,
-            jds: createJdExtractionDb(client, writer),
-            store: createSupabaseJobStore(writer),
-            usage: createSupabaseUsageStore(writer),
-            providerContext,
-            keySource,
-            keyStatus: createRecordingKeyStatusReporter(),
-            runGate: null,
-            createLlm,
-            extract: productionJdExtractorForTests,
-            log,
-          },
-          id,
-          { signal },
-        ),
       loadCareerRows: (db) => loadCareerRows(db as AiWriterSupabaseClient),
       // Retry waits (C-11.3) are not slept in tests.
       sleep: async () => {},
       log,
     };
+  }
+
+
+  /** The separate extraction request the screen sends first (R1 A13: never inside generation / ranking). */
+  async function extractJd(client: Client, uid: string, id: string) {
+    const writer = createAiWriterClient(uid);
+    const providerContext = createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" });
+    const adapter = lazyAdapter(queue);
+    const createLlm = (input: Parameters<ReturnType<typeof scriptedLlmFactory>>[0]): Llm => scriptedLlmFactory(adapter, Date.now)(input);
+    return ensureJdExtracted(
+      {
+        userId: uid,
+        jds: createJdExtractionDb(client, writer),
+        store: createSupabaseJobStore(writer),
+        usage: createSupabaseUsageStore(writer),
+        providerContext,
+        keySource: createStaticKeySource(FAKE_KEY, () => new ProviderError("key_missing")),
+        keyStatus: createRecordingKeyStatusReporter(),
+        runGate: null,
+        createLlm,
+        extract: productionJdExtractorForTests,
+        log: () => {},
+      },
+      id,
+    );
   }
 
   const collect = () => {
@@ -266,22 +274,36 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
   let coverDraftId = "";
   let competencySectionId = "";
 
-  it("ranking: D-30 extraction first, AI-11 failure → silent fallback; then AI-11 → ai_ranking + output; then reuse", async () => {
-    queue.push({ json: KO_BACKEND.output }, { error: "provider_unavailable" }, { error: "provider_unavailable" }, { error: "provider_unavailable" });
+  it("ranking: A13 no extraction inside, A23 failure → empty user answer; then AI-11 → ai_ranking + output; then reuse", async () => {
+    const empty = { includedExperienceIds: [], includedEducationIds: [], includedProjectIds: [], projectOrder: [] };
+    // A13: requirements missing → failed answer, no job, no provider call; generation → 409 jd_not_extracted.
+    const before = await rankDraftSourcesForProject(deps(user, userId), project, { refresh: false });
+    expect(before).toMatchObject({ kind: "ok", data: { selectionOrigin: "user", failed: true, reason: "jd_not_extracted", jobId: null, ...empty } });
+    await expect(
+      prepareCareerDescription(deps(user, userId), project, { includedExperienceIds: [ids.experience], includedEducationIds: [], includedProjectIds: [ids.project], projectOrder: [ids.project], selectionOrigin: "user" }),
+    ).rejects.toMatchObject({ code: "jd_not_extracted", status: 409 });
+    const noJobs = await admin.from("ai_jobs").select("id").eq("user_id", userId);
+    expect(noJobs.data).toEqual([]);
+
+    // The screen's separate extraction request (AI-01).
+    queue.push({ json: KO_BACKEND.output });
+    expect(await extractJd(user, userId, project)).toMatchObject({ status: "succeeded" });
+
+    queue.push({ error: "provider_unavailable" }, { error: "provider_unavailable" }, { error: "provider_unavailable" });
     const first = await rankDraftSourcesForProject(deps(user, userId), project, { refresh: false });
-    expect(first).toMatchObject({ kind: "ok", data: { origin: "fallback", fallback: true, includedProjectIds: [ids.project] } });
+    expect(first).toMatchObject({ kind: "ok", data: { selectionOrigin: "user", failed: true, reason: "provider_unavailable", ranking: null, ...empty } });
     expect(queue).toHaveLength(0);
 
     queue.push(() => ({ json: { schema_version: 1, rankings: [{ project_ref: captured.rank!.projectRefs[0]!, relevance: "high", include: true, requirement_refs: [], reason: "결제 API" }] } }));
     const second = await rankDraftSourcesForProject(deps(user, userId), project, { refresh: false });
-    expect(second).toMatchObject({ kind: "ok", data: { origin: "ai_ranking", reused: false, includedProjectIds: [ids.project], includedExperienceIds: [ids.experience] } });
+    expect(second).toMatchObject({ kind: "ok", data: { selectionOrigin: "ai_ranking", failed: false, reused: false, includedProjectIds: [ids.project], includedExperienceIds: [ids.experience] } });
     if (second.kind !== "ok") throw new Error("unreachable");
     const job = await admin.from("ai_jobs").select("status, output, target_type").eq("id", second.data.jobId!).single();
     expect(job.data).toMatchObject({ status: "succeeded", target_type: "application_project" });
     expect(job.data!.output).toBeTruthy();
 
     const third = await rankDraftSourcesForProject(deps(user, userId), project, { refresh: false });
-    expect(third).toMatchObject({ data: { origin: "ai_ranking", reused: true, jobId: second.data.jobId } });
+    expect(third).toMatchObject({ data: { selectionOrigin: "ai_ranking", reused: true, jobId: second.data.jobId } });
 
     const usage = await admin.from("ai_usage_records").select("feature, job_type").eq("user_id", userId).order("occurred_at");
     expect(usage.data!.map((u) => u.feature)).toEqual(["jd_extraction", "career_description", "career_description", "career_description", "career_description"]);

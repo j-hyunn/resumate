@@ -146,6 +146,10 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   answer_not_evaluable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // S9 delete_account: the server computes the hash, so a bad one is our bug.
   invalid_subject_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // R1 get_account_deletion_state / server-only key RPCs: the server passes the session user id,
+  // so these are call bugs (QA-R1-01), never user input.
+  invalid_user_id: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  user_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
 };
 
 /** Raise names that the frontend sees under a generic code instead of their own. */
@@ -160,6 +164,8 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_now: "internal_error",
   invalid_limit: "internal_error",
   invalid_subject_hash: "internal_error",
+  invalid_user_id: "internal_error",
+  user_not_found: "internal_error",
   ai_job_not_found: "not_found",
   consent_required: "ai_consent_required",
   key_id_mismatch: "conflict",

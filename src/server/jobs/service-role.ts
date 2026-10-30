@@ -15,8 +15,15 @@ import { getServerEnv } from "@/server/env";
  * - `services/account` via `deleteAuthUser` below (S9, FL-07): only the
  *   Auth admin API can delete an `auth.users` row. Public data is deleted
  *   earlier by the user-session RPC `delete_account`, not with this key.
+ * - `keys/app.ts` (R1 A19, DM v4.2 2.11.3): `save_provider_key` /
+ *   `record_provider_key_check` are executable by service_role only, with
+ *   `p_user_id` = the session user (verified by the Server Action first), so a
+ *   browser can't store unverified ciphertext or flip key status itself.
+ * - `auth/account-state.ts` (R1 A7, DM v4.2 6.1): `get_account_deletion_state`
+ *   (service_role only — users can't read `account_deletion_logs`), called only
+ *   when the session user has no `profiles` row.
  *
- * No table is read or written directly with this client.
+ * No table is read or written directly with this client — RPCs and the Auth admin API only.
  */
 
 export type ServiceRoleClient = SupabaseClient<Database>;

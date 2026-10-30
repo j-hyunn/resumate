@@ -4,13 +4,15 @@ import { AppError } from "@/lib/contracts/errors";
 import { resolveModel } from "@/server/ai/providers/models";
 import { normalizeErrorEvent } from "@/server/sse";
 import { AP, EXP, FREE, JD, KEY, PRJ1, PRJ2, baseTables, draftKit } from "@/test/draft-fakes";
-import { prepareCareerDescription, runCareerDescription } from "./career-description";
+import { USAGE_SETTLE_WORST_MS } from "@/server/jobs/constants";
+import { REQUEST_BUDGET_MS, prepareCareerDescription, runCareerDescription } from "./career-description";
 import { prepareCoverLetterSection, runCoverLetterSection } from "./cover-letter";
 import { rankDraftSourcesForProject } from "./ranking";
 
 /**
- * S7 AI paths (S7 plan "계약 — API" 1–3, 6): ranking's three sources + silent
- * fallback; AI-03 / AI-04 SSE event order, persist → complete, failure →
+ * S7 AI paths (S7 plan "계약 — API" 1–3, 6): ranking's three sources + the
+ * R1 A23 failure answer (empty, selectionOrigin user); R1 A13 (no extraction
+ * inside generation); AI-03 / AI-04 SSE event order, persist → complete, failure →
  * fail RPC + job failed, retry only before the first event, the client gone
  * mid-stream (the run still saves), and one usage record per provider call.
  */
@@ -59,7 +61,7 @@ describe("draft-source-ranking (AI-11, sync)", () => {
     const tables = baseTables({ insights: [{ id: "ins-1", application_project_id: AP, is_latest: true, status: "ready", result: { strategy: { project_priorities: [{ project_id: PRJ2, rank: 1 }] } } }] });
     const k = draftKit({ tables });
     const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
-    expect(out).toMatchObject({ kind: "ok", data: { origin: "insight", insightId: "ins-1", includedProjectIds: [PRJ2], fallback: false } });
+    expect(out).toMatchObject({ kind: "ok", data: { selectionOrigin: "insight", insightId: "ins-1", includedProjectIds: [PRJ2], failed: false, reason: null } });
     expect(k.store.jobs.size).toBe(0);
     expect(k.usage.records).toHaveLength(0);
   });
@@ -70,14 +72,14 @@ describe("draft-source-ranking (AI-11, sync)", () => {
     });
     const k = draftKit({ tables });
     const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
-    expect(out).toMatchObject({ kind: "ok", data: { origin: "ai_ranking", reused: true, jobId: "job-old", includedProjectIds: [PRJ1] } });
+    expect(out).toMatchObject({ kind: "ok", data: { selectionOrigin: "ai_ranking", failed: false, reused: true, jobId: "job-old", includedProjectIds: [PRJ1] } });
     expect(k.usage.records).toHaveLength(0);
   });
 
   it("(3) AI-11 call → ai_ranking, job succeeded, one usage record (meter career_description)", async () => {
     const k = draftKit({ tables: baseTables(), responses: [{ json: { include: [PRJ2, PRJ1] } }] });
     const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
-    expect(out).toMatchObject({ kind: "ok", data: { origin: "ai_ranking", reused: false, includedProjectIds: [PRJ2, PRJ1] } });
+    expect(out).toMatchObject({ kind: "ok", data: { selectionOrigin: "ai_ranking", failed: false, reused: false, includedProjectIds: [PRJ2, PRJ1] } });
     const job = [...k.store.jobs.values()][0]!;
     expect(job).toMatchObject({ jobType: "draft_source_ranking", targetType: "application_project", targetId: AP, status: "succeeded", modelTier: "light" });
     expect(k.usage.records).toHaveLength(1);
@@ -85,31 +87,43 @@ describe("draft-source-ranking (AI-11, sync)", () => {
     expect(k.keyStatus.successes).toHaveLength(1);
   });
 
-  it("AI-11 failure → silent fallback (no error), job failed with its cause, every call recorded", async () => {
+  const EMPTY = { includedExperienceIds: [], includedEducationIds: [], includedProjectIds: [], projectOrder: [], ranking: null };
+
+  it("A23: AI-11 failure → no substitute selection (empty, selectionOrigin user, no error), job failed, every call recorded", async () => {
     const k = draftKit({ tables: baseTables(), responses: [{ error: "schema_invalid" }, { error: "schema_invalid" }] });
     const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
-    expect(out).toMatchObject({ kind: "ok", data: { origin: "fallback", fallback: true, fallbackReason: "schema_invalid", includedProjectIds: [PRJ1, PRJ2] } });
+    expect(out).toEqual({ kind: "ok", data: { selectionOrigin: "user", failed: true, reason: "schema_invalid", reused: false, insightId: null, jobId: expect.any(String), ...EMPTY } });
     expect([...k.store.jobs.values()][0]).toMatchObject({ status: "failed", errorCode: "schema_invalid" });
     expect(k.usage.records).toHaveLength(2); // first try + one immediate retry (C-11.3)
   });
 
-  it("no key → fallback without a job; key_invalid on the call marks the key", async () => {
+  it("no key → failed answer without a job; key_invalid on the call marks the key", async () => {
     const none = draftKit({ tables: baseTables(), context: null });
-    expect(await rankDraftSourcesForProject(none.deps, AP, { refresh: false })).toMatchObject({ data: { fallback: true, fallbackReason: "key_missing" } });
+    expect(await rankDraftSourcesForProject(none.deps, AP, { refresh: false })).toMatchObject({ data: { selectionOrigin: "user", failed: true, reason: "key_missing", ...EMPTY } });
     expect(none.store.jobs.size).toBe(0);
 
     const bad = draftKit({ tables: baseTables(), responses: [{ error: "key_invalid" }] });
-    expect(await rankDraftSourcesForProject(bad.deps, AP, { refresh: false })).toMatchObject({ data: { fallback: true, fallbackReason: "key_invalid" } });
+    expect(await rankDraftSourcesForProject(bad.deps, AP, { refresh: false })).toMatchObject({ data: { selectionOrigin: "user", failed: true, reason: "key_invalid", ...EMPTY } });
     expect(bad.keyStatus.invalidated).toHaveLength(1);
   });
 
-  it("D-30: an unextracted JD is extracted first; extraction failure → fallback", async () => {
-    const tables = baseTables();
-    tables.job_descriptions![0]!.extraction_status = "pending";
-    const k = draftKit({ tables, ensureJd: async () => ({ status: "failed", jobId: "x", code: "rate_limited", retryAfter: null, quotaResetsAt: null }) });
+  it("A13: a JD without requirements is never extracted here → failed answer, no job, no provider call", async () => {
+    for (const [status, reason] of [["pending", "jd_not_extracted"], ["failed", "jd_not_extracted"], ["running", "extraction_in_progress"]] as const) {
+      const tables = baseTables();
+      tables.job_descriptions![0]!.extraction_status = status;
+      const k = draftKit({ tables, responses: [{ json: { include: [PRJ1] } }] });
+      const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
+      expect(out).toMatchObject({ kind: "ok", data: { selectionOrigin: "user", failed: true, reason, ...EMPTY } });
+      expect(k.store.jobs.size).toBe(0);
+      expect(k.usage.records).toHaveLength(0);
+      expect(k.adapter.calls).toHaveLength(0);
+    }
+  });
+
+  it("A23: AI-11 picks no project → failed answer (empty), not a substitute", async () => {
+    const k = draftKit({ tables: baseTables(), responses: [{ json: { include: [] } }] });
     const out = await rankDraftSourcesForProject(k.deps, AP, { refresh: false });
-    expect(k.ensureCalls).toEqual([AP]);
-    expect(out).toMatchObject({ data: { fallback: true, fallbackReason: "rate_limited" } });
+    expect(out).toMatchObject({ kind: "ok", data: { selectionOrigin: "user", failed: true, reason: "no_rankable_projects", ...EMPTY } });
   });
 });
 
@@ -147,13 +161,22 @@ describe("career description (AI-03, SSE)", () => {
     expect(JSON.stringify(events)).not.toContain(KEY);
   });
 
-  it("422 on an empty plan, 409 while the JD is extracted elsewhere; no key → blocked (one SSE error)", async () => {
+  it("422 on an empty plan, 409 while the JD is extracted elsewhere / not extracted (A13); no key → blocked (one SSE error)", async () => {
     const k = draftKit({ tables: baseTables() });
     await expect(prepareCareerDescription(k.deps, AP, { ...cdInput, includedExperienceIds: [] })).rejects.toMatchObject({ code: "empty_selection", status: 422 });
 
     const running = baseTables();
     running.job_descriptions![0]!.extraction_status = "running";
     await expect(prepareCareerDescription(draftKit({ tables: running }).deps, AP, cdInput)).rejects.toMatchObject({ code: "extraction_in_progress" });
+
+    for (const status of ["pending", "failed"]) {
+      const t = baseTables();
+      t.job_descriptions![0]!.extraction_status = status;
+      const kk = draftKit({ tables: t, responses: [{ json: blocks(1) }] });
+      await expect(prepareCareerDescription(kk.deps, AP, cdInput)).rejects.toMatchObject({ code: "jd_not_extracted", status: 409 });
+      expect(kk.store.jobs.size).toBe(0);
+      expect(kk.adapter.calls).toHaveLength(0);
+    }
 
     const none = draftKit({ tables: baseTables(), context: null });
     expect(await prepareCareerDescription(none.deps, AP, cdInput)).toEqual({ kind: "blocked", code: "key_missing" });
@@ -266,19 +289,11 @@ describe("career description (AI-03, SSE)", () => {
     expect([...k.store.jobs.values()][0]!.status).toBe("succeeded");
   });
 
-  it("D-30: preparing → extraction → generation; extraction failure → one error, no draft job", async () => {
-    const tables = baseTables();
-    tables.job_descriptions![0]!.extraction_status = "pending";
-    const k = draftKit({ tables, ensureJd: async () => ({ status: "failed", jobId: "x", code: "daily_quota_exhausted", retryAfter: null, quotaResetsAt: "2026-10-29T07:00:00.000Z" }) });
+  it("A13: generation gets the whole budget (no extraction inside the request)", async () => {
+    const k = draftKit({ tables: baseTables(), rpc: draftRpc([]) });
     const prepared = await prepareCareerDescription(k.deps, AP, cdInput);
     if (prepared.kind !== "ready") throw new Error("not ready");
-    const { events, emit } = collect();
-    await runCareerDescription(k.deps, prepared, emit);
-    expect(types(events)).toEqual(["preparing", "error"]);
-    expect(events[1]).toMatchObject({ code: "daily_quota_exhausted", quotaResetsAt: "2026-10-29T07:00:00.000Z" });
-    // The job is opened before the stream (QA-S7-01) and ends with the extraction's code, no draft row.
-    expect([...k.store.jobs.values()][0]).toMatchObject({ jobType: "career_description", status: "failed", errorCode: "daily_quota_exhausted" });
-    expect(k.db.rpcCalls).toEqual([]);
+    expect(prepared.run!.remaining()).toBeGreaterThanOrEqual(REQUEST_BUDGET_MS - USAGE_SETTLE_WORST_MS);
   });
 });
 
@@ -372,18 +387,15 @@ describe("cover letter question (AI-04, SSE)", () => {
     expect([...gated.store.jobs.values()][0]).toMatchObject({ status: "failed", errorCode: "key_missing" });
   });
 
-  it("D-30 extraction inside the question job: failure ends the job with that code without a second key report", async () => {
-    const tables = coverTables();
-    tables.job_descriptions![0]!.extraction_status = "pending";
-    const k = draftKit({ tables, rpc: draftRpc([]), ensureJd: async () => ({ status: "failed", jobId: "x", code: "billing_required", retryAfter: null, quotaResetsAt: null }) });
-    const prepared = await prepareCoverLetterSection(k.deps, SEC);
-    if (prepared.kind !== "ready") throw new Error("not ready");
-    const { events, emit } = collect();
-    await runCoverLetterSection(k.deps, prepared, emit);
-    expect(types(events)).toEqual(["preparing", "error"]);
-    expect([...k.store.jobs.values()][0]).toMatchObject({ status: "failed", errorCode: "billing_required" });
-    expect(k.keyStatus.failures).toHaveLength(0);
-    expect(k.keyStatus.invalidated).toHaveLength(0);
+  it("A13: a JD without requirements → 409 jd_not_extracted before any job or provider call", async () => {
+    for (const [status, code] of [["pending", "jd_not_extracted"], ["failed", "jd_not_extracted"], ["running", "extraction_in_progress"]] as const) {
+      const tables = coverTables();
+      tables.job_descriptions![0]!.extraction_status = status;
+      const k = draftKit({ tables, rpc: draftRpc([]), responses: [{ json: blocks(1) }] });
+      await expect(prepareCoverLetterSection(k.deps, SEC)).rejects.toMatchObject({ code, status: 409 });
+      expect(k.store.jobs.size).toBe(0);
+      expect(k.adapter.calls).toHaveLength(0);
+    }
     void JD;
   });
 

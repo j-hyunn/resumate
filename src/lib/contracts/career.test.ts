@@ -211,6 +211,11 @@ describe("DataReadiness", () => {
     expect(DataReadiness.safeParse({ ...sample, ai_connection: { active_provider: null, key_status: null, connection_tier: null } }).success).toBe(true);
     expect(DataReadiness.safeParse({ ...sample, ai_connection: undefined }).success).toBe(false);
   });
+  it("R1 A18: project_fields hint → form + suggested_project_id (DM §6 v4.2 example)", () => {
+    const f = DataReadiness.shape.features.shape.draft;
+    expect(f.safeParse({ ready: false, missing: ["complete_project"], hints: ["project_fields"], next_action: "form", suggested_project_id: ID }).success).toBe(true);
+    expect(f.safeParse({ ready: false, missing: ["complete_project"], hints: ["unknown_hint"], next_action: "form" }).success).toBe(false);
+  });
   it("a ready feature needs no next_action", () => {
     const f = DataReadiness.shape.features.shape.insight;
     expect(f.safeParse({ ready: true }).success).toBe(true);

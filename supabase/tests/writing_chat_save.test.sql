@@ -162,6 +162,8 @@ select is((select (title, status, sort_order)::text from public.project_details
           '("새 에피소드",draft,2)', 'new detail inserted as draft, appended to the order');
 select is((select (status, saved_at is null, project_id)::text from public.writing_chats where id = current_setting('t.g')::uuid),
           '(handed_off,t,aaaaaaaa-3333-0000-0000-000000000001)', 'chat handed_off (no saved_at)');
+select throws_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.g')::uuid$$,
+                 'P0001', 'invalid_writing_chat_transition', 'handed_off stays final (R1 A6 resumes abandoned only)');
 
 -- ── invalid period: nothing written ────────────────────────────────────────
 select set_config('t.bad', public.start_writing_chat('new_project')::text, true);

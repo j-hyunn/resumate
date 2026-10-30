@@ -5,6 +5,7 @@ import {
   EVIDENCE_RULES,
   EVIDENCE_SOURCE_TYPES,
   WHOLE_SOURCE_FIELD,
+  isCareerSupportEvidence,
   isQuoteRequired,
   isReflectionEvidence,
   type EvidenceSourceType,
@@ -118,7 +119,10 @@ export type ItemInput = {
   /** Per-item overrides (e.g. AI-04 reflection blocks allow learnings). */
   learnings?: LearningsPolicy;
   scope?: ReadonlySet<string> | null;
-  /** Which source types count as support. Default: career sources (JD alone never supports a claim about the user). */
+  /**
+   * Which source types count as support. Default: career sources (JD alone never
+   * supports a claim about the user). Profile wishes never count (A10).
+   */
   supportSourceTypes?: ReadonlySet<EvidenceSourceType>;
 };
 
@@ -167,7 +171,7 @@ export function validateItem(item: ItemInput, ctx: EvidenceContext): { outcome: 
   report.evidence_kept = kept.length;
 
   const supportTypes = item.supportSourceTypes ?? CAREER_SUPPORT_SOURCE_TYPES;
-  const factual = kept.filter((e) => supportTypes.has(e.source_type) && !isReflectionEvidence(e)).length;
+  const factual = kept.filter((e) => isCareerSupportEvidence(e, supportTypes) && !isReflectionEvidence(e)).length;
   const reflections = kept.filter(isReflectionEvidence).length;
 
   let action: ItemAction = "keep";

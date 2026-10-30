@@ -3,7 +3,6 @@ import type { CareerRows } from "@/server/ai/context-pack/career-rows";
 import type { JdRequirementInput, JdSentence } from "@/server/ai/context-pack/jd";
 import type { Llm } from "@/server/ai/llm";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
-import type { EnsureJdResult } from "@/server/services/application/extraction";
 import type { ReadinessFeature } from "@/lib/contracts/career";
 import type { AiRunDeps } from "./ai-run";
 import type { DraftStore, InsightSignal } from "./db";
@@ -45,7 +44,6 @@ export interface RankingPipeline {
   /** Reuse path: a stored ai_jobs.output → selection for the current pack (null = unreadable output). */
   fromOutput(output: unknown, careerRows: CareerRows): (DraftSourceSelection & { ranking: RankingItemRow[] }) | null;
   fromInsight(priorities: readonly { project_id: string; rank: number }[], careerRows: CareerRows): DraftSourceSelection;
-  fallback(careerRows: CareerRows): DraftSourceSelection;
 }
 
 /** drafts.options (db Options shape). */
@@ -153,8 +151,6 @@ export type DraftAiDeps = AiRunDeps & {
   writer: AiWriterSupabaseClient;
   drafts: DraftStore;
   pipelines: DraftPipelines;
-  /** D-30 extraction (S5 `ensureJdExtracted` with this user's deps). */
-  ensureJd: (applicationProjectId: string, signal?: AbortSignal) => Promise<EnsureJdResult>;
   loadCareerRows: (db: UserSupabaseClient | AiWriterSupabaseClient) => Promise<CareerRows>;
   getReadiness?: (db: UserSupabaseClient) => Promise<{ features: { draft: ReadinessFeature } }>;
 };

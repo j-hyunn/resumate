@@ -6,6 +6,7 @@ import { createKeySecretReader } from "@/server/db/key-reader";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { getServerEnv } from "@/server/env";
 import { logJobEvent } from "@/server/jobs/log";
+import { createServiceRoleClient } from "@/server/jobs/service-role";
 import type { KeySource } from "@/server/jobs/provider-context";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
@@ -43,12 +44,18 @@ export function createAppKeySource(userId: string): KeySource {
   };
 }
 
-/** Deps for register / re-check (user session for keys and consents, app_ai_writer for job + usage rows). */
+/**
+ * Deps for register / re-check: user session for key meta and consents, app_ai_writer for job +
+ * usage rows, and (R1 A19) the service-role client for the two server-only key RPCs, called with
+ * the session user's id after the action's session check.
+ */
 export function createKeyVerificationDeps(supabase: UserSupabaseClient, userId: string): KeyVerificationDeps {
   const writer = createAiWriterClient(userId);
+  let keyRpc: ReturnType<typeof createServiceRoleClient> | undefined;
   return {
     supabase,
     userId,
+    keyRpc: () => (keyRpc ??= createServiceRoleClient("resumate-provider-key")),
     store: createSupabaseJobStore(writer),
     usage: createSupabaseUsageStore(writer),
     kms: getKms,

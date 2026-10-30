@@ -14,7 +14,7 @@ import type { LlmFactoryInput } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { MemoryChatDb, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
 import { ProviderError } from "@/server/ai/errors";
-import { hasRoomForTurn, prepareTurn, runTurn, type PreparedTurn } from "./turn";
+import { hasRoomForTurn, prepareTurn, remainingMessages, runTurn, type PreparedTurn } from "./turn";
 import type { TurnDeps } from "./types";
 
 /**
@@ -124,7 +124,8 @@ describe("AI-12 turn — paid tier (parallel)", () => {
 
     const started = events[0] as Extract<WritingChatTurnEvent, { type: "turn_started" }>;
     expect(started.userMessage.sequence).toBe(2);
-    expect(started.messageCount).toBe(3);
+    // R1 A5: greeting not counted → user 1 + reply 1.
+    expect(started.messageCount).toBe(2);
     const flags = events.find((e) => e.type === "draft_flags") as Extract<WritingChatTurnEvent, { type: "draft_flags" }>;
     expect(flags.needsReview).toHaveLength(1);
     expect(flags.sensitiveAdded).toBe(1);
@@ -188,7 +189,7 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(failedJob.errorCode).toBe("rate_limited");
     expect(Date.parse(failedJob.retryAfter!) - t.clock.ms()).toBeGreaterThanOrEqual(60_000);
     expect(t.chats.chat.messages.at(-1)!.status).toBe("failed");
-    expect(t.chats.chat.messageCount).toBe(3);
+    expect(t.chats.chat.messageCount).toBe(2);
     expect(t.keyStatus.failures).toEqual([{ jobId: failedJob.id, cause: "rate_limited" }]);
 
     // "다시 보내기": same user message, failed row reused, count unchanged, extract not called again.
@@ -198,7 +199,7 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(started.retry).toBe(true);
     expect(started.userMessage.sequence).toBe(2);
     expect(started.assistantMessageId).toBe(first.prepared.kind === "ready" ? first.prepared.assistant.id : "");
-    expect(t.chats.chat.messageCount).toBe(3);
+    expect(t.chats.chat.messageCount).toBe(2);
     expect(t.chats.chat.messages).toHaveLength(3);
     expect(t.chats.calls.filter((c) => c === "appendUserMessage")).toHaveLength(1);
     expect(t.pipelines.seen.extract).toBe(1);
@@ -292,13 +293,13 @@ describe("AI-12 turn — draftStatus and orphaned replies (QA-S4-04 / 05)", () =
       { id: "00000000-0000-4000-8000-0000000000e2", sequence: 2, role: "user", content: "u", status: "done", aiJobId: null, provider: null, model: null, modelTier: null, connectionTier: null, createdAt: "" },
       { id: "00000000-0000-4000-8000-0000000000e3", sequence: 3, role: "assistant", content: "par", status: "streaming", aiJobId: null, provider: "anthropic", model: "m", modelTier: "default", connectionTier: "paid", createdAt: "" },
     );
-    t.chats.chat.messageCount = 3;
+    t.chats.chat.messageCount = 2;
     t.chats.chat.lastExtractedSequence = 2;
     const { events } = await runFull(t.deps, null);
     expect(events.map((e) => e.type)).toEqual(["turn_started", "reply_delta", "reply_done", "turn_done"]);
     expect(t.chats.calls).toContain("finishAssistant:failed");
     expect(t.chats.chat.messages.at(-1)).toMatchObject({ id: "00000000-0000-4000-8000-0000000000e3", status: "done" });
-    expect(t.chats.chat.messageCount).toBe(3);
+    expect(t.chats.chat.messageCount).toBe(2);
   });
 });
 
@@ -324,9 +325,14 @@ describe("AI-12 turn — free tier (sequential, C-12)", () => {
 });
 
 describe("AI-12 turn — gates and limits", () => {
-  it("message limit (40 incl. the reply): refused before any job or message", async () => {
+  it("message limit (40 = user + AI, greeting excluded — R1 A5): refused before any job or message", async () => {
+    expect(hasRoomForTurn(0)).toBe(true);
     expect(hasRoomForTurn(38)).toBe(true);
     expect(hasRoomForTurn(39)).toBe(false);
+    expect(hasRoomForTurn(40)).toBe(false);
+    expect(remainingMessages(0)).toBe(40);
+    expect(remainingMessages(38)).toBe(2);
+    expect(remainingMessages(40)).toBe(0);
     const t = setup({ chat: { id: CHAT, userId: USER, messageCount: 39 } });
     await expect(prepareTurn(t.deps, { chatId: CHAT, content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "message_limit_reached", status: 409 });
     expect(t.store.jobs.size).toBe(0);

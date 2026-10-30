@@ -150,9 +150,15 @@ export interface InterviewPipelines<QC = unknown, EC = unknown> {
      * questions were made with (JSON-safe, kept in the generate checkpoint).
      */
     snapshot(context: QC): QuestionsSnapshot;
+    /**
+     * R1 A22: folds one generation call into the set-level record (report counts summed,
+     * usage added). Production: ai `accumulateQuestionSetRecord`.
+     */
+    accumulate(prev: QuestionSetRecord | null, attempt: { report: Record<string, number>; usage: unknown }): QuestionSetRecord;
     completePayload(input: {
       snapshot: QuestionsSnapshot;
-      run: Omit<QuestionsAttemptResult, "remaining" | "unsupportedNumbers">;
+      /** `usage` / `report` are the whole set's (every generation call of the job, A22); `attempts` = calls. */
+      run: Omit<QuestionsAttemptResult, "remaining" | "unsupportedNumbers"> & { attempts: number | null };
       existingWeakRequirementIds: readonly string[];
       provider: AiProvider;
       connectionTier: ConnectionTier;
@@ -293,17 +299,29 @@ export type QuestionsPrepareOutput = {
   extractedJobId: string | null;
 };
 
+/** R1 A22: the question set's validation report + usage over every generation call (→ interview_sessions). */
+export type QuestionSetRecord = { report: Record<string, number>; usage: unknown; attempts: number };
+
 export type QuestionsGeneratePartial = {
   /** Calls that ended short of the count in this job (the regeneration budget). */
   attempts: number;
   weakRequirementIds: string[];
   unsupportedNumbers: string[];
   last: Omit<QuestionsAttemptResult, "remaining" | "weakRequirementIds" | "unsupportedNumbers"> | null;
+  /** A22: running set-level record (null before the first call). */
+  set: QuestionSetRecord | null;
   /** From the first call's context: what the set was made with. */
   snapshot: QuestionsSnapshot | null;
 };
 
-export type QuestionsGenerateOutput = Omit<QuestionsAttemptResult, "remaining" | "unsupportedNumbers"> & { snapshot: QuestionsSnapshot };
+export type QuestionsGenerateOutput = Omit<QuestionsAttemptResult, "remaining" | "unsupportedNumbers"> & { snapshot: QuestionsSnapshot; attempts?: number | null };
+
+function setRecordOf(value: unknown): QuestionSetRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Partial<QuestionSetRecord>;
+  if (typeof v.attempts !== "number" || !v.report || typeof v.report !== "object") return null;
+  return { report: v.report, usage: v.usage ?? null, attempts: v.attempts };
+}
 
 function generatePartialOf(value: unknown): QuestionsGeneratePartial {
   const v = value && typeof value === "object" ? (value as Partial<QuestionsGeneratePartial>) : {};
@@ -312,6 +330,7 @@ function generatePartialOf(value: unknown): QuestionsGeneratePartial {
     weakRequirementIds: Array.isArray(v.weakRequirementIds) ? v.weakRequirementIds.filter((x): x is string => typeof x === "string") : [],
     unsupportedNumbers: Array.isArray(v.unsupportedNumbers) ? v.unsupportedNumbers.filter((x): x is string => typeof x === "string") : [],
     last: v.last ?? null,
+    set: setRecordOf(v.set),
     snapshot: v.snapshot ?? null,
   };
 }
@@ -378,15 +397,17 @@ export function createInterviewQuestionsJobDefinition<QC, EC>(deps: InterviewJob
       let saved = existing.length;
       await ctx.reportProgress(Math.min(saved, questionCount), questionCount);
 
-      const finished = (run: QuestionsGeneratePartial["last"], weak: string[], snapshot: QuestionsSnapshot): QuestionsGenerateOutput => ({
+      // A22: usage / report of the whole set (every call), not just the last one.
+      const finished = (run: QuestionsGeneratePartial["last"], set: QuestionSetRecord | null, weak: string[], snapshot: QuestionsSnapshot): QuestionsGenerateOutput => ({
         snapshot,
         weakRequirementIds: weak,
         model: run?.model ?? "",
-        usage: run?.usage ?? null,
-        report: run?.report ?? {},
+        usage: set ? set.usage : (run?.usage ?? null),
+        report: set ? set.report : (run?.report ?? {}),
+        attempts: set?.attempts ?? null,
       });
       // Everything already saved (e.g. the stream ended right after the last question): nothing to call.
-      if (saved >= questionCount) return finished(partial.last, partial.weakRequirementIds, partial.snapshot ?? p.snapshot(await contextFor(ctx)));
+      if (saved >= questionCount) return finished(partial.last, partial.set, partial.weakRequirementIds, partial.snapshot ?? p.snapshot(await contextFor(ctx)));
       if (partial.attempts >= p.maxAttempts) throw new AiError("schema_invalid", { retryable: false });
 
       const context = await contextFor(ctx);
@@ -409,11 +430,12 @@ export function createInterviewQuestionsJobDefinition<QC, EC>(deps: InterviewJob
       );
       const weak = union(partial.weakRequirementIds, result.weakRequirementIds);
       const last = { model: result.model, usage: result.usage, report: result.report };
-      if (result.remaining <= 0) return finished(last, weak, snapshot);
+      const set = p.accumulate(partial.set, { report: result.report, usage: result.usage });
+      if (result.remaining <= 0) return finished(last, set, weak, snapshot);
 
       const attempts = partial.attempts + 1;
       log("interview.questions_short", { jobId: ctx.jobId, remaining: result.remaining, attempt: attempts });
-      const next: QuestionsGeneratePartial = { attempts, weakRequirementIds: weak, unsupportedNumbers: union(partial.unsupportedNumbers, result.unsupportedNumbers), last, snapshot };
+      const next: QuestionsGeneratePartial = { attempts, weakRequirementIds: weak, unsupportedNumbers: union(partial.unsupportedNumbers, result.unsupportedNumbers), last, set, snapshot };
       await ctx.savePartial(next);
       // [가정 3] one regeneration of the remaining count; still short → failed (saved questions stay).
       if (attempts >= p.maxAttempts) throw new AiError("schema_invalid", { retryable: false });
@@ -431,7 +453,7 @@ export function createInterviewQuestionsJobDefinition<QC, EC>(deps: InterviewJob
       // QA-S8-04: no context rebuild / career reload — the values the questions were made with.
       const payload = p.completePayload({
         snapshot: gen.snapshot,
-        run: { weakRequirementIds: gen.weakRequirementIds, model: gen.model || resolveModel(ctx.provider, p.tier), usage: gen.usage, report: gen.report },
+        run: { weakRequirementIds: gen.weakRequirementIds, model: gen.model || resolveModel(ctx.provider, p.tier), usage: gen.usage, report: gen.report, attempts: gen.attempts ?? null },
         existingWeakRequirementIds: [],
         provider: ctx.provider,
         connectionTier: ctx.connectionTier,

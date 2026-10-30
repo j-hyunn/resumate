@@ -7,6 +7,7 @@ import { runRetentionCron } from "@/server/jobs/retention";
 import { deleteAuthUser } from "@/server/jobs/service-role";
 import { hasPsql, hasTable, isStackReady, readLocalSupabase, runPsql } from "@/test/local-supabase";
 import { computeSubjectHash, deleteAccount, getAccountDeletionSummary } from "./index";
+import { getAccountState } from "./state";
 
 /**
  * S9 end-to-end against the local stack (plan API 5 "로컬 DB 통합"):
@@ -81,6 +82,16 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
     const before = countsFor(target.id);
     for (const [table, n] of Object.entries(before)) expect(n, `fixture row in ${table}`).toBeGreaterThan(0);
     const otherBefore = countsFor(other.id);
+    const stateDeps = (client: Client, id: string) => ({ supabase: client, userId: id, deletionStateRpc: () => admin, hashSecret: SECRET });
+    // R1 A7: a normal user is `active` without the service-role RPC.
+    expect(
+      await getAccountState({
+        ...stateDeps(target.client, target.id),
+        deletionStateRpc: () => {
+          throw new Error("must not be called with a profile");
+        },
+      }),
+    ).toBe("active");
 
     // S-25 summary (DM §4.3).
     const summary = await getAccountDeletionSummary(target.client);
@@ -110,6 +121,14 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
       }),
     ).rejects.toMatchObject({ code: "account_deletion_incomplete" });
     expect(Object.values(countsFor(target.id)).every((n) => n === 0)).toBe(true);
+
+    // R1 A7: the half-deleted account (session still valid, no profile, log row) → deletion_incomplete;
+    // the user session itself can't call the RPC (service_role only).
+    expect(await getAccountState(stateDeps(target.client, target.id))).toBe("deletion_incomplete");
+    const direct = await target.client.rpc("get_account_deletion_state", { p_user_id: target.id, p_subject_hash: computeSubjectHash(target.id, SECRET) });
+    expect(direct.error?.code).toBe("42501");
+    // Another user's hash doesn't match this user's log → profile_missing (never another user's deletion).
+    expect(await getAccountState({ ...stateDeps(target.client, target.id), hashSecret: "other-secret-0000000000000000000000" })).toBe("profile_missing");
 
     // Retry with the same session: RPC passes idempotently, then the real Auth delete.
     const retry = await deleteAccount({ ...base, deleteAuthUser: (id) => deleteAuthUser(id, admin) });

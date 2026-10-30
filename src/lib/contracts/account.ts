@@ -57,3 +57,15 @@ export type DeleteAccountResult = {
 
 /** S-01 landing (public). FL-07: "즉시 로그아웃 → S-01". */
 export const ACCOUNT_DELETED_REDIRECT = "/" as const;
+
+// ---------------- account state (R1 A7, DM v4.2 6.1) ----------------
+
+/** RPC `get_account_deletion_state` values. `active` = a profile row exists. */
+export const ACCOUNT_STATES = ["active", "deletion_incomplete", "profile_missing"] as const;
+export type AccountState = (typeof ACCOUNT_STATES)[number];
+
+/**
+ * S-25 entry (outside the consent gate): `deletion_incomplete` → show only "탈퇴 마무리하기"
+ * (no summary, no confirmation check; the same `deleteAccount({ confirm: true })` finishes it).
+ */
+export type AccountStatus = { state: Exclude<AccountState, "profile_missing"> };

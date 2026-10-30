@@ -15,10 +15,11 @@ export const maxDuration = 60;
  * 생성 (SSE, C-6 스트리밍; F-DOC-01/03). Body `CreateCareerDescriptionInput`
  * (`regeneratedFromId` = "다시 생성": a new draft, the old one stays).
  *
- * Before the stream (JSON): 400, 401, 404 (incl. an unknown `regeneratedFromId`), 409 `extraction_in_progress`
- * / `career_description_in_progress` (`error.details.jobId` = the running job, D-34 one per project),
- * 422 `insufficient_data` (+ readiness) / `empty_selection`.
- * Stream: (`preparing` → D-30 extraction) → `generation_started` →
+ * Before the stream (JSON): 400, 401, 404 (incl. an unknown `regeneratedFromId`), 409 `jd_not_extracted`
+ * (R1 A13: requirements missing — the screen runs the extraction route first; no provider call) /
+ * `extraction_in_progress` / `career_description_in_progress` (`error.details.jobId` = the running job,
+ * D-34 one per project), 422 `insufficient_data` (+ readiness) / `empty_selection`.
+ * Stream (the whole 58 s budget is generation's): `generation_started` →
  * `block_started` / `block_delta` / `block_completed`(+ evidence) → `validated`
  * → `done { draftId }` | `error`. An identical ready draft (C-6 재사용) answers
  * `done { reused: true }` right away. No key → one `error` (key_missing / key_invalid).

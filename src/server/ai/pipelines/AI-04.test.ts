@@ -248,7 +248,7 @@ describe("streamCoverLetterSection (AI-04)", () => {
     expect(payload.correction_applied).toBe(true);
     expect(payload.char_adjust_needed).toBe(false);
     expect(payload.ai_char_count).toBe(95);
-    expect(payload.meta.prompt_version).toContain("ai-04.adjust.v1");
+    expect(payload.meta.prompt_version).toContain("ai-04.adjust.v2");
     expect(payload.meta.usage?.inputTokens).toBe(200);
   });
 

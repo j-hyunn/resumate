@@ -21,6 +21,9 @@ import {
   editDraftDetail,
   getWritingChat,
   handOffWritingChat,
+  listProjectWritingChats,
+  listWritingChats,
+  resumeWritingChat,
   reviewDraftField,
   saveWritingChat,
   setWritingChatAffiliation,
@@ -161,10 +164,10 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
 
   let chatId = "";
 
-  it("start: greeting counts as message 1, no AI call; visible in the career tree", async () => {
+  it("start: greeting not counted (R1 A5), no AI call; visible in the career tree", async () => {
     ({ writingChatId: chatId } = await startWritingChat(user, { mode: "new_project" }));
     const chat = await getWritingChat(user, userId, chatId);
-    expect(chat).toMatchObject({ status: "active", messageCount: 1, limitReached: false });
+    expect(chat).toMatchObject({ status: "active", messageCount: 0, remainingMessages: 40, limitReached: false });
     expect(chat.messages).toHaveLength(1);
     expect(chat.messages[0]).toMatchObject({ role: "assistant", status: "done", provider: null, aiJobId: null });
     // No key in this test user: reading works, sending is locked (PRD 3.3).
@@ -182,7 +185,8 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     expect(events.map((e) => e.type)).toEqual(["turn_started", "reply_delta", "reply_done", "draft_patch", "draft_flags", "turn_done"]);
 
     const chat = await getWritingChat(user, userId, chatId);
-    expect(chat.messageCount).toBe(3);
+    expect(chat.messageCount).toBe(2);
+    expect(chat.remainingMessages).toBe(38);
     expect(chat.messages.map((m) => [m.sequence, m.role, m.status])).toEqual([
       [1, "assistant", "done"],
       [2, "user", "done"],
@@ -214,7 +218,7 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     const failed = await turn(chatId, SECOND_TEXT, [{ error: "rate_limited" }], [{ json: secondExtract }]);
     expect(failed.events.map((e) => e.type)).toEqual(["turn_started", "draft_patch", "draft_flags", "error"]);
     let chat = await getWritingChat(user, userId, chatId);
-    expect(chat.messageCount).toBe(5);
+    expect(chat.messageCount).toBe(4);
     expect(chat.messages.at(-1)).toMatchObject({ role: "assistant", status: "failed" });
     expect(chat.structuredDraft.details[0]?.fields.situation?.value).toBeTruthy();
     const { data: failedJob } = await admin.from("ai_jobs").select("status, error_code, retry_after").eq("id", failed.jobId).single();
@@ -224,7 +228,7 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     const resend = await turn(chatId, null, [{ json: "결과는 어땠나요?" }], []);
     expect(resend.events.map((e) => e.type)).toEqual(["turn_started", "reply_delta", "reply_done", "turn_done"]);
     chat = await getWritingChat(user, userId, chatId);
-    expect(chat.messageCount).toBe(5);
+    expect(chat.messageCount).toBe(4);
     expect(chat.messages).toHaveLength(5);
     expect(chat.messages.at(-1)).toMatchObject({ status: "done", aiJobId: resend.jobId });
     // Only the reply was called again (QA-S3a-08): one usage row for the resend job.
@@ -264,6 +268,8 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     expect(chat).toMatchObject({ status: "saved", projectId: saved.projectId, canSend: false, daysUntilAutoDelete: null });
     await expect(prepareTurn(deps(), { chatId, content: "더", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_not_active" });
     expect((await getCareerTree(user)).activeWritingChats.map((c) => c.id)).not.toContain(chatId);
+    // S-10 "AI 작성 대화 기록" (R1 A6): the project's chats with their status.
+    expect(await listProjectWritingChats(user, saved.projectId)).toEqual([expect.objectContaining({ id: chatId, status: "saved", messageCount: 4 })]);
   });
 
   it("hand-off (no AI): a second chat's edits go to draft career rows; delete the chat only keeps them", async () => {
@@ -289,6 +295,30 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     const { writingChatId } = await startWritingChat(user, { mode: "new_project" });
     expect(await abandonWritingChat(user, writingChatId)).toEqual({ writingChatId, status: "abandoned" });
     await expect(abandonWritingChat(user, writingChatId)).rejects.toMatchObject({ code: "writing_chat_not_active" });
+
+    // R1 A6: S-08 lists it under "그만둔 AI 대화" until resumed.
+    let lists = await listWritingChats(user);
+    expect(lists.abandoned.map((c) => c.id)).toContain(writingChatId);
+    expect(lists.active.map((c) => c.id)).not.toContain(writingChatId);
+    expect(lists.abandoned.find((c) => c.id === writingChatId)).toMatchObject({ status: "abandoned", messageCount: 0 });
+    expect((await getCareerTree(user)).abandonedWritingChats.map((c) => c.id)).toContain(writingChatId);
+
+    // "다시 이어 하기": abandoned → active, last_activity_at refreshed, no AI job; idempotent; the draft is kept.
+    const before = await admin.from("writing_chats").select("last_activity_at").eq("id", writingChatId).single();
+    const jobsBefore = await admin.from("ai_jobs").select("id").eq("user_id", userId);
+    const resumed = await resumeWritingChat(user, writingChatId);
+    expect(resumed).toMatchObject({ writingChatId, status: "active" });
+    expect(Date.parse(resumed.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(before.data!.last_activity_at));
+    expect(await resumeWritingChat(user, writingChatId)).toMatchObject({ writingChatId, status: "active" });
+    const jobsAfter = await admin.from("ai_jobs").select("id").eq("user_id", userId);
+    expect(jobsAfter.data).toHaveLength(jobsBefore.data!.length);
+    lists = await listWritingChats(user);
+    expect(lists.active.map((c) => c.id)).toContain(writingChatId);
+    expect(lists.abandoned.map((c) => c.id)).not.toContain(writingChatId);
+
+    // Saved chats can't be resumed (read-only, D-27 (a)); other users' chats are not found.
+    await expect(resumeWritingChat(user, chatId)).rejects.toMatchObject({ code: "writing_chat_not_resumable", status: 409 });
+    await expect(resumeWritingChat(user, crypto.randomUUID())).rejects.toMatchObject({ code: "not_found" });
     await expect(startWritingChat(user, { mode: "augment_project", projectId: crypto.randomUUID() })).rejects.toMatchObject({ code: "not_found" });
   });
 

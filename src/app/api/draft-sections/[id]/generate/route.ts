@@ -17,8 +17,9 @@ export const maxDuration = 60;
  * the edited text (the screen confirms first, D-DM-06).
  *
  * Before the stream (JSON): 400, 401, 404, 409 `section_in_progress` /
- * `extraction_in_progress`, 422 `insufficient_data` (+ readiness).
- * Stream: (`preparing`) → `generation_started` → `sources_selected` → paragraph
+ * `jd_not_extracted` (R1 A13: extract first, no provider call) / `extraction_in_progress`,
+ * 422 `insufficient_data` (+ readiness).
+ * Stream: `generation_started` → `sources_selected` → paragraph
  * block events → (`adjusting_length`) → `validated` → `done` | `error`.
  * No key → one `error`. Closing the page does not stop the run.
  */

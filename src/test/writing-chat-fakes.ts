@@ -35,7 +35,8 @@ export class MemoryChatDb implements TurnChatDb {
       educationId: null,
       status: "active",
       structuredDraft: parseStructuredDraft({}),
-      messageCount: 1,
+      // R1 A5: the greeting (sequence 1, no job) is not counted.
+      messageCount: 0,
       lastExtractedSequence: 0,
       returnTarget: null,
       lastActivityAt: clock().toISOString(),

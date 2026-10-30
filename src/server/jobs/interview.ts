@@ -5,6 +5,7 @@ import {
   AI05_MAX_ATTEMPTS,
   AI05_PROMPT_VERSION,
   AI05_TIER,
+  accumulateQuestionSetRecord,
   buildCompleteInterviewQuestionsPayload,
   buildInterviewQuestionContext,
   generateInterviewQuestions,
@@ -102,6 +103,11 @@ export const productionInterviewPipelines: InterviewPipelines<InterviewQuestionC
       careerSnapshotHash: context.base.careerSnapshotHash,
       requirementIds: [...context.aliases.values()].filter((e) => e.sourceType === "jd_requirement").map((e) => e.id),
     }),
+    accumulate: (prev, attempt) =>
+      accumulateQuestionSetRecord(prev as Parameters<typeof accumulateQuestionSetRecord>[0], {
+        report: attempt.report,
+        usage: (attempt.usage ?? null) as Parameters<typeof accumulateQuestionSetRecord>[1]["usage"],
+      }),
     completePayload: (input) =>
       buildCompleteInterviewQuestionsPayload({
         context: snapshotContext(input.snapshot),
@@ -110,6 +116,7 @@ export const productionInterviewPipelines: InterviewPipelines<InterviewQuestionC
         model: input.run.model,
         usage: (input.run.usage ?? null) as Parameters<typeof buildCompleteInterviewQuestionsPayload>[0]["usage"],
         report: input.run.report,
+        attempts: input.run.attempts,
         provider: input.provider,
         connectionTier: input.connectionTier,
       }),

@@ -3,7 +3,7 @@ import type { CareerRows } from "../context-pack/career-rows";
 import { buildInterviewBase, type InterviewBase } from "../context-pack/interview";
 import type { JdRequirementInput, JdSentence } from "../context-pack/jd";
 import type { YearMonth } from "../context-pack/months";
-import { CAREER_SUPPORT_SOURCE_TYPES, isEvidenceSourceType, isReflectionEvidence } from "../evidence-rules";
+import { isActionResultEvidence, isCareerSupportEvidence, isEvidenceSourceType, isReflectionEvidence } from "../evidence-rules";
 import { AiError } from "../errors";
 import { computeInputHash } from "../input-hash";
 import type { Llm } from "../llm";
@@ -176,7 +176,7 @@ type Acceptance = {
 /** Primary project / detail alias of a question from its career evidence (first one wins). */
 function primaryTargets(evidence: ReadonlyArray<{ source_type: string; ref: string }>, aliases: AliasMap): { project: string | null; detail: string | null } {
   for (const e of evidence) {
-    if (!isEvidenceSourceType(e.source_type) || !CAREER_SUPPORT_SOURCE_TYPES.has(e.source_type)) continue;
+    if (!isCareerSupportEvidence(e)) continue;
     const entry = aliases.get(e.ref);
     if (!entry) continue;
     if (entry.sourceType === "project") return { project: entry.alias, detail: null };
@@ -228,6 +228,21 @@ export function emptySequences(count: number, existing: readonly { sequence: num
 
 // ---------- per-question check ----------
 
+/**
+ * Whether a job question premises a fact of the user's career (4.1, A11).
+ * project_deep_dive and requirement_fit always do. gap_probe does when it is
+ * anchored on experience, cites factual career evidence, or names a career
+ * proper noun in its text; otherwise it asks about the requirement without
+ * assuming anything ("이 요건과 비슷한 경험이 있다면") and is exempt. [가정]
+ * the evidence / proper-noun signals stand for "premises a fact" (spec gives
+ * the rule, not the detection).
+ */
+export function premisesUserFacts(kind: InterviewSourceKind, anchor: InterviewAnchor, factualCareerEvidence: number, careerTermsInText: number): boolean {
+  if (kind === "project_deep_dive" || kind === "requirement_fit") return true;
+  if (kind !== "gap_probe") return false;
+  return anchor === "experience" || factualCareerEvidence > 0 || careerTermsInText > 0;
+}
+
 export type QuestionDropReason =
   | "schema"
   | "kind_not_allowed"
@@ -235,6 +250,7 @@ export type QuestionDropReason =
   | "forbidden_topic"
   | "anchor_evidence_missing"
   | "kind_target_missing"
+  | "fact_premise_unsupported"
   | "career_terms_in_non_experience"
   | "unsupported_numbers"
   | "duplicate_text"
@@ -306,7 +322,8 @@ export function checkQuestion(
   const checked = validateItem({ key: QUESTION_ITEM_KEY, kind: "reference", evidence: rawEvidence, learnings }, { aliases, learnings });
   addToReport(report, checked.report);
   const evidence = checked.outcome.evidence;
-  const career = evidence.filter((e) => CAREER_SUPPORT_SOURCE_TYPES.has(e.source_type));
+  // A10: profile wishes (희망 직무·관심 산업) are context, never a user fact.
+  const career = evidence.filter((e) => isCareerSupportEvidence(e));
   const factualCareer = career.filter((e) => !isReflectionEvidence(e));
 
   // Anchor needs its evidence (4.1).
@@ -330,14 +347,21 @@ export function checkQuestion(
   const gapIds = isJob ? resolve(raw.target_gap_requirement_refs, "target_refs_dropped") : [];
   if (!isJob && raw.target_requirement_refs.length + raw.target_gap_requirement_refs.length > 0) addToReport(report, { target_refs_dropped: 1 });
 
-  // Kind needs its basis (4.1 table).
-  if (raw.source_kind === "project_deep_dive") {
-    // 사실 전제는 action / result / 성과에서만 (v3).
-    const ok = factualCareer.some((e) => e.source_type === "achievement" || (e.source_type === "project_detail" && (e.field === "action" || e.field === "result")));
-    if (!ok) return fail("kind_target_missing");
-  }
-  if (raw.source_kind === "requirement_fit" && (!targetIds.length || !factualCareer.length)) return fail("kind_target_missing");
+  // Kind needs its basis (4.1 table: project_deep_dive = action/result/성과, requirement_fit = 대상 요건, gap_probe = 보완 요건).
+  const factBasis = factualCareer.some(isActionResultEvidence);
+  if (raw.source_kind === "project_deep_dive" && !factBasis) return fail("kind_target_missing");
+  if (raw.source_kind === "requirement_fit" && !targetIds.length) return fail("kind_target_missing");
   if (raw.source_kind === "gap_probe" && !gapIds.length) return fail("kind_target_missing");
+
+  // 4.1 사실 전제 (v4.3, A11): every job question that premises a fact of the
+  // user's career takes it only from a detail's action / result or an
+  // achievement. requirement_fit always premises one; gap_probe does when it
+  // points at the user's experience (anchor experience, career evidence, or a
+  // career proper noun in the text). A gap_probe that only asks "if you had a
+  // similar experience…" is exempt.
+  if (isJob && premisesUserFacts(raw.source_kind, anchor, factualCareer.length, findCareerTerms(text, base.careerTerms).length) && !factBasis) {
+    return fail("fact_premise_unsupported");
+  }
 
   // Culture questions not anchored on experience assume no user facts (4.1).
   const nonExperienceCulture = !isJob && anchor !== "experience";
@@ -680,7 +704,28 @@ export async function runInterviewQuestions(
   return { attempts, weakRequirementIds: [...weak], model: last.model, usage: usage ?? UNAVAILABLE_USAGE, report };
 }
 
-/** complete_interview_questions.p_payload (no call). */
+/**
+ * Set-level record of one more generation call (A22): reports summed key by
+ * key, usage summed (C-13). The job runner folds every attempt of the set
+ * through this so the complete payload carries the whole set, not the last call.
+ */
+export function accumulateQuestionSetRecord(
+  prev: { report: Record<string, number>; usage: NormalizedUsage | null; attempts: number } | null,
+  attempt: { report: Record<string, number>; usage: NormalizedUsage | null },
+): { report: Record<string, number>; usage: NormalizedUsage | null; attempts: number } {
+  const report: Record<string, number> = { ...(prev?.report ?? {}) };
+  addToReport(report, attempt.report);
+  const usage = prev?.usage && attempt.usage ? addUsage(prev.usage, attempt.usage) : (attempt.usage ?? prev?.usage ?? null);
+  return { report, usage, attempts: (prev?.attempts ?? 0) + 1 };
+}
+
+/**
+ * complete_interview_questions.p_payload (no call). A22: the set-level
+ * `validation_report` (counts: questions dropped and why, composition
+ * warnings, `attempts` / `regenerated` when known) and `usage` go top-level
+ * (→ interview_sessions.question_validation_report / question_usage); `meta`
+ * keeps the same values for the existing job-meta path.
+ */
 export function buildCompleteInterviewQuestionsPayload(input: {
   context: InterviewQuestionContext;
   weakRequirementIds: readonly string[];
@@ -688,15 +733,24 @@ export function buildCompleteInterviewQuestionsPayload(input: {
   model: string;
   usage?: NormalizedUsage | null;
   report?: Record<string, number> | null;
+  /** Generation calls that made the set (1 = no regeneration). Added to the report when given. */
+  attempts?: number | null;
   provider: ProviderId;
   connectionTier: ConnectionTier;
 }): CompleteInterviewQuestionsPayload {
   const valid = new Set([...input.context.aliases.values()].filter((e) => e.sourceType === "jd_requirement").map((e) => e.id));
   const weak = [...new Set([...(input.existingWeakRequirementIds ?? []), ...input.weakRequirementIds])].filter((id) => valid.has(id));
+  let report: Record<string, number> | null = input.report ? { ...input.report } : null;
+  if (input.attempts != null && input.attempts > 0) {
+    report = { ...(report ?? {}), attempts: input.attempts, regenerated: input.attempts > 1 ? 1 : 0 };
+  }
+  const usage = input.usage ?? null;
   return {
     weak_requirement_ids: input.context.interviewType === "job" ? weak : [],
     insight_id: input.context.insightId,
     career_snapshot_hash: input.context.base.careerSnapshotHash,
+    validation_report: report,
+    usage,
     meta: payloadMeta({
       schemaVersion: AI05_OUTPUT_SCHEMA_VERSION,
       promptVersion: AI05_PROMPT_VERSION,
@@ -704,8 +758,8 @@ export function buildCompleteInterviewQuestionsPayload(input: {
       model: input.model,
       modelTier: AI05_TIER,
       connectionTier: input.connectionTier,
-      report: input.report ?? null,
-      usage: input.usage ?? null,
+      report,
+      usage,
     }),
   };
 }

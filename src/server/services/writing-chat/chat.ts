@@ -16,7 +16,10 @@ import {
   StartWritingChatInput,
   type StructuredDraft,
   type WritingChatConnection,
+  type ProjectWritingChatSummary,
+  type ResumeWritingChatResult,
   type WritingChatDto,
+  type WritingChatLists,
   type WritingChatProgress,
   type WritingChatSaveResult,
 } from "@/lib/contracts/writing-chat";
@@ -29,7 +32,7 @@ import { deleteCareerItem } from "@/server/services/career/rpc";
 import { applyDraftPatch, loadChatSnapshot } from "./db";
 import { draftProgress } from "./draft";
 import { daysUntilAutoDelete, toMessageDtos } from "./mappers";
-import { hasRoomForTurn } from "./turn";
+import { hasRoomForTurn, remainingMessages } from "./turn";
 import type { ChatSnapshot } from "./types";
 
 /**
@@ -44,7 +47,7 @@ function internal(cause: unknown): AppError {
 
 // ---------------- start ----------------
 
-/** start_writing_chat: chat row + the fixed greeting (no AI call, counts as message 1). */
+/** start_writing_chat: chat row + the fixed greeting (no AI call; not counted in "n / 40", R1 A5). */
 export async function startWritingChat(supabase: UserSupabaseClient, input: z.output<typeof StartWritingChatInput>): Promise<{ writingChatId: string }> {
   const rt = input.returnTarget;
   // S5 (R-31): the gate's application project must be the user's (RLS read; `not_found` otherwise).
@@ -134,6 +137,7 @@ export function toWritingChatDto(
     structuredDraft: chat.structuredDraft,
     messageCount: chat.messageCount,
     messageLimit: WRITING_CHAT_MESSAGE_LIMIT,
+    remainingMessages: remainingMessages(chat.messageCount),
     limitReached: !room,
     lastActivityAt: chat.lastActivityAt,
     savedAt: chat.savedAt,
@@ -160,28 +164,65 @@ export async function getWritingChat(supabase: UserSupabaseClient, userId: strin
   return toWritingChatDto(chat, { connection, augmentTarget, now });
 }
 
-/** S-08 "작성 중인 AI 대화" (active chats, latest activity first). */
-export async function listActiveWritingChats(supabase: UserSupabaseClient, now: Date = new Date()): Promise<ActiveWritingChatSummary[]> {
+type SummaryStatus = ActiveWritingChatSummary["status"];
+
+async function listChatsByStatus(supabase: UserSupabaseClient, statuses: SummaryStatus[], now: Date): Promise<ActiveWritingChatSummary[]> {
   const { data, error } = await supabase
     .from("writing_chats")
     .select("id, mode, project_id, last_activity_at, message_count, status, projects!writing_chats_project_fkey(name)")
-    .eq("status", "active")
+    .in("status", statuses)
     .order("last_activity_at", { ascending: false });
   if (error) throw mapDbError(error);
   return (data ?? []).map((r) => {
     const project = (r as { projects?: { name: string | null } | { name: string | null }[] | null }).projects;
     const name = Array.isArray(project) ? (project[0]?.name ?? null) : (project?.name ?? null);
+    const status = r.status as SummaryStatus;
     return {
       id: r.id,
       mode: r.mode as ActiveWritingChatSummary["mode"],
+      status,
       projectId: r.project_id,
       projectName: r.mode === "augment_project" ? name : null,
       lastActivityAt: r.last_activity_at,
       messageCount: r.message_count,
       messageLimit: WRITING_CHAT_MESSAGE_LIMIT,
-      daysUntilAutoDelete: daysUntilAutoDelete({ projectId: r.project_id, status: "active", lastActivityAt: r.last_activity_at }, now),
+      daysUntilAutoDelete: daysUntilAutoDelete({ projectId: r.project_id, status, lastActivityAt: r.last_activity_at }, now),
     };
   });
+}
+
+/** S-08 "작성 중인 AI 대화" (active chats, latest activity first). */
+export function listActiveWritingChats(supabase: UserSupabaseClient, now: Date = new Date()): Promise<ActiveWritingChatSummary[]> {
+  return listChatsByStatus(supabase, ["active"], now);
+}
+
+/**
+ * S-08 (R1 A6, UX v5.3): "작성 중인 AI 대화" + the folded "그만둔 AI 대화" group. Abandoned
+ * rows are listed until the 90-day cleanup removes them (DM §3.4); saved / handed-off chats
+ * are not here (they show on the project, S-10).
+ */
+export async function listWritingChats(supabase: UserSupabaseClient, now: Date = new Date()): Promise<WritingChatLists> {
+  const rows = await listChatsByStatus(supabase, ["active", "abandoned"], now);
+  return { active: rows.filter((r) => r.status === "active"), abandoned: rows.filter((r) => r.status === "abandoned") };
+}
+
+/** S-10 "AI 작성 대화 기록" (R1 A6): the project's chats, every status, latest activity first. */
+export async function listProjectWritingChats(supabase: UserSupabaseClient, projectId: string): Promise<ProjectWritingChatSummary[]> {
+  const { data, error } = await supabase
+    .from("writing_chats")
+    .select("id, mode, status, last_activity_at, saved_at, message_count")
+    .eq("project_id", projectId)
+    .order("last_activity_at", { ascending: false });
+  if (error) throw mapDbError(error);
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    mode: r.mode as ProjectWritingChatSummary["mode"],
+    status: r.status as ProjectWritingChatSummary["status"],
+    lastActivityAt: r.last_activity_at,
+    savedAt: r.saved_at,
+    messageCount: r.message_count,
+    messageLimit: WRITING_CHAT_MESSAGE_LIMIT,
+  }));
 }
 
 // ---------------- preview edits (user session apply_structured_draft_patch) ----------------
@@ -291,6 +332,30 @@ export async function abandonWritingChat(supabase: UserSupabaseClient, chatId: s
     throw new AppError("writing_chat_not_active", "저장했거나 그만둔 대화예요.", { status: 409 });
   }
   return { writingChatId: chatId, status: "abandoned" };
+}
+
+/**
+ * "다시 이어 하기" (R1 A6, DM §2.5 전이 표): abandoned → active, as the user (direct column
+ * update; the guard trigger allows it only from `abandoned` and sets last_activity_at = now()).
+ * No AI call and no key needed (UX FL-14). Saved / handed-off chats stay read-only.
+ */
+export async function resumeWritingChat(supabase: UserSupabaseClient, chatId: string): Promise<ResumeWritingChatResult> {
+  const { data, error } = await supabase.from("writing_chats").update({ status: "active" }).eq("id", chatId).eq("status", "abandoned").select("id, last_activity_at");
+  if (error) throw mapDbError(error);
+  const row = data?.[0];
+  if (!row) {
+    const exists = await supabase.from("writing_chats").select("status").eq("id", chatId).maybeSingle();
+    if (exists.error) throw mapDbError(exists.error);
+    if (!exists.data) throw new AppError("not_found", "요청한 대화를 찾을 수 없습니다.");
+    // Already active (double click / another tab): idempotent success.
+    if (exists.data.status === "active") {
+      const again = await supabase.from("writing_chats").select("last_activity_at").eq("id", chatId).maybeSingle();
+      if (again.error) throw mapDbError(again.error);
+      return { writingChatId: chatId, status: "active", lastActivityAt: again.data?.last_activity_at ?? new Date().toISOString() };
+    }
+    throw new AppError("writing_chat_not_resumable", "저장했거나 폼으로 옮긴 대화는 다시 이어 할 수 없어요.", { status: 409 });
+  }
+  return { writingChatId: chatId, status: "active", lastActivityAt: row.last_activity_at };
 }
 
 /** C-10 복귀 후: clear return_target (DM §2.5 "복귀하면 null로 비움"). */

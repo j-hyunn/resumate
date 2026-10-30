@@ -88,6 +88,8 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
     return {
       supabase: user,
       userId,
+      // R1 A19: the server-only key RPCs run on service_role with p_user_id.
+      keyRpc: () => admin,
       store: createSupabaseJobStore(writer),
       usage: createSupabaseUsageStore(writer),
       kms: () => kms,
@@ -164,6 +166,25 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
     ).rejects.toMatchObject({ code: "ai_consent_required", status: 409 });
     expect(verifiedKeys).toHaveLength(0);
     expect(await verificationJobs()).toHaveLength(0);
+  });
+
+  it("R1 A19: the browser's user session can't call the key RPCs (service_role only)", async () => {
+    const save = await user.rpc("save_provider_key", {
+      p_user_id: userId,
+      p_provider: "anthropic",
+      p_connection_tier: "paid",
+      p_key_ciphertext: "\\x00",
+      p_key_nonce: "\\x00",
+      p_wrapped_dek: "\\x00",
+      p_kek_id: "k",
+      p_key_last4: "0000",
+      p_disclosure_version: "v2026-10-29",
+      p_verification_result: "valid",
+      p_key_id: crypto.randomUUID(),
+    });
+    expect(save.error?.code).toBe("42501");
+    const check = await user.rpc("record_provider_key_check", { p_user_id: userId, p_provider: "anthropic", p_result_status: "valid" });
+    expect(check.error?.code).toBe("42501");
   });
 
   it("format error: rejected before any provider call, no job", async () => {

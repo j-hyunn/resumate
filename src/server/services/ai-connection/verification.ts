@@ -44,10 +44,22 @@ export type Log = (event: string, fields: Record<string, string | number | boole
 
 export type VerifyFn = (input: { provider: AiProvider; apiKey: string; signal: AbortSignal }) => Promise<KeyVerificationResult>;
 
+/**
+ * R1 A19 (DM v4.2 2.11.3): `save_provider_key` / `record_provider_key_check` run
+ * on the server-only role with `p_user_id` (no execute for authenticated / anon).
+ * Production: the service-role client (src/server/jobs/service-role.ts), used
+ * ONLY for these two RPCs, after the action verified the session. `userId` is
+ * always the session user's id (never from the request body).
+ */
+export type KeyRpcClient = Pick<UserSupabaseClient, "rpc">;
+
 export type KeyVerificationDeps = {
-  /** User session (RLS as the user): key meta, consents, key RPCs. */
+  /** User session (RLS as the user): key meta, consents, provider availability. */
   supabase: UserSupabaseClient;
+  /** Verified session user id; passed as `p_user_id` to the server-only key RPCs. */
   userId: string;
+  /** Server-only role client for save_provider_key / record_provider_key_check (A19). Lazy: built only when a key RPC runs. */
+  keyRpc: () => KeyRpcClient;
   /** app_ai_writer stores of this user (ai_jobs, ai_usage_records). */
   store: JobStore;
   usage: UsageStore;
@@ -254,7 +266,8 @@ async function saveEncrypted(
     args.verified.result === "limited" && (LIMITED_CAUSES as readonly string[]).includes(args.verified.errorCode ?? "")
       ? (args.verified.errorCode as LimitedCause)
       : undefined;
-  const { data, error } = await deps.supabase.rpc("save_provider_key", {
+  const { data, error } = await deps.keyRpc().rpc("save_provider_key", {
+    p_user_id: deps.userId,
     p_provider: args.provider,
     p_connection_tier: args.tier,
     p_key_ciphertext: toByteaHex(enc.keyCiphertext),
@@ -272,10 +285,17 @@ async function saveEncrypted(
   return keyMetaFromRpc(data);
 }
 
-/** F-AI-04 (4): strict consent for (provider, tier) at the version the client showed. */
-async function assertConsent(deps: KeyVerificationDeps, provider: AiProvider, tier: ConnectionTier, disclosureVersion: string): Promise<void> {
+/**
+ * F-AI-04 (4), R1 A20: the unified re-consent rule (same as AI runs and the DB check in
+ * save_provider_key). No "exact current version" match any more: a consent to an older
+ * version passes unless a `requires_reconsent` version took effect after it. Returns the
+ * agreed version, which is what `p_disclosure_version` carries (the DB judges by the
+ * consent row; the value only has to name an existing disclosure, db R1 notes).
+ */
+async function assertConsent(deps: KeyVerificationDeps, provider: AiProvider, tier: ConnectionTier): Promise<string> {
   const state = await getConsentState(deps.supabase, provider, tier, (deps.now ?? (() => new Date()))());
-  if (state.needsConsent || state.currentVersion !== disclosureVersion) throw consentRequired();
+  if (state.needsConsent || !state.agreedVersion) throw consentRequired();
+  return state.agreedVersion;
 }
 
 // ---------------- register / replace ----------------
@@ -287,7 +307,7 @@ export async function registerProviderKey(
   const { provider, connectionTier: tier } = input;
   const apiKey = normalizeProviderKey(input.apiKey);
   await assertProviderAvailable(deps.supabase, provider);
-  await assertConsent(deps, provider, tier, input.disclosureVersion);
+  const agreedVersion = await assertConsent(deps, provider, tier);
 
   const [existing] = await loadKeyMetas(deps.supabase, provider);
   if (!isPlausibleProviderKey(provider, apiKey)) {
@@ -305,6 +325,7 @@ export async function registerProviderKey(
   }
 
   const kms = deps.kms(); // fail closed (no KEK) before spending a provider call
+  deps.keyRpc(); // A19: fail closed (no service-role key) before spending a provider call
   const activeBefore = await loadActiveProvider(deps.supabase, deps.userId);
   const keyId = existing?.id ?? (deps.newId ?? randomUUID)();
 
@@ -322,7 +343,7 @@ export async function registerProviderKey(
 
   let meta: ProviderKeyMeta;
   try {
-    meta = await saveEncrypted(deps, { provider, tier, keyId, apiKey, disclosureVersion: input.disclosureVersion, verified, kms });
+    meta = await saveEncrypted(deps, { provider, tier, keyId, apiKey, disclosureVersion: agreedVersion, verified, kms });
   } catch (err) {
     await closeJob(deps, job, "stalled");
     throw err;
@@ -344,12 +365,14 @@ export async function recheckProviderKey(
   const tier = input.connectionTier ?? storedTier;
   const tierChange = tier !== storedTier;
   let kms: KmsAdapter | null = null;
+  let agreedVersion = "";
   if (tierChange) {
     await assertProviderAvailable(deps.supabase, provider);
-    await assertConsent(deps, provider, tier, input.disclosureVersion ?? "");
+    agreedVersion = await assertConsent(deps, provider, tier);
     kms = deps.kms();
   }
 
+  deps.keyRpc(); // A19: fail closed before spending a provider call
   const job = await openJob(deps, provider, tier);
   let apiKey: string;
   try {
@@ -372,7 +395,7 @@ export async function recheckProviderKey(
         tier,
         keyId: existing.id,
         apiKey,
-        disclosureVersion: input.disclosureVersion ?? "",
+        disclosureVersion: agreedVersion,
         verified,
         kms,
       });
@@ -382,11 +405,11 @@ export async function recheckProviderKey(
 
     // DM 2.11.3 record_provider_key_check: valid → valid / key_invalid → invalid / others → needs_check.
     const cause = verified.errorCode ? failureCauseOf(verified.errorCode) : null;
-    const { data, error } = await deps.supabase.rpc(
+    const { data, error } = await deps.keyRpc().rpc(
       "record_provider_key_check",
       verified.result === "valid"
-        ? { p_provider: provider, p_result_status: "valid" }
-        : { p_provider: provider, p_result_status: "failed", p_failure_cause: isKeyFailureCause(cause) ? cause : "provider_unavailable" },
+        ? { p_user_id: deps.userId, p_provider: provider, p_result_status: "valid" }
+        : { p_user_id: deps.userId, p_provider: provider, p_result_status: "failed", p_failure_cause: isKeyFailureCause(cause) ? cause : "provider_unavailable" },
     );
     if (error) throw mapDbError(error);
     await closeJob(deps, job, verified.result === "valid" ? null : (verified.errorCode ?? "provider_unavailable"));

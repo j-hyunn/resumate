@@ -40,12 +40,24 @@ const cons = (version: string, agreedAt = "2026-10-30T00:00:00Z"): ConsentRow =>
 describe("consent rules (DM 2.11.5)", () => {
   const v1 = disc("v1", "2026-10-28T00:00:00Z");
 
-  it("strict: needs the current version; none / older / no disclosure → needs consent", () => {
+  it("R1 A20 unified state: none / other tier → needs consent; a newer version needs it only with requires_reconsent", () => {
     expect(consentStateOf([v1], [cons("v1")], "gemini", "free", NOW)).toMatchObject({ currentVersion: "v1", agreedVersion: "v1", needsConsent: false });
     expect(consentStateOf([v1], [], "gemini", "free", NOW).needsConsent).toBe(true);
     expect(consentStateOf([v1], [cons("v1")], "gemini", "paid", NOW).needsConsent).toBe(true);
-    const v2 = disc("v2", "2026-11-01T00:00:00Z");
+    // Wording-only update (requires_reconsent false): no re-consent for saving either (was "exact current version").
+    const wording = disc("v2", "2026-11-01T00:00:00Z", false);
+    expect(consentStateOf([v1, wording], [cons("v1")], "gemini", "free", NOW)).toMatchObject({ currentVersion: "v2", agreedVersion: "v1", needsConsent: false });
+    const v2 = disc("v2", "2026-11-01T00:00:00Z", true);
     expect(consentStateOf([v1, v2], [cons("v1")], "gemini", "free", NOW)).toMatchObject({ currentVersion: "v2", needsConsent: true });
+    // Same answer as the run-time rule, for every case above.
+    for (const [d, c, tier] of [
+      [[v1], [cons("v1")], "free"],
+      [[v1], [], "free"],
+      [[v1, wording], [cons("v1")], "free"],
+      [[v1, v2], [cons("v1")], "free"],
+    ] as const) {
+      expect(consentStateOf([...d], [...c], "gemini", tier, NOW).needsConsent).toBe(!mayRunWithConsent([...d], [...c], "gemini", tier, NOW));
+    }
     // A future version isn't current yet.
     const future = disc("v3", "2027-01-01T00:00:00Z");
     expect(consentStateOf([v1, future], [cons("v1")], "gemini", "free", NOW).needsConsent).toBe(false);

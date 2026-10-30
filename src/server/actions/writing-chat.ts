@@ -6,13 +6,17 @@ import {
   EditDraftAchievementInput,
   EditDraftDetailInput,
   EditDraftSkillInput,
+  ProjectWritingChatsInput,
   ReviewDraftFieldInput,
   SetAffiliationInput,
   StartWritingChatInput,
   WritingChatIdInput,
+  type ProjectWritingChatSummary,
+  type ResumeWritingChatResult,
   type StartWritingChatResult,
   type StructuredDraft,
   type WritingChatDto,
+  type WritingChatLists,
   type WritingChatSaveResult,
 } from "@/lib/contracts/writing-chat";
 import { requireConsentedUser } from "@/server/auth/session";
@@ -145,6 +149,34 @@ export async function abandonWritingChat(input: unknown): Promise<ActionResult<{
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return chats.abandonWritingChat(supabase, parsed.data.writingChatId);
+  });
+}
+
+/** "다시 이어 하기" (R1 A6; S-08 그만둔 AI 대화, S-10 대화 기록): abandoned → active. No AI call, no key. */
+export async function resumeWritingChat(input: unknown): Promise<ActionResult<ResumeWritingChatResult>> {
+  const parsed = WritingChatIdInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.resumeWritingChat(supabase, parsed.data.writingChatId);
+  });
+}
+
+/** S-08 "작성 중인 AI 대화" + "그만둔 AI 대화" (R1 A6). The career tree carries the same lists. */
+export async function listWritingChats(): Promise<ActionResult<WritingChatLists>> {
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.listWritingChats(supabase);
+  });
+}
+
+/** S-10 "AI 작성 대화 기록": the project's chats incl. abandoned (R1 A6). */
+export async function listProjectWritingChats(input: unknown): Promise<ActionResult<ProjectWritingChatSummary[]>> {
+  const parsed = ProjectWritingChatsInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.listProjectWritingChats(supabase, parsed.data.projectId);
   });
 }
 

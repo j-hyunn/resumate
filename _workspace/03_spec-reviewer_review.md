@@ -1215,3 +1215,209 @@ R-27·R-28은 구현 전에 데이터 모델 한 절(2.5·3.3)만 고치면 닫�
 
 - `[결정 필요]`(리더): R-63 (a) 결과 행 전부 다시 열기 / (b) 실패 행만 + `[가정]` 삭제. 권고 (a) — 리더 판단 "섞이지 않게"의 목적과 맞다. (a)면 DM 11.5 백엔드 후속 ★에 "공급자 변경 시 결과 행 재개방" 추가.
 - 나머지(R-64·R-65·R-66, R-61·R-62)는 문장 수정으로 닫힌다. 거부 코드(확인 2)와 컬럼 갱신(확인 3 앞 두 항목)은 네 문서가 맞다.
+
+## 재검토 (2026-11-06) — 라운드 1
+
+> 범위: B3~B6, B11 중 다시 시도 공급자 규칙과 연결 게이트 거부 코드만. (1) A1 변경 후속 수정 R-63~R-66을 리뷰어가 직접 대조(이전에는 grep만), (2) 2026-11-06 추가분(DM 2.11.7 경로 ② `ai_connection_changed`·판정 순서, 경로 ⑤ 요청 범위 작업 시작, UX C-20 행, decisions 3.7 "2026-11-06 거부 코드" 행, README 8행). 대상: PRD v4.3 F-AI-03 (2), UX v5.3 C-20·S-16·S-33·S-40·FL-12·FL-20, AI v4.3 C-11.4·AI-06, DM v4.2 2.9.1·2.11.7·7장·11.5, `docs/planning/decisions.md` 3.6·3.7·4.1·4.2, `docs/planning/README.md`.
+> 구현 대조 기준(읽기만): `backend-work-495ef2` 커밋 42f7611 — `supabase/migrations/20261106000100_r2_retry_ai_job.sql`(`retry_ai_job`), `src/server/db/errors.ts`, `src/server/jobs/runner.ts`(`startJob`·`retryJob`), `src/app/api/ai-jobs/[id]/retry/route.ts`, `src/server/services/drafts/ai-run.ts`, `src/server/services/application/extraction.ts`, `get_data_readiness` 마이그레이션.
+> R-61·R-62(기존 미해결)는 다시 적지 않는다.
+
+### 확인 결과 — R-63~R-66
+
+| ID | 확인 | 판정 |
+|----|------|------|
+| R-63 | DM 0장 41행·2.9.1 상태 전이·(1) 행·"결과 행 다시 열기 — RPC 동작"·7장·11.5 ★, AI C-11.4 477행이 모두 "다르면 그 작업이 쓴 결과 행 전부 다시 열어 덮어씀, 같으면 실패 행만". AI의 `[가정]`은 리더 판단으로 바뀌었다. 구현 `retry_ai_job`도 같은 규칙(`v_restarted` = 공급자 또는 등급이 다름) | **해소**. 구현과의 세부 차이는 R-70 |
+| R-64 | AI C-11.4 478행: 경우 ① `key_missing`, 경우 ② `ai_not_connected`(409), 근거 DM 2.11.7. 구현 `startJob`도 `ai_not_connected`(`runner.ts:190`) | **해소**(경우 ② 안의 요청 범위 작업은 R-68) |
+| R-65 | DM 2.9.1 (2) 행·7장 retry 행에 인사이트 "다시 생성"(새 작업·새 버전) 있음 | **해소** |
+| R-66 | PRD F-AI-03 (2) "작업에 기록된 공급자·등급(직전 실행 값)과 다르면" — 세 문서와 같음 | **해소**(UX 본문 2곳 잔여는 R-73) |
+
+### 확인 결과 — 핵심 규칙과 2026-11-06 추가분
+
+| 규칙 | PRD | UX | AI | DM | 구현 42f7611 | 판정 |
+|------|-----|----|----|----|--------------|------|
+| 모든 재실행 = 누른 시점 활성 공급자·등급, 진행 중은 시작 공급자 | F-AI-03 (2) | C-20 851행, S-40 1306행 | C-11.4 | 2.9.1 | `retry_ai_job`이 `profiles.active_ai_provider`와 그 키 등급을 읽음, 가드 트리거가 `failed → queued` 밖의 공급자 변경 거부 | 같음 |
+| 다르면 `step_outputs` 비움 + 결과 행 전부, 같으면 유지 + 실패 행만 | 같음 | 855행 | 474·477행 | 446·451행 | 같음(세부 R-70) | 같음 |
+| 작업 행 공급자 메타 갱신 | 같음 | 같음 | 같음 | 같음 | `provider`·`connection_tier`·`model`·`model_tier` 갱신, 결과 행·`evaluation_*` 갱신 | 같음 |
+| 경로 ② 코드·HTTP | — | C-20 845행 | C-11.4 478행(`ai_connection_changed` 없음 → R-68) | 2.11.7 ② | `errors.ts:41-47` 모두 409 | AI만 빠짐 |
+| 경로 ② 판정 순서 `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed` | — | 같음 | 없음 | 같음 | 같음(마이그레이션 117-135행, `runner.ts` `activeContext`) | 같음. 단 게이트 앞의 `ai_job_not_retryable`이 문서에 없음 → R-69 |
+| `ai_connection_changed`: 한 번 다시 읽고 또 어긋날 때만, 행 `failed` 유지 | — | 같음 | 없음 | 같음 | 같음(`runner.ts:332-342`, 거부는 롤백) | AI만 빠짐 |
+| 경로 ⑤ 요청 범위 작업 시작: 동의 필요 = `key_missing`, 무효 = `key_invalid`, 추출 200 안 `failed`, 서류 동기/SSE `error` | F-AI-03 (2)는 "동의 필요면 동의를 연다" | C-20 845행 끝 문장은 `key_missing`, 855행 표·FL-20 613행은 C-21 | C-11.4 경우 ② = DM 경로 ① | 2.11.7 ⑤ | 같음(`ai-run.ts` `gateCode`, `extraction.ts:137`, `draftSseError`) | **문서끼리 다름 → R-67, R-68** |
+| decisions 3.7 "2026-11-06 거부 코드" 행, README 8행 | — | — | — | — | — | DM 2.11.7과 같음 |
+| 같은 행 다시 시도 = 원래 공급자 잔여 표현 | 없음 | 없음 | 없음 | 없음 | — | 폐기 맥락만 남음(문제없음). ★ "현재 구현은 옛 공급자로" 문장은 낡음 → R-71 |
+
+### 신규 이슈
+
+#### R-67 [Major] 요청 범위 작업(경로 ⑤)의 "동의 필요"가 화면에서 막다른 길이 된다 — PRD·UX는 C-21을 연다고 하지만 화면이 알 방법이 없다 `[결정 필요]`
+- 담당: leader(결정) → ux-planner, data-architect, product-planner
+- 근거
+  - DM 2.11.7 ⑤: 요건 추출·서류 3종 시작의 동의 필요 = **`key_missing`**("현재 구현과 같음, 2026-11-06 리더 판단"). UX C-20 845행 끝: "요청 범위 작업 시작(경로 ⑤) … 동의 필요도 `key_missing`으로 와서 'AI 연결하기'로 보인다".
+  - 반면 PRD F-AI-03 (2): "그 공급자·등급의 동의가 필요하면 동의(F-AI-04 (5))를 연다"(모든 재실행 대상). UX C-20 855행 표(요건 추출·서류 3종 다시 시도 포함): "동의 필요면 활성 공급자·등급으로 C-21". FL-20 613행도 같다.
+  - 화면이 동의 필요를 미리 알 데이터가 없다: `get_data_readiness().ai_connection` = `active_provider`·`key_status`·`connection_tier`뿐(UX 799행, 구현 `private.current_ai_connection()`도 같음). 동의 상태는 AI 작성 대화 DTO(`WritingChatConnection.lock`에 `ai_consent_required`)에만 있다.
+  - "AI 연결하기" → S-40으로 가도, 이미 연결·활성인 공급자의 재동의를 받는 진입점이 없다. S-40 카드 상태는 미연결/연결됨/무효/확인 필요/일시 중지이고, C-21은 활성 공급자 **변경**·등급 변경 때만 열린다(1306·1307행). 운영자가 `requires_reconsent` 고지를 내면, 사용자는 요건 추출·서류 생성에서 "AI 연결하기" → S-40(모두 정상으로 보임) → 다시 실행 → 또 `key_missing`을 반복한다. 경로 ③·④도 같은 길로 가지만, 경로 ⑤는 가장 자주 쓰는 실행 버튼이라 영향이 크다.
+- 제안(택1, 권고 (a))
+  - (a) 화면이 동의 필요를 알게 한다: DM `get_data_readiness().ai_connection`에 `consent_required boolean`(2.11.5 규칙, `check_ai_run_allowed`와 같은 판정) 추가 → UX C-18/C-20: 이 값이 true면 실행 버튼 자리에 활성 공급자·등급으로 C-21, S-40 카드에 "동의 필요" 상태와 C-21 진입. 경로 ⑤ 서버 코드는 그대로 `key_missing`(대비용). 백엔드 후속 ★(readiness 필드).
+  - (b) 경로 ⑤를 HTTP 409 `ai_consent_required`로 바꾼다(백엔드 후속 ★, 추출 200 응답·SSE `error` 코드에 `ai_consent_required` 허용). 경로 ③·④의 막다른 길은 남는다.
+  - 어느 쪽이든 PRD F-AI-03 (2)·UX 855행·FL-20 613행의 "동의 필요면 C-21" 문장을 결정에 맞춘다.
+
+#### R-68 [Major] AI C-11.4가 요청 범위 작업의 거부 코드를 경로 ①(`ai_not_connected` 409)로 적었고, 2026-11-06 추가분(`ai_connection_changed`, 경로 ⑤)이 없다
+- 담당: ai-feature-designer
+- 근거
+  - AI C-11.4 475행: 경우 ② = "요청 범위 작업(AI-01 요건 추출, AI-11·AI-03·AI-04)의 다시 시도·다시 생성, 인사이트 다시 생성, 다시 채점, 남은 질문 다시 만들기". 478행: "경우 ②(새 작업 시작, DM 경로 ①) — 키 없음 `ai_not_connected`(409), 동의 필요 `ai_consent_required`, 키 무효 `key_invalid`".
+  - DM 2.11.7 ⑤: 요청 범위 작업 시작은 키 없음·동의 필요 모두 `key_missing`, 추출은 HTTP 200 안 `failed`, 서류는 동기 응답 또는 SSE `error`. 구현도 DM과 같다(`ai-run.ts` `gateCode`: `ai_consent_required`·`ai_not_connected` → `key_missing`, `extraction.ts:137`, 경력기술서·자소서 라우트 `draftSseError`).
+  - 478행 경우 ① 목록에 `ai_connection_changed`와 판정 순서가 없다(DM 2.11.7 673·674행, UX C-20).
+- 제안: 478행을 DM 2.11.7 경로별로 다시 쓴다 — 경우 ①(경로 ②) `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed`(409, 서버가 한 번 다시 읽은 뒤에도 어긋날 때만, 행 `failed` 유지) / 경우 ② 중 새 비동기 작업(인사이트 다시 생성, 다시 채점, 남은 질문 다시 만들기 — 경로 ①) `ai_not_connected`·`ai_consent_required`·`key_invalid` 409 / 경우 ② 중 요청 범위 작업(경로 ⑤) `key_missing`(동의 필요 포함)·`key_invalid`, 응답 형태는 DM 2.11.7 ⑤. "동의 필요는 활성 공급자·등급으로 C-21"은 R-67 결정에 맞춘다. 변경 이력에 2026-11-06 추가를 적는다.
+
+#### R-69 [Major] 같은 행 다시 시도의 `ai_job_not_retryable` 범위가 구현보다 좁게 적혀 있다 — 입력 원인 실패에서 화면의 "다시 시도"가 409로 막힌다
+- 담당: data-architect(주), ux-planner
+- 근거
+  - 구현: `retry_ai_job` 98-103행·`runner.ts` `retryJob`·retry 라우트 주석 — `error_category = 'input'`(`input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`)인 실패, 요청 범위 작업 유형, `failed`가 아닌 종료 상태(`succeeded`·`canceled`)는 409 `ai_job_not_retryable`. 이 판정은 **연결 게이트보다 먼저**다(작업 없음 404 → 진행 중이면 그 작업을 따라감(202 `inProgress`) → `ai_job_not_retryable` → `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed`).
+  - DM 2.9.1 450행·7장 retry 행: `ai_job_not_retryable`은 "요청 범위 작업"만. 2.11.7 판정 순서(673행)에는 게이트 4개만 있다.
+  - UX C-20 `input_rejected` 행: 버튼 "해당 입력으로 이동, **다시 시도**". "다시 시도 거부" 행: "`ai_job_not_retryable`: 화면은 요청 범위 작업에 이 경로를 쓰지 않으므로 보통 나오지 않는다". → 인사이트(S-16)나 면접 질문 생성(S-33)이 `input_too_long`·`safety_blocked`로 실패하면 "다시 시도"가 늘 409가 된다.
+- 제안: 기획을 구현에 맞춘다(같은 입력으로 같은 행을 다시 돌리면 같은 원인으로 실패하므로 구현 쪽이 맞다).
+  - DM 2.9.1 (1)·7장·2.11.7 ②: "입력 원인(`error_category = 'input'`) 실패와 `failed`가 아닌 행은 같은 행 다시 시도 대상이 아니다(409 `ai_job_not_retryable`)"와 위 전체 판정 순서를 적는다.
+  - UX C-20 `input_rejected`·(입력) 행: 비동기 작업(인사이트·면접 질문 생성)에서는 "다시 시도" 대신 입력을 고친 뒤 새 실행(인사이트 "다시 생성", 면접은 새 세션 또는 해당 실행 버튼)으로 보낸다. "다시 시도 거부" 행의 "보통 나오지 않는다" 문장을 고친다.
+
+#### R-70 [Minor] 결과 행 다시 열기의 위치·세부가 구현과 다르다
+- 담당: data-architect, leader(decisions 4.2)
+- 근거
+  - DM 2.9.1 451행: "같은 행 다시 시도를 시작하는 `begin_*`(…의 시작 RPC)는 공급자·등급 비교 결과에 따라 다시 열 결과 행을 고른다". 구현은 **`retry_ai_job` 안에서** 작업 행 갱신과 같은 트랜잭션으로 연다(마이그레이션 166-202행). 같으면 실패 행을 `begin_*`/`save_*`/`complete_*`가 나중에 연다(기존 방식).
+  - DM 452행 "성공(`succeeded`/`ready`)이던 행도 다시 연다": 구현은 작업 안의 성공 답변 평가는 다시 열지만(`answer_evaluations`는 상태 조건 없이 `pending`), **이미 끝난 결과 묶음**(인사이트 `ready`, 질문 `generation_status = 'ready'`, 채점 완료 세션)은 그대로 둔다 `[가정]`(`complete_*`는 성공했는데 작업 완료만 실패한 경우).
+  - `interview_questions`: DM "새 세대 값으로 교체 대상 표시 — 방식은 구현 선택 `[가정]`" ↔ 구현은 세션의 저장 질문을 **지우고**(빈 답변만 있는 질문, 연쇄 삭제) `generation_status = 'generating'`으로 되돌린다 `[가정]`. decisions 4.2 "면접 질문 행 다시 열기"는 이것으로 답이 났다.
+  - `input_hash`는 공급자나 모델이 바뀌면 null로 비운다(DM "갱신 시점·방식은 구현 선택 `[가정]`"과 충돌 없음, 기록만 하면 됨).
+- 제안: DM 2.9.1 "결과 행 다시 열기 — RPC 동작"의 주체를 `retry_ai_job`으로 바꾸고 위 세 세부(완료된 결과 묶음 제외 `[가정]`, 질문 삭제 후 재생성 `[가정]`, `input_hash` 비움)를 적는다(기획 문서 수정, 구현 변경 없음). decisions 4.2 "면접 질문 행 다시 열기"를 해소로 옮긴다.
+
+#### R-71 [Minor] A1 변경 ★ 백엔드 후속 표기가 낡았다 — 42f7611(R2)에서 이미 구현됨
+- 담당: data-architect, ai-feature-designer, product-planner, leader(decisions·README)
+- 근거: 구현 R2(`slices.md` "R2 A1 변경 … done 2026-11-06")가 활성 공급자 다시 시도, 공급자 메타 갱신, `step_outputs` 비움, 결과 행 재개방, 경로 ② 게이트 순서, `ai_connection_changed`를 넣었다. 경로 ① 코드(`ai_not_connected`·`ai_consent_required`·`key_invalid`)도 구현과 같다(`runner.ts:186-193`). 그런데 문서는 아직 "할 일"로 적혀 있다.
+  - DM 2.9.1 459행 "★ 백엔드 후속: 현재 구현은 같은 행 다시 시도를 작업에 기록된 옛 공급자로 돌린다 → …", DM 11.5 1213행 ★ A1 변경·R-63
+  - AI C-11.4 482행 "백엔드 후속 ★: 현재 구현은 작업에 고정된 옛 공급자로 다시 돈다 → …"(결과 행 재개방도 빠져 있음)
+  - PRD 593행 ★ 14건 중 A1, decisions 4.1 A1 행, 4.2 "새 작업 시작 경로의 거부 코드" 행, README 57행 "★ 14건"
+- 제안: 위 ★ 문장을 "구현됨(backend R2, 42f7611, 2026-11-06)"으로 바꾸고 "현재 구현은 …" 문장은 지운다. decisions 4.1 A1·4.2 거부 코드 행은 "완료"로, README ★ 개수를 맞춘다.
+
+#### R-72 [Minor] DM 7장 retry 행과 11.5에 2026-11-06 추가가 없다
+- 담당: data-architect
+- 근거: DM 7장 "실패 작업 다시 시도" 행(1022행): "키 없음 409 `key_missing`, 무효 409 `key_invalid`, 동의 필요 409 `ai_consent_required`" — `ai_connection_changed`·판정 순서 없음. 11.5 이름 표 1205행 "API 거부 코드 `ai_consent_required`(HTTP 409 경로만), `ai_not_connected`, `ai_job_not_retryable`"에 `ai_connection_changed`와 경로 ⑤가 없다. 2.11.7 본문과 10장 변경 이력에는 있다.
+- 제안: 7장 retry 행에 `ai_connection_changed`(409)와 "판정 순서는 2.11.7"을, 11.5 표에 `ai_connection_changed`·경로 ⑤ 행을 더한다(R-69 반영분과 함께).
+
+#### R-73 [Minor] UX S-16·S-33 본문의 비교 기준이 "처음과 다르면"이다 (R-66 잔여)
+- 담당: ux-planner
+- 근거: S-16 1150행 "공급자가 처음과 다르면 버튼 옆에 '{활성 공급자}로 처음부터 다시 해요'", S-33 1190행 "공급자가 처음과 다르면 처음부터". 네 문서와 구현의 기준은 **작업 행에 기록된 공급자·등급(직전 실행 값)** 이고 등급만 바뀌어도 처음부터 다시 한다(`v_restarted`). 두 번째 다시 시도부터는 "처음"과 "직전"이 다르다.
+- 제안: 두 곳을 "작업 행의 공급자·등급과 다르면"(C-20 855행과 같은 말)으로 바꾼다. 같이: C-20 `ai_connection_changed` 처리에 "다시 시도 버튼 옆 C-19 배지와 '처음부터 다시' 표시를 새 활성 연결로 다시 읽는다"를 한 줄 더한다(안 그러면 바뀌기 전 공급자를 보인 채 다시 누르게 된다).
+
+#### R-74 [Minor] README가 "리뷰어 재검토 없음"으로 남아 있다
+- 담당: leader
+- 근거: README 8행 "(문서 버전 그대로, 리뷰어 재검토 없음)", 41행 "R-63~R-66은 … 리뷰어 재검토 없음, grep으로만 확인".
+- 제안: 이 재검토 결과(R-63~R-66 해소, R-67~R-74)로 두 줄을 갱신한다. 이슈 수정 뒤에 고친다.
+
+### 이슈 목록 (재검토 라운드 1)
+
+| ID | 심각도 | 담당 | 상태 | 한 줄 |
+|----|--------|------|------|-------|
+| R-63 | Major | data-architect, ai-feature-designer | **해소**(리뷰어 확인) | 구현 세부 차이는 R-70 |
+| R-64 | Minor | ai-feature-designer | **해소**(리뷰어 확인) | 요청 범위 작업 코드는 R-68 |
+| R-65 | Minor | data-architect | **해소**(리뷰어 확인) | |
+| R-66 | Minor | product-planner | **해소**(리뷰어 확인) | UX 잔여는 R-73 |
+| R-67 | **Major** | leader(결정) → ux-planner, data-architect, product-planner | 신규 `[결정 필요]` | 경로 ⑤ 동의 필요 = `key_missing` ↔ PRD·UX "C-21을 연다", 화면이 알 방법·S-40 진입점 없음 |
+| R-68 | **Major** | ai-feature-designer | 신규 | AI C-11.4 요청 범위 작업 코드 = 경로 ① ↔ DM 경로 ⑤·구현, `ai_connection_changed` 없음 |
+| R-69 | **Major** | data-architect, ux-planner | 신규 | 입력 원인 실패도 `ai_job_not_retryable`(게이트보다 먼저) ↔ DM "요청 범위만", UX "다시 시도" 버튼 |
+| R-70 | Minor | data-architect, leader | 신규 | 결과 행 재개방 주체 `begin_*` ↔ 구현 `retry_ai_job`, 완료 묶음 제외·질문 삭제 `[가정]` |
+| R-71 | Minor | data-architect, ai-feature-designer, product-planner, leader | 신규 | A1·R-63·경로 ① ★가 R2에서 구현됨 — "현재 구현은 옛 공급자" 문장 낡음 |
+| R-72 | Minor | data-architect | 신규 | DM 7장 retry 행·11.5에 `ai_connection_changed`·경로 ⑤ 없음 |
+| R-73 | Minor | ux-planner | 신규 | S-16·S-33 "처음과 다르면" → "작업 행의 공급자·등급과", `ai_connection_changed` 뒤 배지 다시 읽기 |
+| R-74 | Minor | leader | 신규 | README "리뷰어 재검토 없음" 갱신 |
+
+### 리더 전달
+
+- `[결정 필요]` R-67: (a) readiness `ai_connection.consent_required` 추가 + S-40 "동의 필요" 상태(권고, 경로 ③·④도 함께 풀림, 백엔드 ★ 1건) / (b) 경로 ⑤를 409 `ai_consent_required`로(백엔드 ★, ③·④는 남음).
+- 구현 쪽을 고쳐야 할 것(백엔드 후속 ★)은 R-67 결정분뿐이다. R-69·R-70은 기획 문서를 구현에 맞추는 수정이다.
+- 판정 순서·코드 이름·HTTP 409·공급자 컬럼 갱신·`ai_connection_changed` 재시도 한 번은 DM·UX·decisions·README·구현이 모두 같다.
+
+## 재검토 (2026-11-06) — 라운드 2 (최종)
+
+> 범위: 라운드 1 이슈 R-67~R-74 수정 확인과, 수정으로 생긴 문제(B3~B6, B11). 대상: `_workspace/` PRD v4.3 F-AI-03 (2)·F-AI-04 (5)·482·594행, UX v5.3 C-18·C-20·FL-20·S-16·S-33·S-40, AI v4.3 C-11.4, DM v4.2 2.9.1·2.11.7·6장·7장·11.5, `docs/planning/decisions.md` 2장·3.7·4.1·4.2, `docs/planning/README.md`. `docs/planning/`의 네 문서 사본은 아직 동기화 전이라 보지 않았다.
+> 리더 결정 R-67 = (a): readiness `ai_connection.consent_required`, 화면이 실행 전 C-21, S-40 "동의 필요" 상태, 서버 코드는 그대로. `[가정]`, 사용자 확인 권장, 백엔드 ★.
+> 구현 대조(읽기만): `backend-work-495ef2` 42f7611 — `retry_ai_job`(마이그레이션 20261106000100), `runner.ts` `retryJob`, `src/server/db/errors.ts`, `src/app/api/ai-jobs/[id]/retry/route.ts`, `services/ai-connection/consent.ts`.
+
+### 이슈별 확인
+
+| ID | 확인 내용 | 판정 |
+|----|-----------|------|
+| R-67 | PRD F-AI-03 (2) "실행하기 전에 동의 … 요청 하나로 끝나는 기능은 서버 거절 시 'AI 연결 필요' 안내(대비용) `[가정]`", F-AI-04 (5) S-40 "동의 필요" 상태, 482행 가정 표·594행 ★. UX C-18 판정 원천에 `consent_required`(모든 실행 전 C-21 → 동의 뒤 readiness 다시 읽고 누른 실행을 이어 보냄), C-20 `key_missing` 행·"다시 시도 거부" 행(경로 ③④⑤의 `key_missing`은 readiness 다시 읽기 → C-21), 855행 표, FL-20 613행, S-40 데이터 원천(1299행)·카드 상태(1305행)·상태 목록(1313행). AI C-11.4 483행. DM 2.11.7 끝 문단·6장 `consent_required`(판정 = `private.ai_consent_allows_run`, 활성 공급자 없으면 null)·11.5 이름 표·★. decisions 3.7 R-67 행(대안 (b) 채택 안 함)·4.1 ★. README "사용자 확인 권장 1건". 경로 ⑤ 서버 코드 `key_missing`은 DM·AI·UX·구현 모두 같음. 단독 동의 저장 경로는 구현에 이미 있음(`recordAiDataUseConsent`, 사용자 세션 insert — DM 7장 F-AI-04 행과 같음) | **해소**. 사용자 확인 권장 표기가 decisions 2장에 없는 점은 R-77 |
+| R-68 | AI C-11.4 479~483행이 DM 2.11.7 경로 ①②③④⑤에 하나씩 대응: 새 비동기 작업 시작 = 경로 ① `ai_not_connected`·`ai_consent_required`·`key_invalid`, 같은 행 다시 시도 = `ai_job_not_retryable` 먼저 → `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed`(한 번 다시 읽은 뒤), 실행 중 확인·대화 SSE = 동의 필요 `key_missing`, 요청 범위 작업 = 경로 ⑤ `key_missing`·`key_invalid`(추출 200 안 `failed`, 서류 동기/SSE `error`). 변경 기록은 "다른 팀원에게 요청" 절 "2026-11-06 재검토 반영"에 있음 | **해소** |
+| R-69 | DM 2.9.1 (1) 행 "입력 원인 실패 제외", 대상 아님 목록(요청 범위 유형·입력 원인 4코드·`failed` 아닌 행·대상 없어진 행), 전체 판정 순서, 2.11.7 ② 판정 순서, 7장 retry 행, 11.5. UX C-20 `input_rejected`·(입력) 행 "다시 시도 버튼은 두지 않는다 → 입력 고친 뒤 새 실행", "다시 시도 거부" 행 `ai_job_not_retryable` 범위·판정 순서. decisions 3.7 R-69. 구현 대조: `retryJob`이 진행 중 → 따라감, `status ≠ failed`·`error_code` 없음·`errorCategoryOf = input`·요청 범위 유형 → 409 `ai_job_not_retryable`을 `activeContext()`(게이트)보다 먼저 판정. 입력 범주 4코드는 DB 생성 컬럼(`s3a_ai_jobs_v4.sql` 115행)과 같음. RPC가 행을 못 옮기면(`requeued: false`) 진행 중이면 따라가고 아니면 `ai_job_not_retryable` — DM 문장과 같음 | **해소**. S-16·S-33 본문 잔여는 R-76 |
+| R-70 | DM 2.9.1 "결과 행 다시 열기 — RPC 동작": 주체 `retry_ai_job`, 같은 트랜잭션·잠금 순서, 인사이트 `failed` 행 → `generating`, 질문은 세션이 이 작업의 진행 중 세션이고 `generation_status <> 'ready'`일 때 빈 답변 질문 삭제 → `generating` `[가정]`, 채점은 세션 `evaluation_failed`/`evaluating`일 때 이 작업의 평가 전부 `pending`·종합 메타·세션 `evaluation_*`, 끝난 결과 묶음 제외 `[가정]`, `input_hash` 비움 `[가정]`. 구현 166~202행과 줄 단위로 같음. decisions 3.7 R-70, 4.2 "면접 질문 행 다시 열기" 해소 | **해소** |
+| R-71 | "현재 구현은 옛 공급자로" 문장 없음(전 문서 검색). DM 2.9.1 469행·11.5 1233행, AI C-11.4 487행, PRD 594행, decisions 4.1 끝 줄·4.2 "새 작업 시작 경로의 거부 코드" 해소, README "★ 14건 … A1은 구현됨"이 모두 "구현됨(42f7611)". ★ 개수: PRD 594행 13 + R-67 = 14, decisions 4.1 표 14행, README 14 — 같음 | **해소** |
+| R-72 | DM 7장 retry 행에 `ai_job_not_retryable`(게이트보다 먼저)·`ai_connection_changed`(409, 다시 읽은 뒤에도 어긋날 때만, 행 `failed` 유지)·"판정 순서는 2.11.7". 11.5 표에 `ai_connection_changed` 행, `ai_job_not_retryable` 범위 행, 경로 ⑤ 행, readiness 행 | **해소**. 같은 행의 경우 (2) 경로 번호 오기는 R-75 |
+| R-73 | S-16 1150행·S-33 1190행 "작업 행의 공급자·등급과 다르면" + "`ai_connection_changed` 뒤에는 C-19 배지와 이 표시가 새 활성 공급자를 다시 읽는다". C-20 "다시 시도 거부" 행에도 같은 문장 | **해소** |
+| R-74 | README 8행 "같은 날 재검토(R-67~R-74)를 거쳐 네 문서를 고쳤다", 42행 재검토 줄 추가. 41행 "리뷰어 재검토 없음"은 2026-11-05 사이클의 기록이고 바로 아래 줄이 재검토로 확인했음을 적어 문제없음 | **해소**. 이번 라운드 2 결과(아래 R-75~R-77, 미해결 수)는 리더가 README 리뷰 현황에 반영해야 함 |
+
+### 구현 대조 결과 — 경로 ② 판정 순서와 `ai_job_not_retryable` 범위
+
+| 단계 | DM 2.9.1·2.11.7 ② | 구현 42f7611 | 판정 |
+|------|-------------------|--------------|------|
+| 1 | 작업 없음 404 `not_found` | `retryJob` `store.get` → `not_found`, RPC `ai_job_not_found` 404 | 같음 |
+| 2 | 진행 중이면 그 작업을 따라감(202 `inProgress`) | `isActive(job.status)` → `following` | 같음 |
+| 3 | `ai_job_not_retryable` — 요청 범위 유형, 입력 원인 4코드, `failed` 아닌 행, `error_code` 없음, 대상 없어진 행 | TS: `status ≠ failed`·`!errorCode`·`errorCategoryOf = input`·`REQUEST_SCOPED_JOB_TYPES`. RPC: 같은 조건 + 대상(지원 프로젝트·세션) 없음 | 같음(아래 참고 1) |
+| 4~6 | `key_missing` → `key_invalid` → `ai_consent_required` | TS `activeContext()`(`peekActive` → `forUser`), RPC가 잠금 아래 같은 순서로 다시 봄. `errors.ts` 세 코드 모두 409 | 같음 |
+| 7 | `ai_connection_changed` — 한 번 다시 읽고도 어긋날 때만, 행 `failed` 유지 | `requeue` 실패 시 `activeContext()` 다시 읽고 1회 재호출, RPC 예외는 트랜잭션 롤백. `errors.ts` 409, 문구 "AI 연결이 방금 바뀌었어요. 다시 시도해 주세요." = UX C-20 | 같음 |
+| 8 | 같은 대상의 다른 작업이 진행 중이면(unique 위반) 그 작업을 따라감 | `conflict` → `findInFlight` → `FollowJob` | 같음 |
+| 9 | `requeued: false`면 진행 중이면 따라가고 아니면 `ai_job_not_retryable` | `!result` → `store.get` → `following` / `notRetryable()` | 같음 |
+
+- 참고 1(이슈 아님): "결과 대상이 없어진 행"의 `ai_job_not_retryable`은 RPC 안에서만 판정되므로 실제로는 TS 게이트(4~6) 뒤에 나온다. 대상이 없어진 작업은 화면에 다시 시도 버튼이 없어 사용자 영향이 없다. 문서를 고칠 필요는 없고, 백엔드 QA가 판정 순서 테스트를 쓸 때만 알면 된다.
+- retry 라우트 주석의 거부 목록(`key_missing`·`ai_consent_required`·`key_invalid`, 요청 범위·입력 원인 → `ai_job_not_retryable`)에 `ai_connection_changed`가 빠져 있으나 코드 동작은 문서와 같다(주석일 뿐, 기획 이슈 아님).
+
+### 신규 이슈 (수정으로 생긴 문제)
+
+#### R-75 [Minor] DM 2.9.1 경우 (2) 행과 7장 retry 행이 요청 범위 작업의 다시 생성 거부 코드를 "경로 ①"로 가리킨다 (R-68과 같은 오류가 DM에 남음)
+- 담당: data-architect
+- 근거
+  - DM 2.9.1 447행 (2) 행: 해당 동작에 "요청 범위 작업(`jd_extraction`, 서류 3종 …)의 다시 생성"을 넣고, 공급자 칸 끝에 "거부 코드는 2.11.7 경로 ①".
+  - DM 7장 1037행 retry 행: "경우 (2) 새 작업: 인사이트 '다시 생성', 요청 범위 작업의 다시 생성, 면접 '다시 채점'·'남은 질문 다시 만들기'는 … (거부 코드는 2.11.7 경로 ①)".
+  - 같은 문서 2.11.7 ⑤와 11.5, AI C-11.4 482행, 구현(`ai-run.ts` `gateCode`, `extraction.ts`)은 요청 범위 작업 = 경로 ⑤(`key_missing`, 추출 HTTP 200 안 `failed`, 서류 동기/SSE `error`)다. 2.9.1·7장만 보고 구현하면 요건 추출·서류 다시 생성이 409 `ai_not_connected`/`ai_consent_required`를 내게 된다.
+- 제안: 두 곳을 "거부 코드는 2.11.7 — 인사이트 다시 생성·다시 채점·남은 질문 다시 만들기는 경로 ①, 요청 범위 작업은 경로 ⑤"로 고친다.
+
+#### R-76 [Minor] UX S-16·S-33 본문의 "다시 시도"가 입력 원인 실패에도 열린 것처럼 읽힌다 (R-69 잔여)
+- 담당: ux-planner
+- 근거
+  - S-16 1150행: "선행 요건 추출이 실패하면 인사이트도 같은 원인으로 실패하고, '다시 시도'는 같은 작업 행을 `prepare`부터 다시 하며 …" 바로 뒤에 "추출은 됐는데 요건이 0개면 `not_a_jd` 문구". 선행 추출의 실패 원인이 `not_a_jd`·`input_too_long`이면 인사이트 작업도 입력 원인(`error_category = 'input'`)으로 끝나고, C-20(R-69 반영)과 DM 2.9.1·구현은 이 행을 409 `ai_job_not_retryable`로 거부한다.
+  - S-33 1190행: "생성이 통째로 실패하면 '다시 시도'는 같은 작업 행을 …" — 입력 원인(`input_too_long`·`safety_blocked`)을 빼지 않았다.
+  - C-20은 "다시 시도 버튼은 두지 않는다"로 고쳐졌지만, 화면 구현자는 S-16·S-33 본문을 먼저 본다. 구현 작업 상태 응답(`isManuallyRetryable`, `src/lib/contracts/ai.ts` 70행)도 입력 범주를 다시 시도 대상에서 뺀다.
+- 제안: 두 문장에 "(입력 원인 실패 — `not_a_jd`·`insufficient_data`·`input_too_long`·`safety_blocked` — 는 '다시 시도' 없이 C-20 `input_rejected`·(입력) 행대로: 인사이트는 공고 원문을 고친 뒤 '다시 생성', 면접 질문은 S-20 '시작하기')"를 붙인다.
+
+#### R-77 [Minor] decisions 2장에 R-67 `[가정]`이 없고, README의 확인 항목 개수가 decisions 4.2와 다르다
+- 담당: leader
+- 근거
+  - README "남은 결정": "사용자 확인 권장 1건: R-67 … 내용은 decisions.md에 있다". decisions 2장 "확인이 필요한 주요 가정"(사용자가 바꾸고 싶으면 알려 달라는 표)에는 R-67 행이 없고 3.7·4.1에만 있다. 사용자가 확인할 자리에서 보이지 않는다.
+  - README "남은 일": "확인 항목 3건(2건 해소)". decisions 4.2 표는 5행(탈퇴 미완료 판정 RPC, 새 작업 시작 거부 코드(해소), tone 정규화, 시작 인사 문구, 면접 질문 행 다시 열기(해소)) — 5건 중 2건 해소, 남은 3건이다.
+- 제안: decisions 2장에 "실행 전 동의 확인 | readiness `consent_required`로 실행 전 C-21, S-40 '동의 필요', 서버 코드 그대로 (R-67 리더 판단, 사용자 확인 권장) | PRD F-AI-03 (2)·F-AI-04 (5), DM 6장·2.11.7, UX C-18" 행을 더한다. README를 "확인 항목 5건(2건 해소, 남은 3건)"으로 고치고, 리뷰 현황 재검토 줄에 라운드 2 결과(R-67~R-74 해소, R-75~R-77 Minor 미해결)를 적는다.
+
+### 이슈 목록 (재검토 라운드 2, 최종)
+
+| ID | 심각도 | 담당 | 상태 | 한 줄 |
+|----|--------|------|------|-------|
+| R-67 | Major | leader → ux-planner, data-architect, product-planner | **해소**(리더 판단 (a) `[가정]`, 사용자 확인 권장, 백엔드 ★) | readiness `consent_required` → 실행 전 C-21, S-40 "동의 필요", 서버 코드 그대로 — 네 문서·decisions·README 같음 |
+| R-68 | Major | ai-feature-designer | **해소** | C-11.4가 DM 2.11.7 경로 ①~⑤에 대응 |
+| R-69 | Major | data-architect, ux-planner | **해소** | `ai_job_not_retryable` 범위·판정 순서 = 구현. S-16·S-33 잔여는 R-76 |
+| R-70 | Minor | data-architect, leader | **해소** | 결과 행 재개방 = `retry_ai_job`, 세부 `[가정]` 구현과 같음 |
+| R-71 | Minor | data-architect, ai-feature-designer, product-planner, leader | **해소** | ★ → 구현됨(42f7611), ★ 14건 일치 |
+| R-72 | Minor | data-architect | **해소** | 7장·11.5 보강. 경로 번호 오기는 R-75 |
+| R-73 | Minor | ux-planner | **해소** | S-16·S-33 비교 기준·배지 다시 읽기 |
+| R-74 | Minor | leader | **해소** | README 8·42행. 라운드 2 결과 반영은 R-77 |
+| R-75 | Minor | data-architect | **미해결(신규, 라운드 초과 → 리더 전달)** | DM 2.9.1 (2)·7장 요청 범위 다시 생성 = "경로 ①" → 경로 ⑤ |
+| R-76 | Minor | ux-planner | **미해결(신규, 라운드 초과 → 리더 전달)** | S-16·S-33 "다시 시도"에 입력 원인 제외 문구 |
+| R-77 | Minor | leader | **미해결(신규, 라운드 초과 → 리더 전달)** | decisions 2장 R-67 가정 행, README 확인 항목 개수·라운드 2 결과 |
+
+### 리더 전달
+
+- R-67~R-74 8건 모두 해소. 남은 것은 신규 Minor 3건(R-75~R-77)과 기존 R-61·R-62(Minor)이다. Critical·Major 0건.
+- R-75~R-77은 모두 한두 문장 수정이라 리뷰어 재검토 없이 담당 확인으로 닫아도 된다. 셋 다 구현 변경은 필요 없다.
+- `[결정 필요]`(사용자 확인 권장) 1건: R-67 (a) — 리더 판단 `[가정]`. 사용자가 확인하기 전에는 백엔드 ★(readiness `consent_required`)를 구현하지 않는다(decisions 4.1 R-67 행).
+- 구현 42f7611은 경로 ② 판정 순서·코드·HTTP 409·`ai_connection_changed` 재시도 한 번·`ai_job_not_retryable` 범위·결과 행 재개방이 기획(DM 2.9.1·2.11.7)과 같다. 참고 1(대상 없어진 행은 게이트 뒤에 판정)은 사용자 영향이 없어 이슈로 올리지 않았다.
+- `docs/planning/`의 PRD·UX·AI·DM 사본은 아직 `_workspace` 버전과 동기화되지 않았다. 동기화할 때 R-75·R-76 수정분을 포함한다.
+
+### 리더 후속 처리 (2026-11-06, 라운드 2 뒤)
+
+- R-75 해소: DM 2.9.1 경우 (2)·7장 retry 행 — 인사이트 다시 생성·다시 채점·남은 질문 다시 만들기 = 경로 ①, 요청 범위 작업 = 경로 ⑤.
+- R-76 해소: UX S-16·S-33에 입력 원인 실패는 다시 시도 없이 C-20대로(인사이트 "다시 생성", 면접 S-20 "시작하기") 괄호 추가.
+- R-77 해소: decisions 2장에 R-67 `[가정]` 행, README 확인 항목 수(5건 중 2건 해소)·라운드 2 결과.
+- 세 건 모두 리뷰어 재검토 없이 문자열 확인만 했다. 미해결은 기존 R-61·R-62(Minor).

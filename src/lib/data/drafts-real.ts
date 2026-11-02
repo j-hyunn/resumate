@@ -412,7 +412,7 @@ const RANKING_GATE_CODES: readonly string[] = ["key_missing", "key_invalid"]
 export async function realRankDraftSources(applicationProjectId: string): Promise<{ project_ids: string[]; ranking: Array<{ project_id: string; relevance: "high" | "medium" | "low"; include: boolean }> }> {
   const { supabase, user } = await requireConsentedUser()
   // QA-W5-07: an unknown / foreign / malformed project is AppError `not_found` (never a provider failure).
-  if (!isUuid(applicationProjectId)) throw new AppError("not_found", "기업 JD를 찾을 수 없어요.", { status: 404 })
+  if (!isUuid(applicationProjectId)) throw new AppError("not_found", "자기소개서를 찾을 수 없어요.", { status: 404 })
   const outcome = await rankDraftSourcesForProject(createDraftAiDeps(supabase, user.id), applicationProjectId, { refresh: false })
   if (outcome.kind === "insufficient_data") throw new MockAiError("insufficient_data")
   const data = outcome.data

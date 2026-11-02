@@ -585,7 +585,7 @@ isOneToOne: false
                   }
                   ComputedFields: never
                   Insert: {
-                    "body"?: string,"created_at"?: string,"id"?: string,"project_id": string,"sort_order": number,"title": string,"updated_at"?: string,"user_id"?: string
+                    "body"?: string,"created_at"?: string,"id"?: string,"project_id": string,"sort_order"?: number,"title": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
                     "body"?: string,"created_at"?: string,"id"?: string,"project_id"?: string,"sort_order"?: number,"title"?: string,"updated_at"?: string,"user_id"?: string

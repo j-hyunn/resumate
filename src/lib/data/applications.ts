@@ -330,7 +330,7 @@ export interface CreateApplicationInput {
    * A3 request 1: S-14 회사명·포지션명 입력란 (키 없음: 펼침). Stored on the JD with source 'user';
    * the AI extraction keeps user values (it only fills empty ones).
    * v5.3 name rule (S-14): `name` given → that; else **both** company and position → "회사명 –
-   * 포지션명" (user, first 100 chars); else no key → default "새 기업 JD (YYYY-MM-DD)", key →
+   * 포지션명" (user, first 100 chars); else no key → default "새 자기소개서 (YYYY-MM-DD)", key →
    * null (추출 대기, the AI name on success / the same rule on failure).
    */
   company_name?: string | null
@@ -363,7 +363,7 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
   }
   const jdId = newId()
   // v4 (D-30): with a key AI-01 runs automatically; without one the JD stays `pending` (요건 정리하기
-  // later) and the name is the user's or the default "새 기업 JD (날짜)".
+  // later) and the name is the user's or the default "새 자기소개서 (날짜)".
   const failNext = db.mock_controls.next_jd_extraction_failure
   if (key && failNext) db.mock_controls.next_jd_extraction_failure = null
   const job = key

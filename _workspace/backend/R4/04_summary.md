@@ -21,12 +21,12 @@
 | typecheck | 0 errors |
 | lint | 0 |
 | Vitest | 111 files, 1,772 pass |
-| pgTAP | 51 files, 2,387 pass |
+| pgTAP | 51 files, 2,388 pass (QA-R4-05 수정 후) |
 | `pnpm build` | 로컬 스택 env를 인라인으로 주면 통과(작업 트리에 `.env.local` 없음, R4-API-9) |
 
 ## QA (2라운드)
 - Critical 0 / Major 0. Minor 4건(QA-R4-01~04) 수정·재확인.
-- 남은 Minor 2건:
+- 남은 Minor 2건 → 둘 다 해결(2026-11-02, 03 보고서 "라운드 2 뒤 리더 처리"):
   - QA-R4-05 (db-engineer): `project_deliverables.sort_order` 기본값 없음 → insert 타입 우회 `as never`(`save.ts:237`)
   - QA-R4-06 (api-engineer): 서버 메시지 18곳의 "기업 JD" 문구 → "자기소개서"(CR-23). UI 재작업과 함께 처리 가능
 

@@ -233,8 +233,8 @@ export async function saveDeliverable(supabase: UserSupabaseClient, patch: SaveD
         ? async () =>
             withStatus(
               await table()
-                // sort_order: the insert trigger sets max + 1 when it is omitted (db notes); the generated type still requires it.
-                .insert({ id: patch.id, project_id: projectId, title, body: patch.body ?? "" } as never)
+                // sort_order omitted: the column defaults to 0 and the insert trigger appends (max + 1).
+                .insert({ id: patch.id, project_id: projectId, title, body: patch.body ?? "" })
                 .select(DELIVERABLE_RESULT_COLUMNS)
                 .single(),
             )

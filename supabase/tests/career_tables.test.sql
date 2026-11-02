@@ -266,6 +266,11 @@ values ('aaaaaaaa-4444-0000-0000-000000000002', 'aaaaaaaa-3333-0000-0000-0000000
 select results_eq($$select sort_order::int from public.project_deliverables
                      where project_id = 'aaaaaaaa-3333-0000-0000-000000000002' order by sort_order$$,
                   array[1, 2], 'omitted sort_order is filled with last + 1');
+insert into public.project_deliverables (id, project_id, title, sort_order)
+values ('aaaaaaaa-4444-0000-0000-000000000009', 'aaaaaaaa-3333-0000-0000-000000000002', 'D0', 0);
+select is((select sort_order::int from public.project_deliverables where id = 'aaaaaaaa-4444-0000-0000-000000000009'),
+          3, 'sort_order 0 (column default) is filled with last + 1 (QA-R4-05)');
+delete from public.project_deliverables where id = 'aaaaaaaa-4444-0000-0000-000000000009';
 select is((select body from public.project_deliverables where id = 'aaaaaaaa-4444-0000-0000-000000000001'), '',
           'body defaults to empty');
 select throws_ok($$insert into public.project_deliverables (project_id, title)

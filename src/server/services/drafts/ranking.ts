@@ -106,7 +106,7 @@ export async function rankDraftSourcesForProject(deps: DraftAiDeps, applicationP
 
   // A13: requirements must already exist (no extraction here; a failure, not an error screen).
   const jd = await loadDraftJd(user, applicationProjectId);
-  if (!jd) throw new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+  if (!jd) throw new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
   if (jd.extractionStatus === "running") return fail("extraction_in_progress");
   if (jd.extractionStatus !== "succeeded") return fail("jd_not_extracted");
   const requirements = await loadRequirements(user, jd.jobDescriptionId);

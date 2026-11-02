@@ -234,3 +234,8 @@ DB·AI 모듈은 DM v4.4·AI v4.5와 경계에서 맞는다. 차단 이슈 없�
 | Minor (수정 확인) | 4 (QA-R4-01~04) | 0 | 0 |
 
 결론: R4 슬라이스는 전체 검사(typecheck·lint·vitest 1,772·pgTAP 2,387·build)를 통과하고 경계면 불일치로 흐름이 깨지는 곳이 없다. 남은 2건은 Minor(타입 우회, 문구)라 출시를 막지 않는다. 2라운드 상한에 따라 열린 2건은 리더에게 넘긴다.
+
+## 라운드 2 뒤 리더 처리 (2026-11-02, 사용자 요청)
+- QA-R4-05 **해결**: `20261109101800_r4_deliverable_sort_order_default.sql` — `sort_order` 기본값 0, 삽입 트리거가 null 또는 1 미만이면 마지막 + 1. `database.types.ts` 재생성(Insert `sort_order` 선택), `save.ts`의 `as never` 제거. pgTAP `career_tables`에 0 → 끝 번호 케이스 추가.
+- QA-R4-06 **해결**: 서버 사용자 문구의 "기업 JD" → "자기소개서"(errors.ts, drafts·insight·interview·application 서비스, `lib/data/drafts-real.ts`), 기본 이름 주석 갱신. 내부 이름·코드 주석의 용어는 그대로.
+- 검사: pgTAP 51 files / 2,388 pass, typecheck 0, lint 0, Vitest 111 files / 1,772 pass, `pnpm build` 43페이지 통과(로컬 스택 env 인라인).

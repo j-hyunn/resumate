@@ -78,5 +78,5 @@ export function createJdExtractionDb(user: UserSupabaseClient, writer: AiWriterS
 export async function assertApplicationProjectOwned(user: UserSupabaseClient, applicationProjectId: string): Promise<void> {
   const { data, error } = await user.from("application_projects").select("id").eq("id", applicationProjectId).maybeSingle();
   if (error) throw mapDbError(error);
-  if (!data) throw new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+  if (!data) throw new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 }

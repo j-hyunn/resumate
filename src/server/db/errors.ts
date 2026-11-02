@@ -78,8 +78,8 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_return_target: { message: "입력값을 확인해 주세요." },
   invalid_period: { message: "기간을 확인해 주세요. 종료 월이 시작 월보다 빠를 수 없어요." },
   // S5 application projects / JD (db notes "RPC 시그니처")
-  application_project_not_found: { message: "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  job_description_not_found: { message: "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  application_project_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  job_description_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   application_project_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_id: { message: "입력값을 확인해 주세요." },
   invalid_raw_text: { message: "공고 원문은 1자 이상 50,000자 이하로 입력해 주세요." },
@@ -144,15 +144,15 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   message_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sequence: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // W0 Q53-2 / Q53-11 update_failed_jd_raw_text (DM 2.6.1)
-  jd_job_in_progress: { message: "이 기업 JD에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
+  jd_job_in_progress: { message: "이 자기소개서에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
   jd_raw_text_locked: { message: "지금은 공고 원문을 고칠 수 없어요. 새로고침 후 확인해 주세요.", status: 409 },
   jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
-  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 기업 JD로 추가해 주세요.", status: 409 },
+  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요.", status: 409 },
   jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
   // W0 Q53-3 begin_interview_evaluation / 다시 채점 route (DM 2.7.1)
   interview_evaluation_input_only: { message: "남은 실패는 입력이 원인이라 다시 채점할 수 없어요. 새 면접에서 다시 답해 주세요.", status: 409 },
   // S8 interviews (db notes)
-  interview_in_progress: { message: "이 기업 JD에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
+  interview_in_progress: { message: "이 자기소개서에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
   session_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_interview_type: { message: "면접 유형을 골라 주세요." },
   invalid_question_count: { message: "질문 수는 3, 5, 7 중에서 골라 주세요." },

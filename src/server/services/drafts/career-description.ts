@@ -142,7 +142,7 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
   if (plan.sections.length === 0) throw emptySelection();
 
   const jd = await loadDraftJd(user, applicationProjectId);
-  if (!jd) throw new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+  if (!jd) throw new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
   assertJdExtracted(jd);
 
   const context = await deps.providerContext.forUser(deps.userId).catch((err: unknown) => {
@@ -215,7 +215,7 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
 export const CAREER_DESCRIPTION_IN_PROGRESS = "career_description_in_progress";
 
 function inProgressError(jobId: string | null): AppError {
-  return new AppError(CAREER_DESCRIPTION_IN_PROGRESS, "이 기업 JD의 경력기술서를 만들고 있어요. 끝난 뒤 다시 시도해 주세요.", {
+  return new AppError(CAREER_DESCRIPTION_IN_PROGRESS, "이 자기소개서의 경력기술서를 만들고 있어요. 끝난 뒤 다시 시도해 주세요.", {
     status: 409,
     details: { jobId },
   });

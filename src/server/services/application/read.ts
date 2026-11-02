@@ -41,7 +41,7 @@ import { parseSentences } from "./db";
  * S-31 hub, S-15 JD view. Server Components call these at wiring time.
  */
 
-const notFound = () => new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 const PROJECT_COLUMNS =
   "id, name, name_source, deadline, memo, stage, stage_outcome, stage_changed_at, last_activity_at, created_at, " +

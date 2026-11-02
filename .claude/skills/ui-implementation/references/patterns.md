@@ -5,7 +5,7 @@ Read the section(s) your screens need. These patterns encode decisions from the 
 ## Contents
 1. AI response modes (sync / async job / streaming)
 2. Fake AI (mock module)
-3. AI failure, limit, and insufficient-data states
+3. AI lock, failure, and insufficient-data states
 4. Autosave and draft status
 5. Evidence chips and panel
 6. Data-insufficient gate and return banner
@@ -23,7 +23,8 @@ Source: `03-ai-features.md` C-6. Every AI-backed screen uses exactly one of thes
 |------|---------|------------|
 | Sync | AI-01 JD extraction, AI-11 source ranking, AI-08 | Button → spinner on the button (ST-AI-SYNC) → result replaces content. Disable the trigger while running |
 | Async job | AI-02 insight, AI-05 interview questions, AI-06/07 evaluation | Start → receive `job_id` → C-03 progress (stage label from `ai_jobs.progress.stage`, `done/total`) → partial results as they arrive → complete. The user may leave; completion shows the in-app toast and a menu badge. Poll every 2s in the mock (Realtime later) |
-| Streaming | AI-03 career description, AI-04 cover letter, AI-12 writing chat | C-04: render blocks as `block_started` / `block_delta` / `block_completed` / `validated` / `done` / `error` events arrive; show a stop button (sets `cancel_requested_at`) |
+| Streaming (documents) | AI-03 career description, AI-04 cover letter | C-04, event order from the spec's C-04: `sources_selected` → `block_started` / `block_delta` / `block_completed` → (only when needed) `adjusting_length` → `validated` → `done` (or `error`). Streamed blocks are provisional; on `validated` replace the whole section (career description: the whole draft) and only then attach evidence chips, badges, and the post-generation notes. Show a stop button (sets `cancel_requested_at`) |
+| Streaming (chat turn) | AI-12 writing chat | Turn events, not blocks: `turn_started` → `reply_delta`* → `reply_done` → `draft_patch` → `draft_flags` → `turn_done` (or `error`). No message limit per month; only the 40-message cap per chat (greeting excluded) |
 
 Stage labels come from the C-03 table in the screen spec — map `stage` keys to that copy in one shared constant, not per screen.
 
@@ -38,12 +39,12 @@ Keep the client hook shape stable so the real backend can replace the mock: `use
 - Failure injection: a parameter (and the `?state=ai-failed` switch) makes the job/stream fail with a given `error_category` (`transient`, `input`, `timeout`, `canceled`).
 - Outputs reference real fixture IDs so evidence chips resolve.
 
-## 3. AI failure, limit, insufficient data
+## 3. AI lock, failure, insufficient data
 
-- **ST-AI-FAILED:** copy chosen by `ai_jobs.error_category` (spec 3.0 common states). Always say usage was not charged, and offer retry. `canceled` is not shown as a failure. Async jobs keep completed stages and retry from the failed stage.
-- **ST-LIMIT:** the trigger button is replaced/disabled with the limit message. For the AI writing chat, only *new* chats are blocked; continuing, saving, and switching to the form still work.
-- **ST-INSUFFICIENT:** render C-09 instead of running AI. No usage is charged.
-- **Usage hint** next to every charging button: "이번 달 {N}회 남음 · 이 작업으로 {k}회 사용". Units per feature are in the spec's "실행 버튼 사용량 안내".
+- **BYOK (no service usage limits):** there is no ST-LIMIT, no "N회 남음", no charging copy. AI runs on the user's own provider key.
+- **C-18 AI lock:** from `getDataReadiness().ai_connection` — no active provider → lock; `key_status = 'invalid'` → C-20 `key_invalid`; `needs_check` → allowed with a C-19 caution badge. `consent_required = true` → don't lock, but open C-21 for the active provider and tier before any AI run starts.
+- **C-20 failures:** copy by `failure_cause` (7 provider causes) or `error_category` + `error_code`. Every retry and re-run uses the provider active *at click time* (badge shows the active provider). Input-caused failures (`input_too_long`, `safety_blocked`, `not_a_jd`, `insufficient_data`) have no "다시 시도" — the user fixes the input and runs again. Retry refusals (409 `key_missing`, `ai_consent_required`, `key_invalid`, `ai_connection_changed`, `ai_job_not_retryable`) are request responses, not job errors. `canceled` is not shown as a failure.
+- **ST-INSUFFICIENT:** render C-09 instead of running AI.
 
 ## 4. Autosave and draft status
 
@@ -61,7 +62,7 @@ Keep the client hook shape stable so the real backend can replace the mock: `use
 ## 6. Data-insufficient gate and return banner
 
 - Readiness comes from `getDataReadiness()` (mirrors RPC `get_data_readiness()`); decide gate vs action only from `features.{feature}.ready / missing / next_action`.
-- C-09 primary button follows `next_action` (`writing_chat` → S-36 with `suggested_mode`, `form` → S-09). When the monthly chat limit is used up, switch to "직접 입력하기" as the spec describes.
+- C-09 primary button follows `next_action` (`writing_chat` → S-36 with `suggested_mode`; `form` + `suggested_project_id` → S-10 for that project with name/role focused (hint `project_fields`); `form` without it → S-09).
 - Store the return target (feature + application project + in-progress settings) when leaving; C-10 banner on every career screen re-checks readiness after each save and returns to the original screen with settings restored.
 
 ## 7. Kanban board (S-39)
@@ -81,4 +82,4 @@ Keep the client hook shape stable so the real backend can replace the mock: `use
 ## 9. `?state=` preview switch
 
 - A helper reads `searchParams.state` (development only) and returns an override the page passes down; production ignores it.
-- Each screen documents which values it supports in the area report. Prefer the shared names: `empty`, `loading`, `error`, `not-found`, `ai-pending`, `ai-stream`, `ai-failed`, `limit`, `insufficient`, `save-failed`, plus screen-specific ones (e.g. `wait-jd`, `move-failed`).
+- Each screen documents which values it supports in the area report. Prefer the shared names: `empty`, `loading`, `error`, `not-found`, `ai-pending`, `ai-stream`, `ai-failed`, `insufficient`, `save-failed`, plus screen-specific ones (e.g. `wait-jd`, `move-failed`).

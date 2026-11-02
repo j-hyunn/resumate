@@ -1,0 +1,282 @@
+/*
+ * Design tokens copied from docs/ui/design-system.md 1.1.2 (v1).
+ * Deviations (A0 foundation): shadcn/tailwind.css import (custom data-* variants used by
+ * shadcn primitives), dark tokens under the .dark class set by the theme script (Q-2),
+ * next/font/local Pretendard variable prepended to --font-sans (Q-1), radius-2xl..4xl added.
+ * Token names are unchanged; change them only through ui-designer.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Dark mode (Q-2): the user picks 시스템 설정 / 라이트 / 다크 in 설정 › 화면 (default 시스템 설정).
+ * An inline script in the root layout (components/common/theme.ts) puts .dark on <html> before
+ * first paint and follows OS changes while "system" is selected. No next-themes.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(0.985 0.002 260);
+  --foreground: oklch(0.21 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.01 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.01 260);
+
+  --primary: oklch(0.48 0.115 158);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-subtle: oklch(0.965 0.03 158);
+  --primary-subtle-foreground: oklch(0.40 0.09 158);
+
+  --secondary: oklch(0.955 0.005 260);
+  --secondary-foreground: oklch(0.25 0.01 260);
+  --muted: oklch(0.955 0.005 260);
+  --muted-foreground: oklch(0.50 0.015 260);
+  --accent: oklch(0.945 0.008 260);
+  --accent-foreground: oklch(0.21 0.01 260);
+
+  --destructive: oklch(0.54 0.20 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --destructive-subtle: oklch(0.965 0.02 25);
+  --destructive-subtle-foreground: oklch(0.45 0.17 27);
+
+  --success: oklch(0.50 0.13 140);
+  --success-foreground: oklch(0.99 0 0);
+  --success-subtle: oklch(0.965 0.035 135);
+  --success-subtle-foreground: oklch(0.40 0.10 140);
+
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.25 0.05 60);
+  --warning-subtle: oklch(0.97 0.04 85);
+  --warning-subtle-foreground: oklch(0.45 0.10 60);
+
+  --info: oklch(0.55 0.13 240);
+  --info-foreground: oklch(0.99 0 0);
+  --info-subtle: oklch(0.965 0.02 240);
+  --info-subtle-foreground: oklch(0.42 0.11 245);
+
+  --ai: oklch(0.53 0.19 295);
+  --ai-foreground: oklch(0.99 0 0);
+  --ai-subtle: oklch(0.965 0.02 295);
+  --ai-subtle-foreground: oklch(0.44 0.17 295);
+
+  --chip: oklch(0.955 0.006 260);
+  --chip-foreground: oklch(0.21 0.01 260);
+  --chip-border: oklch(0.87 0.01 260);
+
+  --border: oklch(0.91 0.006 260);
+  --input: oklch(0.64 0.01 260);
+  --ring: oklch(0.52 0.12 158);
+
+  --stage-before-apply: oklch(0.62 0.01 260);
+  --stage-document: oklch(0.60 0.13 240);
+  --stage-assignment: oklch(0.62 0.12 200);
+  --stage-job-interview: oklch(0.55 0.16 275);
+  --stage-culture-fit-interview: oklch(0.62 0.15 350);
+  --stage-closed: oklch(0.35 0.01 260);
+
+  --chart-1: oklch(0.48 0.115 158);
+  --chart-2: oklch(0.60 0.13 240);
+  --chart-3: oklch(0.75 0.15 75);
+  --chart-4: oklch(0.62 0.15 350);
+  --chart-5: oklch(0.55 0.16 275);
+
+  /* L-01 sidebar-08 inset: --sidebar is the base, a clear step darker than the floating --background panel */
+  --sidebar: oklch(0.945 0.006 260);
+  --sidebar-foreground: oklch(0.21 0.01 260);
+  --sidebar-primary: oklch(0.48 0.115 158);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.905 0.01 260);
+  --sidebar-accent-foreground: oklch(0.21 0.01 260);
+  --sidebar-border: oklch(0.91 0.006 260);
+  --sidebar-ring: oklch(0.52 0.12 158);
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.17 0.006 260);
+  --foreground: oklch(0.95 0.004 260);
+  --card: oklch(0.205 0.007 260);
+  --card-foreground: oklch(0.95 0.004 260);
+  --popover: oklch(0.23 0.008 260);
+  --popover-foreground: oklch(0.95 0.004 260);
+
+  --primary: oklch(0.74 0.14 158);
+  --primary-foreground: oklch(0.18 0.03 158);
+  --primary-subtle: oklch(0.26 0.045 158);
+  --primary-subtle-foreground: oklch(0.86 0.09 158);
+
+  --secondary: oklch(0.25 0.008 260);
+  --secondary-foreground: oklch(0.95 0.004 260);
+  --muted: oklch(0.25 0.008 260);
+  --muted-foreground: oklch(0.72 0.012 260);
+  --accent: oklch(0.27 0.01 260);
+  --accent-foreground: oklch(0.95 0.004 260);
+
+  --destructive: oklch(0.68 0.18 25);
+  --destructive-foreground: oklch(0.17 0.03 25);
+  --destructive-subtle: oklch(0.26 0.05 25);
+  --destructive-subtle-foreground: oklch(0.84 0.09 25);
+
+  --success: oklch(0.74 0.15 140);
+  --success-foreground: oklch(0.17 0.03 140);
+  --success-subtle: oklch(0.25 0.045 140);
+  --success-subtle-foreground: oklch(0.86 0.11 140);
+
+  --warning: oklch(0.80 0.14 80);
+  --warning-foreground: oklch(0.22 0.05 60);
+  --warning-subtle: oklch(0.27 0.045 75);
+  --warning-subtle-foreground: oklch(0.87 0.11 85);
+
+  --info: oklch(0.72 0.11 240);
+  --info-foreground: oklch(0.17 0.03 240);
+  --info-subtle: oklch(0.26 0.04 240);
+  --info-subtle-foreground: oklch(0.85 0.07 240);
+
+  --ai: oklch(0.72 0.15 295);
+  --ai-foreground: oklch(0.17 0.03 295);
+  --ai-subtle: oklch(0.27 0.05 295);
+  --ai-subtle-foreground: oklch(0.86 0.08 295);
+
+  --chip: oklch(0.26 0.008 260);
+  --chip-foreground: oklch(0.95 0.004 260);
+  --chip-border: oklch(0.36 0.01 260);
+
+  --border: oklch(0.30 0.008 260);
+  --input: oklch(0.54 0.01 260);
+  --ring: oklch(0.66 0.12 158);
+
+  --stage-before-apply: oklch(0.62 0.01 260);
+  --stage-document: oklch(0.70 0.11 240);
+  --stage-assignment: oklch(0.72 0.10 200);
+  --stage-job-interview: oklch(0.70 0.13 275);
+  --stage-culture-fit-interview: oklch(0.72 0.13 350);
+  --stage-closed: oklch(0.80 0.01 260);
+
+  --chart-1: oklch(0.74 0.14 158);
+  --chart-2: oklch(0.70 0.11 240);
+  --chart-3: oklch(0.80 0.14 80);
+  --chart-4: oklch(0.72 0.13 350);
+  --chart-5: oklch(0.70 0.13 275);
+
+  /* L-01 sidebar-08 inset (dark): like shadcn, the base is a clear step lighter than the --background panel */
+  --sidebar: oklch(0.235 0.008 260);
+  --sidebar-foreground: oklch(0.95 0.004 260);
+  --sidebar-primary: oklch(0.74 0.14 158);
+  --sidebar-primary-foreground: oklch(0.18 0.03 158);
+  --sidebar-accent: oklch(0.30 0.01 260);
+  --sidebar-accent-foreground: oklch(0.95 0.004 260);
+  --sidebar-border: oklch(0.33 0.008 260);
+  --sidebar-ring: oklch(0.66 0.12 158);
+}
+
+@theme inline {
+  --font-sans: var(--font-pretendard), "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);  /* 4px  칩·작은 배지 */
+  --radius-md: calc(var(--radius) - 2px);  /* 6px  버튼·입력·보드 카드 */
+  --radius-lg: var(--radius);              /* 8px  카드·패널·다이얼로그 */
+  --radius-xl: calc(var(--radius) + 4px);  /* 12px 보드 열 */
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-foreground: var(--primary-subtle-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-subtle-foreground: var(--destructive-subtle-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-subtle-foreground: var(--info-subtle-foreground);
+  --color-ai: var(--ai);
+  --color-ai-foreground: var(--ai-foreground);
+  --color-ai-subtle: var(--ai-subtle);
+  --color-ai-subtle-foreground: var(--ai-subtle-foreground);
+  --color-chip: var(--chip);
+  --color-chip-foreground: var(--chip-foreground);
+  --color-chip-border: var(--chip-border);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-stage-before-apply: var(--stage-before-apply);
+  --color-stage-document: var(--stage-document);
+  --color-stage-assignment: var(--stage-assignment);
+  --color-stage-job-interview: var(--stage-job-interview);
+  --color-stage-culture-fit-interview: var(--stage-culture-fit-interview);
+  --color-stage-closed: var(--stage-closed);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --animate-field-flash: field-flash 1.2s ease-out;
+  --animate-caret-blink: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes field-flash {
+  0%   { background-color: var(--ai-subtle); }
+  100% { background-color: transparent; }
+}
+@keyframes caret-blink {
+  to { visibility: hidden; }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-background text-foreground font-sans text-base antialiased;
+    line-height: 1.6;
+    word-break: keep-all;          /* 한국어 어절 단위 줄바꿈 */
+    overflow-wrap: anywhere;       /* 긴 URL·영문 토큰 넘침 방지 */
+    font-feature-settings: "ss06"; /* Pretendard: 숫자·영문 가독 */
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+}

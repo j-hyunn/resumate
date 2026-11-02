@@ -96,13 +96,31 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       const x = db.projects.find((r) => r.id === sid)
       if (!x) return empty
       const parent = db.experiences.find((r) => r.id === x.experience_id)?.company_name ?? db.educations.find((r) => r.id === x.education_id)?.institution_name
+      // DM v4.4: real rows carry STAR / description columns and `content_updated_at` (the "변경됨" baseline, DM 2.8).
+      const v44 = x as unknown as Record<string, string | null | undefined>
+      const field = e.source_field
+      const value = field && field !== "name" && field !== "period" && field in v44 ? (v44[field] ?? null) : field === "summary" ? x.summary : x.name
       return {
         source_label: e.source_label ?? x.name ?? "",
-        current_value: e.source_field === "role" ? x.role : e.source_field === "summary" ? x.summary : x.name,
+        current_value: value,
         path: [projectYear(db, x), parent, x.name].filter(Boolean) as string[],
         href: routes.project(x.id),
         to_career: true,
-        updated_at: x.updated_at,
+        updated_at: v44.content_updated_at ?? x.updated_at,
+      }
+    }
+    case "project_deliverable": {
+      // R4 (DM v4.4): deliverables of standalone projects. 연결 대기: no S-44 route in the current UI yet.
+      const d = (db as unknown as { project_deliverables?: Array<Record<string, string | null>> }).project_deliverables?.find((r) => r.id === sid)
+      if (!d) return empty
+      const p = db.projects.find((r) => r.id === d.project_id)
+      return {
+        source_label: e.source_label ?? d.title ?? "",
+        current_value: e.source_field === "body" ? (d.body ?? null) : (d.title ?? null),
+        path: [projectYear(db, p), p?.name, d.title].filter(Boolean) as string[],
+        href: null,
+        to_career: true,
+        updated_at: d.updated_at ?? null,
       }
     }
     case "project_detail": {

@@ -31,13 +31,13 @@ const output = {
     {
       block_id: "p2-b1",
       text: "결제 승인 API 응답 시간 1.2초 → 0.7초 단축",
-      evidence: [{ source_type: "achievement", ref: "ACH-2", field: "metric" }],
+      evidence: [{ source_type: "project", ref: "PRJ-2", field: "result", quote: "응답 시간이 0.7초로 줄었다" }],
       placeholders: [],
     },
     {
       block_id: "p2-b2",
       text: "장애 복구 시간 50% 단축", // invented number
-      evidence: [{ source_type: "project_detail", ref: "DET-9", field: "action", quote: "없는 근거" }], // bad ref
+      evidence: [{ source_type: "project", ref: "PRJ-9", field: "action", quote: "없는 근거" }], // bad ref
       placeholders: [],
     },
   ],

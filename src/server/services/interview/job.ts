@@ -1,3 +1,4 @@
+import { sessionDeliverableProjectIds } from "@/server/ai/pipelines/AI-06";
 import { errorCategoryOf } from "@/lib/contracts/ai";
 import type { AiErrorCode, AiProvider, ConnectionTier, ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
@@ -102,6 +103,8 @@ export type EvaluationContextInput = {
   jd: InterviewJdInputs;
   question: WriterQuestion & { evidence: QuestionEvidence[] };
   answer: { id: string; answer_text: string; updated_at: string | null };
+  /** C-1.1 v4.5: standalone projects whose deliverables enter the pack — the same for every answer of the session. */
+  deliverableProjectIds: readonly string[];
 };
 
 export type SummarizeInput = {
@@ -579,6 +582,8 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
       const evidence = await L.questionEvidence(ctx.db, session.questions.map((q) => q.id));
       const questionById = new Map(session.questions.map((q) => [q.id, q]));
       const answerById = new Map(session.answers.map((a) => [a.id, a]));
+      // ai notes §7: one deliverable scope for the whole session (shared cached pack).
+      const deliverableProjectIds = sessionDeliverableProjectIds(careerRows, [...evidence.values()].flat());
 
       type Item = EvaluationPrepareOutput["answers"][number];
       const contextOf = (item: Item): EC => {
@@ -592,6 +597,7 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
           jd,
           question: { ...question, evidence: evidence.get(question.id) ?? [] },
           answer: { id: answer.id, answer_text: answer.answer_text, updated_at: answer.updated_at },
+          deliverableProjectIds,
         });
       };
       const callDeps = (item: Item): InterviewCallDeps => ({ llm: ctx.llm, signal: ctx.signal, jobId: ctx.jobId, callKey: `${ctx.callKeyPrefix}.${item.sequence}` });

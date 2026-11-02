@@ -14,7 +14,6 @@ const S1 = "00000000-0000-4000-8000-0000000000c1";
 const S2 = "00000000-0000-4000-8000-0000000000c2";
 const EXP = "00000000-0000-4000-8000-0000000000e1";
 const PRJ = "00000000-0000-4000-8000-0000000000b1";
-const DET = "00000000-0000-4000-8000-0000000000b9";
 
 const aiBlocks = [
   { block_id: "q-p1", block_kind: "paragraph", text: "첫 문단", project_id: PRJ, requirement_ids: ["r1"], placeholders: [{ token: "[수치 입력 필요]", hint: "응답 시간" }], flags: ["number_check_needed"], generated_by: "ai", user_modified: false },
@@ -123,15 +122,15 @@ describe("getDraft / listDrafts", () => {
       sectionRow({ id: S2, sort_order: 1, status: "generating", ai_content: null, ai_job_id: "job-s2", question_text: "직무 역량", template_key: "job_competency" }),
     ],
     draft_section_sources: [
-      { id: "src-1", draft_section_id: S1, experience_id: EXP, education_id: null, project_id: PRJ, project_detail_ids: [DET], role: "primary", origin: "ai", rationale: "이유", requirement_ids: [], reuse_reason: null, sort_order: 0, source_label: null, source_deleted_at: null },
+      { id: "src-1", draft_section_id: S1, experience_id: EXP, education_id: null, project_id: PRJ, role: "primary", origin: "ai", rationale: "이유", requirement_ids: [], reuse_reason: null, sort_order: 0, source_label: null, source_deleted_at: null },
     ],
     evidence_links: [
-      { id: "ev-1", owner_type: "draft_section", owner_id: S1, item_key: "q-p1", sort_order: 0, source_type: "project", source_id: PRJ, source_field: "role", source_locator: null, source_label: "결제", quote: null, quote_adjusted: false, source_snapshot_at: "2026-10-29T00:00:00Z", source_deleted_at: null },
+      { id: "ev-1", owner_type: "draft_section", owner_id: S1, item_key: "q-p1", sort_order: 0, source_type: "project", source_id: PRJ, source_field: "action", source_locator: null, source_label: "결제", quote: null, quote_adjusted: false, source_snapshot_at: "2026-10-29T00:00:00Z", source_deleted_at: null },
       { id: "ev-2", owner_type: "draft_section", owner_id: S1, item_key: "sources.0", sort_order: 0, source_type: "project", source_id: PRJ, source_field: "name", source_locator: null, source_label: "결제", quote: null, quote_adjusted: false, source_snapshot_at: "2026-10-29T00:00:00Z", source_deleted_at: null },
     ],
     experiences: [{ id: EXP, company_name: "가나다", updated_at: "2026-10-01T00:00:00Z" }],
-    projects: [{ id: PRJ, name: "결제 플랫폼", updated_at: "2026-10-30T00:00:00Z" }],
-    project_details: [{ id: DET, title: "정산 배치" }],
+    // DM v4.4: "변경됨" compares the project's content_updated_at.
+    projects: [{ id: PRJ, name: "결제 플랫폼", updated_at: "2026-10-30T00:00:00Z", content_updated_at: "2026-10-30T00:00:00Z", experience_id: EXP, education_id: null }],
     ai_jobs: [{ id: "job-s2", job_type: "cover_letter", target_id: S2, status: "failed", provider: "gemini", connection_tier: "free", error_code: "rate_limited", retry_after: "2026-10-29T00:02:00Z", quota_resets_at: null, finished_at: "2026-10-29T00:01:00Z", application_project_id: AP }],
   });
 
@@ -141,8 +140,8 @@ describe("getDraft / listDrafts", () => {
     expect(view.status).toBe("partially_failed");
     const [q1, q2] = view.sections;
     expect(q1!.blocks).toHaveLength(2);
-    expect(q1!.blocks[0]!.evidence[0]).toMatchObject({ state: "changed", kindLabel: "프로젝트" });
-    expect(q1!.sources[0]).toMatchObject({ affiliationName: "가나다", projectName: "결제 플랫폼", detailTitles: ["정산 배치"], role: "primary", origin: "ai", rationale: "이유" });
+    expect(q1!.blocks[0]!.evidence[0]).toMatchObject({ state: "changed", kindLabel: "프로젝트 · 행동" });
+    expect(q1!.sources[0]).toMatchObject({ affiliationName: "가나다", projectName: "결제 플랫폼", role: "primary", origin: "ai", rationale: "이유" });
     expect(q1!.sources[0]!.evidence).toHaveLength(1);
     expect(q1).toMatchObject({ flags: ["char_adjust_needed"], notesForUser: ["메모가 없어 자리 표시를 넣었어요."], currentCharCount: 10, badge: { provider: "gemini", connectionTier: "free" } });
     expect(q2!.status).toBe("failed");

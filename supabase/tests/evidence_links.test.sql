@@ -19,7 +19,7 @@ select ok(not has_table_privilege('app_ai_writer', 'public.evidence_links', 'INS
 select set_eq(
   $$select tgname::text from pg_trigger where tgname like '%_evidence_source_deleted' and not tgisinternal$$,
   array['experiences_evidence_source_deleted', 'educations_evidence_source_deleted', 'projects_evidence_source_deleted',
-        'project_details_evidence_source_deleted', 'achievements_evidence_source_deleted', 'skills_evidence_source_deleted',
+        'project_deliverables_evidence_source_deleted', 'skills_evidence_source_deleted',
         'jd_requirements_evidence_source_deleted', 'job_descriptions_evidence_source_deleted',
         'interview_answers_evidence_source_deleted'],
   'deletion trigger on each career / JD (S6) / interview answer (S8) evidence source table');
@@ -33,14 +33,14 @@ insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000002', 'B사', '2018-01-01', 'J');
 insert into public.educations (id, institution_name, education_type, start_month, description)
   values ('a0000000-2222-0000-0000-000000000001', 'U', 'degree', '2014-03-01', '컴퓨터공학');
-insert into public.projects (id, experience_id, name, role, summary)
-  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000002', 'P', 'Dev', '결제');
-insert into public.project_details (id, project_id, title, situation, action, result)
-  values ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't', 's', '인덱스 재설계', 'r');
-insert into public.project_details (id, project_id, title, situation, action)
-  values ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000001', 't2', 's2', 'a2');
-insert into public.achievements (id, project_detail_id, metric_name, value_after, description)
-  values ('a0000000-5555-0000-0000-000000000001', 'a0000000-4444-0000-0000-000000000001', 'p95', 120, '지연 감소');
+insert into public.projects (id, experience_id, name, situation, action, result, learnings)
+  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000002', 'P', '결제', '인덱스 재설계', 'r', 'l');
+-- standalone project with two deliverables
+insert into public.projects (id, name, role, description)
+  values ('a0000000-3333-0000-0000-000000000002', 'Side', 'Lead', '사이드 내용');
+insert into public.project_deliverables (id, project_id, title, body)
+  values ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000002', 'RFC', '# 설계 문서'),
+         ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000002', 'ADR', 'a2');
 insert into public.skills (id, name) values ('a0000000-6666-0000-0000-000000000001', 'Postgres');
 reset role;
 -- S5: evidence_links.application_project_id is a composite FK; A's application project for the links below.
@@ -70,11 +70,12 @@ create temp table t_links (id uuid, source_type text, source_id uuid, source_fie
 insert into t_links values
   ('e0000000-0000-0000-0000-000000000001', 'experience', 'a0000000-1111-0000-0000-000000000001', 'summary', '결제 플랫폼', null),
   ('e0000000-0000-0000-0000-000000000002', 'education', 'a0000000-2222-0000-0000-000000000001', 'description', '컴퓨터공학', null),
-  ('e0000000-0000-0000-0000-000000000003', 'project', 'a0000000-3333-0000-0000-000000000001', 'summary', '결제', null),
-  ('e0000000-0000-0000-0000-000000000004', 'project_detail', 'a0000000-4444-0000-0000-000000000002', 'action', 'a2', null),
-  ('e0000000-0000-0000-0000-000000000005', 'achievement', 'a0000000-5555-0000-0000-000000000001', 'description', '지연 감소', null),
+  ('e0000000-0000-0000-0000-000000000003', 'project', 'a0000000-3333-0000-0000-000000000001', 'situation', '결제', null),
+  ('e0000000-0000-0000-0000-000000000004', 'project_deliverable', 'a0000000-4444-0000-0000-000000000002', 'body', 'a2',
+   '{"start":0,"end":2}'),
+  ('e0000000-0000-0000-0000-000000000005', 'project', 'a0000000-3333-0000-0000-000000000002', 'description', '사이드 내용', null),
   ('e0000000-0000-0000-0000-000000000006', 'skill', 'a0000000-6666-0000-0000-000000000001', 'name', null, null),
-  ('e0000000-0000-0000-0000-000000000007', 'project_detail', 'a0000000-4444-0000-0000-000000000001', 'action', '인덱스 재설계', null),
+  ('e0000000-0000-0000-0000-000000000007', 'project', 'a0000000-3333-0000-0000-000000000001', 'action', '인덱스 재설계', null),
   ('e0000000-0000-0000-0000-000000000008', 'profile', 'a0000000-0000-0000-0000-000000000001', 'desired_job_title', null, null),
   ('e0000000-0000-0000-0000-000000000009', 'jd_sentence', 'f0000000-0000-0000-0000-000000000001', null, '결제 경험',
    '{"sid":"S1","start":0,"end":5}');
@@ -96,8 +97,30 @@ select throws_ok($$insert into public.evidence_links (application_project_id, ow
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'experience', 'a0000000-1111-0000-0000-000000000001', 'company_name')$$,
                  '23514', null, 'source_field must be allowed for source_type (V-2)');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_detail', 'a0000000-4444-0000-0000-000000000001', null)$$,
-                 '23514', null, 'project_detail needs a field');
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_deliverable', 'a0000000-4444-0000-0000-000000000001', null)$$,
+                 '23514', null, 'project_deliverable needs a field');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_deliverable', 'a0000000-4444-0000-0000-000000000001', 'description')$$,
+                 '23514', null, 'project_deliverable fields are title / body');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_detail', gen_random_uuid(), 'action')$$,
+                 '23514', null, 'project_detail is no longer a source type (v4.4)');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'achievement', gen_random_uuid(), 'description')$$,
+                 '23514', null, 'achievement is no longer a source type (v4.4)');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project', 'a0000000-3333-0000-0000-000000000001', 'summary')$$,
+                 '23514', null, 'project.summary is no longer an evidence field');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project', 'a0000000-3333-0000-0000-000000000001', 'experience_type')$$,
+                 '23514', null, 'classifications are not evidence fields (AI C-1.2)');
+-- project field vs project kind (AI V-2 DB defense)
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project', 'a0000000-3333-0000-0000-000000000001', 'description')$$,
+                 'P0001', 'invalid_evidence_source', 'affiliated project has no description evidence');
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project', 'a0000000-3333-0000-0000-000000000002', 'action')$$,
+                 'P0001', 'invalid_evidence_source', 'standalone project has no STAR evidence');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'jd_sentence', gen_random_uuid(), 'action')$$,
                  '23514', null, 'jd_sentence has no field');
@@ -111,7 +134,7 @@ select throws_ok($$insert into public.evidence_links (application_project_id, ow
 -- Insert guard: missing source -> stored as deleted, quote dropped.
 select lives_ok($$insert into public.evidence_links (id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field, quote)
                   values ('e0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k',
-                          'project_detail', gen_random_uuid(), 'action', '사라진 원문')$$,
+                          'project_deliverable', gen_random_uuid(), 'body', '사라진 원문')$$,
                 'link to a missing source is accepted');
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000010'$$,
                   $$values (null::text, true)$$, 'link to a missing source stored as deleted without quote');
@@ -143,14 +166,14 @@ select throws_ok($$update public.evidence_links set quote = null$$, '42501', nul
 select throws_ok($$delete from public.evidence_links$$, '42501', null, 'user cannot delete links');
 
 -- Deletion triggers, one table at a time (as the user).
-delete from public.project_details where id = 'a0000000-4444-0000-0000-000000000002';
+delete from public.project_deliverables where id = 'a0000000-4444-0000-0000-000000000002';
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000004'$$,
-                  $$values (null::text, true)$$, 'project_details delete marks its link');
-select is((select quote from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000007'), '인덱스 재설계',
-          'sibling detail link untouched');
-delete from public.achievements where id = 'a0000000-5555-0000-0000-000000000001';
+                  $$values (null::text, true)$$, 'project_deliverables delete marks its link');
+select is((select quote from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000005'), '사이드 내용',
+          'parent project link untouched');
+delete from public.projects where id = 'a0000000-3333-0000-0000-000000000002';
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000005'$$,
-                  $$values (null::text, true)$$, 'achievements delete marks its link');
+                  $$values (null::text, true)$$, 'standalone project delete marks its link');
 delete from public.skills where id = 'a0000000-6666-0000-0000-000000000001';
 select is((select source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000006'), true,
           'skills delete marks its link');
@@ -160,14 +183,14 @@ select results_eq($$select quote, source_deleted_at is not null from public.evid
 delete from public.experiences where id = 'a0000000-1111-0000-0000-000000000001';
 select results_eq($$select quote, source_deleted_at is not null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000001'$$,
                   $$values (null::text, true)$$, 'experiences delete marks its link');
--- Cascade chain: delete_career_item(experience, delete_projects) -> project -> detail.
+-- Cascade chain: delete_career_item(experience) -> its project (FK cascade).
 select lives_ok($$select public.delete_career_item('experience', 'a0000000-1111-0000-0000-000000000002', 'delete_projects')$$,
                 'delete experience with its projects');
 select results_eq($$select id::text, quote, source_deleted_at is not null from public.evidence_links
                      where id in ('e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000007') order by id$$,
                   $$values ('e0000000-0000-0000-0000-000000000003', null::text, true),
                            ('e0000000-0000-0000-0000-000000000007', null::text, true)$$,
-                  'cascaded project and detail deletions mark their links');
+                  'cascaded project deletion marks its links');
 select results_eq($$select quote, source_deleted_at is null from public.evidence_links where id = 'e0000000-0000-0000-0000-000000000009'$$,
                   $$values ('결제 경험'::text, true)$$, 'non-career link untouched');
 reset role;

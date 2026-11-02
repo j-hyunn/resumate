@@ -1,6 +1,6 @@
--- S9 retention purge RPCs (DM §3.4, §4.4, §2.9, A.17): boundaries (89 / 91 days, 13 KST months, 3 years), kept rows
--- (linked chats, chats with a live turn, in-flight jobs), result rows surviving job purge, per-call cap, argument
--- errors, privileges (service_role only).
+-- S9 retention purge RPCs (DM §4.4, §2.9, A.17): boundaries (90 days, 13 KST months, 3 years), kept rows
+-- (in-flight jobs), result rows surviving job purge, per-call cap, argument errors, privileges (service_role only).
+-- R4 (DM v4.4 §3.4, CR-6): purge_unlinked_writing_chats is retired; every chat belongs to a project and is kept.
 -- Assertions filter on this test's user / hashes: the shared local DB may hold rows from integration test runs.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -13,49 +13,17 @@ insert into auth.users (id, email, aud, role) values
 create temp table t_now as select '2026-11-15 12:00:00+09'::timestamptz as v;
 grant select on t_now to service_role, authenticated;
 
-insert into public.projects (id, user_id, name, role) values
-  ('a0000000-3333-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'P1', 'Dev');
+insert into public.experiences (id, user_id, company_name) values
+  ('a0000000-1111-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'A');
+insert into public.projects (id, user_id, experience_id, name) values
+  ('a0000000-3333-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', 'P1');
 
--- ── writing chats ──
-insert into public.writing_chats (id, user_id, mode, project_id, status, saved_at, last_activity_at) values
-  -- unlinked active, 89 days -> kept
-  ('a0000000-c4a7-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'active', null,
-   (select v from t_now) - interval '89 days'),
-  -- unlinked active, 91 days -> purged
-  ('a0000000-c4a7-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'active', null,
-   (select v from t_now) - interval '91 days'),
-  -- unlinked abandoned, 91 days -> purged
-  ('a0000000-c4a7-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'abandoned', null,
-   (select v from t_now) - interval '91 days'),
-  -- linked (augment), 400 days -> kept
-  ('a0000000-c4a7-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'augment_project',
-   'a0000000-3333-0000-0000-000000000001', 'active', null, (select v from t_now) - interval '400 days'),
-  -- linked saved, 400 days -> kept
-  ('a0000000-c4a7-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'new_project',
-   'a0000000-3333-0000-0000-000000000001', 'saved', now(), (select v from t_now) - interval '400 days'),
-  -- unlinked active, 91 days, but a turn job is queued -> kept
-  ('a0000000-c4a7-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'active', null,
-   (select v from t_now) - interval '91 days'),
-  -- exactly 90 days -> kept (strictly older than 90 days is purged)
-  ('a0000000-c4a7-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'active', null,
-   (select v from t_now) - interval '90 days');
-insert into public.writing_chat_messages (user_id, writing_chat_id, sequence, role, content) values
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-c4a7-0000-0000-000000000002', 1, 'user', 'x'),
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-c4a7-0000-0000-000000000002', 2, 'user', 'y'),
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-c4a7-0000-0000-000000000001', 1, 'user', 'z');
-insert into public.ai_jobs (id, user_id, job_type, target_type, target_id, status, run_generation, provider, model_tier,
-                            connection_tier) values
-  ('a0000000-7777-0000-0000-0000000000c6', 'a0000000-0000-0000-0000-000000000001', 'writing_chat_turn', 'writing_chat',
-   'a0000000-c4a7-0000-0000-000000000006', 'queued', 1, 'gemini', 'default', 'free');
-
-select is(public.purge_unlinked_writing_chats((select v from t_now)), 2, 'chats: 2 purged (91-day active + abandoned)');
-select results_eq($$select id::text from public.writing_chats where user_id = 'a0000000-0000-0000-0000-000000000001' order by id$$,
-                  $$values ('a0000000-c4a7-0000-0000-000000000001'::text), ('a0000000-c4a7-0000-0000-000000000004'),
-                           ('a0000000-c4a7-0000-0000-000000000005'), ('a0000000-c4a7-0000-0000-000000000006'),
-                           ('a0000000-c4a7-0000-0000-000000000007')$$,
-                  'chats kept: 89 days, exactly 90 days, linked (any age), live turn');
-select is((select count(*)::int from public.writing_chat_messages where user_id = 'a0000000-0000-0000-0000-000000000001'), 1, 'chats: messages of purged chats cascade');
-select is(public.purge_unlinked_writing_chats((select v from t_now)), 0, 'chats: second run deletes nothing');
+-- ── writing chats: no age-based purge any more ──
+select hasnt_function('public', 'purge_unlinked_writing_chats', 'R4: purge_unlinked_writing_chats retired (CR-6)');
+select hasnt_index('public', 'writing_chats', 'writing_chats_unlinked_last_activity_idx', 'R4: its index is gone too');
+insert into public.writing_chats (id, user_id, project_id, status, last_activity_at) values
+  ('a0000000-c4a7-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001',
+   'a0000000-3333-0000-0000-000000000001', 'active', (select v from t_now) - interval '400 days');
 
 -- ── ai_jobs ──
 insert into public.application_projects (id, user_id, name, name_source) values
@@ -220,7 +188,7 @@ select results_eq($$select subject_hash from public.account_deletion_logs where 
 -- ── argument errors ──
 select throws_ok($$select public.purge_old_ai_jobs(null)$$, 'P0001', 'invalid_now', 'p_now null');
 select throws_ok($$select public.purge_old_ai_jobs(now(), 0)$$, 'P0001', 'invalid_limit', 'p_limit 0');
-select throws_ok($$select public.purge_unlinked_writing_chats(now(), 50001)$$, 'P0001', 'invalid_limit', 'p_limit 50001');
+select throws_ok($$select public.purge_old_ai_jobs(now(), 50001)$$, 'P0001', 'invalid_limit', 'p_limit 50001');
 select throws_ok($$select public.purge_old_ai_usage_records(now(), null)$$, 'P0001', 'invalid_limit', 'p_limit null');
 
 -- ── privileges ──
@@ -230,7 +198,7 @@ select set_eq(
       cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader'), ('service_role')) r (rolname)
      where n.nspname = 'public' and p.proname like 'purge\_%'
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
-  array['purge_unlinked_writing_chats:service_role', 'purge_old_ai_jobs:service_role',
+  array['purge_old_ai_jobs:service_role',
         'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role'],
   'purge RPCs: service_role only');
 select is_empty($$select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -241,13 +209,14 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select throws_ok($$select public.purge_old_ai_jobs(now() + interval '10 years')$$, '42501', null,
                  'user cannot call purge_old_ai_jobs');
-select throws_ok($$select public.purge_unlinked_writing_chats(now() + interval '10 years')$$, '42501', null,
-                 'user cannot call purge_unlinked_writing_chats');
+
 reset role;
 
 set local role service_role;
 select is(public.purge_old_ai_jobs((select v from t_now)), 0, 'service_role can run the purge');
 reset role;
+select is((select count(*)::int from public.writing_chats where id = 'a0000000-c4a7-0000-0000-000000000004'), 1,
+          'a 400-day-old chat is still kept after every purge');
 
 select * from finish();
 rollback;

@@ -1,5 +1,5 @@
 -- S7 career deletion and drafts (DM §2.7, §4.1–4.2, F-COM-04): draft_section_sources source deletion triggers
--- (source_deleted_at + pre-deletion label, project_detail_ids removal), get_deletion_impact drafts /
+-- (source_deleted_at + pre-deletion label), get_deletion_impact drafts / R4: v4.4 entity types (project_deliverable),
 -- draft_sections counts, delete_career_item keep_results / delete_results (career description deleted, cover
 -- letter question reset).
 begin;
@@ -17,15 +17,13 @@ insert into public.experiences (id, company_name, start_month, job_rank) values
   ('a0000000-1111-0000-0000-000000000002', 'C사', '2018-01-01', 'J');
 insert into public.educations (id, institution_name, education_type, start_month)
   values ('a0000000-2222-0000-0000-000000000001', '한빛대', 'degree', '2015-03-01');
-insert into public.projects (id, experience_id, education_id, name, role) values
-  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 'Dev'),
-  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 'Lead'),
-  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action) values
-  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't1', 's1', 'a1'),
-  ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000001', 't2', 's2', 'a2'),
-  ('a0000000-4444-0000-0000-000000000003', 'a0000000-3333-0000-0000-000000000002', 't3', 's3', 'a3'),
-  ('a0000000-4444-0000-0000-000000000004', 'a0000000-3333-0000-0000-000000000003', 't4', 's4', 'a4');
+insert into public.projects (id, experience_id, education_id, name, situation, action, description) values
+  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 's1', 'a1', null),
+  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 's3', 'a3', null),
+  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', null, null, 'd');
+insert into public.project_deliverables (id, project_id, title, body) values
+  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000003', 'DL1', 'b1'),
+  ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000003', 'DL2', 'b2');
 insert into public.skills (id, name) values ('a0000000-6666-0000-0000-000000000001', 'Postgres'),
                                             ('a0000000-6666-0000-0000-000000000002', 'Kafka');
 reset role;
@@ -35,8 +33,8 @@ insert into public.application_projects (id, user_id, name, name_source) values
   ('a0000000-aaaa-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', '나 프로젝트', 'user');
 
 -- Results (as postgres: fixed rows). DR1: career description in AP1 (experience section E1 + education section).
--- CL1 (AP1): Q1 sources P1 [D1], Q2 evidence on skill S1, Q3 source P2 (ED1), Q4 source E2 only.
--- CL2 (AP2): Q5 evidence on D2.
+-- CL1 (AP1): Q1 source P1, Q2 evidence on skill S1, Q3 source P2 (ED1), Q4 source E2 + evidence on deliverable DL2.
+-- CL2 (AP2): Q5 evidence on deliverable DL1 (standalone P3).
 insert into public.drafts (id, user_id, application_project_id, draft_type, title, status) values
   ('a0000000-eeee-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
    'career_description', '경력기술서', 'generating'),
@@ -59,14 +57,13 @@ select ('a0000000-5c00-0000-0000-00000000000' || n)::uuid, 'a0000000-0000-0000-0
        2, 'motivation', now(), 'gemini', 'm', 'default', 'free', case when n = 1 then 'user' else 'ai' end
   from generate_series(1, 5) n;
 insert into public.draft_section_sources (user_id, draft_section_id, application_project_id, experience_id, education_id,
-                                          project_id, project_detail_ids, role, origin, sort_order, source_label) values
+                                          project_id, role, origin, sort_order, source_label) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-5c00-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'a0000000-1111-0000-0000-000000000001', null, 'a0000000-3333-0000-0000-000000000001',
-   '{a0000000-4444-0000-0000-000000000001,a0000000-4444-0000-0000-000000000002}', 'primary', 'user', 0, 'A사 › 결제'),
+   'a0000000-1111-0000-0000-000000000001', null, 'a0000000-3333-0000-0000-000000000001', 'primary', 'user', 0, 'A사 › 결제'),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-5c00-0000-0000-000000000003', 'a0000000-aaaa-0000-0000-000000000001',
-   null, 'a0000000-2222-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000002', '{}', 'primary', 'ai', 0, null),
+   null, 'a0000000-2222-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000002', 'primary', 'ai', 0, null),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-5c00-0000-0000-000000000004', 'a0000000-aaaa-0000-0000-000000000001',
-   'a0000000-1111-0000-0000-000000000002', null, null, '{}', 'primary', 'ai', 0, null);
+   'a0000000-1111-0000-0000-000000000002', null, null, 'primary', 'ai', 0, null);
 insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id,
                                    source_field, quote) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'draft_section',
@@ -74,7 +71,9 @@ insert into public.evidence_links (user_id, application_project_id, owner_type, 
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'draft_section',
    'a0000000-5c00-0000-0000-000000000002', 'p1', 'skill', 'a0000000-6666-0000-0000-000000000001', 'name', 'Postgres'),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000002', 'draft_section',
-   'a0000000-5c00-0000-0000-000000000005', 'p1', 'project_detail', 'a0000000-4444-0000-0000-000000000002', 'action', 'a2'),
+   'a0000000-5c00-0000-0000-000000000005', 'p1', 'project_deliverable', 'a0000000-4444-0000-0000-000000000001', 'body', 'b1'),
+  ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'draft_section',
+   'a0000000-5c00-0000-0000-000000000004', 'p1', 'project_deliverable', 'a0000000-4444-0000-0000-000000000002', 'body', 'b2'),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'draft_section',
    'a0000000-5c00-0000-0000-000000000001', 'sources.0', 'project', 'a0000000-3333-0000-0000-000000000001', 'name', '결제');
 
@@ -82,23 +81,25 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 
 -- ── get_deletion_impact ──
-select is(public.get_deletion_impact('project_detail', 'a0000000-4444-0000-0000-000000000002') -> 'affected_results',
+select is(public.get_deletion_impact('project_deliverable', 'a0000000-4444-0000-0000-000000000001') -> 'affected_results',
           '{"by_application_project": [
-             {"name": "가 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
-              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"},
              {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
               "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}]}'::jsonb,
-          'impact: detail -> Q1 (source detail ids) and Q5 (evidence), by project name');
-select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
-          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          'impact: deliverable -> Q5 (evidence)');
+select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000003') -> 'affected_results' -> 'by_application_project',
+          '[{"name": "가 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"},
             {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}]'::jsonb,
-          'impact: project -> DR1 (evidence), Q1 (source + evidence counted once), Q5 (cascade detail evidence)');
+          'impact: standalone project -> Q4 / Q5 through its cascaded deliverables');
+select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
+          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+             "application_project_id": "a0000000-aaaa-0000-0000-000000000001"}]'::jsonb,
+          'impact: project -> DR1 (evidence), Q1 (source + evidence counted once)');
 select is(public.get_deletion_impact('experience', 'a0000000-1111-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
           '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"}]'::jsonb,
-          'impact: experience (keep projects) -> DR1 (section header), Q1 (source experience)');
+          'impact: experience (+ its projects) -> DR1 (section header), Q1 (source experience / project)');
 select is(public.get_deletion_impact('skill', 'a0000000-6666-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project' -> 0 ->> 'draft_sections',
           '1', 'impact: skill -> Q2 (evidence)');
 select is(public.get_deletion_impact('education', 'a0000000-2222-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
@@ -109,14 +110,13 @@ select is(public.get_deletion_impact('skill', 'a0000000-6666-0000-0000-000000000
           '[]'::jsonb, 'impact: unrelated skill -> nothing');
 
 -- ── keep_results: source deletion triggers ──
-select lives_ok($$select public.delete_career_item('project_detail', 'a0000000-4444-0000-0000-000000000001')$$,
-                'keep_results: delete D1');
-select is((select project_detail_ids::text[] from public.draft_section_sources
-            where draft_section_id = 'a0000000-5c00-0000-0000-000000000001'),
-          array['a0000000-4444-0000-0000-000000000002'], 'detail delete: id removed from project_detail_ids');
-select is((select source_deleted_at from public.draft_section_sources
-            where draft_section_id = 'a0000000-5c00-0000-0000-000000000001'), null,
-          'detail delete: the source row itself is not marked deleted (DM §2.7)');
+select lives_ok($$select public.delete_career_item('project_deliverable', 'a0000000-4444-0000-0000-000000000002')$$,
+                'keep_results: delete DL2');
+select results_eq($$select quote, source_deleted_at is not null from public.evidence_links
+                     where owner_id = 'a0000000-5c00-0000-0000-000000000004' and source_type = 'project_deliverable'$$,
+                  $$values (null::text, true)$$, 'deliverable delete: its evidence marked "원본 삭제됨"');
+select is((select status from public.draft_sections where id = 'a0000000-5c00-0000-0000-000000000004'), 'ready',
+          'keep_results: Q4 result kept');
 select lives_ok($$select public.delete_career_item('project', 'a0000000-3333-0000-0000-000000000002')$$,
                 'keep_results: delete P2');
 select results_eq($$select source_label, source_deleted_at is not null from public.draft_section_sources
@@ -137,7 +137,7 @@ select results_eq($$select source_label, source_deleted_at is not null from publ
                   $$values ('C사'::text, true)$$, 'experience delete: label = company name');
 
 -- ── delete_results ──
-select lives_ok($$select public.delete_career_item('skill', 'a0000000-6666-0000-0000-000000000001', 'keep_projects', 'delete_results')$$,
+select lives_ok($$select public.delete_career_item('skill', 'a0000000-6666-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,
                 'delete_results: skill S1');
 select results_eq($$select status, ai_content is null, edited_content is null, ai_char_count is null, question_class is null,
                            completed_at is null, provider is null, question_text, user_note, source_selection_mode
@@ -149,8 +149,10 @@ select is((select count(*)::int from public.evidence_links where owner_id = 'a00
 select is((select status from public.drafts where id = 'a0000000-cccc-0000-0000-000000000001'), 'composing',
           'delete_results: draft status recomputed (ready + pending -> composing)');
 
-select lives_ok($$select public.delete_career_item('project', 'a0000000-3333-0000-0000-000000000001', 'keep_projects', 'delete_results')$$,
+select lives_ok($$select public.delete_career_item('project', 'a0000000-3333-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,
                 'delete_results: project P1');
+select lives_ok($$select public.delete_career_item('project', 'a0000000-3333-0000-0000-000000000003', 'delete_projects', 'delete_results')$$,
+                'delete_results: standalone project P3 (deliverables cascade)');
 select is((select count(*)::int from public.drafts where id = 'a0000000-eeee-0000-0000-000000000001'), 0,
           'delete_results: career description document deleted');
 select is((select count(*)::int from public.evidence_links where owner_id in ('a0000000-5e00-0000-0000-000000000001',
@@ -161,7 +163,7 @@ select results_eq($$select status, ai_content is null, source_selection_mode,
                       from public.draft_sections s where s.id in ('a0000000-5c00-0000-0000-000000000001',
                                                                   'a0000000-5c00-0000-0000-000000000005') order by s.id$$,
                   $$values ('pending'::text, true, 'ai'::text, 0), ('pending', true, 'ai', 0)$$,
-                  'delete_results: Q1 (source) and Q5 (detail evidence via cascade) reset, sources removed');
+                  'delete_results: Q1 (source) and Q5 (deliverable evidence via cascade) reset, sources removed');
 select is((select status from public.drafts where id = 'a0000000-cccc-0000-0000-000000000002'), 'composing',
           'delete_results: other project''s draft recomputed');
 select results_eq($$select status from public.draft_sections where id in ('a0000000-5c00-0000-0000-000000000003',
@@ -175,7 +177,7 @@ set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","r
 select is(private.reset_cover_letter_sections(array['a0000000-5c00-0000-0000-000000000003'::uuid]), 0,
           'reset helper: B cannot reset A''s question');
 select is(private.career_deletion_section_ids('a0000000-0000-0000-0000-000000000001', 'project',
-            'a0000000-3333-0000-0000-000000000003', 'keep_projects'), '{}'::uuid[],
+            'a0000000-3333-0000-0000-000000000003', 'delete_projects'), '{}'::uuid[],
           'section ids helper: RLS hides A''s rows from B');
 reset role;
 select is((select status from public.draft_sections where id = 'a0000000-5c00-0000-0000-000000000003'), 'ready',

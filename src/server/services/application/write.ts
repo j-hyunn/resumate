@@ -31,7 +31,7 @@ import { requestCancel } from "@/server/services/ai-jobs";
  * 추출은 실패 안내"); `shouldExtract` tells the screen to call the sync route.
  */
 
-const notFound = () => new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 function obj(data: unknown): Record<string, unknown> {
   return data && typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : {};

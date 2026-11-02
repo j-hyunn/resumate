@@ -2,6 +2,7 @@ import { selectGateRequirements, type GateRequirement, type GateRequirementRow }
 import { buildWritingChatContext, type WritingChatContext, type WritingChatTurnInput } from "@/server/ai/context-pack/writing-chat";
 import { extract, reply } from "@/server/ai/pipelines/AI-12";
 import { isEmptyDraftPatch } from "@/server/ai/schemas/structured-draft";
+import { AppError } from "@/lib/contracts/errors";
 import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career/rpc";
@@ -10,41 +11,35 @@ import type { RequirementCategory, RequirementImportance } from "@/lib/contracts
 import type { Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
- * Production AI-12 pipelines (ai-pipeline `extract` / `reply`, notes §0).
- * Builds `WritingChatTurnInput` once per turn from the snapshot plus the
- * context reads the pack needs (app_ai_writer: affiliation candidates, the
- * augment target, desired job title, readiness for gate chats). Reads only —
- * the turn never writes career tables (NFR-AI-05).
+ * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
+ * Builds `WritingChatTurnInput` once per turn from the snapshot plus the context reads the
+ * pack needs (app_ai_writer: the chat's project row read fresh every turn + its parent's name /
+ * status, desired job title, readiness and JD requirements for gate chats). Reads only — the
+ * turn never writes career tables (NFR-AI-05).
  */
 
-type Loaded = Omit<WritingChatTurnInput, "mode" | "messages" | "structuredDraft" | "lastExtractedSequence" | "requestedSlot" | "isFinalReply">;
+type Loaded = Pick<WritingChatTurnInput, "project" | "desiredJobTitle" | "gate" | "gateRequirements">;
 
 async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<Loaded> {
   const chat = snap.chat;
-  const [exps, edus, profile, project, details] = await Promise.all([
-    db.from("experiences").select("id, company_name, start_month, end_month, is_current, status").order("start_month", { ascending: false, nullsFirst: false }),
-    db.from("educations").select("id, institution_name, program_name, start_month, end_month, status").order("start_month", { ascending: false, nullsFirst: false }),
+  const [projectRes, profile] = await Promise.all([
+    db
+      .from("projects")
+      .select("id, name, start_month, end_month, is_current, experience_id, education_id, project_type, experience_type, competencies, situation, task, action, result, learnings")
+      .eq("id", chat.projectId)
+      .maybeSingle(),
     db.from("profiles").select("desired_job_title").eq("id", chat.userId).maybeSingle(),
-    chat.mode === "augment_project" && chat.projectId
-      ? db.from("projects").select("id, name, role, summary, start_month, end_month, team_size").eq("id", chat.projectId).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    chat.mode === "augment_project" && chat.projectId
-      ? db
-          .from("project_details")
-          .select("id, status, sort_order, title, situation, task, action, result, learnings")
-          .eq("project_id", chat.projectId)
-          .order("sort_order")
-      : Promise.resolve({ data: [], error: null }),
   ]);
-  for (const r of [exps, edus, profile, project, details]) if (r.error) throw mapDbError(r.error);
+  for (const r of [projectRes, profile]) if (r.error) throw mapDbError(r.error);
+  const p = projectRes.data;
+  // The chat cascades with its project; a missing row here is a race with a delete.
+  if (!p) throw new AppError("not_found", "대상 프로젝트를 찾을 수 없습니다.");
 
-  const experiences = exps.data ?? [];
-  const educations = edus.data ?? [];
-  const parent = chat.experienceId
-    ? experiences.find((e) => e.id === chat.experienceId)
-    : chat.educationId
-      ? educations.find((e) => e.id === chat.educationId)
-      : undefined;
+  const parentRes = p.experience_id
+    ? await db.from("experiences").select("company_name, status").eq("id", p.experience_id).maybeSingle()
+    : await db.from("educations").select("institution_name, status").eq("id", p.education_id ?? "").maybeSingle();
+  if (parentRes.error) throw mapDbError(parentRes.error);
+  const parentRow = parentRes.data as { company_name?: string | null; institution_name?: string | null; status: string } | null;
 
   let gate: WritingChatTurnInput["gate"] = null;
   let gateRequirements: GateRequirement[] = [];
@@ -56,33 +51,27 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
     gateRequirements = requirements;
   }
 
-  const p = project.data;
   return {
-    affiliation: {
-      experienceId: chat.experienceId,
-      educationId: chat.educationId,
-      parentStatus: parent ? (parent.status === "complete" ? "complete" : "draft") : null,
+    project: {
+      id: p.id,
+      name: p.name,
+      startMonth: p.start_month,
+      endMonth: p.end_month,
+      isCurrent: p.is_current,
+      parent: {
+        type: p.experience_id ? "experience" : "education",
+        name: (p.experience_id ? parentRow?.company_name : parentRow?.institution_name) ?? null,
+        status: parentRow?.status === "complete" ? "complete" : "draft",
+      },
+      projectType: p.project_type,
+      experienceType: p.experience_type,
+      competencies: p.competencies ?? [],
+      situation: p.situation,
+      task: p.task,
+      action: p.action,
+      result: p.result,
+      learnings: p.learnings,
     },
-    candidates: {
-      experiences: experiences.map((e) => ({ id: e.id, companyName: e.company_name, startMonth: e.start_month, endMonth: e.end_month, isCurrent: e.is_current })),
-      educations: educations.map((e) => ({ id: e.id, institutionName: e.institution_name, programName: e.program_name, startMonth: e.start_month, endMonth: e.end_month })),
-    },
-    augmentTarget: p
-      ? {
-          project: { id: p.id, name: p.name, role: p.role, summary: p.summary, startMonth: p.start_month, endMonth: p.end_month, teamSize: p.team_size },
-          details: (details.data ?? []).map((d) => ({
-            id: d.id,
-            status: d.status === "complete" ? ("complete" as const) : ("draft" as const),
-            sortOrder: d.sort_order,
-            title: d.title,
-            situation: d.situation,
-            task: d.task,
-            action: d.action,
-            result: d.result,
-            learnings: d.learnings,
-          })),
-        }
-      : null,
     desiredJobTitle: profile.data?.desired_job_title ?? null,
     gate,
     gateRequirements,
@@ -99,13 +88,13 @@ export async function loadGateRequirements(db: AiWriterSupabaseClient, applicati
   const jd = await db.from("job_descriptions").select("id").eq("application_project_id", applicationProjectId).maybeSingle();
   if (jd.error) throw mapDbError(jd.error);
   if (!jd.data) return [];
-  const [reqs, skills, projects, details] = await Promise.all([
+  const [reqs, skills, projects, deliverables] = await Promise.all([
     db.from("jd_requirements").select("id, category, content, keywords, importance, sort_order").eq("job_description_id", jd.data.id).order("sort_order"),
     db.from("skills").select("name, normalized_name"),
-    db.from("projects").select("name, role, summary").eq("status", "complete"),
-    db.from("project_details").select("title, situation, task, action, result").eq("status", "complete"),
+    db.from("projects").select("name, situation, task, action, result, role, description").eq("status", "complete"),
+    db.from("project_deliverables").select("title"),
   ]);
-  for (const r of [reqs, skills, projects, details]) if (r.error) throw mapDbError(r.error);
+  for (const r of [reqs, skills, projects, deliverables]) if (r.error) throw mapDbError(r.error);
   const rows: GateRequirementRow[] = (reqs.data ?? []).map((r) => ({
     id: r.id,
     category: r.category as RequirementCategory,
@@ -116,8 +105,9 @@ export async function loadGateRequirements(db: AiWriterSupabaseClient, applicati
   }));
   if (rows.length === 0) return [];
   const texts: string[] = [];
-  for (const p of projects.data ?? []) texts.push(...[p.name, p.role, p.summary].filter((t): t is string => !!t));
-  for (const d of details.data ?? []) texts.push(...[d.title, d.situation, d.task, d.action, d.result].filter((t): t is string => !!t));
+  // v4.4 (ai notes §5.1): complete projects' STAR / role / description + deliverable titles.
+  for (const p of projects.data ?? []) texts.push(...[p.name, p.situation, p.task, p.action, p.result, p.role, p.description].filter((t): t is string => !!t));
+  for (const d of deliverables.data ?? []) if (d.title) texts.push(d.title);
   return selectGateRequirements(rows, {
     skillNames: (skills.data ?? []).map((s) => s.normalized_name ?? s.name),
     texts,
@@ -127,14 +117,11 @@ export async function loadGateRequirements(db: AiWriterSupabaseClient, applicati
 export function toTurnInput(snap: TurnSnapshot, loaded: Loaded): WritingChatTurnInput {
   const chat = snap.chat;
   return {
-    mode: chat.mode,
     // The pack keeps `done` only (failed replies never reach the model, AI-12).
     messages: chat.messages.map((m) => ({ id: m.id, sequence: m.sequence, role: m.role, content: m.content, status: m.status })),
     structuredDraft: chat.structuredDraft,
     lastExtractedSequence: chat.lastExtractedSequence,
-    requestedSlot: snap.requestedSlot
-      ? { slot: snap.requestedSlot.slot, detail_key: snap.requestedSlot.detailKey, existing_detail_id: snap.requestedSlot.existingDetailId }
-      : null,
+    requestedSlot: snap.requestedSlot ? { slot: snap.requestedSlot.slot } : null,
     // begin_assistant_message.is_final (no further user message fits after this reply).
     isFinalReply: snap.isLastTurn,
     ...loaded,
@@ -174,7 +161,7 @@ export function createWritingChatPipelines(opts: PipelineLogOptions = {}): Writi
     async extract(call) {
       const ctx = await contextFor(call.snapshot);
       const result = await extract(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey, jobId: call.jobId, logger: opts.logger });
-      if (result.skipped) return { skipped: true, patch: null, processedThroughSequence: null };
+      if (result.skipped) return { skipped: true, patch: null, processedThroughSequence: null, flags: null };
       if (result.rejections.length > 0) {
         // AI-12: rejected patches are logged by check number and field only (no source text).
         opts.log?.("writing_chat.v9_rejected", {
@@ -188,7 +175,20 @@ export function createWritingChatPipelines(opts: PipelineLogOptions = {}): Writi
         skipped: false,
         patch: isEmptyDraftPatch(result.patch) ? null : result.patch,
         processedThroughSequence: result.processedThroughSequence,
+        flags: result.flags,
       };
+    },
+    async turnState(snapshot) {
+      try {
+        const ctx = await contextFor(snapshot);
+        const p = ctx.input.project;
+        return {
+          project: { star: { situation: p.situation, task: p.task, action: p.action, result: p.result, learnings: p.learnings }, startMonth: p.startMonth },
+          readyToReturn: ctx.focus.readyToReturn,
+        };
+      } catch {
+        return null;
+      }
     },
   };
 }

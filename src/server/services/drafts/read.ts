@@ -63,7 +63,7 @@ const SECTION_COLUMNS =
   "id, draft_id, sort_order, section_kind, status, experience_id, education_id, heading, question_text, template_key, char_limit, count_basis, user_note, source_selection_mode, sources_modified_at, generation_no, question_class, ai_content, edited_content, ai_char_count, correction_applied, validation_report, provider, model, model_tier, connection_tier, ai_job_id, updated_at";
 
 const SOURCE_COLUMNS =
-  "id, draft_section_id, experience_id, education_id, project_id, project_detail_ids, role, origin, rationale, requirement_ids, reuse_reason, sort_order, source_label, source_deleted_at";
+  "id, draft_section_id, experience_id, education_id, project_id, role, origin, rationale, requirement_ids, reuse_reason, sort_order, source_label, source_deleted_at";
 
 type DraftRow = {
   id: string;
@@ -122,7 +122,6 @@ type SourceRow = {
   experience_id: string | null;
   education_id: string | null;
   project_id: string | null;
-  project_detail_ids: string[] | null;
   role: string;
   origin: string;
   rationale: string | null;
@@ -323,7 +322,6 @@ type Names = {
   experiences: Map<string, string>;
   educations: Map<string, string>;
   projects: Map<string, string>;
-  details: Map<string, string>;
 };
 
 async function loadNames(user: UserSupabaseClient, sources: readonly SourceRow[]): Promise<Names> {
@@ -331,33 +329,27 @@ async function loadNames(user: UserSupabaseClient, sources: readonly SourceRow[]
   const expIds = uniq(sources.map((s) => s.experience_id));
   const eduIds = uniq(sources.map((s) => s.education_id));
   const prjIds = uniq(sources.map((s) => s.project_id));
-  const detIds = uniq(sources.flatMap((s) => s.project_detail_ids ?? []));
-  const [exp, edu, prj, det] = await Promise.all([
+  const [exp, edu, prj] = await Promise.all([
     expIds.length ? user.from("experiences").select("id, company_name").in("id", expIds) : Promise.resolve({ data: [], error: null }),
     eduIds.length ? user.from("educations").select("id, institution_name").in("id", eduIds) : Promise.resolve({ data: [], error: null }),
     prjIds.length ? user.from("projects").select("id, name").in("id", prjIds) : Promise.resolve({ data: [], error: null }),
-    detIds.length ? user.from("project_details").select("id, title").in("id", detIds) : Promise.resolve({ data: [], error: null }),
   ]);
-  for (const r of [exp, edu, prj, det]) if (r.error) throw mapDbError(r.error);
+  for (const r of [exp, edu, prj]) if (r.error) throw mapDbError(r.error);
   return {
     experiences: new Map(((exp.data ?? []) as Array<{ id: string; company_name: string }>).map((r) => [r.id, r.company_name])),
     educations: new Map(((edu.data ?? []) as Array<{ id: string; institution_name: string }>).map((r) => [r.id, r.institution_name])),
     projects: new Map(((prj.data ?? []) as Array<{ id: string; name: string }>).map((r) => [r.id, r.name])),
-    details: new Map(((det.data ?? []) as Array<{ id: string; title: string | null }>).map((r) => [r.id, r.title ?? ""])),
   };
 }
 
 function sourceView(s: SourceRow, names: Names, chips: Map<string, EvidenceChip[]> | undefined, index: number): DraftSectionSourceView {
-  const detailIds = s.project_detail_ids ?? [];
   return {
     id: s.id,
     experienceId: s.experience_id,
     educationId: s.education_id,
     projectId: s.project_id,
-    projectDetailIds: detailIds,
     affiliationName: s.experience_id ? (names.experiences.get(s.experience_id) ?? null) : s.education_id ? (names.educations.get(s.education_id) ?? null) : null,
     projectName: s.project_id ? (names.projects.get(s.project_id) ?? null) : null,
-    detailTitles: detailIds.flatMap((id) => (names.details.has(id) ? [names.details.get(id)!] : [])),
     role: s.role === "primary" ? "primary" : "supporting",
     origin: s.origin === "user" ? "user" : "ai",
     rationale: s.rationale,

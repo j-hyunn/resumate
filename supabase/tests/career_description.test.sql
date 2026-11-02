@@ -16,12 +16,10 @@ insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
 insert into public.educations (id, institution_name, education_type, start_month)
   values ('a0000000-2222-0000-0000-000000000001', '한빛대', 'degree', '2015-03-01');
-insert into public.projects (id, experience_id, education_id, name, role) values
-  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 'Dev'),
-  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 'Lead'),
-  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action, result, learnings) values
-  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't1', 's1', '인덱스 재설계', 'r1', '배운 점');
+insert into public.projects (id, experience_id, education_id, name, situation, action, result, learnings, role, description) values
+  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 's1', '인덱스 재설계', 'r1', '배운 점', null, null),
+  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 's2', 'a2', null, null, null, null),
+  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', null, null, null, null, 'Dev', '사이드 내용');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}';
@@ -185,11 +183,11 @@ insert into t_cd select jsonb_build_object(
   'evidence', jsonb_build_array(
     jsonb_build_object('section_id', current_setting('t.s0'), 'item_key', 'e1-s', 'sort_order', 0, 'source_type', 'experience',
                        'source_id', 'a0000000-1111-0000-0000-000000000001', 'source_field', 'summary', 'quote', null),
-    jsonb_build_object('section_id', current_setting('t.s0'), 'item_key', 'p1-b1', 'sort_order', 0, 'source_type', 'project_detail',
-                       'source_id', 'a0000000-4444-0000-0000-000000000001', 'source_field', 'action', 'quote', '인덱스 재설계',
+    jsonb_build_object('section_id', current_setting('t.s0'), 'item_key', 'p1-b1', 'sort_order', 0, 'source_type', 'project',
+                       'source_id', 'a0000000-3333-0000-0000-000000000001', 'source_field', 'action', 'quote', '인덱스 재설계',
                        'owner_type', 'insight', 'owner_id', 'b0000000-0000-0000-0000-000000000009'),
     jsonb_build_object('section_id', current_setting('t.s1'), 'item_key', 'p2-r', 'sort_order', 0, 'source_type', 'project',
-                       'source_id', 'a0000000-3333-0000-0000-000000000002', 'source_field', 'role',
+                       'source_id', 'a0000000-3333-0000-0000-000000000002', 'source_field', 'situation',
                        'source_snapshot_at', '2026-10-01T00:00:00Z', 'source_label', '졸업 프로젝트')));
 grant select on t_cd to app_ai_writer;
 

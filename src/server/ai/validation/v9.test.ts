@@ -1,17 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  augmentTarget,
-  baseInput,
-  DETAIL_DONE_ID,
-  DETAIL_DRAFT_ID,
-  EXP_ID,
-  GREETING,
-  msgId,
-  output,
-  rows,
-} from "../__fixtures__/AI-12/conversations";
-import { buildWritingChatContext } from "../context-pack/writing-chat";
+import { baseInput, emptyProject, filledProject, GREETING, msgId, output, rows } from "../__fixtures__/AI-12/conversations";
+import { buildWritingChatContext, type WritingChatTurnInput } from "../context-pack/writing-chat";
 import type { Ai12ExtractOutput } from "../schemas/AI-12";
+import { toDraftPatch } from "../schemas/structured-draft";
 import {
   checkMonthValue,
   checkNumberValue,
@@ -23,7 +14,10 @@ import {
   findUnsupportedNames,
   isActorAmbiguous,
   isDelegationRequest,
+  MAX_PATCHES_PER_TURN,
+  mergedStarLength,
   normalizeMessageAlias,
+  remainingStarChars,
   uncoveredRatio,
   V9E_MAX_UNCOVERED_RATIO,
   validateExtractOutput,
@@ -232,325 +226,314 @@ describe("V-9g sensitive", () => {
 // validateExtractOutput (composite)
 // ---------------------------------------------------------------------------
 
-function ctxFor(turns: readonly (readonly ["user" | "assistant", string])[], extra: Parameters<typeof baseInput>[0] = {}) {
+// ---------------------------------------------------------------------------
+// validateExtractOutput (composite, v4.5 schema v3)
+// ---------------------------------------------------------------------------
+
+const SAY = "23년 3월부터 했어요. 피크 시간에 결제 승인 API가 느려졌어요. 제가 병목 쿼리를 찾아 인덱스를 다시 설계했어요.";
+
+function ctxFor(extra: Partial<WritingChatTurnInput> = {}, turns: readonly (readonly ["user" | "assistant", string])[] = [["assistant", GREETING], ["user", SAY]]) {
   return buildWritingChatContext(baseInput({ messages: rows(turns), ...extra }));
 }
 
-function run(out: Ai12ExtractOutput, ctx = ctxFor([["assistant", GREETING], ["user", "결제 승인 API 성능 개선 프로젝트였고 저 포함 4명이었어요."]])) {
+function run(out: Ai12ExtractOutput, ctx = ctxFor()) {
   return validateExtractOutput(out, ctx.v9);
 }
 
-describe("validateExtractOutput", () => {
-  it("applies a valid project patch with UUID sources and the original quote span", () => {
-    const r = run(output({ project_patches: [{ field: "team_size", op: "set", value: 4, source_message_ids: ["M2"], source_quotes: ["저 포함 4명이었어요"] }] }));
-    expect(r.changes.fields).toEqual([
-      {
-        target: "project",
-        detail_key: null,
-        existing_detail_id: null,
-        field: "team_size",
-        value: 4,
-        source_message_ids: [msgId(2)],
-        source_quotes: ["저 포함 4명이었어요"],
-        review: "ok",
-      },
-    ]);
-    expect(r.report).toMatchObject({ proposed: 1, applied: 1, rejected: 0 });
+const star = (field: string, value: string, quotes: string[], op: "set" | "append" = "set", ids = ["M2"]) =>
+  ({ field, op, value, source_message_ids: ids, source_quotes: quotes }) as Ai12ExtractOutput["star_patches"][number];
+
+const SITUATION = star("situation", "피크 시간에 결제 승인 API가 느려졌다", ["피크 시간에 결제 승인 API가 느려졌어요"]);
+const ACTION = star("action", "병목 쿼리를 찾아 인덱스를 재설계했다", ["병목 쿼리를 찾아 인덱스를 다시 설계했어요"]);
+
+const field = (value: string | string[], extra: Record<string, unknown> = {}) => ({
+  value,
+  origin: "ai",
+  source_message_ids: [msgId(2)],
+  source_quotes: [],
+  review: "ok",
+  reviewed_at: null,
+  applied_at: null,
+  ...extra,
+});
+
+describe("validateExtractOutput — period and STAR", () => {
+  it("applies valid patches with UUID sources and the original quote span", () => {
+    const r = run(output({
+      project_patches: [{ field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M-2"], source_quotes: ["23년 3월부터  했어요"] }],
+      star_patches: [SITUATION, ACTION],
+    }));
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.period).toEqual([{ field: "start_month", value: "2023-03", source_message_ids: [msgId(2)], source_quotes: ["23년 3월부터 했어요"], review: "ok" }]);
+    expect(r.changes.star.map((s) => `${s.field}:${s.op}:${s.review}`)).toEqual(["situation:set:ok", "action:set:ok"]);
+    expect(r.report).toMatchObject({ proposed: 3, applied: 3, rejected: 0 });
   });
 
-  it("rejects AI-sourced facts (V-9a) and logs only check + path", () => {
-    const ctx = ctxFor([
-      ["assistant", GREETING],
-      ["user", "결제 프로젝트였어요"],
-      ["assistant", "팀은 몇 명이었나요? 4명 정도였나요?"],
-      ["user", "네 맞아요"],
-    ]);
-    const r = run(output({ project_patches: [{ field: "team_size", op: "set", value: 4, source_message_ids: ["M3"], source_quotes: ["4명 정도였나요"] }] }), ctx);
-    expect(r.changes.fields).toEqual([]);
-    expect(r.rejections).toEqual([{ check: "V-9a", target: "project.team_size" }]);
-    expect(JSON.stringify(r.rejections)).not.toContain("4명");
+  it.each([
+    ["V-9a assistant source", star("situation", "어떤 상황이었나", ["어떤 상황에서"], "set", ["M1"]), "V-9a"],
+    ["V-9b paraphrased quote", star("situation", "API가 느렸다", ["API가 느렸어요"]), "V-9b"],
+    ["V-9c number not in quote", star("result", "응답 시간이 30% 줄었다", ["인덱스를 다시 설계했어요"]), "V-9c"],
+    ["V-9c 1,200명 not said", star("result", "사용자 1,200명이 썼다", ["인덱스를 다시 설계했어요"]), "V-9c"],
+    ["V-9c 2년 6개월 not said", star("situation", "2년 6개월 동안 운영했다", ["피크 시간에 결제 승인 API가 느려졌어요"]), "V-9c"],
+    ["V-9d invented tech", star("action", "Redis로 병목 쿼리를 찾아 인덱스를 재설계했다", ["병목 쿼리를 찾아 인덱스를 다시 설계했어요"]), "V-9d"],
+    ["empty value", star("task", "   ", ["피크 시간"]), "type"],
+  ])("%s → %s", (_name, patch, check) => {
+    const r = run(output({ star_patches: [patch] }));
+    expect(r.rejections).toEqual([{ check, target: `star.${patch.field}` }]);
+    expect(r.changes.star).toEqual([]);
   });
 
-  it("rejects a type error, a bad month, and a too-long value", () => {
+  it("V-9c accepts numbers stated in the quotes (30%, 1,200명)", () => {
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", "응답이 30% 빨라졌고 1200명이 쓰게 됐어요"]]);
+    const r = run(output({ star_patches: [star("result", "응답이 30% 빨라졌고 1,200명이 쓰게 되었다", ["응답이 30% 빨라졌고 1200명이 쓰게 됐어요"])] }), ctx);
+    expect(r.rejections).toEqual([]);
+  });
+
+  it("V-9e marks a loose summary needs_review and flags it", () => {
+    const r = run(output({ star_patches: [star("action", "전사 결제 플랫폼 아키텍처를 주도적으로 설계하고 팀 생산성을 높였다", ["인덱스를 다시 설계했어요"])] }));
+    expect(r.changes.star[0]).toMatchObject({ field: "action", review: "needs_review" });
+    expect(r.flags.needsReview).toEqual([{ section: "star", field: "action" }]);
+    expect(r.report.needs_review).toBe(1);
+  });
+
+  it("rejects a bad month and period patches the project already has (V-9h), and end_month on an ongoing project", () => {
+    const bad = run(output({ project_patches: [{ field: "start_month", op: "set", value: "2023-3", source_message_ids: ["M2"], source_quotes: ["23년 3월부터"] }] }));
+    expect(bad.rejections).toEqual([{ check: "type", target: "project.start_month" }]);
+    const filled = run(output({ project_patches: [{ field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터"] }] }), ctxFor({ project: emptyProject({ startMonth: "2022-01-01" }) }));
+    expect(filled.rejections).toEqual([{ check: "V-9h", target: "project.start_month" }]);
+    const ongoing = run(output({ project_patches: [{ field: "end_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터"] }] }), ctxFor({ project: emptyProject({ isCurrent: true }) }));
+    expect(ongoing.rejections).toEqual([{ check: "V-9h", target: "project.end_month" }]);
+  });
+
+  it("V-9h: a filled project field takes append only", () => {
+    const ctx = ctxFor({ project: filledProject() });
+    const r = run(output({ star_patches: [star("action", "병목 쿼리를 찾았다", ["병목 쿼리를 찾아"]), star("action", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctx);
+    expect(r.rejections).toEqual([{ check: "V-9h", target: "star.action" }]);
+    expect(r.changes.star.map((s) => `${s.field}:${s.op}`)).toEqual(["action:append"]);
+  });
+
+  it("append onto an empty project and an empty proposal becomes set; a second append stays append", () => {
+    const r = run(output({ star_patches: [star("situation", SITUATION.value, SITUATION.source_quotes, "append"), star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }));
+    expect(r.changes.star.map((s) => s.op)).toEqual(["set", "append"]);
+  });
+
+  it("append onto a pending proposal stays append; a set equal to the pending value is unchanged", () => {
+    const draft = { star: { situation: field(SITUATION.value) } };
+    const r = run(output({ star_patches: [SITUATION, star("action", ACTION.value, ACTION.source_quotes, "append")] }), ctxFor({ structuredDraft: draft }));
+    expect(r.report.unchanged).toBe(1);
+    expect(r.changes.star.map((s) => `${s.field}:${s.op}`)).toEqual(["action:set"]);
+    const appended = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctxFor({ structuredDraft: draft }));
+    expect(appended.changes.star.map((s) => s.op)).toEqual(["append"]);
+  });
+
+  it.each([
+    ["user_edit", { origin: "user_edit" }],
+    ["accepted", { review: "accepted" }],
+  ])("does not overwrite a %s field that is not applied yet", (_name, extra) => {
+    const r = run(output({ star_patches: [SITUATION] }), ctxFor({ structuredDraft: { star: { situation: field("내가 쓴 상황", extra) } } }));
+    expect(r.rejections).toEqual([{ check: "protected", target: "star.situation" }]);
+  });
+
+  it("an applied user_edit field is no longer protected", () => {
     const r = run(
-      output({
-        project_patches: [
-          { field: "team_size", op: "set", value: "네 명", source_message_ids: ["M2"], source_quotes: ["4명"] },
-          { field: "start_month", op: "set", value: "2023-3", source_message_ids: ["M2"], source_quotes: ["4명"] },
-          { field: "summary", op: "set", value: "가".repeat(201), source_message_ids: ["M2"], source_quotes: ["4명"] },
-        ],
-      }),
+      output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }),
+      ctxFor({ project: emptyProject({ situation: "내가 쓴 상황" }), structuredDraft: { star: { situation: field("내가 쓴 상황", { origin: "user_edit", applied_at: "2026-11-02T00:00:00Z" }) } } }),
     );
-    expect(r.rejections.map((x) => x.check)).toEqual(["type", "type", "length"]);
+    expect(r.rejections).toEqual([]);
   });
 
-  it("does not overwrite user_edit or accepted fields", () => {
-    const draft = {
-      project: {
-        name: { value: "내가 고친 이름", origin: "user_edit", source_message_ids: [], source_quotes: [], review: "ok", reviewed_at: null },
-        role: { value: "개발", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "accepted", reviewed_at: "2026-10-28T00:00:00Z" },
-      },
-    };
-    const ctx = ctxFor([["assistant", GREETING], ["user", "결제 승인 API 성능 개선 프로젝트였고 백엔드 리드였어요"]], { structuredDraft: draft });
-    const r = run(
-      output({
-        project_patches: [
-          { field: "name", op: "set", value: "결제 승인 API 성능 개선", source_message_ids: ["M2"], source_quotes: ["결제 승인 API 성능 개선"] },
-          { field: "role", op: "set", value: "백엔드 리드", source_message_ids: ["M2"], source_quotes: ["백엔드 리드였어요"] },
-        ],
-      }),
-      ctx,
-    );
-    expect(r.changes.fields).toEqual([]);
-    expect(r.report.by_check.protected).toBe(2);
+  it("C-14 length: an append that would pass 2,000 chars is rejected and flagged", () => {
+    const long = "가".repeat(1990);
+    const ctx = ctxFor({ project: emptyProject({ situation: long }) });
+    expect(mergedStarLength("situation", ctx.v9.project, ctx.v9.draft)).toBe(1990);
+    expect(remainingStarChars("situation", ctx.v9.project, ctx.v9.draft)).toBe(9);
+    const r = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctx);
+    expect(r.rejections).toEqual([{ check: "length", target: "star.situation" }]);
+    expect(r.flags.lengthFull).toEqual(["situation"]);
   });
 
-  it("merges append with the current value and its sources", () => {
-    const draft = {
-      details: [
-        {
-          detail_key: "D1",
-          existing_detail_id: null,
-          fields: { action: { value: "쿼리를 분석했다", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["쿼리를 분석했어요"], review: "ok", reviewed_at: null } },
-          achievements: [],
-        },
-      ],
-    };
-    const ctx = ctxFor(
-      [
-        ["assistant", GREETING],
-        ["user", "제가 쿼리를 분석했어요"],
-        ["assistant", "그다음엔요?"],
-        ["user", "제가 인덱스를 추가했어요"],
-      ],
-      { structuredDraft: draft, lastExtractedSequence: 2 },
-    );
-    const r = run(
-      output({ detail_patches: [{ detail_key: "D1", detail_ref: null, field: "action", op: "append", value: "인덱스를 추가했다", source_message_ids: ["M4"], source_quotes: ["인덱스를 추가했어요"] }] }),
-      ctx,
-    );
-    expect(r.changes.fields[0]).toMatchObject({
-      field: "action",
-      value: "쿼리를 분석했다 인덱스를 추가했다",
-      source_message_ids: [msgId(2), msgId(4)],
-      source_quotes: ["쿼리를 분석했어요", "인덱스를 추가했어요"],
-      review: "ok",
-    });
-    expect(r.changes.new_details).toEqual([]);
+  it("C-14 length counts the pending proposal too", () => {
+    const ctx = ctxFor({ project: emptyProject({ situation: "가".repeat(1000) }), structuredDraft: { star: { situation: field("나".repeat(990), { op: "append" }) } } });
+    expect(mergedStarLength("situation", ctx.v9.project, ctx.v9.draft)).toBe(1991);
+    const r = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctx);
+    expect(r.rejections[0]).toMatchObject({ check: "length" });
   });
 
-  it("creates a missing detail key and rejects a patch naming both / neither target", () => {
-    const r = run(
-      output({
-        detail_patches: [
-          { detail_key: "D1", detail_ref: null, field: "title", op: "set", value: "결제 승인 API 성능 개선", source_message_ids: ["M2"], source_quotes: ["결제 승인 API 성능 개선"] },
-          { detail_key: "D1", detail_ref: "DET-1", field: "task", op: "set", value: "성능 개선", source_message_ids: ["M2"], source_quotes: ["성능 개선"] },
-          { detail_key: null, detail_ref: null, field: "task", op: "set", value: "성능 개선", source_message_ids: ["M2"], source_quotes: ["성능 개선"] },
-        ],
-      }),
-    );
-    expect(r.changes.new_details).toEqual([{ detail_key: "D1" }]);
-    expect(r.rejections.map((x) => x.check)).toEqual(["target", "target"]);
+  it("C-14 limit: patches beyond 10 per turn are rejected", () => {
+    const many = Array.from({ length: MAX_PATCHES_PER_TURN + 2 }, () => star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append"));
+    const r = run(output({ star_patches: many }));
+    expect(r.rejections.filter((x) => x.check === "limit")).toHaveLength(2);
+    expect(r.changes.star).toHaveLength(MAX_PATCHES_PER_TURN);
   });
+});
 
-  it("V-9e marks a loose summary needs_review", () => {
-    const r = run(
-      output({
-        detail_patches: [
-          { detail_key: "D1", detail_ref: null, field: "result", op: "set", value: "전사 결제 플랫폼의 안정성과 확장성을 크게 끌어올렸다", source_message_ids: ["M2"], source_quotes: ["결제 승인 API 성능 개선"] },
-        ],
-      }),
-    );
-    expect(r.changes.fields[0].review).toBe("needs_review");
-    expect(r.flags.needsReview).toEqual([{ target: "detail", detail_key: "D1", existing_detail_id: null, field: "result" }]);
-  });
+describe("validateExtractOutput — V-9f actor", () => {
+  const TEAM = "저희 팀이 Redis 캐시를 붙여서 조회가 빨라졌어요.";
+  const teamCtx = (extra: Partial<WritingChatTurnInput> = {}) => ctxFor(extra, [["assistant", GREETING], ["user", TEAM]]);
+  const teamAction = star("action", "Redis 캐시를 붙여 조회 속도를 높였다", [TEAM]);
 
-  it("V-9f moves a team action to a situation candidate and asks again", () => {
-    const ctx = ctxFor([["assistant", GREETING], ["user", "저희 팀이 Redis 캐시를 붙여서 조회가 빨라졌어요."]]);
-    const r = run(
-      output({ detail_patches: [{ detail_key: "D1", detail_ref: null, field: "action", op: "set", value: "Redis 캐시를 붙였다", source_message_ids: ["M2"], source_quotes: ["저희 팀이 Redis 캐시를 붙여서"] }] }),
-      ctx,
-    );
-    expect(r.changes.fields).toEqual([
-      expect.objectContaining({ field: "situation", value: "Redis 캐시를 붙였다", review: "needs_review", detail_key: "D1" }),
-    ]);
-    expect(r.changes.clarifications).toEqual([{ kind: "actor_ambiguous", field: "action", detail_key: "D1", existing_detail_id: null }]);
-    expect(r.flags.actorAmbiguous).toHaveLength(1);
+  it("moves a team action to a needs_review situation when both situations are empty", () => {
+    const r = run(output({ star_patches: [teamAction] }), teamCtx());
+    expect(r.changes.star).toEqual([expect.objectContaining({ field: "situation", op: "set", review: "needs_review" })]);
+    expect(r.changes.clarifications).toEqual([{ kind: "actor_ambiguous", field: "action" }]);
+    expect(r.flags.actorAmbiguous).toEqual([{ section: "star", field: "action" }]);
     expect(r.report.actor_ambiguous).toBe(1);
   });
 
-  it("V-9f keeps an existing situation and only adds the clarification", () => {
-    const draft = {
-      details: [{ detail_key: "D1", existing_detail_id: null, fields: { situation: { value: "조회가 느렸다", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "ok", reviewed_at: null } }, achievements: [] }],
-    };
-    const ctx = ctxFor([["assistant", GREETING], ["user", "저희가 캐시를 붙였어요"]], { structuredDraft: draft });
-    const r = run(
-      output({ detail_patches: [{ detail_key: "D1", detail_ref: null, field: "action", op: "set", value: "캐시를 붙였다", source_message_ids: ["M2"], source_quotes: ["저희가 캐시를 붙였어요"] }] }),
-      ctx,
-    );
-    expect(r.changes.fields).toEqual([]);
-    expect(r.changes.clarifications).toHaveLength(1);
+  it.each([
+    ["the project has a situation", { project: emptyProject({ situation: "기존 상황" }) }],
+    ["the proposal has a situation", { structuredDraft: { star: { situation: field("제안된 상황") } } }],
+  ])("drops the value when %s", (_name, extra) => {
+    const r = run(output({ star_patches: [teamAction] }), teamCtx(extra as Partial<WritingChatTurnInput>));
+    expect(r.changes.star).toEqual([]);
+    expect(r.changes.clarifications).toEqual([{ kind: "actor_ambiguous", field: "action" }]);
   });
 
-  it("resolves an old actor_ambiguous clarification when an own action arrives", () => {
-    const draft = { clarifications: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1", existing_detail_id: null }], details: [{ detail_key: "D1" }] };
-    const ctx = ctxFor([["assistant", GREETING], ["user", "제가 캐시 무효화 규칙을 설계했어요"]], { structuredDraft: draft });
-    const r = run(
-      output({ detail_patches: [{ detail_key: "D1", detail_ref: null, field: "action", op: "set", value: "캐시 무효화 규칙을 설계했다", source_message_ids: ["M2"], source_quotes: ["제가 캐시 무효화 규칙을 설계했어요"] }] }),
-      ctx,
-    );
-    expect(r.changes.clarifications).toEqual([]);
+  it("resolves an old actor_ambiguous clarification when an own action arrives, keeps others", () => {
+    const draft = { clarifications: [{ kind: "actor_ambiguous", field: "action" }, { kind: "period_unclear", field: "start_month" }] };
+    const r = run(output({ star_patches: [ACTION] }), ctxFor({ structuredDraft: draft }));
+    expect(r.changes.clarifications).toEqual([{ kind: "period_unclear", field: "start_month" }]);
   });
 
-  it("V-9h: augment rejects filled existing fields and unknown DET refs, accepts empty ones", () => {
-    const ctx = ctxFor(
-      [["assistant", GREETING], ["user", "정산이 하루 늦게 끝나서 고객 문의가 많았어요. 제가 배치 순서를 바꿨어요. 팀은 5명이었어요."]],
-      { mode: "augment_project", augmentTarget: augmentTarget() },
-    );
+  it("keeps clarifications unchanged (null) when nothing changes", () => {
+    const draft = { clarifications: [{ kind: "number_vague", field: "result" }] };
+    expect(run(output({ star_patches: [SITUATION] }), ctxFor({ structuredDraft: draft })).changes.clarifications).toBeNull();
+  });
+
+  it("maps model clarifications without their note", () => {
+    const r = run(output({ clarifications: [{ kind: "period_unclear", field: null, note: "작년 봄" }, { kind: "number_vague", field: null, note: "정도만" }] }));
+    expect(r.changes.clarifications).toEqual([{ kind: "period_unclear", field: "start_month" }, { kind: "number_vague", field: "result" }]);
+    expect(JSON.stringify(r)).not.toContain("작년 봄");
+  });
+});
+
+describe("validateExtractOutput — V-9g sensitive", () => {
+  it("rejects sensitive values and counts once per pending message and category", () => {
+    const text = "우울증 치료로 쉬었다가 복귀했어요. 결제 모듈 리팩터링을 맡았어요.";
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", text]]);
     const r = run(
       output({
-        project_patches: [
-          { field: "name", op: "set", value: "정산 배치", source_message_ids: ["M2"], source_quotes: ["정산"] },
-          { field: "team_size", op: "set", value: 5, source_message_ids: ["M2"], source_quotes: ["팀은 5명이었어요"] },
+        star_patches: [
+          star("situation", "우울증 치료로 쉬었다가 복귀했다", ["우울증 치료로 쉬었다가 복귀했어요"]),
+          star("task", "치료 후 복귀했다", ["우울증 치료로 쉬었다가"]),
+          star("action", "결제 모듈 리팩터링을 맡았다", ["결제 모듈 리팩터링을 맡았어요"]),
         ],
-        detail_patches: [
-          { detail_key: null, detail_ref: "DET-1", field: "situation", op: "set", value: "정산이 하루 늦게 끝나 고객 문의가 많았다", source_message_ids: ["M2"], source_quotes: ["정산이 하루 늦게 끝나서 고객 문의가 많았어요"] },
-          { detail_key: null, detail_ref: "DET-1", field: "title", op: "set", value: "정산 지연", source_message_ids: ["M2"], source_quotes: ["정산이 하루 늦게"] },
-          { detail_key: null, detail_ref: "DET-2", field: "action", op: "set", value: "배치 순서를 바꿨다", source_message_ids: ["M2"], source_quotes: ["제가 배치 순서를 바꿨어요"] },
-          { detail_key: null, detail_ref: "DET-9", field: "task", op: "set", value: "배치 순서", source_message_ids: ["M2"], source_quotes: ["배치 순서"] },
-        ],
+        sensitive_flags: [{ category: "health", message_id: "M2" }, { category: "religion", message_id: "M1" }],
       }),
       ctx,
     );
-    expect(r.changes.fields.map((f) => [f.target, f.existing_detail_id, f.field])).toEqual([
-      ["project", null, "team_size"],
-      ["detail", DETAIL_DRAFT_ID, "situation"],
-    ]);
-    expect(r.rejections).toEqual([
-      { check: "V-9h", target: "project.name" },
-      { check: "V-9h", target: "detail.DET-1.title" },
-      { check: "V-9h", target: "detail.DET-2.action" },
-      { check: "V-9h", target: "detail.?.task" },
-    ]);
-    expect(DETAIL_DONE_ID).toBeTruthy();
-  });
-
-  it("V-9h: detail_ref is not allowed in new_project", () => {
-    const r = run(
-      output({ detail_patches: [{ detail_key: null, detail_ref: "DET-1", field: "task", op: "set", value: "성능 개선", source_message_ids: ["M2"], source_quotes: ["성능 개선"] }] }),
-    );
-    expect(r.rejections).toEqual([{ check: "V-9h", target: "detail.?.task" }]);
-  });
-
-  it("achievements: all four fields checked, numbers with units", () => {
-    const ctx = ctxFor([["assistant", GREETING], ["user", "결제 승인 API 응답 시간이 1.2초 걸리던 게 0.7초로 줄었어요"]]);
-    const ok = run(
-      output({
-        achievements: [
-          { detail_key: "D1", detail_ref: null, metric_name: "결제 승인 API 응답 시간", value_before: 1.2, value_after: 0.7, unit: "초", source_message_ids: ["M2"], source_quotes: ["결제 승인 API 응답 시간이 1.2초 걸리던 게 0.7초로 줄었어요"] },
-        ],
-      }),
-      ctx,
-    );
-    expect(ok.changes.achievements).toHaveLength(1);
-    expect(ok.changes.achievements[0].fields.value_after?.value).toBe(0.7);
-    expect(ok.changes.new_details).toEqual([{ detail_key: "D1" }]);
-
-    const bad = run(
-      output({
-        achievements: [
-          { detail_key: "D1", detail_ref: null, metric_name: "응답 시간", value_before: 1.5, value_after: 0.7, unit: "초", source_message_ids: ["M2"], source_quotes: ["1.2초 걸리던 게 0.7초로"] },
-          { detail_key: "D1", detail_ref: null, metric_name: "응답 시간", value_before: 1.2, value_after: 0.7, unit: "ms", source_message_ids: ["M2"], source_quotes: ["1.2초 걸리던 게 0.7초로"] },
-          { detail_key: "D1", detail_ref: null, metric_name: "응답 시간", value_before: null, value_after: null, unit: null, source_message_ids: ["M2"], source_quotes: ["1.2초"] },
-        ],
-      }),
-      ctx,
-    );
-    expect(bad.changes.achievements).toEqual([]);
-    expect(bad.rejections.map((x) => x.check)).toEqual(["V-9c", "V-9c", "type"]);
-  });
-
-  it("skills: dictionary spellings, dedupe, and invented skills", () => {
-    const draft = { skills: [{ value: "redis", source_message_ids: [msgId(2)], source_quotes: ["레디스"] }] };
-    const ctx = ctxFor([["assistant", GREETING], ["user", "카프카로 이벤트를 받고 레디스에 캐시했어요"]], { structuredDraft: draft });
-    const r = run(
-      output({
-        skills: [
-          { value: "Kafka", source_message_ids: ["M2"], source_quotes: ["카프카로 이벤트를 받고"] },
-          { value: "Redis", source_message_ids: ["M2"], source_quotes: ["레디스에 캐시했어요"] },
-          { value: "Kubernetes", source_message_ids: ["M2"], source_quotes: ["이벤트를 받고"] },
-          { value: "kafka", source_message_ids: ["M2"], source_quotes: ["카프카로"] },
-        ],
-      }),
-      ctx,
-    );
-    expect(r.changes.skills.map((s) => s.value)).toEqual(["Kafka"]);
-    expect(r.rejections).toEqual([{ check: "V-9d", target: "skill.2" }]);
-    expect(r.report.unchanged).toBe(2);
-  });
-
-  it("affiliation: suggests a named candidate, rejects unnamed or unknown ones, ignores in augment", () => {
-    const ctx = ctxFor([["assistant", GREETING], ["user", "에이비씨페이 다닐 때 한 프로젝트예요"], ["assistant", "네"], ["user", "전 회사에서 한 거예요"]]);
-    const ok = run(output({ affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이 다닐 때"] } }), ctx);
-    expect(ok.changes.affiliation_suggestion).toEqual({ type: "experience", id: EXP_ID, source_message_ids: [msgId(2)] });
-    const unnamed = run(output({ affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M4"], source_quotes: ["전 회사에서"] } }), ctx);
-    expect(unnamed.rejections).toEqual([{ check: "V-9d", target: "affiliation" }]);
-    const wrongType = run(output({ affiliation_suggestion: { type: "education", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이"] } }), ctx);
-    expect(wrongType.rejections).toEqual([{ check: "ref", target: "affiliation" }]);
-    // Re-suggesting from an already-extracted message (the user may have declined it) is blocked.
-    const old = ctxFor([["assistant", GREETING], ["user", "에이비씨페이 다닐 때 한 프로젝트예요"], ["assistant", "네"], ["user", "백엔드였어요"]], { lastExtractedSequence: 2 });
-    expect(run(output({ affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이"] } }), old).rejections).toEqual([
-      { check: "declined", target: "affiliation" },
-    ]);
-    const declined = ctxFor([["assistant", GREETING], ["user", "에이비씨페이 다닐 때"]], { declinedAffiliationIds: [EXP_ID] });
-    expect(run(output({ affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이"] } }), declined).changes.affiliation_suggestion).toBeNull();
-    const augment = ctxFor([["assistant", GREETING], ["user", "에이비씨페이 다닐 때"]], { mode: "augment_project", augmentTarget: augmentTarget() });
-    expect(run(output({ affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이"] } }), augment).changes.affiliation_suggestion).toBeNull();
-  });
-
-  it("V-9g: rejects sensitive values, counts flags once per pending message and category", () => {
-    const ctx = ctxFor(
-      [
-        ["assistant", GREETING],
-        ["user", "예전에 노조 일을 했어요"],
-        ["assistant", "네"],
-        ["user", "우울증 치료를 받느라 쉬었다가 복귀해서 결제 모듈을 맡았어요"],
-      ],
-      { lastExtractedSequence: 2 },
-    );
-    const r = run(
-      output({
-        detail_patches: [
-          { detail_key: "D1", detail_ref: null, field: "situation", op: "set", value: "치료 후 복귀했다", source_message_ids: ["M4"], source_quotes: ["우울증 치료를 받느라 쉬었다가 복귀해서"] },
-          { detail_key: "D1", detail_ref: null, field: "task", op: "set", value: "노조 일을 했다", source_message_ids: ["M2"], source_quotes: ["노조 일을 했어요"] },
-        ],
-        sensitive_flags: [
-          { category: "health", message_id: "M4" },
-          { category: "health", message_id: "M4" },
-          { category: "union", message_id: "M2" },
-          { category: "religion", message_id: "M1" },
-        ],
-      }),
-      ctx,
-    );
-    expect(r.changes.fields).toEqual([]);
     expect(r.rejections.map((x) => x.check)).toEqual(["V-9g", "V-9g"]);
-    // M2 is not pending (already extracted) and M1 is the assistant: only M4|health counts.
     expect(r.changes.sensitive_flags_add).toBe(1);
+    expect(r.flags.sensitiveAdded).toBe(1);
+    expect(r.changes.star.map((s) => s.field)).toEqual(["action"]);
   });
 
-  it("drops the model's clarification note and maps detail_ref", () => {
-    const ctx = ctxFor([["assistant", GREETING], ["user", "정산이 늦었어요"]], { mode: "augment_project", augmentTarget: augmentTarget() });
+  it("does not count messages already extracted", () => {
+    const ctx = ctxFor({ lastExtractedSequence: 2 }, [["assistant", GREETING], ["user", "우울증이 있었어요"], ["assistant", "네"], ["user", "결제 일을 했어요"]]);
+    const r = run(output({ sensitive_flags: [{ category: "health", message_id: "M2" }] }), ctx);
+    expect(r.changes.sensitive_flags_add).toBe(0);
+  });
+});
+
+describe("validateExtractOutput — V-9i classification", () => {
+  const ready = () => ctxFor({ project: emptyProject({ situation: "상황", action: "행동" }) });
+  const sugg = (s: Partial<Ai12ExtractOutput["classification_suggestions"]>) =>
+    output({ classification_suggestions: { project_type: null, experience_type: null, competencies: null, ...s } });
+
+  it("accepts keys from the list with user sources and a clean reason", () => {
     const r = run(
-      output({
-        clarifications: [
-          { kind: "number_vague", field: "result", detail_key: null, detail_ref: "DET-1", note: "'확 줄었다'만 있음" },
-          { kind: "actor_ambiguous", field: "action", detail_key: null, detail_ref: "DET-7", note: null },
-        ],
+      sugg({
+        project_type: { value: "improvement", source_message_ids: ["M2"], reason: "M2에서 말한 성능 개선 작업" },
+        experience_type: { value: "problem_solving", source_message_ids: ["M1", "M2"], reason: null },
+      }),
+      ready(),
+    );
+    expect(r.changes.classification).toEqual([
+      { field: "project_type", value: "improvement", source_message_ids: [msgId(2)], reason: "말한 성능 개선 작업" },
+      { field: "experience_type", value: "problem_solving", source_message_ids: [msgId(2)], reason: null },
+    ]);
+    expect(r.report.applied).toBe(2);
+  });
+
+  it("① drops a value outside the CR-17 list (cast past zod)", () => {
+    const out = sugg({ project_type: { value: "rocket_science" as never, source_message_ids: [], reason: null } });
+    expect(run(out, ready()).rejections).toEqual([{ check: "V-9i", target: "classification.project_type" }]);
+  });
+
+  it("②: competencies — unknown keys dropped, duplicates removed, first 3 kept", () => {
+    const value = ["analysis", "analysis", "bogus", "planning", "execution", "leadership"] as never;
+    const r = run(sugg({ competencies: { value, source_message_ids: [], reason: null } }), ready());
+    expect(r.changes.classification).toEqual([{ field: "competencies", value: ["analysis", "planning", "execution"], source_message_ids: [], reason: null }]);
+  });
+
+  it("③ drops a suggestion for a field the user already chose (competencies: any chosen)", () => {
+    const ctx = ctxFor({ project: emptyProject({ situation: "상황", action: "행동", projectType: "operation", competencies: ["analysis"] }) });
+    const r = run(
+      sugg({
+        project_type: { value: "improvement", source_message_ids: [], reason: null },
+        competencies: { value: ["planning"], source_message_ids: [], reason: null },
+        experience_type: { value: "impact", source_message_ids: [], reason: null },
       }),
       ctx,
     );
-    expect(r.changes.clarifications).toEqual([{ kind: "number_vague", field: "result", detail_key: null, existing_detail_id: DETAIL_DRAFT_ID }]);
-    expect(JSON.stringify(r)).not.toContain("확 줄었다");
+    expect(r.rejections.map((x) => x.target)).toEqual(["classification.project_type", "classification.competencies"]);
+    expect(r.changes.classification.map((c) => c.field)).toEqual(["experience_type"]);
+  });
+
+  it("③ drops a suggestion over a user_edit proposal", () => {
+    const ctx = ctxFor({ project: emptyProject({ situation: "상황", action: "행동" }), structuredDraft: { classification: { project_type: field("operation", { origin: "user_edit" }) } } });
+    expect(run(sugg({ project_type: { value: "improvement", source_message_ids: [], reason: null } }), ctx).rejections).toHaveLength(1);
+  });
+
+  it("④ removes non-user source ids, keeps the suggestion", () => {
+    const r = run(sugg({ project_type: { value: "improvement", source_message_ids: ["M1", "M9"], reason: null } }), ready());
+    expect(r.changes.classification[0].source_message_ids).toEqual([]);
+  });
+
+  it("⑤ drops suggestions until situation and action exist (proposal or this turn counts)", () => {
+    const s = sugg({ project_type: { value: "improvement", source_message_ids: [], reason: null } });
+    expect(run(s).rejections).toEqual([{ check: "V-9i", target: "classification.project_type" }]);
+    const sameTurn = run({ ...s, star_patches: [SITUATION, ACTION] });
+    expect(sameTurn.changes.classification).toHaveLength(1);
+  });
+
+  it("clips the reason to 100 chars and drops a sensitive reason", () => {
+    const long = run(sugg({ project_type: { value: "improvement", source_message_ids: [], reason: "가".repeat(300) } }), ready());
+    expect(long.changes.classification[0].reason).toHaveLength(100);
+    const health = run(sugg({ project_type: { value: "improvement", source_message_ids: [], reason: "우울증 치료 뒤 복귀" } }), ready());
+    expect(health.changes.classification[0].reason).toBeNull();
+  });
+
+  it("same value as the pending suggestion is unchanged", () => {
+    const ctx = ctxFor({ project: emptyProject({ situation: "상황", action: "행동" }), structuredDraft: { classification: { competencies: field(["analysis"]) } } });
+    const r = run(sugg({ competencies: { value: ["analysis"], source_message_ids: [], reason: null } }), ctx);
+    expect(r.report.unchanged).toBe(1);
+    expect(r.changes.classification).toEqual([]);
+  });
+});
+
+describe("toDraftPatch (v3 ops)", () => {
+  it("orders ops: sensitive first, period, STAR, classification, clarifications — no aliases", () => {
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", `${SAY} 우울증 치료도 받았어요.`]]);
+    const r = validateExtractOutput(
+      output({
+        project_patches: [{ field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터 했어요"] }],
+        star_patches: [SITUATION, ACTION],
+        classification_suggestions: { project_type: { value: "improvement", source_message_ids: ["M2"], reason: null }, experience_type: null, competencies: null },
+        clarifications: [{ kind: "number_vague", field: "result", note: null }],
+        sensitive_flags: [{ category: "health", message_id: "M2" }],
+      }),
+      ctx.v9,
+    );
+    const patch = toDraftPatch(r.changes);
+    expect(patch.ops.map((o) => ("target" in o ? `${o.op}:${o.target.section}.${o.target.field}` : o.op))).toEqual([
+      "add_sensitive_flags",
+      "set:project.start_month",
+      "set:star.situation",
+      "set:star.action",
+      "set:classification.project_type",
+      "set_clarifications",
+    ]);
+    expect(JSON.stringify(patch)).not.toMatch(/"M-?\d+"/);
   });
 });

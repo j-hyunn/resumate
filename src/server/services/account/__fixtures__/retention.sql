@@ -18,15 +18,9 @@ declare
   kst_month date := date_trunc('month', n at time zone 'Asia/Seoul')::date;
   id uuid;
 begin
-  -- Unlinked writing chats: 90 days after last activity (D-DM-08).
+  -- DM v4.4 (CR-6): every chat belongs to a project and is kept (no 90-day purge any more).
   id := gen_random_uuid();
-  insert into public.writing_chats (id, user_id, mode, status, last_activity_at) values (id, u, 'new_project', 'active', n - interval '91 days');
-  insert into fx values ('chat_unlinked_91d', id);
-  id := gen_random_uuid();
-  insert into public.writing_chats (id, user_id, mode, status, last_activity_at) values (id, u, 'new_project', 'abandoned', n - interval '89 days');
-  insert into fx values ('chat_unlinked_89d', id);
-  id := gen_random_uuid();
-  insert into public.writing_chats (id, user_id, mode, status, project_id, last_activity_at) values (id, u, 'augment_project', 'active', prj, n - interval '400 days');
+  insert into public.writing_chats (id, user_id, status, project_id, last_activity_at) values (id, u, 'active', prj, n - interval '400 days');
   insert into fx values ('chat_linked_400d', id);
 
   -- ai_jobs: finished 90 days ago; in-flight jobs are never purged.

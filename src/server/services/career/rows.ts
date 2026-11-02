@@ -4,7 +4,7 @@ import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 
 /**
- * Whole career rows as the user (RLS) for the wired data layer (`src/lib/data/career.ts`, W2). The
+ * Whole career rows (DM v4.4) as the user (RLS) for the wired data layer (`src/lib/data/career.ts`, W2). The
  * screens read table rows, not the S2 DTOs. DM §2.4: tens of rows per user, read once and joined in memory.
  */
 
@@ -21,12 +21,11 @@ function rowOf<T>(res: { data: T; error: PostgrestError | null }): T {
 }
 
 export async function loadCareerRows(supabase: UserSupabaseClient) {
-  const [experiences, educations, projects, details, achievements, skills, links, chats] = await Promise.all([
+  const [experiences, educations, projects, deliverables, skills, links, chats] = await Promise.all([
     supabase.from("experiences").select("*"),
     supabase.from("educations").select("*"),
     supabase.from("projects").select("*").order("created_at"),
-    supabase.from("project_details").select("*").order("project_id").order("sort_order"),
-    supabase.from("achievements").select("*").order("created_at"),
+    supabase.from("project_deliverables").select("*").order("project_id").order("sort_order"),
     supabase.from("skills").select("*").order("name"),
     supabase.from("project_skills").select("*").order("created_at"),
     supabase.from("writing_chats").select("*").order("last_activity_at", { ascending: false }),
@@ -35,8 +34,7 @@ export async function loadCareerRows(supabase: UserSupabaseClient) {
     experiences: rowsOf(experiences),
     educations: rowsOf(educations),
     projects: rowsOf(projects),
-    project_details: rowsOf(details),
-    achievements: rowsOf(achievements),
+    project_deliverables: rowsOf(deliverables),
     skills: rowsOf(skills),
     project_skills: rowsOf(links),
     writing_chats: rowsOf(chats),
@@ -61,14 +59,6 @@ export async function loadProjectRow(supabase: UserSupabaseClient, id: string) {
   return rowOf(await supabase.from("projects").select("*").eq("id", id).maybeSingle());
 }
 
-export async function loadProjectDetailRow(supabase: UserSupabaseClient, id: string) {
-  return rowOf(await supabase.from("project_details").select("*").eq("id", id).maybeSingle());
-}
-
-export async function loadAchievementRow(supabase: UserSupabaseClient, id: string) {
-  return rowOf(await supabase.from("achievements").select("*").eq("id", id).maybeSingle());
-}
-
 /** Skills linked to one project (S-10 사용 기술). */
 export async function loadProjectSkillRows(supabase: UserSupabaseClient, projectId: string) {
   const links = rowsOf(await supabase.from("project_skills").select("skill_id").eq("project_id", projectId));
@@ -76,15 +66,9 @@ export async function loadProjectSkillRows(supabase: UserSupabaseClient, project
   return rowsOf(await supabase.from("skills").select("*").in("id", links.map((l) => l.skill_id)));
 }
 
-/** S-36 augment: the first unfinished detail of the project (the one the chat fills before the AI picks a card). */
-export async function loadFirstDraftDetailId(supabase: UserSupabaseClient, projectId: string): Promise<string | null> {
-  const details = rowsOf(await supabase.from("project_details").select("id").eq("project_id", projectId).eq("status", "draft").order("sort_order").limit(1));
-  return details[0]?.id ?? null;
-}
-
-/** S-08 lists: latest activity first. */
-export async function loadWritingChatRows(supabase: UserSupabaseClient, status: "active" | "abandoned") {
-  return rowsOf(await supabase.from("writing_chats").select("*").eq("status", status).order("last_activity_at", { ascending: false }));
+/** Chats of one project, latest activity first (S-10 패널 대화 기록). */
+export async function loadProjectWritingChatRows(supabase: UserSupabaseClient, projectId: string) {
+  return rowsOf(await supabase.from("writing_chats").select("*").eq("project_id", projectId).order("last_activity_at", { ascending: false }));
 }
 
 /**

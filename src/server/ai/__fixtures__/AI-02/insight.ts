@@ -7,7 +7,7 @@ import { careerRowsFixture, IDS } from "../career-rows";
 
 /**
  * Synthetic AI-02 fixtures (fictional company and person; no real postings or
- * résumés). Model outputs are built from the context so aliases (DET-n, PRJ-n …)
+ * résumés). Model outputs are built from the context so aliases (PRJ-n, DLV-n …)
  * always match the pack the pipeline builds.
  */
 
@@ -89,15 +89,13 @@ export function enInput(rows: CareerRows = careerRowsFixture()): InsightContextI
   };
 }
 
-/** Thin data: one experience, one project with one detail, no quantitative achievement. */
+/** Thin data: one experience, one project, no number in any result / description / deliverable (C-14 v4.5). */
 export function thinRows(): CareerRows {
   const rows = careerRowsFixture();
-  const keepProjects = new Set<string>([IDS.prjSettle]);
   return {
     ...rows,
-    projects: rows.projects.filter((p) => keepProjects.has(p.id)),
-    projectDetails: rows.projectDetails.filter((d) => keepProjects.has(d.project_id)),
-    achievements: [],
+    projects: rows.projects.filter((p) => p.id === IDS.prjSettle).map((p) => ({ ...p, result: "정산 처리 시간이 크게 줄었다" })),
+    deliverables: [],
   };
 }
 
@@ -117,12 +115,17 @@ export function sidOf(ctx: InsightContext, needle: string): string {
 
 type Ev = Ai02Match["evidence"][number];
 
+const star = (field: string) => (ctx: InsightContext, projectId: string, quote: string): Ev => ({ source_type: "project", ref: alias(ctx, "project", projectId), field, quote });
+
 export const ev = {
-  action: (ctx: InsightContext, detailId: string, quote: string): Ev => ({ source_type: "project_detail", ref: alias(ctx, "project_detail", detailId), field: "action", quote }),
-  result: (ctx: InsightContext, detailId: string, quote: string): Ev => ({ source_type: "project_detail", ref: alias(ctx, "project_detail", detailId), field: "result", quote }),
-  situation: (ctx: InsightContext, detailId: string, quote: string): Ev => ({ source_type: "project_detail", ref: alias(ctx, "project_detail", detailId), field: "situation", quote }),
-  learnings: (ctx: InsightContext, detailId: string, quote: string): Ev => ({ source_type: "project_detail", ref: alias(ctx, "project_detail", detailId), field: "learnings", quote }),
-  achievement: (ctx: InsightContext, achId: string): Ev => ({ source_type: "achievement", ref: alias(ctx, "achievement", achId), field: "metric", quote: null }),
+  action: star("action"),
+  result: star("result"),
+  situation: star("situation"),
+  task: star("task"),
+  learnings: star("learnings"),
+  role: star("role"),
+  description: star("description"),
+  deliverable: (ctx: InsightContext, deliverableId: string, quote: string): Ev => ({ source_type: "project_deliverable", ref: alias(ctx, "project_deliverable", deliverableId), field: "body", quote }),
   skill: (ctx: InsightContext, skillId: string): Ev => ({ source_type: "skill", ref: alias(ctx, "skill", skillId), field: "name", quote: null }),
   project: (ctx: InsightContext, projectId: string): Ev => ({ source_type: "project", ref: alias(ctx, "project", projectId), field: "name", quote: null }),
   sentence: (ctx: InsightContext, needle: string): Ev => ({ source_type: "jd_sentence", ref: sidOf(ctx, needle), field: null, quote: null }),
@@ -145,9 +148,9 @@ export function matchOutput(matches: Ai02Match[]): Ai02MatchOutput {
 
 /**
  * Recorded-style stage-1 outputs for the Korean JD (rich career).
- * REQ-1 결제 승인 API → met (action + achievement)
+ * REQ-1 결제 승인 API → met (action + result)
  * REQ-2 정산 배치    → met (action)
- * REQ-3 장애 대응    → met (action + result)
+ * REQ-3 장애 대응    → met (deliverable body, standalone project)
  * REQ-4 Spring Boot  → met claimed with a skill tag only → partial (server)
  * REQ-5 Kotlin       → partial (skill)
  * REQ-6 대용량 트래픽 → met claimed with situation only → partial (server)
@@ -159,16 +162,16 @@ export function matchOutput(matches: Ai02Match[]): Ai02MatchOutput {
 export function koMatchOutputs(ctx: InsightContext): [Ai02MatchOutput, Ai02MatchOutput] {
   return [
     matchOutput([
-      match("REQ-1", "met", [ev.action(ctx, IDS.detPay1, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다"), ev.achievement(ctx, IDS.achPay)]),
-      match("REQ-2", "met", [ev.action(ctx, IDS.detSettle, "정산 배치를 청크 단위로 재설계했다")]),
-      match("REQ-3", "met", [ev.action(ctx, IDS.detPay2, "런북을 작성하고 알림 규칙을 정리했다"), ev.result(ctx, IDS.detPay2, "장애 복구 시간이 줄었다")]),
+      match("REQ-1", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다"), ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다")]),
+      match("REQ-2", "met", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")]),
+      match("REQ-3", "met", [ev.deliverable(ctx, IDS.dlvSide1, "은행 문자 10종의 형식을 정규식으로 분류했다")]),
       match("REQ-4", "met", [ev.skill(ctx, IDS.sklSpring)]),
       match("REQ-5", "partial", [ev.skill(ctx, IDS.sklKotlin)], { missing_aspect: "Kotlin 사용 서술" }),
-      match("REQ-6", "met", [ev.situation(ctx, IDS.detPay1, "피크 시간 결제 승인 API 응답이 1.2초까지 늘었다")]),
-      match("REQ-7", "met", [ev.action(ctx, IDS.detPay1, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 새로 설계했다")]),
+      match("REQ-6", "met", [ev.situation(ctx, IDS.prjPay, "피크 시간 결제 승인 API 응답이 1.2초까지 늘었다")]),
+      match("REQ-7", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 새로 설계했다")]),
       match("REQ-8", "no_evidence", []),
     ]),
-    matchOutput([match("REQ-9", "met", [ev.learnings(ctx, IDS.detPay1, "측정 없이 최적화하면 안 된다는 것을 배웠다")])]),
+    matchOutput([match("REQ-9", "met", [ev.learnings(ctx, IDS.prjPay, "측정 없이 최적화하면 안 된다는 것을 배웠다")])]),
   ];
 }
 
@@ -183,13 +186,13 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
         title: "결제 승인 API 성능 개선",
         description: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄인 경험이 결제 API 운영 요건과 맞닿습니다.",
         requirement_refs: ["REQ-1", "REQ-7"],
-        evidence: [ev.action(ctx, IDS.detPay1, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다"), ev.achievement(ctx, IDS.achPay), { source_type: "jd_requirement", ref: "REQ-1", field: null, quote: null }],
+        evidence: [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다"), ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다"), { source_type: "jd_requirement", ref: "REQ-1", field: null, quote: null }],
       },
       {
         title: "정산 배치 재설계",
         description: "정산 배치를 청크 단위로 재설계한 경험이 있습니다.",
         requirement_refs: ["REQ-2"],
-        evidence: [ev.action(ctx, IDS.detSettle, "정산 배치를 청크 단위로 재설계했다")],
+        evidence: [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")],
       },
     ],
     gaps: [
@@ -202,7 +205,7 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
           {
             type: "prepare_answer",
             text: "비동기 처리 경험을 묻는 질문에 대비해 캐시 무효화 메시지 발행 경험을 정리해 두세요.",
-            evidence: [ev.action(ctx, IDS.detEdu, "쓰기 시 무효화 메시지를 발행했다")],
+            evidence: [ev.action(ctx, IDS.prjEdu, "쓰기 시 무효화 메시지를 발행했다")],
           },
         ],
         evidence: [ev.sentence(ctx, "Kafka")],
@@ -211,13 +214,13 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
         requirement_refs: ["REQ-5"],
         gap_kind: "partial",
         description: "Kotlin을 프로젝트에서 어떻게 썼는지 서술이 없습니다.",
-        actions: [{ type: "reframe", text: "결제 승인 API 개선 상세 내용에 Kotlin 사용 범위를 함께 설명해 보세요.", evidence: [ev.skill(ctx, IDS.sklKotlin)] }],
+        actions: [{ type: "reframe", text: "개인 가계부 앱 프로젝트 내용에 Kotlin 사용 범위를 함께 설명해 보세요.", evidence: [ev.skill(ctx, IDS.sklKotlin)] }],
         evidence: [],
       },
     ],
     strategy: {
       positioning: "결제 도메인에서 응답 시간과 장애 대응을 개선해 온 백엔드 엔지니어로 포지셔닝합니다.",
-      positioning_evidence: [ev.achievement(ctx, IDS.achPay)],
+      positioning_evidence: [ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다")],
       project_priorities: [
         { rank: 1, ref: prjPay, reason: "결제 승인 API 요건과 가장 직접적으로 연결됩니다.", requirement_refs: ["REQ-1", "REQ-3"] },
         { rank: 2, ref: prjSettle, reason: "정산 배치 개선 요건과 연결됩니다.", requirement_refs: ["REQ-2"] },

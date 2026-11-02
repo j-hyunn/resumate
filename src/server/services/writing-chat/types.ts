@@ -1,5 +1,7 @@
-import type { AiErrorCode, AiProvider, ConnectionTier, ModelTier, WritingChatMessageRole, WritingChatMessageStatus, WritingChatMode, WritingChatStatus } from "@/lib/contracts/enums";
+import type { AiErrorCode, AiProvider, ConnectionTier, ModelTier, WritingChatMessageRole, WritingChatMessageStatus, WritingChatStatus } from "@/lib/contracts/enums";
 import type { RequestedSlot, ReturnTarget, StructuredDraft } from "@/lib/contracts/writing-chat";
+import type { ProjectSlotState } from "@/server/ai/context-pack/focus-slots";
+import type { V9Flags } from "@/server/ai/validation/v9";
 import type { ProviderError } from "@/server/ai/errors";
 import type { Llm } from "@/server/ai/llm";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
@@ -27,14 +29,13 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-/** One chat as the turn sees it (read through the user session, RLS). */
+/** One chat as the turn sees it (read through the user session, RLS). DM 2.5 v4.4: always bound to one affiliated project. */
 export type ChatSnapshot = {
   id: string;
   userId: string;
-  mode: WritingChatMode;
-  projectId: string | null;
-  experienceId: string | null;
-  educationId: string | null;
+  projectId: string;
+  /** First user message's first 30 chars (DB); null → "새 대화". */
+  title: string | null;
   status: WritingChatStatus;
   structuredDraft: StructuredDraft;
   messageCount: number;
@@ -42,8 +43,8 @@ export type ChatSnapshot = {
   lastExtractedSequence: number;
   returnTarget: ReturnTarget | null;
   lastActivityAt: string;
+  lastAppliedAt: string | null;
   createdAt: string;
-  savedAt: string | null;
   /** Ordered by sequence, every status. */
   messages: ChatMessage[];
 };
@@ -93,7 +94,7 @@ export type TurnSnapshot = {
   messageCountAfterReply: number;
   /** True when this turn's reply is the last that fits the 40-message limit (AI-12: summarize + 저장 안내). */
   isLastTurn: boolean;
-  /** app_ai_writer client (context pack reads: affiliation candidates, augment target, profile, readiness). */
+  /** app_ai_writer client (context pack reads: the project row, profile, readiness, gate requirements). */
   db: AiWriterSupabaseClient;
 };
 
@@ -115,6 +116,16 @@ export type ExtractOutcome = {
   patch: unknown | null;
   /** Highest user sequence this extract covered → mark_writing_chat_extracted. Null = keep the mark. */
   processedThroughSequence: number | null;
+  /** V-9 flags for SSE `draft_flags` (field refs only, no text). Null when skipped. */
+  flags: V9Flags | null;
+};
+
+/** What `turn_done` needs from the turn's context (AI-12 v4.5 §5.2–5.3). */
+export type TurnState = {
+  /** The project's current STAR / start month (read fresh this turn) — quick chips are computed from it + the new draft. */
+  project: ProjectSlotState;
+  /** Gate chat whose feature is ready now (focus.readyToReturn). */
+  readyToReturn: boolean;
 };
 
 /** Reply stream (ai-pipeline `ReplyEvent` / C-10.3): deltas, then exactly one `done` or `error`. */
@@ -128,6 +139,8 @@ export interface WritingChatPipelines {
   reply(call: PipelineCall): AsyncIterable<TurnReplyEvent>;
   /** AI-12 extract: light tier structured output → V-9 → storage patch. Throws AiError / ProviderError. */
   extract(call: PipelineCall): Promise<ExtractOutcome>;
+  /** Project state + gate readiness of this turn (no provider call). Null when it can't be read. */
+  turnState(snapshot: TurnSnapshot): Promise<TurnState | null>;
 }
 
 export type Log = (event: string, fields: Record<string, string | number | boolean | null>) => void;

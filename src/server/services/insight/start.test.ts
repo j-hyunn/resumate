@@ -39,7 +39,7 @@ function fakeUser(tables: Record<string, Array<Record<string, unknown>>>): UserS
 }
 
 const READY: ReadinessFeature = { ready: true };
-const NOT_READY: ReadinessFeature = { ready: false, missing: ["complete_project"], hints: ["complete_project_detail"], next_action: "writing_chat", suggested_mode: "new_project" };
+const NOT_READY: ReadinessFeature = { ready: false, missing: ["complete_project"], hints: ["project_star"], next_action: "writing_chat", suggested_project_id: "00000000-0000-4000-8000-00000000a001" };
 
 const INPUTS = { jd: {}, requirements: [], careerRows: {} } as unknown as InsightInputs;
 

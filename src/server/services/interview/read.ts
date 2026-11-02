@@ -62,7 +62,7 @@ export const USER_QUESTION_COLUMNS = "id, session_id, sequence, source_kind, anc
 const ANSWER_COLUMNS = "id, session_id, question_id, answer_text, status, score_status, score_value, score_max, score_method_version, score_rationale, updated_at";
 
 const sessionNotFound = () => new AppError("not_found", "면접 세션을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
-const projectNotFound = () => new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+const projectNotFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
@@ -174,7 +174,7 @@ async function listItems(user: UserSupabaseClient, rows: SessionRow[]) {
   // Q53-6: the S-37 menu uses S-22's decision. Only finished sessions can have one other than `none`.
   const finished = rows.filter((r) => r.submitted_at !== null).map((r) => r.id);
   const [names, jobs, decisions] = await Promise.all([loadProjectNames(user, rows.map((r) => r.application_project_id)), loadJobsFor(user, rows.map((r) => r.id)), loadGradingDecisions(user, finished)]);
-  return rows.map((r) => toListItem(r, names.get(r.application_project_id) ?? "기업 JD", jobs, decisions.get(r.id)?.decision));
+  return rows.map((r) => toListItem(r, names.get(r.application_project_id) ?? "자기소개서", jobs, decisions.get(r.id)?.decision));
 }
 
 /** S-37 모의 면접 — 전체 세션 (F-P3-15). Filters by project / type / effective status / execution provider. */
@@ -240,7 +240,7 @@ export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionI
   const inProgress = run.status === "in_progress";
   const questionJobActive = run.activeJob?.jobType === QUESTIONS_JOB_TYPE;
   return {
-    session: toSessionHeader(row, names.get(row.application_project_id) ?? "기업 JD", run),
+    session: toSessionHeader(row, names.get(row.application_project_id) ?? "자기소개서", run),
     items: questions.map((q) => {
       const a = answerByQuestion.get(q.id);
       return { question: toQuestionView(q, chips.get(q.id)), answer: a ? toAnswerView(a) : null };
@@ -424,7 +424,7 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
     };
   });
 
-  const header = toSessionHeader(row, names.get(row.application_project_id) ?? "기업 JD", run);
+  const header = toSessionHeader(row, names.get(row.application_project_id) ?? "자기소개서", run);
   const evaluationActive = run.activeJob?.jobType === EVALUATION_JOB_TYPE;
   const grading = decisions.get(row.id)?.decision ?? NO_GRADING_DECISION;
   return {

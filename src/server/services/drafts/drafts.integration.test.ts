@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
-import { SaveAchievementInput, SaveExperienceInput, SaveProjectDetailInput, SaveProjectInput } from "@/lib/contracts/career";
+import { CreateProjectInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
 import type { DraftStreamEvent } from "@/lib/contracts/draft";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { loadCareerRows } from "@/server/ai/context-pack/career-rows";
@@ -23,7 +23,7 @@ import { createJdExtractionDb } from "@/server/services/application/db";
 import { ensureJdExtracted } from "@/server/services/application/extraction";
 import { loadProgress } from "@/server/services/application/read";
 import { createApplicationProject, deleteApplicationProject } from "@/server/services/application/write";
-import { getDeletionImpact, saveAchievement, saveExperience, saveProject, saveProjectDetail } from "@/server/services/career";
+import { createProject, getDeletionImpact, saveExperience, saveProject } from "@/server/services/career";
 import { normalizeErrorEvent } from "@/server/sse";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
@@ -83,8 +83,9 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
   const logs: string[] = [];
   const queue: Lazy[] = [];
   const project = crypto.randomUUID();
-  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID(), detail: crypto.randomUUID(), achievement: crypto.randomUUID() };
+  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID() };
   const ACTION = "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다";
+  const RESULT = "p95 응답 시간이 800ms에서 200ms로 줄었다";
   const captured: { rank?: RankingContext; cd?: CareerDescriptionContext; cl?: CoverLetterContext } = {};
 
   const pipelines: DraftPipelines = {
@@ -168,8 +169,6 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
     const a = captured.cd!.aliases;
     const exp = a.aliasOf("experience", ids.experience)!;
     const prj = a.aliasOf("project", ids.project)!;
-    const det = a.aliasOf("project_detail", ids.detail)!;
-    const ach = a.aliasOf("achievement", ids.achievement)!;
     return {
       json: {
         schema_version: 1,
@@ -181,14 +180,14 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
             projects: [
               {
                 project_ref: prj,
-                role_line: { block_id: "p1-r", text: "리드", evidence: [{ source_type: "project", ref: prj, field: "role", quote: null }], placeholders: [] },
+                role_line: { block_id: "p1-r", text: "결제 승인 개선 리드", evidence: [{ source_type: "project", ref: prj, field: "task", quote: "결제 승인 개선 리드" }], placeholders: [] },
                 bullets: [
                   {
                     block_id: "p1-b1",
                     text: "결제 승인 API 병목 쿼리 인덱스 재설계로 p95 응답 시간 800ms → 200ms 단축",
                     evidence: [
-                      { source_type: "project_detail", ref: det, field: "action", quote: ACTION },
-                      { source_type: "achievement", ref: ach, field: "metric", quote: null },
+                      { source_type: "project", ref: prj, field: "action", quote: ACTION },
+                      { source_type: "project", ref: prj, field: "result", quote: RESULT },
                     ],
                     requirement_refs: [],
                     placeholders: [],
@@ -211,7 +210,6 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
     const a = captured.cl!.aliases;
     const exp = a.aliasOf("experience", ids.experience)!;
     const prj = a.aliasOf("project", ids.project)!;
-    const det = a.aliasOf("project_detail", ids.detail)!;
     return {
       json: {
         schema_version: 2,
@@ -223,15 +221,14 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
             project_ref: prj,
             experience_ref: exp,
             education_ref: null,
-            detail_refs: [det],
             role: "primary",
             rationale: "결제 승인 API 개선 경험이 직무 역량을 보여 줍니다.",
             requirement_refs: [],
             reuse_reason: null,
-            evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }],
+            evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }],
           },
         ],
-        paragraphs: [{ block_id: "q-p1", text: PARAGRAPH, evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
+        paragraphs: [{ block_id: "q-p1", text: PARAGRAPH, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
         notes_for_user: [],
       },
     };
@@ -255,9 +252,11 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
     ({ id: otherId, client: otherUser } = await newUser("drafts-other"));
     await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: project, rawText: KO_BACKEND.raw }));
     await saveExperience(user, SaveExperienceInput.parse({ id: ids.experience, companyName: "알파", startMonth: "2021-03", jobPosition: "백엔드", isCurrent: true }));
-    await saveProject(user, SaveProjectInput.parse({ id: ids.project, affiliation: { type: "experience", id: ids.experience }, name: "결제 개선", role: "리드", startMonth: "2024-02" }));
-    await saveProjectDetail(user, SaveProjectDetailInput.parse({ id: ids.detail, projectId: ids.project, title: "응답 속도", situation: "피크 시간 응답이 느렸다", action: ACTION }));
-    await saveAchievement(user, SaveAchievementInput.parse({ id: ids.achievement, target: { type: "project_detail", id: ids.detail }, metricName: "p95", valueBefore: 800, valueAfter: 200, unit: "ms" }));
+    await createProject(user, CreateProjectInput.parse({ id: ids.project, name: "결제 개선", affiliation: { type: "experience", id: ids.experience } }));
+    await saveProject(
+      user,
+      SaveProjectInput.parse({ id: ids.project, startMonth: "2024-02", situation: "피크 시간 응답이 느렸다", task: "결제 승인 개선 리드", action: ACTION, result: RESULT }),
+    );
   });
 
   afterAll(async () => {
@@ -334,7 +333,7 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
     const blocks = view.sections.flatMap((sec) => sec.blocks);
     expect(blocks.map((b) => b.blockKind)).toEqual(expect.arrayContaining(["header", "role_line", "bullet"]));
     const bullet = blocks.find((b) => b.blockKind === "bullet")!;
-    expect(bullet.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["상세 내용 · 행동"]));
+    expect(bullet.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["프로젝트 · 행동"]));
 
     const all = logs.join("\n");
     expect(all).not.toContain(ACTION);
@@ -416,7 +415,7 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
     expect(view.status).toBe("composing"); // other questions not generated yet
 
     // C-11 change → user mode.
-    await setSectionSources(user, { sectionId: competencySectionId, sources: [{ projectId: ids.project, projectDetailIds: [ids.detail] }] });
+    await setSectionSources(user, { sectionId: competencySectionId, sources: [{ projectId: ids.project }] });
     view = await getDraft(user, coverDraftId);
     expect(view.sections[1]).toMatchObject({ sourceSelectionMode: "user" });
     expect(view.sections[1]!.sourcesModifiedAt).not.toBeNull();
@@ -454,7 +453,7 @@ describe.skipIf(!ready)("drafts (local stack)", { timeout: 30_000 }, () => {
   });
 
   it("deletion impact counts drafts and sections; deleteDraft; project delete cascades", async () => {
-    const impact = await getDeletionImpact(user, { entityType: "project", entityId: ids.project, affiliationMode: "keep_projects" });
+    const impact = await getDeletionImpact(user, { entityType: "project", entityId: ids.project });
     const row = impact.affected_results.by_application_project.find((r) => r.application_project_id === project)!;
     expect(row.drafts + row.draft_sections).toBeGreaterThan(0);
 

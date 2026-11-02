@@ -33,22 +33,15 @@ const KEY = "sk-ant-test-secret-key-0001";
 const FIRST_USER_MSG = "00000000-0000-4000-8000-000000000001";
 
 const draftWith = (userMessageId: string) => ({
-  schema_version: 1,
+  schema_version: 3,
   project: {
-    name: { value: "결제 개선", origin: "ai", source_message_ids: [userMessageId], source_quotes: ["결제 개선"], review: "ok", reviewed_at: null },
+    start_month: { value: "2023-03", origin: "ai", source_message_ids: [userMessageId], source_quotes: ["23년 3월"], review: "ok", reviewed_at: null, applied_at: null },
   },
-  details: [
-    {
-      detail_key: "D1",
-      existing_detail_id: null,
-      fields: {
-        situation: { value: "트래픽이 늘었다", origin: "ai", source_message_ids: [userMessageId], source_quotes: ["트래픽"], review: "needs_review", reviewed_at: null },
-      },
-      achievements: [],
-    },
-  ],
-  skills: [],
-  clarifications: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1", existing_detail_id: null }],
+  star: {
+    situation: { value: "트래픽이 늘었다", op: "set", origin: "ai", source_message_ids: [userMessageId], source_quotes: ["트래픽"], review: "needs_review", reviewed_at: null, applied_at: null },
+  },
+  classification: {},
+  clarifications: [{ kind: "actor_ambiguous", field: "action" }],
   sensitive_flags_count: 1,
 });
 
@@ -130,9 +123,16 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(flags.needsReview).toHaveLength(1);
     expect(flags.sensitiveAdded).toBe(1);
     expect(flags.clarifications[0]!.kind).toBe("actor_ambiguous");
+    expect(flags.needsReview).toEqual([{ section: "star", field: "situation" }]);
     const done = events.at(-1) as Extract<WritingChatTurnEvent, { type: "turn_done" }>;
-    expect(done.draftUpdated).toBe(true);
-    expect(done.progress.slots.find((s) => s.slot === "situation")!.filled).toBe(true);
+    expect(done.draftStatus).toBe("updated");
+    expect(done.closed).toBe(false);
+    expect(done.needsReviewCount).toBe(1);
+    expect(done.applicableFields).toEqual(["start_month"]);
+    // AI-12 v4.5 chips from the new draft (situation proposed → action is the first empty required slot).
+    expect(done.chips).toHaveLength(3);
+    expect(done.chips[0]).toEqual({ label: "비어 있는 항목부터 물어봐 줘", requestedSlot: "action" });
+    expect(done.readyToReturn).toBe(false);
 
     const job = t.store.jobs.get(started.jobId)!;
     expect(job.status).toBe("succeeded");
@@ -163,7 +163,7 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     const first = await runFull(t.deps, "첫 답변");
     expect(types(first.events)).toEqual(["turn_started", "reply_delta", "reply_done", "turn_done"]);
     const done = first.events.at(-1) as Extract<WritingChatTurnEvent, { type: "turn_done" }>;
-    expect(done.draftUpdated).toBe(false);
+    expect(done.draftStatus).toBe("failed");
     const job = t.store.jobs.get(done.jobId)!;
     expect(job.status).toBe("succeeded");
     // provider_unavailable needs a wait → not retried inside the stream (spec-gaps 2026-10-30 ③): 1 extract record.
@@ -276,15 +276,24 @@ describe("AI-12 turn — final failure causes (QA-S4-01 / 07)", () => {
 });
 
 describe("AI-12 turn — draftStatus and orphaned replies (QA-S4-04 / 05)", () => {
-  it("resend with nothing pending → draftStatus unchanged (draftUpdated true); failed extract → failed", async () => {
+  it("the 40th message closes the chat: turn_done.closed, no chips; a closed chat refuses the next turn", async () => {
+    const t = setup({ reply: [{ json: "마지막" }], extract: [{ json: null }] });
+    t.chats.chat.messageCount = 38;
+    const { events } = await runFull(t.deps, "마지막 답변");
+    expect(events.at(-1)).toMatchObject({ type: "turn_done", messageCount: 40, limitReached: true, closed: true, chips: [] });
+    expect(t.chats.chat.status).toBe("closed");
+    await expect(prepareTurn(t.deps, { chatId: CHAT, content: "더", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_closed" });
+  });
+
+  it("resend with nothing pending → draftStatus unchanged; failed extract → failed", async () => {
     const t = setup({ reply: [{ error: "rate_limited" }, { json: "다시" }], extract: [{ json: null }] });
     await runFull(t.deps, "답변");
     const resend = await runFull(t.deps, null);
-    expect(resend.events.at(-1)).toMatchObject({ type: "turn_done", draftStatus: "unchanged", draftUpdated: true });
+    expect(resend.events.at(-1)).toMatchObject({ type: "turn_done", draftStatus: "unchanged" });
 
     const u = setup({ reply: [{ json: "q" }], extract: [{ error: "provider_unavailable" }] });
     const { events } = await runFull(u.deps, "답변");
-    expect(events.at(-1)).toMatchObject({ type: "turn_done", draftStatus: "failed", draftUpdated: false });
+    expect(events.at(-1)).toMatchObject({ type: "turn_done", draftStatus: "failed" });
   });
 
   it("a reply left streaming by a dead turn is closed as failed so resend works at once", async () => {
@@ -371,8 +380,8 @@ describe("AI-12 turn — gates and limits", () => {
   });
 
   it("closed chat and nothing to resend are refused", async () => {
-    const t = setup({ chat: { id: CHAT, userId: USER, status: "saved" } });
-    await expect(prepareTurn(t.deps, { chatId: CHAT, content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_not_active" });
+    const t = setup({ chat: { id: CHAT, userId: USER, status: "closed" } });
+    await expect(prepareTurn(t.deps, { chatId: CHAT, content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_closed" });
     const u = setup({});
     await expect(prepareTurn(u.deps, { chatId: CHAT, content: null, requestedSlot: null })).rejects.toMatchObject({ code: "nothing_to_retry" });
     await expect(prepareTurn(u.deps, { chatId: "00000000-0000-4000-8000-0000000000ff", content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "not_found" });

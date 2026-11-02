@@ -10,7 +10,7 @@ import { escLine } from "../drafts-common";
  * The system block is the same for both types (one cache entry); the user's
  * <session> says which role applies.
  */
-export const AI05_PROMPT_VERSION = `ai-05.generate.v2+${COMMON_PROMPT_VERSION}`;
+export const AI05_PROMPT_VERSION = `ai-05.generate.v3+${COMMON_PROMPT_VERSION}`;
 
 export const AI05_SYSTEM = `이 기능: 모의 면접 질문 일괄 생성
 <session>의 interview_type이 역할을 정합니다.
@@ -29,26 +29,26 @@ ${PROFILE_PREFERENCE_RULE}
 - 한 질문에 핵심 하나만 묻습니다(하위 질문은 최대 2개).
 - 질문 속 사실(회사명, 프로젝트명, 수치, 행동)은 데이터에 적힌 그대로만 씁니다. 숫자는 데이터에 같은 값으로 있는 것만 씁니다.
 - 질문마다 intent(평가 의도, 한 문장)와 good_answer_signals(좋은 답변의 신호 2~4개)를 내부용으로 씁니다. focus_criteria는 specificity, intent_fit, structure, job_relevance 중 이 질문이 특히 보는 것 1~2개입니다.
-- 별칭(EXP-1, PRJ-2, DET-3, ACH-4, REQ-1, S5)은 target_requirement_refs, target_gap_requirement_refs, weak_requirement_refs, evidence에만 씁니다. text, intent, good_answer_signals에는 별칭 대신 이름을 씁니다.
+- 별칭(EXP-1, PRJ-2, DLV-3, REQ-1, S5)은 target_requirement_refs, target_gap_requirement_refs, weak_requirement_refs, evidence에만 씁니다. text, intent, good_answer_signals에는 별칭 대신 이름을 씁니다.
 - 묻지 않는 주제: 나이, 결혼·출산 계획, 가족, 종교, 출신 지역, 정치 성향, 건강. 이전 회사나 동료를 비난하게 유도하지 않습니다.
 - 경력 데이터의 제3자 이름이나 민감한 내용은 질문에 옮기지 않습니다.
 
 [직무 면접 (job)]
 1) 먼저 요건마다 경력 데이터의 근거 강도를 판단해, 근거가 약하거나 없는 요건의 REQ 번호를 weak_requirement_refs에 씁니다. <reference>가 있으면 참고합니다.
 2) 질문 구성 (source_kind)
-- project_deep_dive: 특정 상세 내용의 행동(action)·결과(result)·성과에 대한 본인 기여 검증. 근거에 상세 내용의 action 또는 result(quote 포함)나 성과(achievement)를 답니다. anchor는 experience.
-- requirement_fit: 중요 표시된 JD 요건과 경험의 연결. target_requirement_refs에 요건을, evidence에 그 요건(jd_requirement)과 경력 근거를 답니다. 경력 근거에는 상세 내용의 action 또는 result(quote 포함)나 성과(achievement)가 꼭 있어야 합니다. anchor는 experience.
+- project_deep_dive: 특정 프로젝트의 행동(action)·결과/성과(result)(독립 프로젝트는 내용·산출물)에 대한 본인 기여 검증. 근거에 경력·교육 안 프로젝트의 action 또는 result, 또는 독립 프로젝트의 description이나 산출물 body(quote 포함)를 답니다. anchor는 experience.
+- requirement_fit: 중요 표시된 JD 요건과 경험의 연결. target_requirement_refs에 요건을, evidence에 그 요건(jd_requirement)과 경력 근거를 답니다. 경력 근거에는 action·result(경력·교육 안 프로젝트) 또는 description·산출물 body(독립 프로젝트)(quote 포함)가 꼭 있어야 합니다. anchor는 experience.
 - gap_probe: weak_requirement_refs 중 하나에 대한 대응력. target_gap_requirement_refs에 그 요건을, evidence에 그 요건(jd_requirement)을 답니다. anchor는 experience(유사 경험을 짚을 때) 또는 jd.
-  - 유사 경험을 짚으면 그 경험의 action·result 또는 성과 근거를 답니다. 그런 근거가 없으면 경험을 짚지 말고 "이 요건과 비슷한 경험이 있다면 어떻게 접근했는지"처럼 사실을 전제하지 않고 묻습니다(anchor jd, 경력 근거 없음, 회사명·프로젝트명 없이).
-- 같은 프로젝트를 주 대상으로 하는 질문은 최대 2개, 같은 상세 내용은 1개, 같은 요건을 주 대상으로 하는 질문은 1개입니다. 주 대상은 evidence의 첫 경력 근거와 target 요건의 첫 번째입니다.
-- 모든 직무 질문(project_deep_dive, requirement_fit, gap_probe)에서 지원자 경력의 사실(수치·행동·역할)을 전제하면 그 전제는 상세 내용의 action, result 또는 성과에서만 가져오고 그 근거를 evidence에 답니다. situation·task·프로젝트 요약·스킬 태그만으로 "~하셨는데"처럼 사실을 전제하지 않습니다. <reflection>의 learnings는 직무 질문에 쓰지 않습니다.
+  - 유사 경험을 짚으면 그 경험의 action·result 또는 description·산출물 body 근거를 답니다. 그런 근거가 없으면 경험을 짚지 말고 "이 요건과 비슷한 경험이 있다면 어떻게 접근했는지"처럼 사실을 전제하지 않고 묻습니다(anchor jd, 경력 근거 없음, 회사명·프로젝트명 없이).
+- 같은 프로젝트를 주 대상으로 하는 질문은 최대 2개, 같은 요건을 주 대상으로 하는 질문은 1개입니다. 주 대상은 evidence의 첫 경력 근거와 target 요건의 첫 번째입니다.
+- 모든 직무 질문(project_deep_dive, requirement_fit, gap_probe)에서 지원자 경력의 사실(수치·행동·역할)을 전제하면 그 전제는 action·result(경력·교육 안 프로젝트) 또는 description·산출물 body(독립 프로젝트)에서만 가져오고 그 근거를 evidence에 답니다. situation·task·role·스킬 태그·분류만으로 "~하셨는데"처럼 사실을 전제하지 않습니다. <reflection>의 learnings는 직무 질문에 쓰지 않습니다.
 - anchor는 experience 또는 jd만 씁니다.
 
 [컬처핏 면접 (culture_fit)]
 - source_kind는 주제입니다: collaboration(협업·역할 분담·소통), conflict(의견 충돌·갈등 해결), failure_growth(실패·실수와 이후 변화), values(일하는 방식의 가치관·우선순위), org_adaptation(새 조직·변화 적응, 피드백 수용), motivation_career(지원 동기·이직 이유·커리어 방향).
 - 질문마다 주제가 달라야 합니다(7문항일 때만 한 주제 최대 2개). 5·7문항이면 motivation_career를 1개 포함합니다.
 - anchor
-  - experience: 지원자의 실제 경력 맥락을 짚습니다. evidence에 경력 근거가 필수입니다. 상세 내용의 situation과 learnings를 우선 활용합니다. learnings를 쓸 때는 "그 경험에서 ~를 배웠다고 정리하셨는데"처럼 본인의 회고로 인용합니다.
+  - experience: 지원자의 실제 경력 맥락을 짚습니다. evidence에 경력 근거가 필수입니다. 프로젝트 STAR의 situation·task와 learnings를 우선 활용하고, 주제 고르기에 경험 유형 분류(<classification>)를 참고합니다. learnings를 쓸 때는 "그 경험에서 ~를 배웠다고 정리하셨는데"처럼 본인의 회고로 인용합니다.
   - jd: <jd>의 조직·업무 방식 문장(S 번호)을 바탕으로 합니다. evidence에 그 jd_sentence가 필수입니다. <jd>에 S 문장이 없으면 쓰지 않습니다.
   - general: 일반 컬처핏 질문. evidence는 빈 배열입니다.
 - <session>의 data_sufficiency: ok → experience 앵커를 절반 이상 / thin → 가능한 만큼 experience, 나머지는 jd·general / none → jd·general만.

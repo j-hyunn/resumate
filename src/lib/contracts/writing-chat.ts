@@ -1,142 +1,72 @@
 import { z } from "zod";
+import {
+  ClarificationSchema,
+  StructuredDraftSchema,
+  parseStructuredDraft as parseStoredDraft,
+  type StructuredDraft as StructuredDraftType,
+} from "@/server/ai/schemas/structured-draft";
 import { AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
 import {
-  CLARIFICATION_KINDS,
-  DRAFT_ACHIEVEMENT_FIELDS,
-  DRAFT_DETAIL_FIELDS,
-  DRAFT_FIELD_ORIGINS,
-  DRAFT_FIELD_REVIEWS,
-  DRAFT_PROJECT_FIELDS,
+  APPLY_PROPOSAL_FIELDS,
+  APPLY_PROPOSAL_SKIP_REASONS,
+  CAREER_STATUSES,
+  CLASSIFICATION_FIELDS,
+  COMPETENCIES,
+  DRAFT_PERIOD_FIELDS,
+  EXPERIENCE_TYPES,
   KEY_STATUSES,
+  MAX_COMPETENCIES,
+  PROJECT_TYPES,
   RETURN_TARGET_FEATURES,
+  STAR_FIELDS,
   WRITING_CHAT_MESSAGE_ROLES,
   WRITING_CHAT_MESSAGE_STATUSES,
-  WRITING_CHAT_MODES,
   WRITING_CHAT_SLOTS,
   WRITING_CHAT_STATUSES,
 } from "./enums";
 
 /**
- * S4 AI writing chat contracts (F-P1-13, AI-12, DM §2.5 / §3.3 / §7, UX S-36 / S-08).
+ * AI writing chat contracts v4.4 (F-P1-13, AI-12 v4.5, DM §2.5 / §3.3 / §7, UX S-10 Resumate AI 패널).
  *
- * - Action inputs / DTOs are camelCase. `structuredDraft` keeps the DB jsonb
- *   shape (snake_case, DM §2.5) because it IS the documented storage format and
- *   the screen renders it field by field.
- * - SSE turn events (`POST /api/writing-chats/{id}/turns`): `turn_started` →
- *   `reply_delta`* → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`,
- *   or `error` (exactly one terminal: `turn_done` or `error`). `draft_patch` /
- *   `draft_flags` are skipped when the extract call failed or changed nothing.
+ * - Every chat belongs to one affiliated project; a project has many chats (CR-5·CR-6).
+ * - Action inputs / DTOs are camelCase. `structuredDraft` keeps the DB jsonb v3 shape
+ *   (snake_case, DM §2.5) — the documented storage format the panel renders field by field.
+ *   The schema is the one the AI pipeline parses (`src/server/ai/schemas/structured-draft.ts`).
+ * - SSE turn events (`POST /api/writing-chats/{id}/turns`, DM §7): `turn_started` →
+ *   `reply_delta`* → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`, or `error`
+ *   (exactly one terminal). `draft_patch` / `draft_flags` are skipped when the extract call
+ *   failed or changed nothing.
  */
 
-/** DM §2.5 / D-34: user + assistant messages per chat (the fixed greeting counts, spec-gaps 2026-10-30 ②). */
+/** DM §2.5 (R1 A5): user + assistant messages per chat, the greeting excluded. */
 export const WRITING_CHAT_MESSAGE_LIMIT = 40;
 /** DM §2.5 [가정]: writing_chat_messages.content ≤ 4,000. */
 export const WRITING_CHAT_MESSAGE_MAX_CHARS = 4000;
-/** DM §3.4 [가정] (U-9): unbound chats (no project) are deleted 90 days after the last activity. */
-export const WRITING_CHAT_RETENTION_DAYS = 90;
+/** UX S-10 [가정]: quick chips hide from this message_count on. */
+export const QUICK_CHIPS_HIDE_FROM = 36;
 
 const uuid = z.guid();
 const isoDateTime = z.string();
 
-// ---------- structured_draft (DM §2.5, schema_version 1) ----------
+// ---------- structured_draft v3 (DM §2.5 v4.4) ----------
 
-export const DraftFieldValue = z.union([z.string(), z.number(), z.null()]);
+export const StructuredDraft = StructuredDraftSchema;
+export type StructuredDraft = StructuredDraftType;
+/** Alias used by `src/types/db.ts` (the legacy `StructuredDraft` name there is the v1 shape). */
+export type StructuredDraftV3 = StructuredDraftType;
+export const DraftClarification = ClarificationSchema;
+export type DraftClarification = z.infer<typeof ClarificationSchema>;
 
-/** One field object. `source_message_ids` are user messages of the same chat only (V-9a). */
-export const DraftField = z.object({
-  value: DraftFieldValue,
-  origin: z.enum(DRAFT_FIELD_ORIGINS),
-  source_message_ids: z.array(uuid).default([]),
-  source_quotes: z.array(z.string()).default([]),
-  review: z.enum(DRAFT_FIELD_REVIEWS),
-  reviewed_at: isoDateTime.nullable().default(null),
-});
-export type DraftField = z.infer<typeof DraftField>;
-
-const projectFieldsShape = Object.fromEntries(DRAFT_PROJECT_FIELDS.map((f) => [f, DraftField.optional()])) as Record<
-  (typeof DRAFT_PROJECT_FIELDS)[number],
-  z.ZodOptional<typeof DraftField>
->;
-const detailFieldsShape = Object.fromEntries(DRAFT_DETAIL_FIELDS.map((f) => [f, DraftField.optional()])) as Record<
-  (typeof DRAFT_DETAIL_FIELDS)[number],
-  z.ZodOptional<typeof DraftField>
->;
-const achievementFieldsShape = Object.fromEntries(DRAFT_ACHIEVEMENT_FIELDS.map((f) => [f, DraftField.optional()])) as Record<
-  (typeof DRAFT_ACHIEVEMENT_FIELDS)[number],
-  z.ZodOptional<typeof DraftField>
->;
-
-/** One quantitative achievement; `achievement_key` (A1, A2…) is assigned by the patch RPC. */
-export const DraftAchievement = z.object({ achievement_key: z.string().nullable().default(null), ...achievementFieldsShape });
-export type DraftAchievement = z.infer<typeof DraftAchievement>;
-
-export const DraftDetail = z.object({
-  /** New detail: conversation-scoped key (D1, D2…). Null for an existing detail. */
-  detail_key: z.string().nullable().default(null),
-  /** augment_project: the existing project_details row whose EMPTY fields this fills. */
-  existing_detail_id: uuid.nullable().default(null),
-  fields: z.object(detailFieldsShape).default({}),
-  achievements: z.array(DraftAchievement).default([]),
-});
-export type DraftDetail = z.infer<typeof DraftDetail>;
-
-export const DraftSkill = z.object({
-  value: z.string(),
-  source_message_ids: z.array(uuid).default([]),
-  source_quotes: z.array(z.string()).default([]),
-});
-export type DraftSkill = z.infer<typeof DraftSkill>;
-
-export const DraftAffiliationSuggestion = z.object({
-  type: z.enum(["experience", "education"]),
-  id: uuid,
-  source_message_ids: z.array(uuid).default([]),
-});
-
-export const DraftClarification = z.object({
-  kind: z.enum(CLARIFICATION_KINDS),
-  field: z.string().nullable().default(null),
-  detail_key: z.string().nullable().default(null),
-  existing_detail_id: uuid.nullable().default(null),
-});
-export type DraftClarification = z.infer<typeof DraftClarification>;
-
-/** `writing_chats.structured_draft`. The column default is `{}`, so every key is optional. */
-export const StructuredDraft = z.object({
-  schema_version: z.number().int().optional(),
-  project: z.object(projectFieldsShape).default({}),
-  affiliation_suggestion: DraftAffiliationSuggestion.nullable().default(null),
-  details: z.array(DraftDetail).default([]),
-  skills: z.array(DraftSkill).default([]),
-  clarifications: z.array(DraftClarification).default([]),
-  sensitive_flags_count: z.number().int().nonnegative().default(0),
-});
-export type StructuredDraft = z.infer<typeof StructuredDraft>;
-
-/** Parses the stored jsonb (lenient defaults). Unknown keys are dropped. */
+/** Parses the stored jsonb (column default `{}`). Throws on a malformed value (server bug). */
 export function parseStructuredDraft(value: unknown): StructuredDraft {
-  return StructuredDraft.parse(value ?? {});
+  return parseStoredDraft(value);
 }
 
-// ---------- field paths (preview edits, highlights, flags) ----------
-
-/** Which detail: a new one by its conversation key, or an existing row (augment). */
-export const DetailRef = z.union([
-  z.object({ detailKey: z.string().regex(/^D[1-9][0-9]{0,2}$/) }),
-  z.object({ existingDetailId: uuid }),
-]);
-export type DetailRef = z.infer<typeof DetailRef>;
-
-/** Address of one field object in structured_draft. */
+/** Address of one field object in structured_draft (also the SSE `FieldRef`). */
 export const DraftFieldPath = z.discriminatedUnion("section", [
-  z.object({ section: z.literal("project"), field: z.enum(DRAFT_PROJECT_FIELDS) }),
-  z.object({ section: z.literal("detail"), detail: DetailRef, field: z.enum(DRAFT_DETAIL_FIELDS) }),
-  z.object({
-    section: z.literal("achievement"),
-    /** `achievement_key` of the item (A1, A2…). */
-    achievementKey: z.string().regex(/^A[1-9][0-9]{0,3}$/),
-    field: z.enum(DRAFT_ACHIEVEMENT_FIELDS),
-  }),
+  z.object({ section: z.literal("project"), field: z.enum(DRAFT_PERIOD_FIELDS) }),
+  z.object({ section: z.literal("star"), field: z.enum(STAR_FIELDS) }),
+  z.object({ section: z.literal("classification"), field: z.enum(CLASSIFICATION_FIELDS) }),
 ]);
 export type DraftFieldPath = z.infer<typeof DraftFieldPath>;
 
@@ -163,97 +93,85 @@ export const ReturnTargetInput = z.object({
 
 // ---------- action inputs ----------
 
-export const StartWritingChatInput = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("new_project"), returnTarget: ReturnTargetInput.optional() }),
-  z.object({ mode: z.literal("augment_project"), projectId: uuid, returnTarget: ReturnTargetInput.optional() }),
-]);
+/** 패널 "+ 새 대화" / C-09 게이트 진입 (DM §3.3): affiliated projects only (DB refuses standalone). */
+export const StartWritingChatInput = z.object({
+  projectId: uuid,
+  returnTarget: ReturnTargetInput.optional(),
+});
 export type StartWritingChatInput = z.input<typeof StartWritingChatInput>;
 
 export const WritingChatIdInput = z.object({ writingChatId: uuid });
 export type WritingChatIdInput = z.input<typeof WritingChatIdInput>;
 
-const fieldValue = z.union([z.string().trim().max(2000), z.number().finite(), z.null()]);
+const YEAR_MONTH_RE = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/;
 
-/** Preview direct edit → origin `user_edit`, review `ok` (DM §2.5). `null` / `''` clears the value. */
-export const ApplyDraftEditInput = z.object({
-  writingChatId: uuid,
-  path: DraftFieldPath,
-  value: fieldValue.transform((v) => (v === "" ? null : v)),
-});
+/**
+ * Proposal card direct edit → origin `user_edit`, review `ok` (DM §2.5). `null` / `''` clears.
+ * Value by section: STAR text ≤ 2,000 / period 'YYYY-MM' / classification key (competencies: 1–3 keys).
+ */
+export const ApplyDraftEditInput = z
+  .object({
+    writingChatId: uuid,
+    path: DraftFieldPath,
+    value: z.union([z.string(), z.array(z.string()), z.null()]),
+  })
+  .transform((v) => ({ ...v, value: typeof v.value === "string" ? (v.value.trim() === "" ? null : v.value.trim()) : v.value }))
+  .superRefine((v, ctx) => {
+    const bad = (message: string) => ctx.addIssue({ code: "custom", path: ["value"], message });
+    if (v.value === null) return;
+    const { section, field } = v.path;
+    if (section === "star") {
+      if (typeof v.value !== "string" || v.value.length > 2000) bad("star_text");
+    } else if (section === "project") {
+      if (typeof v.value !== "string" || !YEAR_MONTH_RE.test(v.value)) bad("year_month");
+    } else if (field === "competencies") {
+      const list = v.value;
+      if (!Array.isArray(list) || list.length === 0 || list.length > MAX_COMPETENCIES || new Set(list).size !== list.length) bad("competencies");
+      else if (list.some((k) => !(COMPETENCIES as readonly string[]).includes(k))) bad("competencies");
+    } else {
+      const keys: readonly string[] = field === "project_type" ? PROJECT_TYPES : EXPERIENCE_TYPES;
+      if (typeof v.value !== "string" || !keys.includes(v.value)) bad("classification_key");
+    }
+  });
 export type ApplyDraftEditInput = z.input<typeof ApplyDraftEditInput>;
 
 /** `needs_review` → accepted / rejected (value null, review ok, reviewed_at). */
 export const ReviewDraftFieldInput = z.object({ writingChatId: uuid, path: DraftFieldPath });
 export type ReviewDraftFieldInput = z.input<typeof ReviewDraftFieldInput>;
 
-/** Preview "사용 기술": add one / remove one (normalized-name match, DM §2.5 skills[]). */
-export const EditDraftSkillInput = z.object({
+/** [반영] (one field) / [모두 반영] (`fields` omitted) → apply_writing_chat_proposal (DM §3.3). */
+export const ApplyProposalInput = z.object({
   writingChatId: uuid,
-  action: z.enum(["add", "remove"]),
-  value: z.string().trim().min(1).max(50),
+  fields: z
+    .array(z.enum(APPLY_PROPOSAL_FIELDS))
+    .min(1)
+    .refine((v) => new Set(v).size === v.length, { message: "duplicate_field" })
+    .optional(),
 });
-export type EditDraftSkillInput = z.input<typeof EditDraftSkillInput>;
+export type ApplyProposalInput = z.input<typeof ApplyProposalInput>;
 
-/** Preview cards: add a new detail card / remove a card (the career rows are never touched). */
-export const EditDraftDetailInput = z.discriminatedUnion("action", [
-  z.object({ writingChatId: uuid, action: z.literal("add"), detailKey: z.string().regex(/^D[1-9][0-9]{0,2}$/) }),
-  z.object({ writingChatId: uuid, action: z.literal("remove"), detail: DetailRef }),
-]);
-export type EditDraftDetailInput = z.input<typeof EditDraftDetailInput>;
-
-/** Preview 정량 성과: add one to a detail (at least one value) / remove one by key. */
-export const EditDraftAchievementInput = z.discriminatedUnion("action", [
-  z.object({
-    writingChatId: uuid,
-    action: z.literal("add"),
-    detail: DetailRef,
-    fields: z
-      .object({
-        metric_name: z.string().trim().min(1).max(200).optional(),
-        value_before: z.number().finite().optional(),
-        value_after: z.number().finite().optional(),
-        unit: z.string().trim().min(1).max(50).optional(),
-      })
-      .refine((f) => Object.values(f).some((v) => v !== undefined), { message: "empty_achievement" }),
-  }),
-  z.object({ writingChatId: uuid, action: z.literal("remove"), achievementKey: z.string().regex(/^A[1-9][0-9]{0,3}$/) }),
-]);
-export type EditDraftAchievementInput = z.input<typeof EditDraftAchievementInput>;
-
-/**
- * Affiliation (S-36 소속 칸): connect / pick directly (one id) / "아니요" (none:
- * clears only the suggestion when `clearSuggestionOnly`) / clear.
- */
-export const SetAffiliationInput = z.object({
-  writingChatId: uuid,
-  affiliation: z.discriminatedUnion("type", [
-    z.object({ type: z.literal("experience"), id: uuid }),
-    z.object({ type: z.literal("education"), id: uuid }),
-    z.object({ type: z.literal("none") }),
-  ]),
-  /** "[아니요]": drop the AI suggestion, keep the confirmed affiliation as is. */
-  clearSuggestionOnly: z.boolean().default(false),
+/** RPC `apply_writing_chat_proposal` jsonb (DM §3.3). */
+export const ApplyProposalRpcResult = z.object({
+  applied: z.array(z.enum(APPLY_PROPOSAL_FIELDS)),
+  skipped: z.array(z.object({ field: z.enum(APPLY_PROPOSAL_FIELDS), reason: z.enum(APPLY_PROPOSAL_SKIP_REASONS) })),
+  project_status: z.enum(CAREER_STATUSES),
 });
-export type SetAffiliationInput = z.input<typeof SetAffiliationInput>;
+export type ApplyProposalRpcResult = z.infer<typeof ApplyProposalRpcResult>;
 
 // ---------- turn request ----------
 
-/** `POST /api/writing-chats/{id}/turns` body (JSON). `?retry=1` = "다시 보내기" (no body content). */
-/** R-18 "이 부분 물어봐 줘": this slot goes first in focus_slots (optionally for one detail card). */
-export const RequestedSlot = z.object({
-  slot: z.enum(WRITING_CHAT_SLOTS),
-  detailKey: z.string().regex(/^D[1-9][0-9]{0,2}$/).nullable().default(null),
-  existingDetailId: uuid.nullable().default(null),
-});
+/** Quick chip / "AI에게 물어보기": this slot goes first in focus_slots (AI-12 v4.5). */
+export const RequestedSlot = z.object({ slot: z.enum(WRITING_CHAT_SLOTS) });
 export type RequestedSlot = z.infer<typeof RequestedSlot>;
 
+/** `POST /api/writing-chats/{id}/turns` body (JSON). `?retry=1` = "다시 보내기" (no body content). */
 export const WritingChatTurnInput = z.object({
   content: z.string().trim().min(1).max(WRITING_CHAT_MESSAGE_MAX_CHARS),
   requestedSlot: RequestedSlot.nullable().default(null),
 });
 export type WritingChatTurnInput = z.input<typeof WritingChatTurnInput>;
 
-/** `?retry=1` body (optional): "다시 보내기" sends no new content. */
+/** `?retry=1` body (optional). */
 export const WritingChatRetryInput = z.object({
   requestedSlot: RequestedSlot.nullable().default(null),
 });
@@ -266,9 +184,9 @@ export const WritingChatMessageDto = z.object({
   role: z.enum(WRITING_CHAT_MESSAGE_ROLES),
   content: z.string(),
   status: z.enum(WRITING_CHAT_MESSAGE_STATUSES),
-  /** "내 답변 #n" (user messages only, numbered among user messages). */
+  /** "#n" (user messages only, numbered among user messages). */
   userNumber: z.number().int().nullable(),
-  /** Assistant result meta (S-36 턴별 공급자 표시). Null for the fixed greeting and user messages. */
+  /** Assistant result meta (턴별 공급자 표시). Null for the fixed greeting and user messages. */
   provider: AiProviderSchema.nullable(),
   model: z.string().nullable(),
   modelTier: ModelTierSchema.nullable(),
@@ -278,17 +196,7 @@ export const WritingChatMessageDto = z.object({
 });
 export type WritingChatMessageDto = z.infer<typeof WritingChatMessageDto>;
 
-/** 진행 단계 표시 (S-36): which slots have a value in structured_draft. */
-export const WritingChatProgress = z.object({
-  slots: z.array(z.object({ slot: z.enum(WRITING_CHAT_SLOTS), filled: z.boolean() })),
-  /** First slot not filled yet (null when all are). */
-  current: z.enum(WRITING_CHAT_SLOTS).nullable(),
-  /** "검토가 필요한 항목 N개". */
-  needsReviewCount: z.number().int().nonnegative(),
-});
-export type WritingChatProgress = z.infer<typeof WritingChatProgress>;
-
-/** C-19 badge + whether a new message can be sent (PRD 3.3: reading/saving never need a key). */
+/** C-19 badge + whether a new message can be sent (reading / editing / applying never need a key). */
 export const WritingChatConnection = z.object({
   provider: AiProviderSchema.nullable(),
   connectionTier: ConnectionTierSchema.nullable(),
@@ -298,85 +206,49 @@ export const WritingChatConnection = z.object({
 });
 export type WritingChatConnection = z.infer<typeof WritingChatConnection>;
 
-/** augment_project: the target project's existing details (filled fields read-only, R-06). */
-export const AugmentTargetDto = z.object({
-  projectId: uuid,
-  name: z.string().nullable(),
-  details: z.array(
-    z.object({
-      id: uuid,
-      title: z.string().nullable(),
-      /** Which columns already have a value (V-9h: never overwritten by the chat). */
-      filled: z.record(z.enum(DRAFT_DETAIL_FIELDS), z.boolean()),
-    }),
-  ),
-});
-export type AugmentTargetDto = z.infer<typeof AugmentTargetDto>;
+/** AI-12 "빠른 버튼 칩 3개" (server-computed; the label is sent as the user message with `requestedSlot`). */
+export const QuickChip = z.object({ label: z.string(), requestedSlot: z.enum(STAR_FIELDS) });
+export type QuickChip = z.infer<typeof QuickChip>;
 
+/** One chat for the S-10 panel (opened chat). */
 export const WritingChatDto = z.object({
   id: uuid,
-  mode: z.enum(WRITING_CHAT_MODES),
-  projectId: uuid.nullable(),
-  experienceId: uuid.nullable(),
-  educationId: uuid.nullable(),
+  projectId: uuid,
+  /** First user message's first 30 chars (DB); null → "새 대화". */
+  title: z.string().nullable(),
   status: z.enum(WRITING_CHAT_STATUSES),
   structuredDraft: StructuredDraft,
-  /** "n / 40": user + AI messages, the greeting excluded (R1 A5, DM §2.5). */
+  /** "n / 40": user + AI messages, the greeting excluded (R1 A5). */
   messageCount: z.number().int(),
   messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
-  /** 40 − messageCount (≥ 0). */
   remainingMessages: z.number().int().nonnegative(),
-  /** No room for another turn (messageCount > 38): the input is disabled. */
+  /** No room for another turn (messageCount > 38) or `closed`: the input is disabled. */
   limitReached: z.boolean(),
   lastActivityAt: isoDateTime,
-  savedAt: isoDateTime.nullable(),
+  lastAppliedAt: isoDateTime.nullable(),
   returnTarget: ReturnTarget.nullable(),
   createdAt: isoDateTime,
-  /** Unbound chats only (no project): days until the 90-day cleanup. Null otherwise. */
-  daysUntilAutoDelete: z.number().int().nullable(),
   messages: z.array(WritingChatMessageDto),
-  progress: WritingChatProgress,
   connection: WritingChatConnection,
-  augmentTarget: AugmentTargetDto.nullable(),
-  /** True when the chat accepts new messages (active, under the limit, no lock). */
+  /** Quick chips for the current state (hidden from QUICK_CHIPS_HIDE_FROM messages on). */
+  chips: z.array(QuickChip),
+  /** "검토가 필요한 항목 N개" (pending needs_review fields). */
+  needsReviewCount: z.number().int().nonnegative(),
+  /** Pending proposal fields [모두 반영] would write now (review ok / accepted, not applied). */
+  applicableFields: z.array(z.enum(APPLY_PROPOSAL_FIELDS)),
+  /** True when the chat accepts new messages (active, under the limit, no lock, no reply running). */
   canSend: z.boolean(),
 });
 export type WritingChatDto = z.infer<typeof WritingChatDto>;
 
-/** S-08 "작성 중인 AI 대화" / "그만둔 AI 대화" row (R1 A6: `status` tells the two groups apart). */
-export const ActiveWritingChatSummary = z.object({
-  id: uuid,
-  mode: z.enum(WRITING_CHAT_MODES),
-  /** `active` (작성 중) or `abandoned` (그만둔 대화 — "다시 이어 하기"). */
-  status: z.enum(["active", "abandoned"]),
-  projectId: uuid.nullable(),
-  /** augment_project target name (null for new_project). */
-  projectName: z.string().nullable(),
-  lastActivityAt: isoDateTime,
-  /** Greeting excluded (R1 A5). */
-  messageCount: z.number().int(),
-  messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
-  daysUntilAutoDelete: z.number().int().nullable(),
-});
-export type ActiveWritingChatSummary = z.infer<typeof ActiveWritingChatSummary>;
-/** Alias: the S-08 list rows cover both groups. */
-export type WritingChatSummary = ActiveWritingChatSummary;
-
-/** S-08 lists (R1 A6): active chats, then abandoned ones not yet auto-deleted; latest activity first each. */
-export const WritingChatLists = z.object({
-  active: z.array(ActiveWritingChatSummary),
-  abandoned: z.array(ActiveWritingChatSummary),
-});
-export type WritingChatLists = z.infer<typeof WritingChatLists>;
-
-/** S-10 "AI 작성 대화 기록" (R1 A6): chats bound to one project, every status. */
+/** S-10 패널 대화 기록 목록 (DM §7: id, title, status, message_count, last_activity_at, last_applied_at). */
 export const ProjectWritingChatSummary = z.object({
   id: uuid,
-  mode: z.enum(WRITING_CHAT_MODES),
-  /** active → 이어 하기 / abandoned → "다시 이어 하기" / saved · handed_off → read-only. */
+  title: z.string().nullable(),
+  /** `closed` → "끝난 대화" (열람·반영만). */
   status: z.enum(WRITING_CHAT_STATUSES),
   lastActivityAt: isoDateTime,
-  savedAt: isoDateTime.nullable(),
+  lastAppliedAt: isoDateTime.nullable(),
   messageCount: z.number().int(),
   messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
 });
@@ -385,45 +257,19 @@ export type ProjectWritingChatSummary = z.infer<typeof ProjectWritingChatSummary
 export const ProjectWritingChatsInput = z.object({ projectId: uuid });
 export type ProjectWritingChatsInput = z.input<typeof ProjectWritingChatsInput>;
 
-/** "다시 이어 하기" (R1 A6): abandoned → active. */
-export const ResumeWritingChatResult = z.object({ writingChatId: uuid, status: z.literal("active"), lastActivityAt: isoDateTime });
-export type ResumeWritingChatResult = z.infer<typeof ResumeWritingChatResult>;
-
 export const StartWritingChatResult = z.object({ writingChatId: uuid });
 export type StartWritingChatResult = z.infer<typeof StartWritingChatResult>;
 
-const n = z.number().int().nonnegative();
+/** Preview edit / review result: the new draft and what changed for the panel. */
+export type DraftEditResult = { structuredDraft: StructuredDraft; needsReviewCount: number; applicableFields: (typeof APPLY_PROPOSAL_FIELDS)[number][] };
 
-/** RPC `save_writing_chat` / `hand_off_writing_chat` jsonb (snake_case as returned). */
-export const WritingChatCommitRpcResult = z.object({
-  writing_chat_id: uuid,
-  status: z.enum(["saved", "handed_off"]),
-  project_id: uuid,
-  project: z.object({ created: z.boolean(), updated: z.boolean() }),
-  project_details: z.object({ created: n, updated: n, missing: n }),
-  achievements: z.object({ created: n }),
-  skills: z.object({ created: n, linked: n }),
-  skipped_needs_review: n,
-});
-
-/** save / hand-off result (S-36 → S-10 / S-35). */
-export const WritingChatSaveResult = z.object({
-  writingChatId: uuid,
-  projectId: uuid,
-  status: z.enum(["saved", "handed_off"]),
-  projectCreated: z.boolean(),
-  projectUpdated: z.boolean(),
-  detailsCreated: n,
-  detailsUpdated: n,
-  /** Existing details (augment) that were deleted meanwhile and so not filled. */
-  detailsMissing: n,
-  achievementsCreated: n,
-  skillsCreated: n,
-  skillsLinked: n,
-  /** needs_review fields left out (T-18). */
-  skippedNeedsReview: n,
-});
-export type WritingChatSaveResult = z.infer<typeof WritingChatSaveResult>;
+/** [반영] result: the RPC's answer + the project's new STAR / period / classification for the left side. */
+export type ApplyProposalResult = {
+  applied: ApplyProposalRpcResult["applied"];
+  skipped: ApplyProposalRpcResult["skipped"];
+  projectStatus: ApplyProposalRpcResult["project_status"];
+  structuredDraft: StructuredDraft;
+};
 
 // ---------- SSE turn events (DM §7 대화 턴, AI-12 응답 모드) ----------
 
@@ -450,16 +296,21 @@ export const DraftPatchEvent = z.object({
   type: z.literal("draft_patch"),
   /** Authoritative structured_draft after the patch (what the RPC returned). */
   structuredDraft: StructuredDraft,
-  /** Fields this turn changed (preview highlight). */
+  /** Fields this turn changed (card highlight). */
   changed: z.array(DraftFieldPath),
 });
 export const DraftFlagsEvent = z.object({
   type: z.literal("draft_flags"),
+  /** Fields this turn left as needs_review (V-9e). */
   needsReview: z.array(DraftFieldPath),
-  clarifications: z.array(DraftClarification),
+  /** Team-subject `action` (V-9f). */
+  actorAmbiguous: z.array(DraftFieldPath),
   /** Sensitive items left out this turn (V-9g) → "이 내용은 기록하지 않을게요". */
   sensitiveAdded: z.number().int().nonnegative(),
   sensitiveFlagsCount: z.number().int().nonnegative(),
+  /** STAR fields that would pass 2,000 chars with more text (C-14) → "글자 수가 가득 찼어요". */
+  lengthFull: z.array(z.enum(STAR_FIELDS)),
+  clarifications: z.array(DraftClarification),
 });
 export const TurnDoneEvent = z.object({
   type: z.literal("turn_done"),
@@ -468,14 +319,16 @@ export const TurnDoneEvent = z.object({
   /** 40 − messageCount (R1 A5). */
   remainingMessages: z.number().int().nonnegative(),
   limitReached: z.boolean(),
-  /**
-   * Preview this turn (QA-S4-05): `updated` (draft_patch sent), `unchanged` (nothing pending, e.g. a
-   * resend, or no change), `failed` (extract failed; the messages are extracted again next turn, AI-12).
-   */
+  /** The chat is now `closed` (the 40th message was this reply): "새 대화에서 이어 하기". */
+  closed: z.boolean(),
+  /** `updated` (draft_patch sent), `unchanged`, `failed` (extract failed; retried next turn, AI-12). */
   draftStatus: z.enum(["updated", "unchanged", "failed"]),
-  /** = draftStatus !== "failed" (kept for the S4 contract). */
-  draftUpdated: z.boolean(),
-  progress: WritingChatProgress,
+  /** Quick chips from the RPC's new draft (AI-12). Empty from QUICK_CHIPS_HIDE_FROM messages on. */
+  chips: z.array(QuickChip),
+  /** Gate chat whose feature is ready now (D-01 met) → C-10 "돌아가기". */
+  readyToReturn: z.boolean(),
+  needsReviewCount: z.number().int().nonnegative(),
+  applicableFields: z.array(z.enum(APPLY_PROPOSAL_FIELDS)),
 });
 
 export const WritingChatTurnEventSchema = z.discriminatedUnion("type", [

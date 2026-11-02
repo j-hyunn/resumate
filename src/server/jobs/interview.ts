@@ -148,6 +148,7 @@ export const productionInterviewPipelines: InterviewPipelines<InterviewQuestionC
           evidence: input.question.evidence.map((e) => ({ source_type: e.source_type, source_id: e.source_id, source_field: e.source_field, sid: e.sid })),
         },
         answer: input.answer,
+        deliverableProjectIds: input.deliverableProjectIds,
       }),
     evaluateFirst: (input, deps) =>
       evaluateAnswerOnce({ context: input.context }, { llm: deps.llm, signal: deps.signal, jobId: deps.jobId, callKey: deps.callKey, logger: consoleAiLogger }),

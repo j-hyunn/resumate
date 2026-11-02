@@ -2,15 +2,14 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { SaveEducationInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
 import {
-  toAchievementDto,
+  compareProjectCards,
   toEducationColumns,
   toExperienceColumns,
   toExperienceDto,
   toProjectColumns,
-  toProjectDetailDto,
+  toProjectDto,
 } from "./mappers";
 import { isPrimaryKeyViolation, sameInstant, upsertRow } from "./save";
-import { summarizeCareer } from "./summary";
 
 const ID = "6f1c1d2e-8a4b-4c3d-9e2f-1a2b3c4d5e6f";
 
@@ -40,6 +39,14 @@ describe("patch → columns", () => {
     });
     expect(toProjectColumns(SaveProjectInput.parse({ id: ID, name: "x" }))).toEqual({ name: "x" });
   });
+  it("project section saves map v4.4 columns; is_current clears end_month (CR-22)", () => {
+    expect(
+      toProjectColumns(
+        SaveProjectInput.parse({ id: ID, action: "a", competencies: ["analysis"], projectType: "improvement", linkUrl: "", isCurrent: true }),
+      ),
+    ).toEqual({ action: "a", competencies: ["analysis"], project_type: "improvement", link_url: null, is_current: true, end_month: null });
+    expect(toProjectColumns(SaveProjectInput.parse({ id: ID, role: "BE", description: "내용" }))).toEqual({ role: "BE", description: "내용" });
+  });
 });
 
 describe("row → DTO", () => {
@@ -61,45 +68,39 @@ describe("row → DTO", () => {
     });
     expect(dto).toMatchObject({ startMonth: "2024-03", endMonth: null, isCurrent: true, employmentType: "full_time" });
   });
-  it("detail STAR filled flags treat blank as empty", () => {
-    const dto = toProjectDetailDto(
-      {
-        id: ID,
-        project_id: ID,
-        status: "draft",
-        title: "t",
-        situation: "s",
-        task: "  ",
-        action: null,
-        result: "r",
-        learnings: null,
-        sort_order: 1,
-        source_writing_chat_id: null,
-        created_at: "t",
-        updated_at: "t",
-      },
-      2,
-    );
-    expect(dto.filled).toEqual({ situation: true, task: false, action: false, result: true, learnings: false });
-    expect(dto.achievementCount).toBe(2);
-  });
-  it("achievement kind passes through", () => {
-    const dto = toAchievementDto({
+  it("project DTO: scope from the affiliation, months as YYYY-MM, competencies kept in order", () => {
+    const base = {
       id: ID,
-      status: "complete",
-      project_detail_id: ID,
-      experience_id: null,
-      metric_name: "p95",
-      value_before: 800,
-      value_after: 200,
-      unit: "ms",
+      status: "draft",
+      experience_id: ID,
+      education_id: null,
+      name: "결제",
+      start_month: "2024-03-01",
+      end_month: null,
+      is_current: true,
+      project_type: "improvement",
+      experience_type: null,
+      competencies: ["execution", "analysis"],
+      situation: "s",
+      task: null,
+      action: null,
+      result: null,
+      learnings: null,
+      role: null,
       description: null,
-      kind: "quantitative",
+      link_url: null,
       source_writing_chat_id: null,
+      content_updated_at: "c",
       created_at: "t",
       updated_at: "t",
-    });
-    expect(dto).toMatchObject({ kind: "quantitative", valueBefore: 800, valueAfter: 200 });
+    };
+    expect(toProjectDto(base)).toMatchObject({ scope: "affiliated", startMonth: "2024-03", isCurrent: true, competencies: ["execution", "analysis"], contentUpdatedAt: "c" });
+    expect(toProjectDto({ ...base, experience_id: null }).scope).toBe("standalone");
+  });
+  it("project cards: start_month desc nulls last, then created_at desc", () => {
+    const card = (id: string, start_month: string | null, created_at: string) => ({ id, status: "draft", name: id, project_type: null, start_month, end_month: null, is_current: false, created_at });
+    const sorted = [card("a", "2023-01-01", "1"), card("b", null, "3"), card("c", "2024-01-01", "1"), card("d", "2023-01-01", "2")].sort(compareProjectCards);
+    expect(sorted.map((c) => c.id)).toEqual(["c", "d", "a", "b"]);
   });
 });
 
@@ -217,31 +218,5 @@ describe("sameInstant", () => {
   it("compares timestamps across formats", () => {
     expect(sameInstant("2026-10-25T01:00:00+00:00", "2026-10-25T10:00:00+09:00")).toBe(true);
     expect(sameInstant("2026-10-25T01:00:00Z", "2026-10-25T01:00:01Z")).toBe(false);
-  });
-});
-
-describe("summarizeCareer", () => {
-  it("counts statuses and rule-based hints", () => {
-    const s = summarizeCareer({
-      experiences: [{ status: "complete" }, { status: "draft" }],
-      educations: [],
-      projects: [
-        { status: "draft", completeDetailCount: 0 },
-        { status: "complete", completeDetailCount: 2 },
-      ],
-      projectDetails: [
-        { status: "complete", result: null },
-        { status: "complete", result: "r" },
-        { status: "draft", result: null },
-      ],
-      skills: [{ id: "a" }],
-    });
-    expect(s).toEqual({
-      completeCounts: { experiences: 1, educations: 0, projects: 1, projectDetails: 2 },
-      draftCounts: { experiences: 1, educations: 0, projects: 1, projectDetails: 1 },
-      detailsWithoutResult: 2,
-      projectsWithoutCompleteDetail: 1,
-      skillCount: 1,
-    });
   });
 });

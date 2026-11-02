@@ -1,5 +1,5 @@
 -- S4 writing_chats / writing_chat_messages: structure, RLS isolation, write paths, message RPCs, cap 40,
--- 다시 보내기, status guard (DM §2.5, §5; AI-12; UX S-36).
+-- 다시 보내기, status guard. R4: DM v4.4 §2.5 (project-bound chats, active / closed, title, CR-19 affiliated only).
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
@@ -9,9 +9,16 @@ insert into auth.users (id, email, aud, role) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated'),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'b@example.test', 'authenticated', 'authenticated');
 
+insert into public.experiences (id, user_id, company_name) values
+  ('aaaaaaaa-1111-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'A사'),
+  ('bbbbbbbb-1111-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'B사');
+insert into public.projects (id, user_id, experience_id, name) values
+  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'aaaaaaaa-1111-0000-0000-000000000001', 'A project'),
+  ('bbbbbbbb-3333-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002',
+   'bbbbbbbb-1111-0000-0000-000000000001', 'B project');
 insert into public.projects (id, user_id, name) values
-  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'A project'),
-  ('bbbbbbbb-3333-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'B project');
+  ('aaaaaaaa-3333-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'A standalone');
 
 -- A: free-tier active key (greeting notice). B: no key.
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek,
@@ -31,6 +38,13 @@ select policies_are('public', 'writing_chat_messages',
 select col_default_is('public', 'writing_chats', 'status', 'active'::text, 'status default active');
 select has_column('public', 'writing_chats', 'last_extracted_sequence', 'last_extracted_sequence (spec-gaps ①)');
 select hasnt_column('public', 'writing_chats', 'usage_event_id', 'no usage_event_id (v4, D-34)');
+select hasnt_column('public', 'writing_chats', 'mode', 'R4: mode dropped (one mode)');
+select hasnt_column('public', 'writing_chats', 'experience_id', 'R4: experience_id dropped');
+select hasnt_column('public', 'writing_chats', 'saved_at', 'R4: saved_at dropped');
+select has_column('public', 'writing_chats', 'title', 'R4: title');
+select has_column('public', 'writing_chats', 'last_applied_at', 'R4: last_applied_at');
+select col_not_null('public', 'writing_chats', 'project_id', 'R4: project_id not null');
+select has_index('public', 'writing_chats', 'writing_chats_project_id_last_activity_idx', 'R4: panel history index');
 
 -- DM §2.5: nobody (but the owner / platform superusers) can UPDATE structured_draft directly.
 select is_empty(
@@ -45,8 +59,8 @@ select set_eq(
       cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
      where a.attrelid = 'public.writing_chats'::regclass and a.attnum > 0 and not a.attisdropped
        and has_column_privilege('authenticated', a.attrelid, a.attnum, p.privilege_type)$$,
-  array['status:UPDATE', 'return_target:UPDATE'],
-  'authenticated: writing_chats direct writes = UPDATE (status, return_target) only');
+  array['return_target:UPDATE'],
+  'authenticated: writing_chats direct writes = UPDATE (return_target) only (R4: status grant revoked)');
 select ok(not has_any_column_privilege('authenticated', 'public.writing_chat_messages', 'INSERT')
           and not has_any_column_privilege('authenticated', 'public.writing_chat_messages', 'UPDATE')
           and not has_table_privilege('authenticated', 'public.writing_chat_messages', 'DELETE'),
@@ -59,33 +73,36 @@ select ok(not has_any_column_privilege('app_ai_writer', 'public.writing_chats', 
           'app_ai_writer: no direct writes on the writing chat tables (RPCs only)');
 select ok(not has_any_column_privilege('service_role', 'public.writing_chats', 'UPDATE')
           and has_table_privilege('service_role', 'public.writing_chats', 'DELETE'),
-          'service_role: no UPDATE, DELETE kept for the 90-day cleanup');
+          'service_role: no UPDATE, DELETE kept for account deletion');
 
 -- ── start_writing_chat ─────────────────────────────────────────────────────
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
-select throws_ok($$select public.start_writing_chat('enrich_project')$$, 'P0001', 'invalid_mode', 'mode CHECK');
-select throws_ok($$select public.start_writing_chat(null)$$, 'P0001', 'invalid_mode', 'null mode');
-select throws_ok($$select public.start_writing_chat('augment_project')$$, 'P0001', 'project_required', 'augment needs a project');
-select throws_ok($$select public.start_writing_chat('augment_project', 'bbbbbbbb-3333-0000-0000-000000000001')$$,
-                 'P0001', 'project_not_found', 'augment: B''s project is not found');
-select throws_ok($$select public.start_writing_chat('new_project', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
-                 'P0001', 'project_not_allowed', 'new_project takes no project');
-select throws_ok($$select public.start_writing_chat('new_project', null, '{"feature":"insight"}')$$,
+select throws_ok($$select public.start_writing_chat(null)$$, 'P0001', 'project_not_found', 'project is required');
+select throws_ok($$select public.start_writing_chat('bbbbbbbb-3333-0000-0000-000000000001')$$,
+                 'P0001', 'project_not_found', 'B''s project is not found');
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000002')$$,
+                 'P0001', 'writing_chat_requires_affiliated_project', 'standalone project has no chat (CR-19)');
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001', '{"feature":"insight"}')$$,
                  'P0001', 'invalid_return_target', 'return_target needs application_project_id');
-select throws_ok($$select public.start_writing_chat('new_project', null,
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001',
                    '{"feature":"board","application_project_id":"aaaaaaaa-7777-0000-0000-000000000001"}')$$,
                  'P0001', 'invalid_return_target', 'return_target feature CHECK');
-select throws_ok($$select public.start_writing_chat('new_project', null, '"insight"')$$,
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001', '"insight"')$$,
                  'P0001', 'invalid_return_target', 'return_target must be an object');
 
-select lives_ok($$select set_config('t.chat', public.start_writing_chat('new_project', null,
+select lives_ok($$select set_config('t.chat', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001',
                    '{"application_project_id":"AAAAAAAA-7777-0000-0000-000000000001","feature":"job_interview","params":{"question_count":5}}')::text, true)$$,
-                'start new_project chat with return_target');
-select is((select (message_count, status, mode, project_id is null, structured_draft = private.writing_chat_empty_draft())::text
+                'start a chat with return_target (gate entry)');
+select is((select (message_count, status, project_id, title is null, last_applied_at is null,
+                   structured_draft = private.writing_chat_empty_draft())::text
              from public.writing_chats where id = current_setting('t.chat')::uuid),
-          '(0,active,new_project,t,t)', 'chat starts active with count 0 (greeting not counted, R1 A5) and an empty draft skeleton');
+          '(0,active,aaaaaaaa-3333-0000-0000-000000000001,t,t,t)',
+          'chat starts active with count 0 (greeting not counted, A5), no title, an empty v3 draft');
+select is((select structured_draft from public.writing_chats where id = current_setting('t.chat')::uuid),
+          '{"schema_version": 3, "project": {}, "star": {}, "classification": {}, "clarifications": [], "sensitive_flags_count": 0}'::jsonb,
+          'empty draft v3 shape');
 select is((select return_target - 'created_at' from public.writing_chats where id = current_setting('t.chat')::uuid),
           '{"application_project_id":"aaaaaaaa-7777-0000-0000-000000000001","feature":"job_interview","params":{"question_count":5}}'::jsonb,
           'return_target normalized');
@@ -94,16 +111,36 @@ select isnt((select return_target ->> 'created_at' from public.writing_chats whe
 select is((select (sequence, role, status, ai_job_id is null, provider is null)::text
              from public.writing_chat_messages where writing_chat_id = current_setting('t.chat')::uuid),
           '(1,assistant,done,t,t)', 'greeting = sequence 1 assistant, no AI job, no provider');
-select ok((select content like '%민감정보%' and content like '%무료 등급%' from public.writing_chat_messages
-            where writing_chat_id = current_setting('t.chat')::uuid), 'greeting: sensitive-info notice + free-tier notice');
+select ok((select content like '%민감정보%' and content like '%무료 등급%' and content like '직무 면접을 쓰려면%'
+                  and content like '%''A project''을 함께 정리해 볼게요%'
+             from public.writing_chat_messages
+            where writing_chat_id = current_setting('t.chat')::uuid),
+          'greeting: gate line + empty-STAR opening + sensitive-info notice + free-tier notice');
 
-select lives_ok($$select set_config('t.aug', public.start_writing_chat('augment_project',
-                   'aaaaaaaa-3333-0000-0000-000000000001')::text, true)$$, 'start augment chat');
-select is((select project_id from public.writing_chats where id = current_setting('t.aug')::uuid),
-          'aaaaaaaa-3333-0000-0000-000000000001'::uuid, 'augment chat bound to the project');
+-- greeting by STAR state (partial / full)
+reset role;
+update public.projects set situation = 's' where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select lives_ok($$select set_config('t.aug', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')::text, true)$$,
+                'second chat on the same project');
+select ok((select content like '''A project''에서 비어 있는 역할부터 여쭤볼게요.%' and content not like '%쓰려면%'
+             from public.writing_chat_messages where writing_chat_id = current_setting('t.aug')::uuid),
+          'greeting: partial STAR asks the first empty slot (task = 역할), no gate line');
+reset role;
+update public.projects set task = 't', action = 'a', result = 'r', learnings = 'l'
+ where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+select ok(private.writing_chat_greeting(p, null, false) like '모든 항목이 채워져 있어요.%', 'greeting: full STAR')
+  from public.projects p where p.id = 'aaaaaaaa-3333-0000-0000-000000000001';
+update public.projects set situation = null, task = null, action = null, result = null, learnings = null
+ where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select is((select count(*)::int from public.writing_chats where project_id = 'aaaaaaaa-3333-0000-0000-000000000001'), 2,
+          'several chats per project');
 
 -- Direct writes refused.
-select throws_ok($$insert into public.writing_chats (mode) values ('new_project')$$, '42501', null,
+select throws_ok($$insert into public.writing_chats (project_id) values ('aaaaaaaa-3333-0000-0000-000000000001')$$, '42501', null,
                  'no direct insert of writing_chats');
 select throws_ok($$update public.writing_chats set structured_draft = '{}' where id = current_setting('t.chat')::uuid$$,
                  '42501', null, 'no direct update of structured_draft');
@@ -112,8 +149,8 @@ select throws_ok($$update public.writing_chats set message_count = 0 where id = 
 select throws_ok($$insert into public.writing_chat_messages (writing_chat_id, sequence, role, content)
                    values (current_setting('t.chat')::uuid, 9, 'user', 'x')$$, '42501', null,
                  'no direct insert of messages');
-select throws_ok($$update public.writing_chats set status = 'saved' where id = current_setting('t.chat')::uuid$$,
-                 'P0001', 'invalid_writing_chat_transition', 'user cannot set saved directly');
+select throws_ok($$update public.writing_chats set status = 'closed' where id = current_setting('t.chat')::uuid$$,
+                 '42501', null, 'user cannot update status (R4: grant revoked)');
 
 -- ── append_writing_chat_message ────────────────────────────────────────────
 select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.chat')::uuid, '   ')$$,
@@ -126,6 +163,8 @@ select results_eq($$select sequence, message_count from public.append_writing_ch
                   $$values (2::smallint, 1::smallint)$$, 'user message = sequence 2, count 1 (greeting not counted)');
 select is((select content from public.writing_chat_messages where writing_chat_id = current_setting('t.chat')::uuid and sequence = 2),
           '결제 프로젝트였어요', 'content stored trimmed');
+select is((select title from public.writing_chats where id = current_setting('t.chat')::uuid), '결제 프로젝트였어요',
+          'first user message fills title');
 
 -- ── B isolation ────────────────────────────────────────────────────────────
 reset role;
@@ -135,15 +174,17 @@ select is((select count(*)::int from public.writing_chats), 0, 'B sees no chats 
 select is((select count(*)::int from public.writing_chat_messages), 0, 'B sees no messages of A');
 select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.chat')::uuid, 'hi')$$,
                  'P0001', 'writing_chat_not_found', 'B cannot append to A''s chat');
-select lives_ok($$update public.writing_chats set status = 'abandoned' where id = current_setting('t.chat')::uuid$$,
+select lives_ok($$update public.writing_chats set return_target = null where id = current_setting('t.chat')::uuid$$,
                 'B update runs');
 select lives_ok($$delete from public.writing_chats where id = current_setting('t.chat')::uuid$$, 'B delete runs');
-select lives_ok($$select set_config('t.bchat', public.start_writing_chat('new_project')::text, true)$$, 'B starts a chat');
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')$$,
+                 'P0001', 'project_not_found', 'B cannot start a chat on A''s project');
+select lives_ok($$select set_config('t.bchat', public.start_writing_chat('bbbbbbbb-3333-0000-0000-000000000001')::text, true)$$, 'B starts a chat');
 select ok((select content not like '%무료 등급%' from public.writing_chat_messages
             where writing_chat_id = current_setting('t.bchat')::uuid), 'greeting without free-tier notice (no key)');
 reset role;
-select is((select status from public.writing_chats where id = current_setting('t.chat')::uuid), 'active',
-          'A''s chat untouched by B');
+select is((select (status, return_target is not null)::text from public.writing_chats where id = current_setting('t.chat')::uuid),
+          '(active,t)', 'A''s chat untouched by B');
 
 -- ── assistant messages (app_ai_writer) ─────────────────────────────────────
 insert into public.ai_jobs (id, user_id, job_type, target_type, target_id, provider, model_tier, connection_tier) values
@@ -161,9 +202,9 @@ select is((select count(*)::int from public.writing_chats), 2, 'app_ai_writer re
 select throws_ok($$insert into public.projects (name) values ('x')$$, '42501', null,
                  'app_ai_writer cannot insert career rows');
 select throws_ok($$update public.projects set name = 'x'$$, '42501', null, 'app_ai_writer cannot update career rows');
-select throws_ok($$select public.save_writing_chat(current_setting('t.chat')::uuid)$$, '42501', null,
-                 'app_ai_writer cannot execute save_writing_chat');
-select throws_ok($$select public.start_writing_chat('new_project')$$, '42501', null,
+select throws_ok($$select public.apply_writing_chat_proposal(current_setting('t.chat')::uuid)$$, '42501', null,
+                 'app_ai_writer cannot execute apply_writing_chat_proposal (no career write on the AI path)');
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')$$, '42501', null,
                  'app_ai_writer cannot start a chat');
 select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.chat')::uuid, 'x')$$, '42501', null,
                  'app_ai_writer cannot append user messages');
@@ -319,62 +360,70 @@ select lives_ok($$select public.finish_assistant_message((select id from public.
 select results_eq($$select message_count, reused from public.begin_assistant_message(current_setting('t.chat')::uuid,
                     'aaaaaaaa-5555-0000-0000-000000000001', 'gemini', 'gemini-flash', 'default', 'free')$$,
                   $$values (40::smallint, true)$$, 'resend at the cap still works (does not count)');
+select is((select status from public.writing_chats where id = current_setting('t.chat')::uuid), 'active',
+          'a failed final reply keeps the chat active (다시 보내기)');
+select lives_ok($$select public.finish_assistant_message((select id from public.writing_chat_messages
+                   where writing_chat_id = current_setting('t.chat')::uuid order by sequence desc limit 1), 'done', '정리해 드릴게요')$$,
+                'last reply done');
+select is((select status from public.writing_chats where id = current_setting('t.chat')::uuid), 'closed',
+          'R4: the completed final reply closes the chat (active -> closed)');
+select throws_ok($$select * from public.begin_assistant_message(current_setting('t.chat')::uuid,
+                   'aaaaaaaa-5555-0000-0000-000000000001', 'gemini', 'gemini-flash', 'default', 'free')$$,
+                 'P0001', 'writing_chat_closed', 'no reply on a closed chat');
 reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.chat')::uuid, '더')$$,
+                 'P0001', 'writing_chat_closed', 'no user message on a closed chat');
+select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
+                   '{"ops":[{"op":"set","target":{"section":"star","field":"situation"},"value":"직접 정리"}]}')$$,
+                'closed chat: user may still edit the proposal');
+select lives_ok($$select public.apply_writing_chat_proposal(current_setting('t.chat')::uuid)$$,
+                'closed chat: user may still apply');
+reset role;
+select throws_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.chat')::uuid$$,
+                 'P0001', 'invalid_writing_chat_transition', 'closed -> active refused even for the owner role');
 select throws_ok($$update public.writing_chats set message_count = 41 where id = current_setting('t.chat')::uuid$$,
                  '23514', null, 'message_count CHECK 0..40');
 
--- ── status guard ───────────────────────────────────────────────────────────
+-- ── status guard / return_target / delete ──────────────────────────────────
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
-select lives_ok($$update public.writing_chats set status = 'abandoned' where id = current_setting('t.aug')::uuid$$,
-                'user abandons a chat');
-select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.aug')::uuid, 'x')$$,
-                 'P0001', 'writing_chat_not_active', 'no messages after abandoning');
--- R1 A6: abandoned -> active (다시 이어 하기) by the user session; only back to active.
-select throws_ok($$update public.writing_chats set status = 'saved' where id = current_setting('t.aug')::uuid$$,
-                 'P0001', 'invalid_writing_chat_transition', 'abandoned -> saved refused');
-select throws_ok($$update public.writing_chats set status = 'handed_off' where id = current_setting('t.aug')::uuid$$,
-                 'P0001', 'invalid_writing_chat_transition', 'abandoned -> handed_off refused');
-reset role;
-update public.writing_chats set last_activity_at = now() - interval '30 days' where id = current_setting('t.aug')::uuid;
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
-select lives_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.aug')::uuid$$,
-                'user resumes an abandoned chat (A6)');
-select results_eq($$select status, last_activity_at > now() - interval '1 minute', message_count
-                     from public.writing_chats where id = current_setting('t.aug')::uuid$$,
-                  $$values ('active'::text, true, 2::smallint)$$, 'resumed: active, last_activity_at = now(), count carried over (2)');
-select results_eq($$select message_count from public.append_writing_chat_message(current_setting('t.aug')::uuid, '이어서 할게요')$$,
-                  $$values (3::smallint)$$, 'messages accepted again after resuming (count continues)');
-select lives_ok($$update public.writing_chats set status = 'abandoned' where id = current_setting('t.aug')::uuid$$,
-                'abandon again');
-reset role;
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
-select is_empty($$update public.writing_chats set status = 'active' where id = current_setting('t.aug')::uuid returning id$$,
-                'B cannot resume A''s chat');
-reset role;
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select throws_ok($$update public.writing_chats set status = 'closed' where id = current_setting('t.aug')::uuid$$,
+                 '42501', null, 'no user-driven status change (no abandon / resume in v4.4)');
 select lives_ok($$update public.writing_chats set return_target = null where id = current_setting('t.aug')::uuid$$,
                 'return_target stays updatable');
 select throws_ok($$update public.writing_chats set return_target = '{"feature":"board"}' where id = current_setting('t.aug')::uuid$$,
                  '23514', null, 'return_target feature CHECK');
+reset role;
+-- a running turn of a deleted chat is asked to cancel (DM §4.2 v4.4)
+update public.ai_jobs set status = 'queued', cancel_requested_at = null where id = 'aaaaaaaa-5555-0000-0000-000000000003';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$delete from public.writing_chats where id = current_setting('t.aug')::uuid$$, 'user deletes own chat');
 reset role;
 select is((select count(*)::int from public.writing_chat_messages where writing_chat_id = current_setting('t.aug')::uuid), 0,
           'messages cascade with the chat');
+select isnt((select cancel_requested_at from public.ai_jobs where id = 'aaaaaaaa-5555-0000-0000-000000000003'), null,
+            'the chat''s queued turn job gets a cancel request');
+-- chats cascade with their project
+delete from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+select is((select count(*)::int from public.writing_chats where id = current_setting('t.chat')::uuid), 0,
+          'project delete cascades its chats');
+select throws_ok($$insert into public.writing_chats (user_id, project_id)
+                   values ('aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000002')$$,
+                 'P0001', 'writing_chat_requires_affiliated_project', 'insert trigger refuses a standalone project');
 
 -- anon
 set local role anon;
 select throws_ok($$select * from public.writing_chats$$, '42501', null, 'anon cannot read writing_chats');
-select throws_ok($$select public.start_writing_chat('new_project')$$, '42501', null, 'anon cannot start');
+select throws_ok($$select public.start_writing_chat(gen_random_uuid())$$, '42501', null, 'anon cannot start');
 reset role;
 
 -- not authenticated (no sub)
 set local role authenticated;
 set local request.jwt.claims = '{"role":"authenticated"}';
-select throws_ok($$select public.start_writing_chat('new_project')$$, '42501', 'not_authenticated', 'no sub');
+select throws_ok($$select public.start_writing_chat(gen_random_uuid())$$, '42501', 'not_authenticated', 'no sub');
 reset role;
 
 -- account deletion cascades chats and messages

@@ -15,8 +15,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
-insert into public.projects (id, experience_id, name, role)
-  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 'Dev');
+insert into public.projects (id, experience_id, name, situation, action)
+  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 's', 'a');
 reset role;
 
 insert into public.application_projects (id, user_id, name, name_source) values

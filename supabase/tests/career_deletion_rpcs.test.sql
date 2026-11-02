@@ -1,4 +1,5 @@
--- S2 get_deletion_impact / delete_career_item / reorder_project_details (DM §4.1, §4.2, §7).
+-- S2 → R4 get_deletion_impact / delete_career_item (DM v4.4 §4.1, §4.2; CR-15). reorder_project_deliverables is
+-- covered in career_tables.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -16,67 +17,71 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
 -- Fixture for A:
---   E1 (complete) ─ P1 ─ D1 (complete) ─ ACH1, ACH2
---                │      └ D2 (draft)
---                │      tags: S1 (tag, only P1), S2 (manual)
---                ├ P2 ─ D3 ─ ACH3
---                └ ACH-E (experience-level)
---   ED1 ─ P3 ─ D4
+--   E1 ─ P1 (affiliated, 2 chats)
+--      └ P2 (affiliated)
+--   ED1 ─ P3 (affiliated, 1 chat)
+--   SP (standalone) ─ DL1, DL2 deliverables; tags: S1 (tag, only SP), S2 (manual, SP + SP2)
+--   SP2 (standalone) ─ tag S2
 insert into public.experiences (id, company_name, start_month, job_rank)
 values ('aaaaaaaa-1111-0000-0000-000000000001', 'A', '2020-01-01', 'S');
 insert into public.educations (id, institution_name, education_type, start_month)
 values ('aaaaaaaa-2222-0000-0000-000000000001', 'U', 'degree', '2014-03-01');
-insert into public.projects (id, experience_id, education_id, name, role) values
-  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', null, 'P1', 'Dev'),
-  ('aaaaaaaa-3333-0000-0000-000000000002', 'aaaaaaaa-1111-0000-0000-000000000001', null, 'P2', 'Dev'),
-  ('aaaaaaaa-3333-0000-0000-000000000003', null, 'aaaaaaaa-2222-0000-0000-000000000001', 'P3', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action) values
-  ('aaaaaaaa-4444-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000001', 'D1', 's', 'a'),
-  ('aaaaaaaa-4444-0000-0000-000000000002', 'aaaaaaaa-3333-0000-0000-000000000001', 'D2', null, null),
-  ('aaaaaaaa-4444-0000-0000-000000000003', 'aaaaaaaa-3333-0000-0000-000000000002', 'D3', 's', 'a'),
-  ('aaaaaaaa-4444-0000-0000-000000000004', 'aaaaaaaa-3333-0000-0000-000000000003', 'D4', 's', 'a');
-insert into public.achievements (id, project_detail_id, experience_id, description) values
-  ('aaaaaaaa-5555-0000-0000-000000000001', 'aaaaaaaa-4444-0000-0000-000000000001', null, 'ach1'),
-  ('aaaaaaaa-5555-0000-0000-000000000002', 'aaaaaaaa-4444-0000-0000-000000000001', null, 'ach2'),
-  ('aaaaaaaa-5555-0000-0000-000000000003', 'aaaaaaaa-4444-0000-0000-000000000003', null, 'ach3'),
-  ('aaaaaaaa-5555-0000-0000-000000000004', null, 'aaaaaaaa-1111-0000-0000-000000000001', 'ach-e');
+insert into public.projects (id, experience_id, education_id, name, situation, action) values
+  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', null, 'P1', 's', 'a'),
+  ('aaaaaaaa-3333-0000-0000-000000000002', 'aaaaaaaa-1111-0000-0000-000000000001', null, 'P2', null, null),
+  ('aaaaaaaa-3333-0000-0000-000000000003', null, 'aaaaaaaa-2222-0000-0000-000000000001', 'P3', 's', 'a');
+insert into public.projects (id, name, description) values
+  ('aaaaaaaa-3333-0000-0000-000000000004', 'SP', 'd'),
+  ('aaaaaaaa-3333-0000-0000-000000000005', 'SP2', 'd');
+insert into public.project_deliverables (id, project_id, title) values
+  ('aaaaaaaa-4444-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000004', 'DL1'),
+  ('aaaaaaaa-4444-0000-0000-000000000002', 'aaaaaaaa-3333-0000-0000-000000000004', 'DL2');
 insert into public.skills (id, name, is_manual) values
   ('aaaaaaaa-6666-0000-0000-000000000001', 'Kafka', false),
   ('aaaaaaaa-6666-0000-0000-000000000002', 'Java', true);
 insert into public.project_skills (project_id, skill_id) values
-  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-6666-0000-0000-000000000001'),
-  ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-6666-0000-0000-000000000002'),
-  ('aaaaaaaa-3333-0000-0000-000000000002', 'aaaaaaaa-6666-0000-0000-000000000002');
+  ('aaaaaaaa-3333-0000-0000-000000000004', 'aaaaaaaa-6666-0000-0000-000000000001'),
+  ('aaaaaaaa-3333-0000-0000-000000000004', 'aaaaaaaa-6666-0000-0000-000000000002'),
+  ('aaaaaaaa-3333-0000-0000-000000000005', 'aaaaaaaa-6666-0000-0000-000000000002');
+select set_config('t.c1', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')::text, true);
+select set_config('t.c2', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')::text, true);
+select set_config('t.c3', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000003')::text, true);
 
 -- ── get_deletion_impact ───────────────────────────────────────────────────
 select is(public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001'),
-          '{"cascade": {"projects": 0, "project_details": 0, "achievements": 1, "project_skills": 0, "writing_chats": 0},
+          '{"cascade": {"projects": 2, "project_deliverables": 0, "project_skills": 0, "writing_chats": 2},
             "affected_results": {"by_application_project": []}}'::jsonb,
-          'experience + keep_projects (default): only experience-level achievements go');
+          'experience (default delete_projects): its projects and their chats');
 select is(public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'delete_projects') -> 'cascade',
-          '{"projects": 2, "project_details": 3, "achievements": 4, "project_skills": 3, "writing_chats": 0}'::jsonb,
-          'experience + delete_projects: projects and everything under them');
-select is(public.get_deletion_impact('education', 'aaaaaaaa-2222-0000-0000-000000000001', 'keep_projects') -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 0, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'education + keep_projects: nothing cascades');
-select is(public.get_deletion_impact('education', 'aaaaaaaa-2222-0000-0000-000000000001', 'delete_projects') -> 'cascade',
-          '{"projects": 1, "project_details": 1, "achievements": 0, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'education + delete_projects');
+          '{"projects": 2, "project_deliverables": 0, "project_skills": 0, "writing_chats": 2}'::jsonb,
+          'experience + explicit delete_projects');
+select is(public.get_deletion_impact('education', 'aaaaaaaa-2222-0000-0000-000000000001') -> 'cascade',
+          '{"projects": 1, "project_deliverables": 0, "project_skills": 0, "writing_chats": 1}'::jsonb,
+          'education: its project and chat');
 select is(public.get_deletion_impact('project', 'aaaaaaaa-3333-0000-0000-000000000001') -> 'cascade',
-          '{"projects": 0, "project_details": 2, "achievements": 2, "project_skills": 2, "writing_chats": 0}'::jsonb,
-          'project: its details, their achievements, its tags (target excluded)');
-select is(public.get_deletion_impact('project_detail', 'aaaaaaaa-4444-0000-0000-000000000001') -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 2, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'project_detail: its achievements');
-select is(public.get_deletion_impact('achievement', 'aaaaaaaa-5555-0000-0000-000000000001') -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 0, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'achievement: nothing cascades');
+          '{"projects": 0, "project_deliverables": 0, "project_skills": 0, "writing_chats": 2}'::jsonb,
+          'affiliated project: its chats (target excluded)');
+select is(public.get_deletion_impact('project', 'aaaaaaaa-3333-0000-0000-000000000004') -> 'cascade',
+          '{"projects": 0, "project_deliverables": 2, "project_skills": 2, "writing_chats": 0}'::jsonb,
+          'standalone project: deliverables and tags');
+select is(public.get_deletion_impact('project_deliverable', 'aaaaaaaa-4444-0000-0000-000000000001') -> 'cascade',
+          '{"projects": 0, "project_deliverables": 0, "project_skills": 0, "writing_chats": 0}'::jsonb,
+          'deliverable: nothing cascades');
 select is(public.get_deletion_impact('skill', 'aaaaaaaa-6666-0000-0000-000000000002') -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 0, "project_skills": 2, "writing_chats": 0}'::jsonb,
+          '{"projects": 0, "project_deliverables": 0, "project_skills": 2, "writing_chats": 0}'::jsonb,
           'skill: its project links');
+select is(public.get_deletion_impact('writing_chat', current_setting('t.c1')::uuid),
+          '{"message_count": 0, "last_applied_at": null}'::jsonb,
+          'writing_chat: {message_count, last_applied_at} only; message_count = column (greeting excluded, QA-R4-03)');
 
+select throws_ok($$select public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'keep_projects')$$,
+                 'P0001', 'affiliation_mode_not_supported', 'keep_projects is no longer supported (CR-15)');
+select throws_ok($$select public.get_deletion_impact('project_detail', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
+                 'P0001', 'invalid_entity_type', 'project_detail is retired');
+select throws_ok($$select public.get_deletion_impact('achievement', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
+                 'P0001', 'invalid_entity_type', 'achievement is retired');
 select throws_ok($$select public.get_deletion_impact('writing_chat', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
-                 'P0001', 'career_item_not_found', 'writing_chat (S4): an id that is not a chat is not found');
+                 'P0001', 'career_item_not_found', 'writing_chat: an id that is not a chat is not found');
 select throws_ok($$select public.get_deletion_impact('chat', 'aaaaaaaa-1111-0000-0000-000000000001')$$,
                  'P0001', 'invalid_entity_type', 'unknown entity_type rejected');
 select throws_ok($$select public.get_deletion_impact(null, 'aaaaaaaa-1111-0000-0000-000000000001')$$,
@@ -85,136 +90,82 @@ select throws_ok($$select public.get_deletion_impact('experience', 'aaaaaaaa-111
                  'P0001', 'invalid_affiliation_mode', 'unknown affiliation_mode rejected');
 select throws_ok($$select public.get_deletion_impact('experience', 'bbbbbbbb-1111-0000-0000-000000000001')$$,
                  'P0001', 'career_item_not_found', 'B''s experience is not found for A');
-select throws_ok($$select public.get_deletion_impact('project', gen_random_uuid())$$,
+select throws_ok($$select public.get_deletion_impact('project_deliverable', gen_random_uuid())$$,
                  'P0001', 'career_item_not_found', 'unknown id is not found');
 
 -- ── delete_career_item ───────────────────────────────────────────────────
-select throws_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001', 'keep_projects', 'keep')$$,
+select throws_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001', 'delete_projects', 'keep')$$,
                  'P0001', 'invalid_result_mode', 'unknown result_mode rejected');
 select throws_ok($$select public.delete_career_item('project', 'bbbbbbbb-3333-0000-0000-000000000001')$$,
                  'P0001', 'career_item_not_found', 'A cannot delete B''s project');
-select throws_ok($$select public.delete_career_item('chat', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
-                 'P0001', 'invalid_entity_type', 'delete: invalid entity_type');
+select throws_ok($$select public.delete_career_item('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'keep_projects')$$,
+                 'P0001', 'affiliation_mode_not_supported', 'delete: keep_projects rejected');
 select throws_ok($$select public.delete_career_item('writing_chat', 'aaaaaaaa-3333-0000-0000-000000000001')$$,
                  'P0001', 'career_item_not_found', 'delete: a project id is not a writing chat');
 select is((select count(*)::int from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001'), 1,
           'failed calls deleted nothing');
 
--- detail delete: the last complete detail of P1 → P1 draft
-select is(public.delete_career_item('project_detail', 'aaaaaaaa-4444-0000-0000-000000000001'),
-          '{"entity_type": "project_detail", "entity_id": "aaaaaaaa-4444-0000-0000-000000000001",
-            "affiliation_mode": "keep_projects", "result_mode": "keep_results",
-            "cascade": {"projects": 0, "project_details": 0, "achievements": 2, "project_skills": 0, "writing_chats": 0},
+-- deliverable delete: parent status unchanged
+select is(public.delete_career_item('project_deliverable', 'aaaaaaaa-4444-0000-0000-000000000001'),
+          '{"entity_type": "project_deliverable", "entity_id": "aaaaaaaa-4444-0000-0000-000000000001",
+            "affiliation_mode": "delete_projects", "result_mode": "keep_results",
+            "cascade": {"projects": 0, "project_deliverables": 0, "project_skills": 0, "writing_chats": 0},
             "affected_results": {"by_application_project": []}}'::jsonb,
-          'delete project_detail returns the counted cascade and modes');
-select is((select count(*)::int from public.achievements
-            where id in ('aaaaaaaa-5555-0000-0000-000000000001', 'aaaaaaaa-5555-0000-0000-000000000002')),
-          0, 'detail achievements cascaded');
-select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001'), 'draft',
-          'deleting the last complete detail returns the project to draft');
+          'delete project_deliverable returns the counted cascade and modes');
+select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000004'), 'complete',
+          'deleting a deliverable leaves the parent status');
 
--- experience + keep_projects: projects become standalone
-select is(public.delete_career_item('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'keep_projects', 'delete_results')
+-- writing chat delete: messages go, the project stays
+select is(public.delete_career_item('writing_chat', current_setting('t.c2')::uuid) ->> 'entity_type', 'writing_chat',
+          'delete writing_chat');
+select is((select count(*)::int from public.writing_chat_messages where writing_chat_id = current_setting('t.c2')::uuid), 0,
+          'chat messages cascaded');
+
+-- experience delete: projects and chats cascade (CR-15)
+select is(public.delete_career_item('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'delete_projects', 'delete_results')
             -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 1, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'delete experience (keep_projects, delete_results)');
+          '{"projects": 2, "project_deliverables": 0, "project_skills": 0, "writing_chats": 1}'::jsonb,
+          'delete experience');
 select is((select count(*)::int from public.projects
-            where id in ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000002')
-              and experience_id is null),
-          2, 'projects of the deleted experience remain standalone');
-select is((select count(*)::int from public.achievements where id = 'aaaaaaaa-5555-0000-0000-000000000004'), 0,
-          'experience-level achievement deleted');
+            where id in ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000002')), 0,
+          'projects of the deleted experience are gone');
+select is((select count(*)::int from public.writing_chats where id = current_setting('t.c1')::uuid), 0,
+          'their chats are gone');
 
--- project delete: details, achievements, tags; orphan tag skill removed, manual skill kept
-select is(public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001') -> 'cascade',
-          '{"projects": 0, "project_details": 1, "achievements": 0, "project_skills": 2, "writing_chats": 0}'::jsonb,
-          'delete project');
-select is((select count(*)::int from public.project_details where project_id = 'aaaaaaaa-3333-0000-0000-000000000001'),
-          0, 'project details cascaded');
+-- standalone project delete: deliverables, tags; orphan tag skill removed, manual skill kept
+select is(public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000004') -> 'cascade',
+          '{"projects": 0, "project_deliverables": 1, "project_skills": 2, "writing_chats": 0}'::jsonb,
+          'delete standalone project');
+select is((select count(*)::int from public.project_deliverables), 0, 'deliverables cascaded');
 select is((select count(*)::int from public.skills where id = 'aaaaaaaa-6666-0000-0000-000000000001'), 0,
           'tag-only skill removed once its project is deleted');
 select is((select count(*)::int from public.skills where id = 'aaaaaaaa-6666-0000-0000-000000000002'), 1,
           'manual skill kept');
 
--- education + delete_projects
-select is(public.delete_career_item('education', 'aaaaaaaa-2222-0000-0000-000000000001', 'delete_projects') -> 'cascade',
-          '{"projects": 1, "project_details": 1, "achievements": 0, "project_skills": 0, "writing_chats": 0}'::jsonb,
-          'delete education with delete_projects');
+-- education
+select is(public.delete_career_item('education', 'aaaaaaaa-2222-0000-0000-000000000001') -> 'cascade',
+          '{"projects": 1, "project_deliverables": 0, "project_skills": 0, "writing_chats": 1}'::jsonb,
+          'delete education');
 select is((select count(*)::int from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000003'), 0,
-          'education project deleted with delete_projects');
+          'education project deleted');
 
--- skill / achievement
+-- skill
 select is(public.delete_career_item('skill', 'aaaaaaaa-6666-0000-0000-000000000002') -> 'cascade',
-          '{"projects": 0, "project_details": 0, "achievements": 0, "project_skills": 1, "writing_chats": 0}'::jsonb,
+          '{"projects": 0, "project_deliverables": 0, "project_skills": 1, "writing_chats": 0}'::jsonb,
           'delete skill removes its links');
 select is((select count(*)::int from public.project_skills), 0, 'no links left');
-select is(public.delete_career_item('achievement', 'aaaaaaaa-5555-0000-0000-000000000003') ->> 'entity_type',
-          'achievement', 'delete achievement');
-select is((select count(*)::int from public.achievements), 0, 'achievement gone');
 
 reset role;
 select is((select count(*)::int from public.experiences where user_id = 'bbbbbbbb-0000-0000-0000-000000000002')
           + (select count(*)::int from public.projects where user_id = 'bbbbbbbb-0000-0000-0000-000000000002'),
           2, 'B''s rows untouched');
 
--- ── reorder_project_details ──────────────────────────────────────────────
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
-insert into public.projects (id, name, role) values ('aaaaaaaa-3333-0000-0000-000000000009', 'R', 'Dev');
-insert into public.project_details (id, project_id, title) values
-  ('aaaaaaaa-4444-0000-0000-000000000091', 'aaaaaaaa-3333-0000-0000-000000000009', 'one'),
-  ('aaaaaaaa-4444-0000-0000-000000000092', 'aaaaaaaa-3333-0000-0000-000000000009', 'two'),
-  ('aaaaaaaa-4444-0000-0000-000000000093', 'aaaaaaaa-3333-0000-0000-000000000009', 'three');
-
-reset role;
-alter table public.project_details disable trigger project_details_set_updated_at;
-update public.project_details set updated_at = '2000-01-01' where project_id = 'aaaaaaaa-3333-0000-0000-000000000009';
-alter table public.project_details enable trigger project_details_set_updated_at;
-set local role authenticated;
-
-select lives_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000093', 'aaaaaaaa-4444-0000-0000-000000000091',
-                          'aaaaaaaa-4444-0000-0000-000000000092']::uuid[])$$, 'reorder succeeds');
-set constraints all immediate;
-set constraints all deferred;
-select results_eq($$select title from public.project_details
-                     where project_id = 'aaaaaaaa-3333-0000-0000-000000000009' order by sort_order$$,
-                  array['three', 'one', 'two'], 'details follow the new order');
-select results_eq($$select sort_order::int from public.project_details
-                     where project_id = 'aaaaaaaa-3333-0000-0000-000000000009' order by sort_order$$,
-                  array[1, 2, 3], 'sort_order renumbered 1..n');
-select is((select count(*)::int from public.project_details
-            where project_id = 'aaaaaaaa-3333-0000-0000-000000000009' and updated_at = '2000-01-01'),
-          3, 'a pure reorder does not bump updated_at');
-
-select throws_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000093', 'aaaaaaaa-4444-0000-0000-000000000091']::uuid[])$$,
-                 'P0001', 'invalid_detail_order', 'missing id rejected');
-select throws_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000093', 'aaaaaaaa-4444-0000-0000-000000000093',
-                          'aaaaaaaa-4444-0000-0000-000000000091']::uuid[])$$,
-                 'P0001', 'invalid_detail_order', 'duplicate id rejected');
-select throws_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000093', 'aaaaaaaa-4444-0000-0000-000000000091',
-                          'aaaaaaaa-4444-0000-0000-000000000092', gen_random_uuid()]::uuid[])$$,
-                 'P0001', 'invalid_detail_order', 'foreign id rejected');
-select throws_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000093', null, 'aaaaaaaa-4444-0000-0000-000000000092']::uuid[])$$,
-                 'P0001', 'invalid_detail_order', 'null id rejected');
-select throws_ok($$select public.reorder_project_details('bbbbbbbb-3333-0000-0000-000000000001', '{}'::uuid[])$$,
-                 'P0001', 'career_item_not_found', 'cannot reorder B''s project');
-select lives_ok($$select public.reorder_project_details('aaaaaaaa-3333-0000-0000-000000000009',
-                    array['aaaaaaaa-4444-0000-0000-000000000091', 'aaaaaaaa-4444-0000-0000-000000000092',
-                          'aaaaaaaa-4444-0000-0000-000000000093']::uuid[])$$, 'second reorder in the same transaction');
-set constraints all immediate;
-select pass('deferred unique constraint holds after two reorders');
-set constraints all deferred;
-
 -- ── auth / role limits ───────────────────────────────────────────────────
+set local role authenticated;
 set local request.jwt.claims = '{"role":"authenticated"}';
 select throws_ok($$select public.get_deletion_impact('project', gen_random_uuid())$$,
                  '42501', 'not_authenticated', 'impact: no sub → not_authenticated');
-select throws_ok($$select public.reorder_project_details(gen_random_uuid(), '{}'::uuid[])$$,
+select throws_ok($$select public.reorder_project_deliverables(gen_random_uuid(), '{}'::uuid[])$$,
                  '42501', 'not_authenticated', 'reorder: no sub → not_authenticated');
 
 reset role;
@@ -222,8 +173,8 @@ select ok(not has_function_privilege('app_ai_writer', 'public.delete_career_item
           'app_ai_writer cannot execute delete_career_item');
 select ok(not has_function_privilege('app_ai_writer', 'public.get_deletion_impact(text, uuid, text)', 'execute'),
           'app_ai_writer cannot execute get_deletion_impact');
-select ok(not has_function_privilege('app_ai_writer', 'public.reorder_project_details(uuid, uuid[])', 'execute'),
-          'app_ai_writer cannot execute reorder_project_details');
+select ok(not has_function_privilege('app_ai_writer', 'public.reorder_project_deliverables(uuid, uuid[])', 'execute'),
+          'app_ai_writer cannot execute reorder_project_deliverables');
 set local role anon;
 select throws_ok($$select public.delete_career_item('project', gen_random_uuid())$$, '42501', null,
                  'anon cannot execute delete_career_item');

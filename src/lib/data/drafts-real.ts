@@ -232,17 +232,17 @@ export async function realFinalizeCoverLetterSection(sectionId: string, generati
 
 export async function realGetCareerSourceTree(): Promise<SourceTree> {
   const { supabase } = await requireConsentedUser()
-  const [experiences, educations, projects, details] = await Promise.all([
+  // R4 shim (DM v4.4): no project_details any more — the tree's project rows carry no detail children.
+  const [experiences, educations, projects] = await Promise.all([
     supabase.from("experiences").select("*"),
     supabase.from("educations").select("*"),
     supabase.from("projects").select("*"),
-    supabase.from("project_details").select("*"),
   ])
   return buildSourceTree({
     experiences: rowsOf(experiences),
     educations: rowsOf(educations),
     projects: rowsOf(projects),
-    project_details: rowsOf(details),
+    project_details: [],
   } as unknown as Pick<MockDb, "experiences" | "educations" | "projects" | "project_details">)
 }
 
@@ -299,7 +299,7 @@ async function loadSectionRows(supabase: UserSupabaseClient, view: DraftView): P
     // A stopped question isn't a failed one (S-19): back to what it was, its body and edit untouched. spec-gaps W3
     const stopped = s.status === "failed" && !!row.ai_job_id && canceled.has(row.ai_job_id)
     const status: DraftSection["status"] = stopped ? (blocksOf(row.ai_content)?.blocks.length ? "ready" : "pending") : s.status
-    return [{ ...publicSection(row), status, ai_content: blocksOf(row.ai_content), edited_content: blocksOf(row.edited_content), sources: sourceRows.filter((x) => x.draft_section_id === s.id).map((x) => ({ ...x, project_detail_ids: x.project_detail_ids ?? [], requirement_ids: x.requirement_ids ?? [] })) }]
+    return [{ ...publicSection(row), status, ai_content: blocksOf(row.ai_content), edited_content: blocksOf(row.edited_content), sources: sourceRows.filter((x) => x.draft_section_id === s.id).map((x) => ({ ...x, project_detail_ids: [], requirement_ids: x.requirement_ids ?? [] })) }]
   })
 }
 
@@ -389,7 +389,7 @@ export async function realDeleteDraftSection(sectionId: string): Promise<boolean
 }
 
 export async function realSetSectionSources(sectionId: string, selections: SourceSelection[]): Promise<DraftSectionSource[] | null> {
-  const result = await draftActions.setSectionSources({ sectionId, sources: selections.map((s) => ({ projectId: s.project_id, projectDetailIds: s.project_detail_ids })) })
+  const result = await draftActions.setSectionSources({ sectionId, sources: selections.map((s) => ({ projectId: s.project_id })) })
   if ("error" in result && result.error.code === "not_found") return null
   unwrap(result)
   const { supabase } = await requireConsentedUser()
@@ -412,7 +412,7 @@ const RANKING_GATE_CODES: readonly string[] = ["key_missing", "key_invalid"]
 export async function realRankDraftSources(applicationProjectId: string): Promise<{ project_ids: string[]; ranking: Array<{ project_id: string; relevance: "high" | "medium" | "low"; include: boolean }> }> {
   const { supabase, user } = await requireConsentedUser()
   // QA-W5-07: an unknown / foreign / malformed project is AppError `not_found` (never a provider failure).
-  if (!isUuid(applicationProjectId)) throw new AppError("not_found", "기업 JD를 찾을 수 없어요.", { status: 404 })
+  if (!isUuid(applicationProjectId)) throw new AppError("not_found", "자기소개서를 찾을 수 없어요.", { status: 404 })
   const outcome = await rankDraftSourcesForProject(createDraftAiDeps(supabase, user.id), applicationProjectId, { refresh: false })
   if (outcome.kind === "insufficient_data") throw new MockAiError("insufficient_data")
   const data = outcome.data

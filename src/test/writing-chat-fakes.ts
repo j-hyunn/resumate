@@ -29,10 +29,8 @@ export class MemoryChatDb implements TurnChatDb {
       createdAt: clock().toISOString(),
     };
     this.chat = {
-      mode: "new_project",
-      projectId: null,
-      experienceId: null,
-      educationId: null,
+      projectId: "00000000-0000-4000-8000-00000000a001",
+      title: null,
       status: "active",
       structuredDraft: parseStructuredDraft({}),
       // R1 A5: the greeting (sequence 1, no job) is not counted.
@@ -40,8 +38,8 @@ export class MemoryChatDb implements TurnChatDb {
       lastExtractedSequence: 0,
       returnTarget: null,
       lastActivityAt: clock().toISOString(),
+      lastAppliedAt: null,
       createdAt: clock().toISOString(),
-      savedAt: null,
       messages: [greeting],
       ...init,
     };
@@ -69,7 +67,7 @@ export class MemoryChatDb implements TurnChatDb {
   async appendUserMessage(chatId: string, content: string) {
     this.calls.push("appendUserMessage");
     this.fail("appendUserMessage");
-    if (this.chat.status !== "active") throw new AppError("writing_chat_not_active", undefined, { status: 409 });
+    if (this.chat.status !== "active") throw new AppError("writing_chat_closed", undefined, { status: 409 });
     // Keeps room for the reply (RPC: message_count > 38 → message_limit_reached).
     if (this.chat.messageCount > WRITING_CHAT_MESSAGE_LIMIT - 2) throw new AppError("message_limit_reached", undefined, { status: 409 });
     const sequence = Math.max(0, ...this.chat.messages.map((m) => m.sequence)) + 1;
@@ -136,6 +134,8 @@ export class MemoryChatDb implements TurnChatDb {
     if (!msg) throw new Error("no such message");
     msg.status = status;
     msg.content = content;
+    // DM 2.5 v4.4: a done reply that leaves no room for another turn closes the chat.
+    if (status === "done" && this.chat.messageCount > WRITING_CHAT_MESSAGE_LIMIT - 2) this.chat.status = "closed";
   }
 
   async applyAiPatch(chatId: string, patch: unknown): Promise<StructuredDraft> {
@@ -176,7 +176,7 @@ export function fakeWritingChatPipelines(seen: { reply: number; extract: number;
     },
     async extract(call) {
       const pending = call.snapshot.pendingUserMessages;
-      if (pending.length === 0) return { skipped: true, patch: null, processedThroughSequence: null };
+      if (pending.length === 0) return { skipped: true, patch: null, processedThroughSequence: null, flags: null };
       seen.extract += 1;
       const result = await call.llm.complete({
         feature: "AI-12.extract",
@@ -188,7 +188,30 @@ export function fakeWritingChatPipelines(seen: { reply: number; extract: number;
         signal: call.signal,
       });
       const parsed = JSON.parse(result.text) as unknown;
-      return { skipped: false, patch: parsed === null ? null : parsed, processedThroughSequence: Math.max(...pending.map((m) => m.sequence)) };
+      return {
+        skipped: false,
+        patch: parsed === null ? null : parsed,
+        processedThroughSequence: Math.max(...pending.map((m) => m.sequence)),
+        flags: flagsOf(parsed),
+      };
     },
+    async turnState() {
+      return { project: { star: { situation: null, task: null, action: null, result: null, learnings: null }, startMonth: null }, readyToReturn: false };
+    },
+  };
+}
+
+/** V-9-like flags from a scripted whole draft: needs_review STAR / period fields, its sensitive count. */
+function flagsOf(draft: unknown) {
+  const d = (draft ?? {}) as { project?: Record<string, { review?: string }>; star?: Record<string, { review?: string }>; sensitive_flags_count?: number };
+  const refs = (section: "project" | "star", fields: Record<string, { review?: string }> | undefined) =>
+    Object.entries(fields ?? {})
+      .filter(([, f]) => f?.review === "needs_review")
+      .map(([field]) => ({ section, field }));
+  return {
+    needsReview: [...refs("project", d.project), ...refs("star", d.star)],
+    actorAmbiguous: [],
+    sensitiveAdded: d.sensitive_flags_count ?? 0,
+    lengthFull: [],
   };
 }

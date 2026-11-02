@@ -73,13 +73,14 @@ export const AI02_JOB_TYPE = "insight";
 export { AI02_PROMPT_VERSION, AI02_MATCH_PROMPT_VERSION, AI02_SYNTHESIZE_PROMPT_VERSION };
 
 /**
- * [가정 S6-4] data_sufficiency `thin` = complete projects ≤ 2 or no
- * quantitative achievement (card example used as the rule).
+ * [가정] C-14 (v4.5, CR-11) data_sufficiency `thin` = complete projects ≤ 2,
+ * or no number anywhere in affiliated results, standalone descriptions, or the
+ * deliverable text that entered the pack (replaces "no quantitative achievement").
  */
 export const THIN_MAX_COMPLETE_PROJECTS = 2;
 export const THIN_HINTS = {
   fewProjects: "완료된 프로젝트가 2개 이하라 요건별 근거가 적을 수 있습니다.",
-  noQuantitative: "수치가 있는 성과가 없어 강점을 뒷받침할 근거가 약할 수 있습니다.",
+  noQuantitative: "결과/성과 서술에 수치가 없어 강점을 뒷받침할 근거가 약할 수 있습니다.",
 } as const;
 
 export type Ai02Deps = {
@@ -163,12 +164,10 @@ export function buildInsightContext(input: InsightContextInput): InsightContext 
 }
 
 /** Server-computed (card: "규칙 기반, 서버 계산"); counts only rows that made it into the pack. */
-export function computeDataSufficiency(rows: CareerRows, pack: CareerPack): InsightDataSufficiency {
-  const packAchievementIds = new Set([...pack.aliases.values()].filter((e) => e.sourceType === "achievement").map((e) => e.id));
-  const quantitative = rows.achievements.filter((a) => packAchievementIds.has(a.id) && a.kind === "quantitative").length;
+export function computeDataSufficiency(_rows: CareerRows, pack: CareerPack): InsightDataSufficiency {
   const hints: string[] = [];
   if (pack.counts.projects <= THIN_MAX_COMPLETE_PROJECTS) hints.push(THIN_HINTS.fewProjects);
-  if (quantitative === 0) hints.push(THIN_HINTS.noQuantitative);
+  if (!pack.hasResultNumbers) hints.push(THIN_HINTS.noQuantitative);
   return { level: hints.length ? "thin" : "ok", hints };
 }
 

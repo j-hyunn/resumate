@@ -10,7 +10,7 @@ import { escBlock, escLine } from "../drafts-common";
  * parallel calls share the cache (card 비용 "캐시 예열 시 공통 프리픽스").
  * The answer is a data block: instructions inside it are not followed (C-4).
  */
-export const AI06_PROMPT_VERSION = `ai-06.evaluate.v2+${COMMON_PROMPT_VERSION}`;
+export const AI06_PROMPT_VERSION = `ai-06.evaluate.v3+${COMMON_PROMPT_VERSION}`;
 
 export const AI06_SYSTEM = `이 기능: 모의 면접 답변 평가 (답변 1개)
 역할: 공정하고 구체적인 면접 코치. 후하게 평가하지 않습니다. 사람을 평가하지 않고 답변을 평가합니다.
@@ -42,14 +42,14 @@ ${PROFILE_PREFERENCE_RULE}
 - improvements: 개선할 점 1~3개. 행동 단위로 씁니다(text: 무엇을, how: 어떻게 말해 볼지). related_criteria를 답니다. 경력 데이터를 활용하라고 제안할 때는 evidence에 그 근거를 답니다.
 - intent_reveal: "이 질문은 ~를 확인하려는 질문이었습니다" 한 문장.
 - model_answer(개선 답변 예시): 답변과 <career_data>에 있는 사실만으로 다시 구성합니다.
-  - 직무: 상세 내용의 상황 → 행동 → 결과 흐름. 사실(행동·수치)은 action, result, 성과에서만 가져오고 evidence에 답니다. learnings는 근거로 쓰지 않습니다.
+  - 직무: 프로젝트 STAR의 상황 → 행동 → 결과/성과 흐름. 사실(행동·수치)은 경력·교육 안 프로젝트의 action·result 또는 독립 프로젝트의 description·산출물 body에서만 가져오고 evidence에 답니다. learnings는 근거로 쓰지 않습니다.
   - 컬처핏: 답변 속 사례를 중심으로. 마지막 회고 문장에는 learnings를 회고로 쓸 수 있습니다("~를 배웠습니다").
   - 숫자는 답변이나 데이터에 같은 값으로 있는 것만 씁니다. 데이터 밖 내용은 본문에 쓰지 않고 suggestions_if_true("이런 사례가 있다면 넣으세요")로 분리합니다.
   - 구체 사례가 답변·데이터 어디에도 없으면 [사례 입력 필요]를, 수치가 필요한데 없으면 [수치 입력 필요]를 쓰고 placeholders에 {token, hint}를 넣습니다.
   - 답변 인용 근거는 {source_type: "interview_answer", ref: "ANS-1", field: null, quote: 답변 원문 그대로}입니다.
-- consistency_notes: <task>가 허용할 때만. 답변이 <career_data>의 사실(상세 내용의 행동·결과·성과, 프로젝트 역할·팀 규모)과 다르면 알려 줍니다. 거짓말로 단정하지 않고 "등록된 데이터와 다릅니다. 확인해 보세요"처럼 씁니다. evidence에 비교한 경력 근거를, answer_quotes에 해당 답변 구간을 답니다. learnings와 다른 해석은 대상이 아닙니다. 허용하지 않으면 빈 배열입니다.
+- consistency_notes: <task>가 허용할 때만. 답변이 <career_data>의 사실(경력·교육 안 프로젝트의 행동·결과/성과, 독립 프로젝트의 내용·산출물)과 다르면 알려 줍니다. 거짓말로 단정하지 않고 "등록된 데이터와 다릅니다. 확인해 보세요"처럼 씁니다. evidence에 비교한 경력 근거를, answer_quotes에 해당 답변 구간을 답니다. learnings와 다른 해석은 대상이 아닙니다. 허용하지 않으면 빈 배열입니다.
 - score: 항상 {status: "pending_method", value: null, max: null, method_version: null, rationale: null}.
-- 별칭(EXP-1, PRJ-2, DET-3, REQ-1, ANS-1, Q-1)은 ref·evidence에만 쓰고 문장에는 쓰지 않습니다.`;
+- 별칭(EXP-1, PRJ-2, DLV-3, REQ-1, ANS-1, Q-1)은 ref·evidence에만 쓰고 문장에는 쓰지 않습니다.`;
 
 export function systemBlocks(): AiTextBlock[] {
   return [commonSystemBlock(), { text: AI06_SYSTEM, cache: true }];

@@ -15,12 +15,11 @@ select lives_ok($$select set_config('t.jd', public.create_application_project('a
                 'authenticated: create_application_project');
 select lives_ok($$insert into public.experiences (id, company_name, start_month, job_rank)
                    values ('aaaaaaaa-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S')$$, 'authenticated: experience');
-select lives_ok($$insert into public.projects (id, experience_id, name, role)
-                   values ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', '결제', 'Dev')$$,
+select lives_ok($$insert into public.projects (id, experience_id, name, situation, action)
+                   values ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', '결제', 's', 'a')$$,
                 'authenticated: project');
-select lives_ok($$insert into public.project_details (id, project_id, title, situation, action)
-                   values ('aaaaaaaa-4444-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000001', 't', 's', 'a')$$,
-                'authenticated: detail');
+select lives_ok($$update public.projects set task = 't' where id = 'aaaaaaaa-3333-0000-0000-000000000001'$$,
+                'authenticated: STAR update');
 select lives_ok($$select * from public.drafts$$, 'authenticated: select drafts (empty)');
 
 -- cover letter editing (no key)
@@ -93,8 +92,8 @@ select is(public.complete_cover_letter_section(current_setting('t.q')::uuid, 'aa
                 jsonb_build_object('item_key', 'q1-p1', 'sort_order', 1, 'source_type', 'jd_sentence',
                                    'source_id', current_setting('t.jd'), 'source_field', null,
                                    'source_locator', '{"sid":"S1","start":0,"end":9}'::jsonb),
-                jsonb_build_object('item_key', 'sources.0', 'sort_order', 0, 'source_type', 'project_detail',
-                                   'source_id', 'aaaaaaaa-4444-0000-0000-000000000001', 'source_field', 'action'))))
+                jsonb_build_object('item_key', 'sources.0', 'sort_order', 0, 'source_type', 'project',
+                                   'source_id', 'aaaaaaaa-3333-0000-0000-000000000001', 'source_field', 'action'))))
             ->> 'evidence_count', '3', 'app_ai_writer: complete_cover_letter_section (user mode)');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000003', 1)$$, 'app_ai_writer: complete job');
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
@@ -127,7 +126,7 @@ select is(public.complete_career_description('aaaaaaaa-eeee-0000-0000-0000000000
               'meta', '{"schema_version":1,"prompt_version":"pv","provider":"anthropic","model":"claude-sonnet-5-5",
                         "model_tier":"default","connection_tier":"paid"}'::jsonb,
               'evidence', jsonb_build_array(jsonb_build_object('section_id', current_setting('t.s'), 'item_key', 'p1-b1',
-                'sort_order', 0, 'source_type', 'project_detail', 'source_id', 'aaaaaaaa-4444-0000-0000-000000000001',
+                'sort_order', 0, 'source_type', 'project', 'source_id', 'aaaaaaaa-3333-0000-0000-000000000001',
                 'source_field', 'action'))))
             ->> 'evidence_count', '1', 'app_ai_writer: complete_career_description');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000005', 1)$$, 'app_ai_writer: complete job');
@@ -153,7 +152,7 @@ select is((public.get_deletion_impact('project', 'aaaaaaaa-3333-0000-0000-000000
           '{"drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
             "application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000001"}'::jsonb,
           'authenticated: get_deletion_impact counts drafts / questions');
-select lives_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001', 'keep_projects', 'delete_results')$$,
+select lives_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,
                 'authenticated: delete_career_item(delete_results)');
 select is((select count(*)::int from public.drafts where draft_type = 'career_description' and status = 'ready'), 0,
           'career description removed with its citation');

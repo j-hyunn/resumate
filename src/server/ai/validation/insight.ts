@@ -24,7 +24,7 @@ import { emptyReport, mergeReports, type ValidationReport } from "./report";
  *   per requirement (duplicates dropped, missing ones filled as no_evidence
  *   [가정 S6-2]) → V-1/V-2/V-3/V-8 per evidence (learnings forbidden, C-9) →
  *   V-4 (met/partial with no career evidence → no_evidence) → met rule (no
- *   detail action/result and no achievement → partial) → V-5 replacement in
+ *   affiliated action/result, standalone description or deliverable body → partial) → V-5 replacement in
  *   rationale / missing_aspect (no regeneration at this stage, see notes).
  *
  * Stage 2 (finalize, after the synthesize call and its V-5 regeneration):
@@ -99,7 +99,7 @@ function isCareerFact(e: ValidatedEvidence): boolean {
   return isCareerSupportEvidence(e) && !isReflectionEvidence(e);
 }
 
-/** Card 가드레일: `met` needs a detail action/result or an achievement among its evidence. */
+/** Card 가드레일 (v4.5): `met` needs an affiliated action/result, a standalone description, or a deliverable body among its evidence. */
 export function supportsMet(evidence: readonly ValidatedEvidence[]): boolean {
   return evidence.some(isActionResultEvidence);
 }

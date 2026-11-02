@@ -21,12 +21,13 @@ describe("runRetentionCron (NFR-PRV-06, DM §4.4)", () => {
   const now = new Date("2026-11-04T18:00:00.000Z");
 
   it("calls each purge RPC in order with p_now / p_limit and returns counts", async () => {
-    const admin = fakeAdmin({ purge_unlinked_writing_chats: [2], purge_old_ai_jobs: [0], purge_old_ai_usage_records: [0], purge_old_account_deletion_logs: [1] });
+    const admin = fakeAdmin({ purge_old_ai_jobs: [0], purge_old_ai_usage_records: [0], purge_old_account_deletion_logs: [1] });
     const logs: string[] = [];
     const result = await runRetentionCron(admin.client, now, (e, f) => void logs.push(JSON.stringify({ e, ...f })));
     expect(admin.calls.map((c) => c.name)).toEqual(RETENTION_PURGES.map((p) => p.rpc));
     for (const c of admin.calls) expect(c.args).toEqual({ p_now: now.toISOString(), p_limit: RETENTION_BATCH_LIMIT });
-    expect(result).toEqual({ deleted: { unlinkedWritingChats: 2, aiJobs: 0, aiUsageRecords: 0, accountDeletionLogs: 1 }, hasMore: [], failed: [] });
+    expect(admin.calls.map((c) => c.name)).not.toContain("purge_unlinked_writing_chats");
+    expect(result).toEqual({ deleted: { aiJobs: 0, aiUsageRecords: 0, accountDeletionLogs: 1 }, hasMore: [], failed: [] });
     expect(logs).toHaveLength(1);
   });
 
@@ -41,10 +42,10 @@ describe("runRetentionCron (NFR-PRV-06, DM §4.4)", () => {
   });
 
   it("keeps going after one purge fails, then throws internal_error", async () => {
-    const admin = fakeAdmin({ purge_unlinked_writing_chats: [1], purge_old_ai_jobs: [new Error("boom")], purge_old_ai_usage_records: [3], purge_old_account_deletion_logs: [0] });
+    const admin = fakeAdmin({ purge_old_ai_jobs: [new Error("boom")], purge_old_ai_usage_records: [3], purge_old_account_deletion_logs: [0] });
     const logs: string[] = [];
     await expect(runRetentionCron(admin.client, now, (e, f) => void logs.push(JSON.stringify({ e, ...f })))).rejects.toMatchObject({ code: "internal_error" });
-    expect(admin.calls).toHaveLength(4);
+    expect(admin.calls).toHaveLength(3);
     expect(logs[0]).toContain('"failed":["aiJobs"]');
     expect(logs[0]).not.toContain("boom");
   });

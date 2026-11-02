@@ -16,7 +16,8 @@ declare
   exp uuid := gen_random_uuid();
   edu uuid := gen_random_uuid();
   prj uuid := gen_random_uuid();
-  det uuid := gen_random_uuid();
+  prj2 uuid := gen_random_uuid();
+  dlv uuid := gen_random_uuid();
   skl uuid := gen_random_uuid();
   chat uuid := gen_random_uuid();
   ap uuid := gen_random_uuid();
@@ -37,11 +38,12 @@ begin
   -- S2 career
   insert into public.experiences (id, user_id, company_name, start_month, job_rank) values (exp, u, 'A사', '2020-01-01', 'S');
   insert into public.educations (id, user_id, institution_name) values (edu, u, 'B대');
-  insert into public.projects (id, user_id, experience_id, name, role) values (prj, u, exp, '결제', 'Dev');
-  insert into public.project_details (id, user_id, project_id, sort_order, title) values (det, u, prj, 1, 't');
-  insert into public.achievements (user_id, project_detail_id, description) values (u, det, 'd');
+  -- R4 (DM v4.4): an affiliated project (STAR) and a standalone one (deliverable + skill).
+  insert into public.projects (id, user_id, experience_id, name, situation, action) values (prj, u, exp, '결제', 's', 'a');
+  insert into public.projects (id, user_id, name, role, description) values (prj2, u, '사이드', 'Dev', 'd');
+  insert into public.project_deliverables (id, user_id, project_id, sort_order, title, body) values (dlv, u, prj2, 1, 't', 'b');
   insert into public.skills (id, user_id, name) values (skl, u, 'Kafka');
-  insert into public.project_skills (user_id, project_id, skill_id) values (u, prj, skl);
+  insert into public.project_skills (user_id, project_id, skill_id) values (u, prj2, skl);
   -- S3b keys / AI consent
   insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version)
     values (u, 'gemini', 'paid', coalesce(disclosure, 'v2026-10-29'));
@@ -54,8 +56,8 @@ begin
     values (job_live, u, 'writing_chat_turn', 'gemini', 'default', 'paid', 'running', 'writing_chat', chat, now(), now());
   insert into public.ai_usage_records (user_id, ai_job_id, feature, job_type, provider, model, model_tier, connection_tier, usage_source, outcome, price_table_version, estimated_cost_usd)
     values (u, job_done, 'key_verification', 'key_verification', 'gemini', 'gm', 'light', 'paid', 'unavailable', 'succeeded', 'p1', 0);
-  -- S4 writing chat (unlinked)
-  insert into public.writing_chats (id, user_id, mode) values (chat, u, 'new_project');
+  -- S4 writing chat (R4: bound to the affiliated project)
+  insert into public.writing_chats (id, user_id, project_id) values (chat, u, prj);
   insert into public.writing_chat_messages (user_id, writing_chat_id, sequence, role, content) values (u, chat, 1, 'user', '안녕');
   -- S5 application project / JD
   insert into public.application_projects (id, user_id, name, name_source) values (ap, u, '에이', 'user');
@@ -67,7 +69,7 @@ begin
   -- S6 insight + evidence
   insert into public.insights (id, user_id, application_project_id, version_no) values (ins, u, ap, 1);
   insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
-    values (u, ap, 'insight', ins, 'k', 'project_detail', det, 'title');
+    values (u, ap, 'insight', ins, 'k', 'project', prj, 'action');
   -- S7 drafts
   insert into public.drafts (id, user_id, application_project_id, draft_type, title, status) values (drf, u, ap, 'career_description', '경력기술서', 'generating');
   insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, experience_id) values (sec, u, drf, 0, 'experience', exp);

@@ -13,8 +13,8 @@ export type AccountDeletionSummary = {
     experiences: number;
     educations: number;
     projects: number;
-    projectDetails: number;
-    achievements: number;
+    /** DM v4.4 (CR-8); project details / achievements are gone. */
+    projectDeliverables: number;
     skills: number;
     writingChats: number;
   };

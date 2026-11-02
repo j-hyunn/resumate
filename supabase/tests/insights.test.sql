@@ -21,10 +21,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
-insert into public.projects (id, experience_id, name, role, summary)
-  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 'Dev', '결제 플랫폼');
-insert into public.project_details (id, project_id, title, situation, action, result)
-  values ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't', 's', '인덱스 재설계', 'r');
+insert into public.projects (id, experience_id, name, situation, action, result)
+  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 's', '인덱스 재설계', 'r');
 insert into public.skills (id, name) values ('a0000000-6666-0000-0000-000000000001', 'Postgres');
 reset role;
 
@@ -79,7 +77,7 @@ insert into t_payload values ('{
   "unknown_top_level": true,
   "evidence": [
     {"item_key": "requirement_matches.a0000000-8888-0000-0000-000000000001", "sort_order": 0,
-     "source_type": "project_detail", "source_id": "a0000000-4444-0000-0000-000000000001", "source_field": "action",
+     "source_type": "project", "source_id": "a0000000-3333-0000-0000-000000000001", "source_field": "action",
      "quote": "인덱스 재설계", "quote_adjusted": false, "source_locator": null, "source_snapshot_at": null,
      "source_label": "결제 / t"},
     {"item_key": "requirement_matches.a0000000-8888-0000-0000-000000000001", "sort_order": 1,
@@ -240,7 +238,7 @@ select results_eq($$select item_key, sort_order, source_type, source_field, quot
                     ('strengths.0', 1, 'skill', 'name', null, true, null,
                      'insight', current_setting('t.i1'), 'a0000000-aaaa-0000-0000-000000000001',
                      'a0000000-0000-0000-0000-000000000001', true, null),
-                    ('requirement_matches.a0000000-8888-0000-0000-000000000001', 0, 'project_detail', 'action',
+                    ('requirement_matches.a0000000-8888-0000-0000-000000000001', 0, 'project', 'action',
                      '인덱스 재설계', false, null,
                      'insight', current_setting('t.i1'), 'a0000000-aaaa-0000-0000-000000000001',
                      'a0000000-0000-0000-0000-000000000001', true, '결제 / t'),

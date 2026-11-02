@@ -234,7 +234,7 @@ select is(public.apply_jd_extraction(current_setting('t.jd6')::uuid, 'a0000000-7
             'gemini', 'm')
             - 'job_description_id' - 'application_project_id' - 'extraction_status',
           jsonb_build_object('applied', true, 'requirement_count', 1,
-            'name', '새 기업 JD (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')', 'name_source', 'default',
+            'name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')', 'name_source', 'default',
             'company_name', null, 'company_name_source', null, 'position_title', null, 'position_title_source', null),
           'unknown / missing sids drop company and position; name falls back to default');
 
@@ -248,7 +248,7 @@ select is(public.fail_jd_extraction(current_setting('t.jd4')::uuid, gen_random_u
 select is(public.fail_jd_extraction(current_setting('t.jd4')::uuid, 'a0000000-7777-0000-0000-000000000004'), true, 'fail recorded');
 select is((select extraction_status from public.job_descriptions where id = current_setting('t.jd4')::uuid), 'failed', 'P4 failed');
 select is((select array[name, name_source] from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000004'),
-          array['새 기업 JD (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')', 'default'],
+          array['새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')', 'default'],
           'failed extraction gives the null name the default name [가정 1]');
 select is(public.fail_jd_extraction(current_setting('t.jd4')::uuid, 'a0000000-7777-0000-0000-000000000004'), false,
           'second fail is a no-op');

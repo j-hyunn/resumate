@@ -1,27 +1,22 @@
-import type {
-  AchievementOutput,
-  Ai12ExtractOutput,
-  ClarificationOutput,
-  DetailPatch,
-  ProjectPatch,
-  SensitiveCategory,
-  SkillOutput,
-} from "../schemas/AI-12";
+import { isCompetency, isExperienceType, isProjectType, MAX_COMPETENCIES, type ClassificationField } from "../classification";
+import type { Ai12ExtractOutput, ClarificationOutput, ClassificationSuggestions, SensitiveCategory, StarPatch } from "../schemas/AI-12";
 import {
+  CLASSIFICATION_REASON_MAX,
   DRAFT_PATCH_MAX_QUOTE_LENGTH,
+  STAR_FIELD_MAX_LENGTH,
   emptyDraftChanges,
   hasValue,
+  isPending,
   isProtected,
-  type AchievementField,
-  type AffiliationType,
   type Clarification,
-  type DetailField,
-  type DraftField,
+  type ClassificationChange,
   type DraftChanges,
-  type DraftPatchField,
   type FieldRef,
-  type PatchFieldObject,
-  type ProjectField,
+  type PeriodChange,
+  type PeriodField,
+  type StarChange,
+  type StarField,
+  type StarOp,
   type StructuredDraft,
 } from "../schemas/structured-draft";
 import { normalizeForMatch, originalSpan } from "./normalize";
@@ -42,44 +37,33 @@ import {
 } from "./v9-lexicon";
 
 /**
- * AI-12 V-9 (발화 추적, 날조 0건 장치) — AI spec AI-12 "서버 검증 V-9".
- * Every value the extract call proposes must trace to what the user said:
+ * AI-12 V-9 (발화 추적, 날조 0건 장치) — AI spec v4.5 AI-12 "서버 검증 V-9",
+ * one project, one STAR (CR-2):
  *
  * | # | check | on failure |
  * |---|-------|------------|
- * | V-9a | sources are this chat's `role = 'user'` messages | reject |
+ * | V-9a | sources are this chat's `role = 'user'` messages; not only delegation requests | reject |
  * | V-9b | each quote is a substring of a cited message (normalized) | reject |
  * | V-9c | every number (with unit) / month in the value is in the quotes | reject |
  * | V-9d | English tokens, dictionary skills, company names are in the cited messages | reject |
  * | V-9e | ≤ 40% of the value's content words are missing from the quotes | needs_review |
- * | V-9f | `action` whose subject is the team | actor_ambiguous + situation candidate |
+ * | V-9f | `action` whose subject is the team | actor_ambiguous (+ situation candidate) |
  * | V-9g | sensitive information | reject + sensitive count |
- * | V-9h | augment: target column already filled / unknown DET-n | reject (RPC enforces too) |
+ * | V-9h | STAR field filled on the project → `append` only; period only when the project column is empty | reject (RPC enforces too) |
+ * | V-9i | classification: key list, ≤ 3 distinct competencies, target empty, user sources, situation + action present | drop (classification is not a claim) |
  *
+ * Plus C-14: ≤ 10 patches per turn, merged STAR value ≤ 2,000 chars.
  * Pure functions only. Results carry counts and field paths, never text (C-7).
  */
 
 /** [가정] AI-12 V-9e: share of content words missing from the quotes above which a value needs review. */
 export const V9E_MAX_UNCOVERED_RATIO = 0.4;
 
-/** Length limits from the target columns (DM 2.3); name/role have no DB limit, 100 is [가정]. */
-export const FIELD_MAX_LENGTH: Readonly<Record<string, number>> = {
-  name: 100,
-  role: 100,
-  summary: 200,
-  title: 100,
-  situation: 2000,
-  task: 2000,
-  action: 2000,
-  result: 2000,
-  learnings: 2000,
-  metric_name: 200,
-  unit: 50,
-  skill: 50,
-};
+/** [가정] C-14 "턴당 패치 ≤ 10개" (period + STAR patches; classification is separate). */
+export const MAX_PATCHES_PER_TURN = 10;
 
-/** team_size is a smallint; anything outside this range is not a team. */
-export const TEAM_SIZE_MAX = 10_000;
+/** Separator the merge uses between the current value and appended text (DM 3.3: "줄바꿈 1개"). */
+export const APPEND_SEPARATOR_LENGTH = 1;
 
 export type V9Check =
   | "V-9a"
@@ -89,12 +73,11 @@ export type V9Check =
   | "V-9d"
   | "V-9g"
   | "V-9h"
+  | "V-9i"
   | "protected"
-  | "target"
   | "type"
   | "length"
-  | "ref"
-  | "declined";
+  | "limit";
 
 export const V9_CHECKS: readonly V9Check[] = [
   "V-9a",
@@ -104,18 +87,17 @@ export const V9_CHECKS: readonly V9Check[] = [
   "V-9d",
   "V-9g",
   "V-9h",
+  "V-9i",
   "protected",
-  "target",
   "type",
   "length",
-  "ref",
-  "declined",
+  "limit",
 ];
 
 export type V9Report = {
-  /** Patch items the model proposed (fields, achievements, skills, affiliation). */
+  /** Patches and classification suggestions the model proposed. */
   proposed: number;
-  /** Items in the outgoing patch. */
+  /** Items in the outgoing patch (period + STAR + classification). */
   applied: number;
   /** Applied fields marked needs_review (V-9e, V-9f candidates). */
   needs_review: number;
@@ -139,29 +121,38 @@ export type V9Message = {
   content: string;
 };
 
+/** The chat's project as it is now (re-read every turn; the user may edit or apply in between). */
+export type V9Project = {
+  star: Readonly<Record<StarField, string | null>>;
+  startMonth: string | null;
+  endMonth: string | null;
+  isCurrent: boolean;
+  projectType: string | null;
+  experienceType: string | null;
+  competencies: readonly string[];
+};
+
 export type V9Context = {
-  mode: "new_project" | "augment_project";
   /** Messages in this call (status = 'done'), keyed by alias (`M{sequence}`). */
   messages: ReadonlyMap<string, V9Message>;
   /** User messages this extract is for (sequence > last_extracted_sequence). Sensitive counts only count these. */
   pendingAliases: ReadonlySet<string>;
-  /** augment_project: target project id and its already filled columns (V-9h). */
-  existingProject: { id: string; filled: ReadonlySet<ProjectField> } | null;
-  /** augment_project: DET-n → existing detail id and its filled columns (V-9h). */
-  existingDetails: ReadonlyMap<string, { id: string; filled: ReadonlySet<DetailField> }>;
-  /** EXP-n / EDU-n → candidate. */
-  candidates: ReadonlyMap<string, { type: AffiliationType; id: string; names: readonly string[] }>;
+  project: V9Project;
   draft: StructuredDraft;
-  /** writing_chats.experience_id / education_id already set (suggestions are then pointless). */
-  affiliationConfirmed: boolean;
-  /** Candidate ids the user declined ([아니요]) in this chat, if the runner knows them. Never re-suggested. */
-  declinedAffiliationIds: ReadonlySet<string>;
+};
+
+export type V9Flags = {
+  needsReview: FieldRef[];
+  actorAmbiguous: FieldRef[];
+  sensitiveAdded: number;
+  /** STAR fields whose append was rejected because the merged value would pass 2,000 chars (C-14). */
+  lengthFull: StarField[];
 };
 
 export type V9Result = {
   /** Validated changes (UUIDs); `toDraftPatch` makes the RPC ops. */
   changes: DraftChanges;
-  flags: { needsReview: FieldRef[]; actorAmbiguous: FieldRef[]; sensitiveAdded: number };
+  flags: V9Flags;
   report: V9Report;
   rejections: V9Rejection[];
 };
@@ -429,88 +420,65 @@ export function detectSensitive(text: string): SensitiveCategory[] {
 // Whole-output validation
 // ---------------------------------------------------------------------------
 
-type ClaimKind = "text" | "month" | "team_size" | "number";
+type ClaimKind = "text" | "month";
 
 type ClaimOk = { ok: true; sourceIds: string[]; quotes: string[]; review: "ok" | "needs_review" };
 type ClaimFail = { ok: false; check: V9Check; sensitive?: { aliases: string[]; categories: SensitiveCategory[] } };
 
-/**
- * Runs V-9a → V-9b → V-9g → V-9c → V-9d → V-9e on one value.
- * `nameCheck` is off for numeric values.
- */
-function checkClaim(
-  value: string | number,
-  kind: ClaimKind,
-  rawIds: readonly string[],
-  rawQuotes: readonly string[],
-  ctx: V9Context,
-  options: { overlap?: boolean; units?: readonly string[] } = {},
-): ClaimOk | ClaimFail {
+/** Runs V-9a → V-9b → V-9g → V-9c → V-9d → V-9e on one value. */
+function checkClaim(value: string, kind: ClaimKind, rawIds: readonly string[], rawQuotes: readonly string[], ctx: V9Context): ClaimOk | ClaimFail {
   const a = checkSources(rawIds, ctx.messages);
   if (!a.ok) return { ok: false, check: a.check };
   const b = checkQuotes(rawQuotes, a.sources);
   if (!b.ok) return { ok: false, check: "V-9b" };
-  const text = String(value);
-  const sensitive = [...detectSensitive(text), ...b.quotes.flatMap(detectSensitive)];
+  const sensitive = [...detectSensitive(value), ...b.quotes.flatMap(detectSensitive)];
   if (sensitive.length > 0) {
     return { ok: false, check: "V-9g", sensitive: { aliases: a.sources.map((s) => s.alias), categories: [...new Set(sensitive)] } };
   }
-  const numbersOk =
-    kind === "month"
-      ? checkMonthValue(text, b.quotes)
-      : kind === "team_size"
-        ? checkNumberValue(Number(value), b.quotes, ["명", "인"])
-        : kind === "number"
-          ? checkNumberValue(Number(value), b.quotes, options.units)
-          : checkTextNumbers(text, b.quotes);
+  const numbersOk = kind === "month" ? checkMonthValue(value, b.quotes) : checkTextNumbers(value, b.quotes);
   if (!numbersOk) return { ok: false, check: "V-9c" };
-  if (kind === "text" && findUnsupportedNames(text, a.sources.map((s) => s.content)).length > 0) {
+  if (kind === "text" && findUnsupportedNames(value, a.sources.map((s) => s.content)).length > 0) {
     return { ok: false, check: "V-9d" };
   }
-  const review =
-    kind === "text" && options.overlap !== false && uncoveredRatio(text, b.quotes) > V9E_MAX_UNCOVERED_RATIO
-      ? "needs_review"
-      : "ok";
+  const review = kind === "text" && uncoveredRatio(value, b.quotes) > V9E_MAX_UNCOVERED_RATIO ? "needs_review" : "ok";
   return { ok: true, sourceIds: a.sources.map((s) => s.id), quotes: b.quotes, review };
 }
 
-type DetailTarget = { detail_key: string | null; existing_detail_id: string | null; label: string };
-
-const DETAIL_KEY = /^D\d{1,3}$/;
-
-function fieldKey(target: "project" | "detail", t: DetailTarget | null, field: string): string {
-  return `${target}|${t?.detail_key ?? ""}|${t?.existing_detail_id ?? ""}|${field}`;
-}
-
-function sameTarget(a: { detail_key: string | null; existing_detail_id: string | null }, b: DetailTarget): boolean {
-  return b.existing_detail_id ? a.existing_detail_id === b.existing_detail_id : a.existing_detail_id === null && a.detail_key === b.detail_key;
+function filledText(v: string | null | undefined): boolean {
+  return typeof v === "string" && v.trim() !== "";
 }
 
 function clarKey(c: Clarification): string {
-  return `${c.kind}|${c.field ?? ""}|${c.detail_key ?? ""}|${c.existing_detail_id ?? ""}`;
+  return `${c.kind}|${c.field ?? ""}`;
+}
+
+/**
+ * Length the STAR field would have if the project's current value and the
+ * pending proposal were both applied (DM 3.3 merge: current + separator + proposal).
+ */
+export function mergedStarLength(field: StarField, project: V9Project, draft: StructuredDraft): number {
+  const current = (project.star[field] ?? "").trim().length;
+  const pending = isPending(draft.star[field]) ? (draft.star[field]!.value ?? "").length : 0;
+  return current + (current > 0 && pending > 0 ? APPEND_SEPARATOR_LENGTH : 0) + pending;
+}
+
+/** Room left for appended text in a STAR field (C-14), separator included. Negative = already over. */
+export function remainingStarChars(field: StarField, project: V9Project, draft: StructuredDraft): number {
+  const used = mergedStarLength(field, project, draft);
+  return STAR_FIELD_MAX_LENGTH - used - (used > 0 ? APPEND_SEPARATOR_LENGTH : 0);
 }
 
 export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context): V9Result {
-  const patch = emptyDraftChanges();
+  const changes = emptyDraftChanges();
   const rejections: V9Rejection[] = [];
   const byCheck = Object.fromEntries(V9_CHECKS.map((c) => [c, 0])) as Record<V9Check, number>;
-  const report: V9Report = {
-    proposed: 0,
-    applied: 0,
-    needs_review: 0,
-    rejected: 0,
-    by_check: byCheck,
-    actor_ambiguous: 0,
-    sensitive_added: 0,
-    unchanged: 0,
-  };
-  const needsReview: FieldRef[] = [];
-  const actorAmbiguous: FieldRef[] = [];
+  const report: V9Report = { proposed: 0, applied: 0, needs_review: 0, rejected: 0, by_check: byCheck, actor_ambiguous: 0, sensitive_added: 0, unchanged: 0 };
+  const flags: V9Flags = { needsReview: [], actorAmbiguous: [], sensitiveAdded: 0, lengthFull: [] };
   const newClarifications: Clarification[] = [];
   const sensitiveKeys = new Set<string>();
-  /** Field objects in this patch, keyed by target + field (later set wins, append merges). */
-  const fieldIndex = new Map<string, DraftPatchField>();
-  const knownDetailKeys = new Set(ctx.draft.details.filter((d) => d.existing_detail_id === null && d.detail_key).map((d) => d.detail_key!));
+  /** Fields this turn sets or appends to (V-9f situation candidate, V-9i situation/action presence). */
+  const touched = new Map<StarField, StarChange>();
+  let patches = 0;
 
   const reject = (check: V9Check, target: string, sensitive?: ClaimFail["sensitive"]) => {
     report.rejected++;
@@ -521,410 +489,247 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
   const countSensitive = (alias: string, category: SensitiveCategory) => {
     if (ctx.pendingAliases.has(alias)) sensitiveKeys.add(`${alias}|${category}`);
   };
+  const projectHas = (field: StarField) => filledText(ctx.project.star[field]);
 
-  const ensureDetailKey = (key: string) => {
-    if (!knownDetailKeys.has(key)) {
-      knownDetailKeys.add(key);
-      patch.new_details.push({ detail_key: key });
-    }
-  };
-
-  const resolveDetail = (detailKey: string | null, detailRef: string | null): DetailTarget | { error: V9Check } => {
-    if ((detailKey === null) === (detailRef === null)) return { error: "target" };
-    if (detailRef !== null) {
-      const existing = ctx.existingDetails.get(detailRef.trim());
-      if (ctx.mode !== "augment_project" || !existing) return { error: "V-9h" };
-      return { detail_key: null, existing_detail_id: existing.id, label: detailRef.trim() };
-    }
-    const key = detailKey!.trim().toUpperCase();
-    if (!DETAIL_KEY.test(key)) return { error: "target" };
-    return { detail_key: key, existing_detail_id: null, label: key };
-  };
-
-  const draftFieldOf = (target: "project" | "detail", t: DetailTarget | null, field: string): DraftField | undefined => {
-    if (target === "project") return ctx.draft.project[field as ProjectField];
-    const detail = ctx.draft.details.find((d) => sameTarget(d, t!));
-    return detail?.fields[field as DetailField];
-  };
-
-  const existingFilled = (target: "project" | "detail", t: DetailTarget | null, field: string): boolean => {
-    if (ctx.mode !== "augment_project") return false;
-    if (target === "project") return !!ctx.existingProject?.filled.has(field as ProjectField);
-    if (!t?.existing_detail_id) return false;
-    for (const d of ctx.existingDetails.values()) if (d.id === t.existing_detail_id) return d.filled.has(field as DetailField);
-    return false;
-  };
-
-  /** Puts one validated field into the patch, merging `append` with the current value. */
-  const putField = (
-    target: "project" | "detail",
-    t: DetailTarget | null,
-    field: ProjectField | DetailField,
-    op: "set" | "append",
-    value: string | number,
-    claim: ClaimOk,
-    path: string,
-  ): boolean => {
-    const key = fieldKey(target, t, field);
-    const pending = fieldIndex.get(key);
-    const current = draftFieldOf(target, t, field);
-    let next: PatchFieldObject = { value, source_message_ids: claim.sourceIds, source_quotes: claim.quotes, review: claim.review };
-    const base = pending ?? (hasValue(current) ? current : undefined);
-    if (op === "append" && base && typeof value === "string" && base.value !== null) {
-      const merged = `${String(base.value)} ${value}`;
-      const max = FIELD_MAX_LENGTH[field];
-      if (max && merged.length > max) {
-        reject("length", path);
-        return false;
-      }
-      next = {
-        value: merged,
-        source_message_ids: [...new Set([...base.source_message_ids, ...claim.sourceIds])],
-        source_quotes: [...new Set([...base.source_quotes, ...claim.quotes])],
-        review: base.review === "needs_review" || claim.review === "needs_review" ? "needs_review" : "ok",
-      };
-    } else if (!pending && current && current.value === value) {
-      report.unchanged++;
-      return false;
-    }
-    const entry: DraftPatchField = {
-      target,
-      detail_key: t?.detail_key ?? null,
-      existing_detail_id: t?.existing_detail_id ?? null,
-      field,
-      ...next,
-    };
-    if (target === "detail" && t?.detail_key) ensureDetailKey(t.detail_key);
-    fieldIndex.set(key, entry);
-    return true;
-  };
-
-  // 1. new_details: creating a detail is not a claim; keys only.
-  for (const nd of output.new_details) {
-    const key = nd.detail_key.trim().toUpperCase();
-    if (DETAIL_KEY.test(key)) ensureDetailKey(key);
-  }
-
-  // 2. project_patches
+  // 1. Period (project_patches): only start_month / end_month, op set, project column empty (V-9h).
   for (const p of output.project_patches) {
     report.proposed++;
     const path = `project.${p.field}`;
-    const result = checkProjectPatch(p, ctx);
-    if ("check" in result) {
-      reject(result.check, path, result.sensitive);
+    if (++patches > MAX_PATCHES_PER_TURN) {
+      reject("limit", path);
+      continue;
+    }
+    const current = p.field === "start_month" ? ctx.project.startMonth : ctx.project.endMonth;
+    // R-CR-15: an ongoing project takes no end month (CHECK NOT is_current OR end_month IS NULL).
+    if (filledText(current) || (p.field === "end_month" && ctx.project.isCurrent)) {
+      reject("V-9h", path);
       continue;
     }
     if (isProtected(ctx.draft.project[p.field])) {
       reject("protected", path);
       continue;
     }
-    putField("project", null, p.field, p.op, result.value, result.claim, path);
-  }
-
-  // 3. detail_patches
-  for (const d of output.detail_patches) {
-    report.proposed++;
-    const target = resolveDetail(d.detail_key, d.detail_ref);
-    if ("error" in target) {
-      reject(target.error, `detail.?.${d.field}`);
-      continue;
-    }
-    const path = `detail.${target.label}.${d.field}`;
-    if (existingFilled("detail", target, d.field)) {
-      reject("V-9h", path);
-      continue;
-    }
-    if (isProtected(draftFieldOf("detail", target, d.field))) {
-      reject("protected", path);
-      continue;
-    }
-    const value = d.value.trim();
-    if (value.length === 0) {
+    const value = p.value.trim();
+    if (!MONTH_VALUE.test(value)) {
       reject("type", path);
       continue;
     }
-    if (value.length > (FIELD_MAX_LENGTH[d.field] ?? 2000)) {
-      reject("length", path);
-      continue;
-    }
-    const claim = checkClaim(value, "text", d.source_message_ids, d.source_quotes, ctx);
+    const claim = checkClaim(value, "month", p.source_message_ids, p.source_quotes, ctx);
     if (!claim.ok) {
       reject(claim.check, path, claim.sensitive);
       continue;
     }
-    if (d.field === "action" && isActorAmbiguous(value, claim.quotes)) {
-      // V-9f: not the user's own action — ask again, keep it only as a situation candidate.
+    const pending = ctx.draft.project[p.field];
+    if (isPending(pending) && pending!.value === value) {
+      report.unchanged++;
+      continue;
+    }
+    const prior = changes.period.findIndex((c) => c.field === p.field);
+    const change: PeriodChange = { field: p.field, value, source_message_ids: claim.sourceIds, source_quotes: claim.quotes, review: claim.review };
+    if (prior >= 0) changes.period[prior] = change;
+    else changes.period.push(change);
+  }
+
+  // 2. STAR patches. `projected` = merged length on apply if everything pending is applied (C-14).
+  const projected = new Map<StarField, number>();
+  const projectedOf = (field: StarField) => projected.get(field) ?? mergedStarLength(field, ctx.project, ctx.draft);
+  const putStar = (field: StarField, op: StarOp, value: string, claim: ClaimOk, path: string): boolean => {
+    const draftField = ctx.draft.star[field];
+    // V-9h: a filled project field takes appends only.
+    if (projectHas(field) && op === "set") {
+      reject("V-9h", path);
+      return false;
+    }
+    // Append onto nothing = set (RPC does the same).
+    const effective: StarOp = op === "append" && !projectHas(field) && !isPending(draftField) && !touched.has(field) ? "set" : op;
+    if (effective === "set" && !touched.has(field) && isPending(draftField) && draftField!.value === value) {
+      report.unchanged++;
+      return false;
+    }
+    const before = projectedOf(field);
+    const after = effective === "set" ? value.length : before + (before > 0 ? APPEND_SEPARATOR_LENGTH : 0) + value.length;
+    if (after > STAR_FIELD_MAX_LENGTH) {
+      reject("length", path);
+      if (!flags.lengthFull.includes(field)) flags.lengthFull.push(field);
+      return false;
+    }
+    projected.set(field, after);
+    const change: StarChange = { field, op: effective, value, source_message_ids: claim.sourceIds, source_quotes: claim.quotes, review: claim.review };
+    changes.star.push(change);
+    touched.set(field, change);
+    return true;
+  };
+
+  for (const s of output.star_patches) {
+    report.proposed++;
+    const path = `star.${s.field}`;
+    if (++patches > MAX_PATCHES_PER_TURN) {
+      reject("limit", path);
+      continue;
+    }
+    if (isProtected(ctx.draft.star[s.field])) {
+      reject("protected", path);
+      continue;
+    }
+    const value = s.value.trim();
+    if (value.length === 0) {
+      reject("type", path);
+      continue;
+    }
+    if (value.length > STAR_FIELD_MAX_LENGTH) {
+      reject("length", path);
+      continue;
+    }
+    const claim = checkClaim(value, "text", s.source_message_ids, s.source_quotes, ctx);
+    if (!claim.ok) {
+      reject(claim.check, path, claim.sensitive);
+      continue;
+    }
+    if (s.field === "action" && isActorAmbiguous(value, claim.quotes)) {
+      // V-9f: not the user's own action — ask again; keep it only as a situation candidate
+      // when both the proposal and the project have no situation yet.
       report.actor_ambiguous++;
-      const ref: FieldRef = { target: "detail", detail_key: target.detail_key, existing_detail_id: target.existing_detail_id, field: "action" };
-      actorAmbiguous.push(ref);
-      newClarifications.push({ kind: "actor_ambiguous", field: "action", detail_key: target.detail_key, existing_detail_id: target.existing_detail_id });
+      flags.actorAmbiguous.push({ section: "star", field: "action" });
+      newClarifications.push({ kind: "actor_ambiguous", field: "action" });
       const situationTaken =
-        hasValue(draftFieldOf("detail", target, "situation")) ||
-        fieldIndex.has(fieldKey("detail", target, "situation")) ||
-        existingFilled("detail", target, "situation") ||
-        output.detail_patches.some((o) => o !== d && o.field === "situation" && sameOutputTarget(o, d));
-      if (!situationTaken && value.length <= FIELD_MAX_LENGTH.situation) {
-        putField("detail", target, "situation", "set", value, { ...claim, review: "needs_review" }, `detail.${target.label}.situation`);
+        projectHas("situation") ||
+        hasValue(ctx.draft.star.situation) ||
+        touched.has("situation") ||
+        output.star_patches.some((o) => o !== s && o.field === "situation");
+      if (!situationTaken && !isProtected(ctx.draft.star.situation)) {
+        putStar("situation", "set", value, { ...claim, review: "needs_review" }, "star.situation");
       }
       continue;
     }
-    putField("detail", target, d.field, d.op, value, claim, path);
+    putStar(s.field, s.op, value, claim, path);
   }
 
-  // 4. achievements (4 fields all V-9c; one bad field rejects the achievement)
-  for (const [i, a] of output.achievements.entries()) {
+  // 3. Classification suggestions (V-9i). Not a claim: drops never reject the turn.
+  const situationKnown = projectHas("situation") || hasValue(ctx.draft.star.situation) || touched.has("situation");
+  const actionKnown = projectHas("action") || hasValue(ctx.draft.star.action) || touched.has("action");
+  for (const field of ["project_type", "experience_type", "competencies"] as const) {
+    const suggestion = output.classification_suggestions[field];
+    if (!suggestion) continue;
     report.proposed++;
-    const target = resolveDetail(a.detail_key, a.detail_ref);
-    const path = `achievement.${"error" in target ? "?" : target.label}.${i}`;
-    if ("error" in target) {
-      reject(target.error, path);
+    const result = checkClassification(field, suggestion, ctx, situationKnown && actionKnown);
+    if ("drop" in result) {
+      reject("V-9i", `classification.${field}`);
       continue;
     }
-    const result = checkAchievement(a, ctx);
-    if ("check" in result) {
-      reject(result.check, path, result.sensitive);
-      continue;
-    }
-    if (isDuplicateAchievement(ctx.draft, target, result.fields)) {
+    const pending = ctx.draft.classification[field];
+    if (isPending(pending) && JSON.stringify(pending!.value) === JSON.stringify(result.change.value)) {
       report.unchanged++;
       continue;
     }
-    if (target.detail_key) ensureDetailKey(target.detail_key);
-    patch.achievements.push({ detail_key: target.detail_key, existing_detail_id: target.existing_detail_id, fields: result.fields });
+    changes.classification.push(result.change);
   }
 
-  // 5. skills
-  const knownSkills = new Set(ctx.draft.skills.map((s) => norm(s.value)));
-  for (const [i, s] of output.skills.entries()) {
-    report.proposed++;
-    const path = `skill.${i}`;
-    const result = checkSkill(s, ctx);
-    if ("check" in result) {
-      reject(result.check, path, result.sensitive);
-      continue;
-    }
-    const key = norm(result.value);
-    if (knownSkills.has(key)) {
-      report.unchanged++;
-      continue;
-    }
-    knownSkills.add(key);
-    patch.skills.push({ value: result.value, source_message_ids: result.claim.sourceIds, source_quotes: result.claim.quotes });
-  }
-
-  // 6. affiliation suggestion (new_project only, and only while nothing is confirmed)
-  if (output.affiliation_suggestion) {
-    const s = output.affiliation_suggestion;
-    if (ctx.mode === "new_project" && !ctx.affiliationConfirmed) {
-      report.proposed++;
-      const candidate = ctx.candidates.get(s.ref.trim());
-      if (!candidate || candidate.type !== s.type) {
-        reject("ref", "affiliation");
-      } else {
-        const a = checkSources(s.source_message_ids, ctx.messages);
-        const b = a.ok ? checkQuotes(s.source_quotes, a.sources) : null;
-        if (!a.ok) reject(a.check, "affiliation");
-        else if (!b || !b.ok) reject("V-9b", "affiliation");
-        else if (!candidateNamed(candidate.names, a.sources.map((m) => m.content))) reject("V-9d", "affiliation");
-        // Don't repeat a declined suggestion: never for a known decline, and only from a new user message
-        // (an old mention, already turned into a suggestion the user may have dismissed, can't bring it back).
-        else if (ctx.declinedAffiliationIds.has(candidate.id) || !a.sources.some((m) => ctx.pendingAliases.has(m.alias))) {
-          reject("declined", "affiliation");
-        }
-        else if (ctx.draft.affiliation_suggestion?.id !== candidate.id) {
-          patch.affiliation_suggestion = { type: candidate.type, id: candidate.id, source_message_ids: a.sources.map((m) => m.id) };
-        } else report.unchanged++;
-      }
-    }
-  }
-
-  // 7. clarifications: keep unresolved old ones, add new ones (model + V-9f).
+  // 4. Clarifications: keep unresolved old ones, add new ones (model + V-9f).
   for (const c of output.clarifications) {
-    const mapped = mapClarification(c, ctx);
+    const mapped = mapClarification(c);
     if (mapped) newClarifications.push(mapped);
   }
-  const applied = [...fieldIndex.values()];
+  const okStar = (field: StarField) => changes.star.some((c) => c.field === field && c.review === "ok");
   const resolved = (c: Clarification): boolean => {
-    const okField = (target: "project" | "detail", field: string) =>
-      applied.some(
-        (f) =>
-          f.target === target &&
-          f.field === field &&
-          f.review === "ok" &&
-          (target === "project" || (f.detail_key === c.detail_key && f.existing_detail_id === c.existing_detail_id)),
-      );
     switch (c.kind) {
       case "actor_ambiguous":
-        return okField("detail", c.field ?? "action");
+        return okStar("action") || projectHas("action");
       case "number_vague":
-        return patch.achievements.some((a) => a.detail_key === c.detail_key && a.existing_detail_id === c.existing_detail_id);
+        // [가정] resolved once a result with a number arrives (or the user fills it in the section).
+        return changes.star.some((s) => s.field === "result" && s.review === "ok" && extractNumbers(s.value).length > 0);
       case "period_unclear":
-        return okField("project", c.field === "end_month" ? "end_month" : "start_month");
-      case "affiliation_unclear":
-        return patch.affiliation_suggestion !== null || ctx.affiliationConfirmed;
+        return changes.period.some((p) => p.field === "start_month") || filledText(ctx.project.startMonth);
     }
   };
-  const nextClarifications: Clarification[] = [];
+  const next: Clarification[] = [];
   const seen = new Set<string>();
   for (const c of ctx.draft.clarifications) {
     if (resolved(c) || seen.has(clarKey(c))) continue;
     seen.add(clarKey(c));
-    nextClarifications.push(c);
+    next.push(c);
   }
   for (const c of newClarifications) {
     if (seen.has(clarKey(c))) continue;
     seen.add(clarKey(c));
-    nextClarifications.push(c);
+    next.push(c);
   }
-  const before = ctx.draft.clarifications.map(clarKey).join("\n");
-  if (nextClarifications.map(clarKey).join("\n") !== before) patch.clarifications = nextClarifications;
+  if (next.map(clarKey).join("\n") !== ctx.draft.clarifications.map(clarKey).join("\n")) changes.clarifications = next;
 
-  // 8. sensitive flags: model flags on this turn's user messages + server detections (V-9g rejections).
+  // 5. Sensitive flags: model flags on this turn's user messages + server detections (V-9g rejections).
   for (const f of output.sensitive_flags) {
     const msg = ctx.messages.get(normalizeMessageAlias(f.message_id));
     if (msg && msg.role === "user") countSensitive(msg.alias, f.category);
   }
-  patch.sensitive_flags_add = sensitiveKeys.size;
+  changes.sensitive_flags_add = sensitiveKeys.size;
   report.sensitive_added = sensitiveKeys.size;
+  flags.sensitiveAdded = sensitiveKeys.size;
 
-  patch.fields = applied;
-  for (const f of applied) {
-    if (f.review === "needs_review") {
-      report.needs_review++;
-      needsReview.push({ target: f.target, detail_key: f.detail_key, existing_detail_id: f.existing_detail_id, field: f.field });
+  for (const p of changes.period) {
+    if (p.review === "needs_review") flags.needsReview.push({ section: "project", field: p.field });
+  }
+  for (const s of changes.star) {
+    if (s.review === "needs_review" && !flags.needsReview.some((r) => r.section === "star" && r.field === s.field)) {
+      flags.needsReview.push({ section: "star", field: s.field });
     }
   }
-  for (const a of patch.achievements) {
-    for (const [field, obj] of Object.entries(a.fields)) {
-      if (obj?.review === "needs_review") {
-        report.needs_review++;
-        needsReview.push({ target: "achievement", detail_key: a.detail_key, existing_detail_id: a.existing_detail_id, field });
-      }
-    }
-  }
-  report.applied = applied.length + patch.achievements.length + patch.skills.length + (patch.affiliation_suggestion ? 1 : 0);
+  report.needs_review = flags.needsReview.length;
+  report.applied = changes.period.length + changes.star.length + changes.classification.length;
 
-  return {
-    changes: patch,
-    flags: { needsReview, actorAmbiguous, sensitiveAdded: patch.sensitive_flags_add },
-    report,
-    rejections,
-  };
+  return { changes, flags, report, rejections };
 }
 
-function sameOutputTarget(a: DetailPatch, b: DetailPatch): boolean {
-  return (a.detail_key ?? null) === (b.detail_key ?? null) && (a.detail_ref ?? null) === (b.detail_ref ?? null);
-}
+/** Message aliases in a reason, with a following particle ("M2에서 말한" → "말한"). */
+const MESSAGE_ALIAS_IN_TEXT = /\bM-?\d+(?:에서|에게|에|의|을|를|이|가|은|는|와|과|처럼)?(?![\w가-힣])/g;
 
-function checkProjectPatch(
-  p: ProjectPatch,
+/**
+ * V-9i (AI-12 "분류 추천"): ① keys from the CR-17 list (others dropped, element
+ * by element for competencies) ② competencies ≤ 3, no duplicates ③ the
+ * project's value is empty (competencies: none chosen) and the user has not
+ * edited the proposal ④ sources: user messages only (others removed; may be
+ * empty) ⑤ situation and action present. `reason` ≤ 100 chars, no aliases,
+ * no sensitive text.
+ */
+function checkClassification(
+  field: ClassificationField,
+  s: NonNullable<ClassificationSuggestions[ClassificationField]>,
   ctx: V9Context,
-): { value: string | number; claim: ClaimOk } | { check: V9Check; sensitive?: ClaimFail["sensitive"] } {
-  if (ctx.mode === "augment_project" && ctx.existingProject?.filled.has(p.field)) return { check: "V-9h" };
-  let value: string | number;
-  let kind: ClaimKind;
-  if (p.field === "team_size") {
-    const n = typeof p.value === "number" ? p.value : /^\s*\d+\s*$/.test(p.value) ? Number(p.value) : NaN;
-    if (!Number.isInteger(n) || n < 1 || n > TEAM_SIZE_MAX) return { check: "type" };
-    if (p.op !== "set") return { check: "type" };
-    value = n;
-    kind = "team_size";
-  } else if (p.field === "start_month" || p.field === "end_month") {
-    const v = String(p.value).trim();
-    if (!MONTH_VALUE.test(v) || p.op !== "set") return { check: "type" };
-    value = v;
-    kind = "month";
+  starReady: boolean,
+): { change: ClassificationChange } | { drop: true } {
+  if (!starReady) return { drop: true };
+  if (isProtected(ctx.draft.classification[field])) return { drop: true };
+  let value: string | string[];
+  if (field === "project_type") {
+    if (filledText(ctx.project.projectType) || !isProjectType(s.value)) return { drop: true };
+    value = s.value as string;
+  } else if (field === "experience_type") {
+    if (filledText(ctx.project.experienceType) || !isExperienceType(s.value)) return { drop: true };
+    value = s.value as string;
   } else {
-    if (typeof p.value !== "string" || p.value.trim().length === 0) return { check: "type" };
-    value = p.value.trim();
-    if (value.length > FIELD_MAX_LENGTH[p.field]) return { check: "length" };
-    kind = "text";
+    if (ctx.project.competencies.length > 0) return { drop: true };
+    const keys = (Array.isArray(s.value) ? s.value : []).filter(isCompetency);
+    value = [...new Set(keys)].slice(0, MAX_COMPETENCIES);
+    if (value.length === 0) return { drop: true };
   }
-  const claim = checkClaim(value, kind, p.source_message_ids, p.source_quotes, ctx);
-  if (!claim.ok) return { check: claim.check, sensitive: claim.sensitive };
-  return { value, claim };
-}
-
-function checkAchievement(
-  a: AchievementOutput,
-  ctx: V9Context,
-): { fields: Partial<Record<AchievementField, PatchFieldObject>> } | { check: V9Check; sensitive?: ClaimFail["sensitive"] } {
-  if (a.value_before === null && a.value_after === null) return { check: "type" };
-  const fields: Partial<Record<AchievementField, PatchFieldObject>> = {};
-  const parts: [AchievementField, string | number, ClaimKind][] = [];
-  if (a.metric_name !== null && a.metric_name.trim()) parts.push(["metric_name", a.metric_name.trim(), "text"]);
-  if (a.value_before !== null) parts.push(["value_before", a.value_before, "number"]);
-  if (a.value_after !== null) parts.push(["value_after", a.value_after, "number"]);
-  if (a.unit !== null && a.unit.trim()) parts.push(["unit", a.unit.trim(), "text"]);
-  // V-9c "단위 포함": before/after numbers must be stated with the achievement's unit (or without one).
-  const unit = a.unit?.trim() ? [unitOf(a.unit.trim())] : undefined;
-  for (const [field, value, kind] of parts) {
-    if (typeof value === "string" && value.length > (FIELD_MAX_LENGTH[field] ?? 200)) return { check: "length" };
-    const claim = checkClaim(value, kind, a.source_message_ids, a.source_quotes, ctx, { overlap: field === "metric_name", units: unit });
-    if (!claim.ok) return { check: claim.check, sensitive: claim.sensitive };
-    // V-9c: the unit is part of the number — it must be written in the quotes.
-    if (field === "unit" && !norm(claim.quotes.join("\n")).includes(norm(String(value)))) return { check: "V-9c" };
-    fields[field] = { value, source_message_ids: claim.sourceIds, source_quotes: claim.quotes, review: claim.review };
+  const ids: string[] = [];
+  for (const raw of s.source_message_ids) {
+    const msg = ctx.messages.get(normalizeMessageAlias(raw));
+    if (msg && msg.role === "user" && !ids.includes(msg.id)) ids.push(msg.id);
   }
-  return { fields };
+  return { change: { field, value, source_message_ids: ids, reason: cleanReason(s.reason) } };
 }
 
-function isDuplicateAchievement(
-  draft: StructuredDraft,
-  target: DetailTarget,
-  fields: Partial<Record<AchievementField, PatchFieldObject>>,
-): boolean {
-  const detail = draft.details.find((d) => sameTarget(d, target));
-  if (!detail) return false;
-  return detail.achievements.some(
-    (a) =>
-      (a.value_before?.value ?? null) === (fields.value_before?.value ?? null) &&
-      (a.value_after?.value ?? null) === (fields.value_after?.value ?? null) &&
-      (a.metric_name?.value ?? null) === (fields.metric_name?.value ?? null),
-  );
+function cleanReason(reason: string | null): string | null {
+  if (!reason) return null;
+  const text = reason.replace(MESSAGE_ALIAS_IN_TEXT, "").replace(/\s+/g, " ").trim();
+  if (!text || detectSensitive(text).length > 0) return null;
+  return text.length > CLASSIFICATION_REASON_MAX ? `${text.slice(0, CLASSIFICATION_REASON_MAX - 1)}…` : text;
 }
 
-function checkSkill(
-  s: SkillOutput,
-  ctx: V9Context,
-): { value: string; claim: ClaimOk } | { check: V9Check; sensitive?: ClaimFail["sensitive"] } {
-  const value = s.value.trim();
-  if (!value) return { check: "type" };
-  if (value.length > FIELD_MAX_LENGTH.skill) return { check: "length" };
-  const claim = checkClaim(value, "text", s.source_message_ids, s.source_quotes, ctx, { overlap: false });
-  if (!claim.ok) return { check: claim.check, sensitive: claim.sensitive };
-  // The skill itself (or another spelling from the dictionary) must be in a cited message.
-  const sources = norm(
-    s.source_message_ids
-      .map((id) => ctx.messages.get(normalizeMessageAlias(id))?.content ?? "")
-      .join("\n"),
-  );
-  const token = norm(value);
-  const entry = dictionaryEntryFor(token);
-  if (!(entry ? entryInText(entry, sources) : sources.includes(token))) return { check: "V-9d" };
-  return { value, claim };
+function mapClarification(c: ClarificationOutput): Clarification | null {
+  if (c.kind === "actor_ambiguous") return { kind: c.kind, field: "action" };
+  if (c.kind === "number_vague") return { kind: c.kind, field: c.field ?? "result" };
+  if (c.kind === "period_unclear") return { kind: c.kind, field: c.field === "end_month" ? "end_month" : "start_month" };
+  return null;
 }
 
-function candidateNamed(names: readonly string[], sourceTexts: readonly string[]): boolean {
-  const source = norm(sourceTexts.join("\n"));
-  return names.some((name) => {
-    const n = norm(name);
-    return n.length >= 2 && source.includes(n);
-  });
-}
-
-function mapClarification(c: ClarificationOutput, ctx: V9Context): Clarification | null {
-  let detail_key: string | null = null;
-  let existing_detail_id: string | null = null;
-  if (c.detail_ref) {
-    const existing = ctx.existingDetails.get(c.detail_ref.trim());
-    if (!existing) return null;
-    existing_detail_id = existing.id;
-  } else if (c.detail_key) {
-    const key = c.detail_key.trim().toUpperCase();
-    if (!DETAIL_KEY.test(key)) return null;
-    detail_key = key;
-  }
-  if (c.kind === "actor_ambiguous" && !detail_key && !existing_detail_id) return null;
-  return { kind: c.kind, field: c.field, detail_key, existing_detail_id };
-}
+export type { StarPatch, PeriodField };

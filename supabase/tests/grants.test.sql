@@ -42,6 +42,7 @@ select is_empty(
 -- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
 -- S7: + SELECT on drafts, draft_sections, draft_section_sources (writes only through the S7 definer RPCs).
 -- S8: + SELECT on the 5 interview tables (writes only through the S8 definer RPCs).
+-- R4 (DM v4.4): project_details / achievements dropped, + SELECT on project_deliverables.
 select set_eq(
   $$select c.relname::text || ':' || p.privilege_type
       from pg_class c
@@ -51,8 +52,8 @@ select set_eq(
      where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
        and has_table_privilege('app_ai_writer', c.oid, p.privilege_type)
        and not (c.relname = 'profiles' and p.privilege_type = 'SELECT')$$,
-  array['experiences:SELECT', 'educations:SELECT', 'projects:SELECT', 'project_details:SELECT',
-        'achievements:SELECT', 'skills:SELECT', 'project_skills:SELECT',
+  array['experiences:SELECT', 'educations:SELECT', 'projects:SELECT', 'project_deliverables:SELECT',
+        'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
         'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT',
@@ -284,7 +285,8 @@ select ok(has_column_privilege('app_ai_writer', 'public.application_projects', '
           and not has_column_privilege('app_ai_writer', 'public.application_projects', 'memo', 'SELECT'),
           'app_ai_writer: application_projects name readable, memo not');
 
--- S4: writing chat RPCs by role (DM §5, §7). Career-writing RPCs (save / hand-off) are user-session only (DM-13).
+-- S4: writing chat RPCs by role (DM §5, §7). R4: save / hand-off / affiliation retired; the career-writing
+-- apply_writing_chat_proposal is user-session only (DM-13).
 select set_eq(
   $$select p.proname::text || ':' || r.rolname
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -292,10 +294,10 @@ select set_eq(
      where n.nspname = 'public'
        and p.proname in ('start_writing_chat', 'append_writing_chat_message', 'begin_assistant_message',
                          'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
-                         'set_writing_chat_affiliation', 'save_writing_chat', 'hand_off_writing_chat')
+                         'apply_writing_chat_proposal')
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['start_writing_chat:authenticated', 'append_writing_chat_message:authenticated',
-        'set_writing_chat_affiliation:authenticated', 'save_writing_chat:authenticated', 'hand_off_writing_chat:authenticated',
+        'apply_writing_chat_proposal:authenticated',
         'apply_structured_draft_patch:authenticated', 'apply_structured_draft_patch:app_ai_writer',
         'begin_assistant_message:app_ai_writer', 'finish_assistant_message:app_ai_writer',
         'mark_writing_chat_extracted:app_ai_writer'],
@@ -321,14 +323,13 @@ select set_eq(
        and not has_function_privilege('app_key_reader', p.oid, 'execute')$$,
   array['sweep_stalled_ai_jobs(timestamp with time zone)',
         'claim_due_ai_jobs(timestamp with time zone,integer)',
-        'purge_unlinked_writing_chats(timestamp with time zone,integer)',
         'purge_old_ai_jobs(timestamp with time zone,integer)',
         'purge_old_ai_usage_records(timestamp with time zone,integer)',
         'purge_old_account_deletion_logs(timestamp with time zone,integer)',
         'save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)',
         'record_provider_key_check(uuid,text,text,text)',
         'get_account_deletion_state(uuid,text)'],
-  'service_role-only public functions = sweep / claim_due (S3a) + the 4 S9 retention purges + R1 server-only RPCs (A19 key save / check, A7 deletion state)');
+  'service_role-only public functions = sweep / claim_due (S3a) + the 3 S9 retention purges (R4: unlinked chat purge retired) + R1 server-only RPCs (A19 key save / check, A7 deletion state)');
 
 -- QA-S9-04 (b): public functions the user session can execute, catalog-wide. Grows only with a user-session RPC
 -- in DM §5 / §7.
@@ -341,11 +342,11 @@ select set_eq(
         'apply_structured_draft_patch', 'create_application_project', 'create_cover_letter_draft',
         'create_interview_session', 'delete_account', 'delete_career_item', 'delete_cover_letter_question',
         'delete_provider_key', 'get_account_deletion_summary', 'get_ai_usage_summary', 'get_consent_status',
-        'get_data_readiness', 'get_deletion_impact', 'get_interview_question_reveals', 'hand_off_writing_chat',
+        'get_data_readiness', 'get_deletion_impact', 'get_interview_question_reveals',
         'mark_interview_result_viewed', 'move_application_stage', 'record_consents',
-        'reorder_cover_letter_questions', 'reorder_project_details', 'request_ai_job_cancel',
-        'save_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
-        'set_writing_chat_affiliation', 'start_writing_chat', 'submit_interview_session',
+        'reorder_cover_letter_questions', 'reorder_project_deliverables', 'request_ai_job_cancel',
+        'apply_writing_chat_proposal', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
+        'start_writing_chat', 'submit_interview_session',
         'get_interview_grading_decisions', 'update_failed_jd_raw_text'],
   'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role)');
 

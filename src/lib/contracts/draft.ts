@@ -80,8 +80,6 @@ export const COVER_LETTER_MAX_QUESTIONS = 10;
 export const CAREER_DESCRIPTION_MAX_PROJECTS = 8;
 /** C-11 사용자 선택: 0–5 sources per question [가정] (db set_section_sources; AI picks 0–2). */
 export const COVER_LETTER_MAX_SOURCES = 5;
-/** project_detail_ids per source (AI-04 `detail_refs` 1–2; the user may pick a few more [가정]). */
-export const SOURCE_DETAIL_IDS_MAX = 5;
 /** Edited block text cap [가정] (one block = a bullet or a paragraph). */
 export const BLOCK_TEXT_MAX = 5_000;
 
@@ -198,7 +196,6 @@ export const StreamedSourceSchema = z.object({
   experience_id: z.string().nullable(),
   education_id: z.string().nullable(),
   project_id: z.string().nullable(),
-  project_detail_ids: z.array(z.string()),
   /** "회사명 › 프로젝트명". */
   label: z.string(),
   rationale: z.string(),
@@ -347,7 +344,6 @@ export const SectionSourceInput = z
     projectId: Id.nullable().optional(),
     experienceId: Id.nullable().optional(),
     educationId: Id.nullable().optional(),
-    projectDetailIds: Ids(SOURCE_DETAIL_IDS_MAX).optional(),
     role: z.enum(DRAFT_SOURCE_ROLES).optional(),
     /** 관련 요건 (this project's JD requirements only). */
     requirementIds: Ids(50).optional(),
@@ -450,17 +446,15 @@ export type DraftBlockView = {
   evidence: EvidenceChip[];
 };
 
-/** C-11 one source row ("회사명 또는 기관명 › 프로젝트명 › 상세 내용 제목"). */
+/** C-11 one source row ("회사명 또는 기관명 › 프로젝트명"; DM v4.4: no detail ids). */
 export type DraftSectionSourceView = {
   id: string;
   experienceId: string | null;
   educationId: string | null;
   projectId: string | null;
-  projectDetailIds: string[];
   /** Current names (null when the row is gone; then `sourceLabel` is shown). */
   affiliationName: string | null;
   projectName: string | null;
-  detailTitles: string[];
   role: DraftSourceRole;
   origin: DraftSourceOrigin;
   rationale: string | null;

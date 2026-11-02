@@ -15,7 +15,7 @@ const entry = (alias: string, sourceType: AliasEntry["sourceType"], fields: Reco
 function map(): AliasMap {
   const m = new AliasMap();
   m.add(entry("PRJ-3", "project", { name: "정산 배치 재설계" }));
-  m.add(entry("DET-5", "project_detail", { title: "배치 재설계" }, "정산 배치 재설계 › 배치 재설계"));
+  m.add(entry("DLV-5", "project_deliverable", { title: "배치 설계 문서", body: "본문" }, "배치 설계 문서"));
   m.add(entry("REQ-2", "jd_requirement", { "": "Kotlin 사용 경험" }));
   m.add(entry("SKL-1", "skill", { name: "Spring Boot" }));
   m.add(entry("EXP-1", "experience", {}, "예시페이"));
@@ -27,7 +27,9 @@ function map(): AliasMap {
 describe("replaceAliasesInText (QA-S6-04)", () => {
   it.each<[string, string, string, { replaced: number; removed: number }]>([
     ["project", "PRJ-3의 재시도 큐 설계를 정리해 두세요.", "'정산 배치 재설계'의 재시도 큐 설계를 정리해 두세요.", { replaced: 1, removed: 0 }],
-    ["detail with field suffix", "DET-5.action에서 보듯", "'배치 재설계'에서 보듯", { replaced: 1, removed: 0 }],
+    ["project with field suffix", "PRJ-3.action에서 보듯", "'정산 배치 재설계'에서 보듯", { replaced: 1, removed: 0 }],
+    ["deliverable → title", "DLV-5.body에 나온 대로", "'배치 설계 문서'에 나온 대로", { replaced: 1, removed: 0 }],
+    ["leftover DET-n / ACH-n removed (v4.5)", "결제 경험(DET-2, ACH-1)이 있습니다.", "결제 경험이 있습니다.", { replaced: 0, removed: 2 }],
     ["requirement", "REQ-2 요건은 부분 충족입니다.", "'Kotlin 사용 경험' 요건은 부분 충족입니다.", { replaced: 1, removed: 0 }],
     ["skill (unquoted)", "SKL-1 태그만 있습니다.", "Spring Boot 태그만 있습니다.", { replaced: 1, removed: 0 }],
     ["experience label", "EXP-1에서", "'예시페이'에서", { replaced: 1, removed: 0 }],
@@ -52,7 +54,7 @@ describe("replaceAliasesInText (QA-S6-04)", () => {
   });
 
   it("aliasDisplayLabel falls back to the entry label", () => {
-    expect(aliasDisplayLabel(entry("ACH-1", "achievement", { metric: "x" }, "응답 시간"))).toBe("'응답 시간'");
-    expect(aliasDisplayLabel(entry("ACH-2", "achievement", {}, null))).toBeNull();
+    expect(aliasDisplayLabel(entry("DLV-1", "project_deliverable", { title: null }, "설계 문서"))).toBe("'설계 문서'");
+    expect(aliasDisplayLabel(entry("EDU-2", "education", {}, null))).toBeNull();
   });
 });

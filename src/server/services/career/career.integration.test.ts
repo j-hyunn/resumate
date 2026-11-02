@@ -3,10 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AddManualSkillInput,
   AddProjectSkillInput,
-  SaveAchievementInput,
+  CreateProjectInput,
+  SaveDeliverableInput,
   SaveEducationInput,
   SaveExperienceInput,
-  SaveProjectDetailInput,
   SaveProjectInput,
 } from "@/lib/contracts/career";
 import type { Database } from "@/server/db/database.types";
@@ -14,28 +14,33 @@ import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase
 import {
   addManualSkill,
   addProjectSkill,
+  createProject,
   deleteCareerItem,
-  getCareerTree,
+  getCareerList,
   getDataReadiness,
   getDeletionImpact,
+  getDeliverable,
+  getExperienceDetail,
+  getProjectDetail,
+  getStandaloneProjectDetail,
   removeProjectSkill,
-  reorderProjectDetails,
-  saveAchievement,
+  reorderProjectDeliverables,
+  saveDeliverable,
   saveEducation,
   saveExperience,
   saveProject,
-  saveProjectDetail,
 } from "./index";
 
 /**
- * S2 career services against the local stack as real user sessions:
- * DB-computed status on auto-save, project ↔ detail recalculation, optimistic
- * concurrency, cross-user isolation, skills, reorder, readiness, deletion.
- * Skips when the stack isn't running or S2 migrations aren't applied.
+ * Career services v4.4 (R4) against the local stack as real user sessions:
+ * DB-computed status on section saves, affiliated (STAR) vs standalone
+ * (description / deliverables / skills) projects, optimistic concurrency,
+ * cross-user isolation, readiness v4.4, deletion v4.4 (CR-15 cascade).
+ * Skips when the stack isn't running or the R4 migrations aren't applied.
  */
 
 const stack = readLocalSupabase();
-const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "project_details")) : false;
+const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "project_deliverables")) : false;
 
 type Client = SupabaseClient<Database>;
 const newId = () => crypto.randomUUID();
@@ -71,7 +76,7 @@ describe.skipIf(!ready)("career services (local stack)", () => {
 
   let experienceId = "";
   let projectId = "";
-  let detailId = "";
+  let standaloneId = "";
 
   it("auto-saves an experience: draft → complete, status from the DB", async () => {
     const draft = await saveExperience(alice, SaveExperienceInput.parse({ id: newId(), companyName: "알파" }));
@@ -101,7 +106,7 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     // Another user replaying that id can neither read nor overwrite it.
     await expect(saveExperience(bob, SaveExperienceInput.parse({ id, companyName: "탈취" }))).rejects.toMatchObject({ code: "not_found" });
     await expect(saveExperience(bob, SaveExperienceInput.parse({ id }))).rejects.toMatchObject({ code: "not_found" });
-    await deleteCareerItem(alice, { entityType: "experience", entityId: id, affiliationMode: "keep_projects", resultMode: "keep_results" });
+    await deleteCareerItem(alice, { entityType: "experience", entityId: id, resultMode: "keep_results" });
   });
 
   it("create → edit → resend same create: the edit survives, the resend gets conflict (QA-S2-08)", async () => {
@@ -116,65 +121,93 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     });
     const row = await alice.from("experiences").select("company_name, job_rank, updated_at").eq("id", id).single();
     expect(row.data).toEqual({ company_name: "고친 이름", job_rank: "과장", updated_at: editedRow.updatedAt });
-    await deleteCareerItem(alice, { entityType: "experience", entityId: id, affiliationMode: "keep_projects", resultMode: "keep_results" });
+    await deleteCareerItem(alice, { entityType: "experience", entityId: id, resultMode: "keep_results" });
   });
 
   it("isCurrent → end month cleared; a stored end month can't break the CHECK", async () => {
     const e = await saveExperience(alice, SaveExperienceInput.parse({ id: newId(), companyName: "베타", startMonth: "2020-01", endMonth: "2021-06", jobRank: "사원" }));
     await expect(saveExperience(alice, SaveExperienceInput.parse({ id: e.id, isCurrent: true }))).resolves.toMatchObject({ status: "complete" });
-    await deleteCareerItem(alice, { entityType: "experience", entityId: e.id, affiliationMode: "keep_projects", resultMode: "keep_results" });
+    await deleteCareerItem(alice, { entityType: "experience", entityId: e.id, resultMode: "keep_results" });
   });
 
-  it("another user can't see or edit the row (not_found), nor attach to it", async () => {
+  it("another user can't see or edit the row (not_found), nor attach a project to it", async () => {
     await expect(saveExperience(bob, SaveExperienceInput.parse({ id: experienceId, summary: "hack" }))).rejects.toMatchObject({
       code: "not_found",
     });
     await expect(
-      saveProject(bob, SaveProjectInput.parse({ id: newId(), affiliation: { type: "experience", id: experienceId }, name: "x" })),
+      createProject(bob, CreateProjectInput.parse({ name: "x", affiliation: { type: "experience", id: experienceId } })),
     ).rejects.toMatchObject({ code: "not_found" });
   });
 
-  it("a project is complete only with a complete detail; the detail save reports it", async () => {
-    const p = await saveProject(
-      alice,
-      SaveProjectInput.parse({ id: newId(), affiliation: { type: "experience", id: experienceId }, name: "결제 개선", role: "리드", startMonth: "2024-02" }),
-    );
-    expect(p.status).toBe("draft");
-    projectId = p.id;
-    const d1 = await saveProjectDetail(alice, SaveProjectDetailInput.parse({ id: newId(), projectId, title: "응답 속도", situation: "느림" }));
-    expect(d1).toMatchObject({ status: "draft", sortOrder: 1, project: { status: "draft" } });
-    const d1done = await saveProjectDetail(alice, SaveProjectDetailInput.parse({ id: d1.id, action: "캐시 도입" }));
-    expect(d1done).toMatchObject({ status: "complete", project: { id: projectId, status: "complete" } });
-    // QA-S2-04: the project form continues with the updatedAt the detail save returned.
+  it("C-23 create (CR-6): name only → draft; STAR section saves make it complete (name + situation + action)", async () => {
+    const id = newId();
+    const p = await createProject(alice, CreateProjectInput.parse({ id, name: "결제 개선", affiliation: { type: "experience", id: experienceId } }));
+    expect(p).toMatchObject({ id, status: "draft" });
+    // A retried create with the same client id is the same row.
+    await expect(createProject(alice, CreateProjectInput.parse({ id, name: "결제 개선", affiliation: { type: "experience", id: experienceId } }))).resolves.toMatchObject({ id });
+    projectId = id;
+    const s1 = await saveProject(alice, SaveProjectInput.parse({ id, expectedUpdatedAt: p.updatedAt, situation: "결제 승인 응답이 느렸다", startMonth: "2024-02" }));
+    expect(s1.status).toBe("draft");
+    const s2 = await saveProject(alice, SaveProjectInput.parse({ id, expectedUpdatedAt: s1.updatedAt, action: "인덱스를 재설계했다" }));
+    expect(s2.status).toBe("complete");
+    // Stale section save → conflict.
+    await expect(saveProject(alice, SaveProjectInput.parse({ id, expectedUpdatedAt: s1.updatedAt, result: "x" }))).rejects.toMatchObject({ code: "conflict" });
+    // Classification + is_current (clears end month).
     await expect(
-      saveProject(alice, SaveProjectInput.parse({ id: projectId, expectedUpdatedAt: d1done.project.updatedAt, summary: "한 줄" })),
+      saveProject(alice, SaveProjectInput.parse({ id, projectType: "improvement", competencies: ["analysis", "execution"], endMonth: "2024-06" })),
     ).resolves.toMatchObject({ status: "complete" });
-    // A late resend of d1's create after it was edited: conflict, no new row, no new sort_order.
-    await expect(saveProjectDetail(alice, SaveProjectDetailInput.parse({ id: d1.id, projectId, title: "응답 속도" }))).rejects.toMatchObject({
-      code: "conflict",
-    });
-    const d1rows = await alice.from("project_details").select("id, sort_order, action").eq("project_id", projectId);
-    expect(d1rows.data).toEqual([{ id: d1.id, sort_order: 1, action: "캐시 도입" }]);
-    detailId = d1.id;
-    const d2 = await saveProjectDetail(alice, SaveProjectDetailInput.parse({ id: newId(), projectId, title: "두 번째" }));
-    expect(d2.sortOrder).toBe(2);
+    await saveProject(alice, SaveProjectInput.parse({ id, isCurrent: true }));
+    const row = await alice.from("projects").select("is_current, end_month, competencies, project_type").eq("id", id).single();
+    expect(row.data).toEqual({ is_current: true, end_month: null, competencies: ["analysis", "execution"], project_type: "improvement" });
   });
 
-  it("bob can't add a detail under alice's project", async () => {
-    await expect(saveProjectDetail(bob, SaveProjectDetailInput.parse({ id: newId(), projectId, title: "x" }))).rejects.toMatchObject({
-      code: "not_found",
+  it("DM-20: standalone-only columns on an affiliated project are refused; scope can't change", async () => {
+    await expect(saveProject(alice, SaveProjectInput.parse({ id: projectId, description: "내용" }))).rejects.toMatchObject({ code: "invalid_input" });
+    await expect(saveProject(alice, SaveProjectInput.parse({ id: projectId, affiliation: { type: "none" } }))).rejects.toMatchObject({
+      code: "project_scope_change_not_allowed",
     });
+    await expect(saveProject(bob, SaveProjectInput.parse({ id: projectId, name: "탈취" }))).rejects.toMatchObject({ code: "not_found" });
   });
 
-  it("saves an achievement on a detail (kind generated)", async () => {
-    const a = await saveAchievement(
-      alice,
-      SaveAchievementInput.parse({ id: newId(), target: { type: "project_detail", id: detailId }, metricName: "p95", valueBefore: 800, valueAfter: 200, unit: "ms" }),
-    );
-    expect(a.status).toBe("complete");
-    const tree = await getCareerTree(alice);
-    expect(tree.achievements.find((x) => x.id === a.id)).toMatchObject({ kind: "quantitative", projectDetailId: detailId });
-    expect(tree.projectDetails.find((d) => d.id === detailId)?.achievementCount).toBe(1);
+  it("standalone project (S-43): description completes it; deliverables + skills only here", async () => {
+    const p = await createProject(alice, CreateProjectInput.parse({ name: "사이드 프로젝트", affiliation: { type: "none" } }));
+    standaloneId = p.id;
+    await expect(saveProject(alice, SaveProjectInput.parse({ id: p.id, situation: "s" }))).rejects.toMatchObject({ code: "invalid_input" });
+    const done = await saveProject(alice, SaveProjectInput.parse({ id: p.id, role: "1인 개발", description: "가계부 앱", linkUrl: "https://example.com" }));
+    expect(done.status).toBe("complete");
+
+    const d1 = await saveDeliverable(alice, SaveDeliverableInput.parse({ id: newId(), projectId: p.id, title: "설계 문서", body: "# 구조" }));
+    const d2 = await saveDeliverable(alice, SaveDeliverableInput.parse({ id: newId(), projectId: p.id, title: "회고" }));
+    await expect(saveDeliverable(alice, SaveDeliverableInput.parse({ id: d1.id, expectedUpdatedAt: d1.updatedAt, body: "## 구조" }))).resolves.toMatchObject({ id: d1.id });
+    await expect(saveDeliverable(alice, SaveDeliverableInput.parse({ id: newId(), projectId, title: "x" }))).rejects.toMatchObject({
+      code: "deliverable_requires_standalone_project",
+    });
+    await expect(saveDeliverable(bob, SaveDeliverableInput.parse({ id: newId(), projectId: p.id, title: "x" }))).rejects.toMatchObject({ code: "not_found" });
+
+    await reorderProjectDeliverables(alice, { projectId: p.id, orderedIds: [d2.id, d1.id] });
+    await expect(reorderProjectDeliverables(alice, { projectId: p.id, orderedIds: [d1.id] })).rejects.toMatchObject({ code: "conflict" });
+
+    const t = await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId: p.id, name: "Type  Script" }));
+    const again = await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId: p.id, name: "type script" }));
+    expect(again.skill.id).toBe(t.skill.id);
+    await expect(addProjectSkill(alice, AddProjectSkillInput.parse({ projectId, name: "Go" }))).rejects.toMatchObject({
+      code: "project_skill_requires_standalone_project",
+    });
+
+    const detail = await getStandaloneProjectDetail(alice, p.id);
+    expect(detail).toMatchObject({ project: { scope: "standalone", role: "1인 개발", linkUrl: "https://example.com" }, deliverableLimitReached: false });
+    expect(detail!.deliverables.map((d) => d.title)).toEqual(["회고", "설계 문서"]);
+    expect(detail!.deliverables[0]).not.toHaveProperty("body");
+    expect(detail!.skills.map((s) => s.name)).toEqual(["Type Script"]);
+    await expect(getDeliverable(alice, d1.id)).resolves.toMatchObject({ deliverable: { body: "## 구조" }, project: { id: p.id, name: "사이드 프로젝트" } });
+    await expect(getDeliverable(bob, d1.id)).resolves.toBeNull();
+    expect(await getStandaloneProjectDetail(alice, projectId)).toBeNull();
+
+    // The last unlink deletes a tag skill, not a manual one.
+    await expect(removeProjectSkill(alice, { projectId: p.id, skillId: t.skill.id })).resolves.toEqual({ removed: true, skillDeleted: true });
+    const manual = await addManualSkill(alice, AddManualSkillInput.parse({ name: "Go", proficiency: "practical" }));
+    await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId: p.id, name: "go" }));
+    await expect(removeProjectSkill(alice, { projectId: p.id, skillId: manual.id })).resolves.toEqual({ removed: true, skillDeleted: false });
   });
 
   it("education: enrolled clears end month", async () => {
@@ -188,95 +221,65 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     });
   });
 
-  it("skills: tags reuse by normalized name; the last unlink deletes a tag skill, not a manual one", async () => {
-    const t1 = await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId, name: "Type  Script" }));
-    const t2 = await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId, name: "type script" }));
-    expect(t2.skill.id).toBe(t1.skill.id);
-    expect(t2.skill).toMatchObject({ isManual: false, projectCount: 1 });
-    await expect(removeProjectSkill(alice, { projectId, skillId: t1.skill.id })).resolves.toEqual({ removed: true, skillDeleted: true });
+  it("S-08 list (CR-4): experiences, educations, standalone projects once under their start year; S-09 cards; S-10 page", async () => {
+    const list = await getCareerList(alice);
+    const all = list.years.flatMap((y) => y.items);
+    expect(all.map((i) => i.id)).not.toContain(projectId);
+    expect(all.filter((i) => i.id === experienceId)).toHaveLength(1);
+    expect(list.years.find((y) => y.year === 2023)!.items.map((i) => i.id)).toContain(experienceId);
+    expect(list.years.at(-1)!.year).toBeNull();
+    expect(list.years.at(-1)!.items.map((i) => i.id)).toContain(standaloneId);
 
-    const manual = await addManualSkill(alice, AddManualSkillInput.parse({ name: "Go", proficiency: "practical" }));
-    expect(manual).toMatchObject({ isManual: true, proficiency: "practical" });
-    await addProjectSkill(alice, AddProjectSkillInput.parse({ projectId, name: "go" }));
-    await expect(removeProjectSkill(alice, { projectId, skillId: manual.id })).resolves.toEqual({ removed: true, skillDeleted: false });
+    const exp = await getExperienceDetail(alice, experienceId);
+    expect(exp!.projects).toEqual([expect.objectContaining({ id: projectId, name: "결제 개선", projectType: "improvement", isCurrent: true })]);
+    const page = await getProjectDetail(alice, projectId);
+    expect(page).toMatchObject({ project: { scope: "affiliated", action: "인덱스를 재설계했다" }, parent: { type: "experience", id: experienceId, name: "알파" }, writingChats: [] });
+    expect(await getProjectDetail(alice, standaloneId)).toBeNull();
+    expect(await getProjectDetail(bob, projectId)).toBeNull();
   });
 
-  it("reorders details; a partial list is invalid_detail_order", async () => {
-    const tree = await getCareerTree(alice);
-    const ids = tree.projectDetails.filter((d) => d.projectId === projectId).map((d) => d.id);
-    const reversed = [...ids].reverse();
-    await reorderProjectDetails(alice, { projectId, orderedIds: reversed });
-    const after = await getCareerTree(alice);
-    expect(after.projectDetails.filter((d) => d.projectId === projectId).map((d) => d.id)).toEqual(reversed);
-    await expect(reorderProjectDetails(alice, { projectId, orderedIds: [ids[0]!] })).rejects.toMatchObject({ code: "invalid_detail_order" });
-    await expect(reorderProjectDetails(bob, { projectId, orderedIds: ids })).rejects.toMatchObject({ code: "not_found" });
-  });
-
-  it("readiness: one complete experience + one complete project → ready", async () => {
+  it("readiness v4.4: ready with a complete experience + affiliated project; bob → form", async () => {
     const r = await getDataReadiness(alice);
-    expect(r.counts).toMatchObject({ complete_experiences: 1, complete_projects: 1 });
+    expect(r.counts).toMatchObject({ complete_experiences: 1, complete_projects: 2, projects_without_complete_star: 0 });
     expect(r.features.insight.ready).toBe(true);
-    expect(r.features.culture_fit_interview.data_sufficiency).toBe("ok");
     const b = await getDataReadiness(bob);
     expect(b.features.draft).toMatchObject({ ready: false, next_action: "form" });
+    expect(b.features.draft).not.toHaveProperty("suggested_mode");
   });
 
-  it("R1 A18: a project with a complete detail but no role → hints project_fields, form + suggested_project_id (no key needed)", async () => {
+  it("readiness v4.4: an affiliated project without STAR → hint project_star, form + suggested project (no key)", async () => {
     const carol = await signedInUser("career-c");
     const exp = await saveExperience(carol, SaveExperienceInput.parse({ id: newId(), companyName: "감마", startMonth: "2022-01", jobPosition: "백엔드", isCurrent: true }));
-    const p = await saveProject(carol, SaveProjectInput.parse({ id: newId(), affiliation: { type: "experience", id: exp.id }, name: "정산 개선", startMonth: "2024-01" }));
-    await saveProjectDetail(carol, SaveProjectDetailInput.parse({ id: newId(), projectId: p.id, title: "배치 시간", situation: "정산 배치가 느렸다", action: "쿼리를 나눠 병렬 처리했다" }));
+    const p = await createProject(carol, CreateProjectInput.parse({ name: "정산 개선", affiliation: { type: "experience", id: exp.id } }));
     const r = await getDataReadiness(carol);
     expect(r.ai_connection).toEqual({ active_provider: null, key_status: null, connection_tier: null, consent_required: null });
+    expect(r.counts.projects_without_complete_star).toBe(1);
     for (const f of [r.features.insight, r.features.draft, r.features.job_interview]) {
       expect(f).toMatchObject({ ready: false, next_action: "form", suggested_project_id: p.id });
-      expect(f.hints).toContain("project_fields");
-      expect(f).not.toHaveProperty("suggested_mode");
+      expect(f.hints).toContain("project_star");
     }
   });
 
-  it("career tree groups by year (experience 2023→now, project in 2024)", async () => {
-    const tree = await getCareerTree(alice, new Date("2026-10-25T00:00:00Z"));
-    const y2024 = tree.years.find((y) => y.year === 2024)!;
-    expect(y2024.affiliations.find((a) => a.id === experienceId)?.projectIds).toEqual([projectId]);
-    expect(tree.years.find((y) => y.year === 2023)!.affiliations.find((a) => a.id === experienceId)?.projectIds).toEqual([]);
-    expect(tree.isEmpty).toBe(false);
-    expect(tree.projects.find((p) => p.id === projectId)).toMatchObject({ detailCount: 2, completeDetailCount: 1, skillIds: [] });
-  });
-
-  it("deleting the last complete detail sends the project back to draft", async () => {
-    const impact = await getDeletionImpact(alice, { entityType: "project_detail", entityId: detailId, affiliationMode: "keep_projects" });
-    expect(impact.cascade.achievements).toBe(1);
-    expect(impact.affected_results.by_application_project).toEqual([]);
-    const res = await deleteCareerItem(alice, {
-      entityType: "project_detail",
-      entityId: detailId,
-      affiliationMode: "keep_projects",
-      resultMode: "keep_results",
+  it("deletion v4.4: deliverable (no cascade), project (deliverables + skills), experience takes its projects (CR-15)", async () => {
+    const detail = await getStandaloneProjectDetail(alice, standaloneId);
+    const dlv = detail!.deliverables[0]!.id;
+    await expect(getDeletionImpact(alice, { entityType: "project_deliverable", entityId: dlv })).resolves.toMatchObject({
+      cascade: { projects: 0, project_deliverables: 0, project_skills: 0, writing_chats: 0 },
     });
-    // QA-S2-04: the response carries the parent's new state for the open project form.
-    expect(res.updatedProjects).toEqual([{ id: projectId, status: "draft", updatedAt: expect.any(String) }]);
-    const tree = await getCareerTree(alice);
-    const project = tree.projects.find((p) => p.id === projectId);
-    expect(project?.status).toBe("draft");
-    expect(project?.updatedAt).toBe(res.updatedProjects[0]!.updatedAt);
-  });
+    await deleteCareerItem(alice, { entityType: "project_deliverable", entityId: dlv, resultMode: "keep_results" });
+    const sp = await getDeletionImpact(alice, { entityType: "project", entityId: standaloneId });
+    // The skill links were removed above; one deliverable is left.
+    expect(sp.cascade).toMatchObject({ project_deliverables: 1, project_skills: 0 });
 
-  it("deleting an experience keeps its projects as standalone by default", async () => {
-    const impact = await getDeletionImpact(alice, { entityType: "experience", entityId: experienceId, affiliationMode: "delete_projects" });
-    expect(impact.cascade.projects).toBe(1);
-    const res = await deleteCareerItem(alice, {
-      entityType: "experience",
-      entityId: experienceId,
-      affiliationMode: "keep_projects",
-      resultMode: "keep_results",
+    await expect(getDeletionImpact(alice, { entityType: "experience", entityId: experienceId, affiliationMode: "keep_projects" as never })).rejects.toMatchObject({
+      code: "invalid_input",
     });
-    expect(res).toMatchObject({ entity_type: "experience", cascade: { projects: 0 } });
-    expect(res.updatedProjects.map((p) => p.id)).toEqual([projectId]);
-    const tree = await getCareerTree(alice);
-    expect(tree.projects.find((p) => p.id === projectId)?.experienceId).toBeNull();
-    await expect(
-      deleteCareerItem(bob, { entityType: "project", entityId: projectId, affiliationMode: "keep_projects", resultMode: "keep_results" }),
-    ).rejects.toMatchObject({ code: "not_found" });
+    const impact = await getDeletionImpact(alice, { entityType: "experience", entityId: experienceId });
+    expect(impact.cascade).toMatchObject({ projects: 1 });
+    await expect(deleteCareerItem(bob, { entityType: "project", entityId: projectId, resultMode: "keep_results" })).rejects.toMatchObject({ code: "not_found" });
+    const res = await deleteCareerItem(alice, { entityType: "experience", entityId: experienceId, resultMode: "keep_results" });
+    expect(res).toMatchObject({ entity_type: "experience", affiliation_mode: "delete_projects", cascade: { projects: 1 } });
+    const gone = await alice.from("projects").select("id").eq("id", projectId);
+    expect(gone.data).toEqual([]);
   });
 });

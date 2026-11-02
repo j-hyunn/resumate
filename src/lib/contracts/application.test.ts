@@ -41,9 +41,9 @@ describe("S5 application contracts", () => {
     expect(SetApplicationOutcomeInput.safeParse({ id: ID, outcome: "withdrawn" }).success).toBe(false);
   });
 
-  it("display name: name → 회사명 – 포지션명 → 새 기업 JD", () => {
+  it("display name: name → 회사명 – 포지션명 → 새 자기소개서 (CR-23)", () => {
     expect(applicationDisplayName("내 이름", "A", "B")).toBe("내 이름");
     expect(applicationDisplayName(null, "A", "B")).toBe("A – B");
-    expect(applicationDisplayName(null, "A", null)).toBe("새 기업 JD");
+    expect(applicationDisplayName(null, "A", null)).toBe("새 자기소개서");
   });
 });

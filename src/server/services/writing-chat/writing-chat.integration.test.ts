@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { SaveExperienceInput } from "@/lib/contracts/career";
+import { CreateProjectInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
 import { ProviderError } from "@/server/ai/errors";
 import { output } from "@/server/ai/__fixtures__/AI-12/conversations";
 import { createAiWriterClient } from "@/server/db/ai-writer";
@@ -10,23 +10,17 @@ import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticPr
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import type { LlmFactoryInput } from "@/server/jobs/types";
-import { getCareerTree, getDeletionImpact, saveExperience } from "@/server/services/career";
+import { createProject, getDeletionImpact, getProjectDetail, saveExperience, saveProject } from "@/server/services/career";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import type { WritingChatTurnEvent } from "@/lib/contracts/writing-chat";
 import {
-  abandonWritingChat,
   applyDraftEdit,
+  applyWritingChatProposal,
   deleteWritingChat,
-  editDraftDetail,
   getWritingChat,
-  handOffWritingChat,
   listProjectWritingChats,
-  listWritingChats,
-  resumeWritingChat,
   reviewDraftField,
-  saveWritingChat,
-  setWritingChatAffiliation,
   startWritingChat,
 } from "./chat";
 import { createTurnChatDb } from "./db";
@@ -35,16 +29,17 @@ import { prepareTurn, runTurn } from "./turn";
 import type { TurnDeps } from "./types";
 
 /**
- * S4 end-to-end against the local stack: start → full turn (real AI-12
- * pipelines, scripted provider) → failed reply + "다시 보내기" → preview edits
- * → affiliation → save; a second chat → hand-off; delete chat only. Checks
- * NFR-AI-05 (no career row before save), one usage row per provider call,
- * message counts, and that no message text reaches the logs (NFR-PRV-09).
- * Skips when the stack isn't running or S4 isn't migrated.
+ * R4 (DM v4.4) end-to-end against the local stack: a chat on an affiliated project →
+ * full turn (real AI-12 v4.5 pipelines, scripted provider) → failed reply + "다시 보내기"
+ * → proposal edits / review → [반영] (apply_writing_chat_proposal) → STAR on the project;
+ * many chats per project; delete the chat only keeps the applied STAR. Checks NFR-AI-05
+ * (the turn writes no career column), one usage row per provider call, message counts,
+ * and that no message text reaches the logs (NFR-PRV-09).
+ * Skips when the stack isn't running or R4 isn't migrated.
  */
 
 const stack = readLocalSupabase();
-const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "writing_chats")) : false;
+const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "project_deliverables")) : false;
 
 type Client = SupabaseClient<Database>;
 
@@ -52,20 +47,15 @@ const USER_TEXT = "에이비씨페이 다닐 때 결제 승인 API 성능 개선
 const SECOND_TEXT = "결제 승인 API가 피크 시간에 느려져서 결제 실패 문의가 많았어요.";
 
 const firstExtract = output({
-  project_patches: [
-    { field: "name", op: "set", value: "결제 승인 API 성능 개선", source_message_ids: ["M2"], source_quotes: ["결제 승인 API 성능 개선 프로젝트를 했어요"] },
-    { field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터 했고"] },
-    { field: "role", op: "set", value: "백엔드 개발", source_message_ids: ["M2"], source_quotes: ["저는 백엔드 개발을 맡았어요"] },
+  project_patches: [{ field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터 했고"] }],
+  star_patches: [
+    { field: "task", op: "set", value: "백엔드 개발을 맡았다", source_message_ids: ["M2"], source_quotes: ["저는 백엔드 개발을 맡았어요"] },
   ],
-  affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M2"], source_quotes: ["에이비씨페이 다닐 때"] },
 });
 
 const secondExtract = output({
-  new_details: [{ detail_key: "D1", source_message_ids: ["M4"] }],
-  detail_patches: [
+  star_patches: [
     {
-      detail_key: "D1",
-      detail_ref: null,
       field: "situation",
       op: "set",
       value: "결제 승인 API가 피크 시간에 느려져 결제 실패 문의가 많았다",
@@ -75,12 +65,13 @@ const secondExtract = output({
   ],
 });
 
-describe.skipIf(!ready)("AI writing chat (local stack)", () => {
+describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
   const s = stack!;
   let admin: Client;
   let user: Client;
   let userId = "";
   let experienceId = "";
+  let projectId = "";
   const logs: string[] = [];
   const replies: ScriptedResponse[] = [];
   const extracts: ScriptedResponse[] = [];
@@ -120,9 +111,9 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     return { events, jobId: prepared.job.id };
   }
 
-  async function projectCount() {
-    const { count } = await admin.from("projects").select("id", { count: "exact", head: true }).eq("user_id", userId);
-    return count ?? 0;
+  async function projectStar() {
+    const { data } = await admin.from("projects").select("situation, task, action, result, learnings, start_month, status, source_writing_chat_id").eq("id", projectId).single();
+    return data!;
   }
 
   beforeEach(() => {
@@ -152,6 +143,7 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     if (signIn.error) throw new Error(`signIn failed: ${signIn.error.code}`);
     experienceId = crypto.randomUUID();
     await saveExperience(user, SaveExperienceInput.parse({ id: experienceId, companyName: "에이비씨페이", startMonth: "2021-03", isCurrent: true, jobPosition: "백엔드 개발자" }));
+    projectId = (await createProject(user, CreateProjectInput.parse({ name: "결제 승인 API 성능 개선", affiliation: { type: "experience", id: experienceId } }))).id;
   });
 
   afterAll(async () => {
@@ -164,51 +156,54 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
 
   let chatId = "";
 
-  it("start: greeting not counted (R1 A5), no AI call; visible in the career tree", async () => {
-    ({ writingChatId: chatId } = await startWritingChat(user, { mode: "new_project" }));
+  it("start: affiliated projects only; greeting not counted (R1 A5), no AI call; chips from AI-12", async () => {
+    const standalone = await createProject(user, CreateProjectInput.parse({ name: "사이드", affiliation: { type: "none" } }));
+    await expect(startWritingChat(user, { projectId: standalone.id })).rejects.toMatchObject({ code: "writing_chat_requires_affiliated_project" });
+    await expect(startWritingChat(user, { projectId: crypto.randomUUID() })).rejects.toMatchObject({ code: "not_found" });
+
+    ({ writingChatId: chatId } = await startWritingChat(user, { projectId }));
     const chat = await getWritingChat(user, userId, chatId);
-    expect(chat).toMatchObject({ status: "active", messageCount: 0, remainingMessages: 40, limitReached: false });
+    expect(chat).toMatchObject({ projectId, title: null, status: "active", messageCount: 0, remainingMessages: 40, limitReached: false, lastAppliedAt: null });
     expect(chat.messages).toHaveLength(1);
     expect(chat.messages[0]).toMatchObject({ role: "assistant", status: "done", provider: null, aiJobId: null });
+    expect(chat.chips).toHaveLength(3);
     // No key in this test user: reading works, sending is locked (PRD 3.3).
     expect(chat.connection.lock).toBe("ai_not_connected");
     expect(chat.canSend).toBe(false);
-    // QA-S6-05: `now` fixed to the chat's own last_activity_at (DB clock), so host/DB clock skew can't flip the day count.
-    const lastActivity = await user.from("writing_chats").select("last_activity_at").eq("id", chatId).single();
-    const tree = await getCareerTree(user, new Date(lastActivity.data!.last_activity_at));
-    expect(tree.activeWritingChats.map((c) => c.id)).toContain(chatId);
-    expect(tree.activeWritingChats.find((c) => c.id === chatId)?.daysUntilAutoDelete).toBe(90);
+    // S-10 page lists the chat under the project.
+    expect((await getProjectDetail(user, projectId))!.writingChats.map((c) => c.id)).toEqual([chatId]);
   });
 
-  it("full turn (paid, parallel): reply streamed + stored, AI patch applied, no career write, usage per call", async () => {
+  it("full turn (paid, parallel): reply streamed + stored, AI patch applied, title from the first message, no career write, usage per call", async () => {
+    const before = await projectStar();
     const { events, jobId } = await turn(chatId, USER_TEXT, [{ json: "그때 어떤 상황이었나요?" }], [{ json: firstExtract }]);
     expect(events.map((e) => e.type)).toEqual(["turn_started", "reply_delta", "reply_done", "draft_patch", "draft_flags", "turn_done"]);
+    const done = events.at(-1) as Extract<WritingChatTurnEvent, { type: "turn_done" }>;
+    expect(done).toMatchObject({ draftStatus: "updated", closed: false, readyToReturn: false });
+    expect(done.chips).toHaveLength(3);
 
     const chat = await getWritingChat(user, userId, chatId);
     expect(chat.messageCount).toBe(2);
-    expect(chat.remainingMessages).toBe(38);
+    expect(chat.title).toBe(USER_TEXT.slice(0, 30).trim());
     expect(chat.messages.map((m) => [m.sequence, m.role, m.status])).toEqual([
       [1, "assistant", "done"],
       [2, "user", "done"],
       [3, "assistant", "done"],
     ]);
     expect(chat.messages[2]).toMatchObject({ provider: "anthropic", modelTier: "default", connectionTier: "paid", aiJobId: jobId });
-    expect(chat.structuredDraft.project.name?.value).toBe("결제 승인 API 성능 개선");
-    expect(chat.structuredDraft.project.name?.source_message_ids).toEqual([chat.messages[1]!.id]);
-    expect(chat.structuredDraft.affiliation_suggestion).toMatchObject({ type: "experience", id: experienceId });
+    expect(chat.structuredDraft.project.start_month?.value).toBe("2023-03");
+    expect(chat.structuredDraft.star.task?.source_message_ids).toEqual([chat.messages[1]!.id]);
 
-    // NFR-AI-05: the turn wrote no career row.
-    expect(await projectCount()).toBe(0);
+    // NFR-AI-05: the turn wrote no career column.
+    expect(await projectStar()).toEqual(before);
 
     const { data: job } = await admin.from("ai_jobs").select("*").eq("id", jobId).single();
     expect(job).toMatchObject({ status: "succeeded", job_type: "writing_chat_turn", target_type: "writing_chat", target_id: chatId, provider: "anthropic" });
     const { data: usage } = await admin.from("ai_usage_records").select("*").eq("ai_job_id", jobId).order("call_key");
-    // QA-S4-03: turn-numbered call keys (C-13 `writing_chat.turn.{n}.*`).
     expect((usage ?? []).map((u) => [u.call_key, u.feature, u.model_tier, u.outcome])).toEqual([
       ["writing_chat.turn.2.extract", "writing_chat", "light", "succeeded"],
       ["writing_chat.turn.2.reply", "writing_chat", "default", "succeeded"],
     ]);
-    // QA-S4-02: V-9 stats are logged for this job (counts only).
     expect(logs.some((l) => l.includes('"ai_validation"') && l.includes(jobId))).toBe(true);
     const { data: row } = await admin.from("writing_chats").select("last_extracted_sequence").eq("id", chatId).single();
     expect(row?.last_extracted_sequence).toBe(2);
@@ -220,7 +215,7 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     let chat = await getWritingChat(user, userId, chatId);
     expect(chat.messageCount).toBe(4);
     expect(chat.messages.at(-1)).toMatchObject({ role: "assistant", status: "failed" });
-    expect(chat.structuredDraft.details[0]?.fields.situation?.value).toBeTruthy();
+    expect(chat.structuredDraft.star.situation?.value).toBeTruthy();
     const { data: failedJob } = await admin.from("ai_jobs").select("status, error_code, retry_after").eq("id", failed.jobId).single();
     expect(failedJob).toMatchObject({ status: "failed", error_code: "rate_limited" });
     expect(failedJob?.retry_after).not.toBeNull();
@@ -231,95 +226,66 @@ describe.skipIf(!ready)("AI writing chat (local stack)", () => {
     expect(chat.messageCount).toBe(4);
     expect(chat.messages).toHaveLength(5);
     expect(chat.messages.at(-1)).toMatchObject({ status: "done", aiJobId: resend.jobId });
-    // Only the reply was called again (QA-S3a-08): one usage row for the resend job.
     const { data: usage } = await admin.from("ai_usage_records").select("call_key").eq("ai_job_id", resend.jobId);
     expect(usage).toHaveLength(1);
   });
 
-  it("preview edits, affiliation, save: reviewed draft → career rows as the user", async () => {
-    await applyDraftEdit(user, { writingChatId: chatId, path: { section: "project", field: "role" }, value: "백엔드 리드" });
+  it("proposal card: edit / review, then [반영] writes the project as the user; applied fields are locked", async () => {
+    await applyDraftEdit(user, { writingChatId: chatId, path: { section: "star", field: "action" }, value: "APM으로 병목 쿼리를 찾아 인덱스를 재설계했다" });
     let chat = await getWritingChat(user, userId, chatId);
-    expect(chat.structuredDraft.project.role).toMatchObject({ value: "백엔드 리드", origin: "user_edit", review: "ok" });
-
-    // A needs_review field: accept it explicitly if V-9e flagged one, else this is a no-op check.
-    const situation = chat.structuredDraft.details[0]?.fields.situation;
-    if (situation?.review === "needs_review") {
-      await reviewDraftField(user, { writingChatId: chatId, path: { section: "detail", detail: { detailKey: "D1" }, field: "situation" } }, "accept");
+    expect(chat.structuredDraft.star.action).toMatchObject({ value: "APM으로 병목 쿼리를 찾아 인덱스를 재설계했다", origin: "user_edit", review: "ok" });
+    await expect(reviewDraftField(user, { writingChatId: chatId, path: { section: "star", field: "action" } }, "accept")).rejects.toMatchObject({
+      code: "invalid_review_transition",
+    });
+    if (chat.structuredDraft.star.situation?.review === "needs_review") {
+      await reviewDraftField(user, { writingChatId: chatId, path: { section: "star", field: "situation" } }, "accept");
     }
-    await applyDraftEdit(user, { writingChatId: chatId, path: { section: "detail", detail: { detailKey: "D1" }, field: "title" }, value: "피크 시간 결제 지연" });
-    await expect(
-      reviewDraftField(user, { writingChatId: chatId, path: { section: "project", field: "role" } }, "accept"),
-    ).rejects.toMatchObject({ code: "invalid_review_transition" });
+    await applyDraftEdit(user, { writingChatId: chatId, path: { section: "classification", field: "competencies" }, value: ["analysis", "execution"] });
 
-    const aff = await setWritingChatAffiliation(user, { writingChatId: chatId, affiliation: { type: "experience", id: experienceId }, clearSuggestionOnly: false });
-    expect(aff).toMatchObject({ experienceId, educationId: null });
-    expect(aff.structuredDraft.affiliation_suggestion).toBeNull();
+    // [반영] one field, then [모두 반영].
+    const one = await applyWritingChatProposal(user, { writingChatId: chatId, fields: ["start_month"] });
+    expect(one).toMatchObject({ applied: ["start_month"], skipped: [], projectStatus: "draft" });
+    const all = await applyWritingChatProposal(user, { writingChatId: chatId });
+    expect(all.applied).toEqual(expect.arrayContaining(["situation", "task", "action", "competencies"]));
+    expect(all.projectStatus).toBe("complete");
+    expect(all.structuredDraft.star.action?.applied_at).not.toBeNull();
+    const star = await projectStar();
+    expect(star).toMatchObject({ status: "complete", start_month: "2023-03-01", action: "APM으로 병목 쿼리를 찾아 인덱스를 재설계했다", source_writing_chat_id: chatId });
+    const { data: comp } = await admin.from("projects").select("competencies").eq("id", projectId).single();
+    expect(comp?.competencies).toEqual(["analysis", "execution"]);
 
-    expect(await projectCount()).toBe(0);
-    const saved = await saveWritingChat(user, chatId);
-    expect(saved).toMatchObject({ status: "saved", projectCreated: true, detailsCreated: 1 });
-    const { data: project } = await user.from("projects").select("*").eq("id", saved.projectId).single();
-    expect(project).toMatchObject({ name: "결제 승인 API 성능 개선", role: "백엔드 리드", experience_id: experienceId, source_writing_chat_id: chatId, start_month: "2023-03-01" });
-    const { data: details } = await user.from("project_details").select("*").eq("project_id", saved.projectId);
-    expect(details).toHaveLength(1);
-    expect(details![0]).toMatchObject({ title: "피크 시간 결제 지연", source_writing_chat_id: chatId });
-
+    // Nothing left: applied [] (not an error); an applied field can't be edited in the card.
+    await expect(applyWritingChatProposal(user, { writingChatId: chatId })).resolves.toMatchObject({ applied: [] });
+    await expect(applyDraftEdit(user, { writingChatId: chatId, path: { section: "star", field: "action" }, value: "x" })).rejects.toMatchObject({
+      code: "field_already_applied",
+    });
     chat = await getWritingChat(user, userId, chatId);
-    expect(chat).toMatchObject({ status: "saved", projectId: saved.projectId, canSend: false, daysUntilAutoDelete: null });
-    await expect(prepareTurn(deps(), { chatId, content: "더", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_not_active" });
-    expect((await getCareerTree(user)).activeWritingChats.map((c) => c.id)).not.toContain(chatId);
-    // S-10 "AI 작성 대화 기록" (R1 A6): the project's chats with their status.
-    expect(await listProjectWritingChats(user, saved.projectId)).toEqual([expect.objectContaining({ id: chatId, status: "saved", messageCount: 4 })]);
+    expect(chat.lastAppliedAt).not.toBeNull();
+    expect(chat.applicableFields).toEqual([]);
   });
 
-  it("hand-off (no AI): a second chat's edits go to draft career rows; delete the chat only keeps them", async () => {
-    const { writingChatId } = await startWritingChat(user, { mode: "new_project" });
-    await applyDraftEdit(user, { writingChatId, path: { section: "project", field: "name" }, value: "사내 배포 도구" });
-    await editDraftDetail(user, { writingChatId, action: "add", detailKey: "D1" });
-    await applyDraftEdit(user, { writingChatId, path: { section: "detail", detail: { detailKey: "D1" }, field: "title" }, value: "배포 자동화" });
-    const handed = await handOffWritingChat(user, writingChatId);
-    expect(handed).toMatchObject({ status: "handed_off", projectCreated: true, detailsCreated: 1 });
-    const { data: project } = await user.from("projects").select("status, source_writing_chat_id").eq("id", handed.projectId).single();
-    expect(project).toMatchObject({ status: "draft", source_writing_chat_id: writingChatId });
+  it("a second chat on the same project appends to filled STAR; over 2,000 chars → field_too_long, nothing written", async () => {
+    const { writingChatId } = await startWritingChat(user, { projectId });
+    await applyDraftEdit(user, { writingChatId, path: { section: "star", field: "result" }, value: "응답 시간이 1.2초에서 0.7초로 줄었다" });
+    await applyDraftEdit(user, { writingChatId, path: { section: "star", field: "action" }, value: "캐시를 도입했다" });
+    const r = await applyWritingChatProposal(user, { writingChatId, fields: ["action", "result"] });
+    expect(r.applied).toEqual(["action", "result"]);
+    const star = await projectStar();
+    expect(star.action).toBe("APM으로 병목 쿼리를 찾아 인덱스를 재설계했다\n캐시를 도입했다");
 
-    const impact = await getDeletionImpact(user, { entityType: "writing_chat", entityId: writingChatId, affiliationMode: "keep_projects" });
-    expect(impact.message_count).toBe(1);
-    expect(impact.linked_saved_rows).toBeGreaterThanOrEqual(2);
+    // Fill the project's learnings close to the limit, then try to append.
+    await saveProject(user, SaveProjectInput.parse({ id: projectId, learnings: "가".repeat(1990) }));
+    await applyDraftEdit(user, { writingChatId, path: { section: "star", field: "learnings" }, value: "나".repeat(50) });
+    await expect(applyWritingChatProposal(user, { writingChatId })).rejects.toMatchObject({ code: "field_too_long", status: 409, details: { fields: ["learnings"] } });
+
+    expect((await listProjectWritingChats(user, projectId)).map((c) => c.id)).toEqual(expect.arrayContaining([chatId, writingChatId]));
+    const impact = await getDeletionImpact(user, { entityType: "writing_chat", entityId: writingChatId });
+    expect(impact).toMatchObject({ message_count: 0 });
+    expect(impact.last_applied_at).not.toBeNull();
     const deleted = await deleteWritingChat(user, writingChatId);
-    expect(deleted.messageCount).toBe(1);
-    const { data: kept } = await user.from("projects").select("id, source_writing_chat_id").eq("id", handed.projectId).single();
-    expect(kept).toMatchObject({ id: handed.projectId, source_writing_chat_id: null });
-  });
-
-  it("abandon: active → abandoned once; augment start checks the project", async () => {
-    const { writingChatId } = await startWritingChat(user, { mode: "new_project" });
-    expect(await abandonWritingChat(user, writingChatId)).toEqual({ writingChatId, status: "abandoned" });
-    await expect(abandonWritingChat(user, writingChatId)).rejects.toMatchObject({ code: "writing_chat_not_active" });
-
-    // R1 A6: S-08 lists it under "그만둔 AI 대화" until resumed.
-    let lists = await listWritingChats(user);
-    expect(lists.abandoned.map((c) => c.id)).toContain(writingChatId);
-    expect(lists.active.map((c) => c.id)).not.toContain(writingChatId);
-    expect(lists.abandoned.find((c) => c.id === writingChatId)).toMatchObject({ status: "abandoned", messageCount: 0 });
-    expect((await getCareerTree(user)).abandonedWritingChats.map((c) => c.id)).toContain(writingChatId);
-
-    // "다시 이어 하기": abandoned → active, last_activity_at refreshed, no AI job; idempotent; the draft is kept.
-    const before = await admin.from("writing_chats").select("last_activity_at").eq("id", writingChatId).single();
-    const jobsBefore = await admin.from("ai_jobs").select("id").eq("user_id", userId);
-    const resumed = await resumeWritingChat(user, writingChatId);
-    expect(resumed).toMatchObject({ writingChatId, status: "active" });
-    expect(Date.parse(resumed.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(before.data!.last_activity_at));
-    expect(await resumeWritingChat(user, writingChatId)).toMatchObject({ writingChatId, status: "active" });
-    const jobsAfter = await admin.from("ai_jobs").select("id").eq("user_id", userId);
-    expect(jobsAfter.data).toHaveLength(jobsBefore.data!.length);
-    lists = await listWritingChats(user);
-    expect(lists.active.map((c) => c.id)).toContain(writingChatId);
-    expect(lists.abandoned.map((c) => c.id)).not.toContain(writingChatId);
-
-    // Saved chats can't be resumed (read-only, D-27 (a)); other users' chats are not found.
-    await expect(resumeWritingChat(user, chatId)).rejects.toMatchObject({ code: "writing_chat_not_resumable", status: 409 });
-    await expect(resumeWritingChat(user, crypto.randomUUID())).rejects.toMatchObject({ code: "not_found" });
-    await expect(startWritingChat(user, { mode: "augment_project", projectId: crypto.randomUUID() })).rejects.toMatchObject({ code: "not_found" });
+    expect(deleted.messageCount).toBe(0);
+    // The applied STAR stays on the project.
+    expect((await projectStar()).result).toBe("응답 시간이 1.2초에서 0.7초로 줄었다");
   });
 
   it("no conversation text in logs (NFR-PRV-09)", () => {

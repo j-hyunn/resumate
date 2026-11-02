@@ -47,7 +47,6 @@ export type CoverLetterPayloadSource = {
   project_id: string | null;
   experience_id: string | null;
   education_id: string | null;
-  project_detail_ids: string[];
   role: DraftSourceRole;
   rationale: string | null;
   requirement_ids: string[];

@@ -3,7 +3,8 @@ import { DRAFT_SOURCE_ROLES, QUESTION_CLASSES, SOURCE_SELECTION_MODES } from "@/
 import { DraftEvidence, DraftRef, DraftRefs, NotesForUser, TextBlockOutputSchema } from "./drafts-common";
 
 /**
- * AI-04 자기소개서 문항 model output, schema_version 2 (card "출력 스키마 (문항 1개)").
+ * AI-04 자기소개서 문항 model output, schema_version 2 (card "출력 스키마 (문항 1개)";
+ * v4.5 drops `detail_refs` — one STAR per project).
  * `sources` come before `paragraphs` so the selection streams first (PRD 6.3);
  * Gemini keeps the key order via `propertyOrdering`. `project_ref` is nullable:
  * a user-mode source may be an experience or education alone (DM A.11).
@@ -14,7 +15,6 @@ export const Ai04SourceSchema = z.object({
   project_ref: DraftRef.nullable(),
   experience_ref: DraftRef.nullable(),
   education_ref: DraftRef.nullable(),
-  detail_refs: DraftRefs,
   role: z.enum(DRAFT_SOURCE_ROLES),
   rationale: z.string().max(600),
   requirement_refs: DraftRefs,

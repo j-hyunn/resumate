@@ -47,16 +47,22 @@ export function findUnknownTechTerms(text: string, corpus: string): string[] {
 
 // ---------- 본인 주어 + 상황·과제뿐인 근거 (AI-03 실패 유형: 팀 성과를 본인 성과로) ----------
 
-const CONTEXT_ONLY_FIELDS = new Set(["situation", "task"]);
+/**
+ * v4.5: a project's situation / task (affiliated STAR) and role (standalone
+ * 담당 업무 — same rank as task, C-1.1 [가정]) describe context and scope,
+ * not the user's own contribution.
+ */
+const CONTEXT_ONLY_FIELDS = new Set(["situation", "task", "role"]);
 
 /**
- * True when every career evidence of a claim block is a detail's situation or
- * task (team context), so the user's own contribution isn't backed. JD and
- * reflection evidence are ignored; no career evidence → false (V-4 handles it).
+ * True when every career evidence of a claim block is a project's situation,
+ * task or role (team context / scope), so the user's own contribution isn't
+ * backed. JD and reflection evidence are ignored; no career evidence → false
+ * (V-4 handles it).
  */
 export function isSituationTaskOnly(evidence: readonly ValidatedEvidence[]): boolean {
   const career = evidence.filter((e) => e.source_type !== "jd_sentence" && e.source_type !== "jd_requirement" && e.field !== "learnings");
-  return career.length > 0 && career.every((e) => e.source_type === "project_detail" && e.field !== null && CONTEXT_ONLY_FIELDS.has(e.field));
+  return career.length > 0 && career.every((e) => e.source_type === "project" && e.field !== null && CONTEXT_ONLY_FIELDS.has(e.field));
 }
 
 // ---------- V-7 범위 (AI-04 sources) ----------
@@ -65,27 +71,20 @@ export type SourceScopeItem = {
   projectAlias: string | null;
   /** EXP-n / EDU-n (the project's parent, or the selected experience/education itself). */
   parentAlias: string | null;
-  /** Narrows the project's details (AI-04 `detail_refs`); details of other projects are ignored. */
-  detailAliases: readonly string[];
 };
 
 /**
- * AI-04 V-7 (C-3): each source's project with its details (only `detail_refs`
- * when given), their achievements and the project's skills, plus the parent
- * experience/education itself and its experience-level achievements — but not
- * sibling projects. A source with no project = the whole experience/education.
- * Profile, JD, and notes are always in scope.
+ * AI-04 V-7 (C-3 v4.5): each source's project (affiliated STAR, or standalone
+ * role/description/deliverables/skills) plus the parent experience/education
+ * itself — but not sibling projects. A source with no project = the whole
+ * experience/education. Profile, JD, and notes are always in scope.
  */
 export function buildSourceScope(aliases: AliasMap, sources: readonly SourceScopeItem[]): Set<string> {
   const scope = buildSelectionScope(aliases, { refs: [] });
   for (const s of sources) {
     if (s.projectAlias) {
-      const details = s.detailAliases.filter((d) => aliases.get(d)?.parents.includes(s.projectAlias as string));
-      for (const a of buildSelectionScope(aliases, { refs: [s.projectAlias], detailRefs: details })) scope.add(a);
-      if (s.parentAlias) {
-        scope.add(s.parentAlias);
-        for (const e of aliases.values()) if (e.sourceType === "achievement" && e.parents.includes(s.parentAlias)) scope.add(e.alias);
-      }
+      for (const a of buildSelectionScope(aliases, { refs: [s.projectAlias] })) scope.add(a);
+      if (s.parentAlias) scope.add(s.parentAlias);
     } else if (s.parentAlias) {
       for (const a of buildSelectionScope(aliases, { refs: [s.parentAlias] })) scope.add(a);
     }

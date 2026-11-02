@@ -3,86 +3,101 @@ import { toCanonicalJsonSchema } from "../providers/schema";
 import { Ai12ExtractOutputSchema, ai12ExtractJsonSchema } from "./AI-12";
 import {
   emptyDraftChanges,
+  hasValue,
+  isApplicable,
+  isEmptyDraftChanges,
   isEmptyDraftPatch,
+  isPending,
+  isProtected,
   parseStructuredDraft,
   toDraftPatch,
   type DraftChanges,
 } from "./structured-draft";
 
-describe("parseStructuredDraft", () => {
+const obj = (extra: Record<string, unknown> = {}) => ({ value: "v", origin: "ai", source_message_ids: ["u"], source_quotes: ["q"], review: "ok", reviewed_at: null, applied_at: null, ...extra });
+
+describe("parseStructuredDraft (v3)", () => {
   it("fills the skeleton from the column default '{}'", () => {
-    expect(parseStructuredDraft({})).toEqual({
-      schema_version: 1,
-      project: {},
-      affiliation_suggestion: null,
-      details: [],
-      skills: [],
-      clarifications: [],
-      sensitive_flags_count: 0,
-    });
+    expect(parseStructuredDraft({})).toEqual({ schema_version: 3, project: {}, star: {}, classification: {}, clarifications: [], sensitive_flags_count: 0 });
   });
 
-  it("reads the RPC's stored shape (achievement_key, existing_detail_id)", () => {
+  it("reads the DM v4.4 stored shape (op, applied_at, classification reason)", () => {
     const draft = parseStructuredDraft({
-      schema_version: 1,
-      project: { name: { value: "x", origin: "ai", source_message_ids: ["u"], source_quotes: ["q"], review: "ok", reviewed_at: null } },
-      details: [
-        {
-          detail_key: "D1",
-          existing_detail_id: null,
-          fields: {},
-          achievements: [{ achievement_key: "A1", value_after: { value: 3, origin: "user_edit", source_message_ids: [], source_quotes: [], review: "ok", reviewed_at: null } }],
-        },
-        { detail_key: null, existing_detail_id: "e", fields: { result: { value: "r", origin: "ai", source_message_ids: ["u"], source_quotes: ["q"], review: "needs_review", reviewed_at: null } }, achievements: [] },
-      ],
-      clarifications: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1", existing_detail_id: null }],
+      schema_version: 3,
+      project: { start_month: obj({ value: "2023-03" }) },
+      star: { result: obj({ op: "append", review: "needs_review" }) },
+      classification: {
+        experience_type: { value: "problem_solving", origin: "ai", source_message_ids: [], reason: "이유", review: "ok", reviewed_at: null, applied_at: null },
+        competencies: { value: ["analysis", "execution"], origin: "ai", source_message_ids: ["u"], reason: null, review: "ok", reviewed_at: null, applied_at: "2026-11-02T00:00:00Z" },
+      },
+      clarifications: [{ kind: "actor_ambiguous", field: "action" }],
+      sensitive_flags_count: 1,
     });
-    expect(draft.details[0].achievements[0].achievement_key).toBe("A1");
-    expect(draft.details[1].fields.result?.review).toBe("needs_review");
+    expect(draft.star.result).toMatchObject({ op: "append", review: "needs_review", applied_at: null });
+    expect(draft.classification.experience_type?.reason).toBe("이유");
+    expect(draft.classification.competencies?.value).toEqual(["analysis", "execution"]);
+  });
+
+  it("defaults op to set and drops unknown keys (v4.4 details / skills / is_current)", () => {
+    const draft = parseStructuredDraft({ star: { action: { value: "a" } }, details: [], skills: [], project: { start_month: { value: "2023-03" } } });
+    expect(draft.star.action?.op).toBe("set");
+    expect(draft).not.toHaveProperty("details");
+    expect(() => parseStructuredDraft({ project: { is_current: { value: "true" } } })).toThrow();
   });
 
   it("throws on a malformed draft instead of resetting it", () => {
-    expect(() => parseStructuredDraft({ details: "nope" })).toThrow();
+    expect(() => parseStructuredDraft({ star: "nope" })).toThrow();
+    expect(() => parseStructuredDraft({ clarifications: [{ kind: "affiliation_unclear" }] })).toThrow();
   });
 });
 
-describe("toDraftPatch (RPC op list)", () => {
+describe("field predicates", () => {
+  it.each([
+    ["empty", obj({ value: null }), { has: false, pending: false, applicable: false, protected: false }],
+    ["blank", obj({ value: "  " }), { has: false, pending: false, applicable: false, protected: false }],
+    ["empty array", obj({ value: [] }), { has: false, pending: false, applicable: false, protected: false }],
+    ["ok", obj(), { has: true, pending: true, applicable: true, protected: false }],
+    ["needs_review", obj({ review: "needs_review" }), { has: true, pending: true, applicable: false, protected: false }],
+    ["accepted", obj({ review: "accepted" }), { has: true, pending: true, applicable: true, protected: true }],
+    ["user_edit", obj({ origin: "user_edit" }), { has: true, pending: true, applicable: true, protected: true }],
+    ["applied user_edit", obj({ origin: "user_edit", applied_at: "t" }), { has: true, pending: false, applicable: false, protected: false }],
+  ])("%s", (_name, f, expected) => {
+    const field = f as Parameters<typeof hasValue>[0];
+    expect({ has: hasValue(field), pending: isPending(field), applicable: isApplicable(field), protected: isProtected(field) }).toEqual(expected);
+  });
+});
+
+describe("toDraftPatch (RPC op list v3)", () => {
   const src = { source_message_ids: ["u1"], source_quotes: ["q"] };
 
-  it("orders new_detail first and maps each change to its op", () => {
+  it("orders sensitive, period, STAR, classification, clarifications", () => {
     const changes: DraftChanges = {
-      ...emptyDraftChanges(),
-      fields: [
-        { target: "detail", detail_key: "D1", existing_detail_id: null, field: "action", value: "a", review: "ok", ...src },
-        { target: "detail", detail_key: null, existing_detail_id: "e1", field: "result", value: "r", review: "needs_review", ...src },
-        { target: "project", detail_key: null, existing_detail_id: null, field: "team_size", value: 4, review: "ok", ...src },
+      period: [{ field: "start_month", value: "2023-03", review: "ok", ...src }],
+      star: [
+        { field: "action", op: "set", value: "a", review: "ok", ...src },
+        { field: "result", op: "append", value: "r", review: "needs_review", ...src },
       ],
-      new_details: [{ detail_key: "D1" }],
-      achievements: [{ detail_key: "D1", existing_detail_id: null, fields: { value_after: { value: 3, review: "ok", ...src } } }],
-      skills: [{ value: "Kafka", ...src }],
-      affiliation_suggestion: { type: "experience", id: "x", source_message_ids: ["u1"] },
+      classification: [{ field: "competencies", value: ["analysis"], source_message_ids: ["u1"], reason: null }],
       clarifications: [],
       sensitive_flags_add: 2,
     };
     expect(toDraftPatch(changes).ops).toEqual([
       { op: "add_sensitive_flags", count: 2 },
-      { op: "new_detail", detail_key: "D1" },
-      { op: "set", target: { section: "detail", detail_key: "D1", field: "action" }, value: "a", review: "ok", ...src },
-      { op: "set", target: { section: "detail", existing_detail_id: "e1", field: "result" }, value: "r", review: "needs_review", ...src },
-      { op: "set", target: { section: "project", field: "team_size" }, value: 4, review: "ok", ...src },
-      { op: "add_achievement", detail: { detail_key: "D1" }, fields: { value_after: { value: 3, review: "ok", ...src } } },
-      { op: "add_skill", value: "Kafka", ...src },
-      { op: "set_affiliation_suggestion", type: "experience", id: "x", source_message_ids: ["u1"] },
+      { op: "set", target: { section: "project", field: "start_month" }, value: "2023-03", review: "ok", ...src },
+      { op: "set", target: { section: "star", field: "action" }, value: "a", review: "ok", ...src },
+      { op: "append", target: { section: "star", field: "result" }, value: "r", review: "needs_review", ...src },
+      { op: "set", target: { section: "classification", field: "competencies" }, value: ["analysis"], source_message_ids: ["u1"], reason: null },
       { op: "set_clarifications", items: [] },
     ]);
   });
 
   it("empty changes → no ops; clamps to the RPC limits", () => {
+    expect(isEmptyDraftChanges(emptyDraftChanges())).toBe(true);
     expect(isEmptyDraftPatch(toDraftPatch(emptyDraftChanges()))).toBe(true);
     const many = Array.from({ length: 30 }, (_, i) => `q${i}`);
     const patch = toDraftPatch({
       ...emptyDraftChanges(),
-      skills: [{ value: "Go", source_message_ids: many, source_quotes: many }],
+      star: [{ field: "action", op: "set", value: "a", review: "ok", source_message_ids: many, source_quotes: many }],
       sensitive_flags_add: 500,
     });
     expect(patch.ops[0]).toEqual({ op: "add_sensitive_flags", count: 100 });
@@ -90,11 +105,9 @@ describe("toDraftPatch (RPC op list)", () => {
   });
 
   it("QA-S4-07: the sensitive count survives the 100-op cap", () => {
-    const src = { source_message_ids: ["u1"], source_quotes: ["q"] };
     const patch = toDraftPatch({
       ...emptyDraftChanges(),
-      skills: Array.from({ length: 150 }, (_, i) => ({ value: `S${i}`, ...src })),
-      clarifications: [],
+      star: Array.from({ length: 150 }, () => ({ field: "action" as const, op: "append" as const, value: "a", review: "ok" as const, ...src })),
       sensitive_flags_add: 3,
     });
     expect(patch.ops).toHaveLength(100);
@@ -102,28 +115,42 @@ describe("toDraftPatch (RPC op list)", () => {
   });
 });
 
-describe("AI-12 output schema (C-10.2)", () => {
-  it("converts to a canonical JSON schema", () => {
+describe("AI-12 output schema v3 (C-10.2)", () => {
+  it("converts to a canonical JSON schema with classification enums", () => {
     const schema = ai12ExtractJsonSchema();
     expect(schema).toMatchObject({ type: "object", additionalProperties: false });
-    expect((schema.required as string[]).sort()).toEqual(
-      ["achievements", "affiliation_suggestion", "clarifications", "detail_patches", "new_details", "project_patches", "schema_version", "sensitive_flags", "skills"],
-    );
+    expect((schema.required as string[]).sort()).toEqual(["clarifications", "classification_suggestions", "project_patches", "schema_version", "sensitive_flags", "star_patches"]);
+    expect(JSON.stringify(schema)).toContain('"new_build"');
+    expect(JSON.stringify(schema)).toContain('"learning_agility"');
     expect(() => toCanonicalJsonSchema(Ai12ExtractOutputSchema)).not.toThrow();
   });
 
   it("parses the spec example shape", () => {
     const parsed = Ai12ExtractOutputSchema.safeParse({
-      schema_version: 2,
-      project_patches: [{ field: "team_size", op: "set", value: 4, source_message_ids: ["M3"], source_quotes: ["저 포함 4명이었어요"] }],
-      detail_patches: [{ detail_key: "D1", detail_ref: null, field: "action", op: "set", value: "v", source_message_ids: ["M7"], source_quotes: ["q"] }],
-      achievements: [],
-      skills: [{ value: "Kafka", source_message_ids: ["M4"], source_quotes: ["Kafka로"] }],
-      new_details: [{ detail_key: "D2", source_message_ids: ["M15"] }],
-      affiliation_suggestion: { type: "experience", ref: "EXP-1", source_message_ids: ["M1"], source_quotes: ["에이비씨페이 다닐 때"] },
-      clarifications: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1", detail_ref: null, note: "n" }],
+      schema_version: 3,
+      project_patches: [{ field: "start_month", op: "set", value: "2023-03", source_message_ids: ["M2"], source_quotes: ["23년 3월부터"] }],
+      star_patches: [
+        { field: "action", op: "set", value: "v", source_message_ids: ["M7"], source_quotes: ["q"] },
+        { field: "result", op: "append", value: "r", source_message_ids: ["M9"], source_quotes: ["q"] },
+      ],
+      classification_suggestions: {
+        project_type: { value: "improvement", source_message_ids: ["M7"], reason: "기존 결제 API의 성능을 개선한 작업" },
+        experience_type: { value: "problem_solving", source_message_ids: ["M7", "M9"], reason: "병목을 찾아 해결한 경험" },
+        competencies: { value: ["problem_solving", "analysis"], source_message_ids: ["M7"], reason: null },
+      },
+      clarifications: [{ kind: "actor_ambiguous", field: "action", note: "n" }],
       sensitive_flags: [{ category: "health", message_id: "M6" }],
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it.each([
+    ["out-of-list classification", { classification_suggestions: { project_type: { value: "rocket", source_message_ids: [], reason: null }, experience_type: null, competencies: null } }],
+    ["append on a period", { project_patches: [{ field: "start_month", op: "append", value: "2023-03", source_message_ids: [], source_quotes: [] }] }],
+    ["is_current patch", { project_patches: [{ field: "is_current", op: "set", value: "true", source_message_ids: [], source_quotes: [] }] }],
+    ["v4.4 field", { star_patches: [{ field: "title", op: "set", value: "t", source_message_ids: [], source_quotes: [] }] }],
+  ])("rejects %s (V-6)", (_name, partial) => {
+    const base = { schema_version: 3, project_patches: [], star_patches: [], classification_suggestions: { project_type: null, experience_type: null, competencies: null }, clarifications: [], sensitive_flags: [] };
+    expect(Ai12ExtractOutputSchema.safeParse({ ...base, ...partial }).success).toBe(false);
   });
 });

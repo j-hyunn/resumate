@@ -2,12 +2,12 @@ import type { AliasMap } from "../../context-pack/aliases";
 import type { CareerRows } from "../../context-pack/career-rows";
 import type { EvidenceSourceType } from "../../evidence-rules";
 import { koInput, JD_ID, JD_UPDATED_AT } from "../AI-02/insight";
-import { careerRowsFixture, IDS } from "../career-rows";
+import { careerRowsFixture, IDS, project } from "../career-rows";
 
 /**
  * Synthetic S7 fixtures (AI-11, AI-03, AI-04). Fictional person and company.
- * Model outputs are built from the context's alias map so PRJ-n / DET-n
- * numbers always match the pack the pipeline builds.
+ * Model outputs are built from the context's alias map so the alias
+ * numbers always match the pack the pipeline builds (v4.5: PRJ-n / DLV-n).
  */
 
 export { careerRowsFixture, IDS, JD_ID, JD_UPDATED_AT };
@@ -29,35 +29,16 @@ export function manyProjectRows(count: number): CareerRows {
   const rows = careerRowsFixture();
   for (let i = 0; i < count; i++) {
     const id = `31000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
-    const detailId = `41000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
-    rows.projects.push({
-      id,
-      status: "complete",
-      experience_id: IDS.expB,
-      education_id: null,
-      name: `추가 프로젝트 ${i + 1}`,
-      start_month: `2020-${String((i % 12) + 1).padStart(2, "0")}-01`,
-      end_month: null,
-      role: "개발",
-      team_size: null,
-      summary: null,
-      created_at: "2026-01-10T00:00:00.000Z",
-      updated_at: "2026-01-10T00:00:00.000Z",
-    });
-    rows.projectDetails.push({
-      id: detailId,
-      status: "complete",
-      project_id: id,
-      title: `추가 상세 ${i + 1}`,
-      situation: "상황",
-      task: null,
-      action: "기능을 개발했다",
-      result: null,
-      learnings: null,
-      sort_order: 1,
-      created_at: "2026-01-10T00:00:00.000Z",
-      updated_at: "2026-01-10T00:00:00.000Z",
-    });
+    rows.projects.push(
+      project({
+        id,
+        experience_id: IDS.expB,
+        name: `추가 프로젝트 ${i + 1}`,
+        start_month: `2020-${String((i % 12) + 1).padStart(2, "0")}-01`,
+        situation: "상황",
+        action: "기능을 개발했다",
+      }),
+    );
   }
   return rows;
 }

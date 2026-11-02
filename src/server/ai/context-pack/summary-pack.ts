@@ -1,19 +1,23 @@
+import { classificationLine } from "../classification";
 import { buildCareerPack, type CareerPack } from "./career-pack";
 import type { AliasEntry } from "./aliases";
 import type { CareerRows } from "./career-rows";
 import type { YearMonth } from "./months";
 
 /**
- * Summary Career Context Pack for AI-11 (card 입력 컨텍스트: 경력·교육·프로젝트의
- * 이름·기간·역할·한 줄 요약, 상세 내용의 제목·행동 앞 200자, 스킬 태그, 연결 성과
- * 지표명; 회고 및 배운 점 제외).
+ * Summary Career Context Pack for AI-11 (card 입력 컨텍스트 v4.5: 경력·교육·프로젝트의
+ * 이름·기간, 소속 프로젝트의 분류 3종(참고)·역할(task) 앞 100자·행동 앞 200자·
+ * 결과/성과 앞 150자, 독립 프로젝트의 담당 업무·내용 앞 200자·사용 기술, 산출물
+ * 제목 + 앞 200자; 배운 점 제외).
  *
  * It is rendered from the full pack's alias map (same inclusion rules, same
  * aliases, same order), so `careerSnapshotHash` is the one C-1 hash and the
  * PRJ-n numbers match what other features see for the same rows.
  */
 
+export const SUMMARY_TASK_MAX = 100;
 export const SUMMARY_ACTION_MAX = 200;
+export const SUMMARY_RESULT_MAX = 150;
 export const SUMMARY_TEXT_MAX = 200;
 
 export type SummaryCareerPack = {
@@ -24,6 +28,7 @@ export type SummaryCareerPack = {
 
 export function buildSummaryCareerPack(rows: CareerRows, options: { asOf?: YearMonth } = {}): SummaryCareerPack {
   const full = buildCareerPack(rows, options);
+  const projectRows = new Map(rows.projects.map((p) => [p.id, p]));
   const entries = [...full.aliases.values()];
   const byAlias = new Map(entries.map((e) => [e.alias, e]));
   const skillsByProject = new Map<string, string[]>();
@@ -38,7 +43,7 @@ export function buildSummaryCareerPack(rows: CareerRows, options: { asOf?: YearM
       depth++;
       cur = byAlias.get(cur.parents[0]);
     }
-    // Parentless projects sit under the "기타 프로젝트" group line.
+    // Standalone projects sit under the "독립 프로젝트" group line.
     return cur?.sourceType === "project" ? depth + 1 : depth;
   };
 
@@ -67,29 +72,42 @@ export function buildSummaryCareerPack(rows: CareerRows, options: { asOf?: YearM
         );
         break;
       case "project": {
-        if (!e.parents.length && !otherGroupOpen) {
-          out.push("기타 프로젝트");
-          otherGroupOpen = true;
+        if (e.scope === "standalone") {
+          if (!otherGroupOpen) {
+            out.push("독립 프로젝트");
+            otherGroupOpen = true;
+          }
+          const skills = skillsByProject.get(e.alias) ?? [];
+          out.push(
+            pad +
+              line(e.alias, [
+                f.name,
+                f.period,
+                f.role ? `담당 업무: ${clip(f.role, SUMMARY_TEXT_MAX)}` : null,
+                f.description ? `내용: ${clip(f.description, SUMMARY_TEXT_MAX)}` : null,
+                skills.length ? `사용 기술: ${skills.join(", ")}` : null,
+              ]),
+          );
+        } else {
+          // C-1.2: classification is reference only; C-9: learnings are left out.
+          const row = projectRows.get(e.id);
+          const classification = row ? classificationLine(row) : null;
+          out.push(
+            pad +
+              line(e.alias, [
+                f.name,
+                f.period,
+                classification ? `분류(참고): ${classification}` : null,
+                f.task ? `역할: ${clip(f.task, SUMMARY_TASK_MAX)}` : null,
+                f.action ? `행동: ${clip(f.action, SUMMARY_ACTION_MAX)}` : null,
+                f.result ? `결과/성과: ${clip(f.result, SUMMARY_RESULT_MAX)}` : null,
+              ]),
+          );
         }
-        const skills = skillsByProject.get(e.alias) ?? [];
-        out.push(
-          pad +
-            line(e.alias, [
-              f.name,
-              f.period,
-              f.role ? `역할: ${f.role}` : null,
-              f.summary ? `요약: ${clip(f.summary, SUMMARY_TEXT_MAX)}` : null,
-              skills.length ? `스킬: ${skills.join(", ")}` : null,
-            ]),
-        );
         break;
       }
-      case "project_detail":
-        // C-9: learnings are left out of the summary pack.
-        out.push(pad + line(e.alias, [f.title, f.action ? `행동: ${clip(f.action, SUMMARY_ACTION_MAX)}` : null]));
-        break;
-      case "achievement":
-        out.push(pad + line(e.alias, [`성과 지표: ${e.label ?? "-"}`]));
+      case "project_deliverable":
+        out.push(pad + line(e.alias, [`산출물: ${e.fields.title ?? "-"}`, f.body ? clip(f.body, SUMMARY_TEXT_MAX) : null]));
         break;
       default:
         break;

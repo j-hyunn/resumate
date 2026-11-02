@@ -16,8 +16,15 @@ import { loadDraftCounts } from "@/server/services/drafts/progress"
 import * as applicationActions from "@/server/actions/application"
 import * as draftActions from "@/server/actions/draft"
 import * as interviewActions from "@/server/actions/interview"
-import { DeleteCareerItemInput, DeletionImpactInput, type CareerDeletionImpact, type WritingChatDeletionImpact } from "@/lib/contracts/career"
-import { invalid } from "@/lib/contracts/errors"
+import {
+  DeleteCareerItemInput,
+  DeletionImpactInput,
+  type CareerDeletionImpact,
+  type DeleteCareerItemResult,
+  type WritingChatDeletionImpact,
+} from "@/lib/contracts/career"
+import type { DeletableEntityType } from "@/lib/contracts/enums"
+import { AppError, invalid } from "@/lib/contracts/errors"
 import { requireConsentedUser } from "@/server/auth/session"
 import { rememberDeletedRow } from "@/server/auth/user-cookies"
 import * as career from "@/server/services/career"
@@ -118,12 +125,12 @@ function affectedSources(db: MockDb, set: CascadeSet) {
 export async function getDeletionImpact(
   entityType: DeletionEntityType,
   entityId: string,
-  affiliationMode: AffiliationMode = "keep_projects",
+  affiliationMode: AffiliationMode = "delete_projects",
 ): Promise<DeletionImpact> {
   return previewOr(
     () => mockDeletionImpact(entityType, entityId, affiliationMode),
     async () => {
-      const parsed = DeletionImpactInput.safeParse({ entityType, entityId, affiliationMode })
+      const parsed = DeletionImpactInput.safeParse({ entityType: legacyEntityType(entityType), entityId, affiliationMode: legacyAffiliationMode(entityType, affiliationMode) })
       if (!parsed.success) return unwrap(invalid(parsed.error))
       const { supabase } = await requireConsentedUser()
       return toDeletionImpact(await career.getDeletionImpact(supabase, parsed.data))
@@ -131,14 +138,64 @@ export async function getDeletionImpact(
   )
 }
 
-/** RPC jsonb → the screen's one shape (`writing_chat` has its own counts and no cascade, DM §4.2). */
+/**
+ * @deprecated R4 shim: the current UI still offers `project_detail` / `achievement` (dropped in DM v4.4)
+ * and "keep projects" (refused since CR-15). Those answer a clear error instead of acting differently.
+ */
+function legacyEntityType(entityType: DeletionEntityType): string {
+  if (entityType === "project_detail" || entityType === "achievement") {
+    throw new AppError("not_supported", "이 항목은 새 커리어 구조에서 없어졌어요. 새로고침 후 다시 확인해 주세요.", { status: 410 })
+  }
+  return entityType
+}
+
+/** CR-15: an experience / education delete always removes its projects; other types ignore the mode. */
+function legacyAffiliationMode(entityType: DeletionEntityType, mode: AffiliationMode): "delete_projects" {
+  if (mode === "keep_projects" && (entityType === "experience" || entityType === "education")) {
+    throw new AppError("affiliation_mode_not_supported", "경력·교육을 지우면 그 안의 프로젝트도 함께 지워져요. 새로고침 후 다시 시도해 주세요.", { status: 400 })
+  }
+  return "delete_projects"
+}
+
+/** RPC jsonb (v4.4) → the legacy screen shape (`writing_chat` has its own counts and no cascade, DM §4.2). */
 function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpact): DeletionImpact {
-  if ("cascade" in impact) return impact
+  if ("cascade" in impact) {
+    return {
+      cascade: { projects: impact.cascade.projects, project_details: 0, achievements: 0, project_skills: impact.cascade.project_skills, writing_chats: impact.cascade.writing_chats },
+      affected_results: impact.affected_results,
+    }
+  }
   return {
     cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0 },
     affected_results: { by_application_project: [] },
-    writing_chat: impact,
+    // v4.4 has no saved rows: `last_applied_at` set → "반영된 STAR는 남아요" (shown as 1 kept row).
+    writing_chat: { message_count: impact.message_count, linked_saved_rows: impact.last_applied_at ? 1 : 0 },
   }
+}
+
+/** C-05 v4.4 impact (S-09 / S-34 / S-43 / S-44 / S-10 패널). 연결 대기: the reworked delete dialog calls this. */
+export async function getCareerDeletionImpact(
+  entityType: DeletableEntityType,
+  entityId: string,
+): Promise<CareerDeletionImpact | WritingChatDeletionImpact> {
+  const parsed = DeletionImpactInput.safeParse({ entityType, entityId })
+  if (!parsed.success) return unwrap(invalid(parsed.error))
+  const { supabase } = await requireConsentedUser()
+  return career.getDeletionImpact(supabase, parsed.data)
+}
+
+/** C-05 v4.4 delete. 연결 대기. */
+export async function deleteCareerEntity(
+  entityType: DeletableEntityType,
+  entityId: string,
+  resultMode: ResultMode = "keep_results",
+): Promise<DeleteCareerItemResult> {
+  const parsed = DeleteCareerItemInput.safeParse({ entityType, entityId, resultMode })
+  if (!parsed.success) return unwrap(invalid(parsed.error))
+  const { supabase, user } = await requireConsentedUser()
+  const result = await career.deleteCareerItem(supabase, parsed.data)
+  await rememberDeletedRow(user.id, parsed.data.entityId)
+  return result
 }
 
 async function mockDeletionImpact(entityType: DeletionEntityType, entityId: string, affiliationMode: AffiliationMode): Promise<DeletionImpact> {
@@ -213,13 +270,13 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
 export async function deleteCareerItem(
   entityType: DeletionEntityType,
   entityId: string,
-  affiliationMode: AffiliationMode = "keep_projects",
+  affiliationMode: AffiliationMode = "delete_projects",
   resultMode: ResultMode = "keep_results",
 ): Promise<void> {
   return previewOr(
     () => mockDeleteCareerItem(entityType, entityId, affiliationMode, resultMode),
     async () => {
-      const parsed = DeleteCareerItemInput.safeParse({ entityType, entityId, affiliationMode, resultMode })
+      const parsed = DeleteCareerItemInput.safeParse({ entityType: legacyEntityType(entityType), entityId, affiliationMode: legacyAffiliationMode(entityType, affiliationMode), resultMode })
       if (!parsed.success) return unwrap(invalid(parsed.error))
       const { supabase, user } = await requireConsentedUser()
       await career.deleteCareerItem(supabase, parsed.data)

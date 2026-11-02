@@ -277,7 +277,7 @@ function setup(opts: { context?: ProviderContext | null; responses?: ScriptedRes
     pipelines: fakePipelines(db, calls, opts.behavior ?? {}),
     storeFor: () => db,
     ensureJd: async () => ({ status: "already_extracted" as const }),
-    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [], projectDetails: [], achievements: [], skills: [], projectSkills: [] }),
+    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] }),
     loaders: {
       jd: async () => ({ jobDescriptionId: "jd", updatedAt: null, extractionStatus: "succeeded", sentences: [], positionTitle: null, cultureSids: [], requirements: [] }),
       insightSignal: async () => null,

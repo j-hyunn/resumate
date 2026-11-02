@@ -31,16 +31,11 @@ insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
 insert into public.educations (id, institution_name, education_type, start_month)
   values ('a0000000-2222-0000-0000-000000000001', '한빛대', 'degree', '2015-03-01');
-insert into public.projects (id, experience_id, education_id, name, role) values
-  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 'Dev'),
-  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 'Lead'),
-  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', 'Dev'),
-  ('a0000000-3333-0000-0000-000000000004', null, null, '미완', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action, result, learnings) values
-  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't1', 's1', '인덱스 재설계', 'r1', null),
-  ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000002', 't2', 's2', 'a2', 'r2', null),
-  ('a0000000-4444-0000-0000-000000000003', 'a0000000-3333-0000-0000-000000000003', 't3', 's3', 'a3', 'r3', null),
-  ('a0000000-4444-0000-0000-000000000005', 'a0000000-3333-0000-0000-000000000001', 't5', 's5', 'a5', 'r5', '배운 점');
+insert into public.projects (id, experience_id, education_id, name, situation, action, result, learnings, role, description) values
+  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', null, '결제', 's1', '인덱스 재설계', 'r1', '배운 점', null, null),
+  ('a0000000-3333-0000-0000-000000000002', null, 'a0000000-2222-0000-0000-000000000001', '졸업 프로젝트', 's2', 'a2', 'r2', null, null, null),
+  ('a0000000-3333-0000-0000-000000000003', null, null, '사이드', null, null, null, null, 'Dev', 'd3'),
+  ('a0000000-3333-0000-0000-000000000004', null, null, '미완', null, null, null, null, 'Dev', null);
 insert into public.skills (id, name) values ('a0000000-6666-0000-0000-000000000001', 'Postgres');
 reset role;
 
@@ -48,10 +43,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}';
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('b0000000-1111-0000-0000-000000000001', 'B사', '2020-01-01', 'S');
-insert into public.projects (id, experience_id, name, role)
-  values ('b0000000-3333-0000-0000-000000000001', 'b0000000-1111-0000-0000-000000000001', 'B 결제', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action)
-  values ('b0000000-4444-0000-0000-000000000001', 'b0000000-3333-0000-0000-000000000001', 't', 's', 'a');
+insert into public.projects (id, experience_id, name, situation, action)
+  values ('b0000000-3333-0000-0000-000000000001', 'b0000000-1111-0000-0000-000000000001', 'B 결제', 's', 'a');
 reset role;
 
 select results_eq($$select status from public.projects where user_id = 'a0000000-0000-0000-0000-000000000001' order by id$$,
@@ -239,7 +232,6 @@ insert into t_src_bad values
                   {"education_id":"a0000000-2222-0000-0000-000000000001"},{"project_id":"a0000000-3333-0000-0000-000000000004"}]', 'invalid_sources'),
   ('empty object', '[{}]', 'invalid_sources'),
   ('experience + education', '[{"experience_id":"a0000000-1111-0000-0000-000000000001","education_id":"a0000000-2222-0000-0000-000000000001"}]', 'invalid_sources'),
-  ('details without project', '[{"experience_id":"a0000000-1111-0000-0000-000000000001","project_detail_ids":["a0000000-4444-0000-0000-000000000001"]}]', 'invalid_sources'),
   ('duplicate', '[{"project_id":"a0000000-3333-0000-0000-000000000001"},{"project_id":"a0000000-3333-0000-0000-000000000001","experience_id":"a0000000-1111-0000-0000-000000000001"}]', 'invalid_sources'),
   ('bad role', '[{"project_id":"a0000000-3333-0000-0000-000000000001","role":"lead"}]', 'invalid_sources'),
   ('bad uuid', '[{"project_id":"x"}]', 'invalid_sources'),
@@ -247,7 +239,6 @@ insert into t_src_bad values
   ('B project', '[{"project_id":"b0000000-3333-0000-0000-000000000001"}]', 'source_not_found'),
   ('B experience', '[{"experience_id":"b0000000-1111-0000-0000-000000000001"}]', 'source_not_found'),
   ('affiliation mismatch', '[{"project_id":"a0000000-3333-0000-0000-000000000002","experience_id":"a0000000-1111-0000-0000-000000000001"}]', 'source_not_found'),
-  ('detail of another project', '[{"project_id":"a0000000-3333-0000-0000-000000000001","project_detail_ids":["a0000000-4444-0000-0000-000000000003"]}]', 'source_not_found'),
   ('requirement of another project', '[{"project_id":"a0000000-3333-0000-0000-000000000001","requirement_ids":["a0000000-8888-0000-0000-000000000003"]}]', 'source_not_found');
 
 create function pg_temp.set_sources_err(p_label text) returns text language plpgsql as $f$
@@ -264,17 +255,17 @@ select is_empty($$select label, pg_temp.set_sources_err(label), code from t_src_
 select is((select count(*)::int from public.draft_section_sources), 0, 'set_section_sources: errors write nothing');
 
 select is(jsonb_array_length(public.set_section_sources(current_setting('t.q1')::uuid,
-            '[{"project_id":"a0000000-3333-0000-0000-000000000001","project_detail_ids":["a0000000-4444-0000-0000-000000000001"],
+            '[{"project_id":"a0000000-3333-0000-0000-000000000001","project_detail_ids":["a0000000-3333-0000-0000-000000000001"],
                "requirement_ids":["a0000000-8888-0000-0000-000000000001"]},
               {"experience_id":"a0000000-1111-0000-0000-000000000001"}]') -> 'sources'), 2,
           'set_section_sources: 2 sources');
 select results_eq($$select sort_order, experience_id::text, education_id::text, project_id::text, role, origin, source_label,
-                           cardinality(project_detail_ids), cardinality(requirement_ids)
+                           cardinality(requirement_ids)
                       from public.draft_section_sources where draft_section_id = current_setting('t.q1')::uuid order by sort_order$$,
                   $$values (0, 'a0000000-1111-0000-0000-000000000001'::text, null::text, 'a0000000-3333-0000-0000-000000000001'::text,
-                            'primary'::text, 'user'::text, 'A사 › 결제'::text, 1, 1),
-                           (1, 'a0000000-1111-0000-0000-000000000001', null, null, 'supporting', 'user', 'A사', 0, 0)$$,
-                  'set_section_sources: affiliation derived from the project, labels, default roles');
+                            'primary'::text, 'user'::text, 'A사 › 결제'::text, 1),
+                           (1, 'a0000000-1111-0000-0000-000000000001', null, null, 'supporting', 'user', 'A사', 0)$$,
+                  'set_section_sources: affiliation derived from the project, labels, default roles (R4: a stale project_detail_ids key is ignored)');
 select results_eq($$select source_selection_mode, sources_modified_at is not null from public.draft_sections
                      where id = current_setting('t.q1')::uuid$$,
                   $$values ('user'::text, true)$$, 'set_section_sources: user mode + sources_modified_at');
@@ -293,7 +284,7 @@ insert into t_cl values ('{
   "correction_applied": true,
   "sources": [
     {"project_id": "a0000000-3333-0000-0000-000000000001", "experience_id": "a0000000-1111-0000-0000-000000000001",
-     "project_detail_ids": ["a0000000-4444-0000-0000-000000000001"], "role": "primary", "rationale": "r1",
+     "project_detail_ids": ["a0000000-3333-0000-0000-000000000001"], "role": "primary", "rationale": "r1",
      "requirement_ids": ["a0000000-8888-0000-0000-000000000001"], "reuse_reason": null},
     {"project_id": "a0000000-3333-0000-0000-000000000002", "education_id": "a0000000-2222-0000-0000-000000000001",
      "project_detail_ids": [], "role": "supporting", "rationale": "r2", "requirement_ids": [], "reuse_reason": "대안 없음"}
@@ -302,7 +293,7 @@ insert into t_cl values ('{
   "meta": {"schema_version": 2, "prompt_version": "ai-04.generate.v1+common.v1", "provider": "gemini", "model": "gemini-x",
            "model_tier": "default", "connection_tier": "free", "validation_report": {"removed": 0}, "usage": {"input_tokens": 1}},
   "evidence": [
-    {"item_key": "q1-p1", "sort_order": 0, "source_type": "project_detail", "source_id": "a0000000-4444-0000-0000-000000000001",
+    {"item_key": "q1-p1", "sort_order": 0, "source_type": "project", "source_id": "a0000000-3333-0000-0000-000000000001",
      "source_field": "action", "quote": "인덱스 재설계", "owner_id": "b0000000-0000-0000-0000-000000000009"},
     {"item_key": "q1-p1", "sort_order": 1, "source_type": "user_note", "source_id": "Q1", "source_field": null, "quote": "메모"},
     {"item_key": "q1-p1", "sort_order": 2, "source_type": "jd_sentence", "source_id": "a0000000-dddd-0000-0000-000000000001",
@@ -416,11 +407,11 @@ union all select 'hashes missing', (select v - 'hashes' from t_cl)
 union all select 'schema_version 0', (select jsonb_set(v, '{meta,schema_version}', '0') from t_cl)
 union all select 'evidence unknown item_key', (select jsonb_set(v, '{evidence,0,item_key}', '"q9-p9"') from t_cl)
 union all select 'evidence sources index out of range', (select jsonb_set(v, '{evidence,3,item_key}', '"sources.2"') from t_cl)
-union all select 'user_note of another question', (select jsonb_set(v, '{evidence,1,source_id}', '"a0000000-4444-0000-0000-000000000001"') from t_cl)
+union all select 'user_note of another question', (select jsonb_set(v, '{evidence,1,source_id}', '"a0000000-3333-0000-0000-000000000001"') from t_cl)
 union all select 'user_note with field', (select jsonb_set(v, '{evidence,1,source_field}', '"note"') from t_cl)
 union all select 'learnings in job_competency', (select jsonb_set(jsonb_set(v, '{question_class}', '"job_competency"'),
-                                                  '{evidence,0}', '{"item_key":"q1-p1","sort_order":0,"source_type":"project_detail",
-                                                  "source_id":"a0000000-4444-0000-0000-000000000005","source_field":"learnings"}') from t_cl)
+                                                  '{evidence,0}', '{"item_key":"q1-p1","sort_order":0,"source_type":"project",
+                                                  "source_id":"a0000000-3333-0000-0000-000000000001","source_field":"learnings"}') from t_cl)
 union all select 'interview_answer source', (select jsonb_set(v, '{evidence,0,source_type}', '"interview_answer"') from t_cl)
 union all select 'evidence bad field (CHECK)', (select jsonb_set(v, '{evidence,0,source_field}', '"company_name"') from t_cl);
 grant select on t_cl_bad to app_ai_writer;
@@ -442,8 +433,8 @@ select is((select status from public.draft_sections where id = current_setting('
 
 -- learnings are fine outside job_competency (C-9).
 select is(public.complete_cover_letter_section(current_setting('t.q1')::uuid, 'a0000000-7777-0000-0000-000000000001', 1,
-            jsonb_set((select v from t_cl), '{evidence,5}', '{"item_key":"q1-p1","sort_order":3,"source_type":"project_detail",
-                       "source_id":"a0000000-4444-0000-0000-000000000005","source_field":"learnings","quote":"배운 점"}', true))
+            jsonb_set((select v from t_cl), '{evidence,5}', '{"item_key":"q1-p1","sort_order":3,"source_type":"project",
+                       "source_id":"a0000000-3333-0000-0000-000000000001","source_field":"learnings","quote":"배운 점"}', true))
             - 'completed_at' - 'section_id' - 'draft_id',
           '{"applied": true, "status": "ready", "draft_status": "composing", "generation_no": 1, "source_count": 2,
             "evidence_count": 6}'::jsonb,
@@ -456,16 +447,16 @@ select results_eq($$select status, generation_no, ai_char_count, correction_appl
                   $$values ('ready'::text, 1, 812, true, 'motivation'::text, true, 'q1-p1'::text, 'gemini-x'::text,
                             'ai-04.generate.v1+common.v1'::text, 2, 'cih1'::text, 'cch1'::text, true, true, '0'::text, '1'::text)$$,
                   'complete: question stored, edited_content reset (S7 [가정 4])');
-select results_eq($$select sort_order, origin, role, rationale, reuse_reason, source_label, project_detail_ids::text[],
+select results_eq($$select sort_order, origin, role, rationale, reuse_reason, source_label,
                            requirement_ids::text[], source_deleted_at is null
                       from public.draft_section_sources where draft_section_id = current_setting('t.q1')::uuid order by sort_order$$,
                   $$values (0, 'ai'::text, 'primary'::text, 'r1'::text, null::text, 'A사 › 결제'::text,
-                            array['a0000000-4444-0000-0000-000000000001'], array['a0000000-8888-0000-0000-000000000001'], true),
-                           (1, 'ai', 'supporting', 'r2', '대안 없음', '한빛대 › 졸업 프로젝트', '{}'::text[], '{}'::text[], true)$$,
+                            array['a0000000-8888-0000-0000-000000000001'], true),
+                           (1, 'ai', 'supporting', 'r2', '대안 없음', '한빛대 › 졸업 프로젝트', '{}'::text[], true)$$,
                   'complete: AI sources stored (origin ai, labels)');
 select set_eq($$select item_key || ':' || source_type || ':' || owner_type from public.evidence_links
                  where owner_id = current_setting('t.q1')::uuid$$,
-              array['q1-p1:project_detail:draft_section', 'q1-p1:user_note:draft_section', 'q1-p1:jd_sentence:draft_section',
+              array['q1-p1:project:draft_section', 'q1-p1:user_note:draft_section', 'q1-p1:jd_sentence:draft_section',
                     'sources.0:project:draft_section', 'sources.1:jd_requirement:draft_section'],
               'complete: evidence by block_id and sources.{n}; owner from the RPC');
 select is((select quote from public.evidence_links where source_type = 'user_note'), '메모',
@@ -522,7 +513,7 @@ select is(public.complete_cover_letter_section(current_setting('t.q1')::uuid, 'a
                                      {"project_id":"a0000000-3333-0000-0000-000000000001","experience_id":"a0000000-1111-0000-0000-000000000001",
                                       "role":"supporting","rationale":"목록 밖"}]'),
                       '{evidence}', '[{"item_key":"q1-p1","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000002","source_field":"name"},
-                                      {"item_key":"sources.0","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000002","source_field":"role"},
+                                      {"item_key":"sources.0","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000002","source_field":"task"},
                                       {"item_key":"sources.1","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000001","source_field":"name"}]'))
             ->> 'generation_no', '2', 'complete (user mode): generation_no 2');
 select results_eq($$select sort_order, project_id::text, origin, rationale from public.draft_section_sources
@@ -531,7 +522,7 @@ select results_eq($$select sort_order, project_id::text, origin, rationale from 
                            (1, 'a0000000-3333-0000-0000-000000000003', 'user', null)$$,
                   'complete (user mode): user rows kept, only the rationale refreshed, outside entry ignored');
 select set_eq($$select item_key || ':' || source_field from public.evidence_links where owner_id = current_setting('t.q1')::uuid$$,
-              array['q1-p1:name', 'sources.0:role'],
+              array['q1-p1:name', 'sources.0:task'],
               'complete (user mode): previous evidence replaced, outside source''s evidence dropped');
 select results_eq($$select source_selection_mode, sources_modified_at is null, provider, connection_tier
                       from public.draft_sections where id = current_setting('t.q1')::uuid$$,

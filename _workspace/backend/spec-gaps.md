@@ -617,3 +617,36 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - W5-1 **프로필은 낙관적 동시성이 없다 `[백엔드 요청]`** (W2-②의 나머지): `UpdateProfileInput`과 서비스에 `updated_at`이 없어 S-04는 나중 저장이 이긴다.
 - W5-2 **부모 없음과 행 없음이 같은 코드다** (`mapSaveError` 23503 → `not_found`): 화면은 "저장할 곳을 찾지 못했어요"로 합쳐 안내한다.
 - W5-3 **충돌 상태와 기간 역전 처리는 스펙에 없다 `[UI-가정]`**: 충돌은 사용자 선택, 기간 역전은 기간만 빼고 저장. 기획 확인 필요.
+
+## R4 (ai-pipeline-engineer, 2026-11-02)
+- R4-AI-1 **분류 추천 `reason` 길이** (AI C-14·AI-12 "≤ 100자" ↔ DM 2.5 "≤ 200자 `[가정]`"): 파이프라인(V-9i)은 100자로 자른다. DB는 200자까지 받으므로 충돌은 없지만 두 문서 값을 맞추면 좋다. `[가정]`
+- R4-AI-2 **팩의 프로젝트 기간 표기** (AI C-1 CR-22 "YYYY.MM - 현재 (N년 N개월)" ↔ 기존 팩 "YYYY-MM ~ 현재" + `computed_duration` 줄): 경력·교육과 같은 기존 표기를 유지했다(`YYYY-MM ~ 현재`, 종료월만 비면 `YYYY-MM ~ (종료 미입력)`이고 개월 수 없음). 모델 입력 형식이라 화면 영향은 없다. `[가정]`
+- R4-AI-3 **AI-12 응답 호출에 프로젝트 현재 값** (AI-12 처리 방식 "응답 = 이전 제안 + 프로젝트 현재 값 + …" ↔ 같은 카드 "AI 질문에는 구체적 사실을 넣지 않는다"): 응답 호출에는 값 없이 상태(값 있음/제안 있음/비어 있음)만 보낸다. 정리 호출에는 STAR 값과 남은 글자 수를 보낸다. `[가정]`
+
+## R4 (db-engineer, 2026-11-07)
+- R4-DB-1 **기존 데이터 비우기 `[가정]`** (DM 11.2 권고): 이관 대신 커리어 하위·대화 데이터를 지웠다(decisions.md 2026-11-07). 원격 적용 전에 남겨야 할 데이터가 없는지 확인 필요.
+- R4-DB-2 **AI-12 패치의 DB 입력 형식** (DM 2.5는 저장 모양만, AI 명세는 모델 출력만 정함): `apply_structured_draft_patch`는 `{ops:[{op:"set"|"append", target:{section, field}, value, source_message_ids, source_quotes, review}]}` 형식으로 받는다. 분류는 `{op:"set", target:{section:"classification", field}, value, source_message_ids?, reason?}`. `project.is_current`는 필드별 거부 사유 `field_not_patchable`(DM 거부 사유 목록에 없는 이름). `[가정]`
+- R4-DB-3 **사용자 STAR 수정과 V-9h** (DM 2.5 "V-9h AI·사용자 공통 — set 거부" ↔ "사용자 값 수정은 op 유지"): 사용자 수정은 거부하지 않고 `op`를 프로젝트 컬럼 기준(값 있음 → `append`, 없음 → `set`)으로 다시 정한다. 대화 중 왼쪽 섹션을 고친 뒤에도 카드 수정이 막히지 않게 하려는 것. 반영은 어차피 현재 값 뒤에 덧붙인다. `[가정]`
+- R4-DB-4 **`is_current = true`인 프로젝트의 `end_month` 제안**: 패치는 `field_already_filled`로 거부, 반영 RPC는 `period_already_set`으로 건너뜀(DM 3.3과 같음). 패치 쪽 이름은 DM에 없어 기존 사유를 썼다. `[가정]`
+- R4-DB-5 **상한 도달 `closed` 전이 시점** (DM 2.5 "마지막 응답 완료 시점 / 실패로 닫는 턴 정리"): `finish_assistant_message(…, 'done', …)`에서 `message_count > 38`이면 닫는다. 마지막 응답이 `failed`면 `active`로 둬서 "다시 보내기"가 되게 했다(닫으면 `begin_assistant_message`가 거부됨). 실패한 채 떠나면 대화가 `active`로 남는다(사용자 메시지는 `message_limit_reached`로 막힘). `[가정]`
+- R4-DB-6 **오류 코드 `writing_chat_closed`** (DM 2.5): `append_writing_chat_message`·`begin_assistant_message`·AI 패치가 이전 `writing_chat_not_active` 대신 `writing_chat_closed`를 낸다. 앱 오류 매핑 갱신 필요.
+- R4-DB-7 **분류 추천 `reason` 길이** (DM 2.5 ≤200 `[가정]` ↔ AI-12 ≤100, R4-AI-1과 같은 항목): DB는 200자로 자른다(거부 아님).
+- R4-DB-8 **V-9i ⑤ "상황·행동이 아직 없으면 추천 버림"**: DB는 강제하지 않는다(키 목록·빈 값·출처만 검사). 파이프라인 검증 몫. `[가정]`
+- R4-DB-9 **`source_snapshot_at` = `content_updated_at`** (DM 2.8, 11.1 evidence 행): DB 트리거로 계산하지 않았다. 결과 RPC는 payload 값을 저장하므로, 팩을 만든 시점의 `projects.content_updated_at`(산출물은 `updated_at`)을 파이프라인이 넣어야 한다. 저장 시점 값으로 덮으면 팩 생성 뒤 수정이 "변경됨"으로 안 보이기 때문.
+- R4-DB-10 **readiness `hints`의 `project_star`·`project_fields`** (DM 6장): 완료 프로젝트가 0개일 때 판정 순서(② STAR → ③ 내용)를 따라 **하나만** 넣는다. 둘 다 해당해도 `project_star`만 나온다. `[가정]`
+- R4-DB-11 **반영 RPC의 `invalid_period`** (DM 3.3 반환 목록에 없음): 제안 기간을 넣은 결과 `end_month < start_month`면 예외 `invalid_period`로 전체 거부한다(CHECK 위반을 사용자 오류로 바꿈). `[가정]`
+- R4-DB-12 **근거의 프로젝트 종류 불일치** (DM 2.8 "insert 트리거가 `invalid_evidence_source`로 거부"): 트리거 예외라 결과 저장 RPC 전체가 실패한다(다른 근거·결과도 저장 안 됨). 파이프라인 V-2에서 먼저 걸러야 한다.
+- R4-DB-13 ~~**마이그레이션 접두사**: `20261107…`가 `20261108000100_w1_…`보다 앞에 정렬~~ — **해소**: 리더가 파일명을 `20261109100100`~`20261109101600`으로 바꿔 w1 뒤로 정렬된다(QA-R4-04). QA 수정은 `20261109101700_r4_qa1_fixes.sql`.
+- R4-DB-14 **산출물 순서 변경과 `updated_at`**: 순서만 바뀌면 `updated_at`을 그대로 둔다(근거 "변경됨" 판정용, `project_details`와 같은 방식). `[가정]`
+- R4-DB-15 **대화 삭제 시 턴 작업 취소** (DM 4.2 v4.4): 기존엔 없던 `writing_chats` AFTER DELETE 트리거로 queued/running `writing_chat_turn`에 `cancel_requested_at`을 건다(프로젝트·경력 연쇄 삭제 포함).
+
+## R4 (api-engineer, 2026-11-02)
+- R4-API-1 **산출물 insert 타입과 `sort_order`** (DM 2.3 "새 행은 최댓값 + 1", db 노트 "생략 시 트리거가 채움"): 컬럼에 DB 기본값이 없어 생성 타입의 `Insert`가 `sort_order`를 필수로 요구한다. `saveDeliverable`은 `sort_order`를 빼고 보내되 그 한 줄만 타입을 우회했다(`as never`, 주석 있음). db-engineer에게 요청: 컬럼 기본값(예: `default 0` 후 트리거가 덮기) 또는 트리거 유지 + 타입 쪽 처리 결정. 동작 영향 없음. `[가정]`
+- R4-API-2 **옛 삭제 화면의 `keep_projects` 기본값** (DM 4.2 v4.4 CR-15 "keep_projects 거부" ↔ 현재 UI `deleteCareerItem(..., affiliationMode = "keep_projects")`): 호환 껍데기의 기본값을 `delete_projects`로 바꿨다. 화면이 명시적으로 `keep_projects`를 보내면 `affiliation_mode_not_supported`로 거부한다(조용히 다르게 지우지 않음). `[가정]`
+- R4-API-3 **옛 프로젝트 폼의 이름 없는 생성** (DM 2.3 `name` not null, CR-6 "이름을 받고 만든다"): 현재 S-10 폼은 이름 없이 저장을 시작할 수 있어, 껍데기는 이름이 비면 "새 프로젝트"로 만든다. 새 화면은 C-23에서 이름을 받는 `createProject`를 쓴다. `[가정]`
+- R4-API-4 **SSE 이벤트 필드 이름** (DM §7 `turn_done`(+ 빠른 버튼 3개, `ready_to_return`) ↔ 기존 계약은 camelCase): `turn_done.chips[] {label, requestedSlot}`, `readyToReturn`, `closed`, `needsReviewCount`, `applicableFields`로 camelCase를 유지했다. `draft_flags`는 `needsReview`·`actorAmbiguous`·`sensitiveAdded`·`sensitiveFlagsCount`·`lengthFull`·`clarifications`. ai 노트 5.3의 snake_case 제안과 이름만 다르고 내용은 같다. `[가정]`
+- R4-API-5 **빠른 칩 숨김 기준** (UX S-10 "`message_count` ≥ 36이면 숨긴다 `[가정]`"): 서버가 `turn_done`·대화 조회에서 36 이상이거나 다음 턴을 받을 수 없으면(`closed`·상한) 빈 배열을 보낸다(`QUICK_CHIPS_HIDE_FROM`). `[가정]`
+- R4-API-6 **반영 응답** (DM §7 "응답 `{applied, skipped, project_status}`로 왼쪽 STAR를 갱신"): 서버 응답에 갱신된 `structuredDraft`를 더 넣었다(카드의 "반영됨" 표시용). 왼쪽 STAR 값 자체는 응답에 없어 화면이 프로젝트를 다시 읽는다(`getProjectPage`). `[가정]`
+- R4-API-7 **옛 대화 화면의 `closed`**: 호환 껍데기는 v4.4 `closed`를 옛 `saved`(읽기 전용)로, 모든 대화를 `augment_project`로 보이고 v3 정리 결과는 비워(`{}`) 보인다. 옛 저장·폼 전환·소속·그만두기·다시 이어 하기는 `not_supported`(410) 또는 무동작. UI 재작업 전까지 옛 S-36에서는 제안을 볼 수 없다. `[가정]`
+- R4-API-8 **근거 "변경됨" 기준** (DM 2.8 v4.4 `source_snapshot_at` = `content_updated_at`): 칩 상태 계산(`services/evidence`, `lib/data/evidence`)이 프로젝트는 `content_updated_at`, 산출물은 `updated_at`과 비교한다. 분류·Link만 바뀐 프로젝트는 "변경됨"이 아니다.
+- R4-API-9 **`pnpm build`와 환경 변수**: `.env.local`이 없는 작업 트리에서는 정적 생성 단계가 `NEXT_PUBLIC_SUPABASE_URL` 누락으로 실패한다(R4 이전부터, `/career/skills` 등 서버 데이터를 읽는 페이지). 로컬 스택 값을 환경 변수로 주면 통과한다. 동작 영향 없음, 기록만.

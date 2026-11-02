@@ -8,8 +8,7 @@ export const EVIDENCE_SOURCE_TYPES = [
   "experience",
   "education",
   "project",
-  "project_detail",
-  "achievement",
+  "project_deliverable",
   "skill",
   "jd_sentence",
   "jd_requirement",
@@ -45,19 +44,34 @@ export const EVIDENCE_RULES: Readonly<Record<EvidenceSourceType, Rule>> = {
     fields: ["institution_name", "program_name", "education_type", "enrollment_status", "period", "description"],
     quoteRequired: ["description"],
   },
-  project: { ref: /^PRJ-\d+$/, fields: ["name", "role", "team_size", "summary", "period"], quoteRequired: ["summary"] },
-  project_detail: {
-    ref: /^DET-\d+$/,
-    fields: ["title", "situation", "task", "action", "result", "learnings"],
-    quoteRequired: ["situation", "task", "action", "result", "learnings"],
+  // v4.5 (CR-2·CR-7·CR-10): STAR fields on affiliated projects, role/description on
+  // standalone ones. Which subset applies to one PRJ-n is PROJECT_SCOPE_FIELDS (V-2).
+  project: {
+    ref: /^PRJ-\d+$/,
+    fields: ["name", "period", "situation", "task", "action", "result", "learnings", "role", "description"],
+    quoteRequired: ["situation", "task", "action", "result", "learnings", "role", "description"],
   },
-  achievement: { ref: /^ACH-\d+$/, fields: ["metric", "description"], quoteRequired: ["description"] },
+  // v4.5 (CR-8, C-1.1): quote-based evidence on the normalized text that entered the pack.
+  project_deliverable: { ref: /^DLV-\d+$/, fields: ["title", "body"], quoteRequired: ["body"] },
   skill: { ref: /^SKL-\d+$/, fields: ["name"], quoteRequired: [] },
   jd_sentence: { ref: /^S\d+$/, fields: [], quoteRequired: [] },
   jd_requirement: { ref: /^REQ-\d+$/, fields: [], quoteRequired: [] },
   interview_answer: { ref: /^ANS-\d+$/, fields: [], quoteRequired: ["*"] },
   user_note: { ref: /^NOTE-\d+$/, fields: [], quoteRequired: ["*"] },
   writing_chat_message: { ref: /^M-\d+$/, fields: [], quoteRequired: ["*"] },
+};
+
+/**
+ * AI spec C-3 v4.5 `project` row: a PRJ-n alias is either an affiliated project
+ * (experience/education, STAR) or a standalone project (role/description).
+ * Classification (project_type / experience_type / competencies) and link_url
+ * are never citable (C-1.2).
+ */
+export const PROJECT_SCOPES = ["affiliated", "standalone"] as const;
+export type ProjectScope = (typeof PROJECT_SCOPES)[number];
+export const PROJECT_SCOPE_FIELDS: Readonly<Record<ProjectScope, readonly string[]>> = {
+  affiliated: ["name", "period", "situation", "task", "action", "result", "learnings"],
+  standalone: ["name", "period", "role", "description"],
 };
 
 /** Key used in alias entries for sources without fields (JD sentence, answer, note, …). */
@@ -72,9 +86,9 @@ export function isQuoteRequired(sourceType: EvidenceSourceType, field: string | 
   return rule.quoteRequired.includes("*") || (field !== null && rule.quoteRequired.includes(field));
 }
 
-/** C-9: `project_detail.learnings` is the user's reflection, not a fact. */
+/** C-9 (v4.5): `project.learnings` (affiliated project STAR) is the user's reflection, not a fact. */
 export function isReflectionEvidence(e: { source_type: string; field?: string | null }): boolean {
-  return e.source_type === "project_detail" && e.field === "learnings";
+  return e.source_type === "project" && e.field === "learnings";
 }
 
 /**
@@ -87,8 +101,7 @@ export const CAREER_SUPPORT_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new 
   "experience",
   "education",
   "project",
-  "project_detail",
-  "achievement",
+  "project_deliverable",
   "skill",
   "interview_answer",
   "user_note",
@@ -119,10 +132,13 @@ export function isCareerSupportEvidence(
 }
 
 /**
- * A fact a question or a `met` verdict may rest on: a detail's action / result
- * or an achievement (AI spec AI-02 판정 기준, 4.1 사실 전제 v3 / A11).
- * Situation, task, summaries, skill tags and learnings are not enough.
+ * A fact a question or a `met` verdict may rest on (AI spec AI-02 판정 기준,
+ * 4.1 사실 전제 A11, v4.5): an affiliated project's action / result, a
+ * standalone project's description, or a deliverable body (C-1.1).
+ * Situation, task, role, skill tags, classification, and learnings are not enough.
+ * V-2 already guarantees `description` only comes from a standalone project.
  */
 export function isActionResultEvidence(e: { source_type: string; field?: string | null }): boolean {
-  return e.source_type === "achievement" || (e.source_type === "project_detail" && (e.field === "action" || e.field === "result"));
+  if (e.source_type === "project") return e.field === "action" || e.field === "result" || e.field === "description";
+  return e.source_type === "project_deliverable" && e.field === "body";
 }

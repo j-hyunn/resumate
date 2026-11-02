@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ReadinessAiConnection } from "./ai-connection";
-import type { ActiveWritingChatSummary } from "./writing-chat";
+import type { ProjectWritingChatSummary } from "./writing-chat";
 import {
   AFFILIATION_MODES,
   DATA_SUFFICIENCIES,
@@ -11,11 +11,16 @@ import {
   READINESS_HINTS,
   READINESS_MISSING,
   READINESS_NEXT_ACTIONS,
-  READINESS_SUGGESTED_MODES,
   RESULT_MODES,
   SKILL_PROFICIENCIES,
-  type AchievementKind,
+  COMPETENCIES,
+  EXPERIENCE_TYPES,
+  MAX_COMPETENCIES,
+  PROJECT_TYPES,
   type CareerStatus,
+  type Competency,
+  type ExperienceType,
+  type ProjectType,
   type EducationType,
   type EmploymentType,
   type EnrollmentStatus,
@@ -36,12 +41,11 @@ import {
 export const CAREER_LIMITS = {
   experience: { companyName: 100, jobRank: 50, jobPosition: 100, department: 100, summary: 2000 },
   education: { institutionName: 100, programName: 100, description: 2000 },
-  project: { name: 100, role: 100, summary: 200, teamSizeMax: 10000 },
-  projectDetail: { title: 100, body: 2000 },
-  achievement: { metricName: 100, unit: 30, description: 2000 },
+  project: { name: 100, role: 100, star: 2000, description: 5000, linkUrl: 2048 },
+  deliverable: { title: 100, body: 20000 },
   skill: { name: 50 },
-  /** Upper bound for reorder_project_details input. */
-  maxProjectDetails: 200,
+  /** project_deliverables per project ([가정] DM 2.3, PRD F-P1-18). */
+  maxDeliverables: 50,
 } as const;
 
 // ---------- year-month ----------
@@ -140,9 +144,9 @@ export const SaveEducationInput = z
 export type SaveEducationInput = z.input<typeof SaveEducationInput>;
 export type SaveEducationPatch = z.output<typeof SaveEducationInput>;
 
-// ---------- projects (DM §2.3, S-10) ----------
+// ---------- projects v4.4 (DM §2.3, S-10 / S-43, CR-2·CR-6·CR-7·CR-9·CR-22) ----------
 
-/** One of experience / education / none (DM: num_nonnulls(experience_id, education_id) <= 1). */
+/** Where a new project lives. Fixed afterwards except experience ↔ education (DB: project_scope_change_not_allowed). */
 export const ProjectAffiliation = z.discriminatedUnion("type", [
   z.object({ type: z.literal("experience"), id: uuid }),
   z.object({ type: z.literal("education"), id: uuid }),
@@ -150,73 +154,96 @@ export const ProjectAffiliation = z.discriminatedUnion("type", [
 ]);
 export type ProjectAffiliation = z.infer<typeof ProjectAffiliation>;
 
+const projectName = z.string().trim().min(1).max(CAREER_LIMITS.project.name);
+const starText = text(CAREER_LIMITS.project.star);
+
+/** Up to 3 distinct competency keys, order kept (F-P1-19, CR-17). */
+const competencies = z
+  .array(z.enum(COMPETENCIES))
+  .max(MAX_COMPETENCIES)
+  .refine((v) => new Set(v).size === v.length, { message: "duplicate_competency" });
+
+const linkUrl = z
+  .union([z.string().trim().max(CAREER_LIMITS.project.linkUrl).regex(/^https?:\/\//i, "http(s) URL"), z.literal("")])
+  .nullable()
+  .transform((v) => (v === "" ? null : v))
+  .optional();
+
+/**
+ * C-23 "프로젝트 추가" (DM §7 v4.4, CR-6): a draft project from its name and affiliation only.
+ * `id` is client-generated (retry-safe create, QA-S2-03); omitted → the server makes one.
+ */
+export const CreateProjectInput = z.object({
+  id: uuid.optional(),
+  name: projectName,
+  affiliation: ProjectAffiliation,
+});
+export type CreateProjectInput = z.input<typeof CreateProjectInput>;
+
+/**
+ * Section save (C-24, DM §7 "섹션 저장"): one section's columns at a time — 머리/정보
+ * (name, period, is_current, classification, affiliation move), one STAR field, 내용, Link.
+ * Update only; an omitted key is left alone, `null` / `''` clears it. Which keys are allowed
+ * depends on the scope (DM-20 CHECKs): STAR / classification on affiliated, role / description /
+ * link_url on standalone — the DB refuses the other kind (`invalid_input`).
+ * `isCurrent: true` also clears end_month (projects_is_current_check, CR-22).
+ */
 export const SaveProjectInput = z
   .object({
-    ...saveMeta,
+    id: uuid,
+    expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+    /** experience ↔ education only (`none` is refused: project_scope_change_not_allowed). */
     affiliation: ProjectAffiliation.optional(),
-    name: text(CAREER_LIMITS.project.name),
-    role: text(CAREER_LIMITS.project.role),
-    summary: text(CAREER_LIMITS.project.summary),
+    name: projectName.optional(),
     startMonth: nullableYearMonth,
     endMonth: nullableYearMonth,
-    teamSize: z.number().int().min(1).max(CAREER_LIMITS.project.teamSizeMax).nullable().optional(),
+    isCurrent: z.boolean().optional(),
+    projectType: z.enum(PROJECT_TYPES).nullable().optional(),
+    experienceType: z.enum(EXPERIENCE_TYPES).nullable().optional(),
+    competencies: competencies.optional(),
+    situation: starText,
+    task: starText,
+    action: starText,
+    result: starText,
+    learnings: starText,
+    role: text(CAREER_LIMITS.project.role),
+    description: text(CAREER_LIMITS.project.description),
+    linkUrl,
   })
-  .refine(endNotBeforeStart, { message: "end_before_start", path: ["endMonth"] });
+  .refine(endNotBeforeStart, { message: "end_before_start", path: ["endMonth"] })
+  .refine((v) => !(v.isCurrent === true && v.endMonth), { message: "current_with_end", path: ["endMonth"] });
 export type SaveProjectInput = z.input<typeof SaveProjectInput>;
 export type SaveProjectPatch = z.output<typeof SaveProjectInput>;
 
-// ---------- project_details (DM §2.3, S-35) ----------
+// ---------- project_deliverables (DM §2.3 v4.4, S-44, CR-8) ----------
 
-const detailBody = text(CAREER_LIMITS.projectDetail.body);
+/**
+ * S-44 save. Create (no `expectedUpdatedAt`) needs `projectId` + `title`; the row goes last
+ * (sort_order = max + 1, DB trigger). Standalone projects only (`deliverable_requires_standalone_project`),
+ * ≤ 50 per project (`deliverable_limit_reached`, [가정]).
+ */
+export const SaveDeliverableInput = z.object({
+  ...saveMeta,
+  projectId: uuid.optional(),
+  title: z.string().trim().min(1).max(CAREER_LIMITS.deliverable.title).optional(),
+  body: z.string().max(CAREER_LIMITS.deliverable.body).optional(),
+});
+export type SaveDeliverableInput = z.input<typeof SaveDeliverableInput>;
+export type SaveDeliverablePatch = z.output<typeof SaveDeliverableInput>;
 
-/** `projectId` is needed to create and ignored on update (a detail never moves between projects). */
-export const SaveProjectDetailInput = z
-  .object({
-    ...saveMeta,
-    projectId: uuid.optional(),
-    title: text(CAREER_LIMITS.projectDetail.title),
-    situation: detailBody,
-    task: detailBody,
-    action: detailBody,
-    result: detailBody,
-    learnings: detailBody,
-  });
-export type SaveProjectDetailInput = z.input<typeof SaveProjectDetailInput>;
-export type SaveProjectDetailPatch = z.output<typeof SaveProjectDetailInput>;
-
-export const ReorderProjectDetailsInput = z.object({
+/** reorder_project_deliverables: every deliverable of the project, new order ([가정] DM 2.3). */
+export const ReorderDeliverablesInput = z.object({
   projectId: uuid,
   orderedIds: z
     .array(uuid)
     .min(1)
-    .max(CAREER_LIMITS.maxProjectDetails)
+    .max(CAREER_LIMITS.maxDeliverables)
     .refine((ids) => new Set(ids).size === ids.length, { message: "duplicate_id" }),
 });
-export type ReorderProjectDetailsInput = z.input<typeof ReorderProjectDetailsInput>;
+export type ReorderDeliverablesInput = z.input<typeof ReorderDeliverablesInput>;
 
-// ---------- achievements (DM §2.3, S-11) ----------
-
-/** Fixed at creation by the entry screen (S-11): a project detail or an experience. Needed to create. */
-export const AchievementTarget = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("project_detail"), id: uuid }),
-  z.object({ type: z.literal("experience"), id: uuid }),
-]);
-export type AchievementTarget = z.infer<typeof AchievementTarget>;
-
-const metricValue = z.number().finite().nullable().optional();
-
-export const SaveAchievementInput = z
-  .object({
-    ...saveMeta,
-    target: AchievementTarget.optional(),
-    metricName: text(CAREER_LIMITS.achievement.metricName),
-    valueBefore: metricValue,
-    valueAfter: metricValue,
-    unit: text(CAREER_LIMITS.achievement.unit),
-    description: text(CAREER_LIMITS.achievement.description),
-  });
-export type SaveAchievementInput = z.input<typeof SaveAchievementInput>;
-export type SaveAchievementPatch = z.output<typeof SaveAchievementInput>;
+export const DeliverableIdInput = z.object({ id: uuid });
+export const ProjectIdInput = z.object({ id: uuid });
 
 // ---------- skills (DM A.4, S-12, F-P1-05) ----------
 
@@ -255,12 +282,12 @@ export const UpdateSkillInput = z
   .refine((v) => v.name !== undefined || v.proficiency !== undefined, { message: "empty patch" });
 export type UpdateSkillInput = z.input<typeof UpdateSkillInput>;
 
-// ---------- deletion (DM §4.1–4.2, C-05) ----------
+// ---------- deletion (DM §4.1–4.2 v4.4, C-05) ----------
 
 export const DeletionImpactInput = z.object({
   entityType: z.enum(DELETABLE_ENTITY_TYPES),
   entityId: uuid,
-  affiliationMode: z.enum(AFFILIATION_MODES).default("keep_projects"),
+  affiliationMode: z.enum(AFFILIATION_MODES).default("delete_projects"),
 });
 export type DeletionImpactInput = z.input<typeof DeletionImpactInput>;
 
@@ -271,15 +298,15 @@ export type DeleteCareerItemInput = z.input<typeof DeleteCareerItemInput>;
 
 const count = z.number().int().nonnegative();
 
+/** DM §4.2 v4.4: children removed with the target (target itself not counted). */
 export const DeletionCascadeCounts = z.object({
   projects: count,
-  project_details: count,
-  achievements: count,
+  project_deliverables: count,
   project_skills: count,
   writing_chats: count,
 });
 
-/** v2 shape per application project (DM §4.2). S6: `insights` = distinct insights whose evidence points at the deleted rows (only projects with ≥ 1); drafts / draft_sections / interview_sessions stay 0 until S7–S8. */
+/** Per application project, only those with ≥ 1 (DM §4.2). */
 export const AffectedApplicationProject = z.object({
   application_project_id: z.guid(),
   name: z.string(),
@@ -295,12 +322,12 @@ export const CareerDeletionImpact = z.object({
   affected_results: z.object({ by_application_project: z.array(AffectedApplicationProject) }),
 });
 /**
- * `entity_type = 'writing_chat'` (S4, DM §4.2): no result impact. `linked_saved_rows` = career rows
- * saved from the chat; they stay (source_writing_chat_id becomes null, DM §3.4).
+ * `entity_type = 'writing_chat'` (DM §4.2 v4.4): no result impact. `last_applied_at` non-null →
+ * the screen says "반영된 STAR는 남아요" (the applied text stays on the project).
  */
 export const WritingChatDeletionImpact = z.object({
   message_count: count,
-  linked_saved_rows: count,
+  last_applied_at: z.string().nullable(),
 });
 export type CareerDeletionImpact = z.infer<typeof CareerDeletionImpact>;
 export type WritingChatDeletionImpact = z.infer<typeof WritingChatDeletionImpact>;
@@ -313,7 +340,7 @@ const deleteEcho = {
   result_mode: z.enum(RESULT_MODES),
 };
 
-/** RPC `delete_career_item` jsonb: what was removed with the target (target itself not counted). */
+/** RPC `delete_career_item` jsonb: input echo + the impact. */
 export const DeleteCareerItemResult = z.union([
   z.object({
     entity_type: z.enum(DELETABLE_ENTITY_TYPES).exclude(["writing_chat"]),
@@ -324,15 +351,16 @@ export const DeleteCareerItemResult = z.union([
   z.object({ entity_type: z.literal("writing_chat"), ...deleteEcho, ...WritingChatDeletionImpact.shape }),
 ]);
 export type DeleteCareerItemResult = z.infer<typeof DeleteCareerItemResult>;
+export type DeleteCareerItemResponse = DeleteCareerItemResult;
 
-// ---------- readiness (DM §6, C-09/C-10) ----------
+// ---------- readiness (DM §6 v4.4, C-09/C-10) ----------
 
 const NotReadyFeature = z.object({
   ready: z.literal(false),
   missing: z.array(z.enum(READINESS_MISSING)),
   hints: z.array(z.enum(READINESS_HINTS)),
   next_action: z.enum(READINESS_NEXT_ACTIONS),
-  suggested_mode: z.enum(READINESS_SUGGESTED_MODES).optional(),
+  /** writing_chat / form on a draft project: the most recently edited one to open (S-10 / S-43). */
   suggested_project_id: z.guid().optional(),
 });
 const ReadyFeature = z.object({
@@ -343,15 +371,14 @@ const ReadyFeature = z.object({
 export const ReadinessFeature = z.discriminatedUnion("ready", [ReadyFeature, NotReadyFeature]);
 export type ReadinessFeature = z.infer<typeof ReadinessFeature>;
 
-/** RPC `get_data_readiness` jsonb, kept in the RPC's snake_case (DM §6 is the documented shape). */
+/** RPC `get_data_readiness` jsonb (DM §6 v4.4), kept in the RPC's snake_case. */
 export const DataReadiness = z.object({
   counts: z.object({
     complete_experiences: count,
     complete_educations: count,
     complete_projects: count,
-    projects_without_complete_detail: count,
-    complete_project_details: count,
-    draft_project_details: count,
+    projects_without_complete_star: count,
+    standalone_projects_without_description: count,
     draft_experiences: count,
     draft_educations: count,
     draft_projects: count,
@@ -361,7 +388,6 @@ export const DataReadiness = z.object({
     experiences: z.array(z.guid()),
     educations: z.array(z.guid()),
     projects: z.array(z.guid()),
-    project_details: z.array(z.guid()),
   }),
   features: z.object({
     insight: ReadinessFeature,
@@ -369,30 +395,15 @@ export const DataReadiness = z.object({
     job_interview: ReadinessFeature,
     culture_fit_interview: z.object({ ready: z.boolean(), data_sufficiency: z.enum(DATA_SUFFICIENCIES) }),
   }),
-  /** DM §6 v4: AI connection state (F-AI-06 lock). No active provider or an invalid key → next_action is `form`. */
+  /** DM §6 v4: AI connection state (F-AI-06 lock). */
   ai_connection: ReadinessAiConnection,
 });
 export type DataReadiness = z.infer<typeof DataReadiness>;
 
 // ---------- DTOs (responses) ----------
 
-/** Every auto-save returns this; `status` is what the DB computed. */
+/** Every save returns this; `status` is what the DB computed. */
 export type SaveResult = { id: string; status: CareerStatus; updatedAt: string };
-
-/**
- * A detail save can flip its project's status (and then its updated_at, DM §2.2 / §4.2),
- * so the project's new state comes back too: the open project form must take
- * `project.updatedAt` as its next `expectedUpdatedAt` (QA-S2-04).
- */
-export type SaveProjectDetailResult = SaveResult & { sortOrder: number; project: SaveResult };
-
-/**
- * `deleteCareerItem` response: the RPC result plus the current state of projects
- * the delete may have touched (QA-S2-04) — the parent of a deleted detail, or the
- * projects that a kept-projects experience/education delete turned standalone.
- * Projects that were deleted are not listed.
- */
-export type DeleteCareerItemResponse = DeleteCareerItemResult & { updatedProjects: SaveResult[] };
 
 export type ExperienceDto = {
   id: string;
@@ -424,63 +435,49 @@ export type EducationDto = {
   updatedAt: string;
 };
 
+/** affiliated = under an experience / education (STAR + classification); standalone = no affiliation. */
+export type ProjectScope = "affiliated" | "standalone";
+
+/** projects v4.4 (DM §2.3). Fields of the other scope are always null / empty. */
 export type ProjectDto = {
   id: string;
   status: CareerStatus;
+  scope: ProjectScope;
   experienceId: string | null;
   educationId: string | null;
-  name: string | null;
-  role: string | null;
-  summary: string | null;
+  name: string;
   startMonth: string | null;
   endMonth: string | null;
-  teamSize: number | null;
-  sourceWritingChatId: string | null;
-  /** project_skills in insertion order. */
-  skillIds: string[];
-  /** Number of project_details (any status). */
-  detailCount: number;
-  completeDetailCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** STAR + 회고 filled flags for the S-08 / S-10 detail rows. */
-export type StarFilled = { situation: boolean; task: boolean; action: boolean; result: boolean; learnings: boolean };
-
-export type ProjectDetailDto = {
-  id: string;
-  projectId: string;
-  status: CareerStatus;
-  title: string | null;
+  isCurrent: boolean;
+  // affiliated
+  projectType: ProjectType | null;
+  experienceType: ExperienceType | null;
+  competencies: Competency[];
   situation: string | null;
   task: string | null;
   action: string | null;
   result: string | null;
   learnings: string | null;
-  sortOrder: number;
+  /** The chat that last applied a proposal here (DM 2.3 v4.4). */
   sourceWritingChatId: string | null;
-  filled: StarFilled;
-  achievementCount: number;
+  // standalone
+  role: string | null;
+  description: string | null;
+  linkUrl: string | null;
+  /** Evidence "변경됨" baseline (DM 2.8). */
+  contentUpdatedAt: string;
   createdAt: string;
   updatedAt: string;
 };
 
-export type AchievementDto = {
-  id: string;
-  status: CareerStatus;
-  projectDetailId: string | null;
-  experienceId: string | null;
-  metricName: string | null;
-  valueBefore: number | null;
-  valueAfter: number | null;
-  unit: string | null;
-  description: string | null;
-  kind: AchievementKind;
-  sourceWritingChatId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+/** S-09 / S-34 project card (C-25): name, type tag, period. */
+export type ProjectCardDto = Pick<ProjectDto, "id" | "status" | "name" | "projectType" | "startMonth" | "endMonth" | "isCurrent">;
+
+/** S-43 deliverable row (body excluded, DM §7). */
+export type DeliverableSummaryDto = { id: string; projectId: string; title: string; sortOrder: number; updatedAt: string };
+
+/** S-44 deliverable. */
+export type DeliverableDto = DeliverableSummaryDto & { body: string; createdAt: string };
 
 export type SkillDto = {
   id: string;
@@ -495,48 +492,53 @@ export type SkillDto = {
 
 export type ProjectSkillLinkDto = { projectId: string; skillId: string };
 
-// ---------- year view (DM §2.4, S-08) ----------
+// ---------- career list (DM §2.4 v4.4, S-08 left) ----------
 
-export type CareerAffiliationRef = { type: "experience" | "education"; id: string };
+export type CareerListEntityType = "experience" | "education" | "project";
 
-/** One experience/education header inside a year, with the projects that started that year under it. */
-export type CareerYearAffiliation = CareerAffiliationRef & { projectIds: string[] };
-
-/**
- * One year bucket. `year: null` is the "연도 미정" bucket (always last).
- * `otherProjectIds` = 독립 프로젝트 ("기타 프로젝트") that start that year.
- */
-export type CareerYearGroup = {
-  year: number | null;
-  affiliations: CareerYearAffiliation[];
-  otherProjectIds: string[];
+/** One list row (DM §2.4 screen type `{entity_type, id, name, start_month}`; `status` for the "작성 중" logic of other screens). */
+export type CareerListItem = {
+  entityType: CareerListEntityType;
+  id: string;
+  /** company_name / institution_name / projects.name (null = "이름 없는 …" on screen). */
+  name: string | null;
+  startMonth: string | null;
+  status: CareerStatus;
+  createdAt: string;
 };
 
-/** S-08 top summary (rule-based, F-P1-07 축소판 [가정]). */
-export type CareerSummary = {
-  completeCounts: { experiences: number; educations: number; projects: number; projectDetails: number };
-  draftCounts: { experiences: number; educations: number; projects: number; projectDetails: number };
-  /** "결과가 빈 상세 내용 N건". */
-  detailsWithoutResult: number;
-  /** "상세 내용 없는 프로젝트 N건" (no complete detail). */
-  projectsWithoutCompleteDetail: number;
-  skillCount: number;
-};
+/** Items under their start year once (CR-4). `year: null` = "연도 미정" (always last). */
+export type CareerListYear = { year: number | null; items: CareerListItem[] };
 
-/** S-08 career tree: normalized entities + the computed year view (ids reference the lists). */
-export type CareerTreeDto = {
-  experiences: ExperienceDto[];
-  educations: EducationDto[];
-  projects: ProjectDto[];
-  projectDetails: ProjectDetailDto[];
-  achievements: AchievementDto[];
-  skills: SkillDto[];
-  years: CareerYearGroup[];
-  summary: CareerSummary;
-  /** True when nothing has been entered yet (S-08 empty state). */
+export type CareerListDto = {
+  years: CareerListYear[];
+  /** No experience, education, or standalone project yet (S-08 empty state). */
   isEmpty: boolean;
-  /** S-08 "작성 중인 AI 대화" (S4): active writing chats, latest activity first. Visible without an AI key. */
-  activeWritingChats: ActiveWritingChatSummary[];
-  /** S-08 "그만둔 AI 대화" (R1 A6): abandoned chats not yet auto-deleted, latest activity first ("다시 이어 하기"). */
-  abandonedWritingChats: ActiveWritingChatSummary[];
 };
+
+// ---------- detail panels / pages (DM §7 v4.4) ----------
+
+/** S-09: the experience + its project cards (start_month desc nulls last, created_at desc). */
+export type ExperienceDetailDto = { experience: ExperienceDto; projects: ProjectCardDto[] };
+
+/** S-34: the education + its project cards. */
+export type EducationDetailDto = { education: EducationDto; projects: ProjectCardDto[] };
+
+/** S-43: a standalone project + skills + deliverables (no body). */
+export type StandaloneProjectDetailDto = {
+  project: ProjectDto;
+  skills: SkillDto[];
+  deliverables: DeliverableSummaryDto[];
+  /** deliverable_limit_reached at 50 ([가정]): "+ 산출물 추가" disabled. */
+  deliverableLimitReached: boolean;
+};
+
+/** S-10: an affiliated project + its parent (이동 경로) + its writing chats (latest activity first). */
+export type ProjectDetailDto = {
+  project: ProjectDto;
+  parent: { type: "experience" | "education"; id: string; name: string | null };
+  writingChats: ProjectWritingChatSummary[];
+};
+
+/** S-44: one deliverable + its project name (이동 경로). */
+export type DeliverableDetailDto = { deliverable: DeliverableDto; project: { id: string; name: string } };

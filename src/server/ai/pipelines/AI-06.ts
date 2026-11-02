@@ -81,7 +81,37 @@ export type AnswerEvaluationContextInput = {
   positionTitle: string | null;
   question: EvaluationQuestionInput;
   answer: { id: string; answer_text: string; updated_at: string | null };
+  /**
+   * C-1.1 (v4.5): standalone projects whose deliverables enter the pack — the
+   * union over the session's questions (`sessionDeliverableProjectIds`), the
+   * same for every answer so parallel calls share one cached pack.
+   */
+  deliverableProjectIds?: readonly string[];
 };
+
+/**
+ * C-1.1 AI-06 포함 범위: standalone projects cited by any question of the
+ * session (evidence `project` on a standalone project, or `project_deliverable`
+ * → its project). Sorted for a stable pack. Pure; the runner passes every
+ * question's evidence_links rows.
+ */
+export function sessionDeliverableProjectIds(
+  careerRows: CareerRows | null,
+  questionEvidence: ReadonlyArray<{ source_type: string; source_id: string }>,
+): string[] {
+  if (!careerRows) return [];
+  const standalone = new Set(careerRows.projects.filter((p) => !p.experience_id && !p.education_id).map((p) => p.id));
+  const deliverableProject = new Map(careerRows.deliverables.map((d) => [d.id, d.project_id]));
+  const out = new Set<string>();
+  for (const e of questionEvidence) {
+    if (e.source_type === "project" && standalone.has(e.source_id)) out.add(e.source_id);
+    if (e.source_type === "project_deliverable") {
+      const projectId = deliverableProject.get(e.source_id);
+      if (projectId && standalone.has(projectId)) out.add(projectId);
+    }
+  }
+  return [...out].sort();
+}
 
 export type AnswerEvaluationContext = {
   interviewType: InterviewType;

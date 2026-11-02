@@ -96,7 +96,7 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
     // S-25 summary (DM §4.3).
     const summary = await getAccountDeletionSummary(target.client);
     expect(summary).toEqual({
-      career: { experiences: 1, educations: 1, projects: 1, projectDetails: 1, achievements: 1, skills: 1, writingChats: 1 },
+      career: { experiences: 1, educations: 1, projects: 2, projectDeliverables: 1, skills: 1, writingChats: 1 },
       applications: { applicationProjects: 1, insights: 1, drafts: 1, interviewSessions: 1, stageEvents: 1 },
       aiConnection: { providerKeys: 1, dataUseConsents: 1, usageRecords: 1 },
       recommendProviderKeyRevocation: true,
@@ -201,10 +201,8 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
 
     const result = await runRetentionCron(admin, now);
     expect(result.failed).toEqual([]);
-    expect(result.deleted.unlinkedWritingChats).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(result.deleted)).not.toContain("unlinkedWritingChats");
 
-    expect(exists("writing_chats", "chat_unlinked_91d")).toBe(false);
-    expect(exists("writing_chats", "chat_unlinked_89d")).toBe(true);
     expect(exists("writing_chats", "chat_linked_400d")).toBe(true);
     expect(exists("ai_jobs", "job_done_91d")).toBe(false);
     expect(exists("ai_jobs", "job_done_89d")).toBe(true);

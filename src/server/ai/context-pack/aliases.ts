@@ -1,4 +1,4 @@
-import type { EvidenceSourceType } from "../evidence-rules";
+import type { EvidenceSourceType, ProjectScope } from "../evidence-rules";
 
 /**
  * One alias the model may cite (C-1 "짧은 별칭", C-2 문장 ID). Built per call;
@@ -20,7 +20,14 @@ export type AliasEntry = {
   label: string | null;
   /** evidence_links.source_locator (e.g. JD sentence offsets). */
   locator?: Record<string, unknown> | null;
-  /** Aliases of ancestors (PRJ → its EXP/EDU; DET → its PRJ; ACH → its DET or EXP). V-7 scope. */
+  /**
+   * Per-quote locator (v4.5 deliverable body: the raw markdown `{start, end}`
+   * of a validated quote, C-1.1 / DM 2.8). Takes precedence over `locator`.
+   */
+  locate?: (field: string, quote: string) => Record<string, unknown> | null;
+  /** `project` only: affiliated (STAR) or standalone (role/description) — V-2 field set. */
+  scope?: ProjectScope;
+  /** Aliases of ancestors (PRJ → its EXP/EDU; DLV → its PRJ; SKL → the projects tagging it). V-7 scope. */
   parents: readonly string[];
 };
 

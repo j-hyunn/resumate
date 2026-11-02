@@ -149,7 +149,10 @@ export type EvidenceSourceType =
   | "experience"
   | "education"
   | "project"
+  | "project_deliverable"
+  /** @deprecated R4: no longer stored (DM v4.4); kept for the mock fixtures */
   | "project_detail"
+  /** @deprecated R4: no longer stored (DM v4.4); kept for the mock fixtures */
   | "achievement"
   | "skill"
   | "jd_requirement"
@@ -282,20 +285,106 @@ export type Education = Row<"educations", {
   enrollment_status: EnrollmentStatus | null
 }>
 
-/** projects (2.3) — affiliation: experience_id XOR education_id XOR none */
-export type Project = Row<"projects", {
+/**
+ * @deprecated R4 compatibility shim (DM v4.4, CR-2·CR-7·CR-10): the v4.3b `projects` row the current
+ * UI screens and mock fixtures still use. The real data layer maps v4.4 rows into it (`summary` =
+ * standalone `description`, `team_size` = null). New code uses `CareerProject`. Delete in the UI rework.
+ */
+export interface Project extends BaseRow {
   status: CareerItemStatus
+  experience_id: Uuid | null
+  education_id: Uuid | null
+  name: string | null
+  role: string | null
+  summary: string | null
+  start_month: DateString | null
+  end_month: DateString | null
+  team_size: number | null
+  source_writing_chat_id: Uuid | null
+}
+
+/**
+ * @deprecated R4 shim: `project_details` was dropped in DM v4.4 (CR-2, STAR moved to `projects`).
+ * The real data layer always returns an empty list. Delete in the UI rework.
+ */
+export interface ProjectDetail extends BaseRow {
+  project_id: Uuid
+  status: CareerItemStatus
+  title: string | null
+  situation: string | null
+  task: string | null
+  action: string | null
+  result: string | null
+  learnings: string | null
+  sort_order: number
+  source_writing_chat_id: Uuid | null
+}
+
+/**
+ * @deprecated R4 shim: `achievements` was dropped in DM v4.4 (CR-11). The real data layer always
+ * returns an empty list. Delete in the UI rework.
+ */
+export interface Achievement extends BaseRow {
+  status: CareerItemStatus
+  project_detail_id: Uuid | null
+  experience_id: Uuid | null
+  metric_name: string | null
+  value_before: number | null
+  value_after: number | null
+  unit: string | null
+  description: string | null
+  kind: string | null
+  source_writing_chat_id: Uuid | null
+}
+
+// --- v4.4 (R4, CR-2·CR-7·CR-8·CR-9·CR-17·CR-22) — 연결 대기: the reworked screens import these ---
+
+/** projects.project_type (DM 2.3 v4.4, CR-17) */
+export type ProjectType =
+  | "new_build"
+  | "improvement"
+  | "operation"
+  | "research"
+  | "marketing"
+  | "process_improvement"
+  | "migration"
+  | "coursework"
+  | "other"
+/** projects.experience_type (DM 2.3 v4.4, CR-17) */
+export type ExperienceType =
+  | "impact"
+  | "problem_solving"
+  | "collaboration"
+  | "leadership"
+  | "failure_recovery"
+  | "new_challenge"
+  | "customer_facing"
+/** projects.competencies element (DM 2.3 v4.4, CR-17), at most 3, order kept */
+export type Competency =
+  | "problem_solving"
+  | "analysis"
+  | "planning"
+  | "execution"
+  | "communication"
+  | "collaboration"
+  | "leadership"
+  | "technical_expertise"
+  | "customer_insight"
+  | "learning_agility"
+
+/**
+ * projects v4.4 (DM 2.3): affiliated (experience / education: STAR + classification) or standalone
+ * (role / description / link_url + deliverables + skills). Scope never changes after create.
+ */
+export type CareerProject = Row<"projects", {
+  status: CareerItemStatus
+  project_type: ProjectType | null
+  experience_type: ExperienceType | null
+  competencies: Competency[]
 }>
 
-/** project_details (2.3) — STAR + learnings ("회고 및 배운 점") */
-export type ProjectDetail = Row<"project_details", {
-  status: CareerItemStatus
-}>
-
-/** achievements (2.3) — exactly one of project_detail_id / experience_id */
-export type Achievement = Row<"achievements", {
-  status: CareerItemStatus
-}>
+/** project_deliverables (DM 2.3 v4.4, CR-8) — standalone projects only, ≤ 50 per project [가정] */
+export type ProjectDeliverable = Row<"project_deliverables">
 
 /** skills (A.4) — no status column */
 export type Skill = Row<"skills", {
@@ -386,11 +475,32 @@ export interface ReturnTarget {
   created_at: Timestamp
 }
 
-/** writing_chats (2.5) */
-export type WritingChat = Row<"writing_chats", {
+/**
+ * @deprecated R4 shim: the v4.3b `writing_chats` row (mode, affiliation, saved_at) the current UI
+ * screens still use. The real data layer maps v4.4 rows into it (`mode` = augment_project, status
+ * `closed` → `saved`, empty legacy draft). New code uses `ProjectWritingChat`. Delete in the UI rework.
+ */
+export interface WritingChat extends BaseRow {
   mode: WritingChatMode
+  project_id: Uuid | null
+  experience_id: Uuid | null
+  education_id: Uuid | null
   status: WritingChatStatus
   structured_draft: StructuredDraft
+  message_count: number
+  last_extracted_sequence: number
+  return_target: ReturnTarget | null
+  last_activity_at: Timestamp
+  saved_at: Timestamp | null
+}
+
+/** structured_draft v3 (DM 2.5 v4.4) — same shape as `src/lib/contracts/writing-chat` `StructuredDraftV3` */
+export type StructuredDraftV3 = import("@/lib/contracts/writing-chat").StructuredDraftV3
+
+/** writing_chats v4.4 (DM 2.5): bound to one affiliated project, many per project, `active` / `closed` */
+export type ProjectWritingChat = Row<"writing_chats", {
+  status: "active" | "closed"
+  structured_draft: StructuredDraftV3
   return_target: ReturnTarget | null
 }>
 
@@ -595,11 +705,17 @@ export type DraftSection = Row<"draft_sections", {
   usage: Record<string, unknown> | null
 }, "completed_at" | "run_generation">
 
-/** draft_section_sources (A.11) */
-export type DraftSectionSource = Row<"draft_section_sources", {
+/** draft_section_sources (A.11, DM v4.4: no `project_detail_ids`) */
+export type DraftSectionSourceRow = Row<"draft_section_sources", {
   role: DraftSourceRole
   origin: DraftSourceOrigin
 }>
+
+/**
+ * @deprecated R4 shim: the current UI reads `project_detail_ids` (dropped in DM v4.4). The real data
+ * layer fills it with `[]`. Use `DraftSectionSourceRow`. Delete in the UI rework.
+ */
+export type DraftSectionSource = DraftSectionSourceRow & { project_detail_ids: Uuid[] }
 
 /** interview_sessions (A.12) */
 export type InterviewSession = Row<"interview_sessions", {
@@ -1028,3 +1144,18 @@ export type AccountDeletionState = "active" | "deletion_incomplete" | "profile_m
 
 /** delete_account error codes surfaced by S-25 (02 S-25 v5.3) */
 export type AccountDeletionErrorCode = "account_deletion_busy" | "account_deletion_incomplete"
+
+// ---------------------------------------------------------------------------
+// R4 (DM v4.4) RPC shapes — 연결 대기: the reworked screens use these; the legacy names above
+// (DataReadiness, DeletionImpact, AccountDeletionSummary, ReadinessHint, DeletionEntityType,
+// AffiliationMode, WritingChatMode / WritingChatStatus, StructuredDraft*) are @deprecated shims.
+// ---------------------------------------------------------------------------
+
+/** RPC get_data_readiness() v4.4 (DM §6) */
+export type DataReadinessV44 = import("@/lib/contracts/career").DataReadiness
+/** RPC get_deletion_impact v4.4 (DM §4.2): career rows */
+export type CareerDeletionImpactV44 = import("@/lib/contracts/career").CareerDeletionImpact
+/** RPC get_deletion_impact v4.4: writing_chat → { message_count, last_applied_at } */
+export type WritingChatDeletionImpactV44 = import("@/lib/contracts/career").WritingChatDeletionImpact
+/** get_deletion_impact / delete_career_item entity_type v4.4 */
+export type DeletionEntityTypeV44 = import("@/lib/contracts/enums").DeletableEntityType

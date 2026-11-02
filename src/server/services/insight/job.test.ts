@@ -44,7 +44,7 @@ function inputs(n: number): InsightInputs {
   return {
     jd: { jobDescriptionId: "jd-1", updatedAt: null, extractionStatus: "succeeded", extractionJobId: null, rawTextEditedAt: null, sentences: [], positionTitle: null, seniorityLabel: null },
     requirements: requirements(n),
-    careerRows: { profile: null, experiences: [], educations: [], projects: [], projectDetails: [], achievements: [], skills: [], projectSkills: [] },
+    careerRows: { profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] },
   };
 }
 

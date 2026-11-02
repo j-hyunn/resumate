@@ -50,15 +50,13 @@ select throws_ok($$select public.get_account_deletion_state('aaaaaaaa-0000-0000-
                  '42501', null, 'A7: authenticated cannot execute');
 reset role;
 
--- ══ A18 readiness project_fields ═══════════════════════════════════════════
--- A: complete experience E1, draft experience E2. P1 under E1 with a complete detail but no role.
+-- ══ A18 readiness project_fields (R4: v4.4 meaning — standalone project without description) ═══════════
+-- A: no experience yet. P1 is a standalone project without description (draft).
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.projects (id, name) values ('aaaaaaaa-3333-0000-0000-000000000001', 'P1');
-insert into public.project_details (project_id, title, situation, action)
-  values ('aaaaaaaa-3333-0000-0000-000000000001', 't', 's', 'a');
 select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001'), 'draft',
-          'P1 stays draft (role missing)');
+          'P1 stays draft (description missing)');
 
 -- experience missing -> step 1 wins: form without suggested_project_id, but the hint is there.
 select is(public.get_data_readiness() #> '{features,insight}',
@@ -69,18 +67,18 @@ select is(public.get_data_readiness() #> '{features,insight}',
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('aaaaaaaa-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
 
--- no AI connection (no key) -> still project_fields (step 2 comes before the no-key form).
+-- no AI connection (no key) -> project_fields step (form + the standalone project).
 select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields", "profile"],
             "next_action": "form", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
-          'A18: project_fields -> form + suggested_project_id, no suggested_mode, same without AI connection');
+          'A18: project_fields -> form + suggested_project_id, same without AI connection');
 select is(public.get_data_readiness() #> '{features,draft}', public.get_data_readiness() #> '{features,insight}',
           'A18: draft feature same object');
 select is(public.get_data_readiness() #> '{features,job_interview}', public.get_data_readiness() #> '{features,insight}',
           'A18: job_interview feature same object');
 reset role;
 
--- with a valid active key -> same result.
+-- with a valid active key -> same result (no AI panel on standalone projects).
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek,
                                      kek_id, key_last4, status)
 values ('aaaaaaaa-9999-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid',
@@ -94,12 +92,8 @@ select is(public.get_data_readiness() #> '{features,insight}',
             "next_action": "form", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
           'A18: same value with a usable key');
 
--- a newer candidate (blank name, whitespace role) wins; a project without a complete detail is not a candidate.
-insert into public.projects (id, experience_id, name, role) values
-  ('aaaaaaaa-3333-0000-0000-000000000002', 'aaaaaaaa-1111-0000-0000-000000000001', '  ', 'Dev'),
-  ('aaaaaaaa-3333-0000-0000-000000000003', 'aaaaaaaa-1111-0000-0000-000000000001', 'P3', 'Dev');
-insert into public.project_details (project_id, title, situation, action)
-  values ('aaaaaaaa-3333-0000-0000-000000000002', 't', 's', 'a');
+-- a newer standalone candidate wins.
+insert into public.projects (id, name) values ('aaaaaaaa-3333-0000-0000-000000000002', 'P2');
 reset role;
 -- now() is fixed inside the test transaction: age P1 by hand so P2 is the newest.
 alter table public.projects disable trigger projects_set_updated_at;
@@ -109,21 +103,27 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #>> '{features,insight,suggested_project_id}', 'aaaaaaaa-3333-0000-0000-000000000002',
           'A18: newest candidate by updated_at');
-select is(public.get_data_readiness() #> '{features,insight,hints}', '["complete_project_detail", "project_fields", "profile"]'::jsonb,
-          'A18: complete_project_detail (P3) and project_fields both hinted');
 
--- project under a draft experience is excluded from the candidates (DM §2.2 inclusion rule).
+-- an affiliated STAR-incomplete project takes precedence (step 2 before step 3): writing_chat with a usable key.
+insert into public.projects (id, experience_id, name)
+  values ('aaaaaaaa-3333-0000-0000-000000000003', 'aaaaaaaa-1111-0000-0000-000000000001', 'P3');
+select is(public.get_data_readiness() #> '{features,insight}',
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_star", "profile"],
+            "next_action": "writing_chat", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000003"}'::jsonb,
+          'A18 v4.4: project_star step first');
+
+-- the STAR project under a draft experience is excluded -> back to project_fields.
 insert into public.experiences (id, company_name) values ('aaaaaaaa-1111-0000-0000-000000000002', '임시');
 update public.projects set experience_id = 'aaaaaaaa-1111-0000-0000-000000000002'
- where id = 'aaaaaaaa-3333-0000-0000-000000000002';
-select is(public.get_data_readiness() #>> '{features,insight,suggested_project_id}', 'aaaaaaaa-3333-0000-0000-000000000001',
+ where id = 'aaaaaaaa-3333-0000-0000-000000000003';
+select is(public.get_data_readiness() #>> '{features,insight,next_action}', 'form',
           'A18: candidate under a draft experience skipped');
 
--- fixing the role completes P1; P2 excluded, P3 has no complete detail -> no project_fields; ready.
-update public.projects set role = 'Backend' where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+-- filling P2's description completes it -> ready.
+update public.projects set description = '내용' where id = 'aaaaaaaa-3333-0000-0000-000000000002';
 select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": true, "missing": [], "hints": ["profile"]}'::jsonb,
-          'A18: role filled -> ready, no project_fields');
+          'A18: description filled -> ready, no project_fields');
 reset role;
 
 -- ══ A19 / A20 save_provider_key consent rule ═══════════════════════════════

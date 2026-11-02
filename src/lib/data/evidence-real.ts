@@ -25,15 +25,15 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     ? (rowsOf(await supabase.from("evidence_links").select("*").eq("owner_type", ownerType).in("owner_id", ownerIds).order("sort_order")) as unknown as EvidenceLink[])
     : []
   const idsOf = (...types: Array<EvidenceLink["source_type"]>) => uniq(links.filter((l) => types.includes(l.source_type)).map((l) => l.source_id))
-  type SourceTable = "achievements" | "project_details" | "projects" | "experiences" | "educations" | "skills" | "jd_requirements" | "interview_answers" | "draft_sections"
+  type SourceTable = "project_deliverables" | "projects" | "experiences" | "educations" | "skills" | "jd_requirements" | "interview_answers" | "draft_sections"
   const select = async <T,>(table: SourceTable, ids: string[]): Promise<T[]> => (ids.length ? (rowsOf(await supabase.from(table).select("*").in("id", ids)) as unknown as T[]) : [])
 
   type Row = Record<string, string | null>
-  const achievements = await select<Row>("achievements", idsOf("achievement"))
-  const details = await select<Row>("project_details", uniq([...idsOf("project_detail"), ...achievements.map((a) => a.project_detail_id)]))
-  const projects = await select<Row>("projects", uniq([...idsOf("project"), ...details.map((d) => d.project_id)]))
+  // DM v4.4: project_details / achievements are gone; deliverables point at their standalone project.
+  const deliverables = await select<Row>("project_deliverables", idsOf("project_deliverable"))
+  const projects = await select<Row>("projects", uniq([...idsOf("project"), ...deliverables.map((d) => d.project_id)]))
   const [experiences, educations, skills, requirements, answers, sections, profiles] = await Promise.all([
-    select<Row>("experiences", uniq([...idsOf("experience"), ...projects.map((p) => p.experience_id), ...achievements.map((a) => a.experience_id)])),
+    select<Row>("experiences", uniq([...idsOf("experience"), ...projects.map((p) => p.experience_id)])),
     select<Row>("educations", uniq([...idsOf("education"), ...projects.map((p) => p.education_id)])),
     select<Row>("skills", idsOf("skill")),
     select<Row>("jd_requirements", idsOf("jd_requirement")),
@@ -46,8 +46,9 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     experiences,
     educations,
     projects,
-    project_details: details,
-    achievements,
+    project_deliverables: deliverables,
+    project_details: [],
+    achievements: [],
     skills,
     jd_requirements: requirements,
     interview_answers: answers,

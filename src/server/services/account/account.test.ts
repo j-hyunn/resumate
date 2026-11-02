@@ -9,7 +9,7 @@ const USER_ID = "11111111-1111-4111-8111-111111111111";
 const SECRET = "test-account-deletion-secret-0123456789abcdefghij";
 
 const RAW_SUMMARY = {
-  career: { experiences: 2, educations: 1, projects: 3, project_details: 5, achievements: 4, skills: 6, writing_chats: 2 },
+  career: { experiences: 2, educations: 1, projects: 3, project_deliverables: 5, skills: 6, writing_chats: 2 },
   applications: { application_projects: 1, insights: 1, drafts: 2, interview_sessions: 1, application_stage_events: 3 },
   ai_connection: { provider_keys: 1, ai_data_use_consents: 2, usage_records: 9, has_provider_keys: true },
 };
@@ -17,7 +17,7 @@ const RAW_SUMMARY = {
 describe("toAccountDeletionSummary (DM §4.3, S-25)", () => {
   it("maps the RPC groups and sets the NFR-KEY-09 hint when keys exist", () => {
     const s = toAccountDeletionSummary(RAW_SUMMARY);
-    expect(s.career).toEqual({ experiences: 2, educations: 1, projects: 3, projectDetails: 5, achievements: 4, skills: 6, writingChats: 2 });
+    expect(s.career).toEqual({ experiences: 2, educations: 1, projects: 3, projectDeliverables: 5, skills: 6, writingChats: 2 });
     expect(s.applications).toEqual({ applicationProjects: 1, insights: 1, drafts: 2, interviewSessions: 1, stageEvents: 3 });
     expect(s.aiConnection).toEqual({ providerKeys: 1, dataUseConsents: 2, usageRecords: 9 });
     expect(s.recommendProviderKeyRevocation).toBe(true);

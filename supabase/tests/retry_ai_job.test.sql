@@ -28,10 +28,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"d0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('d0000000-1111-0000-0000-000000000001', 'D사', '2020-01-01', 'S');
-insert into public.projects (id, experience_id, name, role)
-  values ('d0000000-3333-0000-0000-000000000001', 'd0000000-1111-0000-0000-000000000001', '결제', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action, learnings)
-  values ('d0000000-4444-0000-0000-000000000001', 'd0000000-3333-0000-0000-000000000001', 't', 's', '인덱스 재설계', '배움');
+insert into public.projects (id, experience_id, name, situation, action, learnings)
+  values ('d0000000-3333-0000-0000-000000000001', 'd0000000-1111-0000-0000-000000000001', '결제', 's', '인덱스 재설계', '배움');
 reset role;
 
 insert into public.application_projects (id, user_id, name, name_source)
@@ -67,7 +65,7 @@ create function pg_temp.question(p_seq int, p_req uuid, p_provider text, p_tier 
     'hashes', jsonb_build_object('input_hash', 'ih', 'career_snapshot_hash', 'ch'),
     'meta', pg_temp.meta(p_provider, p_tier),
     'evidence', jsonb_build_array(jsonb_build_object('item_key', 'question', 'sort_order', 0,
-      'source_type', 'project_detail', 'source_id', 'd0000000-4444-0000-0000-000000000001', 'source_field', 'action')));
+      'source_type', 'project', 'source_id', 'd0000000-3333-0000-0000-000000000001', 'source_field', 'action')));
 $f$;
 create function pg_temp.eval_payload(p_provider text, p_tier text) returns jsonb language sql as $f$
   select jsonb_build_object(
@@ -75,7 +73,7 @@ create function pg_temp.eval_payload(p_provider text, p_tier text) returns jsonb
     'hashes', jsonb_build_object('input_hash', 'ih', 'career_snapshot_hash', 'ch'),
     'meta', pg_temp.meta(p_provider, p_tier),
     'evidence', jsonb_build_array(jsonb_build_object('item_key', 'model_answer', 'sort_order', 0,
-      'source_type', 'project_detail', 'source_id', 'd0000000-4444-0000-0000-000000000001', 'source_field', 'action')));
+      'source_type', 'project', 'source_id', 'd0000000-3333-0000-0000-000000000001', 'source_field', 'action')));
 $f$;
 
 grant execute on function pg_temp.meta(text, text), pg_temp.insight_payload(text, text),

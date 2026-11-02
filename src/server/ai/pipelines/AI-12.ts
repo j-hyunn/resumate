@@ -12,17 +12,20 @@ import {
 } from "../prompts/AI-12";
 import type { AiCallResult } from "../providers/types";
 import { Ai12ExtractOutputSchema } from "../schemas/AI-12";
-import { toDraftPatch, type DraftPatch, type FieldRef } from "../schemas/structured-draft";
+import { toDraftPatch, type DraftPatch } from "../schemas/structured-draft";
 import { generateStructured } from "../structured";
-import { V9_CHECKS, validateExtractOutput, type V9Check, type V9Rejection, type V9Report } from "../validation/v9";
+import { V9_CHECKS, validateExtractOutput, type V9Check, type V9Flags, type V9Rejection, type V9Report } from "../validation/v9";
 
 /**
- * AI-12 프로젝트 AI 작성 대화 — one turn = two calls the runner schedules
- * (paid tier: in parallel; free tier: reply then extract, C-12):
+ * AI-12 프로젝트 AI 작성 대화 (v4.5 project detail panel) — one turn = two
+ * calls the runner schedules (paid tier: in parallel; free tier: reply then
+ * extract, C-12):
  *
- * - `extract`: light tier, structured output → V-9 → DraftPatch (aliases → UUIDs)
+ * - `extract`: light tier, structured output (schema v3: period, STAR set/append,
+ *   classification suggestions) → V-9 (incl. V-9i) → DraftPatch (aliases → UUIDs)
  *   for `apply_structured_draft_patch`. Failure never blocks the reply; the
  *   runner leaves last_extracted_sequence alone so the next turn re-covers it.
+ *   Nothing here writes `projects`: "반영" is the user's apply_writing_chat_proposal.
  * - `reply`: default tier, plain text stream (no structured output).
  *
  * Plain async functions: no request, cookies, DB, or after() (api-engineer's
@@ -48,7 +51,8 @@ export type Ai12Deps = {
   jobId?: string | null;
 };
 
-export type DraftFlags = { needsReview: FieldRef[]; actorAmbiguous: FieldRef[]; sensitiveAdded: number };
+/** SSE `draft_flags` payload source (field refs only, no text). */
+export type DraftFlags = V9Flags;
 
 export type ExtractResult = {
   /** Nothing pending (no new user message since last_extracted_sequence): no call made. */
@@ -70,7 +74,7 @@ export async function extract(ctx: WritingChatContext, deps: Ai12Deps): Promise<
     return {
       skipped: true,
       patch: { ops: [] },
-      flags: { needsReview: [], actorAmbiguous: [], sensitiveAdded: 0 },
+      flags: { needsReview: [], actorAmbiguous: [], sensitiveAdded: 0, lengthFull: [] },
       processedThroughSequence: null,
       report: emptyV9Report(),
       rejections: [],
@@ -170,13 +174,13 @@ export function emptyV9Report(): V9Report {
 
 /**
  * QA-S4-02: rejected fields by kind, e.g. `rejected_field_action: 2` (field
- * names from the fixed schema only — never values, quotes, or detail keys).
+ * names from the fixed schema only — never values or quotes).
  */
 export function rejectionTargetCounts(rejections: readonly V9Rejection[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const r of rejections) {
     const parts = r.target.split(".");
-    const kind = parts[0] === "project" || parts[0] === "detail" ? parts[parts.length - 1] : parts[0];
+    const kind = parts[0] === "project" || parts[0] === "star" || parts[0] === "classification" ? parts[parts.length - 1] : parts[0];
     const key = `rejected_field_${/^[a-z_]+$/.test(kind) ? kind : "other"}`;
     out[key] = (out[key] ?? 0) + 1;
   }

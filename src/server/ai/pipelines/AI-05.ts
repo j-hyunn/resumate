@@ -48,7 +48,7 @@ import { findUnsupportedNumbers, guardNumbers } from "../validation/numbers";
  *   (experience → career, culture jd → jd_sentence), kind needs its targets
  * - V-5 on the question text (job/experience: pack+JD; other culture anchors: JD only)
  * - culture non-experience anchors: no career proper nouns (4.1)
- * - C-7 forbidden topics, duplicates (text, same project ≤ 2, same detail 1, same requirement 1)
+ * - C-7 forbidden topics, duplicates (text, same project ≤ 2, same requirement 1; v4.5 no detail rule)
  * - set composition as a feasibility check at each acceptance (4.1 table);
  *   relaxed on a regeneration attempt (warn and proceed, card [가정])
  */
@@ -60,9 +60,8 @@ export const AI05_CALL_KEY = "interview_questions.generate";
 export const AI05_MAX_ATTEMPTS = 2;
 /** Output ≈ 3k tokens for 5 questions incl. reasoning (card 비용); 7 questions + headroom. */
 export const AI05_MAX_OUTPUT_TOKENS = 10_000;
-/** Same project as the primary target of at most 2 questions, same detail 1, same requirement 1 (4.1). */
+/** Same project as the primary target of at most 2 questions, same requirement 1 (4.1 v4.5). */
 export const MAX_PER_PROJECT = 2;
-export const MAX_PER_DETAIL = 1;
 export const MAX_PER_REQUIREMENT = 1;
 const TEXT_MAX = 1000;
 const SIGNAL_MAX = 300;
@@ -160,44 +159,41 @@ export type ExistingInterviewQuestion = {
   question_text: string;
   target_requirement_ids: readonly string[];
   target_gap_requirement_ids: readonly string[];
-  /** Optional: its evidence_links (source_type, source_id) → enables the per-project / per-detail duplicate rule across runs. */
+  /** Optional: its evidence_links (source_type, source_id) → enables the per-project duplicate rule across runs. */
   evidence_sources?: ReadonlyArray<{ source_type: string; source_id: string }>;
 };
 
 type Acceptance = {
   kinds: Partial<Record<InterviewSourceKind, number>>;
   projects: Map<string, number>;
-  details: Set<string>;
   requirements: Set<string>;
   texts: Set<string>;
   accepted: number;
 };
 
-/** Primary project / detail alias of a question from its career evidence (first one wins). */
-function primaryTargets(evidence: ReadonlyArray<{ source_type: string; ref: string }>, aliases: AliasMap): { project: string | null; detail: string | null } {
+/**
+ * Primary project alias of a question from its career evidence (first one wins;
+ * a deliverable counts as its standalone project, 4.1 v4.5). v4.5 has one STAR
+ * per project, so the v4.4 "same detail at most once" rule is gone.
+ */
+function primaryTargets(evidence: ReadonlyArray<{ source_type: string; ref: string }>, aliases: AliasMap): { project: string | null } {
   for (const e of evidence) {
     if (!isCareerSupportEvidence(e)) continue;
     const entry = aliases.get(e.ref);
     if (!entry) continue;
-    if (entry.sourceType === "project") return { project: entry.alias, detail: null };
-    if (entry.sourceType === "project_detail") return { project: entry.parents[0] ?? null, detail: entry.alias };
-    if (entry.sourceType === "achievement") {
-      const parent = entry.parents[0] ? aliases.get(entry.parents[0]) : undefined;
-      if (parent?.sourceType === "project_detail") return { project: parent.parents[0] ?? null, detail: parent.alias };
-      continue;
-    }
+    if (entry.sourceType === "project") return { project: entry.alias };
+    if (entry.sourceType === "project_deliverable") return { project: entry.parents[0] ?? null };
   }
-  return { project: null, detail: null };
+  return { project: null };
 }
 
 function emptyAcceptance(): Acceptance {
-  return { kinds: {}, projects: new Map(), details: new Set(), requirements: new Set(), texts: new Set(), accepted: 0 };
+  return { kinds: {}, projects: new Map(), requirements: new Set(), texts: new Set(), accepted: 0 };
 }
 
-function record(state: Acceptance, q: { kind: InterviewSourceKind; text: string; project: string | null; detail: string | null; requirement: string | null }): void {
+function record(state: Acceptance, q: { kind: InterviewSourceKind; text: string; project: string | null; requirement: string | null }): void {
   state.kinds[q.kind] = (state.kinds[q.kind] ?? 0) + 1;
   if (q.project) state.projects.set(q.project, (state.projects.get(q.project) ?? 0) + 1);
-  if (q.detail) state.details.add(q.detail);
   if (q.requirement) state.requirements.add(q.requirement);
   state.texts.add(questionKey(q.text));
   state.accepted++;
@@ -213,7 +209,7 @@ function acceptanceFrom(existing: readonly ExistingInterviewQuestion[], aliases:
     }
     const targets = primaryTargets(evidence, aliases);
     const requirement = q.target_requirement_ids[0] ?? q.target_gap_requirement_ids[0] ?? null;
-    record(state, { kind: q.source_kind, text: q.question_text, project: targets.project, detail: targets.detail, requirement });
+    record(state, { kind: q.source_kind, text: q.question_text, project: targets.project, requirement });
   }
   return state;
 }
@@ -255,7 +251,6 @@ export type QuestionDropReason =
   | "unsupported_numbers"
   | "duplicate_text"
   | "duplicate_project"
-  | "duplicate_detail"
   | "duplicate_requirement"
   | "composition";
 
@@ -270,7 +265,6 @@ export type CheckedQuestion = {
   goodAnswerSignals: string[];
   evidence: ValidatedEvidence[];
   project: string | null;
-  detail: string | null;
   requirement: string | null;
 };
 
@@ -347,15 +341,15 @@ export function checkQuestion(
   const gapIds = isJob ? resolve(raw.target_gap_requirement_refs, "target_refs_dropped") : [];
   if (!isJob && raw.target_requirement_refs.length + raw.target_gap_requirement_refs.length > 0) addToReport(report, { target_refs_dropped: 1 });
 
-  // Kind needs its basis (4.1 table: project_deep_dive = action/result/성과, requirement_fit = 대상 요건, gap_probe = 보완 요건).
+  // Kind needs its basis (4.1 table v4.5: project_deep_dive = action/result or description/deliverable, requirement_fit = 대상 요건, gap_probe = 보완 요건).
   const factBasis = factualCareer.some(isActionResultEvidence);
   if (raw.source_kind === "project_deep_dive" && !factBasis) return fail("kind_target_missing");
   if (raw.source_kind === "requirement_fit" && !targetIds.length) return fail("kind_target_missing");
   if (raw.source_kind === "gap_probe" && !gapIds.length) return fail("kind_target_missing");
 
   // 4.1 사실 전제 (v4.3, A11): every job question that premises a fact of the
-  // user's career takes it only from a detail's action / result or an
-  // achievement. requirement_fit always premises one; gap_probe does when it
+  // user's career takes it only from an affiliated action / result or a
+  // standalone description / deliverable body (v4.5). requirement_fit always premises one; gap_probe does when it
   // points at the user's experience (anchor experience, career evidence, or a
   // career proper noun in the text). A gap_probe that only asks "if you had a
   // similar experience…" is exempt.
@@ -381,8 +375,7 @@ export function checkQuestion(
   const requirement = targetIds[0] ?? gapIds[0] ?? null;
   if (isJob) {
     if (targets.project && (state.projects.get(targets.project) ?? 0) >= MAX_PER_PROJECT) return fail("duplicate_project");
-    // MAX_PER_DETAIL = MAX_PER_REQUIREMENT = 1: any earlier use blocks.
-    if (targets.detail && state.details.has(targets.detail)) return fail("duplicate_detail");
+    // MAX_PER_REQUIREMENT = 1: any earlier use blocks.
     if (requirement && state.requirements.has(requirement)) return fail("duplicate_requirement");
   }
 
@@ -417,7 +410,6 @@ export function checkQuestion(
       goodAnswerSignals: signals,
       evidence,
       project: targets.project,
-      detail: targets.detail,
       requirement,
     },
   };
@@ -594,7 +586,7 @@ export async function generateInterviewQuestions(
       evidence: toPayloadEvidence([{ itemKey: QUESTION_ITEM_KEY, evidence: q.evidence }], context.aliases, now()),
     };
     await deps.onQuestion(payload);
-    record(state, { kind: q.sourceKind, text: q.text, project: q.project, detail: q.detail, requirement: q.requirement });
+    record(state, { kind: q.sourceKind, text: q.text, project: q.project, requirement: q.requirement });
     saved.push(payload);
   };
 

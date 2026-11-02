@@ -21,7 +21,10 @@ describe("mapDbError", () => {
     [{ code: "P0001", message: "invalid_entity_type" }, "invalid_input", 400],
     [{ code: "P0001", message: "invalid_affiliation_mode" }, "invalid_input", 400],
     [{ code: "P0001", message: "invalid_result_mode" }, "invalid_input", 400],
-    [{ code: "P0001", message: "invalid_detail_order" }, "invalid_detail_order", 409],
+    [{ code: "P0001", message: "invalid_deliverable_order" }, "conflict", 409],
+    [{ code: "P0001", message: "deliverable_limit_reached" }, "deliverable_limit_reached", 409],
+    [{ code: "P0001", message: "project_scope_change_not_allowed" }, "project_scope_change_not_allowed", 409],
+    [{ code: "P0001", message: "affiliation_mode_not_supported" }, "invalid_input", 400],
     // R2 retry_ai_job (DM 2.11.7 path ②)
     [{ code: "P0001", message: "key_missing" }, "key_missing", 409],
     [{ code: "P0001", message: "key_invalid" }, "key_invalid", 409],

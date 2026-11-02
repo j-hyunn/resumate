@@ -17,7 +17,7 @@ export type DraftSourceSelection = {
   includedEducationIds: string[];
 };
 
-/** Pack projects in pack order (experience → education → other; latest first), with their parent. */
+/** Pack projects in pack order (experience → education → standalone; latest first), with their parent. */
 export function packProjects(aliases: AliasMap): Array<{ id: string; alias: string; parent: AliasEntry | null; entry: AliasEntry }> {
   const out: Array<{ id: string; alias: string; parent: AliasEntry | null; entry: AliasEntry }> = [];
   for (const entry of aliases.values()) {
@@ -57,9 +57,10 @@ export function selectionFromPrioritiesWithAliases(aliases: AliasMap, priorities
 }
 
 /**
- * Career rows narrowed to a selection (AI-03 "선택한 경력·프로젝트와 그 성과·스킬만",
- * AI-04 user mode). `experienceIds`/`educationIds` are included as headers
- * (their own fields and experience-level achievements); only `projectIds`
+ * Career rows narrowed to a selection (AI-03 "선택한 경력·교육·프로젝트만", v4.5:
+ * affiliated STAR, standalone role/description/skills/deliverables; AI-04 user
+ * mode). `experienceIds`/`educationIds` are included as headers (their own
+ * fields); only `projectIds`
  * come with them, unless the parent is in `whole*Ids` (all its projects).
  * Parents of selected projects are added. Skills: those tagged on included projects.
  * The profile always stays.
@@ -83,8 +84,6 @@ export function filterCareerRows(
   const expIds = new Set([...(selection.experienceIds ?? []), ...wholeExp, ...projects.map((p) => p.experience_id).filter((v): v is string => !!v)]);
   const eduIds = new Set([...(selection.educationIds ?? []), ...wholeEdu, ...projects.map((p) => p.education_id).filter((v): v is string => !!v)]);
   const projectIds = new Set(projects.map((p) => p.id));
-  const details = rows.projectDetails.filter((d) => projectIds.has(d.project_id));
-  const detailIds = new Set(details.map((d) => d.id));
   const links = rows.projectSkills.filter((l) => projectIds.has(l.project_id));
   const skillIds = new Set(links.map((l) => l.skill_id));
   return {
@@ -92,10 +91,8 @@ export function filterCareerRows(
     experiences: rows.experiences.filter((e) => expIds.has(e.id)),
     educations: rows.educations.filter((e) => eduIds.has(e.id)),
     projects,
-    projectDetails: details,
-    achievements: rows.achievements.filter((a) =>
-      a.project_detail_id ? detailIds.has(a.project_detail_id) : a.experience_id ? expIds.has(a.experience_id) : false,
-    ),
+    // C-1.1 기능별 포함 범위: deliverables of selected standalone projects only.
+    deliverables: rows.deliverables.filter((d) => projectIds.has(d.project_id)),
     skills: rows.skills.filter((s) => skillIds.has(s.id)),
     projectSkills: links,
   };

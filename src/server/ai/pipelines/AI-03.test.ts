@@ -63,9 +63,7 @@ function modelOutput(ctx: ReturnType<typeof setup>["context"]) {
   const pay = a(al, "project", IDS.prjPay);
   const capstone = a(al, "project", IDS.prjEdu);
   const side = a(al, "project", IDS.prjSide);
-  const det1 = a(al, "project_detail", IDS.detPay1);
-  const det2 = a(al, "project_detail", IDS.detPay2);
-  const ach = a(al, "achievement", IDS.achPay);
+  const dlv = a(al, "project_deliverable", IDS.dlvSide1);
   const bullet = (id: string, text: string, evidence: unknown[], extra: Record<string, unknown> = {}) => ({
     block_id: id,
     text,
@@ -84,15 +82,16 @@ function modelOutput(ctx: ReturnType<typeof setup>["context"]) {
         projects: [
           {
             project_ref: pay,
-            role_line: { block_id: "prj-1-r", text: "백엔드 리드 (4인 팀)", evidence: [{ source_type: "project", ref: pay, field: "role", quote: null }], placeholders: [] },
+            // v4.5: the affiliated role line comes from `task` (화면 "역할").
+            role_line: { block_id: "prj-1-r", text: "결제 승인 응답 시간 개선 담당", evidence: [{ source_type: "project", ref: pay, field: "task", quote: "응답 시간을 1초 미만으로 낮추기" }], placeholders: [] },
             bullets: [
-              bullet("prj-1-b1", "결제 승인 API 병목 쿼리 인덱스 재설계로 응답 시간 1.2초 → 0.7초 단축", [{ source_type: "achievement", ref: ach, field: "metric", quote: null }], { requirement_refs: ["REQ-1", "REQ-77"] }),
-              bullet("prj-1-b2", "장애 복구 시간 50% 단축", [{ source_type: "project_detail", ref: det2, field: "action", quote: "런북을 작성하고 알림 규칙을 정리했다" }]),
+              bullet("prj-1-b1", "결제 승인 API 병목 쿼리 인덱스 재설계로 응답 시간 1.2초 → 0.7초 단축", [{ source_type: "project", ref: pay, field: "result", quote: "응답 시간이 0.7초로 줄었다" }], { requirement_refs: ["REQ-1", "REQ-77"] }),
+              bullet("prj-1-b2", "장애 복구 시간 50% 단축", [{ source_type: "project", ref: pay, field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" }]),
               // QA-S7-04: within the 4-bullet cap, so V-8 (not the cap) is what removes its only evidence.
-              bullet("prj-1-b5", "측정 기반 최적화 문화 정착", [{ source_type: "project_detail", ref: det1, field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" }]),
-              bullet("prj-1-b4", "야간 장애 대응 표준화 주도", [{ source_type: "project_detail", ref: det2, field: "situation", quote: "야간 장애 대응이 사람마다 달랐다" }]),
+              bullet("prj-1-b5", "측정 기반 최적화 문화 정착", [{ source_type: "project", ref: pay, field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" }]),
+              bullet("prj-1-b4", "피크 시간 결제 지연 대응 주도", [{ source_type: "project", ref: pay, field: "situation", quote: "피크 시간 결제 승인 API 응답이" }]),
               // 5th bullet → cut by the cap.
-              bullet("prj-1-b6", "런북 정리", [{ source_type: "project_detail", ref: det2, field: "action", quote: "런북을 작성하고 알림 규칙을 정리했다" }]),
+              bullet("prj-1-b6", "인덱스 재설계", [{ source_type: "project", ref: pay, field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" }]),
             ],
           },
           // Not selected → dropped (V-7).
@@ -110,15 +109,20 @@ function modelOutput(ctx: ReturnType<typeof setup>["context"]) {
             project_ref: side,
             role_line: null,
             bullets: [
-              bullet("prj-1-b1", `${side}에서 자동 기록 기능 개발로 입력 시간 [수치 입력 필요] 단축`, [{ source_type: "project", ref: side, field: "role", quote: null }], { placeholders: [{ token: "[수치 입력 필요]", hint: "입력 시간 전후" }] }),
-              bullet("side-b2", "Kafka 기반 알림 파이프라인 구축", [{ source_type: "project_detail", ref: a(al, "project_detail", IDS.detSide), field: "action", quote: "문자 파싱으로 자동 기록을 만들었다" }]),
+              bullet("prj-1-b1", `${side}에서 자동 기록 기능 개발로 입력 시간 [수치 입력 필요] 단축`, [{ source_type: "project", ref: side, field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" }], { placeholders: [{ token: "[수치 입력 필요]", hint: "입력 시간 전후" }] }),
+              bullet("side-b2", "Kafka 기반 알림 파이프라인 구축", [{ source_type: "project_deliverable", ref: dlv, field: "body", quote: "은행 문자 10종의 형식을 정규식으로 분류했다" }]),
             ],
           },
         ],
       },
     ],
     standalone_projects: [
-      { project_ref: capstone, role_line: null, bullets: [bullet("cap-b1", "쓰기 시 무효화 메시지 발행으로 캐시 일관성 확보", [{ source_type: "jd_requirement", ref: "REQ-1", field: null, quote: null }])] },
+      {
+        project_ref: capstone,
+        // The capstone has no `task` → no role line (AI-03 v4.5 [가정]); the server drops it.
+        role_line: { block_id: "cap-r", text: "팀장", evidence: [{ source_type: "project", ref: capstone, field: "name", quote: null }], placeholders: [] },
+        bullets: [bullet("cap-b1", "쓰기 시 무효화 메시지 발행으로 캐시 일관성 확보", [{ source_type: "jd_requirement", ref: "REQ-1", field: null, quote: null }])],
+      },
     ],
     omitted: [{ ref: "PRJ-77", reason: "low_relevance" }],
     notes_for_user: [`${pay}는 수치가 일부 없습니다.`],
@@ -138,7 +142,7 @@ describe("planCareerDescription", () => {
     expect(plan.sections.map((s) => [s.section_kind, s.heading, s.project_ids])).toEqual([
       ["experience", "예시페이", [IDS.prjPay]],
       ["education", "가상대학교 컴퓨터공학", [IDS.prjEdu]],
-      ["standalone_projects", "기타 프로젝트", [IDS.prjSide]],
+      ["standalone_projects", "독립 프로젝트", [IDS.prjSide]],
     ]);
   });
 
@@ -172,7 +176,7 @@ describe("streamCareerDescription (AI-03)", () => {
     const b2 = completed.find((e) => e.blockId === "prj-1-b2")?.block as Record<string, unknown>;
     expect(b2.text).toBe("장애 복구 시간 50% 단축");
     expect(b2.flags).toEqual([]);
-    expect((b2.evidence as Array<{ source_id: string }>)[0].source_id).toBe(IDS.detPay2);
+    expect((b2.evidence as Array<{ source_id: string }>)[0].source_id).toBe(IDS.prjPay);
     expect(b2.project_id).toBe(IDS.prjPay);
 
     expect(persisted).toHaveLength(1);
@@ -184,6 +188,7 @@ describe("streamCareerDescription (AI-03)", () => {
     expect(exp[0]).toMatchObject({ block_kind: "header", generated_by: "server", text: "예시페이 | 2021-03 ~ 현재 | 선임 / 파트장" });
     expect(exp.find((b) => b.block_kind === "header" && b.project_id === IDS.prjPay)?.text).toBe("결제 승인 API 개선 | 2022-01 ~ 2022-12");
     const byId = new Map(exp.map((b) => [b.block_id, b]));
+    expect(byId.get("prj-1-r")).toMatchObject({ block_kind: "role_line", text: "결제 승인 응답 시간 개선 담당" });
     expect(byId.get("prj-1-b1")?.flags).toEqual([]);
     expect(byId.get("prj-1-b1")?.requirement_ids).toEqual([jdParts().requirements[0].id]);
     // V-5: invented number replaced + flagged.
@@ -203,6 +208,7 @@ describe("streamCareerDescription (AI-03)", () => {
     const edu = blocksOf(1);
     expect(edu[0].text).toBe("가상대학교 컴퓨터공학 | 2014-03 ~ 2018-02 | 졸업");
     expect(edu.find((b) => b.block_kind === "bullet")).toMatchObject({ project_id: IDS.prjEdu, flags: ["evidence_check_needed"] });
+    expect(edu.some((b) => b.block_kind === "role_line")).toBe(false); // no task → no role line
 
     // Standalone section: duplicate block id renamed, alias in prose → name, placeholder kept.
     const side = blocksOf(2).find((b) => b.block_kind === "bullet");
@@ -223,7 +229,7 @@ describe("streamCareerDescription (AI-03)", () => {
     expect(payload.notes_for_user).toEqual(["'결제 승인 API 개선'는 수치가 일부 없습니다."]);
     expect(payload.omitted).toEqual([]);
     expect(payload.meta).toMatchObject({ schema_version: 1, prompt_version: AI03_PROMPT_VERSION, provider: "anthropic", model_tier: "default", connection_tier: "paid" });
-    expect(payload.meta.validation_report).toMatchObject({ projects_out_of_scope: 1, bullets_truncated: 1, evidence_removed_v8_learnings: 1, numbers_replaced: 1, skill_terms_flagged: 1, self_claim_context_only: 1, evidence_removed_v7_scope: 1, block_ids_renamed: 1, requirement_refs_dropped: 1 });
+    expect(payload.meta.validation_report).toMatchObject({ projects_out_of_scope: 1, bullets_truncated: 1, evidence_removed_v8_learnings: 1, numbers_replaced: 1, skill_terms_flagged: 1, self_claim_context_only: 1, evidence_removed_v7_scope: 1, block_ids_renamed: 1, requirement_refs_dropped: 1, role_line_dropped_no_source: 1 });
     expect(payload.hashes.input_hash).toBe(
       computeCareerDescriptionInputHash({ provider: "anthropic", model: "claude-sonnet-5-5", careerSnapshotHash: s.context.careerSnapshotHash, requirementsHash: s.context.requirementsHash, options: s.plan.options }),
     );

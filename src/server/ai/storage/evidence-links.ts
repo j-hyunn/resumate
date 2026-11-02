@@ -10,8 +10,11 @@ import type { ValidatedEvidence } from "../validation/evidence";
  *   app_ai_writer JWT `sub`), so a row can't be written for another user.
  * - `ref` → `source_id` (UUID), `field` → `source_field` (null for JD
  *   sentence/requirement, answer, note — the DB CHECK enforces C-3 per type).
- * - `source_snapshot_at` = source row updated_at (DM §2.8), falling back to
+ * - `source_snapshot_at` = the alias entry's snapshot (DM §2.8 v4.4: projects use
+ *   `content_updated_at`, everything else the row `updated_at`), falling back to
  *   `now` when the source has none (sources without a row timestamp, e.g. JD sentences when the JD updated_at is not passed).
+ * - `source_locator`: a per-quote locator when the entry has one (v4.5
+ *   deliverable body → raw markdown `{start, end}`, C-1.1), else the entry's.
  * - `writing_chat_message` never goes here (DM-15) → throws.
  */
 
@@ -61,7 +64,7 @@ export function toEvidenceLinkRows(input: {
         quote_adjusted: e.quote_adjusted,
         source_snapshot_at: entry.snapshotAt ?? input.now.toISOString(),
         source_label: entry.label,
-        source_locator: (entry.locator ?? null) as Json | null,
+        source_locator: ((entry.locate && e.quote ? entry.locate(e.field ?? "", e.quote) : null) ?? entry.locator ?? null) as Json | null,
       });
     });
   }

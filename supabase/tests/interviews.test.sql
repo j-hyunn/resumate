@@ -34,10 +34,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
-insert into public.projects (id, experience_id, name, role)
-  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action, learnings)
-  values ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't', 's', '인덱스 재설계', '배움');
+insert into public.projects (id, experience_id, name, situation, action, learnings)
+  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', '결제', 's', '인덱스 재설계', '배움');
 reset role;
 
 insert into public.application_projects (id, user_id, name, name_source) values
@@ -71,7 +69,7 @@ select set_config('t.q', jsonb_build_object(
   'hashes', jsonb_build_object('input_hash', 'ih', 'career_snapshot_hash', 'ch'),
   'meta', current_setting('t.meta')::jsonb,
   'evidence', jsonb_build_array(jsonb_build_object('item_key', 'question', 'sort_order', 0,
-    'source_type', 'project_detail', 'source_id', 'a0000000-4444-0000-0000-000000000001', 'source_field', 'action',
+    'source_type', 'project', 'source_id', 'a0000000-3333-0000-0000-000000000001', 'source_field', 'action',
     'quote', '인덱스 재설계'),
     jsonb_build_object('item_key', 'question', 'sort_order', 1, 'source_type', 'jd_requirement',
     'source_id', 'a0000000-8888-0000-0000-000000000001')))::text, true);
@@ -84,7 +82,7 @@ select set_config('t.eval', jsonb_build_object(
   'hashes', jsonb_build_object('input_hash', 'ih', 'career_snapshot_hash', 'ch'),
   'meta', current_setting('t.meta')::jsonb,
   'evidence', jsonb_build_array(jsonb_build_object('item_key', 'model_answer', 'sort_order', 0,
-    'source_type', 'project_detail', 'source_id', 'a0000000-4444-0000-0000-000000000001', 'source_field', 'action')))::text,
+    'source_type', 'project', 'source_id', 'a0000000-3333-0000-0000-000000000001', 'source_field', 'action')))::text,
   true);
 
 -- ══ 1. create_interview_session ══
@@ -169,9 +167,9 @@ select throws_ok(format($$select public.save_interview_question('a0000000-5e55-0
                ('{"sequence":2,"target_requirement_ids":["a0000000-8888-0000-0000-000000000003"]}'),
                ('{"sequence":2,"target_gap_requirement_ids":["nope"]}'),
                ('{"sequence":2,"good_answer_signals":[1]}'), ('{"sequence":2,"hashes":{}}'),
-               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"interview_answer","source_id":"a0000000-4444-0000-0000-000000000001"}]}'),
-               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"project_detail","source_id":"a0000000-4444-0000-0000-000000000001","source_field":"learnings"}]}'),
-               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"project_detail","source_id":"a0000000-4444-0000-0000-000000000001","source_field":"budget"}]}')
+               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"interview_answer","source_id":"a0000000-3333-0000-0000-000000000001"}]}'),
+               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000001","source_field":"learnings"}]}'),
+               ('{"sequence":2,"evidence":[{"item_key":"q","sort_order":0,"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000001","source_field":"budget"}]}')
        ) t (p);
 select throws_ok(format($$select public.save_interview_question('a0000000-5e55-0000-0000-000000000001',
                    'a0000000-7777-0000-0000-000000000001', 1, %L::jsonb)$$,
@@ -353,15 +351,15 @@ select throws_ok(format($$select public.save_answer_evaluation(%L, 'a0000000-777
                         current_setting('t.a1'), current_setting('t.eval')::jsonb || p),
                  'P0001', 'invalid_interview_payload', 'save evaluation: invalid ' || p::text)
   from (values ('{"result":{"improvements":[{"evidence":[]}]}}'::jsonb), ('{"result":[]}'), ('{"meta":{}}'),
-               ('{"evidence":[{"item_key":"x","sort_order":0,"source_type":"user_note","source_id":"a0000000-4444-0000-0000-000000000001"}]}')) t (p);
+               ('{"evidence":[{"item_key":"x","sort_order":0,"source_type":"user_note","source_id":"a0000000-3333-0000-0000-000000000001"}]}')) t (p);
 select is(public.save_answer_evaluation(current_setting('t.a1')::uuid, 'a0000000-7777-0000-0000-000000000011', 9,
             current_setting('t.eval')::jsonb) ->> 'reason', 'stale_run', 'save evaluation: other generation -> stale_run');
 select is(public.save_answer_evaluation(current_setting('t.a1')::uuid, 'a0000000-7777-0000-0000-000000000011', 1,
             current_setting('t.eval')::jsonb || jsonb_build_object('evidence', jsonb_build_array(
               jsonb_build_object('item_key', 'criteria.specificity', 'sort_order', 0, 'source_type', 'interview_answer',
                                  'source_id', current_setting('t.a1'), 'quote', '인덱스'),
-              jsonb_build_object('item_key', 'model_answer', 'sort_order', 0, 'source_type', 'project_detail',
-                                 'source_id', 'a0000000-4444-0000-0000-000000000001', 'source_field', 'learnings'))))
+              jsonb_build_object('item_key', 'model_answer', 'sort_order', 0, 'source_type', 'project',
+                                 'source_id', 'a0000000-3333-0000-0000-000000000001', 'source_field', 'learnings'))))
             ->> 'evidence_count', '2', 'save evaluation with an interview_answer source');
 select is(public.fail_answer_evaluation(current_setting('t.a1')::uuid, 'a0000000-7777-0000-0000-000000000011'), false,
           'fail after success: no downgrade');
@@ -468,7 +466,7 @@ select lives_ok(format($$select public.save_interview_question('a0000000-5e55-00
                   current_setting('t.q')::jsonb || jsonb_build_object('sequence', s, 'source_kind', k, 'anchor', 'general',
                     'target_requirement_ids', jsonb_build_array('a0000000-8888-0000-0000-000000000003'),
                     'evidence', jsonb_build_array(jsonb_build_object('item_key', 'question', 'sort_order', 0,
-                      'source_type', 'project_detail', 'source_id', 'a0000000-4444-0000-0000-000000000001',
+                      'source_type', 'project', 'source_id', 'a0000000-3333-0000-0000-000000000001',
                       'source_field', 'learnings')))),
                 'save S2 Q' || s || ' (culture fit may cite learnings)')
   from (values (1, 'collaboration'), (2, 'conflict'), (3, 'values')) t (s, k);

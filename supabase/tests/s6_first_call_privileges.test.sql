@@ -79,7 +79,7 @@ select is((select count(*)::int from public.insights where status = 'ready' and 
 select is(public.get_deletion_impact('skill', 'aaaaaaaa-6666-0000-0000-000000000001')
             -> 'affected_results' -> 'by_application_project' -> 0 ->> 'insights', '1',
           'authenticated: get_deletion_impact counts the insight');
-select lives_ok($$select public.delete_career_item('skill', 'aaaaaaaa-6666-0000-0000-000000000001', 'keep_projects', 'delete_results')$$,
+select lives_ok($$select public.delete_career_item('skill', 'aaaaaaaa-6666-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,
                 'authenticated: delete_career_item(delete_results)');
 select is((select count(*)::int from public.insights where status = 'ready'), 0, 'insight removed with its citation');
 select lives_ok($$delete from public.application_projects where id = 'aaaaaaaa-aaaa-0000-0000-000000000001'$$,

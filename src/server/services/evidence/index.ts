@@ -1,7 +1,7 @@
 import {
   EVIDENCE_KIND_LABELS,
   EVIDENCE_SOURCE_TYPES,
-  PROJECT_DETAIL_FIELD_LABELS,
+  PROJECT_FIELD_LABELS,
   type EvidenceChip,
   type EvidenceOwnerType,
   type EvidenceSourceState,
@@ -47,14 +47,13 @@ export type EvidenceLinkRow = {
 const LINK_COLUMNS =
   "id, owner_type, owner_id, item_key, sort_order, source_type, source_id, source_field, source_locator, source_label, quote, quote_adjusted, source_snapshot_at, source_deleted_at";
 
-/** Source tables whose `updated_at` decides "변경됨". */
+/** Source tables whose `updated_at` (projects: `content_updated_at`, DM 2.8 v4.4) decides "변경됨". */
 const SOURCE_TABLES = {
   profile: "profiles",
   experience: "experiences",
   education: "educations",
   project: "projects",
-  project_detail: "project_details",
-  achievement: "achievements",
+  project_deliverable: "project_deliverables",
   skill: "skills",
   jd_requirement: "jd_requirements",
 } as const satisfies Partial<Record<EvidenceSourceType, string>>;
@@ -65,8 +64,8 @@ export type SourceInfo = {
   updatedAt: string;
   /** Navigation parents (C-02 "원본으로 이동"). */
   projectId?: string | null;
-  projectDetailId?: string | null;
-  experienceId?: string | null;
+  /** project: no experience / education (S-43 instead of S-10). */
+  standalone?: boolean;
 };
 
 /** `${source_type}:${source_id}` → current source info (absent = row not found). */
@@ -82,12 +81,11 @@ function isTracked(type: EvidenceSourceType): type is TrackedSourceType {
   return type in SOURCE_TABLES;
 }
 
-/** C-01 label: kind, plus the STAR field for project details ("상세 내용 · 행동"); learnings → "회고 및 배운 점". */
+/** C-01 label: kind, plus the field for projects ("프로젝트 · 행동"); learnings → "배운 점". */
 export function evidenceKindLabel(sourceType: EvidenceSourceType, field: string | null): string {
-  if (sourceType === "project_detail") {
-    if (field === "learnings") return PROJECT_DETAIL_FIELD_LABELS.learnings!;
-    const fieldLabel = field ? PROJECT_DETAIL_FIELD_LABELS[field] : undefined;
-    return fieldLabel ? `${EVIDENCE_KIND_LABELS.project_detail} · ${fieldLabel}` : EVIDENCE_KIND_LABELS.project_detail;
+  if (sourceType === "project" && field && field in PROJECT_FIELD_LABELS) {
+    if (field === "learnings") return PROJECT_FIELD_LABELS.learnings!;
+    return `${EVIDENCE_KIND_LABELS.project} · ${PROJECT_FIELD_LABELS[field]}`;
   }
   return EVIDENCE_KIND_LABELS[sourceType];
 }
@@ -126,7 +124,7 @@ export function toEvidenceChip(row: EvidenceLinkRow, sources: SourceLookup): Evi
     sourceLabel: row.source_label,
     quote: state === "deleted" ? null : row.quote,
     quoteAdjusted: row.quote_adjusted,
-    isReflection: type === "project_detail" && row.source_field === "learnings",
+    isReflection: type === "project" && row.source_field === "learnings",
     state,
     sourceSnapshotAt: row.source_snapshot_at,
     sourceDeletedAt: row.source_deleted_at,
@@ -143,19 +141,9 @@ function targetOf(row: EvidenceLinkRow, type: EvidenceSourceType, info: SourceIn
     case "education":
       return { type: "education", educationId: row.source_id };
     case "project":
-      return { type: "project", projectId: row.source_id };
-    case "project_detail":
-      return info?.projectId
-        ? { type: "project_detail", projectId: info.projectId, projectDetailId: row.source_id, field: row.source_field }
-        : { type: "other", sourceId: row.source_id };
-    case "achievement":
-      return {
-        type: "achievement",
-        achievementId: row.source_id,
-        projectDetailId: info?.projectDetailId ?? null,
-        projectId: info?.projectId ?? null,
-        experienceId: info?.experienceId ?? null,
-      };
+      return { type: "project", projectId: row.source_id, field: row.source_field, standalone: info?.standalone ?? null };
+    case "project_deliverable":
+      return { type: "project_deliverable", deliverableId: row.source_id, projectId: info?.projectId ?? null };
     case "skill":
       return { type: "skill", skillId: row.source_id };
     case "jd_requirement":
@@ -190,29 +178,20 @@ export async function loadSourceLookup(supabase: UserSupabaseClient, rows: reado
   await Promise.all(
     [...idsByType].map(async ([type, set]) => {
       const ids = [...set];
-      if (type === "project_detail") {
-        const found = await selectIn<{ id: string; updated_at: string; project_id: string }>(supabase, SOURCE_TABLES[type], "id, updated_at, project_id", ids);
-        for (const r of found) lookup.set(key(type, r.id), { updatedAt: r.updated_at, projectId: r.project_id });
-        return;
-      }
-      if (type === "achievement") {
-        const found = await selectIn<{ id: string; updated_at: string; project_detail_id: string | null; experience_id: string | null }>(
+      if (type === "project") {
+        // DM 2.8 v4.4: "변경됨" compares with content_updated_at (classification / link edits don't count).
+        const found = await selectIn<{ id: string; content_updated_at: string; experience_id: string | null; education_id: string | null }>(
           supabase,
           SOURCE_TABLES[type],
-          "id, updated_at, project_detail_id, experience_id",
+          "id, content_updated_at, experience_id, education_id",
           ids,
         );
-        const detailIds = [...new Set(found.flatMap((r) => (r.project_detail_id ? [r.project_detail_id] : [])))];
-        const details = await selectIn<{ id: string; project_id: string }>(supabase, "project_details", "id, project_id", detailIds);
-        const projectOf = new Map(details.map((d) => [d.id, d.project_id]));
-        for (const r of found) {
-          lookup.set(key(type, r.id), {
-            updatedAt: r.updated_at,
-            projectDetailId: r.project_detail_id,
-            projectId: r.project_detail_id ? (projectOf.get(r.project_detail_id) ?? null) : null,
-            experienceId: r.experience_id,
-          });
-        }
+        for (const r of found) lookup.set(key(type, r.id), { updatedAt: r.content_updated_at, standalone: !r.experience_id && !r.education_id });
+        return;
+      }
+      if (type === "project_deliverable") {
+        const found = await selectIn<{ id: string; updated_at: string; project_id: string }>(supabase, SOURCE_TABLES[type], "id, updated_at, project_id", ids);
+        for (const r of found) lookup.set(key(type, r.id), { updatedAt: r.updated_at, projectId: r.project_id });
         return;
       }
       const found = await selectIn<{ id: string; updated_at: string }>(supabase, SOURCE_TABLES[type], "id, updated_at", ids);

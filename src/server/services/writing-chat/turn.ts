@@ -3,6 +3,7 @@ import { failureCauseOf, type StoredAiJobProgress } from "@/lib/contracts/ai";
 import type { AiErrorCode, ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import {
+  DraftFieldPath,
   WRITING_CHAT_MESSAGE_LIMIT,
   WRITING_CHAT_MESSAGE_MAX_CHARS,
   type RequestedSlot,
@@ -24,7 +25,8 @@ import { isKeyFailureCause } from "@/server/jobs/provider-context";
 import { decideRetry } from "@/server/jobs/retry";
 import type { JobRecord } from "@/server/jobs/types";
 import { createPriceCache, createUsageRecorder } from "@/server/jobs/usage-recorder";
-import { diffDrafts, draftProgress } from "./draft";
+import type { V9Flags } from "@/server/ai/validation/v9";
+import { applicableFields, chipsFor, diffDrafts, needsReviewCount } from "./draft";
 import { toMessageDto } from "./mappers";
 import type { ChatMessage, ChatSnapshot, Log, TurnDeps, TurnSnapshot, TurnTiming } from "./types";
 
@@ -110,10 +112,10 @@ function inFlightQuery(deps: TurnDeps, chatId: string) {
 }
 
 const turnInProgress = () => new AppError("turn_in_progress", "이전 메시지에 대한 응답을 만들고 있어요. 잠시 후 다시 보내 주세요.", { status: 409 });
-const notActive = () =>
-  new AppError("writing_chat_not_active", "저장했거나 그만둔 대화예요. 새 대화를 시작해 주세요.", { status: 409 });
+const closedChat = () =>
+  new AppError("writing_chat_closed", "대화가 길어져 끝난 대화예요. 제안은 반영할 수 있고, 새 대화에서 이어 할 수 있어요.", { status: 409 });
 const limitReached = () =>
-  new AppError("message_limit_reached", "대화가 길어져 더 보낼 수 없어요. 지금까지 내용을 저장하거나 폼으로 옮겨 이어서 써 주세요.", { status: 409 });
+  new AppError("message_limit_reached", "대화가 길어져 더 보낼 수 없어요. 제안을 반영하고 새 대화에서 이어 해 주세요.", { status: 409 });
 const nothingToRetry = () => new AppError("nothing_to_retry", "다시 보낼 응답이 없어요.", { status: 409 });
 
 /**
@@ -158,7 +160,7 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
 
   const chat = await deps.chats.load(req.chatId);
   if (!chat) throw new AppError("not_found");
-  if (chat.status !== "active") throw notActive();
+  if (chat.status !== "active") throw closedChat();
 
   let retryUser: ChatMessage | null = null;
   if (retry) {
@@ -314,7 +316,7 @@ type CallFailure = { code: AiErrorCode; retryAfter: string | null; quotaResetsAt
 
 type ReplyResult = { ok: true; message: WritingChatMessageDto } | { ok: false; failure: CallFailure };
 type ExtractResult =
-  | { ok: true; before: StructuredDraft; after: StructuredDraft }
+  | { ok: true; before: StructuredDraft; after: StructuredDraft; flags: V9Flags | null }
   | { ok: false; code: AiErrorCode | "skipped" };
 
 /** Deadline + cancel signal of one call. `timeout` aborts with reason "timeout" (ai `signalReason`). */
@@ -550,7 +552,7 @@ export async function runTurn(
         const after = outcome.patch === null ? before : await deps.chats.applyAiPatch(chat.id, outcome.patch);
         const through = outcome.processedThroughSequence ?? Math.max(...pending.map((m) => m.sequence));
         await deps.chats.markExtracted(chat.id, through);
-        return { ok: true, before, after };
+        return { ok: true, before, after, flags: outcome.flags };
       } catch (err) {
         // The patch was rejected / not stored: the messages stay pending and are extracted again next turn.
         log("writing_chat.extract_store_failed", { jobId: job.id, dbCode: err instanceof AppError ? String(err.code) : "unknown" });
@@ -612,12 +614,15 @@ export async function runTurn(
     if (diff.any) {
       draftStatus = "updated";
       safeEmit({ type: "draft_patch", structuredDraft: extract.after, changed: diff.changed });
+      const flags = extract.flags;
       safeEmit({
         type: "draft_flags",
-        needsReview: diff.needsReview,
-        clarifications: extract.after.clarifications,
-        sensitiveAdded: diff.sensitiveAdded,
+        needsReview: (flags?.needsReview ?? []).flatMap(toPath),
+        actorAmbiguous: (flags?.actorAmbiguous ?? []).flatMap(toPath),
+        sensitiveAdded: Math.max(flags?.sensitiveAdded ?? 0, extract.after.sensitive_flags_count - extract.before.sensitive_flags_count, 0),
         sensitiveFlagsCount: extract.after.sensitive_flags_count,
+        lengthFull: flags?.lengthFull ?? [],
+        clarifications: extract.after.clarifications,
       });
     }
   }
@@ -625,15 +630,22 @@ export async function runTurn(
   const at = now().toISOString();
   const progress: StoredAiJobProgress = { stage: extract.ok ? "extract" : "reply", done: (reply.ok ? 1 : 0) + (extract.ok ? 1 : 0), total: 2 };
   if (reply.ok) {
+    // AI-12 v4.5: chips from the RPC's new draft + the project read this turn; ready_to_return for gate chats.
+    const state = await deps.pipelines.turnState(snapshot).catch(() => null);
+    const room = hasRoomForTurn(turn.messageCount);
     safeEmit({
       type: "turn_done",
       jobId: job.id,
       messageCount: turn.messageCount,
       remainingMessages: remainingMessages(turn.messageCount),
-      limitReached: !hasRoomForTurn(turn.messageCount),
+      limitReached: !room,
+      // finish_assistant_message closes the chat once message_count > 38 (DM 2.5 v4.4).
+      closed: turn.messageCount > WRITING_CHAT_MESSAGE_LIMIT - MESSAGES_PER_TURN,
       draftStatus,
-      draftUpdated: draftStatus !== "failed",
-      progress: draftProgress(draftAfter, { augment: chat.mode === "augment_project" }),
+      chips: state ? chipsFor(state.project, draftAfter, turn.messageCount, room) : [],
+      readyToReturn: state?.readyToReturn ?? false,
+      needsReviewCount: needsReviewCount(draftAfter),
+      applicableFields: applicableFields(draftAfter),
     });
     const completed = await deps.store.complete(job.id, gen, progress).catch(() => false);
     if (!completed) log("writing_chat.turn_complete_failed", { jobId: job.id, lost });
@@ -687,4 +699,10 @@ async function reportKeyStatus(deps: TurnDeps, jobId: string, reply: ReplyResult
   } catch {
     log("writing_chat.key_status_report_failed", { jobId });
   }
+}
+
+/** V-9 flag ref → contract path (unknown sections dropped). */
+function toPath(ref: { section: string; field: string }): DraftFieldPath[] {
+  const parsed = DraftFieldPath.safeParse(ref);
+  return parsed.success ? [parsed.data] : [];
 }

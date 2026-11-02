@@ -96,7 +96,7 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
   let admin: Client;
   let user: Client;
   let userId = "";
-  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID(), detail: crypto.randomUUID() };
+  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID() };
   const ACTION = "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다";
 
   beforeEach(() => {
@@ -128,8 +128,11 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const career = await import("@/server/services/career");
     const contracts = await import("@/lib/contracts/career");
     await career.saveExperience(user, contracts.SaveExperienceInput.parse({ id: ids.experience, companyName: "알파", startMonth: "2021-03", jobPosition: "백엔드", isCurrent: true }));
-    await career.saveProject(user, contracts.SaveProjectInput.parse({ id: ids.project, affiliation: { type: "experience", id: ids.experience }, name: "결제 개선", role: "리드", startMonth: "2024-02" }));
-    await career.saveProjectDetail(user, contracts.SaveProjectDetailInput.parse({ id: ids.detail, projectId: ids.project, title: "응답 속도", situation: "피크 시간 응답이 느렸다", action: ACTION, result: "p95 800ms에서 200ms로 줄였다" }));
+    await career.createProject(user, contracts.CreateProjectInput.parse({ id: ids.project, name: "결제 개선", affiliation: { type: "experience", id: ids.experience } }));
+    await career.saveProject(
+      user,
+      contracts.SaveProjectInput.parse({ id: ids.project, startMonth: "2024-02", situation: "피크 시간 응답이 느렸다", task: "결제 승인 개선 리드", action: ACTION, result: "p95 800ms에서 200ms로 줄였다" }),
+    );
   });
 
   afterAll(async () => {
@@ -240,7 +243,6 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const a = (h.ctx.cd as CareerDescriptionContext).aliases;
     const exp = a.aliasOf("experience", ids.experience)!;
     const prj = a.aliasOf("project", ids.project)!;
-    const det = a.aliasOf("project_detail", ids.detail)!;
     return {
       json: {
         schema_version: 1,
@@ -252,8 +254,8 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
             projects: [
               {
                 project_ref: prj,
-                role_line: { block_id: "p1-r", text: "리드", evidence: [{ source_type: "project", ref: prj, field: "role", quote: null }], placeholders: [] },
-                bullets: [{ block_id: "p1-b1", text: blockText, evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
+                role_line: { block_id: "p1-r", text: "결제 승인 개선 리드", evidence: [{ source_type: "project", ref: prj, field: "task", quote: "결제 승인 개선 리드" }], placeholders: [] },
+                bullets: [{ block_id: "p1-b1", text: blockText, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
               },
             ],
           },
@@ -270,15 +272,14 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const c = h.ctx.cl as CoverLetterContext;
     const prj = c.aliases.aliasOf("project", ids.project)!;
     const exp = c.aliases.aliasOf("experience", ids.experience)!;
-    const det = c.aliases.aliasOf("project_detail", ids.detail)!;
     return {
       json: {
         schema_version: 2,
         question_ref: "CLQ-1",
         question_class: "job_competency",
         selection_mode: c.mode,
-        sources: [{ project_ref: prj, experience_ref: exp, education_ref: null, detail_refs: [det], role: "primary", rationale: "직무 역량을 보여 줍니다.", requirement_refs: [], reuse_reason: null, evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }] }],
-        paragraphs: [{ block_id: "q-p1", text: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했고 응답 시간을 크게 줄였습니다.", evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
+        sources: [{ project_ref: prj, experience_ref: exp, education_ref: null, role: "primary", rationale: "직무 역량을 보여 줍니다.", requirement_refs: [], reuse_reason: null, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] }],
+        paragraphs: [{ block_id: "q-p1", text: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했고 응답 시간을 크게 줄였습니다.", evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], requirement_refs: [], placeholders: [] }],
         notes_for_user: [],
       },
     };
@@ -356,7 +357,7 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(validated).toBeDefined();
     if (validated?.type !== "validated") throw new Error("unreachable");
     // QA of W1's walker over a real AI-03 result
-    expect(validated.blocks.map((b) => b.text)).toEqual(expect.arrayContaining(["리드", expect.stringContaining("800ms")]));
+    expect(validated.blocks.map((b) => b.text)).toEqual(expect.arrayContaining(["결제 승인 개선 리드", expect.stringContaining("800ms")]));
     expect(validated.blocks.every((b) => typeof b.block_id === "string")).toBe(true);
     expect(validated.notes?.notes_for_user).toEqual(["확인해 주세요"]);
 
@@ -378,11 +379,12 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
 
     const chips = await (await evidence()).getEvidenceForOwners("draft_section", [section.id]);
     const chip = chips[section.id]![bullet.block_id]![0]!;
-    expect(chip).toMatchObject({ source_type: "project_detail", status: "ok", kind_label: "상세 내용 · 행동", quote: ACTION, to_career: true });
-    expect(chip.path).toEqual(expect.arrayContaining(["알파", "결제 개선", "응답 속도"]));
-    expect(chip.href).toContain(ids.detail);
+    expect(chip).toMatchObject({ source_type: "project", status: "ok", kind_label: "프로젝트 · 행동", quote: ACTION, current_value: ACTION, to_career: true });
+    expect(chip.path).toEqual(expect.arrayContaining(["알파", "결제 개선"]));
+    expect(chip.href).toContain(ids.project);
     expect(await (await evidence()).getEvidence("draft_section", section.id)).toHaveProperty(bullet.block_id);
-    await admin.from("project_details").update({ situation: "수정" }).eq("id", ids.detail);
+    // DM 2.8 v4.4: a STAR edit moves content_updated_at → 변경됨.
+    await admin.from("projects").update({ situation: "수정" }).eq("id", ids.project);
     expect((await (await evidence()).getEvidence("draft_section", section.id))[bullet.block_id]![0]!.status).toBe("changed");
   });
 
@@ -451,11 +453,11 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(await saveDraftSection(target.id, { question_text: "직무 역량", char_limit: 800, user_note: "메모" })).toMatchObject({ question_text: "직무 역량", char_limit: 800, user_note: "메모" });
     expect(await saveDraftSection(crypto.randomUUID(), { user_note: "x" })).toBeNull();
 
-    const sources = await setSectionSources(target.id, [{ project_id: ids.project, project_detail_ids: [ids.detail] }]);
+    const sources = await setSectionSources(target.id, [{ project_id: ids.project, project_detail_ids: [] }]);
     expect(sources?.[0]).toMatchObject({ project_id: ids.project, experience_id: ids.experience, origin: "user", role: "primary" });
     draft = (await getDraft(project, created.id))!;
     expect(draft.sections[1]!.source_selection_mode).toBe("user");
-    expect(draft.sections[1]!.sources[0]).toMatchObject({ project_detail_ids: [ids.detail] });
+    expect(draft.sections[1]!.sources[0]).toMatchObject({ project_id: ids.project, project_detail_ids: [] });
 
     expect(await prepareCoverLetterSection(target.id)).toBeNull();
     const plan = (await prepareCoverLetterStream(target.id))!;
@@ -514,20 +516,19 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const context = async () => (productionInsightPipeline as unknown as { buildContext: (i: unknown) => { aliases: { aliasOf: (t: string, id: string) => string; values: () => Iterable<{ sourceType: string; alias: string }> }; requirements: Array<{ ref: string }> } }).buildContext(await db.loadInsightInputs(createAiWriterClient(userId), project));
     h.queue.push(async () => {
       const ctx = await context();
-      const det = ctx.aliases.aliasOf("project_detail", ids.detail);
-      return { json: { schema_version: 1, matches: ctx.requirements.map((r, i) => (i === 0 ? { requirement_ref: r.ref, status: "met", rationale: "직접 개선한 행동이 있습니다.", missing_aspect: null, evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }] } : { requirement_ref: r.ref, status: "no_evidence", rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] })) } };
+      const prj = ctx.aliases.aliasOf("project", ids.project);
+      return { json: { schema_version: 1, matches: ctx.requirements.map((r, i) => (i === 0 ? { requirement_ref: r.ref, status: "met", rationale: "직접 개선한 행동이 있습니다.", missing_aspect: null, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] } : { requirement_ref: r.ref, status: "no_evidence", rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] })) } };
     });
     h.queue.push(async () => {
       const ctx = await context();
-      const det = ctx.aliases.aliasOf("project_detail", ids.detail);
       const prj = ctx.aliases.aliasOf("project", ids.project);
       const sentence = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence")!.alias;
       return {
         json: {
           schema_version: 1,
-          strengths: [{ title: "결제 승인 API 개선", description: "결제 승인 API의 병목을 직접 찾아 개선했습니다.", requirement_refs: [ctx.requirements[0]!.ref], evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }] }],
+          strengths: [{ title: "결제 승인 API 개선", description: "결제 승인 API의 병목을 직접 찾아 개선했습니다.", requirement_refs: [ctx.requirements[0]!.ref], evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] }],
           gaps: [{ requirement_refs: [ctx.requirements[1]!.ref], gap_kind: "no_evidence", description: "관련 경험이 확인되지 않습니다.", actions: [{ type: "add_data", text: "관련 프로젝트가 있다면 추가해 주세요.", evidence: [] }], evidence: [{ source_type: "jd_sentence", ref: sentence, field: null, quote: null }] }],
-          strategy: { positioning: "결제 API 성능을 개선해 온 엔지니어입니다.", positioning_evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }], project_priorities: [{ rank: 1, ref: prj, reason: "가장 직접 연결됩니다.", requirement_refs: [ctx.requirements[0]!.ref] }] },
+          strategy: { positioning: "결제 API 성능을 개선해 온 엔지니어입니다.", positioning_evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], project_priorities: [{ rank: 1, ref: prj, reason: "가장 직접 연결됩니다.", requirement_refs: [ctx.requirements[0]!.ref] }] },
         },
       };
     });
@@ -553,7 +554,7 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(result?.strategy.project_priorities[0]).toMatchObject({ project_id: ids.project, rank: 1 });
     expect(result?.gaps[0]?.actions[0]).toMatchObject({ type: "add_data" });
     const chips = await (await evidence()).getEvidence("insight", state.latest!.id);
-    expect(chips[result!.requirement_matches[0]!.item_key]?.[0]).toMatchObject({ source_type: "project_detail", quote: ACTION });
+    expect(chips[result!.requirement_matches[0]!.item_key]?.[0]).toMatchObject({ source_type: "project", quote: ACTION });
     expect(chips[result!.strengths[0]!.item_key]?.length).toBe(1);
     const summary = await getApplicationProject(project);
     expect(summary).toMatchObject({ insight_state: "ready", insight_job_id: null });

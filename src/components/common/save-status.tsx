@@ -16,7 +16,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatTime } from "@/lib/data/labels"
 
-export type SaveState = "idle" | "saving" | "saved" | "failed"
+/** "blocked": trying again won't help until the user decides or fixes something (the form says what) */
+export type SaveState = "idle" | "saving" | "saved" | "failed" | "blocked"
 
 export function SaveStatus({
   state,
@@ -48,6 +49,12 @@ export function SaveStatus({
           <Button variant="link" size="sm" className="h-auto px-0 text-destructive" onClick={onRetry}>
             다시 시도
           </Button>
+        </>
+      ) : state === "blocked" ? (
+        <>
+          <CircleAlert className="size-3.5 text-destructive" aria-hidden />
+          {/* [UI-가정] 충돌·입력 거부 때의 상태 문구 (이유는 폼 안내에 있다) */}
+          <span className="text-destructive">저장되지 않았어요 — 안내를 확인해 주세요</span>
         </>
       ) : null}
     </p>
@@ -88,7 +95,12 @@ export interface UseAutosaveResult<T> {
   /** save now (blur / before navigation) */
   flush: () => Promise<void>
   retry: () => Promise<void>
+  /** forget unsaved and failed input (the user took another version of the row) */
+  discard: () => void
 }
+
+/** Thrown from `save` for an outcome another try can't fix: state "blocked" instead of "failed". */
+export class AutosaveBlocked extends Error {}
 
 /**
  * Serialized autosave (UQ-1, UQ-2):
@@ -130,10 +142,10 @@ export function useAutosave<T>({ save, delayMs = 800 }: UseAutosaveOptions<T>): 
           failed.current = false
           if (mounted.current) setSavedAt(new Date())
           if (pending.current === null) setStateSafe("saved")
-        } catch {
+        } catch (e) {
           failed.current = true
           // `last` keeps the failed value for retry(); newer input waits in `pending`
-          setStateSafe("failed") // input values stay as they are (ST-SAVE-FAILED)
+          setStateSafe(e instanceof AutosaveBlocked ? "blocked" : "failed") // input values stay as they are (ST-SAVE-FAILED)
           return
         }
       }
@@ -165,6 +177,15 @@ export function useAutosave<T>({ save, delayMs = 800 }: UseAutosaveOptions<T>): 
     await drain()
   }, [drain])
 
+  const discard = React.useCallback(() => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    pending.current = null
+    last.current = null
+    failed.current = false
+    setStateSafe("idle")
+  }, [setStateSafe])
+
   React.useEffect(() => {
     mounted.current = true
     const flushNow = () => void flush()
@@ -189,5 +210,5 @@ export function useAutosave<T>({ save, delayMs = 800 }: UseAutosaveOptions<T>): 
     }
   }, [flush, drain])
 
-  return { state, savedAt, schedule, flush, retry }
+  return { state, savedAt, schedule, flush, retry, discard }
 }

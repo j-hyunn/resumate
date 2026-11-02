@@ -7,6 +7,8 @@ import type { EvidenceLink, EvidenceOwnerType, ProjectDetailField } from "@/type
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { routes } from "@/lib/routes"
+import { loadEvidenceRows } from "./evidence-real"
+import { previewOr } from "./source"
 import { DETAIL_FIELD_LABELS, ENROLLMENT_STATUS_LABELS, EDUCATION_TYPE_LABELS, evidenceKindLabel } from "./labels"
 
 export type EvidenceStatus = "ok" | "changed" | "deleted"
@@ -209,23 +211,23 @@ export function toEvidenceView(db: MockDb, e: EvidenceLink): EvidenceView {
 
 /** All evidence for an owner row, grouped by item_key */
 export async function getEvidence(ownerType: EvidenceOwnerType, ownerId: string): Promise<Record<string, EvidenceView[]>> {
-  const db = await mockRequest()
-  const out: Record<string, EvidenceView[]> = {}
-  for (const e of db.evidence_links
-    .filter((x) => x.owner_type === ownerType && x.owner_id === ownerId)
-    .sort((a, b) => a.sort_order - b.sort_order)) {
-    ;(out[e.item_key] ??= []).push(toEvidenceView(db, e))
-  }
-  return clone(out)
+  return (await getEvidenceForOwners(ownerType, [ownerId]))[ownerId] ?? {}
 }
 
 /** Evidence for several owners at once (e.g. all sections of a draft) */
 export async function getEvidenceForOwners(ownerType: EvidenceOwnerType, ownerIds: string[]): Promise<Record<string, Record<string, EvidenceView[]>>> {
-  const db = await mockRequest()
+  const { db, links } = await previewOr(
+    async () => {
+      const mock = await mockRequest()
+      return {
+        db: mock,
+        links: mock.evidence_links.filter((x) => x.owner_type === ownerType && ownerIds.includes(x.owner_id)).sort((a, b) => a.sort_order - b.sort_order),
+      }
+    },
+    () => loadEvidenceRows(ownerType, ownerIds),
+  )
   const out: Record<string, Record<string, EvidenceView[]>> = {}
-  for (const e of db.evidence_links
-    .filter((x) => x.owner_type === ownerType && ownerIds.includes(x.owner_id))
-    .sort((a, b) => a.sort_order - b.sort_order)) {
+  for (const e of links) {
     const byKey = (out[e.owner_id] ??= {})
     ;(byKey[e.item_key] ??= []).push(toEvidenceView(db, e))
   }

@@ -125,7 +125,7 @@ export async function completeAuthCallback(
       // Can't judge the account: the gated pages re-check (and fail visibly) — go on as usual.
       state = "active";
     }
-    if (state === "deletion_incomplete") return ROUTES.accountDeletion;
+    if (state === "deletion_incomplete") return ROUTES.accountDeletionFinalize;
     if (state === "profile_missing") {
       await signOut(supabase);
       return LOGIN_CALLBACK_ERROR;

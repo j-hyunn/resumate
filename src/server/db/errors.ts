@@ -115,6 +115,9 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_draft_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // server-built arguments
   invalid_raw_text_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // QA-W0-05: program errors, unreachable from the app paths (server-built values, no user update grant)
+  invalid_error_code: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  job_description_immutable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sentences: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_extraction_result: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // apply_structured_draft_patch: user-session rule violations (db notes "거부 사유")
@@ -133,6 +136,14 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_message_state: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   message_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sequence: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // W0 Q53-2 / Q53-11 update_failed_jd_raw_text (DM 2.6.1)
+  jd_job_in_progress: { message: "이 기업 JD에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
+  jd_raw_text_locked: { message: "지금은 공고 원문을 고칠 수 없어요. 새로고침 후 확인해 주세요.", status: 409 },
+  jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
+  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 기업 JD로 추가해 주세요.", status: 409 },
+  jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
+  // W0 Q53-3 begin_interview_evaluation / 다시 채점 route (DM 2.7.1)
+  interview_evaluation_input_only: { message: "남은 실패는 입력이 원인이라 다시 채점할 수 없어요. 새 면접에서 다시 답해 주세요.", status: 409 },
   // S8 interviews (db notes)
   interview_in_progress: { message: "이 기업 JD에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
   session_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
@@ -231,6 +242,8 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_draft_sections: "invalid_input",
   invalid_draft_payload: "internal_error",
   invalid_raw_text_hash: "internal_error",
+  invalid_error_code: "internal_error",
+  job_description_immutable: "internal_error",
   invalid_sentences: "internal_error",
   invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
@@ -253,7 +266,9 @@ export function mapDbError(error: DbError): AppError {
   if (code === "P0001" && message in RAISE_MESSAGES) {
     const known = RAISE_MESSAGES[message]!;
     const appCode = RAISE_CODE_ALIASES[message] ?? message;
-    return new AppError(appCode, known.message, { status: known.status, cause: error });
+    // DM 2.7.1: the cause travels in the raise's detail, and in the response's details.
+    const details = message === "interview_evaluation_input_only" && error.details ? { cause: error.details } : undefined;
+    return new AppError(appCode, known.message, { status: known.status, cause: error, details });
   }
   if (code === "42501" && message === "not_authenticated") return new AppError("unauthenticated", undefined, { cause: error });
   if (code === "PGRST116") return new AppError("not_found", undefined, { cause: error });

@@ -20,7 +20,7 @@ import type { ApplicationSummary } from "@/lib/data/applications"
 import { applicationDisplayName, formatDate, submitFailedMessage } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { readNavOrigin } from "@/components/common/return-target"
-import { updateApplicationAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { updateApplicationAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { useDeleteApplication } from "./shared"
 
 export function HubHeader({ ap, failMove = false, failSave = false }: { ap: ApplicationSummary; failMove?: boolean; failSave?: boolean }) {

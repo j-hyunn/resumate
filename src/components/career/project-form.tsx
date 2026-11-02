@@ -27,7 +27,8 @@ import { routes } from "@/lib/routes"
 import { deleteCareerItemAction, reorderProjectDetailsAction, saveProjectAction, setProjectSkillsAction } from "./actions"
 import { AiRunButton } from "@/components/common/ai-run-button"
 import { chatLock } from "./gate-next-step"
-import { DangerZone, FormSection, TextField, nn, useRowAutosave } from "./form-parts"
+import { DangerZone, FormSection, PeriodError, SaveProblemNotice, TextField, monthText, nn, useRowAutosave, type ConflictField } from "./form-parts"
+import { periodPatch, storedPeriod } from "@/lib/data/row-save"
 import { StarFill } from "./star-fill"
 import { readCareerReturn } from "@/components/common/return-target"
 import { RETURN_FEATURE_LABELS } from "@/components/common/return-banner"
@@ -67,6 +68,35 @@ function toValues(p: Project | null, initialAffiliation: { experience_id?: strin
   }
 }
 
+/** 팀 규모 as the save sends it: a positive whole number or nothing */
+function teamSizeOf(input: string): number | null {
+  const team = Number(input)
+  return input.trim() && Number.isFinite(team) && team > 0 ? Math.round(team) : null
+}
+
+/** UQ-702: the values as a save leaves them (summary cut, 팀 규모 rounded, a reversed period not sent). Same shape as `toValues`. */
+function storedValues(v: Values, latest: Project): Values {
+  const team = teamSizeOf(v.team_size)
+  return {
+    ...v,
+    summary: v.summary.slice(0, SUMMARY_LIMIT),
+    ...storedPeriod(v.start_month, v.end_month, latest),
+    team_size: team === null ? "" : String(team),
+  }
+}
+
+function conflictFields(v: Values, affiliationLabel: (key: string) => string): ConflictField[] {
+  return [
+    { label: "소속", value: affiliationLabel(v.affiliation) },
+    { label: "프로젝트 이름", value: v.name },
+    { label: "역할", value: v.role },
+    { label: "한 줄 요약", value: v.summary },
+    { label: "시작", value: monthText(v.start_month) },
+    { label: "종료", value: monthText(v.end_month) },
+    { label: "팀 규모", value: v.team_size },
+  ]
+}
+
 export function ProjectForm({
   project,
   experiences,
@@ -90,13 +120,14 @@ export function ProjectForm({
   const [announce, setAnnounce] = React.useState("")
   const { resume, pendingId: resumingId } = useResumeChat()
 
-  const { autosave, row, id } = useRowAutosave<Values, Project>({
+  const { autosave, row, id, problem, keepMine, takeLatest } = useRowAutosave<Values, Project>({
     initialId: project?.id ?? null,
     initialRow: project,
     editHref: routes.project,
+    comparable: (p) => toValues(p, {}),
+    stored: storedValues,
     save: (rowId, v, opts) => {
       const [kind, affId] = v.affiliation.split(":")
-      const team = Number(v.team_size)
       return saveProjectAction(
         rowId,
         {
@@ -105,9 +136,8 @@ export function ProjectForm({
           name: nn(v.name),
           role: nn(v.role),
           summary: nn(v.summary.slice(0, SUMMARY_LIMIT)),
-          start_month: v.start_month,
-          end_month: v.end_month,
-          team_size: v.team_size.trim() && Number.isFinite(team) && team > 0 ? Math.round(team) : null,
+          ...periodPatch(v.start_month, v.end_month),
+          team_size: teamSizeOf(v.team_size),
         },
         opts,
       )
@@ -120,6 +150,12 @@ export function ProjectForm({
     autosave.schedule(next)
   }
   const blur = () => void autosave.flush()
+  const affiliationLabel = (key: string) => {
+    const [kind, affId] = key.split(":")
+    if (kind === "exp") return experiences.find((e) => e.id === affId)?.company_name ?? "회사명 없음"
+    if (kind === "edu") return educations.find((e) => e.id === affId)?.institution_name ?? "기관명 없음"
+    return "없음"
+  }
 
   // v5.3 A18 (design-system 6장 A2 S-10): highlight the empty name / role, focus the first one and
   // flash it once. The ring of a field goes away once it has a value. No error styling.
@@ -187,6 +223,16 @@ export function ProjectForm({
         badge={id && status === "draft" ? <DraftBadge /> : null}
         description="이름·역할 + 완료된 상세 내용 1개 이상이면 완료돼요"
         status={<SaveStatus state={autosave.state} savedAt={autosave.savedAt} onRetry={autosave.retry} />}
+      />
+      <SaveProblemNotice
+        problem={problem}
+        mine={conflictFields(values, affiliationLabel)}
+        latest={(r) => conflictFields(toValues(r, {}), affiliationLabel)}
+        onKeepMine={keepMine}
+        onTakeLatest={() => {
+          const latest = takeLatest()
+          if (latest) setValues(toValues(latest, {}))
+        }}
       />
       {id && status === "draft" ? <DraftNotice /> : null}
 
@@ -269,9 +315,10 @@ export function ProjectForm({
           }
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <MonthField id="prj-start" label="시작" value={values.start_month} onChange={(v) => set({ start_month: v })} />
-          <MonthField id="prj-end" label="종료" value={values.end_month} onChange={(v) => set({ end_month: v })} />
+          <MonthField id="prj-start" label="시작" value={values.start_month} onChange={(v) => set({ start_month: v })} describedBy="prj-period-error" />
+          <MonthField id="prj-end" label="종료" value={values.end_month} onChange={(v) => set({ end_month: v })} describedBy="prj-period-error" />
         </div>
+        <PeriodError id="prj-period-error" start={values.start_month} end={values.end_month} />
         <TextField
           id="prj-team"
           label="팀 규모(명)"

@@ -46,8 +46,8 @@ import {
   createCoverLetterAction,
   deleteDraftAction,
   rankDraftSourcesAction,
-} from "@/app/(dashboard)/applications/_lib/actions"
-import { EXTRACT_FIRST_NOTE } from "@/app/(dashboard)/applications/_lib/jd-state"
+} from "@/app/(dashboard)/(gated)/applications/_lib/actions"
+import { EXTRACT_FIRST_NOTE } from "@/app/(dashboard)/(gated)/applications/_lib/jd-state"
 import { notifyAiConnectionChanged, useAiConnection } from "@/components/common/ai-connection-context"
 import { ProviderResultTag } from "@/components/common/provider-badge"
 import { initialDraftEntry, markDraftEntered } from "./draft-entry"

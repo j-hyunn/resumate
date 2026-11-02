@@ -1,18 +1,24 @@
 /**
- * Row types mirroring docs/planning/04-data-model.md (v4.2) verbatim.
- *
- * Rules (ui-context.md "Data layer"):
- * - table name -> singular PascalCase row type (`experiences` -> `Experience`)
- * - column names unchanged (snake_case)
- * - enum CHECK values -> string-literal unions with the exact values
- * - no UI-only fields here; view models live next to the component that needs them
- *
- * This file will be replaced by `supabase gen types` later. jsonb shapes are typed from
- * 04-data-model.md (2.5, 6) and 03-ai-features.md (stored form, evidence removed).
+ * Row types: generated Supabase rows (src/server/db/database.types.ts) under the names screens
+ * import. W1 wiring: table name -> singular PascalCase (`experiences` -> `Experience`), column
+ * names unchanged (snake_case). `Row<table, overrides, hidden>` keeps what generated types can't
+ * say: CHECK enums as string-literal unions, jsonb shapes, a few nullability differences, and the
+ * internal columns screens don't use. Every override / hidden column is listed in
+ * _workspace/backend/spec-gaps.md (2026-11-02 W1). View models stay in this file below as before.
  *
  * Conventions: uuid -> string, timestamptz -> ISO string, date (1st-of-month for months)
  * -> 'YYYY-MM-DD' string, smallint/numeric -> number, jsonb -> typed object.
+ * Type-only import: this file stays client-safe.
  */
+import type { Database } from "@/server/db/database.types"
+
+type PublicRelations = Database["public"]["Tables"] & Database["public"]["Views"]
+type Row<T extends keyof PublicRelations, O = object, Hidden extends string = never> = Omit<
+  PublicRelations[T]["Row"],
+  keyof O | Hidden
+> &
+  O
+
 
 export type Uuid = string
 /** timestamptz as ISO 8601 string */
@@ -244,133 +250,61 @@ export type AiUsageOutcome = "succeeded" | "failed"
 // ---------------------------------------------------------------------------
 
 /** profiles (A.1) — PK id = auth.users.id, no user_id column */
-export interface Profile {
-  id: Uuid
-  display_name: string | null
-  desired_job_title: string | null
-  total_years_of_experience: number | null
-  interested_industries: string[]
-  career_data_updated_at: Timestamp | null
-  /** v4: 활성 공급자 1개 (FK → ai_provider_keys(user_id, provider)), null = AI 잠금 */
+export type Profile = Row<"profiles", {
   active_ai_provider: AiProviderName | null
-  last_active_at: Timestamp | null
-  inactivity_notice_sent_at: Timestamp | null
-  created_at: Timestamp
-  updated_at: Timestamp
-}
+}>
 
 /** consents (A.2) */
-export interface Consent extends BaseRow {
+export type Consent = Row<"consents", {
   consent_type: ConsentType
-  policy_version: string
-  agreed: boolean
-  agreed_at: Timestamp
-  withdrawn_at: Timestamp | null
-  user_agent_hash: string | null
-}
+  updated_at: string
+}>
 
 /** policy_versions (A.2) — non-user table */
-export interface PolicyVersion {
-  id: Uuid
+export type PolicyVersion = Row<"policy_versions", {
   policy_type: PolicyType
-  version: string
-  effective_at: Timestamp
-  requires_reconsent: boolean
-  document_path: string
-  created_at: Timestamp
-}
+}, "updated_at">
 
 // ---------------------------------------------------------------------------
 // 2.3 커리어
 // ---------------------------------------------------------------------------
 
 /** experiences (A.3) */
-export interface Experience extends BaseRow {
+export type Experience = Row<"experiences", {
   status: CareerItemStatus
-  company_name: string | null
-  start_month: DateString | null
-  end_month: DateString | null
-  is_current: boolean
-  job_rank: string | null
-  job_position: string | null
-  department: string | null
   employment_type: EmploymentType | null
-  summary: string | null
-}
+}>
 
 /** educations (2.3) */
-export interface Education extends BaseRow {
+export type Education = Row<"educations", {
   status: CareerItemStatus
-  institution_name: string | null
   education_type: EducationType | null
-  program_name: string | null
-  start_month: DateString | null
-  end_month: DateString | null
   enrollment_status: EnrollmentStatus | null
-  description: string | null
-}
+}>
 
 /** projects (2.3) — affiliation: experience_id XOR education_id XOR none */
-export interface Project extends BaseRow {
+export type Project = Row<"projects", {
   status: CareerItemStatus
-  experience_id: Uuid | null
-  education_id: Uuid | null
-  name: string | null
-  role: string | null
-  summary: string | null
-  start_month: DateString | null
-  end_month: DateString | null
-  team_size: number | null
-  source_writing_chat_id: Uuid | null
-}
+}>
 
 /** project_details (2.3) — STAR + learnings ("회고 및 배운 점") */
-export interface ProjectDetail extends BaseRow {
-  project_id: Uuid
+export type ProjectDetail = Row<"project_details", {
   status: CareerItemStatus
-  title: string | null
-  situation: string | null
-  task: string | null
-  action: string | null
-  result: string | null
-  learnings: string | null
-  sort_order: number
-  source_writing_chat_id: Uuid | null
-}
+}>
 
 /** achievements (2.3) — exactly one of project_detail_id / experience_id */
-export interface Achievement extends BaseRow {
+export type Achievement = Row<"achievements", {
   status: CareerItemStatus
-  project_detail_id: Uuid | null
-  experience_id: Uuid | null
-  metric_name: string | null
-  value_before: number | null
-  value_after: number | null
-  unit: string | null
-  description: string | null
-  /**
-   * generated column. // [UI-가정] 04-data-model.md does not list the generated values;
-   * typed as string until the migration defines them.
-   */
-  kind: string | null
-  source_writing_chat_id: Uuid | null
-}
+}>
 
 /** skills (A.4) — no status column */
-export interface Skill extends BaseRow {
-  name: string
+export type Skill = Row<"skills", {
   normalized_name: string
-  is_manual: boolean
   proficiency: SkillProficiency | null
-}
+}>
 
 /** project_skills (A.4) — PK (project_id, skill_id) */
-export interface ProjectSkill {
-  project_id: Uuid
-  skill_id: Uuid
-  user_id: Uuid
-  created_at: Timestamp
-}
+export type ProjectSkill = Row<"project_skills">
 
 // ---------------------------------------------------------------------------
 // 2.5 AI 작성 대화
@@ -453,66 +387,41 @@ export interface ReturnTarget {
 }
 
 /** writing_chats (2.5) */
-export interface WritingChat extends BaseRow {
+export type WritingChat = Row<"writing_chats", {
   mode: WritingChatMode
-  project_id: Uuid | null
-  experience_id: Uuid | null
-  education_id: Uuid | null
   status: WritingChatStatus
   structured_draft: StructuredDraft
-  message_count: number
-  last_activity_at: Timestamp
-  saved_at: Timestamp | null
   return_target: ReturnTarget | null
-  /** v4.2: last user message sequence the extract call applied (화면 노출 없음) */
-  last_extracted_sequence: number
-}
+}>
 
 /** writing_chat_messages (2.5) */
-export interface WritingChatMessage extends BaseRow {
-  writing_chat_id: Uuid
-  sequence: number
+export type WritingChatMessage = Row<"writing_chat_messages", {
   role: WritingChatMessageRole
-  content: string
   status: WritingChatMessageStatus
-  ai_job_id: Uuid | null
-  /** v4 AI 출력 공통 메타 (assistant rows) */
   provider: AiProviderName | null
-  model: string | null
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
-}
+}>
 
 // ---------------------------------------------------------------------------
 // 2.6 지원 프로젝트 (AP + ST)
 // ---------------------------------------------------------------------------
 
 /** application_projects (A.5) */
-export interface ApplicationProject extends BaseRow {
-  /** null = 추출 대기 */
-  name: string | null
+export type ApplicationProject = Row<"application_projects", {
   name_source: NameSource | null
-  deadline: DateString | null
-  memo: string | null
   stage: ApplicationStage
   stage_outcome: StageOutcome | null
-  stage_changed_at: Timestamp
-  last_activity_at: Timestamp
-  duplicated_from_id: Uuid | null
-}
+}>
 
 /** application_stage_events (2.6) — immutable, no updated_at */
-export interface ApplicationStageEvent {
-  id: Uuid
-  user_id: Uuid
-  application_project_id: Uuid
+export type ApplicationStageEvent = Row<"application_stage_events", {
   event_type: StageEventType
   from_stage: ApplicationStage | null
   to_stage: ApplicationStage
   from_outcome: StageOutcome | null
   to_outcome: StageOutcome | null
-  created_at: Timestamp
-}
+}>
 
 /** AI-01 seniority (03 AI-01 output): e.g. { min_years: 5, max_years: null, label: "5년 이상", source_sids: ["S3"] } */
 export interface JdSeniority {
@@ -537,41 +446,22 @@ export interface JdSentence {
 }
 
 /** job_descriptions (A.6) */
-export interface JobDescription extends BaseRow {
-  application_project_id: Uuid
-  raw_text: string
-  raw_text_hash: string
+export type JobDescription = Row<"job_descriptions", {
   sentences: JdSentence[]
-  detected_language: string | null
-  company_name: string | null
   company_name_source: FieldSource | null
-  position_title: string | null
   position_title_source: FieldSource | null
   extraction_status: ExtractionStatus
-  /** AI-01 output (is_likely_jd, seniority, ...) */
   extraction: JdExtraction | null
-  extraction_job_id: Uuid | null
-  /** v4: 요건 탭 공급자 배지 (D-30) */
   extraction_provider: AiProviderName | null
-  extraction_model: string | null
-  tech_keywords: Array<{ keyword: string; source_sids: string[] }>
-  requirements_hash: string | null
-  /** v4.3 (Q53-2, 04 §2.6.1): set by update_failed_jd_raw_text; failures that ended before it are not shown */
-  raw_text_edited_at: string | null
-}
+  tech_keywords: { keyword: string; source_sids: string[]; }[]
+}>
 
 /** jd_requirements (A.7) */
-export interface JdRequirement extends BaseRow {
-  job_description_id: Uuid
+export type JdRequirement = Row<"jd_requirements", {
   category: JdRequirementCategory
-  content: string
-  keywords: string[]
   importance: JdRequirementImportance
-  source_sids: string[]
-  sort_order: number
   origin: JdRequirementOrigin
-  is_user_edited: boolean
-}
+}>
 
 // ---------------------------------------------------------------------------
 // 2.7 인사이트·서류·면접
@@ -628,16 +518,16 @@ export interface InsightMatchStageResult {
 }
 
 /** insights (A.8) */
-export interface Insight extends BaseRow, AiOutputMeta {
-  application_project_id: Uuid
-  version_no: number
-  is_latest: boolean
+export type Insight = Row<"insights", {
   status: InsightStatus
   result: InsightResult | null
   match_stage_result: InsightMatchStageResult | null
-  requirements_hash: string | null
-  completed_at: Timestamp | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  validation_report: Record<string, unknown> | null
+  usage: Record<string, unknown> | null
+}, "run_generation">
 
 export interface DraftOptions {
   included_experience_ids?: Uuid[]
@@ -651,19 +541,17 @@ export interface DraftOptions {
 }
 
 /** drafts (A.9) */
-export interface Draft extends BaseRow, AiOutputMeta {
-  application_project_id: Uuid
-  insight_id: Uuid | null
+export type Draft = Row<"drafts", {
   draft_type: DraftType
   title: string | null
   status: DraftStatus
   options: DraftOptions
-  edited_at: Timestamp | null
-  first_copied_at: Timestamp | null
-  regenerated_from_id: Uuid | null
-  /** v4.2 (A.9) */
-  completed_at: Timestamp | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  validation_report: Record<string, unknown> | null
+  usage: Record<string, unknown> | null
+}, "run_generation">
 
 /** C-05 placeholder tokens (03 C-5) */
 export type PlaceholderToken =
@@ -691,112 +579,60 @@ export interface DraftBlock {
 
 /** draft_sections (A.10) */
 /** draft_sections (A.10) — v4: AI 출력 공통 메타 (문항 단위 재생성이 다른 공급자일 수 있음) */
-export interface DraftSection extends BaseRow, AiOutputMeta {
-  draft_id: Uuid
-  sort_order: number
+export type DraftSection = Row<"draft_sections", {
   section_kind: DraftSectionKind
-  experience_id: Uuid | null
-  education_id: Uuid | null
-  heading: string | null
-  question_text: string | null
   template_key: CoverLetterTemplateKey | null
-  char_limit: number | null
   count_basis: CountBasis | null
-  user_note: string | null
   source_selection_mode: SourceSelectionMode
-  sources_modified_at: Timestamp | null
-  generation_no: number
   question_class: QuestionClass | null
   status: DraftSectionStatus
-  ai_content: { blocks: DraftBlock[] } | null
-  edited_content: { blocks: DraftBlock[] } | null
-  ai_char_count: number | null
-  correction_applied: boolean
+  ai_content: { blocks: DraftBlock[]; } | null
+  edited_content: { blocks: DraftBlock[]; } | null
   validation_report: Record<string, unknown> | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  usage: Record<string, unknown> | null
+}, "completed_at" | "run_generation">
 
 /** draft_section_sources (A.11) */
-export interface DraftSectionSource extends BaseRow {
-  draft_section_id: Uuid
-  application_project_id: Uuid
-  experience_id: Uuid | null
-  education_id: Uuid | null
-  project_id: Uuid | null
-  project_detail_ids: Uuid[]
+export type DraftSectionSource = Row<"draft_section_sources", {
   role: DraftSourceRole
   origin: DraftSourceOrigin
-  rationale: string | null
-  reuse_reason: string | null
-  requirement_ids: Uuid[]
-  sort_order: number
-  source_label: string | null
-  source_deleted_at: Timestamp | null
-}
+}>
 
 /** interview_sessions (A.12) */
-export interface InterviewSession extends BaseRow {
-  application_project_id: Uuid
-  insight_id: Uuid | null
-  source_session_id: Uuid | null
+export type InterviewSession = Row<"interview_sessions", {
   interview_type: InterviewType
   question_count: QuestionCount
   data_sufficiency: DataSufficiency | null
-  weak_requirement_ids: Uuid[]
   status: InterviewSessionStatus
   generation_status: InterviewGenerationStatus
-  answered_count: number
-  unanswered_count: number
-  submitted_at: Timestamp | null
-  completed_at: Timestamp | null
-  result_viewed_at: Timestamp | null
-  abandoned_at: Timestamp | null
-  last_activity_at: Timestamp
-  career_snapshot_hash: string | null
   score_status: SessionScoreStatus | null
-  score_value: number | null
-  score_max: number | null
-  score_method_version: string | null
-  score_rationale: string | null
-  score_counted_count: number | null
-  /** v4.1: 질문 일괄 생성 작업의 공급자·모델 (생성 성공 시) */
   question_provider: AiProviderName | null
-  question_model: string | null
-  /** v4.1: 채점 작업 공급자·모델 (채점 시작 시, 재채점은 덮어씀) */
   evaluation_provider: AiProviderName | null
-  evaluation_model: string | null
-  /** v4.2 A22: 질문 세트 단위 검증 기록 (composition_relaxed / composition_unmet …) */
   question_validation_report: Record<string, unknown> | null
-  /** v4.2 A22: 질문 세트 생성 사용량 합계 */
   question_usage: Record<string, unknown> | null
-}
+}, "evaluation_job_id" | "evaluation_run_generation" | "question_job_id" | "question_run_generation">
 
 /** interview_questions (A.13) — public columns only are granted to the client */
-export interface InterviewQuestion extends BaseRow, AiOutputMeta {
-  session_id: Uuid
-  sequence: number
+export type InterviewQuestion = Row<"interview_questions", {
   source_kind: QuestionSourceKind
   anchor: QuestionAnchor
-  question_text: string
   intent: string | null
-  focus_criteria: string[]
-  target_requirement_ids: Uuid[]
-  target_gap_requirement_ids: Uuid[]
   good_answer_signals: unknown
-  copied_from_question_id: Uuid | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  validation_report: Record<string, unknown> | null
+  usage: Record<string, unknown> | null
+}, "run_generation">
 
 /** interview_answers (A.13) */
-export interface InterviewAnswer extends BaseRow {
-  session_id: Uuid
-  question_id: Uuid
-  answer_text: string
+export type InterviewAnswer = Row<"interview_answers", {
   status: InterviewAnswerStatus
   score_status: AnswerScoreStatus | null
-  score_value: number | null
-  score_max: number | null
-  score_method_version: string | null
-  score_rationale: string | null
-}
+}>
 
 export type CriterionKey = "specificity" | "intent_fit" | "structure" | "job_relevance"
 export type CriterionGrade = "excellent" | "good" | "fair" | "poor" | "not_applicable"
@@ -819,7 +655,8 @@ export interface AnswerEvaluationResult {
     placeholders: Array<{ token: PlaceholderToken; hint: string }>
     suggestions_if_true: string[]
   }
-  consistency_notes: string[]
+  /** AI-06 stored form (`[가정]`). Chips: evidence with item_key `consistency_notes.<n>` */
+  consistency_notes: Array<{ text: string; answer_quotes: string[] }>
   answer_quotes?: string[]
   score?: {
     status: AnswerScoreStatus
@@ -831,14 +668,16 @@ export interface AnswerEvaluationResult {
 }
 
 /** answer_evaluations (A.13) */
-export interface AnswerEvaluation extends BaseRow, AiOutputMeta {
-  session_id: Uuid
-  answer_id: Uuid
+export type AnswerEvaluation = Row<"answer_evaluations", {
   status: EvaluationStatus
   result: AnswerEvaluationResult | null
-  /** v4.3 (Q53-3, 04 §2.7.1): cause of a failed evaluation. null = unknown → still a 다시 채점 대상 */
   error_code: AiErrorCode | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  validation_report: Record<string, unknown> | null
+  usage: Record<string, unknown> | null
+}, "completed_at" | "run_generation">
 
 /** session_feedbacks.result stored form (03 AI-07) */
 export interface SessionFeedbackResult {
@@ -858,34 +697,28 @@ export interface SessionFeedbackResult {
 }
 
 /** session_feedbacks (A.13) */
-export interface SessionFeedback extends BaseRow, AiOutputMeta {
-  session_id: Uuid
+export type SessionFeedback = Row<"session_feedbacks", {
   status: EvaluationStatus
   result: SessionFeedbackResult | null
-}
+  provider: AiProviderName | null
+  model_tier: ModelTier | null
+  connection_tier: ConnectionTier | null
+  validation_report: Record<string, unknown> | null
+  usage: Record<string, unknown> | null
+}, "completed_at" | "run_generation">
 
 // ---------------------------------------------------------------------------
 // 2.8 근거
 // ---------------------------------------------------------------------------
 
 /** evidence_links (A.14) */
-export interface EvidenceLink extends BaseRow {
-  application_project_id: Uuid
+export type EvidenceLink = Row<"evidence_links", {
   owner_type: EvidenceOwnerType
-  owner_id: Uuid
-  /** block_id for drafts, dot path otherwise (requirement_matches.{id}, strengths.{n}, ...) */
-  item_key: string
-  sort_order: number
   source_type: EvidenceSourceType
-  source_id: Uuid | null
+  source_id: string | null
   source_locator: Record<string, unknown> | null
-  source_field: string | null
-  quote: string | null
-  quote_adjusted: boolean
-  source_snapshot_at: Timestamp
-  source_deleted_at: Timestamp | null
-  source_label: string | null
-}
+  source_snapshot_at: string
+}>
 
 // ---------------------------------------------------------------------------
 // 2.9 AI 작업·사용량
@@ -900,170 +733,88 @@ export interface AiJobProgress {
 }
 
 /** ai_jobs (A.15) */
-export interface AiJob extends BaseRow {
+export type AiJob = Row<"ai_jobs", {
   job_type: AiJobType
-  application_project_id: Uuid | null
-  target_type: string | null
-  target_id: Uuid | null
   status: AiJobStatus
   progress: AiJobProgress | null
   params: Record<string, unknown> | null
-  /** v4: 작업 시작 시점 활성 공급자·등급으로 고정 */
   provider: AiProviderName
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
-  /** v4: v3 attempt_count 이름 변경 */
-  retry_count: number
-  next_run_at: Timestamp | null
-  retry_wait_total_ms: number
   error_code: AiErrorCode | null
   error_category: AiErrorCategory | null
   failure_cause: AiFailureCause | null
-  /** daily_quota_exhausted: 공급자 일일 한도 초기화 시각 (UTC 저장, 화면 KST) */
-  quota_resets_at: Timestamp | null
-  /** rate_limited / provider_unavailable 최종 실패: 이 시각 이후 다시 시도 */
-  retry_after: Timestamp | null
-  input_hash: string | null
-  prompt_version: string | null
-  model: string | null
   usage: Record<string, unknown> | null
   output: Record<string, unknown> | null
-  /**
-   * v4.2 (A.15): completed step outputs by stage name (+ `_meta`). No user select grant in the
-   * real DB — mirrored here only so `supabase gen types` matches; screens must not read it.
-   */
   step_outputs: Record<string, unknown>
-  /** v4.2 internal execution generation (stale-runner guard). Not shown */
-  run_generation: number
-  heartbeat_at: Timestamp | null
-  cancel_requested_at: Timestamp | null
-  started_at: Timestamp | null
-  finished_at: Timestamp | null
-}
+}>
 
 // ---------------------------------------------------------------------------
 // 2.9.2 ~ 2.11 AI 사용량 미터 · AI 연결 (v4 BYOK). usage_events / usage_limits는 v4 삭제 (D-34)
 // ---------------------------------------------------------------------------
 
 /** ai_usage_records (04 §2.9.2) — 호출 1회 = 1행, 불변 (updated_at 없음) */
-export interface AiUsageRecord {
-  id: Uuid
-  user_id: Uuid
-  created_at: Timestamp
-  occurred_at: Timestamp
-  /** KST 달력 월 1일 */
-  period_month: DateString
+export type AiUsageRecord = Row<"ai_usage_records", {
   feature: AiUsageFeature
   job_type: AiJobType
-  ai_job_id: Uuid | null
-  call_key: string | null
-  application_project_id: Uuid | null
   provider: AiProviderName
-  model: string
   model_tier: ModelTier
   connection_tier: ConnectionTier
-  input_tokens: number
-  cached_input_tokens: number
-  cache_write_tokens: number
-  output_tokens: number
-  reasoning_tokens: number | null
   usage_source: AiUsageSource
   outcome: AiUsageOutcome
   error_code: AiErrorCode | null
-  price_table_version: string
-  estimated_cost_usd: number
-}
+}>
 
 /** ai_price_tables (04 §2.9.3) — non-user */
-export interface AiPriceTable {
-  id: Uuid
-  version: string
-  effective_from: DateString
+export type AiPriceTable = Row<"ai_price_tables", {
   provider: AiProviderName
-  model: string
-  input_usd_per_mtok: number
-  cached_input_usd_per_mtok: number | null
-  cache_write_usd_per_mtok: number | null
-  output_usd_per_mtok: number
-  long_context_threshold_tokens: number | null
-  long_context_input_usd_per_mtok: number | null
-  long_context_output_usd_per_mtok: number | null
-  source_checked_at: DateString
-}
+}, "created_at" | "long_context_cache_write_usd_per_mtok" | "long_context_cached_input_usd_per_mtok">
 
 /**
  * ai_provider_keys (04 §2.11.1). The 4 cipher columns have no client grant; screens read
  * AiProviderKeyPublic (view ai_provider_keys_public). Kept here only to mirror the table.
  */
-export interface AiProviderKey extends BaseRow {
+export type AiProviderKey = Row<"ai_provider_keys", {
   provider: AiProviderName
   connection_tier: ConnectionTier
-  /** bytea — never sent to the client */
-  key_ciphertext: string
-  key_nonce: string
-  wrapped_dek: string
-  kek_id: string
-  encryption_version: number
-  key_last4: string
   status: ProviderKeyStatus
-  last_verified_at: Timestamp | null
   last_failure_cause: AiFailureCause | null
-  last_failure_at: Timestamp | null
-}
+}>
 
 /** view ai_provider_keys_public (security invoker, meta columns only) */
-export type AiProviderKeyPublic = Pick<
-  AiProviderKey,
-  | "id"
-  | "provider"
-  | "connection_tier"
-  | "key_last4"
-  | "status"
-  | "last_verified_at"
-  | "last_failure_cause"
-  | "last_failure_at"
-  | "created_at"
-  | "updated_at"
->
+export type AiProviderKeyPublic = Row<"ai_provider_keys_public", {
+  provider: AiProviderName
+  connection_tier: ConnectionTier
+  status: ProviderKeyStatus
+  last_failure_cause: AiFailureCause | null
+}>
 
 /** ai_data_use_consents (04 §2.11.5) */
-export interface AiDataUseConsent extends BaseRow {
+export type AiDataUseConsent = Row<"ai_data_use_consents", {
   provider: AiProviderName
   connection_tier: ConnectionTier
-  disclosure_version: string
-  free_tier_acknowledged: boolean
-  agreed_at: Timestamp
-  withdrawn_at: Timestamp | null
-}
+  updated_at: string
+}>
 
 /** ai_disclosures (04 §2.11.6) — non-user */
-export interface AiDisclosure {
-  id: Uuid
+export type AiDisclosure = Row<"ai_disclosures", {
   provider: AiProviderName
   connection_tier: ConnectionTier
-  version: string
-  effective_at: Timestamp
-  requires_reconsent: boolean
-  requires_free_tier_ack: boolean
-  document_path: string
-  terms_checked_at: DateString
-}
+  terms_checked_at: string
+}, "created_at">
 
 /**
  * ai_providers (04 §2.11.6) — non-user. `status_url` / `key_issue_url` are not table columns
  * yet: leader decision Q-6 keeps them next to the mock rows (src/lib/mock/ai-providers.ts)
  * until the backend provides them. // [UI-가정]
  */
-export interface AiProvider {
+export type AiProvider = Row<"ai_providers", {
   provider: AiProviderName
-  display_order: number
-  is_available: boolean
-  is_recommended: boolean
   dashboard_url: string
   billing_url: string
   key_guide_version: string
-  key_guide_checked_at: DateString
-}
+  key_guide_checked_at: string
+}, "created_at" | "updated_at">
 
 // ---------------------------------------------------------------------------
 // RPC return shapes

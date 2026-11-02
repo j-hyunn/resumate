@@ -520,3 +520,100 @@
 - ④ **R2 QA 해소 (QA-R2-01)**: `retry_ai_job`에 `p_expected_provider`·`p_expected_connection_tier`, 어긋나면 `ai_connection_changed`(행 그대로) → 러너가 한 번 다시 읽어 재호출, 또 어긋나면 409 `ai_connection_changed`. 아래 옛 기록은 참고용. ~~**활성 공급자 경쟁 `[가정]`**~~: 서버가 활성 공급자를 읽고 모델을 정한 뒤 `retry_ai_job` 사이에 활성 공급자가 바뀌면 새 공급자에 옛 공급자 모델 id가 기록될 수 있다(드묾, 실패 후 다시 시도로 회복). 로그만 남긴다.
 - ⑤ **`input_hash`는 다시 시도 뒤 비어 있음** (db 노트 ⑤ 연장): 러너는 새 해시를 다시 쓰지 않는다. 그 작업의 성공 결과는 이후 같은 입력 재사용(C-6)에 걸리지 않는다(다음 시작이 한 번 더 실행될 수 있음 — 비용만).
 - ⑧ **QA-01 `ai_connection_changed` `[구현 결정]`** (DM 2.11.7 경로 ② 표에 없는 코드): `retry_ai_job`이 `p_expected_provider`(필수)·`p_expected_connection_tier`(선택)를 받고, 게이트 통과 뒤 활성 연결이 그 값과 다르면 행을 바꾸지 않고 P0001 `ai_connection_changed`로 거부한다(호출자가 고른 모델 id와 공급자가 어긋나는 경쟁 방지). API 응답 코드이며 `ai_jobs.error_code` 값이 아니다. 2.11.7 표에 "연결이 바뀜(재시도 가능)" 행 추가 여부를 기획에 묻는다.
+
+## 2026-11-02 · W0 (db) · Q53 후속 DB 구현 (db-engineer)
+
+- ① **조건 6 비교는 앞뒤 공백 무시 `[가정]`** (DM 2.6.1 "원문이 지금 값과 다르다"): 앞뒤 공백만 다른 저장은 `jd_raw_text_unchanged`로 거부한다. UI mock(`updateFailedJdRawText`)과 같은 결과다. 공백 판정은 Postgres `\s`라 JS `trim()`과 NBSP 등에서 다를 수 있다. 문서가 글자 그대로의 비교를 뜻한다면 정규식 두 곳만 빼면 된다.
+- ② **mock과 DB의 차이: 저장값** (DM이 우선): mock은 원문을 `trim`해 저장하고 `tech_keywords`를 `[]`로 비운다. RPC는 받은 원문 그대로 저장하고(`create_application_project`와 같음, 문장 오프셋이 저장 원문 기준) `tech_keywords`는 DM 표대로 null이다. W3 연결 때 null을 빈 목록으로 읽어야 한다.
+- ③ **가드 트리거는 DM 문구보다 조금 넓다 `[구현 결정]`** (DM 2.6.1 후속 1): DM은 원문 변경 조건만 적었다. `raw_text_edited_at`만 바뀌는 변경과, 원문 변경 없이 `succeeded`를 벗어나는 변경도 `job_description_immutable`로 막는다(리더 지시 "`succeeded → pending`은 `raw_text_edited_at`과 함께만").
+- ④ **`failed` 초안도 중단 처리 대상 `[구현 결정]`** (DM 2.7.1 "`generating`일 때만"): 실행기는 `fail_career_description`을 먼저 부르고 작업을 닫는다. 그래서 `cancel_requested_at` 없이 스트림 중단으로 끝나면 초안이 먼저 `failed`가 되고 작업이 뒤따라 `canceled`가 된다. 이 경우 작업 종료 트리거가 `failed` 초안에도 중단 처리를 적용한다. `ready`는 건드리지 않아 "`validated`가 먼저면 완료"는 그대로다.
+- ⑤ **다시 생성 원본이 지워지면 첫 생성으로 본다 `[가정]`**: `begin_career_description`의 `p_regenerated_from_id`가 이번에 지운 `composing` 행(또는 정리된 낡은 행)이면 `regenerated_from_id = null`로 시작한다. 또 다시 생성 도중 사용자가 원본을 지우면 FK `set null`로 첫 생성이 되어, 그 뒤 중단하면 삭제가 아니라 `composing`으로 남는다(드묾).
+- ⑥ **`composing` 경력기술서 1개를 unique 인덱스로 강제 `[구현 결정]`** (DM 2.7.1은 규칙만): `drafts_career_description_composing_key`. 중단 처리는 같은 트랜잭션에서 다른 `composing` 행을 먼저 지우므로 작업 종료 트리거가 이 인덱스로 실패하지 않는다.
+- ⑦ **공용 판정 헬퍼 이름·모양 `[구현 결정]`** (DM 2.7.1 "이름은 구현이 정함"): 내부 `private.interview_grading_decision`, 서버용 공개 RPC `get_interview_grading_decisions(p_session_ids uuid[])`. 조회 규칙과 맞춰 `evaluating`인데 진행 중 채점 작업이 없으면 `evaluation_failed`로 판정한다. 단 `mark_interview_result_viewed`는 DM 문구대로 저장된 `status`만 본다. 이 경우 표식은 다음 정리 전까지 남는다.
+- ⑧ **`fail_answer_evaluation`의 `p_error_code`는 기본값 null `[구현 결정]`**, 목록 밖 값은 `invalid_error_code`(DM에 없는 코드, 프로그램 오류용).
+- ⑨ **R-63 다시 열기는 입력 원인 답변도 연다** (DM 2.7.1 그대로, 확인용): 공급자가 바뀐 같은 행 다시 시도는 그 작업의 평가를 전부 `pending`으로 열어 입력 원인도 비워진다. 대상 ≥ 1인 세션에서만 일어난다(대상 0은 Q53-5로 거부).
+
+## 2026-11-02 · W0 (api) · Q53 후속 서비스·주소 계약 (api-engineer)
+
+- ⑩ **탈퇴 미완료 계정의 이동 주소 `[구현 결정]`** (리더 계획 "주소 계약", UX S-02·S-25): 계획은 `accountDeletion → /settings/withdraw`만 적었다. 그런데 `/settings/withdraw`는 `(dashboard)` 레이아웃 안이라, W1에서 레이아웃이 `requireConsentedUserOrRedirect`를 쓰면 탈퇴 미완료 계정이 같은 주소로 계속 돌아가는 고리가 생긴다. `ROUTES.accountDeletionFinalize = /settings/withdraw/finalize`를 더하고 `session.ts`·`completeAuthCallback`의 탈퇴 미완료 이동을 그쪽으로 바꿨다. `accountDeletion` 값은 계획대로다. 최종 도착지는 UI 페이지의 이동 결과와 같다.
+- ⑪ **`/settings/withdraw`의 동의 게이트 `[미해결, W1]`** (A7 "약관 동의 게이트 밖"): 이 페이지가 `(dashboard)` 안에 있어, 레이아웃에 동의 게이트를 그대로 넣으면 동의가 없는 활성 계정이 S-25에 갈 수 없다. W0는 레이아웃을 건드리지 않았다. `/settings/withdraw/finalize`는 `(public)` 안이고 프록시에는 동의 게이트가 없어 게이트 밖이 맞다.
+- ⑫ **연결 중 낡은 행의 초안 수 `[가정]`** (UX S-17 "서류 초안 수"): `loadDraftCounts`는 저장된 `status = composing`인 경력기술서만 뺀다. 트리거가 잠금으로 건너뛰어 `generating`/`failed`로 남은 중단 행은 다음 생성이 정리하기 전까지 수에 들어간다. 드물고, 목록·편집기 조회는 이 행도 중단으로 읽는다.
+- ⑬ **`failed` 경력기술서 + `canceled` 작업도 조회에서 중단으로 본다 `[구현 결정]`** (DM 2.7.1은 "`generating`인데 작업이 끝남"만): db ④와 맞춘 것이다. 실행기가 `fail_career_description`을 먼저 부르고 작업이 뒤에 `canceled`가 되는데 트리거가 건너뛰면 이 모양으로 남는다.
+- ⑭ **S-33 `job_gone` 판정 `[구현 결정]`** (UX S-15 "작업이 없어 비교할 수 없으면"): 원문이 수정된 적 있고 질문 작업 행이 없으면 실패를 내리지 않고 `generation.failureHidden = 'job_gone'`을 준다. 수정한 적이 없으면 기존대로 `stalled`다. 인사이트는 비교할 행이 없으면(`generating` 행 + 작업 정리됨) 기존대로 `stalled`를 내린다. S-16 문서에 이 경우의 규칙이 없다.
+- ⑮ **`markDraftCopied`는 `composing` 경력기술서를 막지 않는다 `[가정]`** (UX S-17 "블록·복사 없음"): 복사할 블록이 없고 화면에 버튼이 없어 서버 검사를 더하지 않았다. 직접 호출하면 `first_copied_at`만 기록된다.
+- ⑯ **`begin_interview_evaluation`의 거부가 작업 안에서 나면 `stalled` `[가정]`** (DM 2.7.1): 라우트는 작업을 만들기 전에 거부하므로, 라우트 판정과 작업 시작 사이에 판정이 바뀌는 경우에만 일어난다. 작업이 `stalled`로 끝나고 세션 행은 그대로다. 별도 코드로 내리지 않았다.
+- ⑰ **mock 반환형과 실제 계약의 차이 (W3·W4 연결 때 변환 필요)**: mock `updateFailedJdRawText`는 `{ refused: code }`를 돌려주고 코드 목록에 `invalid_raw_text`·`invalid_raw_text_hash`·`invalid_sentences`·`job_description_not_found`가 있다. 서비스는 `ActionResult`이고 DM 2.6.1대로 `invalid_input`·`internal_error`·`not_found`로 나간다. 면접 쪽은 `grading`의 모양은 같지만 키 이름이 다르다(`failed_answer_count` ↔ `grading.count`, `evaluation_error` ↔ `evaluationErrorCode`).
+- ⑱ **`safeNextPath` 두 벌 (확인 요청)**: UI `src/lib/routes.ts`는 `/consent`도 `next`로 받지 않고, 계약 `src/lib/contracts/routes.ts`는 `/sign-in`·콜백만 막는다. 익명으로 `/consent`에 가면 `/sign-in?next=%2Fconsent`가 되고, 로그인 뒤 `/consent`로 간다. 고리는 생기지 않아 그대로 뒀다.
+
+## 2026-11-02 · W0 QA에서 넘어온 항목
+- DM 2.6.1은 `invalid_raw_text_hash`·`invalid_sentences`를 400으로 적었지만 구현은 500이다. 서버가 만드는 값이라 사용자 입력으로는 나지 않는다. 문서 수정 제안.
+- DM 2.6.1 "이미 묶인 행"의 "다시 돌면 새 원문으로 추출한다"는 Q53-11 수정 뒤 질문 작업 같은 행 재시도에서 깨진다(QA-W0-04).
+- API 노트 "UI 요청 3"은 과장이다. `/dev/states`는 운영에서 이미 `notFound()`다.
+
+## 2026-11-02 · W1 (api) · 공통 연결 (api-engineer)
+
+- ⑲ **[해소 2026-11-02, W1, 리더 결정 (a)] 가입 동의의 `cross_border_transfer`** (DM A.2 "필수 동의" ↔ UX S-03·PRD F-COM-02 v4): DM과 DB(`get_consent_status`, `record_consents`, `REQUIRED_CONSENT_TYPES`)는 `terms`, `privacy_required`, `cross_border_transfer` 3개를 필수로 본다. UX S-03과 PRD는 "AI 공급자 관련 국외 이전 동의는 여기서 받지 않고 키 연결 시점(C-21)에 받는다"고 하고, S-03 폼(`CONSENT_ITEMS`)은 2개만 보낸다. **지금 새 사용자는 S-03에서 `required_consent_missing`으로 저장 실패가 나서 게이트를 지나지 못한다.** 서버에서 동의 행을 대신 채우면 받지 않은 동의를 기록하게 되므로 하지 않았다. 동작 그대로 두었다. 선택지: (a) 필수에서 뺀다(`get_consent_status`·`record_consents`·`enums.ts`·pgTAP·서비스 시험, DM 수정. 코드는 db-engineer) (b) S-03에 항목을 더한다(UX·PRD 수정, UI). 문서 2개와 D-39 방향은 (a) 쪽이지만 동의 범위는 법무에 닿는 결정이라 사용자가 정해야 한다.
+  - **해소**: (a)로 처리했다(`decisions.md`). `20261108000100_w1_signup_consent_required_set.sql`(`get_consent_status`, `record_consents`, `consents_before_insert`), `enums.ts`, pgTAP·서비스 시험, DM A.2(v4.3b). 위 "저장 실패"는 해소 전 상태다. 가입 후 AI 실행은 C-21 전까지 거부된다(`supabase/tests/signup_consent_ai_gate.test.sql`). D-39의 법무 확인은 그대로 열려 있다.
+- ⑳ **`src/types/db.ts`의 생성 타입 차이 `[구현 결정]`** (34개 행 타입 전부 `Row<표, 덮어쓰기, 숨김>`으로 전환, `AiProviderKeyPublic`은 뷰): 생성 타입은 CHECK·jsonb를 `string`·`Json`으로 주므로 enum 합집합과 jsonb 모양은 덮어쓴다. 그 밖의 차이: 
+  - 숨긴 컬럼(화면·fixture가 안 씀): `run_generation`(drafts, insights, interview_questions, session_feedbacks, answer_evaluations, draft_sections), `completed_at`(answer_evaluations, draft_sections, session_feedbacks), `evaluation_job_id`·`evaluation_run_generation`·`question_job_id`·`question_run_generation`(interview_sessions), `created_at`(ai_disclosures, ai_price_tables, ai_providers), `updated_at`(ai_providers, policy_versions), `long_context_cache_write_usd_per_mtok`·`long_context_cached_input_usd_per_mtok`(ai_price_tables).
+  - DB에 없는데 UI 타입에 있는 컬럼: `consents.updated_at`, `ai_data_use_consents.updated_at`. 연결 때 `withdrawn_at ?? agreed_at`으로 채운다.
+  - null 허용이 다른 컬럼(UI 타입 유지, 연결 때 변환): `ai_disclosures.terms_checked_at`, `ai_providers.billing_url`·`dashboard_url`·`key_guide_checked_at`·`key_guide_version`(DB는 null 가능, UI는 string), `evidence_links.source_snapshot_at`(같음), `skills.normalized_name`(같음), `drafts.title`·`evidence_links.source_id`·`interview_questions.intent`(DB는 not null, UI는 null 가능), `ai_jobs.connection_tier`·`model_tier`(같음), `interview_sessions.data_sufficiency`(같음).
+- ㉑ **S-28 장애 배너의 데이터 원천 없음 `[가정]`** (UX S-28, DM 없음): 공급자 장애 상태를 담는 표·경로가 백엔드에 없다. `getServiceStatus`는 실제 경로에서 `affected_providers: []`를 돌려줘 배너가 나오지 않는다. 미리보기는 그대로 나온다.
+- ㉒ **C-21 동의 버전을 화면이 보내지 않음 `[가정]`** (DM 2.11.5, `ai_disclosure_changed`): `recordDataUseConsent(input)`에 버전 인자가 없어 저장 시점에 시행 중인 버전을 서버가 넣는다. 사용자가 보던 사이 고지가 바뀌어도 409 `ai_disclosure_changed`가 나지 않는다. 시그니처를 유지하려면 다른 방법이 없다. C-21 본문도 `DISCLOSURE_FACTS` 상수에서 오므로 버전과 본문의 연결은 기획 확인이 필요하다.
+- ㉓ **무료 등급 확인 조건의 차이** (mock ↔ 계약): mock은 Gemini 무료만 `free_tier_acknowledged`를 요구하고, 계약·DB CHECK는 무료 등급 전부에 요구한다. Gemini 외 공급자를 무료로 고르는 화면 경로는 확인하지 못했다. 그런 경로가 있으면 저장 실패로 나온다.
+- ㉔ **S-42 금액 원천** (S-40 입구 "이번 달 약 $…"): mock은 `ai_usage_records` 합계, 실제는 `get_ai_usage_summary.totals`. 같은 값이다. 기록용.
+- ㉕ **`AiJobView`의 비공개 컬럼**: `params`, `step_outputs`, `run_generation`은 사용자 세션 권한이 없다(서버에만 둠). 실제 경로에서 `null`, `{}`, `0`이다. 화면 검색 결과 이 값을 읽는 곳은 없다. `getLatestJobFor`의 `sessionWide`는 `params`를 볼 수 없는데, 실제 경로에는 답변별 재채점 작업이 없어 영향이 없다고 판단했다 (W4 확인).
+- ㉖ **`startRemainingQuestions` 의미 차이** (mock ↔ `retryInterviewQuestions`): mock은 진행 중 세션에 남은 질문이 있으면 새 작업을 만들고, 실제 경로는 `generation_status = failed`일 때만 받는다(아니면 `interview_generation_not_failed` → `null`). W4에서 S-33 버튼이 뜨는 조건과 맞는지 확인이 필요하다.
+- ㉗ **스트림의 "마무리 중" 단계 `[구현 결정]`** (UX C-04): 실제 SSE는 블록 목록을 미리 알리지 않아 "마지막 블록이 끝남"을 알 수 없다. `start({ endpoint })`에서는 `validated` 전에 `finalizing`으로 가지 않는다. 필요하면 서버 이벤트 추가가 맞다.
+
+## 2026-11-02 · W4 (api) · 모의 면접·보드 연결 (api-engineer)
+
+- ㉖ **닫음: `startRemainingQuestions` 의미 차이.** S-33 버튼은 `failedCategory` + `0 < 저장 질문 < 전체`일 때만 뜨고, `failedCategory`는 실효 `generation_status = failed` 또는 작업 `failed`에서 온다. 실제 경로의 수락 조건(`resolveSessionRun` 실효 `failed`)과 같다. 버튼이 뜨는 행은 받아들여지고, 생성이 끝난 뒤에는 `null`이다. 로컬 스택에서 확인. mock의 "진행 중인데 남은 질문이 있음"은 화면에 버튼이 없어 실제 경로에서 나오지 않는다. 코드 수정 없음.
+- ㉕ **닫음: `getLatestJobFor`의 `sessionWide`.** 실제 경로에 답변별 재채점 작업이 없다. 다시 채점도 세션 단위 새 작업이다. S-37의 `retry_after` 조회는 세션 최신 평가 작업을 그대로 읽어 영향이 없다.
+- ㉘ **AI-06 `consistency_notes` 저장 형태 `[구현 결정]`** (DM·AI-06 `[가정]` ↔ UI 타입): 저장은 `{ text, answer_quotes }[]`, UI 타입과 S-22는 `string[]`이고 `{n}`으로 그대로 그린다. 객체 그대로면 React 렌더 오류다. `toUiEvaluationResult`가 `text`만 넘긴다. 화면에 메모의 인용과 근거(`consistency_notes.<n>`)는 나오지 않는다. 표시하려면 UI 변경이 필요하다.
+- ㉙ **답변 전부 빈 채 제출할 때 키 검사** (mock ↔ `submitInterviewSession`): mock은 답변이 1개 이상일 때만 키를 검사한다. 실제는 AI 호출이 없는 전부 미응답 제출도 연결 게이트를 먼저 거친다(`ai_not_connected`). 화면은 키가 없으면 제출 버튼을 잠그므로 평소 경로에는 나타나지 않는다. 코드 주석은 "제출 = 채점, 키 필요"라 서비스대로 두었다. 기획이 "AI 호출이 없으면 키 불필요"라면 서비스 수정이 필요하다.
+- ㉚ **사용자가 취소한 질문 생성(질문 0개)의 S-33** (UX C-03·C-20 ↔ `answer-sheet.tsx`): 작업은 `canceled`, 세션은 실효 `failed`다. 화면은 `failedCategory = provider_unavailable`로 공급자 문제처럼 안내하고, 질문이 0개라 같은 행 재시도를 보내는데 `canceled` 행이라 `ai_job_not_retryable`로 거부된다. 서버 쪽 `startRemainingQuestions`는 이 경우 동작한다. 화면 수정 사안이라 UI 요청으로 넘긴다.
+- ㉛ **`deleteInterviewSession`의 없는 행** (mock ↔ 실제): mock은 조용히 끝나고 실제는 `not_found`를 던진다. 다른 탭에서 먼저 지운 경우 실패 토스트가 나온다. `abandonInterviewSession`은 mock대로 조용히 처리했다(`interview_not_in_progress`, `not_found`).
+- ㉜ **`InterviewSession.question_validation_report`·`question_usage`와 평가·피드백의 `validation_report`·`usage`는 실제 경로에서 `null` `[구현 결정]`**: 화면이 읽지 않고, 전부 클라이언트 컴포넌트로 직렬화되는 값이라 뺐다. `interview_questions`의 `intent`는 제출 전 `null`, 뒤에는 `get_interview_question_reveals` 값이고 `good_answer_signals`는 항상 `null`이다.
+
+## 2026-11-02 · W2 (api) · 커리어·AI 작성 대화 연결 (api-engineer)
+
+번호는 다른 연결 작업과 겹칠 수 있어 W2-①처럼 적는다.
+
+- W2-① **자동 저장의 첫 저장은 재시도에 안전하지 않다 `[UI 요청]`** (계약 "id는 클라이언트 생성", QA-S2-03): `useRowAutosave`가 새 행을 `id = null`로 보내 서버가 id를 만든다. 첫 저장의 응답만 유실된 뒤 [다시 시도]하면 행이 2개 생긴다. `saveExperience` 등은 `opts.client_id`를 이미 받고 같은 값이면 1행임을 실제 행으로 확인했다. 폼이 보내지 않을 뿐이다.
+- W2-② **낙관적 동시성이 화면에서 약해졌다 `[가정, UI 요청]`** (계약 `expectedUpdatedAt`): 시그니처에 값이 없어, 저장 직전에 읽은 `updated_at`을 쓴다. 두 탭이 같은 행을 고치면 나중 저장이 이긴다. 충돌은 읽기와 쓰기 사이에서만 난다. `opts.expected_updated_at`을 보내면 `conflict`가 난다(확인함). 다만 폼에 충돌 상태가 없어 지금은 "저장 실패"로만 보인다.
+- W2-③ **기간 역전은 저장 실패다** (UX·DM-8 ↔ 계약·DB CHECK): 종료 월이 시작 월보다 앞서면 `invalid_input`이다. mock은 저장했다. 폼에 이 안내가 없어 "저장 실패 — 다시 시도"만 보이고, 다시 시도해도 같다. 값을 몰래 지우지 않았다. 안내 문구가 필요하다.
+- W2-④ **시작 월 없는 경력·교육이 S-08에 안 보인다 `[UI 요청]`** (DM §2.4 "연도 미정"): `groupCareerByYear`는 `year: null` 묶음에 머리를 두지만 `CareerTree`는 `undated_projects`만 있다. 회사명만 쓰고 나간 경력은 목록에서 찾을 수 없다(소속 프로젝트는 `undated_projects`로 보임). mock도 같았다. 반환형을 유지하려고 그대로 뒀다.
+- W2-⑤ **연도 트리의 차이** (mock ↔ DM §2.4): 소속 기간 밖에서 시작한 프로젝트를 mock은 잃어버리고 실제는 그 연도에 소속 머리를 더해 보여 준다. 실제 경로는 서비스의 `groupCareerByYear`를 쓴다. 미리보기는 mock 그대로다.
+- W2-⑥ **대화 시작에 키가 필요 없다** (mock·UX 주석 ↔ PRD 3.3·서비스): mock은 키가 없으면 `WritingChatLockedError`, 실제는 시작한다(보내기에서 막음). C-18이 화면에서 먼저 뜨므로 정상 흐름은 같다. 실제 경로에서 `startWritingChatAction`의 `locked`·`key_invalid`는 나오지 않는다.
+- W2-⑦ **턴 첫 표시는 대역 메시지다** (S-36 ↔ 라우트): 사용자 메시지는 라우트가 저장한다. 그 전에 화면이 보여 줄 행이 필요해 `sendWritingChatTurn`이 저장되지 않은 대역 행(`message`)을 돌려주고, 스트림이 끝나면 화면이 다시 읽어 바꾼다. 그래서 스트리밍 중 메시지 id는 DB와 다르다.
+- W2-⑧ **턴 뒤 미리보기 강조가 사라졌다 `[UI 요청]`**: `runTurn`은 `spec.patchPaths`로 강조하는데 실제 값은 턴이 끝나야 안다(빈 배열). `draft_patch`의 `changed`를 쓰려면 `chat-screen.tsx`를 고쳐야 한다. 또 `ai-stream-client.realChatTurn`은 `changed`·`needsReview`(객체 배열)를 `String()`으로 바꿔 `[object Object]`가 된다. 지금 읽는 화면이 없어 드러나지 않았다. W1 소유 파일이라 고치지 않았다.
+- W2-⑨ **미리보기는 첫 카드만 보여 준다 `[UI 요청]`** (S-36 ↔ AI-12): 화면은 `details[0]`만 그리는데 실제 AI는 카드를 여러 개 만들 수 있다. 나머지 카드는 안 보이지만 저장되고, 저장 요약 수에는 들어간다. 검토 필요 수(`unreviewed`)도 그 카드를 센다. `applyStructuredDraftPatch`는 어느 카드 경로든 처리한다.
+- W2-⑩ **현재 질문 칸은 추정이다 `[가정]`** (`ChatView.currentSlot`, `skippedSlots`): mock의 "물은 칸·건너뛴 칸" 기억은 실제에 없다. 실제 질문은 AI가 턴마다 정한다. `currentSlot`은 초안에서 첫 빈 칸을 고르고 `skippedSlots`는 비어 있다. 진행 단계 강조가 AI 질문과 다를 수 있다.
+- W2-⑪ **거부된 패치는 조용히 무시된다** (DM §2.5, `patchAsUser`): RPC가 값 형식 위반 등을 `rejected`로 돌려줘도 서비스가 버린다. 사용자에게는 값이 안 바뀐 채 저장 표시 없이 돌아온다. S4 그대로다.
+- W2-⑫ **스트림 전 JSON 거부 코드** (`turn_in_progress` 등, 409): `ai-stream-client`가 AI 코드가 아닌 값을 그대로 `error_code`로 넘긴다. `send` 앞의 검사로 활성 여부·상한·키는 먼저 막지만, 같은 대화를 두 탭에서 동시에 보내면 `turn_in_progress`가 C-20까지 간다. 어떤 문구가 나오는지 확인하지 못했다.
+- W2-⑬ **`clarifications` 종류**: 계약에는 `number_vague`·`period_unclear`·`affiliation_unclear`도 있는데 UI 타입과 화면은 `actor_ambiguous`만 안다. 나머지는 표시되지 않는다.
+- W2-⑭ **기록용**: C-05 `cascade`는 mock이 대상 자신을 세고 RPC는 뺀다(DM §4.2). 화면은 그 값을 읽지 않아 영향 없다. `writing_chat`의 `message_count`는 시작 인사를 포함한다(대화의 "n / 40"과 1 차이). 스킬 이름 정규화는 실제가 공백을 하나로 모으고 mock은 없앤다.
+
+
+## 2026-11-02 · W3 (api) · A3 연결
+
+- W3-1 **[UI 요청] S-19 생성은 컴포넌트 수정 없이 실제 경로로 갈 수 없다**: `draft-editor.tsx`가 `stream.start({ blocks })`만 부르고 `"endpoint"`를 넘길 자리가 없다. 이번 지시는 `src/components/` 수정 금지다. 패치 준비 `_workspace/backend/W3/ui-request-s19.patch`. 적용 전까지 실제 경로의 `prepareCareerDescription`·`prepareCoverLetterSection`은 null을 돌려 시작을 거부한다(토스트). 가짜 초안은 만들지 않는다.
+- W3-2 **경력기술서 행이 스트림 전에 없다 `[구현 결정]`** (mock `createCareerDescriptionDraft` ↔ DM `begin_career_description`): 화면은 행을 먼저 만들고 S-19로 이동하지만, 실제 행은 라우트 안에서 생긴다. 사용자 세션은 `drafts` insert 권한이 없다. 설정을 30분 수명 httpOnly 쿠키에 두고 `getDraft`가 그 id로 임시 행(`generating`, 섹션 없음)을 돌려준다. 라우트에 `draftId`를 더해 URL의 id로 행을 만든다. 쿠키는 한 번에 1개이므로 두 탭에서 동시에 새 초안을 시작하면 먼저 연 탭의 임시 행이 사라진다.
+- W3-3 **`draftId`를 준 AI-03은 C-6 재사용을 하지 않는다 `[가정]`** (AI C-6, NFR-AI-08): `done { reused, draftId }`가 와도 화면이 다른 id로 옮겨 갈 경로가 없다(`realBlockStream`이 버린다). 입력이 같으면 토큰을 다시 쓴다. 재사용을 살리려면 스트림 클라이언트와 편집기가 `done.draftId`로 이동해야 한다.
+- W3-4 **중단 반영까지 최대 10초** (Q53-7, C-04): 실행은 하트비트(`HEARTBEAT_INTERVAL_MS` 10초)에서 중단 요청을 본다. `finalizeCareerDescription`이 작업이 끝나기를 최대 12초 기다린 뒤 돌아가므로, 그동안 화면은 스트리밍 상태 그대로다. 줄이려면 하트비트를 줄이거나 편집기에 "중단하는 중" 표시가 필요하다.
+- W3-5 **중단된 자소서 문항의 상태 `[구현 결정]`** (mock ↔ `fail_draft_section`, S7 조회 규칙): DB와 서비스 조회는 `failed`다. 화면은 `failed` + 본문이면 "이 문항을 끝까지 만들지 못했어요"를 띄운다. mock은 이전 상태로 돌아가므로, data 계층에서 마지막 작업이 `canceled`인 문항을 본문 유무에 따라 `ready`/`pending`으로 읽는다. 서비스 `getDraft`·`DraftListItem`의 값과 다르다.
+- W3-6 **`ai_content` 모양** (mock·`types/db.ts` `{ blocks }` ↔ DM A.10·RPC 배열): DB는 배열 자체를 저장한다. data 계층에서 `{ blocks }`로 감싼다. 문서 표기를 맞추는 것이 좋다.
+- W3-7 **`validated.result`의 근거 수** (W1 `validatedBlocks` ↔ AI-03·AI-04 result): 블록에는 `evidence`가 없고 `result.evidence[].item_key`로 묶여 있어 `evidence_count`가 늘 0이다. `block_id`·`text`·`notes_for_user` 추출은 실제 파이프라인 출력으로 맞는 것을 확인했다. `ai-stream-client.ts`는 수정 금지 파일이라 패치에 넣었다. 또 실제 스트림의 임시 블록은 `section_id`가 없어 자소서 `validated` 때 잠깐 겹친다(`streaming.tsx`, 패치에 포함).
+- W3-8 **S-14 이름 규칙** (mock ↔ DM A.5·RPC): mock은 키가 있어도 회사명·포지션명을 둘 다 입력하면 이름을 바로 짓는다. DM·RPC는 "키 없이"일 때만이고, 키가 있으면 추출 전까지 null(화면 "새 기업 JD")이다. DM대로 뒀다.
+- W3-9 **S-18 새 문항·빈 문항** (mock ↔ contract `QuestionText` 1~1,000): mock은 빈 문항을 만들고 지울 수 있다. 실제는 거부된다. `addCoverLetterQuestion`은 "새 문항"(1,000자, 공백 포함)으로 시작한다 `[가정]`. 입력란을 비운 채 자동 저장되면 `invalid_input`으로 "저장 실패"가 뜬다.
+- W3-10 **S-16 버튼은 항상 `regenerate: true` `[가정]`** (AI C-6): `startInsight`에 다시 생성 인자가 없다. 재사용 대상은 화면에 이미 보이는 최신 인사이트뿐이라 잃는 것이 없다고 판단했다.
+- W3-11 **AI-11 실패 이유의 화면 코드 `[가정]`**: `jd_not_extracted`·`extraction_in_progress`·`ranking_in_progress`는 C-11 코드가 아니어서 `provider_unavailable`, `no_rankable_projects`는 `insufficient_data`로 읽는다(화면은 C-20 + 체크 없는 트리).
+- W3-12 **AI-01이 요건 0개 성공을 만들지 않는다** (UX S-15 `succeeded` + 0개, Q53-11): 파이프라인이 `is_likely_jd = true` + 0개를 `schema_invalid`로 끝낸다. 그 화면 상태는 지금 경로로는 나오지 않는다. `jd_has_results`는 요건 행을 직접 지워 만들어 확인했다.
+- W3-13 **Server Action의 시간 제한** (W1 ⑩ 이어서): 배경 추출은 `after()`로 도는데, 페이지 POST에는 라우트의 `maxDuration = 60`이 없다. W5에서 Vercel 값 확인이 필요하다.
+
+## W5 (ui)
+UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그대로), W3-7, W3-9, ㉘, ㉚, ㉛. 내용과 확인 범위는 `W5/02_ui_notes.md`. 브라우저 확인은 없다.
+- W5-1 **프로필은 낙관적 동시성이 없다 `[백엔드 요청]`** (W2-②의 나머지): `UpdateProfileInput`과 서비스에 `updated_at`이 없어 S-04는 나중 저장이 이긴다.
+- W5-2 **부모 없음과 행 없음이 같은 코드다** (`mapSaveError` 23503 → `not_found`): 화면은 "저장할 곳을 찾지 못했어요"로 합쳐 안내한다.
+- W5-3 **충돌 상태와 기간 역전 처리는 스펙에 없다 `[UI-가정]`**: 충돌은 사용자 선택, 기간 역전은 기간만 빼고 저장. 기획 확인 필요.

@@ -17,7 +17,7 @@ import { SaveStatus } from "@/components/common/save-status"
 import { InputGuide } from "@/components/common/input-guide"
 import type { Achievement } from "@/types/db"
 import { saveAchievementAction } from "./actions"
-import { nn, useRowAutosave } from "./form-parts"
+import { SaveProblemNotice, nn, useRowAutosave, type ConflictField } from "./form-parts"
 
 export type AchievementLink = { project_detail_id: string } | { experience_id: string }
 
@@ -44,6 +44,12 @@ function num(v: string): number | null {
   if (t === "") return null
   const n = Number(t)
   return Number.isFinite(n) ? n : null
+}
+
+/** UQ-702: the values as a save leaves them ("1,000" is stored as 1000). Same shape as `toValues`. */
+function storedValues(v: Values): Values {
+  const text = (n: number | null) => (n === null ? "" : String(n))
+  return { ...v, value_before: text(num(v.value_before)), value_after: text(num(v.value_after)) }
 }
 
 export function achievementLine(a: Pick<Achievement, "metric_name" | "value_before" | "value_after" | "unit" | "description">): string {
@@ -103,6 +109,16 @@ export function AchievementDialog({
   )
 }
 
+function conflictFields(v: Values): ConflictField[] {
+  return [
+    { label: "지표 이름", value: v.metric_name },
+    { label: "이전 값", value: v.value_before },
+    { label: "이후 값", value: v.value_after },
+    { label: "단위", value: v.unit },
+    { label: "설명", value: v.description },
+  ]
+}
+
 function AchievementForm({
   link,
   achievement,
@@ -123,9 +139,11 @@ function AchievementForm({
   const failedRef = React.useRef(false)
   const [confirmClose, setConfirmClose] = React.useState(false)
   const [values, setValues] = React.useState<Values>(() => toValues(achievement))
-  const { autosave, row } = useRowAutosave<Values, Achievement>({
+  const { autosave, row, problem, keepMine, takeLatest } = useRowAutosave<Values, Achievement>({
     initialId: achievement?.id ?? null,
     initialRow: achievement,
+    comparable: toValues,
+    stored: storedValues,
     save: async (id, v, opts) => {
       try {
         const saved = await saveAchievementAction(
@@ -140,14 +158,17 @@ function AchievementForm({
         },
         opts,
       )
-        failedRef.current = false
+        failedRef.current = !saved.ok
         return saved
       } catch (e) {
         failedRef.current = true
         throw e
       }
     },
-    onSaved,
+    onSaved: (saved) => {
+      failedRef.current = false
+      onSaved(saved)
+    },
   })
   const set = (patch: Partial<Values>) => {
     const next = { ...values, ...patch }
@@ -175,6 +196,16 @@ function AchievementForm({
         <DialogTitle className="text-lg leading-7 font-semibold">정량 성과</DialogTitle>
         <DialogDescription>연결 대상: {targetLabel}</DialogDescription>
       </DialogHeader>
+      <SaveProblemNotice
+        problem={problem}
+        mine={conflictFields(values)}
+        latest={(r) => conflictFields(toValues(r))}
+        onKeepMine={keepMine}
+        onTakeLatest={() => {
+          const latest = takeLatest()
+          if (latest) setValues(toValues(latest))
+        }}
+      />
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="ach-metric" className="text-sm font-medium">

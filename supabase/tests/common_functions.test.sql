@@ -27,8 +27,7 @@ select ok((select updated_at > '2000-01-01' from public.profiles
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select * from public.record_consents(
-  '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":true},
-    {"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null);
+  '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":true}]'::jsonb, null);
 reset role;
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 select is((select count(*)::int from public.profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001'),

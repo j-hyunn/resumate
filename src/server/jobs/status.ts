@@ -2,6 +2,7 @@ import { AI_ERROR_MESSAGES, errorCategoryOf, failureCauseOf, isManuallyRetryable
 import type { ActiveConnection, ProviderContextSource } from "./provider-context";
 import { REQUEST_SCOPED_JOB_TYPES } from "./runner";
 import { insightJobPartial } from "@/server/services/insight/partial";
+import { isQuestionsPrepareStale, loadGradingDecisions, type GradingDb } from "@/server/services/interview/grading";
 import type { JobRecord } from "./types";
 
 /** Feature partial results for `useAiJob().partial` (S6: AI-02 stage-1 verdicts). Null when the feature has none. */
@@ -29,6 +30,29 @@ export function retryPreviewOf(job: JobRecord, active: ActiveConnection | null):
   };
 }
 
+/**
+ * Q53-5: a failed `interview_evaluation` with no re-grade target can't be retried on the same row
+ * (`retry_ai_job` refuses), so the status response offers no retry. QA-W0-04: same for a questions job
+ * whose JD was edited after `prepare`. Display only: errors → false, and the retry route still refuses.
+ */
+export async function loadRetryBlocked(job: JobRecord, db: GradingDb): Promise<boolean> {
+  if (!canRetryJob(job)) return false;
+  if (job.jobType === "interview_questions") {
+    try {
+      return await isQuestionsPrepareStale(db, job); // QA-W0-04
+    } catch {
+      return false;
+    }
+  }
+  if (job.jobType !== "interview_evaluation" || !job.targetId) return false;
+  try {
+    const decision = (await loadGradingDecisions(db, [job.targetId])).get(job.targetId);
+    return decision?.regradeTargetCount === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Reads the active connection only when the preview needs it (failed + retryable). Display only: errors → null. */
 export async function loadActiveForPreview(job: JobRecord, source: ProviderContextSource, userId: string): Promise<ActiveConnection | null> {
   if (!canRetryJob(job)) return null;
@@ -48,6 +72,7 @@ export function toAiJobStatusResponse(
   job: JobRecord,
   partial: unknown = jobPartial(job),
   active: ActiveConnection | null = null,
+  retryBlocked = false,
 ): AiJobStatusResponse {
   const ended = job.status === "failed" || job.status === "canceled";
   const code = ended ? job.errorCode : null;
@@ -71,8 +96,8 @@ export function toAiJobStatusResponse(
     connectionTier: job.connectionTier,
     retryCount: job.retryCount,
     cancelRequested: job.cancelRequestedAt !== null,
-    canRetry: canRetryJob(job),
-    retry: retryPreviewOf(job, active),
+    canRetry: canRetryJob(job) && !retryBlocked,
+    retry: retryBlocked ? null : retryPreviewOf(job, active),
     updatedAt: job.updatedAt,
   };
 }

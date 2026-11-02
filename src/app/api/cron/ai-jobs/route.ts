@@ -4,6 +4,9 @@ import { getServerEnv } from "@/server/env";
 import { selfInvokeContinue } from "@/server/jobs/app-runner";
 import { isCronAuthorized, runAiJobsCron } from "@/server/jobs/cron";
 
+/** QA-W5-05: same ceiling as the job routes (Fluid compute assumed; see vercel.json). */
+export const maxDuration = 60;
+
 /**
  * Vercel Cron (`Authorization: Bearer <CRON_SECRET>`), all users:
  * fails AI jobs whose heartbeat stopped (C-6 `stalled`) and wakes queued jobs

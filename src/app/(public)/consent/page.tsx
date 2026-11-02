@@ -6,6 +6,7 @@ import { ConsentForm } from "@/components/account/consent-form"
 import { safeNextPath } from "@/lib/routes"
 import { getPolicyVersions } from "@/lib/data/account"
 import { getPreviewState } from "@/lib/preview-state"
+import { gateConsentPage } from "@/server/auth/session"
 
 /**
  * S-03 약관·개인정보 동의 (가입 직후, F-COM-02/03). 동의 완료 → S-08 또는 원래 URL(`?next=`).
@@ -39,6 +40,7 @@ async function Screen({ searchParams }: Props) {
   if (state === "unauth") return <ErrorState kind="unauth" />
   if (state === "error") return <ErrorState kind="error" />
   const next = safeNextPath(sp.next)
+  if (!state) await gateConsentPage(next)
 
   return (
     <div className="px-4 pb-16">

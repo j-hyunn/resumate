@@ -37,3 +37,12 @@
 - 2026-10-28 (S3a, 사용자 결정) 사용자가 누른 수동 재시도는 새 실행으로 보고, 120초 대기 예산과 원인별 재시도 횟수를 새로 시작한다. `retry_count`·`retry_wait_total_ms`는 작업 전체 누계로 남긴다.
 - 2026-10-29 (S3b, QA-S3b-01) 실행 중에 동의가 철회되거나 재동의가 필요해져 막힌 작업은 `error_code = key_missing`으로 끝낸다(`user_account` 범주, `failure_cause` null). 화면은 "AI 연결하기" 잠금 안내를 보이고, 재동의는 연결 화면에서 받는다. C-11.1에 맞는 코드가 없어 정한 것이다([가정], spec-gaps QA-S3b-01 항목).
 - 2026-10-31 (S5) `apply_jd_extraction`의 `p_result` 모양은 db-engineer 노트를 기준으로 한다. 회사명·포지션명은 `{value, source_sids}` 객체(또는 null), 요건 `sort_order`는 0부터 시작한다. AI의 요건 길이 상한 300자는 DB 상한(1~500)보다 엄격하므로 그대로 둔다.
+
+## 2026-11-02 백엔드 연결 (리더 결정)
+- 페이지 주소는 UI가 소유하므로 `ROUTES`를 UI 주소에 맞춘다(`/sign-in`, `/consent`, `/settings/withdraw`). `accountDeletionFinalize = /settings/withdraw/finalize` 추가(api-engineer 제안 수용).
+- QA-W0-02: 동의 검사는 `(dashboard)` 안 라우트 그룹 레이아웃에 두고, S-25(`/settings/withdraw`)는 그 그룹 밖에 둔다. URL은 바뀌지 않는다. A7(동의 게이트 밖)을 지키면서 셸은 유지한다.
+- UI 소유 파일 예외: W1은 게이트 배치, S-25 이동, `/sign-in?error=` 표시, 미리보기 분기처럼 연결에 꼭 필요한 최소 수정만 허용한다. 그 밖의 화면 수정은 "UI 요청"으로 넘긴다. 사용자에게 보고한다.
+- spec-gaps ⑲: 가입 필수 동의에서 `cross_border_transfer`를 뺀다. PRD F-COM-02, UX S-03, 사용자 확정 D-39(공급자별 고지·동의, 키 연결 때)가 이미 정한 내용이고 DB·DM A.2만 옛 상태였다. D-39의 법무 확인은 그대로 열려 있다.
+- W5 재검증 항목: W1은 QA를 받지 않고 W2~W4와 병렬로 진행했다. W5에서 W1 전체(인증, 게이트, 미리보기 분리, `components/account/actions.ts`의 `provider_url` 수정)를 함께 본다.
+- W5 확인 추가: AI 게이트 경로 ①·④·⑤(서비스 계층, 코드만 읽음), `registerProviderKey`가 공급자 호출 전에 동의를 확인하는지, `mapRunGate` 실제 실행. 기존 `cross_border_transfer` 행은 철회 불가로 남음(선택 동의 철회 규칙 밖). DM 머리말 버전을 v4.3b로 맞출 것.
+- W5: UI 요청은 `frontend-engineer`가 일괄 처리한다(W1에서 준 예외를 넓히지 않음). 그 뒤 api-engineer가 중간 상태(`isMockRow`, `listActiveAiJobs` 병합, `startAiJob`)를 걷어내고, backend-qa·ui-qa가 통합 검증한다.

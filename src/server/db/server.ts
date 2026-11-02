@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { getPublicEnv } from "@/server/env";
 import type { Database } from "./database.types";
 import type { UserSupabaseClient } from "./types";
@@ -16,6 +17,8 @@ export type { UserSupabaseClient };
  */
 export async function createSupabaseServerClient(): Promise<UserSupabaseClient> {
   const env = getPublicEnv();
+  // Auth's session load reads the clock right after the client is created: request time only (Cache Components).
+  await connection();
   const cookieStore = await cookies();
 
   return createServerClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {

@@ -1,11 +1,13 @@
 /**
- * ai_jobs (async job mode) read/write + mock side effects. Server only.
- * Client polling goes through server actions in ./actions.ts → useAiJob().
+ * ai_jobs (async job mode) read/write. Server only. Client polling goes through server actions in
+ * ./actions.ts → useAiJob(), so the hook's shape didn't change.
+ * Real path: the same runner and services as the /api/ai-jobs routes (wake on poll, retry, cancel).
+ * Mock path: `?state=` / `/dev/` previews only (`isPreviewRequest`). A plain request never reads the mock store.
  */
-import type { AiErrorCode, AiJob, AiJobType, AnswerEvaluation, InterviewEvaluationRefusalCode, InterviewQuestion, QuestionSourceKind } from "@/types/db"
+import type { AiErrorCode, AiJob, AiJobType, AnswerEvaluation, InterviewEvaluationRefusalCode, InterviewQuestion, NameSource, QuestionSourceKind } from "@/types/db"
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
-import { advanceMockJob, createMockJob, recordMockUsage, retryMockJob, type MockJobOptions } from "@/lib/mock/ai"
+import { advanceMockJob, createMockJob, recordMockUsage, retryMockJob } from "@/lib/mock/ai"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { gradingDecisionOf, regradeTargetIds } from "@/lib/mock/grading"
 import { newId, USER_ID } from "@/lib/mock/ids"
@@ -13,6 +15,14 @@ import { routes } from "@/lib/routes"
 import { gradingRefusal, isInputCausedAnswer, isInputCausedGrading } from "./interview-grading"
 import { ensureJdRequirementsInDb } from "./applications"
 import { applicationDisplayName } from "./labels"
+import { isPreviewRequest } from "./source"
+import { isAppError } from "@/lib/contracts/errors"
+import { getSiteOrigin } from "@/server/auth/site-url"
+import { requireConsentedUser, requireUser } from "@/server/auth/session"
+import { interviewStartDeps } from "@/server/interview-routes"
+import { createAppJobRunner } from "@/server/jobs/app-runner"
+import { loadActiveJobViewRows, loadJobViewRow, loadLatestJobViewRow, requestCancel } from "@/server/services/ai-jobs"
+import { retryInterviewEvaluation, retryInterviewQuestions } from "@/server/services/interview/start"
 
 /** Async-job view model for C-03 / completion toast */
 export interface AiJobView extends AiJob {
@@ -24,7 +34,10 @@ export interface AiJobView extends AiJob {
 }
 
 function jobView(db: MockDb, job: AiJob): AiJobView {
-  const ap = db.application_projects.find((a) => a.id === job.application_project_id)
+  return toJobView(job, db.application_projects.find((a) => a.id === job.application_project_id) ?? null)
+}
+
+function toJobView(job: AiJob, ap: { id: string; name: string | null; name_source: NameSource | null; created_at: string } | null): AiJobView {
   const name = ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : null
   let result_href: string | null = null
   // [UI-가정] only the interview copy is in the spec (C-03); others follow the same pattern
@@ -46,6 +59,26 @@ function jobView(db: MockDb, job: AiJob): AiJobView {
     }
   }
   return { ...job, application_name: name, done_message, result_href }
+}
+
+type RealJobRow = NonNullable<Awaited<ReturnType<typeof loadJobViewRow>>>
+
+/** The view's internal columns have no user grant, and screens don't read them. */
+function realJobView(row: RealJobRow): AiJobView {
+  const { application_projects: ap, ...job } = row
+  // QA-W5-10: internals no screen reads stay on the server (`model` stays: the C-19 tooltip shows it).
+  const aiJob = { ...job, params: null, step_outputs: {}, run_generation: 0, input_hash: null, prompt_version: null, usage: null, output: null } as unknown as AiJob
+  return toJobView(
+    aiJob,
+    ap && job.application_project_id
+      ? { id: job.application_project_id, name: ap.name, name_source: ap.name_source as NameSource | null, created_at: ap.created_at }
+      : null,
+  )
+}
+
+async function realJobById(jobId: string): Promise<AiJobView | null> {
+  const row = await loadJobViewRow((await requireUser()).supabase, jobId)
+  return row ? realJobView(row) : null
 }
 
 const QUESTION_TEMPLATES: Array<{ text: string; kind: QuestionSourceKind }> = [
@@ -342,6 +375,17 @@ function refresh(db: MockDb, job: AiJob) {
 }
 
 export async function getAiJob(id: string): Promise<AiJobView | null> {
+  if (!(await isPreviewRequest())) {
+    // Same side effects as GET /api/ai-jobs/{id} (B-4): wakes a due job, fails a stalled one.
+    const { user } = await requireConsentedUser()
+    try {
+      await createAppJobRunner(await getSiteOrigin()).getStatus({ jobId: id, userId: user.id })
+    } catch (err) {
+      if (isAppError(err) && err.code === "not_found") return null
+      throw err
+    }
+    return realJobById(id)
+  }
   const db = await mockRequest(60)
   const job = db.ai_jobs.find((j) => j.id === id)
   if (!job) return null
@@ -351,6 +395,10 @@ export async function getAiJob(id: string): Promise<AiJobView | null> {
 
 /** Running/queued jobs plus jobs that finished in the last `sinceMs` (for completion toasts). */
 export async function listActiveAiJobs(sinceMs = 15_000): Promise<AiJobView[]> {
+  if (!(await isPreviewRequest())) {
+    // The shell's watcher runs on S-25 too (A7), so no consent gate on this read.
+    return (await loadActiveJobViewRows((await requireUser()).supabase, new Date(Date.now() - sinceMs).toISOString())).map(realJobView)
+  }
   const db = await mockRequest(60)
   const cutoff = Date.now() - sinceMs
   const out: AiJobView[] = []
@@ -373,6 +421,11 @@ export async function getLatestJobFor(
   targetId: string,
   opts?: { jobType?: AiJobType; sessionWide?: boolean },
 ): Promise<AiJobView | null> {
+  if (!(await isPreviewRequest())) {
+    // Per-answer re-score jobs (`sessionWide`) don't exist on the real path: one job per session.
+    const row = await loadLatestJobViewRow((await requireUser()).supabase, targetType, targetId, opts?.jobType)
+    return row ? realJobView(row) : null
+  }
   const db = await mockRequest(60)
   const job = [...db.ai_jobs]
     .reverse()
@@ -388,18 +441,15 @@ export async function getLatestJobFor(
   return clone(jobView(db, job))
 }
 
-/**
- * Start an async job pinned to the active provider. No usage reservation (v4, D-34).
- * Throws MockAiError("key_missing") when no active key — screens show C-18 before this.
- */
-export async function startAiJob(opts: MockJobOptions): Promise<AiJobView> {
-  const db = await mockRequest()
-  const job = createMockJob(db, opts)
-  return clone(jobView(db, job))
-}
-
 /** Sets cancel_requested_at (C-04 중단 / FL-06). */
 export async function cancelAiJob(id: string): Promise<void> {
+  if (!(await isPreviewRequest())) {
+    // POST /api/ai-jobs/{id}/cancel
+    const { supabase, user } = await requireConsentedUser()
+    const { status } = await requestCancel(supabase, id)
+    if (status === "queued") await createAppJobRunner(await getSiteOrigin()).settleCancelIfQueued({ jobId: id, userId: user.id })
+    return
+  }
   const db = await mockRequest(60)
   const job = db.ai_jobs.find((j) => j.id === id)
   if (job && (job.status === "queued" || job.status === "running")) job.cancel_requested_at = new Date().toISOString()
@@ -415,6 +465,17 @@ export async function cancelAiJob(id: string): Promise<void> {
  * `prepare` and reopen every result row the job wrote (R-63); same → resume, reopen failed rows.
  */
 export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null; rate_wait?: boolean }): Promise<AiJobView | null> {
+  if (!(await isPreviewRequest())) {
+    // POST /api/ai-jobs/{id}/retry. A 409 throws AppError → withAiGuard → `{ rejected, refusal }`.
+    const { user } = await requireConsentedUser()
+    try {
+      const started = await createAppJobRunner(await getSiteOrigin()).retryJob({ jobId: id, userId: user.id })
+      return realJobById(started.jobId)
+    } catch (err) {
+      if (isAppError(err) && err.code === "not_found") return null
+      throw err
+    }
+  }
   const db = await mockRequest()
   const job = db.ai_jobs.find((j) => j.id === id)
   if (!job) return null
@@ -479,6 +540,21 @@ export interface RegradeRefused {
  * score_status / completed_at / result_viewed_at (A9).
  */
 export async function regradeFailedAnswers(sessionId: string): Promise<AiJobView | RegradeRefused> {
+  if (!(await isPreviewRequest())) {
+    // POST /api/interview-sessions/{id}/evaluation/retry. Connection refusals go up to withAiGuard.
+    const { supabase, user } = await requireConsentedUser()
+    try {
+      const { jobId } = await retryInterviewEvaluation(await interviewStartDeps(supabase, user.id), sessionId)
+      const view = await realJobById(jobId)
+      if (view) return view
+      return { refused: "interview_evaluation_not_retryable", cause: null }
+    } catch (err) {
+      if (isAppError(err) && (err.code === "interview_evaluation_input_only" || err.code === "interview_evaluation_not_retryable")) {
+        return { refused: err.code as InterviewEvaluationRefusalCode, cause: (err.details?.cause as AiErrorCode | undefined) ?? null }
+      }
+      throw err
+    }
+  }
   const db = await mockRequest()
   const session = db.interview_sessions.find((s) => s.id === sessionId)
   if (!session) return { refused: "interview_evaluation_not_retryable", cause: null }
@@ -517,6 +593,17 @@ export async function regradeFailedAnswers(sessionId: string): Promise<AiJobView
  * is not in progress or already has every question.
  */
 export async function startRemainingQuestions(sessionId: string): Promise<AiJobView | null> {
+  if (!(await isPreviewRequest())) {
+    // POST /api/interview-sessions/{id}/questions/retry (only while generation failed).
+    const { supabase, user } = await requireConsentedUser()
+    try {
+      const { jobId } = await retryInterviewQuestions(await interviewStartDeps(supabase, user.id), sessionId)
+      return realJobById(jobId)
+    } catch (err) {
+      if (isAppError(err) && err.code === "interview_generation_not_failed") return null
+      throw err
+    }
+  }
   const db = await mockRequest()
   const session = db.interview_sessions.find((s) => s.id === sessionId)
   if (!session || session.status !== "in_progress") return null

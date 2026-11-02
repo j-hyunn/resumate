@@ -221,8 +221,11 @@ export function ChatScreen({
   }
 
   const runTurn = (spec: TurnSpec) => {
+    // W2-⑧: a real turn only knows what it changed from its `draft_patch` event (spec.patchPaths is empty)
+    let patched = spec.patchPaths
     turn.start({ ...spec, fail: failCategory ?? undefined }, (ev) => {
-      if (ev.type === "turn_done") void finishTurn(false, spec.patchPaths)
+      if (ev.type === "draft_patch") patched = ev.paths
+      if (ev.type === "turn_done") void finishTurn(false, patched)
       if (ev.type === "error")
         void finishTurn(true, [], ev.error_code, { retry_after: ev.retry_after, quota_resets_at: ev.quota_resets_at })
     })

@@ -1,4 +1,4 @@
-import type { AiProvider } from "@/lib/contracts/enums";
+import { AI_ERROR_CODES, type AiProvider } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { EvidenceChip } from "@/lib/contracts/evidence";
 import {
@@ -29,6 +29,7 @@ import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career";
 import { loadEvidenceChips } from "@/server/services/evidence";
+import { loadGradingDecisions, NO_GRADING_DECISION } from "./grading";
 import {
   EVALUATION_JOB_TYPE,
   executionProvidersOf,
@@ -170,8 +171,10 @@ function toAnswerView(row: AnswerRow): InterviewAnswerView {
 // ---------------- S-37 / S-20 lists ----------------
 
 async function listItems(user: UserSupabaseClient, rows: SessionRow[]) {
-  const [names, jobs] = await Promise.all([loadProjectNames(user, rows.map((r) => r.application_project_id)), loadJobsFor(user, rows.map((r) => r.id))]);
-  return rows.map((r) => toListItem(r, names.get(r.application_project_id) ?? "기업 JD", jobs));
+  // Q53-6: the S-37 menu uses S-22's decision. Only finished sessions can have one other than `none`.
+  const finished = rows.filter((r) => r.submitted_at !== null).map((r) => r.id);
+  const [names, jobs, decisions] = await Promise.all([loadProjectNames(user, rows.map((r) => r.application_project_id)), loadJobsFor(user, rows.map((r) => r.id)), loadGradingDecisions(user, finished)]);
+  return rows.map((r) => toListItem(r, names.get(r.application_project_id) ?? "기업 JD", jobs, decisions.get(r.id)?.decision));
 }
 
 /** S-37 모의 면접 — 전체 세션 (F-P3-15). Filters by project / type / effective status / execution provider. */
@@ -222,13 +225,15 @@ export async function getInterviewPrep(user: UserSupabaseClient, input: { applic
 
 export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionId: string }): Promise<AnswerSheetView> {
   const row = await loadSession(user, input.sessionId);
-  const [{ questions, answers }, jobs, names] = await Promise.all([
+  const [{ questions, answers }, jobs, names, jd] = await Promise.all([
     loadQuestionsAndAnswers(user, row.id),
     loadJobsFor(user, [row.id]),
     loadProjectNames(user, [row.application_project_id]),
+    user.from("job_descriptions").select("raw_text_edited_at").eq("application_project_id", row.application_project_id).maybeSingle(),
   ]);
+  if (jd.error) throw mapDbError(jd.error);
   const chips = await loadEvidenceChips(user, { ownerType: "interview_question", ownerIds: questions.map((q) => q.id) });
-  const run = resolveSessionRun(row, jobsOfSession(jobs, row.id));
+  const run = resolveSessionRun(row, jobsOfSession(jobs, row.id), jd.data?.raw_text_edited_at ?? null);
   const answerByQuestion = new Map(answers.map((a) => [a.question_id, a]));
   const submitted = row.submitted_at !== null;
   const ready = run.generationStatus === "ready";
@@ -247,7 +252,8 @@ export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionI
       remainingCount: Math.max(0, row.question_count - questions.length),
       activeJob: questionJobActive ? run.activeJob : null,
       failure: run.generationStatus === "failed" ? run.failure : null,
-      canRetry: inProgress && !submitted && run.generationStatus === "failed",
+      failureHidden: run.generationStatus === "failed" ? run.failureHidden : null,
+      canRetry: inProgress && !submitted && run.generationStatus === "failed" && run.failureHidden === null,
     },
     canSubmit: inProgress && ready && !submitted,
   };
@@ -255,7 +261,7 @@ export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionI
 
 // ---------------- S-22 결과 ----------------
 
-type EvaluationRow = { answer_id: string; status: string; result: Json | null; provider: string | null; model: string | null; id: string };
+type EvaluationRow = { answer_id: string; status: string; error_code: string | null; result: Json | null; provider: string | null; model: string | null; id: string };
 type FeedbackRow = { id: string; status: string; result: Json | null; provider: string | null; model: string | null };
 
 function toEvaluationView(row: EvaluationRow, chips: Map<string, EvidenceChip[]>): AnswerEvaluationView {
@@ -364,7 +370,8 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
   if (!row.submitted_at) throw new AppError("interview_not_submitted", "제출한 뒤에 볼 수 있어요.", { status: 409 });
 
   let firstView = false;
-  if ((options.markViewed ?? true) && row.status === "completed" && row.result_viewed_at === null) {
+  // Q53-10: the RPC decides (completed, or evaluation_failed with nothing left to do); otherwise `changed: false`.
+  if ((options.markViewed ?? true) && (row.status === "completed" || row.status === "evaluation_failed") && row.result_viewed_at === null) {
     const { data, error } = await user.rpc("mark_interview_result_viewed", { p_session_id: row.id });
     if (error) throw mapDbError(error);
     const r = obj(data);
@@ -374,13 +381,14 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
     }
   }
 
-  const [{ questions, answers }, jobs, names, reveals, evaluations, feedbacks] = await Promise.all([
+  const [{ questions, answers }, jobs, names, reveals, evaluations, feedbacks, decisions] = await Promise.all([
     loadQuestionsAndAnswers(user, row.id),
     loadJobsFor(user, [row.id]),
     loadProjectNames(user, [row.application_project_id]),
     user.rpc("get_interview_question_reveals", { p_session_id: row.id }),
-    user.from("answer_evaluations").select("id, answer_id, status, result, provider, model").eq("session_id", row.id),
+    user.from("answer_evaluations").select("id, answer_id, status, error_code, result, provider, model").eq("session_id", row.id),
     user.from("session_feedbacks").select("id, status, result, provider, model").eq("session_id", row.id).limit(1),
+    loadGradingDecisions(user, [row.id]),
   ]);
   if (reveals.error) throw mapDbError(reveals.error);
   if (evaluations.error) throw mapDbError(evaluations.error);
@@ -412,11 +420,13 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
       evaluation,
       // "채점 실패": submitted, no success, and no evaluation running for it now.
       evaluationFailed: a?.status === "submitted" && !evaluation && (answerScore?.status === "not_scored" || (run.activeJob === null && run.status !== "evaluating")),
+      evaluationErrorCode: e?.status === "failed" ? oneOf(AI_ERROR_CODES, e.error_code) : null,
     };
   });
 
   const header = toSessionHeader(row, names.get(row.application_project_id) ?? "기업 JD", run);
   const evaluationActive = run.activeJob?.jobType === EVALUATION_JOB_TYPE;
+  const grading = decisions.get(row.id)?.decision ?? NO_GRADING_DECISION;
   return {
     session: header,
     score: sessionScoreOf(row),
@@ -426,7 +436,8 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
     evaluationProvider: header.evaluationProvider,
     activeJob: evaluationActive ? run.activeJob : null,
     lastFailure: run.status === "evaluation_failed" ? run.failure : null,
-    canRetryEvaluation: !evaluationActive && (run.status === "evaluation_failed" || (run.status === "completed" && items.some((i) => i.evaluationFailed))),
+    grading,
+    canRetryEvaluation: !evaluationActive && (grading.kind === "regrade" || grading.kind === "resummarize"),
     firstView,
   };
 }

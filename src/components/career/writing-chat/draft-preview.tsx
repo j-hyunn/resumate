@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { CharCount } from "@/components/common/input-guide"
-import type { ProjectDetailField, StructuredField } from "@/types/db"
+import type { ProjectDetail, ProjectDetailField, StructuredDraftDetail, StructuredField } from "@/types/db"
 import { DETAIL_FIELD_LABELS, formatPeriod } from "@/lib/data/labels"
 import type { ChatView } from "@/lib/data/writing-chat-view"
 import { ActorAmbiguousBadge, EmptyValue, FieldStateMark, NeedsReviewBox, SourceChips, fieldUiState } from "./source-chip"
@@ -70,11 +70,18 @@ export function DraftPreview({
 }) {
   const { chat, project, existingDetail } = view
   const draft = chat.structured_draft
-  const detail = draft.details?.[0]
+  const cards: Array<StructuredDraftDetail | undefined> = draft.details?.length ? draft.details : [undefined]
   const numbers = chat.user_message_numbers
   const review = countNeedsReview(view)
   const augment = chat.mode === "augment_project"
-  const ambiguous = (draft.clarifications ?? []).some((c) => c.kind === "actor_ambiguous" && c.field === "action")
+  /** A clarification without a card key belongs to the first card */
+  const ambiguousOn = (card: StructuredDraftDetail | undefined, i: number) =>
+    (draft.clarifications ?? []).some((c) => c.kind === "actor_ambiguous" && c.field === "action" && (c.detail_key ? c.detail_key === card?.detail_key : i === 0))
+  /** The project's detail this card adds to (보강 모드). `existingDetail` covers the first card, also before the AI made one */
+  const existingOf = (card: StructuredDraftDetail | undefined, i: number): ProjectDetail | null => {
+    if (card?.existing_detail_id) return project?.details.find((d) => d.id === card.existing_detail_id) ?? (i === 0 ? existingDetail : null)
+    return i === 0 && !card ? existingDetail : null
+  }
 
   const fieldProps = (path: string) => ({
     path,
@@ -88,7 +95,8 @@ export function DraftPreview({
   const val = (f?: StructuredField<unknown>) => (f && f.value !== null && f.value !== "" ? f.value : null)
   const projectName = augment ? project?.name : val(draft.project?.name)
   const projectRole = augment ? project?.role : val(draft.project?.role)
-  const detailVal = (k: ProjectDetailField) => existingDetail?.[k] ?? val(detail?.fields[k])
+  const cardComplete = (card: StructuredDraftDetail | undefined, i: number) =>
+    REQUIRED_DETAIL.every((k) => existingOf(card, i)?.[k] ?? val(card?.fields[k]))
 
   return (
     <div className="space-y-5">
@@ -153,72 +161,118 @@ export function DraftPreview({
         </div>
       </section>
 
-      <Card className="gap-4 p-4" aria-label="상세 내용">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base leading-6 font-semibold">상세 내용</h3>
-          {existingDetail ? <Badge variant="outline">기존 상세 내용에 추가</Badge> : <Badge variant="outline">새로</Badge>}
-        </div>
-        {DETAIL_ORDER.map((k) => {
-          const path = `details.0.fields.${k}`
-          if (existingDetail?.[k])
-            return (
-              <div key={k} className="space-y-1">
-                <p className="flex items-center justify-between gap-2 text-sm leading-5 font-medium">
-                  {DETAIL_FIELD_LABELS[k]}
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Lock className="size-3" aria-hidden />
-                    기존 내용
-                  </span>
-                </p>
-                <p className="text-base leading-[1.75] whitespace-pre-wrap text-muted-foreground">{existingDetail[k]}</p>
-              </div>
-            )
-          return (
-            <DraftField
-              key={k}
-              label={DETAIL_FIELD_LABELS[k]}
-              required={REQUIRED_DETAIL.includes(k)}
-              field={detail?.fields[k]}
-              slot={k}
-              long
-              badge={k === "action" && ambiguous ? <ActorAmbiguousBadge onClick={handlers.onJumpToQuestion} /> : null}
-              note={k === "action" && ambiguous ? "본인 역할 확인 중 — 팀이 한 일과 본인이 한 일을 AI가 묻고 있어요" : null}
-              {...fieldProps(path)}
-            />
-          )
-        })}
-        {/* UQ-61: 정량 성과 필드도 C-15 네 상태 + 검토 필요 수락/거절 (details[0].achievements[i].{field}) */}
-        <div className="space-y-2">
-          <p className="text-sm leading-5 font-medium">정량 성과</p>
-          {detail?.achievements.length ? (
-            <ul className="space-y-3">
-              {detail.achievements.map((a, i) => {
-                const base = `details.0.achievements.${i}`
-                return (
-                  <li key={i} className="space-y-3 rounded-md border p-3" aria-label={`정량 성과 ${i + 1}`}>
-                    <DraftField label="지표 이름" field={a.metric_name} maxChars={WRITING_CHAT_FIELD_LIMITS.metric_name} {...fieldProps(`${base}.metric_name`)} />
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <DraftField label="이전 값" field={a.value_before as StructuredField<unknown> | undefined} numeric decimal {...fieldProps(`${base}.value_before`)} />
-                      <DraftField label="이후 값" field={a.value_after as StructuredField<unknown> | undefined} numeric decimal {...fieldProps(`${base}.value_after`)} />
-                      <DraftField label="단위" field={a.unit} maxChars={WRITING_CHAT_FIELD_LIMITS.unit} {...fieldProps(`${base}.unit`)} />
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <EmptyValue className="text-sm" />
-          )}
-        </div>
-      </Card>
+      {/* W2-⑨: AI-12 can make several cards; each is saved, so each is shown. No card yet → one empty new card */}
+      {cards.map((card, i) => (
+        <DetailCard
+          key={card?.detail_key ?? card?.existing_detail_id ?? i}
+          index={i}
+          total={cards.length}
+          detail={card}
+          existing={existingOf(card, i)}
+          ambiguous={ambiguousOn(card, i)}
+          fieldProps={fieldProps}
+          onJumpToQuestion={handlers.onJumpToQuestion}
+        />
+      ))}
 
       <section className="space-y-1.5 rounded-md bg-muted p-3 text-sm" aria-label="완료 조건">
         <p className="font-medium">완료 조건</p>
         <Condition met={Boolean(projectName && projectRole)} text="프로젝트: 이름·역할" />
-        <Condition met={REQUIRED_DETAIL.every((k) => detailVal(k))} text="상세 내용: 제목·상황·행동" />
+        <Condition met={cards.some(cardComplete)} text="상세 내용: 제목·상황·행동" />
         <p className="text-muted-foreground">채우지 않아도 저장할 수 있어요. 덜 찬 항목은 작성 중으로 저장돼요</p>
       </section>
     </div>
+  )
+}
+
+type FieldProps = {
+  path: string
+  readOnly: boolean
+  flash: boolean
+  highlightMessageId: string | null
+  numbers: Record<string, number>
+  handlers: PreviewHandlers
+}
+
+/** One 상세 내용 card: paths are `details.{index}.…` (`toDraftFieldPath` turns them into the RPC's address) */
+function DetailCard({
+  index,
+  total,
+  detail,
+  existing,
+  ambiguous,
+  fieldProps,
+  onJumpToQuestion,
+}: {
+  index: number
+  total: number
+  detail: StructuredDraftDetail | undefined
+  existing: ProjectDetail | null
+  ambiguous: boolean
+  fieldProps: (path: string) => FieldProps
+  onJumpToQuestion: () => void
+}) {
+  // [UI-가정] 카드가 여러 개일 때 제목에 순번
+  const title = total > 1 ? `상세 내용 ${index + 1}` : "상세 내용"
+  return (
+    <Card className="gap-4 p-4" aria-label={title}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base leading-6 font-semibold tabular-nums">{title}</h3>
+        {existing ? <Badge variant="outline">기존 상세 내용에 추가</Badge> : <Badge variant="outline">새로</Badge>}
+      </div>
+      {DETAIL_ORDER.map((k) => {
+        const path = `details.${index}.fields.${k}`
+        if (existing?.[k])
+          return (
+            <div key={k} className="space-y-1">
+              <p className="flex items-center justify-between gap-2 text-sm leading-5 font-medium">
+                {DETAIL_FIELD_LABELS[k]}
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Lock className="size-3" aria-hidden />
+                  기존 내용
+                </span>
+              </p>
+              <p className="text-base leading-[1.75] whitespace-pre-wrap text-muted-foreground">{existing[k]}</p>
+            </div>
+          )
+        return (
+          <DraftField
+            key={k}
+            label={DETAIL_FIELD_LABELS[k]}
+            required={REQUIRED_DETAIL.includes(k)}
+            field={detail?.fields[k]}
+            slot={k}
+            long
+            badge={k === "action" && ambiguous ? <ActorAmbiguousBadge onClick={onJumpToQuestion} /> : null}
+            note={k === "action" && ambiguous ? "본인 역할 확인 중 — 팀이 한 일과 본인이 한 일을 AI가 묻고 있어요" : null}
+            {...fieldProps(path)}
+          />
+        )
+      })}
+      {/* UQ-61: 정량 성과 필드도 C-15 네 상태 + 검토 필요 수락/거절 (details[n].achievements[i].{field}) */}
+      <div className="space-y-2">
+        <p className="text-sm leading-5 font-medium">정량 성과</p>
+        {detail?.achievements.length ? (
+          <ul className="space-y-3">
+            {detail.achievements.map((a, i) => {
+              const base = `details.${index}.achievements.${i}`
+              return (
+                <li key={i} className="space-y-3 rounded-md border p-3" aria-label={`정량 성과 ${i + 1}`}>
+                  <DraftField label="지표 이름" field={a.metric_name} maxChars={WRITING_CHAT_FIELD_LIMITS.metric_name} {...fieldProps(`${base}.metric_name`)} />
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <DraftField label="이전 값" field={a.value_before as StructuredField<unknown> | undefined} numeric decimal {...fieldProps(`${base}.value_before`)} />
+                    <DraftField label="이후 값" field={a.value_after as StructuredField<unknown> | undefined} numeric decimal {...fieldProps(`${base}.value_after`)} />
+                    <DraftField label="단위" field={a.unit} maxChars={WRITING_CHAT_FIELD_LIMITS.unit} {...fieldProps(`${base}.unit`)} />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          <EmptyValue className="text-sm" />
+        )}
+      </div>
+    </Card>
   )
 }
 

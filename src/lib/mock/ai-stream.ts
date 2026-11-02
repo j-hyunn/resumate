@@ -50,10 +50,19 @@ function errorEvent(code: AiErrorCode, provider: AiProviderName | null | undefin
   }
 }
 
+/**
+ * A project AI-03 left out (`validated.result.omitted[]`): the screen names it from the C-11 source tree and words
+ * the reason (QA-W5-01). `reason` is `user_excluded` | `low_relevance` (03 AI-03); anything else gets a plain line.
+ */
+export interface OmittedProject {
+  project_id: string
+  reason: string
+}
+
 /** S-19 생성 직후 안내 (A21: not stored — only sent with `validated`) */
 export interface GenerationNotesPayload {
-  /** career description: items left out */
-  omitted?: string[]
+  /** career description: items left out — a real run's projects, or the mock's ready line ("항목 — 이유") */
+  omitted?: Array<OmittedProject | string>
   notes_for_user?: string[]
   /** cover letter: the answer is outside 90–110 % of the limit after adjustment */
   char_adjust_needed?: boolean

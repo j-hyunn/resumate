@@ -3,9 +3,13 @@
  * append_writing_chat_message, apply_structured_draft_patch, set_writing_chat_affiliation,
  * save_writing_chat, hand_off_writing_chat. Server only.
  *
- * The AI turn itself is streamed client-side by the mock (lib/mock/ai-stream mockChatTurn);
- * `completeMockAssistantTurn` stores the reply when the stream finishes.
+ * W2: real services + RLS; `?state=` previews stay on the mock store. The AI turn: `sendWritingChatTurn`
+ * / `retryWritingChatTurn` check the gate and return `{ endpoint, body }`, the screen hands that to
+ * `useChatTurnStream().start`, and the Route Handler stores the messages and the patch. In a preview
+ * the same functions return the mock plan (no `endpoint`) and `completeMockAssistantTurn` stores the reply.
  */
+import { randomUUID } from "node:crypto"
+import { z } from "zod"
 import type {
   AiErrorCode,
   ReturnTarget,
@@ -20,11 +24,28 @@ import type { MockDb } from "@/lib/mock/fixtures"
 import { newId, USER_ID } from "@/lib/mock/ids"
 import { isAchievementComplete, isDetailComplete } from "./career"
 import { canSendWritingChatMessage } from "./writing-chat-limits"
-import type { ChatSlot } from "./writing-chat-slots"
+import { isDetailSlot, type ChatSlot } from "./writing-chat-slots"
 import { applyPlannedTurn, markAsked, planMockTurn, readPlannedTurn } from "@/lib/mock/writing-chat-turn"
 import { activeKey, assertAiRunnable, MockAiError, recordMockUsage } from "@/lib/mock/ai"
 import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { mockMessageMeta } from "@/lib/mock/ai-meta"
+import { normalizeSkillName } from "@/lib/contracts/career"
+import { AppError, invalid, isAppError } from "@/lib/contracts/errors"
+import {
+  ApplyDraftEditInput,
+  EditDraftDetailInput,
+  ReviewDraftFieldInput,
+  SetAffiliationInput,
+  StartWritingChatInput,
+  type DraftFieldPath,
+  type RequestedSlot,
+} from "@/lib/contracts/writing-chat"
+import { requireConsentedUser } from "@/server/auth/session"
+import type { UserSupabaseClient } from "@/server/db/types"
+import { loadCareerRows, loadFirstDraftDetailId, loadWritingChatRows, loadWritingChatWithMessages } from "@/server/services/career/rows"
+import * as chats from "@/server/services/writing-chat/chat"
+import { hasRoomForTurn } from "@/server/services/writing-chat/turn"
+import { previewOr, unwrap } from "./source"
 
 export {
   WRITING_CHAT_MESSAGE_LIMIT,
@@ -45,7 +66,7 @@ export interface WritingChatDetail extends WritingChat {
   user_message_numbers: Record<string, number>
 }
 
-function detail(db: MockDb, chat: WritingChat): WritingChatDetail {
+function detail(db: Pick<MockDb, "writing_chat_messages">, chat: WritingChat): WritingChatDetail {
   const messages = db.writing_chat_messages
     .filter((m) => m.writing_chat_id === chat.id)
     .sort((a, b) => a.sequence - b.sequence)
@@ -55,25 +76,73 @@ function detail(db: MockDb, chat: WritingChat): WritingChatDetail {
   return { ...chat, messages, user_message_numbers: numbers }
 }
 
+// ---------------------------------------------------------------------------
+// real path helpers
+// ---------------------------------------------------------------------------
+
+function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
+  const parsed = schema.safeParse(input)
+  if (!parsed.success) unwrap(invalid(parsed.error))
+  return parsed.data as z.output<S>
+}
+
+async function loadChatDetail(supabase: UserSupabaseClient, chatId: string): Promise<WritingChatDetail | null> {
+  if (!z.guid().safeParse(chatId).success) return null
+  const loaded = await loadWritingChatWithMessages(supabase, chatId)
+  if (!loaded) return null
+  // Generated types give CHECK columns and jsonb as string / Json; the DB guarantees the narrower UI types.
+  return detail({ writing_chat_messages: loaded.messages as unknown as WritingChatMessage[] }, loaded.chat as unknown as WritingChat)
+}
+
+async function requireChatDetail(supabase: UserSupabaseClient, chatId: string): Promise<WritingChatDetail> {
+  const chat = await loadChatDetail(supabase, chatId)
+  if (!chat) throw new AppError("not_found", "요청한 대화를 찾을 수 없습니다.")
+  return chat
+}
+
 export async function listActiveWritingChats(): Promise<WritingChat[]> {
-  const db = await mockRequest()
-  return clone(
-    db.writing_chats.filter((c) => c.status === "active").sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at)),
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      return clone(
+        db.writing_chats.filter((c) => c.status === "active").sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at)),
+      )
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      return (await loadWritingChatRows(supabase, "active")) as unknown as WritingChat[]
+    },
   )
 }
 
 /** v4.2 A6: S-08 "그만둔 대화 N개" — abandoned chats, latest activity first */
 export async function listAbandonedWritingChats(): Promise<WritingChat[]> {
-  const db = await mockRequest()
-  return clone(
-    db.writing_chats.filter((c) => c.status === "abandoned").sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at)),
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      return clone(
+        db.writing_chats.filter((c) => c.status === "abandoned").sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at)),
+      )
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      return (await loadWritingChatRows(supabase, "abandoned")) as unknown as WritingChat[]
+    },
   )
 }
 
 export async function getWritingChat(id: string): Promise<WritingChatDetail | null> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === id)
-  return chat ? clone(detail(db, chat)) : null
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === id)
+      return chat ? clone(detail(db, chat)) : null
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      return loadChatDetail(supabase, id)
+    },
+  )
 }
 
 /** No active AI key (ai_connection.active_provider = null) */
@@ -83,17 +152,42 @@ export class WritingChatLockedError extends Error {
   }
 }
 
-/**
- * 대화 시작: insert + 고정 시작 인사 (AI 없음). v4: no monthly limit (D-34); needs an active
- * provider key — throws WritingChatLockedError otherwise (screens show C-18 first).
- */
-export async function startWritingChat(input: {
+export interface StartWritingChatArgs {
   mode: WritingChatMode
   project_id?: string | null
   experience_id?: string | null
   education_id?: string | null
   return_target?: Omit<ReturnTarget, "created_at"> | null
-}): Promise<WritingChatDetail> {
+}
+
+/**
+ * 대화 시작: insert + 고정 시작 인사 (AI 없음). v4: no monthly limit (D-34). The mock needs an active
+ * provider key and throws WritingChatLockedError (screens show C-18 first); the real start doesn't
+ * (PRD 3.3: only a new message needs a key, spec-gaps W2).
+ */
+export async function startWritingChat(input: StartWritingChatArgs): Promise<WritingChatDetail> {
+  return previewOr(
+    () => mockStartWritingChat(input),
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      const rt = input?.return_target
+      const startInput = parseInput(StartWritingChatInput, {
+        mode: input?.mode,
+        ...(input?.mode === "augment_project" ? { projectId: input.project_id } : {}),
+        ...(rt ? { returnTarget: { applicationProjectId: rt.application_project_id, feature: rt.feature, params: rt.params } } : {}),
+      })
+      // QA-W5-09: the affiliation is checked first and set atomically with the start (cleanup on failure)
+      const affiliationId = startInput.mode === "new_project" ? (input.experience_id ?? input.education_id ?? null) : null
+      const affiliation = affiliationId
+        ? (parseInput(SetAffiliationInput.shape.affiliation, input.experience_id ? { type: "experience", id: input.experience_id } : { type: "education", id: input.education_id }) as chats.StartAffiliation)
+        : null
+      const { writingChatId } = affiliation ? await chats.startWritingChatWithAffiliation(supabase, startInput, affiliation) : await chats.startWritingChat(supabase, startInput)
+      return requireChatDetail(supabase, writingChatId)
+    },
+  )
+}
+
+async function mockStartWritingChat(input: StartWritingChatArgs): Promise<WritingChatDetail> {
   const db = await mockRequest()
   const key = activeKey(db)
   if (!key) throw new WritingChatLockedError()
@@ -143,7 +237,7 @@ export async function startWritingChat(input: {
  * RPC append_writing_chat_message (상한 검사 + message_count 증가).
  * The cap counts the AI reply too, so a message is refused when the reply would not fit (A2 UQ-77).
  */
-export async function appendWritingChatMessage(chatId: string, content: string): Promise<WritingChatMessage> {
+async function appendWritingChatMessage(chatId: string, content: string): Promise<WritingChatMessage> {
   const db = await mockRequest()
   const chat = db.writing_chats.find((c) => c.id === chatId)
   if (!chat || chat.status !== "active") throw new Error("chat not active")
@@ -170,7 +264,7 @@ export async function appendWritingChatMessage(chatId: string, content: string):
 }
 
 /** Stores the assistant reply after a (mock) streamed turn. failed = 실패한 턴 (메시지 수 미증가 [가정]). */
-export async function completeMockAssistantTurn(
+async function completeMockAssistantTurn(
   chatId: string,
   content: string,
   failed = false,
@@ -274,10 +368,59 @@ function getField(draft: StructuredDraft, path: StructuredDraftPath): Structured
  * RPC apply_structured_draft_patch — user session side: edit (→ origin user_edit),
  * accept (needs_review → accepted), reject (value null + review ok).
  */
-export async function applyStructuredDraftPatch(
-  chatId: string,
-  patch: { path: StructuredDraftPath; action: "edit"; value: string | number | null } | { path: StructuredDraftPath; action: "accept" | "reject" },
-): Promise<StructuredDraft> {
+export async function applyStructuredDraftPatch(chatId: string, patch: DraftPatchArgs): Promise<StructuredDraft> {
+  return previewOr(() => mockApplyStructuredDraftPatch(chatId, patch), () => realApplyStructuredDraftPatch(chatId, patch))
+}
+
+type DraftPatchArgs = { path: StructuredDraftPath; action: "edit"; value: string | number | null } | { path: StructuredDraftPath; action: "accept" | "reject" }
+
+/** The screen's index path → the RPC's stable address. Null when the card or item isn't in the draft. */
+export function toDraftFieldPath(draft: StructuredDraft, path: StructuredDraftPath): DraftFieldPath | null {
+  const [section, a, b, c, d] = path.split(".")
+  if (section === "project" && a) return { section: "project", field: a } as DraftFieldPath
+  if (section !== "details") return null
+  const card = draft.details?.[Number(a)]
+  if (!card) return null
+  if (b === "fields" && c) {
+    const ref = card.existing_detail_id ? { existingDetailId: card.existing_detail_id } : { detailKey: card.detail_key }
+    return { section: "detail", detail: ref, field: c } as DraftFieldPath
+  }
+  if (b === "achievements" && c && d) {
+    const key = (card.achievements[Number(c)] as { achievement_key?: string | null } | undefined)?.achievement_key
+    return key ? ({ section: "achievement", achievementKey: key, field: d } as DraftFieldPath) : null
+  }
+  return null
+}
+
+function nextDetailKey(draft: StructuredDraft): string {
+  const taken = (draft.details ?? []).map((x) => Number(x.detail_key?.slice(1) ?? 0))
+  return `D${Math.max(0, ...taken) + 1}`
+}
+
+async function realApplyStructuredDraftPatch(chatId: string, patch: DraftPatchArgs): Promise<StructuredDraft> {
+  const { supabase } = await requireConsentedUser()
+  const chat = await requireChatDetail(supabase, chatId)
+  const draft = chat.structured_draft
+  const edit = async (path: unknown, value: string | number | null) =>
+    (await chats.applyDraftEdit(supabase, parseInput(ApplyDraftEditInput, { writingChatId: chatId, path, value }))).structuredDraft as unknown as StructuredDraft
+  const firstCardField = /^details\.0\.fields\.(\w+)$/.exec(patch.path)?.[1]
+  // First edit of the first card, before the AI made one (the mock builds it on the fly). Augment: the same
+  // existing detail the view shows (`buildChatView`), else a new card.
+  if (patch.action === "edit" && firstCardField && !draft.details?.[0]) {
+    const existingDetailId = chat.mode === "augment_project" && chat.project_id ? await loadFirstDraftDetailId(supabase, chat.project_id) : null
+    if (existingDetailId) return edit({ section: "detail", detail: { existingDetailId }, field: firstCardField }, patch.value)
+    const detailKey = nextDetailKey(draft)
+    await chats.editDraftDetail(supabase, parseInput(EditDraftDetailInput, { writingChatId: chatId, action: "add", detailKey }))
+    return edit({ section: "detail", detail: { detailKey }, field: firstCardField }, patch.value)
+  }
+  const path = toDraftFieldPath(draft, patch.path)
+  if (!path) throw new AppError("not_found")
+  if (patch.action === "edit") return edit(path, patch.value)
+  const reviewed = await chats.reviewDraftField(supabase, parseInput(ReviewDraftFieldInput, { writingChatId: chatId, path }), patch.action)
+  return reviewed.structuredDraft as unknown as StructuredDraft
+}
+
+async function mockApplyStructuredDraftPatch(chatId: string, patch: DraftPatchArgs): Promise<StructuredDraft> {
   const db = await mockRequest()
   const chat = db.writing_chats.find((c) => c.id === chatId)
   if (!chat || chat.status !== "active") throw new Error("chat not active")
@@ -307,15 +450,38 @@ export async function setWritingChatAffiliation(
   chatId: string,
   affiliation: { experience_id: string | null; education_id: string | null } | "dismiss_suggestion",
 ): Promise<WritingChat> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === chatId)
-  if (!chat || chat.mode === "augment_project") throw new Error("affiliation read-only")
-  if (affiliation !== "dismiss_suggestion") {
-    chat.experience_id = affiliation.experience_id
-    chat.education_id = affiliation.experience_id ? null : affiliation.education_id
-  }
-  chat.structured_draft.affiliation_suggestion = null
-  return clone(chat)
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      if (!chat || chat.mode === "augment_project") throw new Error("affiliation read-only")
+      if (affiliation !== "dismiss_suggestion") {
+        chat.experience_id = affiliation.experience_id
+        chat.education_id = affiliation.experience_id ? null : affiliation.education_id
+      }
+      chat.structured_draft.affiliation_suggestion = null
+      return clone(chat)
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      // QA-W5-07: Server Action input — anything but the two shapes is invalid_input
+      if (affiliation !== "dismiss_suggestion" && (!affiliation || typeof affiliation !== "object")) throw new AppError("invalid_input")
+      const target =
+        affiliation === "dismiss_suggestion"
+          ? { affiliation: { type: "none" }, clearSuggestionOnly: true }
+          : {
+              affiliation: affiliation.experience_id
+                ? { type: "experience", id: affiliation.experience_id }
+                : affiliation.education_id
+                  ? { type: "education", id: affiliation.education_id }
+                  : { type: "none" },
+            }
+      await chats.setWritingChatAffiliation(supabase, parseInput(SetAffiliationInput, { writingChatId: chatId, ...target }))
+      const loaded = await loadWritingChatWithMessages(supabase, chatId)
+      if (!loaded) throw new AppError("not_found", "요청한 대화를 찾을 수 없습니다.")
+      return loaded.chat as unknown as WritingChat
+    },
+  )
 }
 
 /** Save-confirm dialog summary (S-36 저장) */
@@ -341,9 +507,26 @@ function countFields(draft: StructuredDraft, pred: (f: StructuredField<unknown>)
 }
 
 export async function getWritingChatSaveSummary(chatId: string): Promise<WritingChatSaveSummary | null> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === chatId)
-  if (!chat) return null
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      return chat ? saveSummaryOf(db, chat, (name) => name.toLowerCase().replace(/\s+/g, "")) : null
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      const db = (await loadCareerRows(supabase)) as unknown as Pick<MockDb, "projects" | "project_details" | "skills" | "writing_chats">
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      return chat ? saveSummaryOf(db, chat, normalizeSkillName) : null
+    },
+  )
+}
+
+function saveSummaryOf(
+  db: Pick<MockDb, "projects" | "project_details" | "skills">,
+  chat: WritingChat,
+  normalize: (name: string) => string,
+): WritingChatSaveSummary {
   const draft = chat.structured_draft
   const usable = (f?: StructuredField<unknown>) => Boolean(f && f.value !== null && f.value !== "" && f.review !== "needs_review")
   const existingProject = chat.project_id ? db.projects.find((p) => p.id === chat.project_id) : undefined
@@ -358,7 +541,7 @@ export async function getWritingChatSaveSummary(chatId: string): Promise<Writing
     })
     if (!complete) draftItems.push(`상세 내용 '${title ?? "제목 없음"}'`)
   }
-  const skillNames = (draft.skills ?? []).map((s) => s.value.toLowerCase().replace(/\s+/g, ""))
+  const skillNames = (draft.skills ?? []).map((s) => normalize(s.value))
   return {
     project: existingProject
       ? { kind: "existing", name: existingProject.name }
@@ -498,27 +681,59 @@ async function persistChat(chatId: string, finalStatus: "saved" | "handed_off", 
   return { project_id: projectId }
 }
 
-export async function saveWritingChat(chatId: string, opts?: { fail?: boolean }) {
-  return persistChat(chatId, "saved", opts)
+export async function saveWritingChat(chatId: string, opts?: { fail?: boolean }): Promise<{ project_id: string }> {
+  return previewOr(
+    () => persistChat(chatId, "saved", opts),
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      return { project_id: (await chats.saveWritingChat(supabase, chatId)).projectId }
+    },
+  )
 }
 
-export async function handOffWritingChat(chatId: string, opts?: { fail?: boolean }) {
-  return persistChat(chatId, "handed_off", opts)
+export async function handOffWritingChat(chatId: string, opts?: { fail?: boolean }): Promise<{ project_id: string }> {
+  return previewOr(
+    () => persistChat(chatId, "handed_off", opts),
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      return { project_id: (await chats.handOffWritingChat(supabase, chatId)).projectId }
+    },
+  )
 }
 
 /** 복귀 후 return_target 비우기 */
 export async function clearReturnTarget(chatId: string): Promise<void> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === chatId)
-  if (chat) chat.return_target = null
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      if (chat) chat.return_target = null
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      await chats.clearReturnTarget(supabase, chatId)
+    },
+  )
 }
 
-/** 대화 그만두기 (`active → abandoned`). No AI call. */
+/** 대화 그만두기 (`active → abandoned`). No AI call. Already saved / abandoned / gone: nothing to do, as in the mock. */
 export async function abandonWritingChat(chatId: string): Promise<void> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === chatId)
-  // UQ-487: status only — last_activity_at (S-08 마지막 활동, 90-day clock) is untouched
-  if (chat && chat.status === "active") Object.assign(chat, { status: "abandoned", updated_at: new Date().toISOString() })
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      // UQ-487: status only — last_activity_at (S-08 마지막 활동, 90-day clock) is untouched
+      if (chat && chat.status === "active") Object.assign(chat, { status: "abandoned", updated_at: new Date().toISOString() })
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      try {
+        await chats.abandonWritingChat(supabase, chatId)
+      } catch (err) {
+        if (!isAppError(err) || (err.code !== "writing_chat_not_active" && err.code !== "not_found")) throw err
+      }
+    },
+  )
 }
 
 /**
@@ -527,17 +742,31 @@ export async function abandonWritingChat(chatId: string): Promise<void> {
  * gone or not abandoned (saved / handed_off can't be reopened).
  */
 export async function resumeWritingChat(chatId: string): Promise<WritingChatDetail | null> {
-  const db = await mockRequest()
-  const chat = db.writing_chats.find((c) => c.id === chatId)
-  if (!chat || chat.status !== "abandoned") return null
-  const now = new Date().toISOString()
-  Object.assign(chat, { status: "active", last_activity_at: now, updated_at: now })
-  return clone(detail(db, chat))
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const chat = db.writing_chats.find((c) => c.id === chatId)
+      if (!chat || chat.status !== "abandoned") return null
+      const now = new Date().toISOString()
+      Object.assign(chat, { status: "active", last_activity_at: now, updated_at: now })
+      return clone(detail(db, chat))
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      try {
+        await chats.resumeWritingChat(supabase, chatId)
+      } catch (err) {
+        if (isAppError(err) && (err.code === "writing_chat_not_resumable" || err.code === "not_found")) return null
+        throw err
+      }
+      return loadChatDetail(supabase, chatId)
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------
-// AI turn (mock). Four entry points used by S-36 (A2 UQ-78): plan / retry / complete / reject.
-// The real backend replaces these with the chat-turn Route Handler (SSE).
+// AI turn. Four entry points used by S-36 (A2 UQ-78): plan / retry / complete / reject.
+// Real path: the chat-turn Route Handler (SSE); these only gate and hand the screen the request.
 // ---------------------------------------------------------------------------
 
 export interface PlannedTurnView {
@@ -546,6 +775,9 @@ export interface PlannedTurnView {
   needsReview: string[]
   actorAmbiguous: string[]
   sensitive: number
+  /** Real path: `useChatTurnStream().start` reads the SSE route when these are present. Absent in previews. */
+  endpoint?: string
+  body?: unknown
 }
 
 function turnView(plan: { reply: string; patchPaths: string[]; needsReview: string[]; actorAmbiguous: string[]; sensitive: number }): PlannedTurnView {
@@ -565,28 +797,101 @@ function sendGate(db: MockDb) {
   assertAiRunnable(db, "request")
 }
 
+/**
+ * The route answers these too, but as a failed stream after the screen has shown the message. Refusing
+ * here keeps the screen's contract: `withAiGuard` → `{ rejected }`, nothing stored, the text stays in the box.
+ */
+async function assertTurnGate(supabase: UserSupabaseClient, userId: string): Promise<void> {
+  const { lock } = await chats.readChatConnection(supabase, userId)
+  if (lock) throw new AppError(lock, undefined, { status: 409 })
+}
+
+function realTurnView(endpoint: string, body: unknown): PlannedTurnView {
+  return { reply: "", patchPaths: [], needsReview: [], actorAmbiguous: [], sensitive: 0, endpoint, body }
+}
+
+const TURN_ENDPOINT = (chatId: string) => `/api/writing-chats/${chatId}/turns`
+
+/** The screen's slot → AI-12 `requested_slot` (이름·역할·제목 = 기본 정보). */
+function toRequestedSlot(slot: ChatSlot | null, draft: StructuredDraft): RequestedSlot | null {
+  if (!slot) return null
+  if (slot === "name" || slot === "role" || slot === "title") return { slot: "basic_info", detailKey: null, existingDetailId: null }
+  const card = isDetailSlot(slot) ? draft.details?.[0] : undefined
+  return { slot, detailKey: card?.existing_detail_id ? null : (card?.detail_key ?? null), existingDetailId: card?.existing_detail_id ?? null }
+}
+
+export type SentWritingChatTurn = PlannedTurnView & { message: WritingChatMessage }
+
 /** User turn: append the message (cap + usage reserve), then plan the AI turn. */
 /**
- * A2 request 10 / UQ-320 rule: key checked first (MockAiError key_missing / key_invalid) — on
- * refusal the user message is **not** appended.
+ * A2 request 10 / UQ-320 rule: key checked first (key_missing / key_invalid) — on refusal the user
+ * message is **not** appended. Real path: `message` is a stand-in for the row the route stores; the
+ * screen re-reads the chat when the stream ends.
  */
-export async function sendWritingChatTurn(chatId: string, content: string, requestedSlot: ChatSlot | null = null) {
-  // path ④ (04 §2.11.7): no key / consent → key_missing, invalid → key_invalid; message not saved
-  sendGate(await mockRequest(0))
-  const message = await appendWritingChatMessage(chatId, content)
-  const plan = await planMockTurn(chatId, message.id, content, requestedSlot)
-  return { message, ...turnView(plan) }
+export async function sendWritingChatTurn(chatId: string, content: string, requestedSlot: ChatSlot | null = null): Promise<SentWritingChatTurn> {
+  return previewOr(
+    async () => {
+      // path ④ (04 §2.11.7): no key / consent → key_missing, invalid → key_invalid; message not saved
+      sendGate(await mockRequest(0))
+      const message = await appendWritingChatMessage(chatId, content)
+      const plan = await planMockTurn(chatId, message.id, content, requestedSlot)
+      return { message, ...turnView(plan) }
+    },
+    async () => {
+      const { supabase, user } = await requireConsentedUser()
+      await assertTurnGate(supabase, user.id)
+      const chat = await requireChatDetail(supabase, chatId)
+      if (chat.status !== "active") throw new AppError("writing_chat_not_active", "저장했거나 그만둔 대화예요. 새 대화를 시작해 주세요.", { status: 409 })
+      if (!hasRoomForTurn(chat.message_count)) {
+        throw new AppError("message_limit_reached", "대화가 길어져 더 보낼 수 없어요. 지금까지 내용을 저장하거나 폼으로 옮겨 이어서 써 주세요.", { status: 409 })
+      }
+      const now = new Date().toISOString()
+      const message: WritingChatMessage = {
+        id: randomUUID(),
+        user_id: user.id,
+        created_at: now,
+        updated_at: now,
+        writing_chat_id: chatId,
+        sequence: (chat.messages[chat.messages.length - 1]?.sequence ?? 0) + 1,
+        role: "user",
+        content,
+        status: "done",
+        ai_job_id: null,
+        provider: null,
+        model: null,
+        model_tier: null,
+        connection_tier: null,
+      }
+      return { message, ...realTurnView(TURN_ENDPOINT(chatId), { content, requestedSlot: toRequestedSlot(requestedSlot, chat.structured_draft) }) }
+    },
+  )
 }
 
 /** 실패한 턴 다시 보내기: same plan (re-planned from the last user message if missing). */
 export async function retryWritingChatTurn(chatId: string): Promise<PlannedTurnView | null> {
-  const db = await mockRequest(0)
-  sendGate(db)
-  // UQ-488: only active chats take a turn
-  if (db.writing_chats.find((c) => c.id === chatId)?.status !== "active") throw new Error("chat not active")
-  const plan = await readPlannedTurn(chatId)
-  return plan ? turnView(plan) : null
+  return previewOr(
+    async () => {
+      const db = await mockRequest(0)
+      sendGate(db)
+      // UQ-488: only active chats take a turn
+      if (db.writing_chats.find((c) => c.id === chatId)?.status !== "active") throw new Error("chat not active")
+      const plan = await readPlannedTurn(chatId)
+      return plan ? turnView(plan) : null
+    },
+    async () => {
+      const { supabase, user } = await requireConsentedUser()
+      await assertTurnGate(supabase, user.id)
+      const chat = await requireChatDetail(supabase, chatId)
+      if (chat.status !== "active") throw new AppError("writing_chat_not_active", "저장했거나 그만둔 대화예요. 새 대화를 시작해 주세요.", { status: 409 })
+      const last = chat.messages[chat.messages.length - 1]
+      if (!last || last.role !== "assistant" || last.status !== "failed") return null
+      return realTurnView(`${TURN_ENDPOINT(chatId)}?retry=1`, {})
+    },
+  )
 }
+
+const CANCEL_SETTLE_TRIES = 6
+const CANCEL_SETTLE_MS = 250
 
 /** Stream finished (or failed): store the assistant message (+ usage meter row), apply the AI patch. */
 export async function completeWritingChatTurn(
@@ -595,12 +900,27 @@ export async function completeWritingChatTurn(
   errorCode: AiErrorCode | null = null,
   timing?: { retry_after?: string | null; quota_resets_at?: string | null },
 ): Promise<void> {
-  const plan = await readPlannedTurn(chatId)
-  await completeMockAssistantTurn(chatId, plan?.reply ?? "", failed, errorCode, timing)
-  if (!failed) await applyPlannedTurn(chatId)
+  return previewOr(
+    async () => {
+      const plan = await readPlannedTurn(chatId)
+      await completeMockAssistantTurn(chatId, plan?.reply ?? "", failed, errorCode, timing)
+      if (!failed) await applyPlannedTurn(chatId)
+    },
+    async () => {
+      // The route already stored everything. Only "중단" can get here first: the abort reaches the
+      // route a moment later, so give the reply row a moment to leave `streaming` before the re-read.
+      if (!failed) return
+      const { supabase } = await requireConsentedUser()
+      for (let i = 0; i < CANCEL_SETTLE_TRIES; i += 1) {
+        const chat = await loadChatDetail(supabase, chatId)
+        if (chat?.messages[chat.messages.length - 1]?.status !== "streaming") return
+        await new Promise((resolve) => setTimeout(resolve, CANCEL_SETTLE_MS))
+      }
+    },
+  )
 }
 
-/** After [거절(비우기)] the AI asks that slot again (AI-12). */
+/** After [거절(비우기)] the AI asks that slot again (AI-12). Real path: the emptied slot is what the next turn asks. */
 export async function markWritingChatSlotAsked(chatId: string, slot: ChatSlot | null): Promise<void> {
-  await markAsked(chatId, slot)
+  return previewOr(() => markAsked(chatId, slot), async () => {})
 }

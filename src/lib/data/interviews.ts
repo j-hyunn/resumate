@@ -15,6 +15,9 @@ import type {
   QuestionCount,
   SessionFeedback,
 } from "@/types/db"
+import { z } from "zod"
+import { AppError, isAppError } from "@/lib/contracts/errors"
+import { StartInterviewSessionInput } from "@/lib/contracts/interview"
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { newId, USER_ID } from "@/lib/mock/ids"
@@ -25,6 +28,13 @@ import { refreshApplicationJobs, regradeFailedAnswers } from "./ai-jobs"
 import { clearsNewResultOnView, hasNewResult, type GradingDecision } from "./interview-grading"
 import { computeReadiness } from "./readiness"
 import { applicationDisplayName } from "./labels"
+import { loadInterviewSessionDetail, loadInterviewSessionRows } from "./interview-rows"
+import { previewOr, unwrap } from "./source"
+import { requireConsentedUser } from "@/server/auth/session"
+import { mapDbError } from "@/server/db/errors"
+import * as interviewActions from "@/server/actions/interview"
+import { interviewStartDeps } from "@/server/interview-routes"
+import { INTERVIEW_INSUFFICIENT_DATA_MESSAGE, restartInterviewSession as restartInterviewSessionService, startInterviewSession as startInterviewSessionService, submitInterviewSession as submitInterviewSessionService } from "@/server/services/interview/start"
 
 export interface InterviewSessionRow extends InterviewSession {
   /** application_projects.name for S-37 rows */
@@ -48,6 +58,15 @@ export interface InterviewSessionRow extends InterviewSession {
 }
 
 export { hasNewResult }
+
+const isUuid = (v: string) => z.guid().safeParse(v).success
+
+const insufficientData = () => new AppError("insufficient_data", INTERVIEW_INSUFFICIENT_DATA_MESSAGE, { status: 422 })
+
+async function realStartDeps() {
+  const { supabase, user } = await requireConsentedUser()
+  return interviewStartDeps(supabase, user.id)
+}
 
 function row(db: MockDb, s: InterviewSession): InterviewSessionRow {
   const ap = db.application_projects.find((a) => a.id === s.application_project_id)
@@ -79,17 +98,26 @@ export interface ListSessionsFilter {
 
 /** S-37 / S-20 list, newest first */
 export async function listInterviewSessions(filter: ListSessionsFilter = {}): Promise<InterviewSessionRow[]> {
-  const db = await mockRequest()
-  return clone(
-    db.interview_sessions
-      .filter(
-        (s) =>
-          (!filter.application_project_id || s.application_project_id === filter.application_project_id) &&
-          (!filter.interview_type || s.interview_type === filter.interview_type) &&
-          (!filter.status || s.status === filter.status),
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      return clone(
+        db.interview_sessions
+          .filter(
+            (s) =>
+              (!filter.application_project_id || s.application_project_id === filter.application_project_id) &&
+              (!filter.interview_type || s.interview_type === filter.interview_type) &&
+              (!filter.status || s.status === filter.status),
+          )
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((s) => row(db, s)),
       )
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .map((s) => row(db, s)),
+    },
+    async () => {
+      if (filter.application_project_id && !isUuid(filter.application_project_id)) return []
+      const { supabase } = await requireConsentedUser()
+      return loadInterviewSessionRows(supabase, filter)
+    },
   )
 }
 
@@ -109,25 +137,47 @@ export interface InterviewSessionDetail extends InterviewSessionRow {
 }
 
 export async function getInterviewSession(applicationProjectId: string, sessionId: string): Promise<InterviewSessionDetail | null> {
-  const db = await mockRequest()
-  const s = db.interview_sessions.find((x) => x.id === sessionId && x.application_project_id === applicationProjectId)
-  if (!s) return null
-  const questions = db.interview_questions
-    .filter((q) => q.session_id === sessionId)
-    .sort((a, b) => a.sequence - b.sequence)
-    .map((q) => {
-      const answer = db.interview_answers.find((a) => a.question_id === q.id) ?? null
-      const evaluation = answer ? (db.answer_evaluations.find((e) => e.answer_id === answer.id) ?? null) : null
-      let evaluation_error: InterviewSessionDetail["questions"][number]["evaluation_error"] = null
-      if (answer?.status === "submitted" && evaluation?.status !== "succeeded") {
-        const jobs = [...db.ai_jobs].reverse().filter((j) => j.target_id === sessionId && j.job_type === "interview_evaluation")
-        const job = jobs.find((j) => j.params?.answer_id === answer.id) ?? jobs.find((j) => typeof j.params?.answer_id !== "string")
-        const code = evaluation?.error_code ?? (job?.status === "failed" ? job.error_code : null)
-        if (code) evaluation_error = { error_code: code, provider: job?.provider ?? "gemini", retry_after: job?.retry_after ?? null, quota_resets_at: job?.quota_resets_at ?? null }
-      }
-      return { ...q, answer, evaluation, evaluation_error }
-    })
-  return clone({ ...row(db, s), questions, feedback: db.session_feedbacks.find((f) => f.session_id === sessionId) ?? null })
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const s = db.interview_sessions.find((x) => x.id === sessionId && x.application_project_id === applicationProjectId)
+      if (!s) return null
+      const questions = db.interview_questions
+        .filter((q) => q.session_id === sessionId)
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((q) => {
+          const answer = db.interview_answers.find((a) => a.question_id === q.id) ?? null
+          const evaluation = answer ? (db.answer_evaluations.find((e) => e.answer_id === answer.id) ?? null) : null
+          let evaluation_error: InterviewSessionDetail["questions"][number]["evaluation_error"] = null
+          if (answer?.status === "submitted" && evaluation?.status !== "succeeded") {
+            const jobs = [...db.ai_jobs].reverse().filter((j) => j.target_id === sessionId && j.job_type === "interview_evaluation")
+            const job = jobs.find((j) => j.params?.answer_id === answer.id) ?? jobs.find((j) => typeof j.params?.answer_id !== "string")
+            const code = evaluation?.error_code ?? (job?.status === "failed" ? job.error_code : null)
+            if (code) evaluation_error = { error_code: code, provider: job?.provider ?? "gemini", retry_after: job?.retry_after ?? null, quota_resets_at: job?.quota_resets_at ?? null }
+          }
+          return { ...q, answer, evaluation, evaluation_error }
+        })
+      return clone({ ...row(db, s), questions, feedback: db.session_feedbacks.find((f) => f.session_id === sessionId) ?? null })
+    },
+    async () => {
+      if (!isUuid(applicationProjectId) || !isUuid(sessionId)) return null
+      const { supabase } = await requireConsentedUser()
+      return loadInterviewSessionDetail(supabase, applicationProjectId, sessionId)
+    },
+  )
+}
+
+/**
+ * QA-W5-07: the start / restart input arrives from a Server Action (any JSON). Bad shapes answer
+ * `invalid_input` (AppError) instead of a TypeError or a ZodError.
+ */
+const StartArgs = z.object({ application_project_id: z.guid(), interview_type: z.string(), question_count: z.unknown() })
+function realStartInput(input: unknown): { applicationProjectId: string; body: z.output<typeof StartInterviewSessionInput> } {
+  const args = StartArgs.safeParse(input)
+  if (!args.success) throw new AppError("invalid_input")
+  const body = StartInterviewSessionInput.safeParse({ interviewType: args.data.interview_type, questionCount: args.data.question_count })
+  if (!body.success) throw new AppError("invalid_input")
+  return { applicationProjectId: args.data.application_project_id, body: body.data }
 }
 
 /**
@@ -142,92 +192,114 @@ export async function startInterviewSession(input: {
   fail?: AiErrorCode | null
   rate_wait?: boolean
 }): Promise<{ session_id: string; job_id: string }> {
-  const db = await mockRequest()
-  const existing = db.interview_sessions.find(
-    (s) => s.application_project_id === input.application_project_id && s.status === "in_progress",
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const existing = db.interview_sessions.find(
+        (s) => s.application_project_id === input.application_project_id && s.status === "in_progress",
+      )
+      if (existing) throw new Error("in_progress session exists")
+      // validate first (key), then D-30 extraction → question generation as one flow
+      assertAiRunnable(db)
+      const extraction = await ensureJdRequirementsInDb(db, input.application_project_id)
+      const now = new Date().toISOString()
+      const readiness = computeReadiness(db)
+      const sessionId = newId()
+      const job = createMockJob(db, {
+        job_type: "interview_questions",
+        application_project_id: input.application_project_id,
+        target_type: "interview_session",
+        target_id: sessionId,
+        units: input.question_count,
+        // a failed `prepare` extraction ends the job with the same cause, no question saved (S-20, 03 C-6, UQ-602)
+        fail: extraction.failed ?? input.fail,
+        fail_at_prepare: !!extraction.failed,
+        rate_wait: input.rate_wait,
+      })
+      db.interview_sessions.push({
+        id: sessionId,
+        user_id: USER_ID,
+        created_at: now,
+        updated_at: now,
+        application_project_id: input.application_project_id,
+        insight_id: null,
+        source_session_id: null,
+        interview_type: input.interview_type,
+        question_count: input.question_count,
+        data_sufficiency:
+          input.interview_type === "culture_fit"
+            ? (readiness.features.culture_fit_interview.data_sufficiency ?? "ok")
+            : "ok",
+        weak_requirement_ids: [],
+        status: "in_progress",
+        generation_status: "generating",
+        answered_count: 0,
+        unanswered_count: 0,
+        submitted_at: null,
+        completed_at: null,
+        result_viewed_at: null,
+        abandoned_at: null,
+        last_activity_at: now,
+        career_snapshot_hash: null,
+        score_status: null,
+        score_value: null,
+        score_max: null,
+        score_method_version: null,
+        score_rationale: null,
+        score_counted_count: null,
+        question_provider: null,
+        question_model: null,
+        evaluation_provider: null,
+        evaluation_model: null,
+        question_validation_report: null,
+        question_usage: null,
+      })
+      // no job left running on this JD: S-15 can edit the text right away (04 §2.6.1 조건 1)
+      if (extraction.failed) refreshApplicationJobs(db, input.application_project_id)
+      return { session_id: sessionId, job_id: job.id }
+    },
+    async () => {
+      // AI-05 job: `prepare` does the D-30 extraction; a failed one fails this job with the same cause.
+      const { applicationProjectId, body } = realStartInput(input)
+      const outcome = await startInterviewSessionService(await realStartDeps(), applicationProjectId, body)
+      if (outcome.kind === "insufficient_data") throw insufficientData() // the screen's C-09 stops this first
+      return { session_id: outcome.data.sessionId, job_id: outcome.data.jobId }
+    },
   )
-  if (existing) throw new Error("in_progress session exists")
-  // validate first (key), then D-30 extraction → question generation as one flow
-  assertAiRunnable(db)
-  const extraction = await ensureJdRequirementsInDb(db, input.application_project_id)
-  const now = new Date().toISOString()
-  const readiness = computeReadiness(db)
-  const sessionId = newId()
-  const job = createMockJob(db, {
-    job_type: "interview_questions",
-    application_project_id: input.application_project_id,
-    target_type: "interview_session",
-    target_id: sessionId,
-    units: input.question_count,
-    // a failed `prepare` extraction ends the job with the same cause, no question saved (S-20, 03 C-6, UQ-602)
-    fail: extraction.failed ?? input.fail,
-    fail_at_prepare: !!extraction.failed,
-    rate_wait: input.rate_wait,
-  })
-  db.interview_sessions.push({
-    id: sessionId,
-    user_id: USER_ID,
-    created_at: now,
-    updated_at: now,
-    application_project_id: input.application_project_id,
-    insight_id: null,
-    source_session_id: null,
-    interview_type: input.interview_type,
-    question_count: input.question_count,
-    data_sufficiency:
-      input.interview_type === "culture_fit"
-        ? (readiness.features.culture_fit_interview.data_sufficiency ?? "ok")
-        : "ok",
-    weak_requirement_ids: [],
-    status: "in_progress",
-    generation_status: "generating",
-    answered_count: 0,
-    unanswered_count: 0,
-    submitted_at: null,
-    completed_at: null,
-    result_viewed_at: null,
-    abandoned_at: null,
-    last_activity_at: now,
-    career_snapshot_hash: null,
-    score_status: null,
-    score_value: null,
-    score_max: null,
-    score_method_version: null,
-    score_rationale: null,
-    score_counted_count: null,
-    question_provider: null,
-    question_model: null,
-    evaluation_provider: null,
-    evaluation_model: null,
-    question_validation_report: null,
-    question_usage: null,
-  })
-  // no job left running on this JD: S-15 can edit the text right away (04 §2.6.1 조건 1)
-  if (extraction.failed) refreshApplicationJobs(db, input.application_project_id)
-  return { session_id: sessionId, job_id: job.id }
 }
 
 /** Autosave one answer. Editable only when draft + not submitted + generation ready (S-33). */
 export async function saveInterviewAnswer(answerId: string, answerText: string, opts?: { fail?: boolean }): Promise<InterviewAnswer> {
-  const db = await mockRequest()
-  if (opts?.fail) throw new Error("save failed (mock)")
-  const answer = db.interview_answers.find((a) => a.id === answerId)
-  const session = answer && db.interview_sessions.find((s) => s.id === answer.session_id)
-  // v4.2 A8: an abandoned session is read-only even for unsubmitted answers
-  if (
-    !answer ||
-    !session ||
-    answer.status !== "draft" ||
-    session.submitted_at ||
-    session.status !== "in_progress" ||
-    session.generation_status !== "ready"
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      if (opts?.fail) throw new Error("save failed (mock)")
+      const answer = db.interview_answers.find((a) => a.id === answerId)
+      const session = answer && db.interview_sessions.find((s) => s.id === answer.session_id)
+      // v4.2 A8: an abandoned session is read-only even for unsubmitted answers
+      if (
+        !answer ||
+        !session ||
+        answer.status !== "draft" ||
+        session.submitted_at ||
+        session.status !== "in_progress" ||
+        session.generation_status !== "ready"
+      )
+        throw new Error("answer not editable")
+      const now = new Date().toISOString()
+      Object.assign(answer, { answer_text: answerText, updated_at: now })
+      session.answered_count = db.interview_answers.filter((a) => a.session_id === session.id && a.answer_text.trim() !== "").length
+      session.last_activity_at = now
+      return clone(answer)
+    },
+    async () => {
+      unwrap(await interviewActions.saveInterviewAnswer({ answerId, answerText }))
+      const { supabase } = await requireConsentedUser()
+      const { data, error } = await supabase.from("interview_answers").select("*").eq("id", answerId).single()
+      if (error) throw mapDbError(error)
+      return data as unknown as InterviewAnswer
+    },
   )
-    throw new Error("answer not editable")
-  const now = new Date().toISOString()
-  Object.assign(answer, { answer_text: answerText, updated_at: now })
-  session.answered_count = db.interview_answers.filter((a) => a.session_id === session.id && a.answer_text.trim() !== "").length
-  session.last_activity_at = now
-  return clone(answer)
 }
 
 /**
@@ -241,49 +313,69 @@ export async function submitInterviewSession(
   sessionId: string,
   opts?: { fail?: AiErrorCode | null; rate_wait?: boolean },
 ): Promise<{ job_id: string | null }> {
-  const db = await mockRequest()
-  const session = db.interview_sessions.find((s) => s.id === sessionId)
-  if (!session) throw new Error("not found")
-  if (session.status !== "in_progress" || session.submitted_at || session.generation_status !== "ready")
-    throw new Error("session not submittable")
-  const answers = db.interview_answers.filter((a) => a.session_id === sessionId)
-  const answered = answers.filter((a) => a.answer_text.trim() !== "").length
-  if (answered > 0) assertAiRunnable(db)
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const session = db.interview_sessions.find((s) => s.id === sessionId)
+      if (!session) throw new Error("not found")
+      if (session.status !== "in_progress" || session.submitted_at || session.generation_status !== "ready")
+        throw new Error("session not submittable")
+      const answers = db.interview_answers.filter((a) => a.session_id === sessionId)
+      const answered = answers.filter((a) => a.answer_text.trim() !== "").length
+      if (answered > 0) assertAiRunnable(db)
 
-  // --- mutations (nothing below may throw a user-facing refusal) ---
-  const now = new Date().toISOString()
-  for (const a of answers) a.status = a.answer_text.trim() ? "submitted" : "unanswered"
-  Object.assign(session, {
-    submitted_at: now,
-    answered_count: answered,
-    unanswered_count: answers.length - answered,
-    last_activity_at: now,
-  })
-  if (answered === 0) {
-    // AI-07 not called: score_status = 'not_scored' ("답변이 없어 평가할 내용이 없어요")
-    Object.assign(session, { status: "completed", completed_at: now, score_status: "not_scored" })
-    for (const a of answers) a.score_status = "unanswered"
-    return { job_id: null }
-  }
-  session.status = "evaluating"
-  const job = createMockJob(db, {
-    job_type: "interview_evaluation",
-    application_project_id: session.application_project_id,
-    target_type: "interview_session",
-    target_id: sessionId,
-    units: answered,
-    fail: opts?.fail ?? null,
-    rate_wait: opts?.rate_wait,
-  })
-  return { job_id: job.id }
+      // --- mutations (nothing below may throw a user-facing refusal) ---
+      const now = new Date().toISOString()
+      for (const a of answers) a.status = a.answer_text.trim() ? "submitted" : "unanswered"
+      Object.assign(session, {
+        submitted_at: now,
+        answered_count: answered,
+        unanswered_count: answers.length - answered,
+        last_activity_at: now,
+      })
+      if (answered === 0) {
+        // AI-07 not called: score_status = 'not_scored' ("답변이 없어 평가할 내용이 없어요")
+        Object.assign(session, { status: "completed", completed_at: now, score_status: "not_scored" })
+        for (const a of answers) a.score_status = "unanswered"
+        return { job_id: null }
+      }
+      session.status = "evaluating"
+      const job = createMockJob(db, {
+        job_type: "interview_evaluation",
+        application_project_id: session.application_project_id,
+        target_type: "interview_session",
+        target_id: sessionId,
+        units: answered,
+        fail: opts?.fail ?? null,
+        rate_wait: opts?.rate_wait,
+      })
+      return { job_id: job.id }
+    },
+    async () => {
+      const { jobId } = await submitInterviewSessionService(await realStartDeps(), sessionId)
+      return { job_id: jobId }
+    },
+  )
 }
 
 export async function abandonInterviewSession(sessionId: string): Promise<void> {
-  const db = await mockRequest()
-  const session = db.interview_sessions.find((s) => s.id === sessionId)
-  if (!session || session.status !== "in_progress") return
-  const now = new Date().toISOString()
-  Object.assign(session, { status: "abandoned", abandoned_at: now, last_activity_at: now })
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const session = db.interview_sessions.find((s) => s.id === sessionId)
+      if (!session || session.status !== "in_progress") return
+      const now = new Date().toISOString()
+      Object.assign(session, { status: "abandoned", abandoned_at: now, last_activity_at: now })
+    },
+    async () => {
+      // Same as the mock: already finished or gone is not an error for this button.
+      try {
+        unwrap(await interviewActions.abandonInterviewSession({ sessionId }))
+      } catch (err) {
+        if (!isAppError(err) || (err.code !== "interview_not_in_progress" && err.code !== "not_found")) throw err
+      }
+    },
+  )
 }
 
 /**
@@ -291,11 +383,25 @@ export async function abandonInterviewSession(sessionId: string): Promise<void> 
  * (Q53-10). Any other screen keeps the 새 결과 표식 without an error (`changed: false`).
  */
 export async function markResultViewed(sessionId: string): Promise<{ changed: boolean }> {
-  const db = await mockRequest()
-  const session = db.interview_sessions.find((s) => s.id === sessionId)
-  if (!session || session.result_viewed_at || !clearsNewResultOnView(session.status, gradingDecisionOf(db, session))) return { changed: false }
-  session.result_viewed_at = new Date().toISOString()
-  return { changed: true }
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const session = db.interview_sessions.find((s) => s.id === sessionId)
+      if (!session || session.result_viewed_at || !clearsNewResultOnView(session.status, gradingDecisionOf(db, session))) return { changed: false }
+      session.result_viewed_at = new Date().toISOString()
+      return { changed: true }
+    },
+    async () => {
+      // The RPC decides (Q53-10): anything but the two rows of clearsNewResultOnView stays `changed: false`.
+      try {
+        const { changed } = unwrap(await interviewActions.markInterviewResultViewed({ sessionId }))
+        return { changed }
+      } catch (err) {
+        if (isAppError(err) && err.code === "not_found") return { changed: false }
+        throw err
+      }
+    },
+  )
 }
 
 /**
@@ -306,11 +412,22 @@ export async function restartInterviewSession(
   sessionId: string,
   input: { application_project_id: string; interview_type: InterviewType; question_count: QuestionCount },
 ): Promise<{ session_id: string; job_id: string } | { insufficient: true }> {
-  const db = await mockRequest()
-  assertAiRunnable(db)
-  if (input.interview_type === "job" && !computeReadiness(db).features.job_interview.ready) return { insufficient: true }
-  await abandonInterviewSession(sessionId)
-  return startInterviewSession(input)
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      assertAiRunnable(db)
+      if (input.interview_type === "job" && !computeReadiness(db).features.job_interview.ready) return { insufficient: true }
+      await abandonInterviewSession(sessionId)
+      return startInterviewSession(input)
+    },
+    async () => {
+      const { applicationProjectId, body } = realStartInput(input)
+      if (!z.guid().safeParse(sessionId).success) throw new AppError("invalid_input")
+      const outcome = await restartInterviewSessionService(await realStartDeps(), sessionId, applicationProjectId, body)
+      if (outcome.kind === "insufficient_data") return { insufficient: true as const }
+      return { session_id: outcome.data.sessionId, job_id: outcome.data.jobId }
+    },
+  )
 }
 
 /** S-22 / S-37 다시 채점 · 종합 평가 다시 정리 — see ai-jobs regradeFailedAnswers */

@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { ROUTES, isProtectedPath, safeNextPath, withNext } from "./routes";
 
+describe("ROUTES follows the UI's page routes (src/lib/routes.ts)", () => {
+  it("uses the paths the pages live at", () => {
+    expect(ROUTES.login).toBe("/sign-in");
+    expect(ROUTES.consent).toBe("/consent");
+    expect(ROUTES.accountDeletion).toBe("/settings/withdraw");
+    expect(ROUTES.accountDeletionFinalize).toBe("/settings/withdraw/finalize");
+  });
+});
+
 describe("safeNextPath", () => {
   it.each([
     ["/career", "/career"],
     ["/applications/abc?tab=insight#top", "/applications/abc?tab=insight#top"],
-    ["/onboarding/consent?next=%2Fboard", "/onboarding/consent?next=%2Fboard"],
+    ["/consent?next=%2Fboard", "/consent?next=%2Fboard"],
   ])("keeps same-origin path %s", (input, expected) => {
     expect(safeNextPath(input)).toBe(expected);
   });
@@ -37,16 +46,20 @@ describe("isProtectedPath", () => {
   it("matches prefixes on segment boundaries", () => {
     expect(isProtectedPath("/career")).toBe(true);
     expect(isProtectedPath("/career/projects/1")).toBe(true);
-    expect(isProtectedPath("/onboarding/consent")).toBe(true);
+    expect(isProtectedPath("/consent")).toBe(true);
+    expect(isProtectedPath("/onboarding/consent")).toBe(false);
+    expect(isProtectedPath(ROUTES.accountDeletion)).toBe(true);
+    expect(isProtectedPath(ROUTES.accountDeletionFinalize)).toBe(true);
     expect(isProtectedPath("/careers")).toBe(false);
     expect(isProtectedPath("/")).toBe(false);
-    expect(isProtectedPath("/login")).toBe(false);
+    expect(isProtectedPath(ROUTES.login)).toBe(false);
+    expect(isProtectedPath("/policies")).toBe(false);
     expect(isProtectedPath("/auth/callback")).toBe(false);
   });
 });
 
 describe("withNext", () => {
   it("encodes the next path", () => {
-    expect(withNext("/login", "/career?x=1&y=2")).toBe("/login?next=%2Fcareer%3Fx%3D1%26y%3D2");
+    expect(withNext("/sign-in", "/career?x=1&y=2")).toBe("/sign-in?next=%2Fcareer%3Fx%3D1%26y%3D2");
   });
 });

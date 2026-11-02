@@ -12,6 +12,17 @@ import type {
 import { mockRequest } from "@/lib/mock/store"
 import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
+import { loadDraftCounts } from "@/server/services/drafts/progress"
+import * as applicationActions from "@/server/actions/application"
+import * as draftActions from "@/server/actions/draft"
+import * as interviewActions from "@/server/actions/interview"
+import { DeleteCareerItemInput, DeletionImpactInput, type CareerDeletionImpact, type WritingChatDeletionImpact } from "@/lib/contracts/career"
+import { invalid } from "@/lib/contracts/errors"
+import { requireConsentedUser } from "@/server/auth/session"
+import { rememberDeletedRow } from "@/server/auth/user-cookies"
+import * as career from "@/server/services/career"
+import { mapDbError } from "@/server/db/errors"
+import { isPreviewRequest, previewOr, unwrap } from "./source"
 
 interface CascadeSet {
   experiences: string[]
@@ -109,6 +120,28 @@ export async function getDeletionImpact(
   entityId: string,
   affiliationMode: AffiliationMode = "keep_projects",
 ): Promise<DeletionImpact> {
+  return previewOr(
+    () => mockDeletionImpact(entityType, entityId, affiliationMode),
+    async () => {
+      const parsed = DeletionImpactInput.safeParse({ entityType, entityId, affiliationMode })
+      if (!parsed.success) return unwrap(invalid(parsed.error))
+      const { supabase } = await requireConsentedUser()
+      return toDeletionImpact(await career.getDeletionImpact(supabase, parsed.data))
+    },
+  )
+}
+
+/** RPC jsonb → the screen's one shape (`writing_chat` has its own counts and no cascade, DM §4.2). */
+function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpact): DeletionImpact {
+  if ("cascade" in impact) return impact
+  return {
+    cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0 },
+    affected_results: { by_application_project: [] },
+    writing_chat: impact,
+  }
+}
+
+async function mockDeletionImpact(entityType: DeletionEntityType, entityId: string, affiliationMode: AffiliationMode): Promise<DeletionImpact> {
   const db = await mockRequest(400)
   const set = collect(db, entityType, entityId, affiliationMode)
   const impact: DeletionImpact = {
@@ -183,6 +216,20 @@ export async function deleteCareerItem(
   affiliationMode: AffiliationMode = "keep_projects",
   resultMode: ResultMode = "keep_results",
 ): Promise<void> {
+  return previewOr(
+    () => mockDeleteCareerItem(entityType, entityId, affiliationMode, resultMode),
+    async () => {
+      const parsed = DeleteCareerItemInput.safeParse({ entityType, entityId, affiliationMode, resultMode })
+      if (!parsed.success) return unwrap(invalid(parsed.error))
+      const { supabase, user } = await requireConsentedUser()
+      await career.deleteCareerItem(supabase, parsed.data)
+      // QA-W5-06 (2): a lost-response create retried in another tab can't bring this row back.
+      await rememberDeletedRow(user.id, parsed.data.entityId)
+    },
+  )
+}
+
+async function mockDeleteCareerItem(entityType: DeletionEntityType, entityId: string, affiliationMode: AffiliationMode, resultMode: ResultMode): Promise<void> {
   const db = await mockRequest()
   const set = collect(db, entityType, entityId, affiliationMode)
   const now = new Date().toISOString()
@@ -266,17 +313,37 @@ export interface ApplicationDeletionImpact {
 }
 
 export async function getApplicationDeletionImpact(applicationProjectId: string): Promise<ApplicationDeletionImpact> {
-  const db = await mockRequest(400)
-  return {
-    insights: db.insights.filter((i) => i.application_project_id === applicationProjectId).length,
-    drafts: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
-    interview_sessions: db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId).length,
-    stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
-  }
+  return previewOr(
+    async () => {
+      const db = await mockRequest(400)
+      return {
+        insights: db.insights.filter((i) => i.application_project_id === applicationProjectId).length,
+        drafts: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
+        interview_sessions: db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId).length,
+        stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
+      }
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      const head = { count: "exact", head: true } as const
+      const [insights, drafts, sessions, events] = await Promise.all([
+        supabase.from("insights").select("id", head).eq("application_project_id", applicationProjectId),
+        loadDraftCounts(supabase, [applicationProjectId]),
+        supabase.from("interview_sessions").select("id", head).eq("application_project_id", applicationProjectId),
+        supabase.from("application_stage_events").select("id", head).eq("application_project_id", applicationProjectId),
+      ])
+      for (const r of [insights, sessions, events]) if (r.error) throw mapDbError(r.error)
+      return { insights: insights.count ?? 0, drafts: drafts.get(applicationProjectId) ?? 0, interview_sessions: sessions.count ?? 0, stage_events: events.count ?? 0 }
+    },
+  )
 }
 
 /** F-AP-05: deletes the application project and everything under it; running AI jobs are canceled. */
 export async function deleteApplicationProject(applicationProjectId: string): Promise<void> {
+  if (!(await isPreviewRequest())) {
+    unwrap(await applicationActions.deleteApplicationProject({ id: applicationProjectId }))
+    return
+  }
   const db = await mockRequest()
   const now = new Date().toISOString()
   for (const job of db.ai_jobs.filter((j) => j.application_project_id === applicationProjectId)) {
@@ -303,11 +370,21 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
 
 /** C-05 초안 / 면접 세션: 하위 개수 */
 export async function getDraftDeletionImpact(draftId: string): Promise<{ sections: number }> {
+  if (!(await isPreviewRequest())) {
+    const { supabase } = await requireConsentedUser()
+    const { count, error } = await supabase.from("draft_sections").select("id", { count: "exact", head: true }).eq("draft_id", draftId)
+    if (error) throw mapDbError(error)
+    return { sections: count ?? 0 }
+  }
   const db = await mockRequest(300)
   return { sections: db.draft_sections.filter((s) => s.draft_id === draftId).length }
 }
 
 export async function deleteDraft(draftId: string): Promise<void> {
+  if (!(await isPreviewRequest())) {
+    unwrap(await draftActions.deleteDraft({ draftId }))
+    return
+  }
   const db = await mockRequest()
   const sectionIds = db.draft_sections.filter((s) => s.draft_id === draftId).map((s) => s.id)
   db.drafts = db.drafts.filter((d) => d.id !== draftId)
@@ -317,23 +394,45 @@ export async function deleteDraft(draftId: string): Promise<void> {
 }
 
 export async function getInterviewSessionDeletionImpact(sessionId: string): Promise<{ questions: number; answers: number }> {
-  const db = await mockRequest(300)
-  return {
-    questions: db.interview_questions.filter((q) => q.session_id === sessionId).length,
-    answers: db.interview_answers.filter((a) => a.session_id === sessionId && a.answer_text.trim() !== "").length,
-  }
+  return previewOr(
+    async () => {
+      const db = await mockRequest(300)
+      return {
+        questions: db.interview_questions.filter((q) => q.session_id === sessionId).length,
+        answers: db.interview_answers.filter((a) => a.session_id === sessionId && a.answer_text.trim() !== "").length,
+      }
+    },
+    async () => {
+      const { supabase } = await requireConsentedUser()
+      const [session, questions] = await Promise.all([
+        // answered_count: non-blank answers, kept by the answer trigger.
+        supabase.from("interview_sessions").select("answered_count").eq("id", sessionId).maybeSingle(),
+        supabase.from("interview_questions").select("id", { count: "exact", head: true }).eq("session_id", sessionId),
+      ])
+      if (session.error) throw mapDbError(session.error)
+      if (questions.error) throw mapDbError(questions.error)
+      return { questions: questions.count ?? 0, answers: session.data?.answered_count ?? 0 }
+    },
+  )
 }
 
 export async function deleteInterviewSession(sessionId: string): Promise<void> {
-  const db = await mockRequest()
-  const questionIds = db.interview_questions.filter((q) => q.session_id === sessionId).map((q) => q.id)
-  const evalIds = db.answer_evaluations.filter((a) => a.session_id === sessionId).map((a) => a.id)
-  const fbIds = db.session_feedbacks.filter((f) => f.session_id === sessionId).map((f) => f.id)
-  db.interview_sessions = db.interview_sessions.filter((s) => s.id !== sessionId)
-  db.interview_questions = db.interview_questions.filter((q) => q.session_id !== sessionId)
-  db.interview_answers = db.interview_answers.filter((a) => a.session_id !== sessionId)
-  db.answer_evaluations = db.answer_evaluations.filter((a) => a.session_id !== sessionId)
-  db.session_feedbacks = db.session_feedbacks.filter((f) => f.session_id !== sessionId)
-  const owners = new Set([...questionIds, ...evalIds, ...fbIds])
-  db.evidence_links = db.evidence_links.filter((e) => !owners.has(e.owner_id))
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const questionIds = db.interview_questions.filter((q) => q.session_id === sessionId).map((q) => q.id)
+      const evalIds = db.answer_evaluations.filter((a) => a.session_id === sessionId).map((a) => a.id)
+      const fbIds = db.session_feedbacks.filter((f) => f.session_id === sessionId).map((f) => f.id)
+      db.interview_sessions = db.interview_sessions.filter((s) => s.id !== sessionId)
+      db.interview_questions = db.interview_questions.filter((q) => q.session_id !== sessionId)
+      db.interview_answers = db.interview_answers.filter((a) => a.session_id !== sessionId)
+      db.answer_evaluations = db.answer_evaluations.filter((a) => a.session_id !== sessionId)
+      db.session_feedbacks = db.session_feedbacks.filter((f) => f.session_id !== sessionId)
+      const owners = new Set([...questionIds, ...evalIds, ...fbIds])
+      db.evidence_links = db.evidence_links.filter((e) => !owners.has(e.owner_id))
+    },
+    async () => {
+      unwrap(await interviewActions.deleteInterviewSession({ sessionId }))
+    },
+  )
 }

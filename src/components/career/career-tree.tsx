@@ -91,6 +91,7 @@ function allProjects(tree: CareerTree): ProjectWithChildren[] {
     for (const p of y.other_projects) map.set(p.id, p)
   }
   for (const p of tree.undated_projects) map.set(p.id, p)
+  for (const e of tree.undated_entries) for (const p of e.projects) map.set(p.id, p)
   return [...map.values()]
 }
 
@@ -282,7 +283,7 @@ export function CareerTreeScreen({ tree, abandonedChats, now }: { tree: CareerTr
             </section>
           )
         })}
-        {tree.undated_projects.length ? (
+        {tree.undated_projects.length || tree.undated_entries.length ? (
           <section aria-label="연도 미정">
             <div className="flex items-center gap-1 py-2">
               <FoldButton open={fold.isOpen("y:undated")} onToggle={() => fold.toggle("y:undated")} label="연도 미정" />
@@ -290,6 +291,9 @@ export function CareerTreeScreen({ tree, abandonedChats, now }: { tree: CareerTr
             </div>
             {fold.isOpen("y:undated") ? (
               <div className="ml-2 space-y-1 border-l pl-4">
+                {tree.undated_entries.map((e) => (
+                  <AffiliationBlock key={`${e.kind}-${(e.experience ?? e.education)?.id}`} entry={e} year="undated" fold={fold} onDelete={setDeleting} />
+                ))}
                 {tree.undated_projects.map((p) => (
                   <ProjectBlock key={p.id} project={p} fold={fold} onDelete={setDeleting} />
                 ))}
@@ -372,7 +376,7 @@ function AffiliationBlock({
   onDelete,
 }: {
   entry: CareerTreeAffiliationEntry
-  year: number
+  year: number | "undated"
   fold: Fold
   onDelete: (t: DeleteTarget) => void
 }) {

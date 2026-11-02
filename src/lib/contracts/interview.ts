@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AiJobStatus, AiJobType, AiProvider, ConnectionTier } from "./enums";
+import type { AiErrorCode, AiJobStatus, AiJobType, AiProvider, ConnectionTier } from "./enums";
 import {
   ANSWER_SCORE_STATUSES,
   DATA_SUFFICIENCIES,
@@ -153,6 +153,22 @@ export type SubmitInterviewSessionResponse = {
  */
 export type RetryInterviewEvaluationResponse = { sessionId: string; jobId: string; inProgress: boolean };
 
+/** 다시 채점 refusals (HTTP 409, DM 2.7.1). `input_only` has `details.cause`. */
+export const INTERVIEW_EVALUATION_REFUSAL_CODES = ["interview_evaluation_not_retryable", "interview_evaluation_input_only"] as const;
+export type InterviewEvaluationRefusalCode = (typeof INTERVIEW_EVALUATION_REFUSAL_CODES)[number];
+
+/**
+ * DM 2.7.1 판정표 (RPC get_interview_grading_decisions), for S-22's button and S-37's menu:
+ * `regrade` → 다시 채점 (count answers), `resummarize` → "종합 평가 다시 정리" (no `evaluate`
+ * stage; progress prepare → summarize → score → complete), `input_only` → no button, `cause`
+ * + 새 면접, `none` → nothing to do.
+ */
+export type InterviewGradingDecision =
+  | { kind: "regrade"; count: number }
+  | { kind: "resummarize" }
+  | { kind: "input_only"; cause: AiErrorCode | null }
+  | { kind: "none" };
+
 // ---------- Server Actions (no key needed) ----------
 
 /** S-33 자동 저장. Only while the answer is `draft`, the session not submitted, and generation `ready`. */
@@ -179,7 +195,8 @@ export type InterviewSessionIdInput = z.input<typeof InterviewSessionIdInput>;
 
 export type AbandonInterviewSessionResult = { sessionId: string; status: InterviewSessionStatus; abandonedAt: string | null };
 export type DeleteInterviewSessionResult = { sessionId: string; deleted: true };
-export type MarkInterviewResultViewedResult = { sessionId: string; resultViewedAt: string | null };
+/** `changed`: this call set the mark (the RPC refuses silently while the user can still act, Q53-10). */
+export type MarkInterviewResultViewedResult = { sessionId: string; resultViewedAt: string | null; changed: boolean };
 
 // ---------- shared view pieces ----------
 
@@ -251,6 +268,8 @@ export type InterviewSessionListItem = {
   isNewResult: boolean;
   executionProvider: ExecutionProviderView | null;
   activeJob: InterviewActiveJob | null;
+  /** S-37 row menu (Q53-6): same table as S-22. Hide the action while `activeJob` runs. */
+  grading: InterviewGradingDecision;
 };
 
 // ---------- S-20 면접 준비 ----------
@@ -335,6 +354,12 @@ export type AnswerSheetView = {
     remainingCount: number;
     activeJob: InterviewActiveJob | null;
     failure: InterviewJobFailure | null;
+    /**
+     * DM 2.6.1 지난 실패: why a failed generation has no `failure` to show (S-15 "이전 실패 안내").
+     * `raw_text_edited` → "공고를 고쳤어요. 이 면접은 질문을 만들지 못했어요"; `job_gone` (edited,
+     * job pruned) → "질문을 만들지 못했어요". Both → "면접 준비로" (S-20), and `canRetry` is false.
+     */
+    failureHidden: "raw_text_edited" | "job_gone" | null;
     /** "남은 질문 다시 만들기" (key needed). */
     canRetry: boolean;
   };
@@ -379,6 +404,8 @@ export type InterviewResultItem = {
   evaluation: AnswerEvaluationView | null;
   /** "채점 실패" + 다시 채점 (C-17 `not_scored`). */
   evaluationFailed: boolean;
+  /** answer_evaluations.error_code when this answer's evaluation failed (Q53-3); null = unknown or not failed. */
+  evaluationErrorCode: AiErrorCode | null;
 };
 
 export type SessionFeedbackView = {
@@ -412,7 +439,9 @@ export type InterviewResultView = {
   evaluationProvider: ProviderModel | null;
   activeJob: InterviewActiveJob | null;
   lastFailure: InterviewJobFailure | null;
-  /** 다시 채점 available (evaluation_failed, or completed with not_scored answers). Key checked by the route. */
+  /** DM 2.7.1 판정 (button label and refusal copy). */
+  grading: InterviewGradingDecision;
+  /** A button applies now: `regrade` / `resummarize`, and no evaluation running. Key checked by the route. */
   canRetryEvaluation: boolean;
   /** True on the read that marked the result viewed (the first open). */
   firstView: boolean;

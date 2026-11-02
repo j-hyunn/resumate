@@ -26,7 +26,8 @@ import { EMPLOYMENT_TYPE_LABELS, directionParticle } from "@/lib/data/labels"
 import type { ExperienceWithChildren } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
 import { saveExperienceAction } from "./actions"
-import { DangerZone, FormSection, RequiredMark, TextField, nn, useRowAutosave } from "./form-parts"
+import { DangerZone, FormSection, PeriodError, RequiredMark, SaveProblemNotice, TextField, monthText, nn, useRowAutosave, type ConflictField } from "./form-parts"
+import { periodPatch, storedPeriod } from "@/lib/data/row-save"
 import { AchievementList } from "./achievement-list"
 import { GateNextStep } from "./gate-next-step"
 
@@ -40,6 +41,19 @@ interface Values {
   department: string
   employment_type: EmploymentType | ""
   summary: string
+}
+
+function conflictFields(v: Values): ConflictField[] {
+  return [
+    { label: "회사명", value: v.company_name },
+    { label: "시작", value: monthText(v.start_month) },
+    { label: "종료", value: v.is_current ? "재직 중" : monthText(v.end_month) },
+    { label: "직급", value: v.job_rank },
+    { label: "직책", value: v.job_position },
+    { label: "부서", value: v.department },
+    { label: "고용 형태", value: v.employment_type ? EMPLOYMENT_TYPE_LABELS[v.employment_type] : "" },
+    { label: "요약", value: v.summary },
+  ]
 }
 
 function toValues(e: Experience | null): Values {
@@ -56,6 +70,11 @@ function toValues(e: Experience | null): Values {
   }
 }
 
+/** UQ-702: "재직 중" clears the end month on save; a reversed period isn't sent. Same shape as `toValues`. */
+function storedValues(v: Values, latest: Experience): Values {
+  return { ...v, ...storedPeriod(v.start_month, v.is_current ? null : v.end_month, latest) }
+}
+
 export function ExperienceForm({
   experience,
   openAchievementId,
@@ -68,17 +87,18 @@ export function ExperienceForm({
   const [touched, setTouched] = React.useState(false)
   const gate = useGateContinuation()
   const { recheck } = gate
-  const { autosave, row, id } = useRowAutosave<Values, Experience>({
+  const { autosave, row, id, problem, keepMine, takeLatest } = useRowAutosave<Values, Experience>({
     initialId: experience?.id ?? null,
     initialRow: experience,
     editHref: routes.experience,
+    comparable: toValues,
+    stored: storedValues,
     save: (rowId, v, opts) =>
       saveExperienceAction(
         rowId,
         {
           company_name: nn(v.company_name),
-          start_month: v.start_month,
-          end_month: v.is_current ? null : v.end_month,
+          ...periodPatch(v.start_month, v.is_current ? null : v.end_month),
           is_current: v.is_current,
           job_rank: nn(v.job_rank),
           job_position: nn(v.job_position),
@@ -117,6 +137,16 @@ export function ExperienceForm({
         description="회사명·기간·직급 또는 직책을 채우면 완료돼요"
         status={<SaveStatus state={autosave.state} savedAt={autosave.savedAt} onRetry={autosave.retry} />}
       />
+      <SaveProblemNotice
+        problem={problem}
+        mine={conflictFields(values)}
+        latest={(r) => conflictFields(toValues(r))}
+        onKeepMine={keepMine}
+        onTakeLatest={() => {
+          const latest = takeLatest()
+          if (latest) setValues(toValues(latest))
+        }}
+      />
       {id && status === "draft" ? <DraftNotice /> : null}
 
       {gate.target && id && status === "complete" ? (
@@ -133,7 +163,7 @@ export function ExperienceForm({
       <FormSection title="기본 정보">
         <TextField id="exp-company" label="회사명" required value={values.company_name} onChange={(v) => set({ company_name: v })} onBlur={blur} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <MonthField id="exp-start" label="시작" required value={values.start_month} onChange={(v) => set({ start_month: v })} />
+          <MonthField id="exp-start" label="시작" required value={values.start_month} onChange={(v) => set({ start_month: v })} describedBy="exp-period-error" />
           <MonthField
             id="exp-end"
             label="종료"
@@ -141,8 +171,10 @@ export function ExperienceForm({
             value={values.is_current ? null : values.end_month}
             onChange={(v) => set({ end_month: v })}
             ongoing={{ label: "재직 중", checked: values.is_current, onCheckedChange: (checked) => set({ is_current: checked }) }}
+            describedBy="exp-period-error"
           />
         </div>
+        <PeriodError id="exp-period-error" start={values.start_month} end={values.is_current ? null : values.end_month} />
         <fieldset className="space-y-2">
           <legend className="text-sm leading-5 font-medium">
             직급 / 직책 (둘 중 하나)

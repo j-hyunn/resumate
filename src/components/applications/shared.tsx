@@ -11,7 +11,7 @@ import { AiProgressInline, useAiJob } from "@/components/common/ai-progress"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
 import { consumeReturnParams } from "@/components/common/return-target"
 import type { ReturnTargetFeature } from "@/types/db"
-import { deleteApplicationAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { deleteApplicationAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** Re-render the server page every `intervalMs` while `active` (mock stand-in for Realtime). */
 export function AutoRefresh({ active, intervalMs = 2_000 }: { active: boolean; intervalMs?: number }) {

@@ -36,7 +36,15 @@ import type { EvidenceView } from "@/lib/data/evidence"
 import { actionFailedMessage } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
-import { COUNT_BASIS_LABELS, DRAFT_TYPE_LABELS, SOURCE_ORIGIN_LABELS, SOURCE_ROLE_LABELS } from "./labels"
+import {
+  COUNT_BASIS_LABELS,
+  DRAFT_TYPE_LABELS,
+  OMITTED_PROJECT_FALLBACK,
+  OMITTED_REASON_FALLBACK,
+  OMITTED_REASON_LABELS,
+  SOURCE_ORIGIN_LABELS,
+  SOURCE_ROLE_LABELS,
+} from "./labels"
 
 /** A3 UQ-86: the server refused to start (URL ?generate=, key removed in another tab …). [UI-가정] 문구 */
 function notifyRefused(reason: "insufficient" | "locked" | "key_invalid" | "unavailable") {
@@ -60,7 +68,7 @@ import {
   prepareCareerDescriptionAction,
   prepareCoverLetterSectionAction,
   saveEditedContentAction,
-} from "@/app/(dashboard)/applications/_lib/actions"
+} from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 type Section = DraftSection & { sources: DraftSectionSource[] }
 
@@ -84,7 +92,7 @@ export interface DraftEditorProps {
   autoGenerate: string | null
   /** v5.3 A4: the stored career description failed (no blocks) → C-20 + 새 초안으로 다시 시도 */
   storedFailure: Omit<AiErrorInfo, "sameRow"> | null
-  preview: { stream: boolean; failed: AiErrorCode | null; failSave: boolean; finalizing?: boolean }
+  preview: { stream: boolean; failed: AiErrorCode | null; failSave: boolean; finalizing?: boolean; stopping?: boolean }
 }
 
 /** S-19 생성 직후 안내 (A21): not stored — kept in memory until the screen is left ("" = 경력기술서) */
@@ -240,6 +248,10 @@ export function DraftEditor(props: DraftEditorProps) {
       return
     }
     generationRef.current = plan.generation_id
+    if ("request" in plan) {
+      stream.start({ ...plan.request, discardOnError: true })
+      return
+    }
     // v5.3 A4: a failure keeps no block (discardOnError); validated replaces the whole draft (F9)
     stream.start({
       blocks: plan.blocks,
@@ -280,6 +292,10 @@ export function DraftEditor(props: DraftEditorProps) {
         return
       }
       generationRef.current = plan.generation_id
+      if ("request" in plan) {
+        stream.start(plan.request)
+        return
+      }
       stream.start({
         sources: plan.sources,
         blocks: plan.blocks.map((b) => ({ ...b, section_id: sectionId })),
@@ -439,7 +455,8 @@ export function DraftEditor(props: DraftEditorProps) {
   }
 
   // ---------------------------------------------------------------- copy
-  const fullText = documentText(draft, sections)
+  // UQ-701: a failed career description has nothing to copy (its leftover section rows carry only headings)
+  const fullText = !isCover && cdFailed ? "" : documentText(draft, sections)
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -570,7 +587,7 @@ export function DraftEditor(props: DraftEditorProps) {
           </Button>
           <CopyWithPlaceholderGuard text={fullText} onCopy={() => void copy(fullText)}>
             {(onClick) => (
-              <Button variant="outline" size="sm" onClick={onClick} disabled={current !== null || preview.finalizing || fullText.trim() === ""}>
+              <Button variant="outline" size="sm" onClick={onClick} disabled={current !== null || preview.finalizing || preview.stopping || fullText.trim() === ""}>
                 <Copy aria-hidden />
                 전체 복사
               </Button>
@@ -584,11 +601,11 @@ export function DraftEditor(props: DraftEditorProps) {
 
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="mx-auto w-full max-w-[42rem] space-y-6">
-            <GenerationNotes notes={genNotes} sections={sections} isCover={isCover} />
-            {preview.finalizing ? (
-              // UQ-524 `?state=finalizing`: "마무리 중" 정지 화면 — 임시 블록, 편집·복사 막힘 (C-04)
+            <GenerationNotes notes={genNotes} sections={sections} isCover={isCover} projectLabels={tree.project_labels} />
+            {preview.finalizing || preview.stopping ? (
+              // UQ-524 `?state=finalizing`: "마무리 중" 정지 화면 — 임시 블록, 편집·복사 막힘 (C-04). `?state=stopping`: 중단 대기 (W3-4)
               <StreamRegion status="streaming" className="space-y-3">
-                <StreamingHeader onStop={() => undefined} phase="finalizing" />
+                <StreamingHeader onStop={() => undefined} phase="finalizing" stopping={preview.stopping} />
                 {(sections[0] ? blocksOf(sections[0]) : []).map((b) => (
                   <StreamingBlock key={b.block_id} block={{ text: b.text, state: "completed" }} />
                 ))}
@@ -629,7 +646,7 @@ export function DraftEditor(props: DraftEditorProps) {
               ))
             ) : current === "draft" || (isPreview && lastTarget === "draft" && (cdFailed || canceled) && stream.blocks.length > 0) ? (
               <StreamRegion status={stream.status} className="space-y-3">
-                {current === "draft" ? <StreamingHeader onStop={stream.cancel} phase={stream.phase} adjusting={stream.adjusting} /> : null}
+                {current === "draft" ? <StreamingHeader onStop={stream.cancel} phase={stream.phase} adjusting={stream.adjusting} stopping={stream.status === "canceled"} /> : null}
                 {cdFailed && current === null ? cdFailure : null}
                 {stream.blocks.map((b) => (
                   <StreamingBlock key={b.block_id} block={b}>
@@ -875,10 +892,12 @@ function QuestionSection({
 
       {streaming ? (
         <StreamRegion status={streaming.status} className="space-y-3">
-          {streaming.status === "streaming" ? (
+          {/* W3-4: after 중단, `busy` lasts until the run has closed (finalize waits for it) */}
+          {streaming.status === "streaming" || (streaming.status === "canceled" && busy) ? (
             <StreamingHeader
               onStop={streaming.cancel}
               phase={streaming.phase}
+              stopping={streaming.status === "canceled"}
               adjusting={streaming.adjusting && (!streaming.adjusting.section_id || streaming.adjusting.section_id === section.id) ? streaming.adjusting : null}
             />
           ) : null}
@@ -1003,7 +1022,25 @@ function QuestionSection({
 // v5.3 A21 생성 직후 안내 (design-system 6장 A3 "S-19 생성 직후 안내 상자", GenerationNotes)
 // ---------------------------------------------------------------------------
 
-function GenerationNotes({ notes, sections, isCover }: { notes: NotesMap; sections: Section[]; isCover: boolean }) {
+/** One "포함하지 않은 항목" line: a real run's project id → "회사 › 프로젝트" (C-11 tree) + reason; the mock's ready line split on " — " */
+function omittedLine(o: NonNullable<GenerationNotesPayload["omitted"]>[number], projectLabels: Record<string, string>): { item: string; why: string | null } {
+  if (typeof o !== "string") return { item: projectLabels[o.project_id] ?? OMITTED_PROJECT_FALLBACK, why: OMITTED_REASON_LABELS[o.reason] ?? OMITTED_REASON_FALLBACK }
+  const [item, ...why] = o.split(" — ")
+  return { item, why: why.length ? why.join(" — ") : null }
+}
+
+function GenerationNotes({
+  notes,
+  sections,
+  isCover,
+  projectLabels,
+}: {
+  notes: NotesMap
+  sections: Section[]
+  isCover: boolean
+  /** C-11 source tree `project_labels` (id → "회사명 또는 기관명 › 프로젝트명") */
+  projectLabels: Record<string, string>
+}) {
   const groups = Object.entries(notes)
     .map(([key, n]) => {
       const index = isCover ? sections.findIndex((s) => s.id === key) : -1
@@ -1031,11 +1068,11 @@ function GenerationNotes({ notes, sections, isCover }: { notes: NotesMap; sectio
                 <p className="font-medium">포함하지 않은 항목</p>
                 <ul className="list-disc space-y-1.5 pl-5">
                   {n.omitted.map((o, i) => {
-                    const [item, ...why] = o.split(" — ")
+                    const { item, why } = omittedLine(o, projectLabels)
                     return (
                       <li key={i}>
-                        <span className="font-medium">{item}</span>
-                        {why.length ? ` — ${why.join(" — ")}` : null}
+                        <span className="font-medium break-words">{item}</span>
+                        {why ? ` — ${why}` : null}
                       </li>
                     )
                   })}

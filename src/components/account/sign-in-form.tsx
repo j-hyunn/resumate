@@ -157,7 +157,7 @@ export function SignInForm({ next, preview }: { next: string | null; preview: Si
             다른 이메일로 받기
           </Button>
 
-          {isPreviewEnabled ? (
+          {isPreviewEnabled && preview ? (
             <div className="space-y-2 rounded-md border border-dashed p-3">
               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <FlaskConical className="size-4" aria-hidden />

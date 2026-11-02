@@ -9,6 +9,7 @@ import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { STEP_CONTINUE, type JobStep, type JobTypeDefinition, type StepContext } from "@/server/jobs/types";
 import type { EnsureJdResult } from "@/server/services/application/extraction";
 import { pickFailure } from "@/server/services/insight/job";
+import { isQuestionsPrepareStale, loadGradingDecisions, type GradingDecisionRow } from "./grading";
 import {
   GONE_RAISES,
   InterviewRpcError,
@@ -49,14 +50,19 @@ import { EVALUATION_JOB_TYPE, INTERVIEW_TARGET_TYPE, QUESTIONS_JOB_TYPE } from "
  *               succeeds (S6 QA lesson); free (C-12): one answer per run via
  *               STEP_CONTINUE. An answer whose failure the runner would no
  *               longer retry (`ctx.wouldRetry`) is closed with
- *               fail_answer_evaluation (`not_scored`) and the job goes on
- *               [가정 2]; key / account / provider-limit causes fail the job.
+ *               fail_answer_evaluation (`not_scored`, with the cause: Q53-3) and
+ *               the job goes on [가정 2]; key / account / provider-limit causes
+ *               fail the job. No answers to evaluate (Q53-5 종합만 다시 정리): no
+ *               call, no spacing, and the stage stays out of `progress`, which
+ *               reads prepare → summarize → score → complete.
  *   summarize → AI-07 over the succeeded evaluations (skipped without a call when none)
  *   score     → D-14 pending: nothing
  *   complete  → complete_interview_evaluation; `evaluation_failed` (all answers
  *               failed) ends the job failed with the answers' cause.
  *   Summary failure fails the job → the trigger marks `evaluation_failed`;
- *   다시 채점 then redoes only the summary [가정 1].
+ *   a NEW job then redoes only the summary (Q53-5). The same row can't: a
+ *   provider change would reopen every saved evaluation (R-63), so a session
+ *   with no re-grade target refuses the same-row retry (`retryBlocked`).
  */
 
 export type QuestionsContextInput = {
@@ -196,6 +202,8 @@ export type InterviewInputLoaders = {
   existingQuestions: (db: AiWriterSupabaseClient, sessionId: string) => Promise<ExistingQuestion[]>;
   questionEvidence: (db: AiWriterSupabaseClient, questionIds: readonly string[]) => Promise<Map<string, QuestionEvidence[]>>;
   session: (db: AiWriterSupabaseClient, sessionId: string) => Promise<SessionForEvaluation>;
+  /** DM 2.7.1 판정 of one session (null = no such session). */
+  gradingDecision: (db: AiWriterSupabaseClient, sessionId: string) => Promise<GradingDecisionRow | null>;
 };
 
 export async function loadExistingQuestions(db: AiWriterSupabaseClient, sessionId: string): Promise<ExistingQuestion[]> {
@@ -225,6 +233,7 @@ export const DB_INPUT_LOADERS: InterviewInputLoaders = {
   existingQuestions: loadExistingQuestions,
   questionEvidence: loadQuestionEvidence,
   session: loadSessionForEvaluation,
+  gradingDecision: async (db, sessionId) => (await loadGradingDecisions(db, [sessionId])).get(sessionId) ?? null,
 };
 
 export type InterviewJobDeps<QC, EC> = {
@@ -467,7 +476,12 @@ export function createInterviewQuestionsJobDefinition<QC, EC>(deps: InterviewJob
     },
   };
 
-  return { jobType: QUESTIONS_JOB_TYPE, modelTier: p.tier, steps: [prepare, generate, complete] };
+  return {
+    jobType: QUESTIONS_JOB_TYPE,
+    modelTier: p.tier,
+    steps: [prepare, generate, complete],
+    retryBlocked: ({ db, job }) => isQuestionsPrepareStale(db, job), // QA-W0-04
+  };
 }
 
 // ======================= interview_evaluation (AI-06 + AI-07) =======================
@@ -535,8 +549,13 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
     },
   };
 
+  /** Q53-5: begin_interview_evaluation gave no answers, so only the summary is redone. */
+  const nothingToEvaluate = (previous: Readonly<Record<string, unknown>>) => (previous.prepare as EvaluationPrepareOutput | undefined)?.answers?.length === 0;
+
   const evaluate: JobStep<Llm> = {
     stage: "evaluate",
+    callsProvider: (previous) => !nothingToEvaluate(previous),
+    hiddenFromProgress: nothingToEvaluate,
     async run(ctx) {
       const { sessionId, applicationProjectId } = interviewParams(ctx.params);
       const prep = prepared(ctx);
@@ -547,7 +566,7 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
       const total = prep.answers.length;
       const pending = prep.answers.filter((a) => !succeeded.has(a.answerId) && !(a.answerId in partial.failed));
       const progress = () => ctx.reportProgress(total - pending.filter((a) => !succeeded.has(a.answerId) && !(a.answerId in partial.failed)).length, total);
-      await progress();
+      if (total > 0) await progress();
 
       const output = (): EvaluateOutput => ({ succeededCount: succeeded.size, failed: partial.failed });
       if (pending.length === 0) return output();
@@ -639,7 +658,7 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
           return;
         }
         // [가정 2] this answer is done for this job: not_scored + "다시 채점"; the summary uses the rest.
-        await store.failAnswerEvaluation(item.answerId, ctx.jobId).catch((e: unknown) => fromRpc(e, log, ctx.jobId));
+        await store.failAnswerEvaluation(item.answerId, ctx.jobId, err.code).catch((e: unknown) => fromRpc(e, log, ctx.jobId));
         partial.failed[item.answerId] = err.code;
         delete partial.calls[item.answerId];
         await persist();
@@ -734,7 +753,16 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
     },
   };
 
-  return { jobType: EVALUATION_JOB_TYPE, modelTier: p.tier, steps: [prepare, evaluate, summarize, score, complete] };
+  return {
+    jobType: EVALUATION_JOB_TYPE,
+    modelTier: p.tier,
+    steps: [prepare, evaluate, summarize, score, complete],
+    // Q53-5 (DM 2.7.1, 2.9.1): same check as retry_ai_job, before the connection gates.
+    retryBlocked: async ({ db, job }) => {
+      if (!job.targetId) return false;
+      return (await L.gradingDecision(db, job.targetId))?.regradeTargetCount === 0;
+    },
+  };
 }
 
 /** AI-07 input: every question with its answer status and succeeded evaluation, plus the requirements it refers to. */

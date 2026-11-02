@@ -32,7 +32,7 @@ import { CharCount } from "@/components/common/input-guide"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { routes } from "@/lib/routes"
 import { setNavOrigin } from "@/components/common/return-target"
-import { createApplicationAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { createApplicationAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** v5.3 S-14: 회사명·포지션명 각 200자 (구현 값 [가정]) */
 const FIELD_MAX = 200

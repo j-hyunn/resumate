@@ -109,3 +109,35 @@ describe("scores and lists", () => {
     expect(items.find((s) => s.id === "d")!.isNewResult).toBe(false);
   });
 });
+
+describe("resolveSessionRun — generation failures of the old raw text (DM 2.6.1)", () => {
+  const failed = session({ generation_status: "failed" });
+  const failedJob = job({ status: "failed", error_code: "not_a_jd", finished_at: "2026-11-01T00:00:00Z" });
+  const EDITED = "2026-11-02T00:00:00Z";
+
+  it("a job failed before the edit: no failure, `raw_text_edited`", () => {
+    expect(resolveSessionRun(failed, [failedJob], EDITED)).toMatchObject({ generationStatus: "failed", failure: null, failureHidden: "raw_text_edited" });
+  });
+
+  it("a job failed after the edit, or never edited: the failure as before", () => {
+    expect(resolveSessionRun(failed, [{ ...failedJob, finished_at: "2026-11-03T00:00:00Z" }], EDITED)).toMatchObject({ failure: { code: "not_a_jd" }, failureHidden: null });
+    expect(resolveSessionRun(failed, [failedJob])).toMatchObject({ failure: { code: "not_a_jd" }, failureHidden: null });
+  });
+
+  it("edited and no job left to compare: `job_gone`; never edited: stalled as before", () => {
+    expect(resolveSessionRun(failed, [], EDITED)).toMatchObject({ failure: null, failureHidden: "job_gone" });
+    expect(resolveSessionRun(failed, [])).toMatchObject({ failure: { code: "stalled" }, failureHidden: null });
+  });
+
+  it("an evaluation failure is never hidden", () => {
+    const evaluation = job({ job_type: "interview_evaluation", status: "failed", error_code: "timeout", finished_at: "2026-11-01T00:00:00Z" });
+    expect(resolveSessionRun(session({ status: "evaluation_failed" }), [evaluation], EDITED)).toMatchObject({ failure: { code: "timeout" }, failureHidden: null });
+  });
+});
+
+describe("toListItem grading (Q53-6)", () => {
+  it("carries the decision; none by default", () => {
+    expect(toListItem(session(), "p", []).grading).toEqual({ kind: "none" });
+    expect(toListItem(session(), "p", [], { kind: "resummarize" }).grading).toEqual({ kind: "resummarize" });
+  });
+});

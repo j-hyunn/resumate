@@ -18,6 +18,7 @@ import { getEvidenceForOwners } from "@/lib/data/evidence"
 import { deleteInterviewSession } from "@/lib/data/deletion"
 import { withAiGuard } from "@/lib/data/ai-guard"
 import type { AiRejected } from "@/lib/data/ai-errors"
+import { isAppError } from "@/lib/contracts/errors"
 
 /**
  * `{ rejected }` (isAiRejected) when the key is missing / invalid — no session is created.
@@ -71,6 +72,13 @@ export async function abandonInterviewSessionAction(sessionId: string) {
   return abandonInterviewSession(sessionId)
 }
 
-export async function deleteInterviewSessionAction(sessionId: string) {
-  return deleteInterviewSession(sessionId)
+/** ㉛: `gone` = another tab deleted it first. What the user asked for is done, so it isn't a failure. */
+export async function deleteInterviewSessionAction(sessionId: string): Promise<{ gone: boolean }> {
+  try {
+    await deleteInterviewSession(sessionId)
+    return { gone: false }
+  } catch (e) {
+    if (isAppError(e) && e.code === "not_found") return { gone: true }
+    throw e
+  }
 }

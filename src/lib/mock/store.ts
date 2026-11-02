@@ -11,6 +11,8 @@ const KEY = "__resumateMockDb" as const
 type GlobalWithDb = typeof globalThis & { [KEY]?: MockDb }
 
 export function getMockDb(): MockDb {
+  // Backstop for mock-isolation.test.ts: fixtures must never serve a production request
+  if (process.env.NODE_ENV === "production") throw new Error("The mock store is not available in production")
   const g = globalThis as GlobalWithDb
   if (!g[KEY]) g[KEY] = createFixtures()
   // a store created before v5.3 (dev HMR) lacks the mock controls
@@ -19,6 +21,7 @@ export function getMockDb(): MockDb {
 }
 
 export function resetMockDb(): void {
+  if (process.env.NODE_ENV === "production") throw new Error("The mock store is not available in production")
   ;(globalThis as GlobalWithDb)[KEY] = createFixtures()
 }
 

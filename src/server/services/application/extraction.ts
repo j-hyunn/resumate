@@ -25,7 +25,8 @@ import { createPriceCache, createUsageRecorder } from "@/server/jobs/usage-recor
  * Order: JD read (user session, RLS) → connection gate (active provider, key,
  * consent; F-AI-08 lock) → ai_jobs insert (target job_description; one in
  * flight per JD) → claim → check_ai_run_allowed → begin_jd_extraction →
- * AI-01 (light tier, retries C-11.3 inside the request) → apply_jd_extraction
+ * JD read again (Q53-2: sentences only after begin, which locks out a raw text
+ * edit) → AI-01 (light tier, retries C-11.3 inside the request) → apply_jd_extraction
  * → complete. Failure → fail_jd_extraction + job failed (error_code,
  * retry_after / quota_resets_at). Every provider call leaves one usage record.
  *
@@ -268,7 +269,7 @@ export async function ensureJdExtracted(
 
   const loaded = await deps.jds.load(applicationProjectId);
   if (!loaded) throw new AppError("not_found");
-  const jd: JdForExtraction = loaded;
+  let jd: JdForExtraction = loaded;
   if (jd.extractionStatus === "succeeded") return { status: "already_extracted" };
 
   // Connection read here and fixed into the job (F-AI-03 (2)); never trusted from the client.
@@ -326,6 +327,22 @@ export async function ensureJdExtracted(
     await close("canceled", "canceled");
     if (err instanceof AppError && err.code === "already_extracted") return { status: "already_extracted" };
     throw err;
+  }
+
+  // DM 2.6.1 follow-up 2: an edit between the first read and begin must not get old sentences stored on new text.
+  // From here on update_failed_jd_raw_text refuses (conditions 1 and 2).
+  try {
+    const current = await deps.jds.load(applicationProjectId);
+    if (!current) {
+      await close("canceled", "canceled"); // project deleted (FL-06)
+      return failed(jobId, "canceled");
+    }
+    jd = current;
+  } catch {
+    log("jd_extraction.reload_failed", { jobId });
+    await deps.jds.fail(jd.jobDescriptionId, jobId).catch(() => false);
+    await close("failed", "stalled");
+    return failed(jobId, "stalled");
   }
   log("jd_extraction.started", { jobId, provider: job.provider, connectionTier: job.connectionTier, sentences: jd.sentences.length });
 

@@ -66,7 +66,6 @@ describe("submitConsents", () => {
       items: [
         { consent_type: "terms", agreed: true },
         { consent_type: "privacy_required", agreed: true },
-        { consent_type: "cross_border_transfer", agreed: true },
       ],
       user_agent_hash: hashUserAgent("UA/1.0"),
     });

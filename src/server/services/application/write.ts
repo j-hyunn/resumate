@@ -11,6 +11,8 @@ import {
   type SetApplicationOutcomeInput,
   type StageChangeResult,
   type UpdateApplicationProjectInput,
+  type UpdateFailedJdRawTextInput,
+  type UpdateFailedJdRawTextResult,
 } from "@/lib/contracts/application";
 import type { ApplicationStage, JdExtractionStatus, NameSource, StageOutcome } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
@@ -73,6 +75,39 @@ export async function createApplicationProject(
     // The DB applies the same rule as check_ai_run_allowed (active provider, key not invalid, consent).
     shouldExtract: row.ai_run_allowed === true && (extractionStatus === "pending" || extractionStatus === "failed"),
     created: row.created !== false,
+    warnings: jdInputWarnings(input.rawText),
+  };
+}
+
+// ---------------- raw text edit (S-15, Q53-2 / Q53-11) ----------------
+
+/**
+ * DM 2.6.1: the one exception to "JD 교체 불가". Sentences and hash come from the same server
+ * code as creation. Refusals (AppError 409): `jd_job_in_progress`, `jd_raw_text_locked`,
+ * `jd_failure_not_input`, `jd_has_results`, `jd_raw_text_unchanged`; `not_found`, `invalid_input`.
+ * No AI call and no key needed: re-extraction is the user's separate "요건 정리하기" (D-30).
+ */
+export async function updateFailedJdRawText(
+  supabase: UserSupabaseClient,
+  input: z.output<typeof UpdateFailedJdRawTextInput>,
+): Promise<UpdateFailedJdRawTextResult> {
+  const { data, error } = await supabase.rpc("update_failed_jd_raw_text", {
+    p_application_project_id: input.id,
+    p_raw_text: input.rawText,
+    p_raw_text_hash: sha256Hex(input.rawText),
+    p_sentences: splitJdSentences(input.rawText) as unknown as Json,
+  });
+  if (error) throw mapDbError(error);
+  const row = obj(data);
+  const jobDescriptionId = str(row.job_description_id);
+  const rawTextEditedAt = str(row.raw_text_edited_at);
+  if (!jobDescriptionId || !rawTextEditedAt) throw new AppError("internal_error", undefined, { status: 500 });
+  return {
+    applicationProjectId: input.id,
+    jobDescriptionId,
+    extractionStatus: "pending",
+    rawTextEditedAt,
+    aiRunAllowed: row.ai_run_allowed === true,
     warnings: jdInputWarnings(input.rawText),
   };
 }

@@ -24,6 +24,11 @@ import type {
 } from "@/types/db"
 import {
   addManualSkill,
+  getAchievement,
+  getEducation,
+  getExperience,
+  getProject,
+  getProjectDetail,
   reorderProjectDetails,
   saveAchievement,
   saveEducation,
@@ -32,7 +37,10 @@ import {
   saveProjectDetail,
   setProjectSkills,
   updateProfile,
+  type WriteOptions,
 } from "@/lib/data/career"
+import { guardRowSave } from "@/lib/data/row-save-guard"
+import type { RowSaveResult } from "@/lib/data/row-save"
 import { deleteCareerItem } from "@/lib/data/deletion"
 import { getDataReadiness } from "@/lib/data/readiness"
 import {
@@ -56,26 +64,47 @@ import { MockAiError } from "@/lib/mock/ai"
 import { slotFromPath, type ChatSlot } from "@/lib/data/writing-chat-slots"
 import { buildChatView } from "@/lib/data/writing-chat-view"
 
-type Opts = { fail?: boolean }
+type Opts = WriteOptions
+
+/** `client_id`: a retried create asks about the row it may have made */
+const lookupId = (id: string | null, opts?: Opts) => id ?? opts?.client_id ?? null
 
 // ---------------------------------------------------------------------------
 // forms (autosave targets)
 // ---------------------------------------------------------------------------
 
-export async function saveProfileAction(patch: Partial<Profile>, opts?: Opts) {
+export async function saveProfileAction(patch: Partial<Profile>, opts?: Pick<Opts, "fail">) {
   return updateProfile(patch, opts)
 }
 
-export async function saveExperienceAction(id: string | null, patch: Partial<Experience>, opts?: Opts) {
-  return saveExperience(id, patch, opts)
+export async function saveExperienceAction(id: string | null, patch: Partial<Experience>, opts?: Opts): Promise<RowSaveResult<Experience>> {
+  return guardRowSave(
+    () => saveExperience(id, patch, opts),
+    async () => {
+      const key = lookupId(id, opts)
+      return key ? getExperience(key) : null
+    },
+  )
 }
 
-export async function saveEducationAction(id: string | null, patch: Partial<Education>, opts?: Opts) {
-  return saveEducation(id, patch, opts)
+export async function saveEducationAction(id: string | null, patch: Partial<Education>, opts?: Opts): Promise<RowSaveResult<Education>> {
+  return guardRowSave(
+    () => saveEducation(id, patch, opts),
+    async () => {
+      const key = lookupId(id, opts)
+      return key ? getEducation(key) : null
+    },
+  )
 }
 
-export async function saveProjectAction(id: string | null, patch: Partial<Project>, opts?: Opts) {
-  return saveProject(id, patch, opts)
+export async function saveProjectAction(id: string | null, patch: Partial<Project>, opts?: Opts): Promise<RowSaveResult<Project>> {
+  return guardRowSave(
+    () => saveProject(id, patch, opts),
+    async () => {
+      const key = lookupId(id, opts)
+      return key ? getProject(key) : null
+    },
+  )
 }
 
 export async function setProjectSkillsAction(projectId: string, names: string[], opts?: Opts) {
@@ -87,16 +116,28 @@ export async function saveProjectDetailAction(
   id: string | null,
   patch: Partial<ProjectDetail>,
   opts?: Opts,
-) {
-  return saveProjectDetail(projectId, id, patch, opts)
+): Promise<RowSaveResult<ProjectDetail>> {
+  return guardRowSave(
+    () => saveProjectDetail(projectId, id, patch, opts),
+    async () => {
+      const key = lookupId(id, opts)
+      return key ? ((await getProjectDetail(projectId, key))?.detail ?? null) : null
+    },
+  )
 }
 
 export async function reorderProjectDetailsAction(projectId: string, orderedIds: string[]) {
   await reorderProjectDetails(projectId, orderedIds)
 }
 
-export async function saveAchievementAction(id: string | null, patch: Partial<Achievement>, opts?: Opts) {
-  return saveAchievement(id, patch, opts)
+export async function saveAchievementAction(id: string | null, patch: Partial<Achievement>, opts?: Opts): Promise<RowSaveResult<Achievement>> {
+  return guardRowSave(
+    () => saveAchievement(id, patch, opts),
+    async () => {
+      const key = lookupId(id, opts)
+      return key ? getAchievement(key) : null
+    },
+  )
 }
 
 export async function addManualSkillAction(name: string) {

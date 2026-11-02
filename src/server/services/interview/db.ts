@@ -1,3 +1,4 @@
+import type { AiErrorCode } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { CareerRows } from "@/server/ai/context-pack/career-rows";
 import type { JdRequirementInput, JdSentence } from "@/server/ai/context-pack/jd";
@@ -253,7 +254,7 @@ export interface InterviewStore {
   failQuestions(sessionId: string, jobId: string): Promise<boolean>;
   beginEvaluation(args: { sessionId: string; jobId: string; provider: string; model: string }): Promise<BegunEvaluation>;
   saveAnswerEvaluation(args: { answerId: string; jobId: string; runGeneration: number; payload: unknown }): Promise<Applied>;
-  failAnswerEvaluation(answerId: string, jobId: string): Promise<boolean>;
+  failAnswerEvaluation(answerId: string, jobId: string, errorCode: AiErrorCode): Promise<boolean>;
   saveSessionFeedback(args: { sessionId: string; jobId: string; runGeneration: number; payload: unknown }): Promise<Applied>;
   completeEvaluation(args: { sessionId: string; jobId: string; runGeneration: number }): Promise<CompletedEvaluation>;
 }
@@ -344,8 +345,8 @@ export function createInterviewStore(writer: AiWriterSupabaseClient): InterviewS
       if (error) throw rpcFailure(error);
       return { applied: applied(data) };
     },
-    async failAnswerEvaluation(answerId, jobId) {
-      const { data, error } = await writer.rpc("fail_answer_evaluation", { p_answer_id: answerId, p_ai_job_id: jobId });
+    async failAnswerEvaluation(answerId, jobId, errorCode) {
+      const { data, error } = await writer.rpc("fail_answer_evaluation", { p_answer_id: answerId, p_ai_job_id: jobId, p_error_code: errorCode });
       if (error) throw rpcFailure(error);
       return data === true;
     },

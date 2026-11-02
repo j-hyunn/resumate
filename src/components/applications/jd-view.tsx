@@ -23,7 +23,7 @@ import { JdRawEditButton, JdRawEditor, JdRawSavedNote, useJdRawEdit } from "./jd
 import type { AiErrorCode, AiJob, AiRetryRefusalCode, JdRequirement, JdSentence } from "@/types/db"
 import { cn } from "@/lib/utils"
 import { IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS, REQUIREMENT_CATEGORY_ORDER } from "./labels"
-import { retryJdExtractionAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { retryJdExtractionAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** "started here" marker for the running view (UQ-530); keeps `from` so the return link survives */
 function useExtractingUrl() {

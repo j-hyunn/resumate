@@ -1,5 +1,5 @@
 /**
- * RPC get_data_readiness() (04 §6), computed from the mock store. Server only.
+ * RPC get_data_readiness() (04 §6). `computeReadiness` is the mock store's version, for previews. Server only.
  * Screens decide gate vs action only from `features.{feature}.ready / missing / next_action`.
  */
 import type { DataReadiness, ReadinessFeature } from "@/types/db"
@@ -7,6 +7,9 @@ import { mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { computeAiConnection } from "./ai-connection"
 import { IDS } from "@/lib/mock/ids"
+import { previewOr } from "./source"
+import { requireUser } from "@/server/auth/session"
+import { loadDataReadiness } from "@/server/services/shell"
 
 /** `?state=insufficient-project-fields`: fixture project 8 really lacks its role (UQ-489) */
 const PREVIEW_PROJECT_ID = IDS.prj(8)
@@ -101,8 +104,11 @@ export function computeReadiness(db: MockDb): DataReadiness {
 }
 
 export async function getDataReadiness(): Promise<DataReadiness> {
-  const db = await mockRequest()
-  return computeReadiness(db)
+  return previewOr(
+    async () => computeReadiness(await mockRequest()),
+    // The RPC's jsonb is the same DM §6 shape the mock computes; screens read it as is.
+    async () => (await loadDataReadiness((await requireUser()).supabase)) as DataReadiness,
+  )
 }
 
 /**

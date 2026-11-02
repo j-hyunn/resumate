@@ -16,7 +16,8 @@ import type { Achievement, ProjectDetail, ProjectDetailField } from "@/types/db"
 import type { ProjectDetailWithAchievements, ProjectWithChildren } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
 import { saveProjectDetailAction } from "./actions"
-import { DangerZone, FormSection, LongTextField, TextField, nn, useRowAutosave } from "./form-parts"
+import { DETAIL_FIELD_LABELS } from "@/lib/data/labels"
+import { DangerZone, FormSection, LongTextField, SaveProblemNotice, TextField, nn, useRowAutosave, type ConflictField } from "./form-parts"
 import { AchievementList } from "./achievement-list"
 
 const LIMIT = 2000 // [UI-가정] 필드별 2,000자 (02 S-35 [가정], 04 STAR ≤ 2,000)
@@ -33,6 +34,9 @@ const G4: Partial<Record<ProjectDetailField, string>> = {
   learnings: "예: 성능 문제는 추측보다 측정에서 시작해야 한다는 것을 배웠어요",
 }
 
+const FIELD_ORDER: ProjectDetailField[] = ["title", "situation", "task", "action", "result", "learnings"]
+const conflictFields = (v: Values): ConflictField[] => FIELD_ORDER.map((k) => ({ label: DETAIL_FIELD_LABELS[k], value: v[k] }))
+
 function toValues(d: ProjectDetail | null): Values {
   return {
     title: d?.title ?? "",
@@ -41,6 +45,18 @@ function toValues(d: ProjectDetail | null): Values {
     action: d?.action ?? "",
     result: d?.result ?? "",
     learnings: d?.learnings ?? "",
+  }
+}
+
+/** UQ-702: the values as a save leaves them (each field cut to its limit). Same shape as `toValues`. */
+function storedValues(v: Values): Values {
+  return {
+    title: cap(v.title, TITLE_LIMIT),
+    situation: cap(v.situation, LIMIT),
+    task: cap(v.task, LIMIT),
+    action: cap(v.action, LIMIT),
+    result: cap(v.result, LIMIT),
+    learnings: cap(v.learnings, LIMIT),
   }
 }
 
@@ -61,9 +77,11 @@ export function DetailForm({
   const refs = React.useRef<Partial<Record<ProjectDetailField, HTMLTextAreaElement | null>>>({})
   const titleRef = React.useRef<HTMLDivElement>(null)
   const achievementControl = React.useRef<{ openNew: () => void }>(null)
-  const { autosave, row, id } = useRowAutosave<Values, ProjectDetail>({
+  const { autosave, row, id, problem, keepMine, takeLatest } = useRowAutosave<Values, ProjectDetail>({
     initialId: detail?.id ?? null,
     initialRow: detail,
+    comparable: toValues,
+    stored: storedValues,
     editHref: (detailId) => routes.projectDetail(project.id, detailId),
     save: (rowId, v, opts) =>
       saveProjectDetailAction(
@@ -139,6 +157,16 @@ export function DetailForm({
           status={<SaveStatus state={autosave.state} savedAt={autosave.savedAt} onRetry={autosave.retry} />}
         />
       </div>
+      <SaveProblemNotice
+        problem={problem}
+        mine={conflictFields(values)}
+        latest={(r) => conflictFields(toValues(r))}
+        onKeepMine={keepMine}
+        onTakeLatest={() => {
+          const latest = takeLatest()
+          if (latest) setValues(toValues(latest))
+        }}
+      />
       {id && status === "draft" ? <DraftNotice /> : null}
 
       <div className="space-y-6">

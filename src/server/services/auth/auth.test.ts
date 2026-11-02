@@ -117,12 +117,12 @@ describe("completeAuthCallback", () => {
   it("R1 A7: unfinished deletion → S-25 before the consent gate and next (consent not even checked)", async () => {
     const c = fakeClient();
     c.rpc.mockResolvedValue({ data: consentRows(true), error: null });
-    await expect(completeAuthCallback(c, params({ code: "abc", next: "/board" }), async () => "deletion_incomplete")).resolves.toBe("/settings/account/delete");
+    await expect(completeAuthCallback(c, params({ code: "abc", next: "/board" }), async () => "deletion_incomplete")).resolves.toBe("/settings/withdraw/finalize");
     expect(c.rpc).not.toHaveBeenCalled();
   });
   it("R1 A7 [가정]: profile_missing → signed out, login error; active → the usual flow", async () => {
     const c = fakeClient();
-    await expect(completeAuthCallback(c, params({ code: "abc" }), async () => "profile_missing")).resolves.toBe("/login?error=auth_callback");
+    await expect(completeAuthCallback(c, params({ code: "abc" }), async () => "profile_missing")).resolves.toBe("/sign-in?error=auth_callback");
     expect(c.auth.signOut).toHaveBeenCalled();
     await expect(completeAuthCallback(fakeClient(), params({ code: "abc", next: "/board" }), async () => "active")).resolves.toBe("/board");
     // A state lookup failure doesn't block sign-in (gated pages re-check).
@@ -136,20 +136,20 @@ describe("completeAuthCallback", () => {
     const c = fakeClient();
     c.rpc.mockResolvedValue({ data: consentRows(true), error: null });
     await expect(completeAuthCallback(c, params({ code: "abc", next: "/board" }))).resolves.toBe(
-      "/onboarding/consent?next=%2Fboard",
+      "/consent?next=%2Fboard",
     );
   });
   it("unsafe next is replaced before the consent redirect", async () => {
     const c = fakeClient();
     c.rpc.mockResolvedValue({ data: consentRows(true), error: null });
     await expect(completeAuthCallback(c, params({ code: "abc", next: "//evil" }))).resolves.toBe(
-      "/onboarding/consent?next=%2Fcareer",
+      "/consent?next=%2Fcareer",
     );
   });
   it("consent check failure → consent page (fail closed)", async () => {
     const c = fakeClient();
     c.rpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "boom" } });
-    await expect(completeAuthCallback(c, params({ code: "abc" }))).resolves.toBe("/onboarding/consent?next=%2Fcareer");
+    await expect(completeAuthCallback(c, params({ code: "abc" }))).resolves.toBe("/consent?next=%2Fcareer");
   });
   it("exchange error → login error", async () => {
     const c = fakeClient({
@@ -173,6 +173,6 @@ describe("completeAuthCallback", () => {
       LOGIN_CALLBACK_ERROR,
     );
     await expect(completeAuthCallback(fakeClient(), params({}))).resolves.toBe(LOGIN_CALLBACK_ERROR);
-    expect(LOGIN_CALLBACK_ERROR).toBe("/login?error=auth_callback");
+    expect(LOGIN_CALLBACK_ERROR).toBe("/sign-in?error=auth_callback");
   });
 });

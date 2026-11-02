@@ -181,14 +181,14 @@ isOneToOne: false
                   ]
                 },"answer_evaluations": {
                   Row: {
-                    "ai_job_id": string | null,"answer_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"id": string,"input_hash": string | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"session_id": string,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null
+                    "ai_job_id": string | null,"answer_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"error_code": string | null,"id": string,"input_hash": string | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"session_id": string,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_job_id"?: string | null,"answer_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id": string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
+                    "ai_job_id"?: string | null,"answer_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"error_code"?: string | null,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id": string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
                   }
                   Update: {
-                    "ai_job_id"?: string | null,"answer_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id"?: string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
+                    "ai_job_id"?: string | null,"answer_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"error_code"?: string | null,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id"?: string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
                   }
                   Relationships: [
                     {
@@ -553,14 +553,14 @@ isOneToOne: false
                   ]
                 },"job_descriptions": {
                   Row: {
-                    "application_project_id": string,"company_name": string | null,"company_name_source": string | null,"created_at": string,"detected_language": string | null,"extraction": Json | null,"extraction_job_id": string | null,"extraction_model": string | null,"extraction_provider": string | null,"extraction_status": string,"id": string,"position_title": string | null,"position_title_source": string | null,"raw_text": string,"raw_text_hash": string,"requirements_hash": string | null,"sentences": NonNullable<Json>,"tech_keywords": Json | null,"updated_at": string,"user_id": string
+                    "application_project_id": string,"company_name": string | null,"company_name_source": string | null,"created_at": string,"detected_language": string | null,"extraction": Json | null,"extraction_job_id": string | null,"extraction_model": string | null,"extraction_provider": string | null,"extraction_status": string,"id": string,"position_title": string | null,"position_title_source": string | null,"raw_text": string,"raw_text_edited_at": string | null,"raw_text_hash": string,"requirements_hash": string | null,"sentences": NonNullable<Json>,"tech_keywords": Json | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "application_project_id": string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text": string,"raw_text_hash": string,"requirements_hash"?: string | null,"sentences": NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
+                    "application_project_id": string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text": string,"raw_text_edited_at"?: string | null,"raw_text_hash": string,"requirements_hash"?: string | null,"sentences": NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "application_project_id"?: string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text"?: string,"raw_text_hash"?: string,"requirements_hash"?: string | null,"sentences"?: NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
+                    "application_project_id"?: string,"company_name"?: string | null,"company_name_source"?: string | null,"created_at"?: string,"detected_language"?: string | null,"extraction"?: Json | null,"extraction_job_id"?: string | null,"extraction_model"?: string | null,"extraction_provider"?: string | null,"extraction_status"?: string,"id"?: string,"position_title"?: string | null,"position_title_source"?: string | null,"raw_text"?: string,"raw_text_edited_at"?: string | null,"raw_text_hash"?: string,"requirements_hash"?: string | null,"sentences"?: NonNullable<Json>,"tech_keywords"?: Json | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -895,7 +895,7 @@ isOneToOne: false
 { Args: { "p_provider": string }; Returns: boolean
                            },
 "fail_answer_evaluation":
-{ Args: { "p_ai_job_id": string,"p_answer_id": string }; Returns: boolean
+{ Args: { "p_ai_job_id": string,"p_answer_id": string,"p_error_code"?: string }; Returns: boolean
                            },
 "fail_career_description":
 { Args: { "p_ai_job_id": string,"p_draft_id": string }; Returns: boolean
@@ -934,6 +934,11 @@ isOneToOne: false
                            },
 "get_deletion_impact":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string }; Returns: Json
+                           },
+"get_interview_grading_decisions":
+{ Args: { "p_session_ids": (string)[] }; Returns: {
+              "answer_input_cause": string,"cause": string,"decision": string,"regrade_target_count": number,"session_id": string,"status": string,"succeeded_count": number,"summary_error_code": string
+            }[]
                            },
 "get_interview_question_reveals":
 { Args: { "p_session_id": string }; Returns: {
@@ -1030,6 +1035,9 @@ isOneToOne: false
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number
+                           },
+"update_failed_jd_raw_text":
+{ Args: { "p_application_project_id": string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json }; Returns: Json
                            }
           }
           Enums: {

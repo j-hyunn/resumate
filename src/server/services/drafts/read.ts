@@ -47,6 +47,11 @@ import { countShownChars, parseBlocks, toBlockViews } from "./blocks";
  * (db notes §4: the job-end trigger skips locked projects; the next begin
  * cleans up). The failure comes from that job (failed → its code, canceled →
  * canceled, gone / succeeded without a result → stalled).
+ *
+ * Q53-7 (DM 2.7.1): a stopped career description isn't a failure. The DB handles it when the job
+ * ends; when its trigger skipped a locked row, the reads apply the same result: a first generation
+ * reads `composing` (no blocks, no sections), a regeneration isn't listed at all (the draft it
+ * came from still stands).
  */
 
 const draftNotFound = () => new AppError("not_found", "초안을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
@@ -180,12 +185,34 @@ export function coverLetterStatus(statuses: readonly DraftSectionStatus[]): Draf
   return "composing";
 }
 
-/** Draft status as the screen should see it. */
-export function effectiveDraftStatus(draft: Pick<DraftRow, "draft_type" | "status" | "ai_job_id">, sectionStatuses: readonly DraftSectionStatus[], activeJobIds: ReadonlySet<string>): DraftStatus {
+const NO_JOB_IDS: ReadonlySet<string> = new Set();
+
+type StoppedDraftRow = Pick<DraftRow, "draft_type" | "status" | "ai_job_id">;
+
+/** Q53-7: a career description row the DB should have closed as stopped (its job ended `canceled`). */
+function isStoppedCareerDescription(draft: StoppedDraftRow, canceledJobIds: ReadonlySet<string>): boolean {
+  return draft.draft_type === "career_description" && (draft.status === "generating" || draft.status === "failed") && draft.ai_job_id !== null && canceledJobIds.has(draft.ai_job_id);
+}
+
+/** Q53-7: a stopped regeneration: the row would be deleted, so nothing shows it. */
+export function isStoppedRegeneration(draft: StoppedDraftRow & Pick<DraftRow, "regenerated_from_id">, canceledJobIds: ReadonlySet<string>): boolean {
+  return draft.regenerated_from_id !== null && isStoppedCareerDescription(draft, canceledJobIds);
+}
+
+/** Draft status as the screen should see it. `canceledJobIds`: this draft's job if it ended canceled. */
+export function effectiveDraftStatus(draft: StoppedDraftRow, sectionStatuses: readonly DraftSectionStatus[], activeJobIds: ReadonlySet<string>, canceledJobIds: ReadonlySet<string> = NO_JOB_IDS): DraftStatus {
   const stored = oneOf(DRAFT_STATUSES, draft.status) ?? "composing";
   if (draft.draft_type === "cover_letter") return coverLetterStatus(sectionStatuses);
+  if (isStoppedCareerDescription(draft, canceledJobIds)) return "composing";
   if (stored === "generating" && !(draft.ai_job_id && activeJobIds.has(draft.ai_job_id))) return "failed";
   return stored;
+}
+
+/** The canceled jobs among these career descriptions' (only rows that could be stopped are looked up). */
+async function loadCanceledDraftJobs(user: UserSupabaseClient, drafts: readonly DraftRow[], activeJobIds: ReadonlySet<string>): Promise<Set<string>> {
+  const ids = drafts.flatMap((d) => (d.draft_type === "career_description" && (d.status === "generating" || d.status === "failed") && d.ai_job_id && !activeJobIds.has(d.ai_job_id) ? [d.ai_job_id] : []));
+  const jobs = await loadJobs(user, ids);
+  return new Set([...jobs.values()].filter((j) => j.status === "canceled").map((j) => j.id));
 }
 
 function failureOf(job: JobRow | undefined, sectionId: string | null, fallbackJobId: string): DraftFailure {
@@ -228,8 +255,8 @@ export async function listDrafts(user: UserSupabaseClient, applicationProjectId:
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
   if (error) throw mapDbError(error);
-  const drafts = (data ?? []) as DraftRow[];
-  const ids = drafts.map((d) => d.id);
+  const rows = (data ?? []) as DraftRow[];
+  const ids = rows.map((d) => d.id);
   const [sectionsRes, active] = await Promise.all([
     ids.length ? user.from("draft_sections").select("id, draft_id, status, ai_job_id").in("draft_id", ids) : Promise.resolve({ data: [], error: null }),
     loadActiveDraftJobs(user, [applicationProjectId]),
@@ -238,25 +265,30 @@ export async function listDrafts(user: UserSupabaseClient, applicationProjectId:
   const sections = (sectionsRes.data ?? []) as Array<{ id: string; draft_id: string; status: string; ai_job_id: string | null }>;
   const activeIds = new Set(active.map((j) => j.id));
   const activeTargets = new Set(active.flatMap((j) => (j.target_id ? [j.target_id] : [])));
+  const canceledIds = await loadCanceledDraftJobs(user, rows, activeIds);
+  const drafts = rows.filter((d) => !isStoppedRegeneration(d, canceledIds));
 
   const items: DraftListItem[] = drafts.map((d) => {
     const own = sections.filter((s) => s.draft_id === d.id);
     const statuses = own.map((s) => effectiveSectionStatus(s.status, s.ai_job_id, activeIds));
     const options = obj(d.options);
+    const status = effectiveDraftStatus(d, statuses, activeIds, canceledIds);
+    // Same as getDraft: a stopped first generation has no blocks or run info to show (Q53-7, QA-W0-03).
+    const composingCareerDescription = status === "composing" && d.draft_type === "career_description";
     return {
       id: d.id,
       draftType: oneOf(DRAFT_TYPES, d.draft_type) ?? "cover_letter",
       title: d.title,
-      status: effectiveDraftStatus(d, statuses, activeIds),
-      sectionCount: own.length,
-      readySectionCount: statuses.filter((s) => s === "ready").length,
+      status,
+      sectionCount: composingCareerDescription ? 0 : own.length,
+      readySectionCount: composingCareerDescription ? 0 : statuses.filter((s) => s === "ready").length,
       selectionOrigin: oneOf(SELECTION_ORIGINS, options.selection_origin),
       createdAt: d.created_at,
       updatedAt: d.updated_at,
       editedAt: d.edited_at,
       firstCopiedAt: d.first_copied_at,
       regeneratedFromId: d.regenerated_from_id,
-      badge: badgeOf(d),
+      badge: composingCareerDescription ? { provider: null, model: null, modelTier: null, connectionTier: null } : badgeOf(d),
       generating: activeTargets.has(d.id) || own.some((s) => activeTargets.has(s.id)),
     };
   });
@@ -407,9 +439,13 @@ export async function getDraft(user: UserSupabaseClient, draftId: string): Promi
   const names = await loadNames(user, sources);
   const activeIds = new Set(active.map((j) => j.id));
   const targets = new Set([draftId, ...sectionIds]);
+  const canceledIds = await loadCanceledDraftJobs(user, [draft], activeIds);
+  if (isStoppedRegeneration(draft, canceledIds)) throw draftNotFound();
 
   const sectionViews = sections.map((s) => toSectionView(s, sources, names, chips.get(s.id), activeIds));
-  const status = effectiveDraftStatus(draft, sectionViews.map((s) => s.status), activeIds);
+  const status = effectiveDraftStatus(draft, sectionViews.map((s) => s.status), activeIds, canceledIds);
+  // Q53-7: a career description in `composing` has no sections, blocks or AI metadata (options stay for S-17).
+  const composingCareerDescription = draft.draft_type === "career_description" && status === "composing";
 
   const activeJobs: DraftActiveJob[] = active
     .filter((j) => j.target_id && targets.has(j.target_id))
@@ -445,8 +481,8 @@ export async function getDraft(user: UserSupabaseClient, draftId: string): Promi
     updatedAt: draft.updated_at,
     editedAt: draft.edited_at,
     firstCopiedAt: draft.first_copied_at,
-    badge: badgeOf(draft),
-    sections: sectionViews,
+    badge: composingCareerDescription ? { provider: null, model: null, modelTier: null, connectionTier: null } : badgeOf(draft),
+    sections: composingCareerDescription ? [] : sectionViews,
     activeJobs,
     failures,
   };

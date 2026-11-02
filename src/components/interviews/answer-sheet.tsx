@@ -93,6 +93,8 @@ export interface AnswerSheetPreview {
   waiting?: boolean
   /** ?state=raw-edited-stale / raw-edited-no-job (S-15 "이전 실패 안내") */
   stale?: "edited" | "no_job" | null
+  /** ?state=generation-canceled (㉚) */
+  canceled?: boolean
 }
 
 /**
@@ -165,19 +167,22 @@ export function AnswerSheet({
 
   const abandoned = session.status === "abandoned"
   const jobRunning = job?.status === "queued" || job?.status === "running"
+  // ㉚: the user stopped the generation. Not a provider failure, and its row can't be retried: a new job picks up (path ①)
+  const canceledJob = job?.status === "canceled" || (Boolean(preview.canceled) && !previewRetried)
+  const canceledGeneration = !abandoned && canceledJob && !jobRunning && !preview.generating && !preview.failed && session.generation_status !== "ready"
   // v5.3: a new 남은 질문 job runs while the row may still say generation_status = 'failed'
   const generatingNow =
-    !abandoned && (preview.generating || jobRunning || (session.generation_status === "generating" && job?.status !== "failed"))
+    !abandoned && (preview.generating || jobRunning || (session.generation_status === "generating" && job?.status !== "failed" && !canceledJob))
   const failedCategory: AiErrorCode | null = abandoned
     ? null
     : ((previewRetried ? null : preview.failed) ??
       (job?.status === "failed"
         ? (job.error_code ?? "provider_unavailable")
-        : session.generation_status === "failed" && !jobRunning
+        : session.generation_status === "failed" && !jobRunning && !canceledJob
           ? "provider_unavailable"
           : null))
   const sheetOpen =
-    !preview.generating && !failedCategory && session.generation_status === "ready" && session.submitted_at === null && !abandoned
+    !preview.generating && !failedCategory && !canceledGeneration && session.generation_status === "ready" && session.submitted_at === null && !abandoned
 
   // --- polling while AI-05 generates questions ------------------------------------
   // UQ-42: poll only while generation is actually running — a running job, or a generating
@@ -242,6 +247,30 @@ export function AnswerSheet({
     } catch {
       // [UI-가정] 재시도 요청 실패 문구
       toast.error(actionFailedMessage(mode === "same_row" ? "다시 시도" : "남은 질문 다시 만들기"))
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  /** ㉚ `startRemainingQuestionsAction`. Its result goes to AiRunButton, which handles a refusal (C-18 / C-21 / C-20). */
+  const restartCanceled = async () => {
+    if (previewWrite.stop()) return
+    setRetrying(true)
+    try {
+      const next = await startRemainingQuestionsAction(session.id)
+      if (isAiRejected(next)) return next
+      if (next) {
+        setJob(next)
+        setPreviewRetried(true)
+        setSession((s) => ({ ...s, generation_status: "generating" }))
+        return
+      }
+      // no new job: the row moved on elsewhere (another tab restarted it, or generation finished)
+      const fresh = await getAnswerSheetStateAction(applicationProjectId, session.id)
+      if (fresh.job) setJob(fresh.job)
+      if (fresh.session) setSession(fresh.session)
+    } catch {
+      toast.error(actionFailedMessage(questions.length ? "남은 질문 다시 만들기" : "질문 다시 만들기"))
     } finally {
       setRetrying(false)
     }
@@ -383,6 +412,17 @@ export function AnswerSheet({
           hasQuestions={questions.length > 0}
           href={routes.interviewPrep(applicationProjectId, session.interview_type)}
         />
+      ) : canceledGeneration ? (
+        // [UI-가정] 문구 전부 (C-20은 canceled를 표시하지 않는다)
+        <Card className="gap-3 p-5" role="status">
+          <p className="font-semibold">질문 만들기를 중단했어요</p>
+          <p className="text-sm text-muted-foreground">
+            {questions.length ? "만든 질문과 답변은 그대로 있어요. 남은 질문을 이어서 만들 수 있어요" : "다시 만들면 처음부터 시작해요"}
+          </p>
+          <AiRunButton lock={{ entry: "interview_new" }} rerun pending={retrying} onRun={restartCanceled}>
+            {questions.length ? "남은 질문 다시 만들기" : "질문 다시 만들기"}
+          </AiRunButton>
+        </Card>
       ) : failedCategory ? (
         // C-20 in the 생성 영역 (02 C-20 표시 위치 "면접 질문 생성(S-33)"). Questions and answers
         // already saved stay (D-36). Retry button + C-19 badge (active provider) + token note come from
@@ -493,7 +533,7 @@ export function AnswerSheet({
                   id={fieldId}
                   value={text}
                   readOnly={!editable}
-                  disabled={generatingNow || Boolean(failedCategory)}
+                  disabled={generatingNow || Boolean(failedCategory) || canceledGeneration}
                   maxLength={ANSWER_MAX_CHARS}
                   onChange={(e) => answer && change(answer.id, e.target.value.slice(0, ANSWER_MAX_CHARS))}
                   onBlur={() => void autosave.flush()}

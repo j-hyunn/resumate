@@ -1386,7 +1386,8 @@ export function createFixtures(): MockDb {
       improvements: [{ item_key: "improvements.0", text: "결과를 수치나 변화로 마무리해 보세요.", how: "'그 뒤로 같은 유형의 장애가 0건이었습니다'처럼 끝맺어 보세요.", related_criteria: ["structure"] }],
       intent_reveal: "갈등을 다루는 방식과 협업 태도를 확인하려는 질문이었습니다.",
       model_answer: { text: "의견이 갈렸을 때 저는 먼저 근거 데이터를 모았습니다. [사례 입력 필요]", placeholders: [{ token: "[사례 입력 필요]", hint: "실제 합의 결과" }], suggestions_if_true: [] },
-      consistency_notes: [],
+      // ㉘: one note with a quote and a chip on the first evaluation
+      consistency_notes: n === 1 ? [{ text: "등록한 상세 내용과 수치가 달라요. 실제 수치를 확인해 보세요.", answer_quotes: ["응답 시간을 절반으로 줄였습니다"] }] : [],
       score: { status: "pending_method", value: null, max: null, method_version: null, rationale: null },
     },
   })
@@ -1498,6 +1499,7 @@ export function createFixtures(): MockDb {
     ev(16, "interview_question", IDS.q(1), "question", "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
     ev(17, "interview_question", IDS.q(1), "target_requirements", "jd_requirement", IDS.req(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영" }),
     ev(18, "interview_question", IDS.q(3), "target_requirements", "jd_requirement", IDS.req(4), null, null, { source_label: "메시지 큐 기반 비동기 처리 경험" }),
+    ev(19, "answer_evaluation", IDS.ev(1), "consistency_notes.0", "project_detail", IDS.det(1), "result", null),
   ]
 
   // --- AI 연결 (v4 BYOK): Gemini 무료 키 연결 + 활성 (05 brief) ----------------------

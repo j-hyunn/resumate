@@ -182,6 +182,21 @@ describe("career description (AI-03, SSE)", () => {
     expect(await prepareCareerDescription(none.deps, AP, cdInput)).toEqual({ kind: "blocked", code: "key_missing" });
   });
 
+  it("QA-W5-07: a draftId that already names a draft → 409 conflict before any job or call", async () => {
+    const tables = baseTables({ drafts: [{ id: DRAFT, application_project_id: AP, draft_type: "career_description", status: "ready", input_hash: null, created_at: "2026-10-01" }] });
+    const k = draftKit({ tables, responses: [{ json: blocks(1) }] });
+    await expect(prepareCareerDescription(k.deps, AP, { ...cdInput, draftId: DRAFT })).rejects.toMatchObject({ code: "conflict", status: 409 });
+    expect(k.store.jobs.size).toBe(0);
+    expect(k.adapter.calls).toHaveLength(0);
+    // a free id still starts
+    const ok = await prepareCareerDescription(k.deps, AP, { ...cdInput, draftId: "00000000-0000-4000-8000-0000000000d9" });
+    expect(ok.kind === "ready" && ok.draftId).toBe("00000000-0000-4000-8000-0000000000d9");
+    if (ok.kind === "ready") {
+      await ok.run!.fail({ code: "canceled", retryAfter: null, quotaResetsAt: null });
+      await ok.run!.close();
+    }
+  });
+
   it("C-6 reuse: an identical ready draft → done(reused) without a call; regenerate skips it", async () => {
     const tables = baseTables({
       drafts: [{ id: "old-draft", application_project_id: AP, draft_type: "career_description", status: "ready", input_hash: `cd|anthropic|${resolveModel("anthropic", "default")}|${PRJ1}|null`, created_at: "2026-10-01" }],

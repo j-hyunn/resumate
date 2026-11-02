@@ -277,6 +277,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     // "다시 시도" calls the generation route again (a new job; a career description gets a new draft row).
     if (REQUEST_SCOPED_JOB_TYPES.has(job.jobType)) throw notRetryable();
     const def = definitionOf(job.jobType);
+    // Q53-5: nothing to redo on this row, whatever the connection state says.
+    if (def.retryBlocked && (await def.retryBlocked({ db: scope.db, job }))) throw notRetryable();
 
     const modelTier = def.modelTier ?? "default";
 
@@ -536,8 +538,9 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
           // A stage resumed with saved partial work (S6) keeps the done/total it reported.
           const resumed = lastProgress.stage === step.stage && meta.partials?.[step.stage] !== undefined;
           const startProgress = resumed ? { stage: step.stage, done: lastProgress.done, total: lastProgress.total } : { stage: step.stage, done: 0, total };
-          await write(store.update(claimed.id, gen, { progress: startProgress, heartbeatAt: iso() }));
-          lastProgress = startProgress;
+          const hidden = step.hiddenFromProgress?.(outputs) === true;
+          await write(store.update(claimed.id, gen, hidden ? { heartbeatAt: iso() } : { progress: startProgress, heartbeatAt: iso() }));
+          if (!hidden) lastProgress = startProgress;
           ranThisInvocation++;
 
           const attempt = 1 + Object.values(meta.retries[step.stage] ?? {}).reduce((a, n) => a + (n ?? 0), 0);
@@ -583,13 +586,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
             // A step that reported its own total (e.g. match batches) ends at that total.
             const endTotal = lastProgress.stage === step.stage ? Math.max(total, lastProgress.total) : total;
             const doneProgress = { stage: step.stage, done: endTotal, total: endTotal };
-            await write(
-              store.saveStepOutputs(claimed.id, gen, outputs, meta, {
-                progress: doneProgress,
-                heartbeatAt: iso(),
-              }),
-            );
-            lastProgress = doneProgress;
+            await write(store.saveStepOutputs(claimed.id, gen, outputs, meta, hidden ? { heartbeatAt: iso() } : { progress: doneProgress, heartbeatAt: iso() }));
+            if (!hidden) lastProgress = doneProgress;
             i++;
             continue;
           }

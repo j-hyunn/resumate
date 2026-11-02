@@ -42,6 +42,19 @@ export const DRAFT_STATUS_LABELS: Record<DraftStatus, string> = {
 export const SOURCE_ROLE_LABELS: Record<DraftSourceRole, string> = { primary: "주 근거", supporting: "보조" }
 export const SOURCE_ORIGIN_LABELS: Record<DraftSourceOrigin, string> = { ai: "AI 선택", user: "내가 추가" }
 
+/**
+ * S-19 생성 직후 안내 "포함하지 않은 항목" — AI-03 `omitted[].reason` (03 AI-03: user_excluded | low_relevance). QA-W5-01.
+ * `user_excluded` also covers the projects over the 8 cap, which the "확인해 주세요" note explains. // [UI-가정] 문구
+ */
+export const OMITTED_REASON_LABELS: Record<string, string> = {
+  user_excluded: "포함 항목 설정에 따라 이번 초안에 넣지 않았어요",
+  low_relevance: "이 기업 JD와 관련이 적어 이번 초안에 넣지 않았어요",
+}
+/** a reason this screen doesn't know yet // [UI-가정] */
+export const OMITTED_REASON_FALLBACK = "이번 초안에 넣지 않았어요"
+/** the project isn't in the source tree any more (deleted or back to 작성 중 since the run) // [UI-가정] */
+export const OMITTED_PROJECT_FALLBACK = "지금은 찾을 수 없는 프로젝트"
+
 /** C-11 drafts.options.selection_origin */
 export const SELECTION_ORIGIN_LABELS: Record<DraftSelectionOrigin, string> = {
   insight: "인사이트 우선순위",

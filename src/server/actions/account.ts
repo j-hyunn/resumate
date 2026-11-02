@@ -9,6 +9,7 @@ import { getServerEnv } from "@/server/env";
 import { createServiceRoleClient, deleteAuthUser, type ServiceRoleClient } from "@/server/jobs/service-role";
 import * as account from "@/server/services/account";
 import { signOut } from "@/server/services/auth";
+import { clearUserScopedCookies } from "@/server/auth/user-cookies";
 
 /**
  * S-25 / FL-07 (F-COM-05). Both use `requireUser` (no consent gate): a user
@@ -58,7 +59,13 @@ export async function deleteAccount(input: unknown): Promise<ActionResult<Delete
         admin = createServiceRoleClient("resumate-account-deletion");
       },
       deleteAuthUser: (id) => deleteAuthUser(id, admin),
-      signOut: () => signOut(supabase),
+      signOut: async () => {
+        try {
+          await signOut(supabase);
+        } finally {
+          await clearUserScopedCookies(); // QA-W5-02
+        }
+      },
       log,
     });
     return { deleted: true as const, canceledJobs: outcome.canceledJobs, redirectTo: ACCOUNT_DELETED_REDIRECT };

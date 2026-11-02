@@ -30,7 +30,7 @@ import { CharCount } from "@/components/common/input-guide"
 import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
 import type { AiErrorCode } from "@/types/db"
-import { updateFailedJdRawTextAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { updateFailedJdRawTextAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { jdRawEditReducer, jdRawEditView } from "./jd-raw-edit-state"
 
 /** S-15 "저장 성공" (명세 문구) */

@@ -29,10 +29,11 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false }
  * `previewDeletionIncomplete` (S-02 `?state=deletion-incomplete`) behaves like such an account.
  */
 function destinationHref(
-  result: { destination: "consent" | "career"; deletion_incomplete?: boolean },
+  result: { destination: "consent" | "career"; deletion_incomplete?: boolean; provider_url?: string },
   next: string | null,
   previewDeletionIncomplete?: boolean,
 ): string {
+  if (result.provider_url) return result.provider_url // real Google OAuth (previews never set it)
   if (previewDeletionIncomplete) return routes.withdrawFinalize("deletion-incomplete")
   if (result.deletion_incomplete) return routes.withdrawFinalize()
   if (result.destination === "consent") return routes.consent(next)

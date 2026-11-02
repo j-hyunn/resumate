@@ -78,6 +78,48 @@ export function jdInputWarnings(rawText: string): JdInputWarning[] {
   return out;
 }
 
+// ---------- raw text edit (S-15, Q53-2 / Q53-11, DM 2.6.1) ----------
+
+export const UpdateFailedJdRawTextInput = z.object({
+  /** application_projects.id */
+  id: uuid,
+  /** Same rules as S-14. Stored as sent: sentence offsets index this exact text. */
+  rawText: z
+    .string()
+    .max(JD_RAW_TEXT_MAX)
+    .refine((v) => v.trim().length > 0, { message: "empty_raw_text" }),
+});
+export type UpdateFailedJdRawTextInput = z.input<typeof UpdateFailedJdRawTextInput>;
+
+/**
+ * `update_failed_jd_raw_text` refusals the screen handles (HTTP 409, in check order;
+ * condition 6 last). `jd_has_results` on a succeeded JD → "새 기업 JD 추가" (S-15).
+ */
+export const JD_RAW_TEXT_REFUSAL_CODES = ["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged"] as const;
+export type JdRawTextRefusalCode = (typeof JD_RAW_TEXT_REFUSAL_CODES)[number];
+
+/** Why `getJdView` says the text can't be edited: conditions 1~5 (6 needs the new text). */
+export type JdRawTextLock = Exclude<JdRawTextRefusalCode, "jd_raw_text_unchanged">;
+
+export type UpdateFailedJdRawTextResult = {
+  applicationProjectId: string;
+  jobDescriptionId: string;
+  extractionStatus: "pending";
+  rawTextEditedAt: string;
+  /** Same rule as check_ai_run_allowed. Saving never starts AI (D-30): the user presses "요건 정리하기". */
+  aiRunAllowed: boolean;
+  warnings: JdInputWarning[];
+};
+
+/**
+ * DM 2.6.1 "지난 실패 표시": a job failure that ended before the raw text was edited belongs
+ * to the old text and isn't shown. A missing `finished_at` can't be compared: it isn't past.
+ */
+export function isFailureBeforeRawTextEdit(finishedAt: string | null | undefined, rawTextEditedAt: string | null | undefined): boolean {
+  if (!finishedAt || !rawTextEditedAt) return false;
+  return Date.parse(finishedAt) < Date.parse(rawTextEditedAt);
+}
+
 export type CreateApplicationProjectResult = {
   applicationProjectId: string;
   jobDescriptionId: string;
@@ -281,6 +323,12 @@ export type JdView = {
   jobDescriptionId: string;
   /** "공고 원문" panel (always readable, no key needed). */
   rawText: string;
+  /** Last raw text edit (null = never edited, DM 2.6.1). */
+  rawTextEditedAt: string | null;
+  /** "공고 원문 고치기" shows: conditions 1~5 of update_failed_jd_raw_text. The RPC decides finally. */
+  rawTextEditable: boolean;
+  /** Why not, null when editable. `jd_has_results` → S-15 "새 기업 JD 추가" (Q53-11). */
+  rawTextLock: JdRawTextLock | null;
   sentences: JdSentenceDto[];
   detectedLanguage: string | null;
   companyName: string | null;

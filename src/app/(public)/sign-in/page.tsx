@@ -6,11 +6,13 @@ import { Card } from "@/components/ui/card"
 import { SignInForm, type SignInPreview } from "@/components/account/sign-in-form"
 import { safeNextPath } from "@/lib/routes"
 import { getPreviewState } from "@/lib/preview-state"
+import { isLoginError } from "@/lib/contracts/routes"
 import { routes } from "@/lib/routes"
 
 /**
  * S-02 가입/로그인 (F-COM-01, FL-09). 로그인 후 S-08 또는 원래 URL(`?next=`), 신규면 S-03.
  * v5.3 A7: 탈퇴 미완료 계정은 S-03·원래 URL·S-08보다 먼저 S-25 탈퇴 마무리(/settings/withdraw/finalize).
+ * `?error=auth_callback` (로그인 콜백 실패)는 링크 만료 안내를 보여 준다 (운영 포함).
  * ?state= : loading · error(발송·Google 실패) · sent(링크 보냄 + 재발송) · link-expired · new-user ·
  *           deletion-incomplete(로그인하면 탈퇴 마무리 상태로)
  */
@@ -41,7 +43,12 @@ async function Screen({ searchParams }: Props) {
   const sp = await searchParams
   const state = getPreviewState(sp)
   if (state === "loading") return <Fallback />
-  const preview = (PREVIEWS as readonly string[]).includes(state ?? "") ? (state as SignInPreview) : null
+  const preview = (PREVIEWS as readonly string[]).includes(state ?? "")
+    ? (state as SignInPreview)
+    : // the auth callback failed (expired or used link, canceled OAuth): QA-W0-01
+      isLoginError(sp.error)
+      ? "link-expired"
+      : null
   const next = safeNextPath(sp.next)
 
   return (

@@ -99,6 +99,14 @@ export function insightSignalForAi03(insight: InsightSignal | null) {
   return insight ? { positioning: insight.positioning, projectPriorities: insight.projectPriorities, requirementStatuses: insight.requirementStatuses } : null;
 }
 
+export const DRAFT_ID_TAKEN_MESSAGE = "이미 있는 초안이에요. 새로고침 후 다시 시도해 주세요.";
+
+async function assertDraftIdFree(user: DraftAiDeps["user"], draftId: string): Promise<void> {
+  const { data, error } = await user.from("drafts").select("id").eq("id", draftId).maybeSingle();
+  if (error) throw mapDbError(error);
+  if (data) throw new AppError("conflict", DRAFT_ID_TAKEN_MESSAGE, { status: 409 });
+}
+
 export async function prepareCareerDescription(deps: DraftAiDeps, applicationProjectId: string, input: Input): Promise<PreparedCareerDescription> {
   const startedAt = nowMs(deps);
   const { user } = deps;
@@ -147,7 +155,7 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
   const insight = await loadLatestInsightSignal(user, applicationProjectId);
 
   let reusedDraftId: string | null = null;
-  if (!input.regeneratedFromId) {
+  if (!input.regeneratedFromId && !input.draftId) {
     const requirements = await loadRequirements(user, jd.jobDescriptionId);
     const ctx = pipeline.buildContext({ careerRows, plan, jobDescriptionId: jd.jobDescriptionId, requirements, insightSignal: insightSignalForAi03(insight) });
     const inputHash = pipeline.inputHash({
@@ -174,9 +182,12 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
   };
   if (reusedDraftId) return { ...base, draftId: null, run: null };
 
+  // QA-W5-07: a client-chosen `draftId` (W3-2 stand-in id) that already names a draft is refused before any job
+  // (409 `conflict`), instead of failing inside the stream as `stalled`. Nothing is overwritten either way.
+  if (input.draftId) await assertDraftIdFree(user, input.draftId);
   // QA-S7-01 (D-34): one career description in flight per application project → 409 with its job id.
   await closeDeadOrRefuse(deps, applicationProjectId);
-  const draftId = (deps.newId ?? randomUUID)();
+  const draftId = input.draftId ?? (deps.newId ?? randomUUID)();
   const opened = await openAiJob(
     deps,
     {

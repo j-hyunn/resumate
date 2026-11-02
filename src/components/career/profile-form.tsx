@@ -34,17 +34,19 @@ export function ProfileForm({ profile }: { profile: Profile }) {
   const { autosave } = useRowAutosave<Values, Profile & { status?: string }>({
     initialId: profile.id,
     initialRow: profile,
-    save: (_id, v, opts) => {
+    // The profile has no `updated_at` in its contract: last write wins, and the row always exists (one per user)
+    save: async (_id, v, opts) => {
       const years = Number(v.total_years_of_experience)
-      return saveProfileAction(
+      const saved = await saveProfileAction(
         {
           display_name: nn(v.display_name),
           desired_job_title: nn(v.desired_job_title),
           total_years_of_experience: v.total_years_of_experience.trim() && Number.isInteger(years) && years >= 0 && years <= 50 ? years : null,
           interested_industries: v.interested_industries,
         },
-        opts,
+        { fail: opts.fail },
       )
+      return { ok: true, row: saved }
     },
   })
   const set = (patch: Partial<Values>, now = false) => {

@@ -32,6 +32,19 @@ import { resolveAiFeatureStatus, type AiFeatureStatusView } from "./ai-feature-s
 import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { refreshApplicationJobs } from "./ai-jobs"
 import { isInputCausedJdFailure, JD_RAW_TEXT_MAX } from "./jd-raw-text"
+import { previewOr } from "./source"
+import { realMoveApplicationStage, realSetApplicationOutcome, realUpdateApplicationProject } from "./board-real"
+import {
+  realCreateApplicationProject,
+  realGetApplicationProject,
+  realGetInsightState,
+  realGetJdRequirement,
+  realGetJobDescription,
+  realListApplicationProjects,
+  realStartInsight,
+  realUpdateFailedJdRawText,
+} from "./applications-real"
+import { realGetDraft, realListDrafts, realSaveDraftSection } from "./drafts-real"
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
@@ -173,8 +186,9 @@ export async function ensureJdRequirementsInDb(db: MockDb, applicationProjectId:
   return { ran: true, failed: null }
 }
 
-function summarize(db: MockDb, ap: ApplicationProject): ApplicationSummary {
-  advanceJdExtraction(db, ap.id)
+/** `advanceMock: false` = real rows (applications-real.ts): the same rules, no simulated extraction. */
+export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMock: boolean } = { advanceMock: true }): ApplicationSummary {
+  if (opts.advanceMock) advanceJdExtraction(db, ap.id)
   const jd = db.job_descriptions.find((j) => j.application_project_id === ap.id) ?? null
   const insights = db.insights.filter((i) => i.application_project_id === ap.id)
   const sessions = db.interview_sessions.filter((s) => s.application_project_id === ap.id)
@@ -262,7 +276,7 @@ export interface ListApplicationsOptions {
 }
 
 /** S-13 (최근 활동순 기본 / 마감일순, 단계 필터) */
-export async function listApplicationProjects(opts: ListApplicationsOptions = {}): Promise<ApplicationSummary[]> {
+async function mockListApplicationProjects(opts: ListApplicationsOptions = {}): Promise<ApplicationSummary[]> {
   const db = await mockRequest()
   let rows = db.application_projects.map((ap) => summarize(db, ap))
   if (opts.stage) rows = rows.filter((r) => r.stage === opts.stage)
@@ -274,7 +288,7 @@ export async function listApplicationProjects(opts: ListApplicationsOptions = {}
   return clone(rows)
 }
 
-export async function getApplicationProject(id: string): Promise<ApplicationSummary | null> {
+async function mockGetApplicationProject(id: string): Promise<ApplicationSummary | null> {
   const db = await mockRequest()
   const ap = db.application_projects.find((a) => a.id === id)
   return ap ? clone(summarize(db, ap)) : null
@@ -282,14 +296,13 @@ export async function getApplicationProject(id: string): Promise<ApplicationSumm
 
 /** S-39: cards grouped by stage, each column ordered by stage_changed_at desc (D-26 (a)) */
 export async function getBoard(): Promise<Record<ApplicationStage, ApplicationSummary[]>> {
-  const db = await mockRequest()
   const board = Object.fromEntries(STAGE_ORDER.map((s) => [s, [] as ApplicationSummary[]])) as Record<
     ApplicationStage,
     ApplicationSummary[]
   >
-  for (const ap of db.application_projects) board[ap.stage].push(summarize(db, ap))
+  for (const ap of await listApplicationProjects()) board[ap.stage].push(ap)
   for (const stage of STAGE_ORDER) board[stage].sort((a, b) => b.stage_changed_at.localeCompare(a.stage_changed_at))
-  return clone(board)
+  return board
 }
 
 /** [{ sid, text, start, end }] per non-empty line (splitJdSentences of create and update_failed_jd_raw_text) */
@@ -309,7 +322,7 @@ function splitJdSentences(rawText: string) {
  * (추출 없이 저장, D-30); invalid key → `key_invalid`; consent needed → `ai_consent_required`
  * (MockAiError, no row). `needs_check` passes. The screen normally stops earlier from readiness.
  */
-export async function createApplicationProject(input: {
+export interface CreateApplicationInput {
   raw_text: string
   name?: string | null
   deadline?: string | null
@@ -322,7 +335,9 @@ export async function createApplicationProject(input: {
    */
   company_name?: string | null
   position_title?: string | null
-}): Promise<ApplicationProject> {
+}
+
+async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<ApplicationProject> {
   const company = input.company_name?.trim() || null
   const position = input.position_title?.trim() || null
   const name = input.name?.trim() || (company && position ? `${company} – ${position}`.slice(0, 100) : null)
@@ -408,13 +423,18 @@ export async function updateApplicationProject(
   id: string,
   patch: Partial<Pick<ApplicationProject, "name" | "deadline" | "memo">>,
 ): Promise<ApplicationProject | null> {
-  const db = await mockRequest()
-  const ap = db.application_projects.find((a) => a.id === id)
-  if (!ap) return null
-  Object.assign(ap, patch)
-  if (patch.name !== undefined) ap.name_source = "user"
-  ap.updated_at = ap.last_activity_at = new Date().toISOString()
-  return clone(ap)
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const ap = db.application_projects.find((a) => a.id === id)
+      if (!ap) return null
+      Object.assign(ap, patch)
+      if (patch.name !== undefined) ap.name_source = "user"
+      ap.updated_at = ap.last_activity_at = new Date().toISOString()
+      return clone(ap)
+    },
+    () => realUpdateApplicationProject(id, patch),
+  )
 }
 
 export class MoveFailedError extends Error {
@@ -433,69 +453,79 @@ export async function moveApplicationStage(
   outcome: StageOutcome | null = null,
   opts?: { fail?: boolean },
 ): Promise<MoveApplicationStageResult> {
-  const db = await mockRequest(250)
-  if (opts?.fail) throw new MoveFailedError()
-  const ap = db.application_projects.find((a) => a.id === id)
-  if (!ap) throw new MoveFailedError()
-  const promptFor = (stage: ApplicationStage): MoveApplicationStageResult["interview_prompt"] => {
-    if (stage !== "job_interview" && stage !== "culture_fit_interview") return null
-    const inProgress = db.interview_sessions.find((s) => s.application_project_id === id && s.status === "in_progress")
-    return {
-      interview_type: stage === "job_interview" ? "job" : "culture_fit",
-      in_progress_session_id: inProgress?.id ?? null,
-      // v4.2: details for C-14 (any interview type — one in-progress session per application)
-      in_progress_session: inProgress
-        ? {
-            session_id: inProgress.id,
-            interview_type: inProgress.interview_type,
-            answered_count: inProgress.answered_count,
-            question_count: inProgress.question_count,
-            generation_status: inProgress.generation_status,
-            last_activity_at: inProgress.last_activity_at,
-          }
-        : null,
-    }
-  }
-  if (ap.stage === toStage) return clone({ application_project: ap, interview_prompt: null })
-  const now = new Date().toISOString()
-  const fromStage = ap.stage
-  const fromOutcome = ap.stage_outcome
-  if (fromStage === "closed" && toStage !== "closed") ap.stage_outcome = null // D-UX-12 (a)
-  if (toStage === "closed" && outcome) ap.stage_outcome = outcome
-  Object.assign(ap, { stage: toStage, stage_changed_at: now, last_activity_at: now, updated_at: now })
-  db.application_stage_events.push({
-    id: newId(),
-    user_id: USER_ID,
-    application_project_id: id,
-    event_type: "stage_changed",
-    from_stage: fromStage,
-    to_stage: toStage,
-    from_outcome: fromOutcome,
-    to_outcome: ap.stage_outcome,
-    created_at: now,
-  })
-  return clone({ application_project: ap, interview_prompt: promptFor(toStage) })
+  return previewOr(
+    async () => {
+      const db = await mockRequest(250)
+      if (opts?.fail) throw new MoveFailedError()
+      const ap = db.application_projects.find((a) => a.id === id)
+      if (!ap) throw new MoveFailedError()
+      const promptFor = (stage: ApplicationStage): MoveApplicationStageResult["interview_prompt"] => {
+        if (stage !== "job_interview" && stage !== "culture_fit_interview") return null
+        const inProgress = db.interview_sessions.find((s) => s.application_project_id === id && s.status === "in_progress")
+        return {
+          interview_type: stage === "job_interview" ? "job" : "culture_fit",
+          in_progress_session_id: inProgress?.id ?? null,
+          // v4.2: details for C-14 (any interview type — one in-progress session per application)
+          in_progress_session: inProgress
+            ? {
+                session_id: inProgress.id,
+                interview_type: inProgress.interview_type,
+                answered_count: inProgress.answered_count,
+                question_count: inProgress.question_count,
+                generation_status: inProgress.generation_status,
+                last_activity_at: inProgress.last_activity_at,
+              }
+            : null,
+        }
+      }
+      if (ap.stage === toStage) return clone({ application_project: ap, interview_prompt: null })
+      const now = new Date().toISOString()
+      const fromStage = ap.stage
+      const fromOutcome = ap.stage_outcome
+      if (fromStage === "closed" && toStage !== "closed") ap.stage_outcome = null // D-UX-12 (a)
+      if (toStage === "closed" && outcome) ap.stage_outcome = outcome
+      Object.assign(ap, { stage: toStage, stage_changed_at: now, last_activity_at: now, updated_at: now })
+      db.application_stage_events.push({
+        id: newId(),
+        user_id: USER_ID,
+        application_project_id: id,
+        event_type: "stage_changed",
+        from_stage: fromStage,
+        to_stage: toStage,
+        from_outcome: fromOutcome,
+        to_outcome: ap.stage_outcome,
+        created_at: now,
+      })
+      return clone({ application_project: ap, interview_prompt: promptFor(toStage) })
+    },
+    () => realMoveApplicationStage(id, toStage, outcome),
+  )
 }
 
 /** RPC set_application_outcome — only when stage = 'closed' */
 export async function setApplicationOutcome(id: string, outcome: StageOutcome | null): Promise<ApplicationProject | null> {
-  const db = await mockRequest(200)
-  const ap = db.application_projects.find((a) => a.id === id)
-  if (!ap || ap.stage !== "closed") return null
-  const now = new Date().toISOString()
-  db.application_stage_events.push({
-    id: newId(),
-    user_id: USER_ID,
-    application_project_id: id,
-    event_type: "outcome_changed",
-    from_stage: "closed",
-    to_stage: "closed",
-    from_outcome: ap.stage_outcome,
-    to_outcome: outcome,
-    created_at: now,
-  })
-  Object.assign(ap, { stage_outcome: outcome, updated_at: now, last_activity_at: now })
-  return clone(ap)
+  return previewOr(
+    async () => {
+      const db = await mockRequest(200)
+      const ap = db.application_projects.find((a) => a.id === id)
+      if (!ap || ap.stage !== "closed") return null
+      const now = new Date().toISOString()
+      db.application_stage_events.push({
+        id: newId(),
+        user_id: USER_ID,
+        application_project_id: id,
+        event_type: "outcome_changed",
+        from_stage: "closed",
+        to_stage: "closed",
+        from_outcome: ap.stage_outcome,
+        to_outcome: outcome,
+        created_at: now,
+      })
+      Object.assign(ap, { stage_outcome: outcome, updated_at: now, last_activity_at: now })
+      return clone(ap)
+    },
+    () => realSetApplicationOutcome(id, outcome),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -510,7 +540,7 @@ export interface JobDescriptionWithRequirements extends JobDescription {
   raw_text_lock: JdRawTextRefusalCode | null
 }
 
-export async function getJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+async function mockGetJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
   const db = await mockRequest()
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return null
@@ -561,7 +591,7 @@ export type UpdateFailedJdRawTextResult =
  * and sentences, sends the JD back to `pending`. No AI call, no tokens (D-30); works without a key.
  * name / name_source / stage / deadline don't change; earlier ai_jobs rows stay untouched.
  */
-export async function updateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
+async function mockUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
   const db = await mockRequest()
   const text = rawText.trim()
   if (!text || text.length > JD_RAW_TEXT_MAX) return { refused: "invalid_raw_text" }
@@ -603,45 +633,10 @@ export async function updateFailedJdRawText(applicationProjectId: string, rawTex
 }
 
 /** One requirement (S-10 "관련 요건: {요건 content}" from an S-16 보완점) */
-export async function getJdRequirement(id: string): Promise<JdRequirement | null> {
+async function mockGetJdRequirement(id: string): Promise<JdRequirement | null> {
   const db = await mockRequest(0)
   const r = db.jd_requirements.find((x) => x.id === id)
   return r ? clone(r) : null
-}
-
-export async function saveJdRequirement(
-  jobDescriptionId: string,
-  id: string | null,
-  patch: Partial<Pick<JdRequirement, "category" | "content" | "importance" | "keywords" | "sort_order">>,
-): Promise<JdRequirement> {
-  const db = await mockRequest()
-  const now = new Date().toISOString()
-  let row = id ? db.jd_requirements.find((r) => r.id === id) : undefined
-  if (!row) {
-    row = {
-      id: newId(),
-      user_id: USER_ID,
-      created_at: now,
-      updated_at: now,
-      job_description_id: jobDescriptionId,
-      category: "required",
-      content: "",
-      keywords: [],
-      importance: "normal",
-      source_sids: [],
-      sort_order: db.jd_requirements.filter((r) => r.job_description_id === jobDescriptionId).length + 1,
-      origin: "user",
-      is_user_edited: false,
-    }
-    db.jd_requirements.push(row)
-  }
-  Object.assign(row, patch, { is_user_edited: row.origin === "ai" ? true : row.is_user_edited, updated_at: now })
-  return clone(row)
-}
-
-export async function deleteJdRequirement(id: string): Promise<void> {
-  const db = await mockRequest()
-  db.jd_requirements = db.jd_requirements.filter((r) => r.id !== id)
 }
 
 // ---------------------------------------------------------------------------
@@ -657,7 +652,7 @@ function insightJobActive(db: MockDb, insight: Insight) {
  * counts as generating only while its job is queued / running — one whose job ended or is gone is
  * `insight_status.failure` (`stalled`), same as S-13 · S-31.
  */
-export async function getInsightState(applicationProjectId: string): Promise<{ latest: Insight | null; generating: Insight | null }> {
+async function mockGetInsightState(applicationProjectId: string): Promise<{ latest: Insight | null; generating: Insight | null }> {
   const db = await mockRequest()
   const rows = db.insights.filter((i) => i.application_project_id === applicationProjectId)
   return clone({
@@ -667,7 +662,7 @@ export async function getInsightState(applicationProjectId: string): Promise<{ l
 }
 
 /** Creates a generating insight row + async job (AI-02). Returns the job id for C-03. */
-export async function startInsight(
+async function mockStartInsight(
   applicationProjectId: string,
   opts?: { fail?: AiErrorCode | null; rate_wait?: boolean },
 ): Promise<{ insight_id: string; job_id: string }> {
@@ -719,7 +714,7 @@ export async function startInsight(
 // 서류 초안 (S-17 ~ S-19)
 // ---------------------------------------------------------------------------
 
-export async function listDrafts(applicationProjectId: string): Promise<Draft[]> {
+async function mockListDrafts(applicationProjectId: string): Promise<Draft[]> {
   const db = await mockRequest()
   return clone(
     db.drafts
@@ -732,7 +727,7 @@ export interface DraftWithSections extends Draft {
   sections: Array<DraftSection & { sources: DraftSectionSource[] }>
 }
 
-export async function getDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
+async function mockGetDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
   const db = await mockRequest()
   const draft = db.drafts.find((d) => d.id === draftId && d.application_project_id === applicationProjectId)
   if (!draft) return null
@@ -745,11 +740,13 @@ export async function getDraft(applicationProjectId: string, draftId: string): P
   })
 }
 
-export async function saveDraftSection(
+export type DraftSectionPatch = Partial<
+  Pick<DraftSection, "question_text" | "char_limit" | "count_basis" | "user_note" | "edited_content" | "source_selection_mode" | "sources_modified_at">
+>
+
+async function mockSaveDraftSection(
   sectionId: string,
-  patch: Partial<
-    Pick<DraftSection, "question_text" | "char_limit" | "count_basis" | "user_note" | "edited_content" | "source_selection_mode" | "sources_modified_at">
-  >,
+  patch: DraftSectionPatch,
   opts?: { fail?: boolean },
 ): Promise<DraftSection | null> {
   const db = await mockRequest()
@@ -758,4 +755,53 @@ export async function saveDraftSection(
   if (!section) return null
   Object.assign(section, patch, { updated_at: new Date().toISOString() })
   return clone(section)
+}
+
+// ---------------------------------------------------------------------------
+// W3 wiring: `?state=` previews stay on the store above, everything else is real (applications-real.ts,
+// drafts-real.ts). Moves and the S-31 edit are W4's (board-real.ts).
+// ---------------------------------------------------------------------------
+
+export function listApplicationProjects(opts: ListApplicationsOptions = {}): Promise<ApplicationSummary[]> {
+  return previewOr(() => mockListApplicationProjects(opts), () => realListApplicationProjects(opts))
+}
+
+export function getApplicationProject(id: string): Promise<ApplicationSummary | null> {
+  return previewOr(() => mockGetApplicationProject(id), () => realGetApplicationProject(id))
+}
+
+export function createApplicationProject(input: CreateApplicationInput): Promise<ApplicationProject> {
+  return previewOr(() => mockCreateApplicationProject(input), () => realCreateApplicationProject(input))
+}
+
+export function getJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+  return previewOr(() => mockGetJobDescription(applicationProjectId), () => realGetJobDescription(applicationProjectId))
+}
+
+export function updateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
+  return previewOr(() => mockUpdateFailedJdRawText(applicationProjectId, rawText), () => realUpdateFailedJdRawText(applicationProjectId, rawText))
+}
+
+export function getJdRequirement(id: string): Promise<JdRequirement | null> {
+  return previewOr(() => mockGetJdRequirement(id), () => realGetJdRequirement(id))
+}
+
+export function getInsightState(applicationProjectId: string): Promise<{ latest: Insight | null; generating: Insight | null }> {
+  return previewOr(() => mockGetInsightState(applicationProjectId), () => realGetInsightState(applicationProjectId))
+}
+
+export function startInsight(applicationProjectId: string, opts?: { fail?: AiErrorCode | null; rate_wait?: boolean }): Promise<{ insight_id: string; job_id: string }> {
+  return previewOr(() => mockStartInsight(applicationProjectId, opts), () => realStartInsight(applicationProjectId))
+}
+
+export function listDrafts(applicationProjectId: string): Promise<Draft[]> {
+  return previewOr(() => mockListDrafts(applicationProjectId), () => realListDrafts(applicationProjectId))
+}
+
+export function getDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
+  return previewOr(() => mockGetDraft(applicationProjectId, draftId), () => realGetDraft(applicationProjectId, draftId))
+}
+
+export function saveDraftSection(sectionId: string, patch: DraftSectionPatch, opts?: { fail?: boolean }): Promise<DraftSection | null> {
+  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), () => realSaveDraftSection(sectionId, patch))
 }

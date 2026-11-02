@@ -188,6 +188,8 @@ export type InsightView = {
   /** JD requirements now (contents instead of REQ-n aliases), sort_order order. */
   requirements: InsightRequirement[];
   extractionStatus: "pending" | "running" | "succeeded" | "failed";
+  /** S-16 "공고를 고쳤어요…" (only while extractionStatus = pending, DM 2.6.1). */
+  rawTextEditedAt: string | null;
   /** Latest ready insight (or the requested version); null = 아직 없음. */
   insight: InsightResultView | null;
   activeJob: InsightActiveJob | null;

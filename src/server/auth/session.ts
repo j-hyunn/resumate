@@ -1,8 +1,10 @@
 import "server-only";
 import type { User } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppError, isAppError } from "@/lib/contracts/errors";
-import { ROUTES, withNext } from "@/lib/contracts/routes";
+import { REQUEST_PATH_HEADER } from "@/lib/contracts/preview";
+import { ROUTES, safeNextPath, withNext } from "@/lib/contracts/routes";
 import { createSupabaseServerClient, type UserSupabaseClient } from "@/server/db/server";
 import { accountDeletionIncomplete, accountProfileMissing } from "@/server/services/account/state";
 import { getConsentStatus } from "@/server/services/consent";
@@ -55,9 +57,31 @@ export async function requireConsentedUser(): Promise<AuthContext> {
   await assertAccountActive(ctx);
   const status = await getConsentStatus(ctx.supabase);
   if (status.needsRequiredConsent) {
+    // UQ-704: a page renders in parallel with its layout's ConsentGate, so its data reads get here
+    // too before the gate's redirect lands. That is the expected pre-consent path: redirect the
+    // same way (no server error log) instead of throwing. Actions and Route Handlers still get 403.
+    const page = await pageRenderPath();
+    if (page) redirect(withNext(ROUTES.consent, page));
     throw new AppError("consent_required", "서비스 이용을 위해 필수 약관에 동의해 주세요.", { status: 403 });
   }
   return ctx;
+}
+
+/**
+ * The page path when this runs inside a page render (the proxy's path mark, no `next-action`, not
+ * `/api/`); null in Server Actions, Route Handlers, and outside a request (tests, scripts).
+ */
+export async function pageRenderPath(): Promise<string | null> {
+  let h: Headers;
+  try {
+    h = await headers();
+  } catch {
+    return null;
+  }
+  if (h.has("next-action")) return null;
+  const path = h.get(REQUEST_PATH_HEADER);
+  if (!path || !path.startsWith("/") || path.startsWith("/api/")) return null;
+  return safeNextPath(path, ROUTES.home);
 }
 
 async function requireUserOrLogin(currentPath: string): Promise<AuthContext> {
@@ -72,7 +96,7 @@ async function requireUserOrLogin(currentPath: string): Promise<AuthContext> {
 }
 
 /**
- * For signed-in pages (the UI's dashboard layout calls this at wiring time):
+ * For signed-in pages (`ConsentGate` in the `(dashboard)/(gated)` and `(focus)` layouts):
  * redirects to S-02 when signed out, to S-25 when the account deletion is
  * unfinished (R1 A7 — before the consent gate and the original URL), and to
  * S-03 when consent is needed. `currentPath` is where the user should land afterwards.
@@ -80,7 +104,7 @@ async function requireUserOrLogin(currentPath: string): Promise<AuthContext> {
 export async function requireConsentedUserOrRedirect(currentPath: string): Promise<AuthContext> {
   const ctx = await requireUserOrLogin(currentPath);
   const state = await loadAccountState(ctx.supabase, ctx.user.id);
-  if (state === "deletion_incomplete") redirect(ROUTES.accountDeletion);
+  if (state === "deletion_incomplete") redirect(ROUTES.accountDeletionFinalize);
   if (state === "profile_missing") throw accountProfileMissing();
   const status = await getConsentStatus(ctx.supabase);
   if (status.needsRequiredConsent) redirect(withNext(ROUTES.consent, currentPath));
@@ -106,7 +130,17 @@ export async function requireUserForAccountDeletion(currentPath: string = ROUTES
 export async function requireUserForConsentPage(currentPath: string = ROUTES.consent): Promise<AuthContext> {
   const ctx = await requireUserOrLogin(currentPath);
   const state = await loadAccountState(ctx.supabase, ctx.user.id);
-  if (state === "deletion_incomplete") redirect(ROUTES.accountDeletion);
+  if (state === "deletion_incomplete") redirect(ROUTES.accountDeletionFinalize);
   if (state === "profile_missing") throw accountProfileMissing();
   return ctx;
+}
+
+/**
+ * S-03 entry: signed-in and not half-deleted (above); someone with nothing left to agree to goes on to
+ * `next` or S-08 instead of seeing the form again (completeAuthCallback relies on this).
+ */
+export async function gateConsentPage(next: string | null | undefined): Promise<void> {
+  const { supabase } = await requireUserForConsentPage();
+  const status = await getConsentStatus(supabase);
+  if (!status.needsRequiredConsent) redirect(safeNextPath(next));
 }

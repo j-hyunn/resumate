@@ -63,7 +63,7 @@ describe.skipIf(!ready)("magic link across devices (local stack)", () => {
       next: link.searchParams.get("next"),
       providerError: null,
     });
-    expect(target).toBe("/onboarding/consent?next=%2Fboard");
+    expect(target).toBe("/consent?next=%2Fboard");
     const { data } = await deviceB.auth.getUser();
     expect(data.user?.email).toBe(email);
   });

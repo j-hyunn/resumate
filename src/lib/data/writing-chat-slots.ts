@@ -91,6 +91,34 @@ export function requestSlotMessage(slot: ChatSlot, fromStep: boolean): string {
 
 export const QUICK_REPLIES = ["잘 모르겠어요", "건너뛸게요"] as const
 
+type WireDraft = { details?: Array<{ detail_key?: string | null; existing_detail_id?: string | null; achievements?: Array<{ achievement_key?: string | null }> }> } | null | undefined
+
+/**
+ * The turn route's `DraftFieldPath` objects (`{ section, field, ... }`, stable keys) → the preview's index paths
+ * ("project.name", "details.1.fields.action"), against the draft sent with them. Reverse of `toDraftFieldPath`.
+ * A path whose card isn't in the draft is dropped.
+ */
+export function previewPathsOf(draft: unknown, paths: unknown): string[] {
+  if (!Array.isArray(paths)) return []
+  const details = (draft as WireDraft)?.details ?? []
+  return paths.flatMap((raw): string[] => {
+    const p = raw as { section?: string; field?: string; detail?: { detailKey?: string; existingDetailId?: string }; achievementKey?: string } | null
+    if (!p?.field) return []
+    if (p.section === "project") return [`project.${p.field}`]
+    if (p.section === "detail") {
+      const i = details.findIndex((d) => (p.detail?.existingDetailId ? d.existing_detail_id === p.detail.existingDetailId : d.detail_key === p.detail?.detailKey))
+      return i < 0 ? [] : [`details.${i}.fields.${p.field}`]
+    }
+    if (p.section === "achievement") {
+      for (const [i, d] of details.entries()) {
+        const j = (d.achievements ?? []).findIndex((a) => a.achievement_key === p.achievementKey)
+        if (j >= 0) return [`details.${i}.achievements.${j}.${p.field}`]
+      }
+    }
+    return []
+  })
+}
+
 /** "project.name" / "details.0.fields.action" → slot */
 export function slotFromPath(path: string): ChatSlot | null {
   const last = path.split(".").pop() as ChatSlot | undefined

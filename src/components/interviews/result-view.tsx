@@ -750,9 +750,18 @@ function AnswerCard({
               <MessageCircleWarning aria-hidden />
               {/* [UI-가정] 일관성 메모 제목 */}
               <AlertTitle>등록한 커리어와 다른 점</AlertTitle>
-              <ul className="col-start-2 list-disc space-y-1 pl-5 text-sm">
+              <ul className="col-start-2 list-disc space-y-2 pl-5 text-sm">
                 {result.consistency_notes.map((n, i) => (
-                  <li key={i}>{n}</li>
+                  <li key={i} className="space-y-1">
+                    <p>{n.text}</p>
+                    {n.answer_quotes.map((q, j) => (
+                      <blockquote key={j} className="border-l-2 pl-2 text-muted-foreground">
+                        {q}
+                      </blockquote>
+                    ))}
+                    {/* ㉘ */}
+                    <EvidenceChips items={evidence[`consistency_notes.${i}`]} />
+                  </li>
                 ))}
               </ul>
             </Alert>

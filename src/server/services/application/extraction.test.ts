@@ -308,3 +308,51 @@ describe("ensureJdExtracted — project deleted mid-run (FL-06)", () => {
     expect(t.usage.records).toHaveLength(1);
   });
 });
+
+describe("ensureJdExtracted — sentences are read after begin (Q53-2, DM 2.6.1)", () => {
+  const edited = "새 공고 원문입니다. 백엔드 개발자를 찾습니다.";
+
+  it("an edit landing between the first read and begin: the model gets the new sentences", async () => {
+    const t = setup({ responses: [{ json: KO_BACKEND.output }] });
+    const begin = t.jds.begin.bind(t.jds);
+    t.jds.begin = async (id, jobId) => {
+      t.jds.state.sentences = splitJdSentences(edited);
+      await begin(id, jobId);
+    };
+    const inputs: string[][] = [];
+    t.deps.extract = async (input, deps) => {
+      inputs.push(input.sentences.map((s) => s.text));
+      return productionJdExtractorForTests(input, deps);
+    };
+    await ensureJdExtracted(t.deps, PROJECT);
+    // The scripted output doesn't fit the new text (retries): what matters is what every call was given.
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const input of inputs) expect(input).toEqual(splitJdSentences(edited).map((s) => s.text));
+  });
+
+  it("project deleted between begin and the read → canceled, no call", async () => {
+    const t = setup({ responses: [{ json: KO_BACKEND.output }] });
+    const load = t.jds.load.bind(t.jds);
+    let reads = 0;
+    t.jds.load = async (id) => (++reads === 1 ? load(id) : null);
+    const r = await ensureJdExtracted(t.deps, PROJECT);
+    expect(r).toMatchObject({ status: "failed", code: "canceled" });
+    expect(onlyJob(t.store)[0]!.status).toBe("canceled");
+    expect(t.usage.records).toHaveLength(0);
+  });
+
+  it("the read after begin fails → JD and job closed as stalled, no call", async () => {
+    const t = setup({ responses: [{ json: KO_BACKEND.output }] });
+    const load = t.jds.load.bind(t.jds);
+    let reads = 0;
+    t.jds.load = async (id) => {
+      if (++reads === 1) return load(id);
+      throw new Error("db down");
+    };
+    const r = await ensureJdExtracted(t.deps, PROJECT);
+    expect(r).toMatchObject({ status: "failed", code: "stalled" });
+    expect(t.jds.state.extractionStatus).toBe("failed");
+    expect(onlyJob(t.store)[0]).toMatchObject({ status: "failed", errorCode: "stalled" });
+    expect(t.usage.records).toHaveLength(0);
+  });
+});

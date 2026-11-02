@@ -10,6 +10,13 @@ const redirect = vi.fn((url: string) => {
 const accountState = vi.fn();
 
 vi.mock("next/navigation", () => ({ redirect: (url: string) => redirect(url) }));
+const requestHeaders = vi.hoisted(() => ({ value: null as Headers | null }));
+vi.mock("next/headers", () => ({
+  headers: async () => {
+    if (!requestHeaders.value) throw new Error("outside a request scope");
+    return requestHeaders.value;
+  },
+}));
 vi.mock("./account-state", () => ({ loadAccountState: () => accountState() }));
 vi.mock("@/server/db/server", () => ({
   createSupabaseServerClient: async () => {
@@ -30,6 +37,7 @@ beforeEach(() => {
   redirect.mockClear();
   accountState.mockReset();
   accountState.mockResolvedValue("active");
+  requestHeaders.value = null;
 });
 
 describe("requireUser", () => {
@@ -50,12 +58,12 @@ describe("requireConsentedUser", () => {
 describe("requireConsentedUserOrRedirect (QA-07)", () => {
   it("signed out → login with next", async () => {
     getUser.mockReturnValue({ data: { user: null }, error: null });
-    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/login?next=%2Fboard" });
+    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/sign-in?next=%2Fboard" });
   });
   it("needs consent → consent page with next", async () => {
     getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
     rpc.mockResolvedValue({ data: needs, error: null });
-    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/onboarding/consent?next=%2Fboard" });
+    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/consent?next=%2Fboard" });
   });
   it("consented → context", async () => {
     getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
@@ -86,7 +94,7 @@ describe("R1 A7 account state gate", () => {
     getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
     rpc.mockResolvedValue({ data: needs, error: null });
     accountState.mockResolvedValue("deletion_incomplete");
-    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/settings/account/delete" });
+    await expect(requireConsentedUserOrRedirect("/board")).rejects.toMatchObject({ url: "/settings/withdraw/finalize" });
     expect(rpc).not.toHaveBeenCalled();
   });
   it("profile_missing [가정] → account_profile_missing, never the consent gate", async () => {
@@ -104,7 +112,7 @@ describe("R1 A7 account state gate", () => {
     await expect(requireUserForAccountDeletion()).resolves.toMatchObject({ accountState: "active" });
     expect(rpc).not.toHaveBeenCalled();
     getUser.mockReturnValue({ data: { user: null }, error: null });
-    await expect(requireUserForAccountDeletion()).rejects.toMatchObject({ url: "/login?next=%2Fsettings%2Faccount%2Fdelete" });
+    await expect(requireUserForAccountDeletion()).rejects.toMatchObject({ url: "/sign-in?next=%2Fsettings%2Fwithdraw" });
   });
 });
 
@@ -122,11 +130,33 @@ describe("QA-R1-02: consent page / consent actions check the account state, not 
     getUser.mockReturnValue({ data: { user: { id: "u" } }, error: null });
     rpc.mockResolvedValue({ data: needs, error: null });
     accountState.mockResolvedValue("deletion_incomplete");
-    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/settings/account/delete" });
+    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/settings/withdraw/finalize" });
     accountState.mockResolvedValue("active");
     await expect(requireUserForConsentPage()).resolves.toMatchObject({ user: { id: "u" } });
     expect(redirect).toHaveBeenCalledTimes(1);
     getUser.mockReturnValue({ data: { user: null }, error: null });
-    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/login?next=%2Fonboarding%2Fconsent" });
+    await expect(requireUserForConsentPage()).rejects.toMatchObject({ url: "/sign-in?next=%2Fconsent" });
+  });
+});
+
+describe("requireConsentedUser in a page render (UQ-704)", () => {
+  const needsConsent = () => {
+    getUser.mockReturnValue({ data: { user: { id: "u1" } }, error: null });
+    rpc.mockResolvedValue({ data: needs, error: null });
+  };
+
+  it("a page render redirects to S-03 with next (the gate's own answer), so nothing is logged as a server error", async () => {
+    needsConsent();
+    requestHeaders.value = new Headers({ "x-resumate-path": "/career?x=1" });
+    await expect(requireConsentedUser()).rejects.toMatchObject({ message: "NEXT_REDIRECT", url: "/consent?next=%2Fcareer%3Fx%3D1" });
+  });
+
+  it("Server Actions, Route Handlers and code outside a request still get consent_required (403)", async () => {
+    for (const h of [new Headers({ "x-resumate-path": "/career", "next-action": "abc" }), new Headers({ "x-resumate-path": "/api/application-projects/x/insights" }), new Headers(), null]) {
+      needsConsent();
+      requestHeaders.value = h;
+      await expect(requireConsentedUser()).rejects.toMatchObject({ code: "consent_required", status: 403 });
+    }
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

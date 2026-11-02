@@ -4,6 +4,9 @@ import { isCronAuthorized } from "@/server/jobs/cron";
 import { runRetentionCron } from "@/server/jobs/retention";
 import { createServiceRoleClient } from "@/server/jobs/service-role";
 
+/** QA-W5-05: same ceiling as the job routes (Fluid compute assumed; see vercel.json). */
+export const maxDuration = 60;
+
 /**
  * Vercel Cron (`Authorization: Bearer <CRON_SECRET>`), daily: retention purges
  * across all users (NFR-PRV-06, DM §4.4). Logs and returns counts only.

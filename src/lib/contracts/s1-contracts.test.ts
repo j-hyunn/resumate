@@ -5,8 +5,11 @@ import { CONSENT_TYPES, OPTIONAL_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from ".
 import { UpdateProfileInput } from "./profile";
 
 describe("enums", () => {
-  it("required + optional = all consent types", () => {
-    expect([...REQUIRED_CONSENT_TYPES, ...OPTIONAL_CONSENT_TYPES].sort()).toEqual([...CONSENT_TYPES].sort());
+  it("required + optional + cross_border_transfer = all consent types", () => {
+    expect([...REQUIRED_CONSENT_TYPES, ...OPTIONAL_CONSENT_TYPES, "cross_border_transfer"].sort()).toEqual([...CONSENT_TYPES].sort());
+  });
+  it("sign-up requires only terms and privacy_required (F-COM-02, D-39)", () => {
+    expect([...REQUIRED_CONSENT_TYPES]).toEqual(["terms", "privacy_required"]);
   });
 });
 

@@ -31,7 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { DraftTone } from "@/types/db"
 import { SourceCheckTree, type TreeSelection } from "./source-tree"
 import type { SourceTree } from "@/lib/data/drafts"
-import { setSectionSourcesAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { setSectionSourcesAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 
 /** v5.3 C-11: 자소서 문항당 직접 고를 수 있는 근거 5개, 경력기술서 프로젝트 8개 (구현 값 [가정]) */

@@ -1,7 +1,11 @@
 # 화면 구현 현황
 - 기준 기획: PRD v4.4a / 플로우 v5.4a / AI v4.4a / 데이터 모델 v4.3a (결정 Q53-1~11 반영)
 - 디자인 시스템: v3 (기획 v5.3 반영, Q53 시각 메모는 `_workspace/ui/16_frontend-engineer_q53_report.md`) · 최종 갱신: 2026-10-30 (Q53 QA 후 수정 완료. 그 수정은 QA 재검토 없이 lint·typecheck·build와 데이터 계층 검사 스크립트로만 확인, 브라우저 클릭 미확인)
-- 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용)
+- 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
+
+> W5 QA 수정 (2026-11-02): `_workspace/ui/19_ui-qa_w5_review.md`·`_workspace/backend/W5/03_backend-qa_report.md`의 UI 이슈를 고쳤다(UQ-701~703·705~707, QA-W5-01·06 앞부분·08). lint·typecheck·test까지 확인, 브라우저 미확인. 상세: `_workspace/ui/20_frontend-engineer_w5_fixes.md`
+
+> W5 (2026-11-02): "QA 통과"는 모두 mock 기준이다. 실제 백엔드 연결 뒤 UI QA는 아직 하지 않았다. W5에서 고친 화면은 lint·typecheck·test·build와 HTTP 확인까지이고 클릭은 해 보지 않았다. 상세: `_workspace/backend/W5/02_ui_notes.md`
 
 | 화면 ID | 화면명 | 영역 | 라우트 | 상태 | 열린 이슈 | 마지막 QA |
 |---|---|---|---|---|---|---|
@@ -9,32 +13,32 @@
 | S-28 | 오류 | A0 | not-found / error | QA 통과 (BYOK) | — | 2026-10-28 BYOK 통합 |
 | C-01~C-10, C-12~C-14, C-17~C-21, ST-* | 공통 컴포넌트·상태 뷰 (v2: C-18 AiLock · C-19 ProviderBadge · C-20 AiErrorNotice · C-21 DataUseConsent · AiRunButton) | A0 | `/dev/states` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-01 | 랜딩 | A1 | `/` | QA 통과 | — | 2026-10-25 R2 |
-| S-02 | 가입/로그인 | A1 | `/sign-in` | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
-| S-03 | 동의 | A1 | `/consent` | QA 통과 (BYOK) | — | 2026-10-28 BYOK 통합 |
+| S-02 | 가입/로그인 | A1 | `/sign-in` | W5 QA 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5 QA 수정(QA-W5-08): `?next=` 검사를 서버 계약판과 통일(`/auth/callback` 거부) | 2026-11-02 W5 QA |
+| S-03 | 동의 | A1 | `/consent` | W5 QA 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (BYOK)) | W5 QA 수정(QA-W5-08): 동의 뒤 이동 `next` 검사를 서버 계약판과 통일 | 2026-11-02 W5 QA |
 | S-24 | 설정 | A1 | `/settings` + 사이드바 설정 다이얼로그(sidebar-13) | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
 | S-25 | 회원 탈퇴 | A1 | `/settings/withdraw` | QA 통과 (v5.3) | — (UQ-90 해결: NFR-PRV-06 v4.1) | 2026-10-30 v5.3 통합 |
 | S-30 | 정책 | A1 | `/policies` | QA 통과 (BYOK) | — (UQ-90 해결: NFR-PRV-06 v4.1) | 2026-10-28 BYOK 통합 |
 | S-04 | 기본 프로필 편집 | A2 | `/career/profile` | QA 통과 | — | 2026-10-25 R2 |
-| S-08 | 커리어 | A2 | `/career` | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
-| S-09 | 경력 편집 | A2 | `/career/experiences/new\|[id]` | QA 통과 | — | 2026-10-25 R2 |
-| S-34 | 교육 편집 | A2 | `/career/educations/new\|[id]` | QA 통과 | — | 2026-10-25 R2 |
-| S-10 | 프로젝트 편집 | A2 | `/career/projects/new\|[id]` | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
-| S-35 | 상세 내용 편집 | A2 | `/career/projects/[id]/details/new\|[detailId]` | QA 통과 | — | 2026-10-25 R2 |
-| S-11 | 정량 성과 (모달) | A2 | `?achievement=` | QA 통과 | — | 2026-10-25 R2 |
+| S-08 | 커리어 | A2 | `/career` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5: 시작 월 없는 경력·교육을 연도 미정에 표시 | 2026-10-30 v5.3 통합 |
+| S-09 | 경력 편집 | A2 | `/career/experiences/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌·기간 안내. W5 QA 수정: 재직 중 토글·첫 저장 두 번 유실의 거짓 충돌(UQ-702·QA-W5-06), 충돌 버튼 44px(UQ-705), 선택 뒤 포커스(UQ-706) — 브라우저 미확인 | 2026-11-02 W5 QA |
+| S-34 | 교육 편집 | A2 | `/career/educations/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌·기간 안내. W5 QA 수정: 재학 중·첫 저장 유실 거짓 충돌, 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
+| S-10 | 프로젝트 편집 | A2 | `/career/projects/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5: client_id·충돌·기간 안내. W5 QA 수정: 거짓 충돌(기간 역전·팀 규모 반올림·첫 저장 유실), 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
+| S-35 | 상세 내용 편집 | A2 | `/career/projects/[id]/details/new\|[detailId]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌. W5 QA 수정: 첫 저장 유실 거짓 충돌, 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
+| S-11 | 정량 성과 (모달) | A2 | `?achievement=` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌. W5 QA 수정: 거짓 충돌("1,000" 쉼표·첫 저장 유실), 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
 | S-12 | 스킬 목록 | A2 | `/career/skills` | QA 통과 | — | 2026-10-25 R2 |
-| S-36 | AI 작성 대화 | A2 | `/career/writing-chats/new\|[id]` | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
+| S-36 | AI 작성 대화 | A2 | `/career/writing-chats/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5: 턴 뒤 강조, 카드 여러 개 | 2026-10-30 v5.3 통합 |
 | S-13 | 기업 JD 목록 | A3 | `/applications` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-14 | 기업 JD 추가 | A3 | `/applications/new` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-31 | 지원 프로젝트 허브 | A3 | `/applications/[id]` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-15 | JD·요건 | A3 | `/applications/[id]/jd` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-16 | 인사이트 | A3 | `/applications/[id]/insight` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-17 | 서류 초안 목록 | A3 | `/applications/[id]/drafts` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
-| S-18 | 자소서 문항 설정 | A3 | `/applications/[id]/drafts/[draftId]/questions` | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
-| S-19 | 초안 편집기 | A3 | `/applications/[id]/drafts/[draftId]` | QA 통과 (Q53) | A3 UQ-84 (c)~(g) 실제 백엔드로 보류 | 2026-10-30 Q53 |
+| S-18 | 자소서 문항 설정 | A3 | `/applications/[id]/drafts/[draftId]/questions` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5: 빈 문항 저장 건너뜀. W5 QA 수정(UQ-703): 화면에서 비운 문항이 있으면 "전체 문항 생성" 비활성, 전체 생성 전 입력 저장 — 브라우저 미확인 | 2026-11-02 W5 QA |
+| S-19 | 초안 편집기 | A3 | `/applications/[id]/drafts/[draftId]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53)) | W5: 실제 생성 시작(패치), 중단 대기 표시. 실제 스트림 끝까지 미확인. 새로고침 후 재연결·done.draftId 미구현; A3 UQ-84 (c)~(g) 실제 백엔드로 보류. W5 QA 수정: 실패 경력기술서 다시 열기 C-20·다시 시도(UQ-701), "포함하지 않은 항목" 프로젝트 이름·이유 문구(QA-W5-01), 중단 대기 문구 "최대 20초쯤"(UQ-707) — 브라우저 미확인 | 2026-11-02 W5 QA |
 | S-20 | 면접 준비 | A4 | `/applications/[id]/interview` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
-| S-33 | 면접 답변지 | A4 | `/applications/[id]/interview/[sessionId]` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
-| S-22 | 면접 결과 | A4 | `/applications/[id]/interview/[sessionId]/result` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
-| S-37 | 모의 면접 전체 세션 | A4 | `/interviews` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
+| S-33 | 면접 답변지 | A4 | `/applications/[id]/interview/[sessionId]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53)) | W5: 중단한 생성은 남은 질문으로 | 2026-10-30 Q53 |
+| S-22 | 면접 결과 | A4 | `/applications/[id]/interview/[sessionId]/result` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53)) | W5: 일관성 메모 인용·근거 | 2026-10-30 Q53 |
+| S-37 | 모의 면접 전체 세션 | A4 | `/interviews` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53)) | W5: 없는 세션 삭제는 안내 후 새로 읽기 | 2026-10-30 Q53 |
 | S-40 | AI 연결 | A1 | `/settings/ai` + 설정 다이얼로그 섹션 "AI 연결" | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
 | S-41 | 키 연결 단계 | A1 | `/settings/ai/connect` (집중 화면, `(focus)` 레이아웃) | QA 통과 (BYOK 신설) | — | 2026-10-28 BYOK 통합 |
 | S-42 | AI 사용량 | A1 | `/settings/ai/usage` + 설정 다이얼로그 섹션 "AI 사용량" | QA 통과 (BYOK 신설) | — | 2026-10-28 BYOK 통합 |

@@ -6,6 +6,11 @@ import type { AiPriceTable, AiUsageFeature, AiUsageSummary } from "@/types/db"
 import { clone, mockRequest } from "@/lib/mock/store"
 import { currentPeriodMonth } from "@/lib/mock/time"
 import type { MockDb } from "@/lib/mock/fixtures"
+import { isPreviewRequest, previewOr, unwrap } from "./source"
+import type { AiUsageSummary as RealAiUsageSummary } from "@/lib/contracts/ai"
+import * as usageActions from "@/server/actions/usage"
+import { requireUser } from "@/server/auth/session"
+import { loadPriceTables } from "@/server/services/usage"
 
 /** S-42 기능별 표: 8 rows, fixed order (Should features excluded) */
 export const USAGE_FEATURE_ORDER: readonly AiUsageFeature[] = [
@@ -93,12 +98,62 @@ export function computeAiUsageSummary(db: MockDb, periodMonth = currentPeriodMon
 
 /** RPC get_ai_usage_summary(period_month default 이번 달 KST, include_previous default false) */
 export async function getAiUsageSummary(periodMonth?: string, includePrevious = false): Promise<AiUsageSummary> {
-  const db = await mockRequest()
-  return clone(computeAiUsageSummary(db, periodMonth, includePrevious))
+  return previewOr(
+    async () => clone(computeAiUsageSummary(await mockRequest(), periodMonth, includePrevious)),
+    async () => toUiUsageSummary(unwrap(await usageActions.getAiUsageSummary({ periodMonth, includePrevious }))),
+  )
+}
+
+/** Service DTO → the RPC's snake_case. S-42 shows `USAGE_FEATURE_ORDER` as 8 fixed rows, zeros included. */
+function toUiUsageSummary(r: RealAiUsageSummary): AiUsageSummary {
+  const feature = (f: AiUsageFeature) => {
+    const row = r.byFeature.find((x) => x.feature === f)
+    return {
+      feature: f,
+      input_tokens: row?.inputTokens ?? 0,
+      output_tokens: row?.outputTokens ?? 0,
+      estimated_cost_usd: row?.estimatedCostUsd ?? 0,
+      calls: row?.calls ?? 0,
+    }
+  }
+  return {
+    period_month: r.periodMonth,
+    as_of: r.asOf,
+    totals: {
+      input_tokens: r.totals.inputTokens,
+      cached_input_tokens: r.totals.cachedInputTokens,
+      cache_write_tokens: r.totals.cacheWriteTokens,
+      output_tokens: r.totals.outputTokens,
+      estimated_cost_usd: r.totals.estimatedCostUsd,
+      calls: r.totals.calls,
+      failed_calls: r.totals.failedCalls,
+    },
+    by_feature: USAGE_FEATURE_ORDER.map(feature),
+    by_provider: r.byProvider.map((p) => ({
+      provider: p.provider,
+      connection_tier: p.connectionTier,
+      input_tokens: p.inputTokens,
+      output_tokens: p.outputTokens,
+      estimated_cost_usd: p.estimatedCostUsd,
+      calls: p.calls,
+    })),
+    price_table_versions: r.priceTableVersions.map((v) => ({ version: v.version, source_checked_at: v.sourceCheckedAt })),
+    ...(r.previousMonth
+      ? {
+          previous_month: {
+            period_month: r.previousMonth.periodMonth,
+            estimated_cost_usd: r.previousMonth.estimatedCostUsd,
+            input_tokens: r.previousMonth.inputTokens,
+            output_tokens: r.previousMonth.outputTokens,
+          },
+        }
+      : {}),
+  }
 }
 
 /** S-42 "가격표 보기": rows of the given versions (default: latest effective) */
 export async function getAiPriceTables(versions?: string[]): Promise<AiPriceTable[]> {
+  if (!(await isPreviewRequest())) return (await loadPriceTables((await requireUser()).supabase, versions)) as AiPriceTable[]
   const db = await mockRequest(0)
   const latest = [...db.ai_price_tables].sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0]?.version
   const want = versions?.length ? versions : latest ? [latest] : []

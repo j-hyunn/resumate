@@ -6,6 +6,7 @@
  * FL-13 "URL에는 지원 프로젝트 ID와 기능 이름만").
  */
 import type { InterviewType, PolicyType, ProjectDetailField } from "@/types/db"
+import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
 
 type Id = string
 
@@ -136,18 +137,23 @@ export function menuKeyForPath(pathname: string): MenuKey | null {
   return null
 }
 
+/** `contractSafeNextPath` answers this when it refuses (a value no path can be) */
+const REFUSED = "\u0000refused"
+
 /**
- * The one check for "원래 URL" (`?next=`): same-origin relative paths only (open-redirect
- * guard), never the auth screens themselves (S-02/S-03) which would loop (A1 UQ-99).
- * Moved from components/account/account-data.ts.
+ * The one check for "원래 URL" (`?next=`) on screens and component actions. QA-W5-08: the server's check
+ * (`lib/contracts/routes.ts`) runs first, so both refuse the same values (open redirects, control characters,
+ * `/auth/callback`, over 512 chars) and normalize the path the same way. On top of it, never the auth screens
+ * themselves (S-02/S-03, and below them) which would loop (A1 UQ-99). Moved from components/account/account-data.ts.
  */
 export function safeNextPath(next: unknown): string | null {
   const value = Array.isArray(next) ? next[0] : next
   if (typeof value !== "string") return null
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null
-  const pathname = value.split(/[?#]/)[0]
+  const safe = contractSafeNextPath(value, REFUSED)
+  if (safe === REFUSED) return null
+  const pathname = safe.split(/[?#]/)[0]
   for (const authPath of ["/sign-in", "/consent"]) {
     if (pathname === authPath || pathname.startsWith(`${authPath}/`)) return null
   }
-  return value
+  return safe
 }

@@ -66,6 +66,12 @@ describe.skipIf(!ready)("consent + profile services (local stack)", () => {
       expect(item.agreedVersion).toBe(item.currentVersion);
     }
     expect(status.items.find((i) => i.consentType === "marketing")?.agreedVersion).not.toBeNull();
+    // F-COM-02, D-39: not taken at sign-up (C-21 at key connection), and the gate still opens.
+    expect(status.items.find((i) => i.consentType === "cross_border_transfer")).toMatchObject({
+      required: false,
+      agreedVersion: null,
+      needsConsent: false,
+    });
   });
 
   it("withdraws an optional consent", async () => {

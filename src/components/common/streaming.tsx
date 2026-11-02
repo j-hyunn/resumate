@@ -15,7 +15,7 @@
  *
  *   const turn = useChatTurnStream()           // AI-12 writing chat turn
  *
- * The real backend swaps the generator for an SSE reader with the same event names.
+ * `start({ endpoint, body })` reads the real SSE route (lib/data/ai-stream-client); a mock request runs the generator.
  */
 import * as React from "react"
 import { Loader2, Sparkles, Square } from "lucide-react"
@@ -34,6 +34,8 @@ import {
   type StreamErrorEvent,
   type StreamSource,
 } from "@/lib/mock/ai-stream"
+
+import { isRealStreamRequest, realBlockStream, realChatTurn, replaceSectionBlocks, type RealStreamRequest } from "@/lib/data/ai-stream-client"
 
 export type { GenerationNotesPayload }
 
@@ -80,7 +82,7 @@ export interface UseAiStreamResult {
    * `discardOnError` (v5.3 A4, career description): a failure drops every provisional block (no
    * block is kept; the retry makes a new draft).
    */
-  start: (request: Omit<MockBlockStreamOptions, "signal"> & { discardOnError?: boolean }) => void
+  start: (request: (Omit<MockBlockStreamOptions, "signal"> | RealStreamRequest) & { discardOnError?: boolean }) => void
   /** sets cancel_requested_at in the real backend */
   cancel: () => void
   reset: () => void
@@ -100,25 +102,30 @@ export function useAiStream(): UseAiStreamResult {
 
   React.useEffect(() => () => controller.current?.abort(), [])
 
-  const start = React.useCallback((request: Omit<MockBlockStreamOptions, "signal"> & { discardOnError?: boolean }) => {
+  const start = React.useCallback((request: (Omit<MockBlockStreamOptions, "signal"> | RealStreamRequest) & { discardOnError?: boolean }) => {
     controller.current?.abort()
     const ac = new AbortController()
     controller.current = ac
-    const { discardOnError, ...mockRequest } = request
-    const sectionOf = new Map(request.blocks.map((b) => [b.block_id, b.section_id]))
+    const { discardOnError, ...source } = request
+    // A real stream doesn't announce its blocks up front: no "마무리 중" before `validated` (spec-gaps W1).
+    const specs = isRealStreamRequest(request) ? [] : request.blocks
+    const sectionOf = new Map(specs.map((b) => [b.block_id, b.section_id]))
     const lastBlockOfSection = new Map<string | undefined, string>()
-    for (const b of request.blocks) lastBlockOfSection.set(b.section_id, b.block_id)
+    for (const b of specs) lastBlockOfSection.set(b.section_id, b.block_id)
     setBlocks([])
     setSources(null)
     setErrorInfo(null)
-    setPhase(request.sources ? "sources" : "streaming")
+    setPhase(!isRealStreamRequest(request) && request.sources ? "sources" : "streaming")
     setAdjusting(null)
     setNotes({})
     setValidatedSections([])
     setStatus("streaming")
     void (async () => {
       try {
-        for await (const ev of mockBlockStream({ ...mockRequest, signal: ac.signal })) {
+        const events = isRealStreamRequest(source)
+          ? realBlockStream(source, ac.signal)
+          : mockBlockStream({ ...(source as Omit<MockBlockStreamOptions, "signal">), signal: ac.signal })
+        for await (const ev of events) {
           switch (ev.type) {
             case "sources_selected":
               setSources(ev.sources)
@@ -147,10 +154,7 @@ export function useAiStream(): UseAiStreamResult {
               // whole-section replacement: provisional blocks of the section → confirmed set
               setBlocks((prev) => {
                 const confirmed: StreamBlock[] = ev.blocks.map((b) => ({ ...b, state: "validated", section_id: ev.section_id }))
-                const firstIndex = prev.findIndex((b) => (b.section_id ?? "") === key)
-                const rest = prev.filter((b) => (b.section_id ?? "") !== key)
-                const at = firstIndex < 0 ? rest.length : Math.min(firstIndex, rest.length)
-                return [...rest.slice(0, at), ...confirmed, ...rest.slice(at)]
+                return replaceSectionBlocks(prev, key, confirmed)
               })
               setAdjusting(null)
               setValidatedSections((v) => [...v, key])
@@ -206,7 +210,7 @@ export interface UseChatTurnResult {
   /** v4: full C-20 info of a failed turn (provider / retry_after / quota_resets_at) */
   errorInfo: AiErrorInfo | null
   lastEvent: ChatTurnEvent | null
-  start: (request: Omit<MockChatTurnOptions, "signal">, onEvent?: (ev: ChatTurnEvent) => void) => void
+  start: (request: Omit<MockChatTurnOptions, "signal"> | RealStreamRequest, onEvent?: (ev: ChatTurnEvent) => void) => void
   cancel: () => void
 }
 
@@ -219,7 +223,7 @@ export function useChatTurnStream(): UseChatTurnResult {
   const controller = React.useRef<AbortController | null>(null)
   React.useEffect(() => () => controller.current?.abort(), [])
 
-  const start = React.useCallback((request: Omit<MockChatTurnOptions, "signal">, onEvent?: (ev: ChatTurnEvent) => void) => {
+  const start = React.useCallback((request: Omit<MockChatTurnOptions, "signal"> | RealStreamRequest, onEvent?: (ev: ChatTurnEvent) => void) => {
     controller.current?.abort()
     const ac = new AbortController()
     controller.current = ac
@@ -228,7 +232,8 @@ export function useChatTurnStream(): UseChatTurnResult {
     setStatus("streaming")
     void (async () => {
       try {
-        for await (const ev of mockChatTurn({ ...request, signal: ac.signal })) {
+        const events = isRealStreamRequest(request) ? realChatTurn(request, ac.signal) : mockChatTurn({ ...request, signal: ac.signal })
+        for await (const ev of events) {
           setLastEvent(ev)
           onEvent?.(ev)
           if (ev.type === "reply_delta") setReply((r) => r + ev.delta)
@@ -256,33 +261,44 @@ export function useChatTurnStream(): UseChatTurnResult {
 /**
  * 생성 중 영역 머리: Sparkles + "작성 중…" + 중단. v5.3: phase "adjusting" → "글자 수 맞추는 중 (현재
  * {n}자 / 제한 {limit}자)", "finalizing" → Loader2 + "마무리 중…". 중단 stays until `done` [UI-가정 G-31].
+ * `stopping` → "중단하는 중…" with the button disabled.
  */
 export function StreamingHeader({
   onStop,
   label = "작성 중…",
   phase,
   adjusting,
+  stopping = false,
   className,
 }: {
   onStop?: () => void
   label?: string
   phase?: StreamPhase
   adjusting?: { current_chars: number; char_limit: number } | null
+  /**
+   * W3-4: the stop was asked and the run hasn't closed yet. The run sees it at its next heartbeat (10 s); the stop waits
+   * up to 3 s for the job row and 12 s for it to close (`drafts-real.ts` stopRun), so ~15 s plus round trips (UQ-707).
+   */
+  stopping?: boolean
   className?: string
 }) {
   const finalizing = phase === "finalizing"
-  const text =
-    phase === "adjusting" && adjusting
+  // [UI-가정] 중단 대기 문구
+  const text = stopping
+    ? "중단하는 중… 최대 20초쯤 걸릴 수 있어요"
+    : phase === "adjusting" && adjusting
       ? `글자 수 맞추는 중 (현재 ${adjusting.current_chars.toLocaleString("ko-KR")}자 / 제한 ${adjusting.char_limit.toLocaleString("ko-KR")}자)`
       : finalizing
         ? "마무리 중…"
         : label
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      {finalizing ? <Loader2 className="size-4 animate-spin text-ai" aria-hidden /> : <Sparkles className="size-4 text-ai" aria-hidden />}
-      <span className={cn("text-sm font-medium text-ai-subtle-foreground", phase === "adjusting" && "tabular-nums")}>{text}</span>
+      {finalizing || stopping ? <Loader2 className="size-4 animate-spin text-ai" aria-hidden /> : <Sparkles className="size-4 text-ai" aria-hidden />}
+      <span role={stopping ? "status" : undefined} className={cn("text-sm font-medium text-ai-subtle-foreground", phase === "adjusting" && !stopping && "tabular-nums")}>
+        {text}
+      </span>
       {onStop ? (
-        <Button variant="outline" size="sm" className="ml-auto" onClick={onStop}>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={onStop} disabled={stopping}>
           <Square className="size-3.5" aria-hidden />
           중단
         </Button>

@@ -200,14 +200,14 @@ select throws_ok($$select public.move_application_stage('a0000000-aaaa-0000-0000
 select throws_ok($$select public.set_application_outcome('a0000000-aaaa-0000-0000-000000000001', 'passed')$$,
                  'P0001', 'application_project_not_found', 'B cannot set A outcome');
 
--- Invalid key -> not allowed -> fallback name.
+-- Q53-1: an invalid active key refuses creation up front (key-less gate tests: create_application_project_gate.test.sql).
 reset role;
 update public.ai_provider_keys set status = 'invalid' where id = 'b0000000-9999-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}';
-select is(public.create_application_project('b0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션') ->> 'name',
-          '회사 – 포지션', 'invalid key -> key-less naming');
+select throws_ok($$select public.create_application_project('b0000000-aaaa-0000-0000-000000000002', '원문', 'h',
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션')$$,
+          'P0001', 'key_invalid', 'invalid key -> refused before insert (Q53-1)');
 
 -- Anonymous callers.
 reset role;

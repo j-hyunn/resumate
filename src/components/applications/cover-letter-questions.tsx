@@ -34,8 +34,8 @@ import type { AiConnection, AiErrorCode, CountBasis, DataReadiness, DraftSection
 import { routes } from "@/lib/routes"
 import { COUNT_BASIS_LABELS } from "./labels"
 import { useRestoreReturnParams } from "./shared"
-import { addQuestionAction, deleteQuestionAction, saveQuestionAction } from "@/app/(dashboard)/applications/_lib/actions"
-import { EXTRACT_FIRST_NOTE } from "@/app/(dashboard)/applications/_lib/jd-state"
+import { addQuestionAction, deleteQuestionAction, saveQuestionAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
+import { EXTRACT_FIRST_NOTE } from "@/app/(dashboard)/(gated)/applications/_lib/jd-state"
 import { useRequirementsFirst } from "./extract-first"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 
@@ -79,10 +79,10 @@ export function CoverLetterQuestions({
   // v5 S-18: 문항 편집·메모는 키 없이 가능, 생성 버튼만 C-18 인라인 / C-19
   const connection = useAiConnection(readiness.ai_connection)
   const locked = !!connection && !connection.active_provider
-  const [states, setStates] = React.useState<Record<string, { state: SaveState; savedAt: Date | null; retry: () => void }>>({})
+  const [states, setStates] = React.useState<Record<string, CardStatus>>({})
   const [adding, setAdding] = React.useState(false)
-  const report = React.useCallback((id: string, s: { state: SaveState; savedAt: Date | null; retry: () => void }) => {
-    setStates((prev) => (prev[id]?.state === s.state && prev[id]?.savedAt === s.savedAt ? prev : { ...prev, [id]: s }))
+  const report = React.useCallback((id: string, s: CardStatus) => {
+    setStates((prev) => (prev[id]?.state === s.state && prev[id]?.savedAt === s.savedAt && prev[id]?.empty === s.empty ? prev : { ...prev, [id]: s }))
   }, [])
 
   // header save status = worst of the cards
@@ -113,6 +113,8 @@ export function CoverLetterQuestions({
   const goGenerate = async (target: string) => {
     setGoing(true)
     try {
+      // UQ-703: S-19 reads the stored questions, so typed edits go first (unmount would save them too, but late)
+      if (target === "all") await Promise.all(Object.values(states).map((s) => s.flush()))
       router.push(`${routes.draft(apId, draftId)}?generate=${target}`)
     } catch {
       setGoing(false)
@@ -125,7 +127,8 @@ export function CoverLetterQuestions({
   const ready = readiness.features.draft.ready
   // A3 UQ-77: 전체 생성 = 아직 초안이 없는 문항만 (S-19 queue와 같은 기준)
   const pendingSections = sections.filter((s) => !s.ai_content?.blocks.length)
-  const anyEmpty = pendingSections.some((s) => !s.question_text?.trim())
+  // UQ-703: an emptied field isn't saved (W3-9), so the stored text is old — judge by what the card shows
+  const anyEmpty = pendingSections.some((s) => states[s.id]?.empty ?? !s.question_text?.trim())
   const allDone = pendingSections.length === 0
 
   return (
@@ -219,6 +222,9 @@ export function CoverLetterQuestions({
   )
 }
 
+/** What a card tells the page: its save state, a way to save now, and whether its question field is blank on screen */
+type CardStatus = { state: SaveState; savedAt: Date | null; retry: () => void; flush: () => Promise<void>; empty: boolean }
+
 function QuestionCard({
   section,
   index,
@@ -232,7 +238,7 @@ function QuestionCard({
   index: number
   canDelete: boolean
   onDelete: () => void
-  onStatus: (id: string, s: { state: SaveState; savedAt: Date | null; retry: () => void }) => void
+  onStatus: (id: string, s: CardStatus) => void
   failSave: boolean
   /** A3 UQ-241: "이 문항만 생성" (C-18 인라인 / C-19) → S-19 ?generate={id} */
   generate: { connection: AiConnection | null; disabled: boolean; draftHref: string; onGenerate: () => Promise<unknown> }
@@ -246,17 +252,21 @@ function QuestionCard({
   const autosave = useAutosave<QuestionPatch>({
     save: async (patch) => {
       if (removed.current) return // deleted card: don't write to a removed section (A3 UQ-67)
+      if (Object.keys(patch).length === 0) return // only an emptied question so far: nothing to send (W3-9)
       await saveQuestionAction(section.id, patch, failSave)
     },
   })
   const pending = React.useRef<QuestionPatch>({})
   const queue = (patch: QuestionPatch) => {
     pending.current = { ...pending.current, ...patch }
-    autosave.schedule(pending.current)
+    // W3-9: the contract refuses an empty question. Skip that field while it's empty (stored text stays), keep saving the others
+    const { question_text: text, ...others } = pending.current
+    autosave.schedule(text !== undefined && !text?.trim() ? others : pending.current)
   }
+  const empty = !question.trim()
   React.useEffect(() => {
-    onStatus(section.id, { state: autosave.state, savedAt: autosave.savedAt, retry: autosave.retry })
-  }, [autosave.state, autosave.savedAt, autosave.retry, onStatus, section.id])
+    onStatus(section.id, { state: autosave.state, savedAt: autosave.savedAt, retry: autosave.retry, flush: autosave.flush, empty })
+  }, [autosave.state, autosave.savedAt, autosave.retry, autosave.flush, empty, onStatus, section.id])
 
   const p = `q-${section.id}`
   const hasDraft = !!section.ai_content?.blocks.length
@@ -302,8 +312,14 @@ function QuestionCard({
           }}
           onBlur={() => void autosave.flush()}
           placeholder="예: 지원 동기를 작성해 주세요."
-          aria-describedby={`${p}-text-count`}
+          aria-describedby={`${p}-text-count ${p}-text-empty`}
         />
+        {/* [UI-가정] W3-9 */}
+        {!question.trim() ? (
+          <p id={`${p}-text-empty`} className="text-sm text-muted-foreground">
+            문항을 입력하면 저장돼요
+          </p>
+        ) : null}
         {/* v5.3 S-18 문항 1,000자 — C-07 글자 수 규칙 (90%부터 경고색) */}
         {question.length >= QUESTION_MAX * 0.9 ? (
           <div className="flex justify-end">

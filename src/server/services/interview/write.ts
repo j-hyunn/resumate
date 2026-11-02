@@ -74,6 +74,6 @@ export async function deleteInterviewSession(user: UserSupabaseClient, input: { 
 export async function markInterviewResultViewed(user: UserSupabaseClient, input: { sessionId: string }): Promise<MarkInterviewResultViewedResult> {
   const { data, error } = await user.rpc("mark_interview_result_viewed", { p_session_id: input.sessionId });
   if (error) throw mapDbError(error);
-  const r = (data ?? {}) as { session_id?: string; result_viewed_at?: string | null };
-  return { sessionId: r.session_id ?? input.sessionId, resultViewedAt: r.result_viewed_at ?? null };
+  const r = (data ?? {}) as { session_id?: string; result_viewed_at?: string | null; changed?: boolean };
+  return { sessionId: r.session_id ?? input.sessionId, resultViewedAt: r.result_viewed_at ?? null, changed: r.changed === true };
 }

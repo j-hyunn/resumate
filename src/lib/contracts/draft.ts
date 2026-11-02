@@ -160,6 +160,12 @@ export const CreateCareerDescriptionInput = z
     tone: z.enum(DRAFT_TONES).optional(),
     /** "다시 생성" of an existing career description: a new drafts row, the old one is kept (AI-03 저장). */
     regeneratedFromId: Id.optional(),
+    /**
+     * W3: the id the S-19 page already opened for this generation (the screen navigates before the
+     * stream starts). The new row uses it. A run with this id isn't answered by C-6 reuse: the
+     * screen stays on this id, so it always generates (spec-gaps W3).
+     */
+    draftId: Id.optional(),
   })
   .strict()
   .refine((v) => v.includedExperienceIds.length + v.includedEducationIds.length + v.includedProjectIds.length > 0, {

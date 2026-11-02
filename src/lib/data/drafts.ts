@@ -31,6 +31,23 @@ import { errorCategoryOf, failureCauseOf, failureTimestamps, type AiRejected } f
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { formatPeriod } from "./labels"
 import { computeReadiness } from "./readiness"
+import { realRetryJdExtraction } from "./applications-real"
+import {
+  realAddCoverLetterQuestion,
+  realCareerDescriptionStreamPlan,
+  realCoverLetterStreamPlan,
+  realCreateCareerDescriptionDraft,
+  realCreateCoverLetterDraft,
+  realDeleteDraftSection,
+  realFinalizeCareerDescription,
+  realFinalizeCoverLetterSection,
+  realGetCareerSourceTree,
+  realMarkDraftCopied,
+  realRankDraftSources,
+  realSetSectionSources,
+  type RealStreamPlan,
+} from "./drafts-real"
+import { previewOr } from "./source"
 
 const now = () => new Date().toISOString()
 
@@ -85,7 +102,7 @@ export interface SourceTree {
   detail_labels: Record<string, string>
 }
 
-function buildSourceTree(db: MockDb): SourceTree {
+export function buildSourceTree(db: Pick<MockDb, "experiences" | "educations" | "projects" | "project_details">): SourceTree {
   const exps = db.experiences.filter((e) => e.status === "complete")
   const edus = db.educations.filter((e) => e.status === "complete")
   const toProject = (p: MockDb["projects"][number]): SourceTreeProject => ({
@@ -138,7 +155,7 @@ function buildSourceTree(db: MockDb): SourceTree {
   return { affiliations, standalone, project_labels, detail_labels }
 }
 
-export async function getCareerSourceTree(): Promise<SourceTree> {
+async function mockGetCareerSourceTree(): Promise<SourceTree> {
   const db = await mockRequest()
   return clone(buildSourceTree(db))
 }
@@ -160,7 +177,7 @@ export function deriveAffiliations(tree: SourceTree, projectIds: string[]): Pick
 // AI-11 경력기술서 기본 선택 (sync, 무차감). Fails silently → latest-first (handled by caller).
 // ---------------------------------------------------------------------------
 
-export async function rankDraftSources(
+async function mockRankDraftSources(
   applicationProjectId: string,
   opts?: { fail?: boolean },
 ): Promise<{ project_ids: string[]; ranking: Array<{ project_id: string; relevance: "high" | "medium" | "low"; include: boolean }> }> {
@@ -243,7 +260,7 @@ function newDraft(applicationProjectId: string, patch: Pick<Draft, "draft_type" 
  * begin_career_description (Q53-7, 04 §2.7.1): the application's `composing` career description (첫 생성
  * 중단) goes away in the same step — one per application.
  */
-export async function createCareerDescriptionDraft(
+async function mockCreateCareerDescriptionDraft(
   applicationProjectId: string,
   options: DraftOptions,
   regeneratedFromId: string | null = null,
@@ -273,7 +290,7 @@ const COVER_LETTER_SEED: Array<Pick<DraftSection, "template_key" | "question_cla
   { template_key: "future_plan", question_class: "future_plan", question_text: "입사 후 포부 및 성장 계획을 작성해 주세요.", char_limit: 600, count_basis: "with_spaces" },
 ]
 
-export async function createCoverLetterDraft(applicationProjectId: string): Promise<Draft> {
+async function mockCreateCoverLetterDraft(applicationProjectId: string): Promise<Draft> {
   const db = await mockRequest()
   const draft = newDraft(applicationProjectId, { draft_type: "cover_letter", title: "자기소개서", status: "composing", options: {} })
   db.drafts.push(draft)
@@ -284,7 +301,7 @@ export async function createCoverLetterDraft(applicationProjectId: string): Prom
   return clone(draft)
 }
 
-export async function addCoverLetterQuestion(draftId: string): Promise<DraftSection | null> {
+async function mockAddCoverLetterQuestion(draftId: string): Promise<DraftSection | null> {
   const db = await mockRequest()
   const draft = db.drafts.find((d) => d.id === draftId)
   if (!draft) return null
@@ -296,7 +313,7 @@ export async function addCoverLetterQuestion(draftId: string): Promise<DraftSect
 }
 
 /** 최소 1문항 (F-DOC-02) */
-export async function deleteDraftSection(draftId: string, sectionId: string): Promise<boolean> {
+async function mockDeleteDraftSection(draftId: string, sectionId: string): Promise<boolean> {
   const db = await mockRequest()
   const sections = db.draft_sections.filter((s) => s.draft_id === draftId)
   if (sections.length <= 1 || !sections.some((s) => s.id === sectionId)) return false
@@ -483,15 +500,15 @@ function recomputeDraftStatus(db: MockDb, draft: Draft) {
 // ---------------------------------------------------------------------------
 
 /** Plan a career description for the draft's options. Returns null if the draft is missing. */
-export async function prepareCareerDescription(
-  draftId: string,
-): Promise<{
+export interface CareerDescriptionPlan {
   generation_id: string
   blocks: StreamPlanBlock[]
   provider: AiProviderName | null
   /** v5.3: pass to `stream.start({ notes })` → arrives with `validated` */
   notes?: GenerationNotesPayload
-} | null> {
+}
+
+async function mockPrepareCareerDescription(draftId: string): Promise<CareerDescriptionPlan | null> {
   const db = await mockRequest()
   const draft = db.drafts.find((d) => d.id === draftId && d.draft_type === "career_description")
   if (!draft) return null
@@ -607,7 +624,7 @@ export type CareerDescriptionStopped =
  * previous draft stands as it was. 첫 생성 → `composing`, options kept for the S-17 settings. A
  * `validated` that arrived first counts as complete (the caller then sends ok).
  */
-export async function finalizeCareerDescription(draftId: string, generationId: string, result: GenerationResult): Promise<CareerDescriptionStopped | null> {
+async function mockFinalizeCareerDescription(draftId: string, generationId: string, result: GenerationResult): Promise<CareerDescriptionStopped | null> {
   const db = await mockRequest()
   const plan = plans().get(generationId)
   const draft = db.drafts.find((d) => d.id === draftId)
@@ -695,9 +712,7 @@ export async function finalizeCareerDescription(draftId: string, generationId: s
 // AI-04 자소서 문항 (근거 선택 먼저 → 문단)
 // ---------------------------------------------------------------------------
 
-export async function prepareCoverLetterSection(
-  sectionId: string,
-): Promise<{
+export interface CoverLetterSectionPlan {
   generation_id: string
   sources: StreamSource[]
   blocks: StreamPlanBlock[]
@@ -705,7 +720,9 @@ export async function prepareCoverLetterSection(
   /** v5.3: pass to `stream.start({ adjustLength, notes })` */
   adjust_length?: { current_chars: number; char_limit: number }
   notes?: GenerationNotesPayload
-} | null> {
+}
+
+async function mockPrepareCoverLetterSection(sectionId: string): Promise<CoverLetterSectionPlan | null> {
   const db = await mockRequest()
   const section = db.draft_sections.find((s) => s.id === sectionId && s.section_kind === "cover_letter_question")
   if (!section) return null
@@ -856,7 +873,7 @@ export async function prepareCoverLetterSection(
  * not ok → previous body·편집본·"근거를 바꿨어요" stay; a first generation keeps only the received
  * paragraphs (status = failed); usage released.
  */
-export async function finalizeCoverLetterSection(sectionId: string, generationId: string, result: GenerationResult): Promise<void> {
+async function mockFinalizeCoverLetterSection(sectionId: string, generationId: string, result: GenerationResult): Promise<void> {
   const db = await mockRequest()
   const plan = plans().get(generationId)
   const section = db.draft_sections.find((s) => s.id === sectionId)
@@ -909,7 +926,7 @@ export interface SourceSelection {
   project_detail_ids: string[]
 }
 
-export async function setSectionSources(sectionId: string, selections: SourceSelection[]): Promise<DraftSectionSource[] | null> {
+async function mockSetSectionSources(sectionId: string, selections: SourceSelection[]): Promise<DraftSectionSource[] | null> {
   const db = await mockRequest()
   const section = db.draft_sections.find((s) => s.id === sectionId)
   const draft = section && db.drafts.find((d) => d.id === section.draft_id)
@@ -951,14 +968,14 @@ export async function setSectionSources(sectionId: string, selections: SourceSel
 }
 
 /** drafts.first_copied_at (F-DOC-04 복사) */
-export async function markDraftCopied(draftId: string): Promise<void> {
+async function mockMarkDraftCopied(draftId: string): Promise<void> {
   const db = await mockRequest(0)
   const draft = db.drafts.find((d) => d.id === draftId)
   if (draft && !draft.first_copied_at) draft.first_copied_at = now()
 }
 
 /** draft edited → drafts.edited_at */
-export async function markDraftEdited(draftId: string): Promise<void> {
+async function mockMarkDraftEdited(draftId: string): Promise<void> {
   const db = await mockRequest(0)
   const draft = db.drafts.find((d) => d.id === draftId)
   if (draft) draft.edited_at = draft.updated_at = now()
@@ -968,12 +985,12 @@ export async function markDraftEdited(draftId: string): Promise<void> {
  * Mock: generations whose stream the user left (no finalize within 20s) are finished by the
  * "server" ("이탈 시 서버가 끝까지 생성·저장" [가정], C-04). Call on S-19 entry.
  */
-export async function settleAbandonedGeneration(draftId: string): Promise<void> {
+async function mockSettleAbandonedGeneration(draftId: string): Promise<void> {
   await mockRequest(0)
   const stale = [...plans().values()].filter((p) => p.draft_id === draftId && Date.now() - p.started_at > 20_000)
   for (const p of stale) {
-    if (p.kind === "career_description") await finalizeCareerDescription(p.target_id, p.generation_id, { ok: true, completed_block_ids: [] })
-    else await finalizeCoverLetterSection(p.target_id, p.generation_id, { ok: true, completed_block_ids: [] })
+    if (p.kind === "career_description") await mockFinalizeCareerDescription(p.target_id, p.generation_id, { ok: true, completed_block_ids: [] })
+    else await mockFinalizeCoverLetterSection(p.target_id, p.generation_id, { ok: true, completed_block_ids: [] })
   }
   // a row left "generating" without a plan (e.g. dev server restart) → settle from what is stored
   const db = await mockRequest(0)
@@ -1006,7 +1023,7 @@ export async function settleAbandonedGeneration(draftId: string): Promise<void> 
  * Returns true when started, "already" when an extraction is running, false when there is no JD.
  * mock_controls.next_jd_extraction_failure makes the started run fail with that cause.
  */
-export async function retryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
+async function mockRetryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
   const db = await mockRequest()
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return false
@@ -1031,6 +1048,89 @@ export async function retryJdExtraction(applicationProjectId: string): Promise<b
     fail: failNext,
   }).id
   return true
+}
+
+// ---------------------------------------------------------------------------
+// W3 wiring: `?state=` previews stay on the store above, everything else is real (drafts-real.ts).
+// ---------------------------------------------------------------------------
+
+export function getCareerSourceTree(): Promise<SourceTree> {
+  return previewOr(mockGetCareerSourceTree, realGetCareerSourceTree)
+}
+
+export function rankDraftSources(applicationProjectId: string, opts?: { fail?: boolean }) {
+  return previewOr(() => mockRankDraftSources(applicationProjectId, opts), () => realRankDraftSources(applicationProjectId))
+}
+
+export function createCareerDescriptionDraft(applicationProjectId: string, options: DraftOptions, regeneratedFromId: string | null = null): Promise<Draft> {
+  return previewOr(
+    () => mockCreateCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId),
+    () => realCreateCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId),
+  )
+}
+
+export function createCoverLetterDraft(applicationProjectId: string): Promise<Draft> {
+  return previewOr(() => mockCreateCoverLetterDraft(applicationProjectId), () => realCreateCoverLetterDraft(applicationProjectId))
+}
+
+export function addCoverLetterQuestion(draftId: string): Promise<DraftSection | null> {
+  return previewOr(() => mockAddCoverLetterQuestion(draftId), () => realAddCoverLetterQuestion(draftId))
+}
+
+export function deleteDraftSection(draftId: string, sectionId: string): Promise<boolean> {
+  return previewOr(() => mockDeleteDraftSection(draftId, sectionId), () => realDeleteDraftSection(sectionId))
+}
+
+/**
+ * Previews only. A real generation has no plan of blocks: it streams from the route (`prepareCareerDescriptionStream`).
+ * Null here refuses the start, so a screen that hasn't moved to the stream plan shows a refusal, never a fake draft.
+ */
+export function prepareCareerDescription(draftId: string): Promise<CareerDescriptionPlan | null> {
+  return previewOr(() => mockPrepareCareerDescription(draftId), async () => null)
+}
+
+export function prepareCoverLetterSection(sectionId: string): Promise<CoverLetterSectionPlan | null> {
+  return previewOr(() => mockPrepareCoverLetterSection(sectionId), async () => null)
+}
+
+/** The real AI-03 start: pass `request` to `stream.start({ ...request, discardOnError: true })`. Null on a preview. */
+export function prepareCareerDescriptionStream(draftId: string): Promise<RealStreamPlan | null> {
+  return previewOr(async () => null, () => realCareerDescriptionStreamPlan(draftId))
+}
+
+/** The real AI-04 start: pass `request` to `stream.start(request)`. Null on a preview. */
+export function prepareCoverLetterStream(sectionId: string): Promise<RealStreamPlan | null> {
+  return previewOr(async () => null, async () => realCoverLetterStreamPlan(sectionId))
+}
+
+export function finalizeCareerDescription(draftId: string, generationId: string, result: GenerationResult): Promise<CareerDescriptionStopped | null> {
+  return previewOr(() => mockFinalizeCareerDescription(draftId, generationId, result), () => realFinalizeCareerDescription(draftId, generationId, result))
+}
+
+export function finalizeCoverLetterSection(sectionId: string, generationId: string, result: GenerationResult): Promise<void> {
+  return previewOr(() => mockFinalizeCoverLetterSection(sectionId, generationId, result), () => realFinalizeCoverLetterSection(sectionId, generationId, result))
+}
+
+export function setSectionSources(sectionId: string, selections: SourceSelection[]): Promise<DraftSectionSource[] | null> {
+  return previewOr(() => mockSetSectionSources(sectionId, selections), () => realSetSectionSources(sectionId, selections))
+}
+
+export function markDraftCopied(draftId: string): Promise<void> {
+  return previewOr(() => mockMarkDraftCopied(draftId), () => realMarkDraftCopied(draftId))
+}
+
+/** The real save (`saveSectionEdit`) already sets edited_at. */
+export function markDraftEdited(draftId: string): Promise<void> {
+  return previewOr(() => mockMarkDraftEdited(draftId), async () => {})
+}
+
+/** A real run is finished by the route or the job sweep, whether or not the screen stayed. */
+export function settleAbandonedGeneration(draftId: string): Promise<void> {
+  return previewOr(() => mockSettleAbandonedGeneration(draftId), async () => {})
+}
+
+export function retryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
+  return previewOr(() => mockRetryJdExtraction(applicationProjectId), () => realRetryJdExtraction(applicationProjectId))
 }
 
 /** "요건 정리하기" (S-15, D-30) — same as retryJdExtraction */

@@ -21,7 +21,7 @@ import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { getAiConnectionAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
 import type { AiErrorCode, AiRetryRefusalCode } from "@/types/db"
-import { getJdExtractionStateAction, retryJdExtractionAction } from "@/app/(dashboard)/applications/_lib/actions"
+import { getJdExtractionStateAction, retryJdExtractionAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 const POLL_MS = 1_200
 /** A14 request path: default wait before a failed request-path call may be sent again (mock) */

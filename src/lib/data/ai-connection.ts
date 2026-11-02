@@ -1,9 +1,9 @@
 /**
  * AI 연결 data layer (v4 BYOK, 04 §2.11): provider keys (view ai_provider_keys_public),
  * profiles.active_ai_provider, ai_data_use_consents, ai_disclosures, ai_providers.
- * RPC names: save_provider_key / record_provider_key_check / delete_provider_key /
- * set_active_ai_provider. Server only; the raw key never leaves the server and is not stored
- * in the mock (only last4).
+ * Reads and writes go to the real services (`*Real` helpers below); `?state=` previews run the mock
+ * bodies (`previewOr`). Server only; the raw key goes straight to `registerProviderKey`, is never
+ * returned, logged or kept here, and the mock stores only last4 (NFR-KEY-01, -05).
  */
 import type {
   AiConnection,
@@ -24,6 +24,15 @@ import { failureTimestamps, mockSyncCall, MockAiError, recordMockUsage } from "@
 import { failureCauseOf } from "./ai-errors"
 import { currentPeriodMonth } from "@/lib/mock/time"
 import { consentRequired } from "@/lib/mock/consent"
+import { isPreviewRequest, previewOr, unwrap } from "./source"
+import type { KeyCheckOutcome } from "@/lib/contracts/ai-connection"
+import { isAppError } from "@/lib/contracts/errors"
+import * as connectionActions from "@/server/actions/ai-connection"
+import { requireUser } from "@/server/auth/session"
+import { getConsentState, loadCurrentDisclosureRow, loadLiveConsentRows } from "@/server/services/ai-connection/consent"
+import { getAiConnection as loadConnection, loadPublicKeyRows } from "@/server/services/ai-connection/keys"
+import { loadDataReadiness } from "@/server/services/shell"
+import { getAiUsageSummary as loadUsageSummary } from "@/server/services/usage"
 
 export { consentRequired }
 
@@ -61,9 +70,14 @@ export function computeAiConnection(db: MockDb): AiConnection {
   }
 }
 
+/** Read as the signed-in user with no consent gate: the shell (S-25 included, A7) mounts this. */
+async function realConnection(): Promise<AiConnection> {
+  const { supabase } = await requireUser()
+  return ((await loadDataReadiness(supabase)) as { ai_connection: AiConnection }).ai_connection
+}
+
 export async function getAiConnection(): Promise<AiConnection> {
-  const db = await mockRequest(0)
-  return computeAiConnection(db)
+  return previewOr(async () => computeAiConnection(await mockRequest(0)), realConnection)
 }
 
 /** Client shell state: ai_connection + whether any key is saved (C-18 destination: S-41 vs S-40) */
@@ -73,8 +87,98 @@ export interface AiConnectionState {
 }
 
 export async function getAiConnectionState(): Promise<AiConnectionState> {
-  const db = await mockRequest(0)
-  return { connection: computeAiConnection(db), has_any_key: db.ai_provider_keys.length > 0 }
+  return previewOr(
+    async () => {
+      const db = await mockRequest(0)
+      return { connection: computeAiConnection(db), has_any_key: db.ai_provider_keys.length > 0 }
+    },
+    async () => {
+      const [connection, keys] = await Promise.all([realConnection(), listRealKeys()])
+      return { connection, has_any_key: keys.length > 0 }
+    },
+  )
+}
+
+async function listRealKeys(provider?: AiProviderName): Promise<AiProviderKeyPublic[]> {
+  return (await loadPublicKeyRows((await requireUser()).supabase, provider)) as AiProviderKeyPublic[]
+}
+
+/** ai_data_use_consents has no updated_at column (mock type only). */
+function toConsentRow(row: Awaited<ReturnType<typeof loadLiveConsentRows>>[number]): AiDataUseConsent {
+  return {
+    ...row,
+    provider: row.provider as AiProviderName,
+    connection_tier: row.connection_tier as ConnectionTier,
+    updated_at: row.withdrawn_at ?? row.agreed_at,
+  }
+}
+
+async function realOverview(): Promise<AiConnectionOverview> {
+  const { supabase, user } = await requireUser()
+  const [connection, ai, keys, consents, usage] = await Promise.all([
+    realConnection(),
+    loadConnection(supabase, user.id),
+    loadPublicKeyRows(supabase),
+    loadLiveConsentRows(supabase),
+    loadUsageSummary(supabase),
+  ])
+  return {
+    connection,
+    providers: ai.providers.map(({ info }) => {
+      const p = info.provider
+      const key = (keys.find((k) => k.provider === p) ?? null) as AiProviderKeyPublic | null
+      const consent = [...consents].reverse().find((c) => c.provider === p)
+      return {
+        // Status, key-issue and upgrade links, description, default tier: UI constants (Q-6), no table column.
+        info: {
+          ...AI_PROVIDERS[p],
+          display_order: info.displayOrder,
+          is_available: info.isAvailable,
+          is_recommended: info.isRecommended,
+          dashboard_url: info.dashboardUrl ?? AI_PROVIDERS[p].dashboard_url,
+          billing_url: info.billingUrl ?? AI_PROVIDERS[p].billing_url,
+          key_guide_version: info.keyGuideVersion ?? AI_PROVIDERS[p].key_guide_version,
+          key_guide_checked_at: info.keyGuideCheckedAt ?? AI_PROVIDERS[p].key_guide_checked_at,
+        },
+        key,
+        is_active: ai.activeProvider === p && !!key,
+        consent: consent ? toConsentRow(consent) : null,
+      }
+    }),
+    month_estimated_cost_usd: usage.totals.estimatedCostUsd,
+  }
+}
+
+/** The key row after a verification (ProviderKeyMeta has no timestamps): null when none is stored. */
+async function realKeyRow(provider: AiProviderName): Promise<AiProviderKeyPublic | null> {
+  return (await listRealKeys(provider))[0] ?? null
+}
+
+/** KeyCheckOutcome (service) → KeyCheckResult (screen). */
+async function toKeyCheckResult(o: KeyCheckOutcome, provider: AiProviderName): Promise<KeyCheckResult> {
+  if (o.result === "rejected") {
+    return { outcome: "rejected", error_code: o.errorCode ?? "key_invalid", failure_cause: o.failureCause, ...(o.reason === "format" ? { format_error: true } : {}) }
+  }
+  const key = await realKeyRow(provider)
+  if (!key) throw new AiConnectionError("save_failed")
+  if (o.result === "valid") return { outcome: "valid", key, became_active: o.becameActive }
+  return {
+    outcome: "limited",
+    key,
+    became_active: o.becameActive,
+    failure_cause: o.failureCause ?? "provider_unavailable",
+    quota_resets_at: o.quotaResetsAt,
+    retry_after: o.retryAfter,
+  }
+}
+
+/** Service refusals → the error S-40 / S-41 catch. Anything unknown stays "save failed". */
+function toConnectionError(err: unknown): AiConnectionError {
+  if (isAppError(err)) {
+    if (err.code === "ai_consent_required") return new AiConnectionError("consent_required")
+    if (err.code === "key_not_found") return new AiConnectionError("no_key")
+  }
+  return new AiConnectionError("save_failed")
 }
 
 /** S-40 provider card view: provider reference row + the user's key (public columns) */
@@ -95,6 +199,7 @@ export interface AiConnectionOverview {
 
 /** S-40 AI 연결 (section and /settings/ai page share this) */
 export async function getAiConnectionOverview(): Promise<AiConnectionOverview> {
+  if (!(await isPreviewRequest())) return realOverview()
   const db = await mockRequest()
   const period = currentPeriodMonth()
   return clone({
@@ -112,12 +217,17 @@ export async function getAiConnectionOverview(): Promise<AiConnectionOverview> {
 }
 
 export async function listProviderKeys(): Promise<AiProviderKeyPublic[]> {
+  if (!(await isPreviewRequest())) return listRealKeys()
   const db = await mockRequest()
   return clone(db.ai_provider_keys.map(toPublic))
 }
 
 /** Current disclosure for provider × tier (C-21) */
 export async function getDisclosure(provider: AiProviderName, tier: ConnectionTier): Promise<AiDisclosure | null> {
+  if (!(await isPreviewRequest())) {
+    const row = await loadCurrentDisclosureRow((await requireUser()).supabase, provider, tier)
+    return row ? { ...row, provider, connection_tier: tier, terms_checked_at: row.terms_checked_at ?? "" } : null
+  }
   const db = await mockRequest(0)
   const rows = db.ai_disclosures
     .filter((d) => d.provider === provider && d.connection_tier === tier)
@@ -133,6 +243,10 @@ export async function getDataUseConsentState(
   provider: AiProviderName,
   tier: ConnectionTier,
 ): Promise<{ required: boolean; reconsent: boolean }> {
+  if (!(await isPreviewRequest())) {
+    const state = await getConsentState((await requireUser()).supabase, provider, tier)
+    return { required: state.needsConsent, reconsent: state.needsConsent && state.agreedVersion !== null }
+  }
   const db = await mockRequest(0)
   const required = consentRequired(db, provider, tier)
   const live = db.ai_data_use_consents.some((c) => c.provider === provider && c.connection_tier === tier && !c.withdrawn_at)
@@ -141,16 +255,19 @@ export async function getDataUseConsentState(
 
 /** Re-consent check (04 §2.11.5, v4.2 A20 — see consentRequired) */
 export async function needsDataUseConsent(provider: AiProviderName, tier: ConnectionTier): Promise<boolean> {
+  if (!(await isPreviewRequest())) return (await getConsentState((await requireUser()).supabase, provider, tier)).needsConsent
   const db = await mockRequest(0)
   return consentRequired(db, provider, tier)
 }
 
 /**
- * MOCK / dev only: publish a new disclosure version for provider × tier with
+ * MOCK / dev only, mock store only (never `ai_disclosures`): publish a new disclosure version for provider × tier with
  * `requires_reconsent = true`, so `ai_connection.consent_required` becomes true for real (every AI
  * run then opens C-21 first; agreeing clears it). Reproduces R-67 without a `?state=` override.
  */
 export async function publishMockReconsentDisclosure(provider?: AiProviderName, tier?: ConnectionTier): Promise<AiConnection> {
+  // A public Server Action wraps this; a plain request (always, in production) never reaches the store.
+  if (!(await isPreviewRequest())) throw new Error("mock reconsent is preview only")
   const db = await mockRequest(0)
   const base = computeAiConnection(db)
   const p = provider ?? base.active_provider
@@ -192,6 +309,29 @@ export async function recordDataUseConsent(input: {
   free_tier_acknowledged: boolean
   fail?: boolean
 }): Promise<AiDataUseConsent> {
+  if (!(await isPreviewRequest())) {
+    // The screen sends no version: the disclosure in effect now is what it shows (spec-gaps W1).
+    const { supabase } = await requireUser()
+    const disclosure = await loadCurrentDisclosureRow(supabase, input.provider, input.connection_tier)
+    if (!disclosure) throw new AiConnectionError("save_failed")
+    try {
+      unwrap(
+        await connectionActions.recordAiDataUseConsent({
+          provider: input.provider,
+          connectionTier: input.connection_tier,
+          disclosureVersion: disclosure.version,
+          freeTierAcknowledged: input.free_tier_acknowledged,
+        }),
+      )
+    } catch (err) {
+      throw toConnectionError(err)
+    }
+    const row = [...(await loadLiveConsentRows(supabase))]
+      .reverse()
+      .find((c) => c.provider === input.provider && c.connection_tier === input.connection_tier)
+    if (!row) throw new AiConnectionError("save_failed")
+    return toConsentRow(row)
+  }
   const db = await mockRequest(300)
   if (input.fail) throw new AiConnectionError("save_failed")
   if (input.connection_tier === "free" && input.provider === "gemini" && !input.free_tier_acknowledged)
@@ -257,6 +397,23 @@ export async function verifyAndSaveProviderKey(input: {
   raw_key: string
   mock?: KeyCheckMock
 }): Promise<KeyCheckResult> {
+  if (!(await isPreviewRequest())) {
+    const state = await getConsentState((await requireUser()).supabase, input.provider, input.connection_tier)
+    if (state.needsConsent || !state.agreedVersion) throw new AiConnectionError("consent_required")
+    try {
+      const outcome = unwrap(
+        await connectionActions.registerProviderKey({
+          provider: input.provider,
+          connectionTier: input.connection_tier,
+          apiKey: input.raw_key,
+          disclosureVersion: state.agreedVersion,
+        }),
+      )
+      return await toKeyCheckResult(outcome, input.provider)
+    } catch (err) {
+      throw err instanceof AiConnectionError ? err : toConnectionError(err)
+    }
+  }
   const db = await mockRequest(0)
   if (!keyFormatOk(input.provider, input.raw_key))
     return { outcome: "rejected", error_code: "key_invalid", failure_cause: "key_invalid", format_error: true }
@@ -330,6 +487,12 @@ export async function verifyAndSaveProviderKey(input: {
 
 /** RPC record_provider_key_check (S-40 "다시 확인") */
 export async function recheckProviderKey(provider: AiProviderName, mock?: KeyCheckMock): Promise<AiProviderKeyPublic | null> {
+  if (!(await isPreviewRequest())) {
+    const result = await connectionActions.recheckProviderKey({ provider })
+    if ("error" in result && result.error.code === "key_not_found") return null
+    unwrap(result)
+    return realKeyRow(provider)
+  }
   const db = await mockRequest(0)
   const row = db.ai_provider_keys.find((k) => k.provider === provider)
   if (!row) return null
@@ -362,6 +525,10 @@ export async function recheckProviderKey(provider: AiProviderName, mock?: KeyChe
 
 /** RPC delete_provider_key: hard delete, active → null (no auto switch), consent withdrawn */
 export async function deleteProviderKey(provider: AiProviderName): Promise<void> {
+  if (!(await isPreviewRequest())) {
+    unwrap(await connectionActions.deleteProviderKey({ provider }))
+    return
+  }
   const db = await mockRequest()
   const now = new Date().toISOString()
   db.ai_provider_keys = db.ai_provider_keys.filter((k) => k.provider !== provider)
@@ -373,6 +540,14 @@ export async function deleteProviderKey(provider: AiProviderName): Promise<void>
 
 /** RPC set_active_ai_provider: only a provider with a registered key (FK) */
 export async function setActiveAiProvider(provider: AiProviderName): Promise<AiConnection> {
+  if (!(await isPreviewRequest())) {
+    try {
+      unwrap(await connectionActions.setActiveAiProvider({ provider }))
+    } catch (err) {
+      throw toConnectionError(err)
+    }
+    return realConnection()
+  }
   const db = await mockRequest()
   if (!db.ai_provider_keys.some((k) => k.provider === provider)) throw new AiConnectionError("no_key")
   db.profiles[0].active_ai_provider = provider
@@ -381,6 +556,20 @@ export async function setActiveAiProvider(provider: AiProviderName): Promise<AiC
 
 /** S-41 ①② 등급 변경: key keeps its secret, tier changes after re-consent */
 export async function changeProviderTier(provider: AiProviderName, tier: ConnectionTier): Promise<AiProviderKeyPublic | null> {
+  if (!(await isPreviewRequest())) {
+    const state = await getConsentState((await requireUser()).supabase, provider, tier)
+    if (state.needsConsent || !state.agreedVersion) throw new AiConnectionError("consent_required")
+    const result = await connectionActions.recheckProviderKey({ provider, connectionTier: tier, disclosureVersion: state.agreedVersion })
+    if ("error" in result && result.error.code === "key_not_found") return null
+    try {
+      const outcome = unwrap(result)
+      // A rejected re-check keeps the old tier: the screen's save-failed row, not a silent success.
+      if (outcome.result === "rejected") throw new AiConnectionError("save_failed")
+    } catch (err) {
+      throw err instanceof AiConnectionError ? err : toConnectionError(err)
+    }
+    return realKeyRow(provider)
+  }
   const db = await mockRequest()
   const row = db.ai_provider_keys.find((k) => k.provider === provider)
   if (!row) return null

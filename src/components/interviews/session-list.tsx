@@ -333,9 +333,9 @@ export function SessionList({
         onOpenChange={(o) => !o && setTarget(null)}
         onConfirm={async () => {
           if (!target) return
-          await deleteInterviewSessionAction(target.entity_id)
+          const { gone } = await deleteInterviewSessionAction(target.entity_id)
           // [UI-가정] 삭제 완료 토스트 문구는 명세에 없음
-          toast("면접 세션을 삭제했어요")
+          toast(gone ? "이미 삭제된 면접 세션이에요" : "면접 세션을 삭제했어요")
           router.refresh()
         }}
       />

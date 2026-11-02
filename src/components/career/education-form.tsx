@@ -20,7 +20,8 @@ import { EDUCATION_TYPE_LABELS, ENROLLMENT_STATUS_LABELS } from "@/lib/data/labe
 import type { EducationWithChildren } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
 import { saveEducationAction } from "./actions"
-import { DangerZone, FormSection, RequiredMark, TextField, nn, useRowAutosave } from "./form-parts"
+import { DangerZone, FormSection, PeriodError, RequiredMark, SaveProblemNotice, TextField, monthText, nn, useRowAutosave, type ConflictField } from "./form-parts"
+import { periodPatch, storedPeriod } from "@/lib/data/row-save"
 
 interface Values {
   institution_name: string
@@ -44,17 +45,36 @@ function toValues(e: Education | null): Values {
   }
 }
 
+function conflictFields(v: Values): ConflictField[] {
+  return [
+    { label: "기관명", value: v.institution_name },
+    { label: "구분", value: v.education_type ? EDUCATION_TYPE_LABELS[v.education_type] : "" },
+    { label: "전공/과정명", value: v.program_name },
+    { label: "시작", value: monthText(v.start_month) },
+    { label: "종료", value: monthText(v.end_month) },
+    { label: "상태", value: v.enrollment_status ? ENROLLMENT_STATUS_LABELS[v.enrollment_status] : "" },
+    { label: "설명", value: v.description },
+  ]
+}
+
 const TYPE_HELP: Record<EducationType, string> = {
   degree: "대학·대학원 등",
   course: "부트캠프·사내외 교육",
 }
 
+/** UQ-702: "재학 중" clears the end month on save; a reversed period isn't sent. Same shape as `toValues`. */
+function storedValues(v: Values, latest: Education): Values {
+  return { ...v, ...storedPeriod(v.start_month, v.enrollment_status === "enrolled" ? null : v.end_month, latest) }
+}
+
 export function EducationForm({ education }: { education: EducationWithChildren | null }) {
   const [values, setValues] = React.useState<Values>(() => toValues(education))
-  const { autosave, row, id } = useRowAutosave<Values, Education>({
+  const { autosave, row, id, problem, keepMine, takeLatest } = useRowAutosave<Values, Education>({
     initialId: education?.id ?? null,
     initialRow: education,
     editHref: routes.education,
+    comparable: toValues,
+    stored: storedValues,
     save: (rowId, v, opts) =>
       saveEducationAction(
         rowId,
@@ -62,8 +82,7 @@ export function EducationForm({ education }: { education: EducationWithChildren 
           institution_name: nn(v.institution_name),
           education_type: v.education_type || null,
           program_name: nn(v.program_name),
-          start_month: v.start_month,
-          end_month: v.enrollment_status === "enrolled" ? null : v.end_month,
+          ...periodPatch(v.start_month, v.enrollment_status === "enrolled" ? null : v.end_month),
           enrollment_status: v.enrollment_status || null,
           description: nn(v.description),
         },
@@ -87,6 +106,16 @@ export function EducationForm({ education }: { education: EducationWithChildren 
         badge={id && status === "draft" ? <DraftBadge /> : null}
         description="기관명·구분·시작월을 채우면 완료돼요"
         status={<SaveStatus state={autosave.state} savedAt={autosave.savedAt} onRetry={autosave.retry} />}
+      />
+      <SaveProblemNotice
+        problem={problem}
+        mine={conflictFields(values)}
+        latest={(r) => conflictFields(toValues(r))}
+        onKeepMine={keepMine}
+        onTakeLatest={() => {
+          const latest = takeLatest()
+          if (latest) setValues(toValues(latest))
+        }}
       />
       {id && status === "draft" ? <DraftNotice /> : null}
 
@@ -119,9 +148,10 @@ export function EducationForm({ education }: { education: EducationWithChildren 
         </fieldset>
         <TextField id="edu-program" label="전공/과정명" value={values.program_name} onChange={(v) => set({ program_name: v })} onBlur={blur} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <MonthField id="edu-start" label="시작" required value={values.start_month} onChange={(v) => set({ start_month: v })} />
-          <MonthField id="edu-end" label="종료" value={enrolled ? null : values.end_month} disabled={enrolled} onChange={(v) => set({ end_month: v })} />
+          <MonthField id="edu-start" label="시작" required value={values.start_month} onChange={(v) => set({ start_month: v })} describedBy="edu-period-error" />
+          <MonthField id="edu-end" label="종료" value={enrolled ? null : values.end_month} disabled={enrolled} onChange={(v) => set({ end_month: v })} describedBy="edu-period-error" />
         </div>
+        <PeriodError id="edu-period-error" start={values.start_month} end={enrolled ? null : values.end_month} />
         <div className="space-y-1.5">
           <Label htmlFor="edu-status" className="text-sm font-medium">
             상태

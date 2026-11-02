@@ -131,7 +131,7 @@ select set_eq(
         'begin_interview_questions', 'save_interview_question', 'complete_interview_questions',
         'fail_interview_questions', 'begin_interview_evaluation', 'save_answer_evaluation', 'fail_answer_evaluation',
         'save_session_feedback', 'complete_interview_evaluation',
-        'retry_ai_job'],
+        'retry_ai_job', 'get_interview_grading_decisions'],
   'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + S8 interview RPCs + R2 retry_ai_job');
 
 -- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
@@ -345,7 +345,8 @@ select set_eq(
         'mark_interview_result_viewed', 'move_application_stage', 'record_consents',
         'reorder_cover_letter_questions', 'reorder_project_details', 'request_ai_job_cancel',
         'save_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
-        'set_writing_chat_affiliation', 'start_writing_chat', 'submit_interview_session'],
+        'set_writing_chat_affiliation', 'start_writing_chat', 'submit_interview_session',
+        'get_interview_grading_decisions', 'update_failed_jd_raw_text'],
   'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role)');
 
 -- QA-S9-04 (a): every table in public has RLS enabled (a new table without RLS fails here).

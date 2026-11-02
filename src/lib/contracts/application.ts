@@ -35,7 +35,8 @@ export const JD_SHORT_WARNING_CHARS = 200;
 /** C-2 8k-token cap [가정]: ≈ 24,000 characters → `long_jd` warning. */
 export const JD_LONG_WARNING_CHARS = 24_000;
 /** Card name while extraction is pending (name null, no company / position, S-14). */
-export const PENDING_DISPLAY_NAME = "새 기업 JD";
+/** R4 CR-23 [가정]: the screens call an application project "자기소개서" (DB default "새 자기소개서 (날짜)"). */
+export const PENDING_DISPLAY_NAME = "새 자기소개서";
 
 const uuid = z.guid();
 /** Form fields: "" / whitespace-only → undefined. */
@@ -236,7 +237,7 @@ export type ApplicationProgress = {
 type NameFields = {
   name: string | null;
   nameSource: (typeof NAME_SOURCES)[number] | null;
-  /** name → "회사명 – 포지션명" → "새 기업 JD" (추출 대기). */
+  /** name → "회사명 – 포지션명" → "새 자기소개서" (추출 대기). */
   displayName: string;
 };
 
@@ -378,7 +379,7 @@ export function joinCompanyPosition(companyName: string | null, positionTitle: s
   return c && p ? `${c} – ${p}` : null;
 }
 
-/** Card / row label: name → "회사명 – 포지션명" → "새 기업 JD". */
+/** Card / row label: name → "회사명 – 포지션명" → "새 자기소개서". */
 export function applicationDisplayName(name: string | null, companyName: string | null, positionTitle: string | null): string {
   if (name && name.trim()) return name;
   return joinCompanyPosition(companyName, positionTitle) ?? PENDING_DISPLAY_NAME;

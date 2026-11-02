@@ -73,7 +73,6 @@ export type SelectedSourceView = {
   experience_id: string | null;
   education_id: string | null;
   project_id: string | null;
-  project_detail_ids: string[];
   /** "회사명 › 프로젝트명" (server-built from the rows). */
   label: string;
   rationale: string;

@@ -209,12 +209,24 @@ export const DETAIL_FIELD_LABELS: Record<ProjectDetailField, string> = {
   learnings: "회고 및 배운 점",
 }
 
+/** DM v4.4 `project` evidence source_field labels (CR-2: 역할 / 결과/성과 / 배운 점). */
+export const PROJECT_EVIDENCE_FIELD_LABELS: Record<string, string> = {
+  situation: "상황",
+  task: "역할",
+  action: "행동",
+  result: "결과/성과",
+  learnings: "배운 점",
+  role: "담당 업무",
+  description: "프로젝트 내용",
+}
+
 /** C-01 칩 종류 라벨 */
 export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   profile: "기본 프로필",
   experience: "경력",
   education: "교육",
   project: "프로젝트",
+  project_deliverable: "산출물",
   project_detail: "상세 내용",
   achievement: "정량 성과",
   skill: "스킬",
@@ -229,6 +241,11 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
  * learnings → "회고 및 배운 점" only (02 C-01 회고 구분).
  */
 export function evidenceKindLabel(sourceType: EvidenceSourceType, sourceField: string | null): string {
+  // DM v4.4: STAR lives on projects — "프로젝트 · 행동"; learnings → "배운 점" (CR-2).
+  if (sourceType === "project" && sourceField && sourceField in PROJECT_EVIDENCE_FIELD_LABELS) {
+    if (sourceField === "learnings") return PROJECT_EVIDENCE_FIELD_LABELS.learnings!
+    return `${EVIDENCE_KIND_LABELS.project} · ${PROJECT_EVIDENCE_FIELD_LABELS[sourceField]}`
+  }
   if (sourceType === "project_detail") {
     if (sourceField === "learnings") return DETAIL_FIELD_LABELS.learnings
     const field = sourceField && sourceField in DETAIL_FIELD_LABELS ? DETAIL_FIELD_LABELS[sourceField as ProjectDetailField] : null
@@ -298,14 +315,14 @@ export function countsAsInterview(s: { status: string }, savedQuestions: number)
   return !(s.status === "abandoned" && savedQuestions === 0)
 }
 
-/** Default JD name "새 기업 JD (2026-10-28)" (S-14, KST date) */
+/** Default name "새 자기소개서 (2026-10-28)" (S-14, KST date; R4 CR-23 [가정] = private.application_default_name) */
 export function defaultApplicationName(createdAt: string | Date): string {
-  return `새 기업 JD (${kstDateString(createdAt)})`
+  return `새 자기소개서 (${kstDateString(createdAt)})`
 }
 
-/** application_projects.name display: null → "새 기업 JD", default → "새 기업 JD (날짜)" (S-14 [가정], KST) */
+/** application_projects.name display: null → "새 자기소개서", default → "새 자기소개서 (날짜)" (S-14 [가정], KST, CR-23) */
 export function applicationDisplayName(name: string | null, nameSource: string | null, createdAt?: string): string {
-  if (!name) return "새 기업 JD"
+  if (!name) return "새 자기소개서"
   if (nameSource === "default" && createdAt) return defaultApplicationName(createdAt)
   return name
 }

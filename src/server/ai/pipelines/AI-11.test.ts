@@ -28,14 +28,19 @@ describe("summary career pack (AI-11 입력)", () => {
     expect(summary.text).toContain(`${a(full.aliases, "project", IDS.prjPay)} 결제 승인 API 개선`);
     expect(summary.text).not.toContain("측정 없이 최적화"); // learnings (C-9)
     expect(summary.text).not.toContain("작성 중 프로젝트"); // draft rows stay out (C-1)
-    expect(summary.text).toContain("기타 프로젝트");
-    expect(summary.text).toContain("성과 지표: 승인 API 응답 시간");
-    expect(summary.text).toContain("스킬: Spring Boot, Kotlin");
+    expect(summary.text).toContain("독립 프로젝트");
+    expect(summary.text).toContain("분류(참고): 프로젝트 종류: 개선·고도화"); // C-1.2 reference only
+    expect(summary.text).toContain("역할: 응답 시간을 1초 미만으로 낮추기");
+    expect(summary.text).toContain("결과/성과: 응답 시간이 0.7초로 줄었다");
+    expect(summary.text).toContain("담당 업무: 1인 개발 (기획·백엔드)");
+    expect(summary.text).toContain("사용 기술: Kotlin, Spring Boot");
+    expect(summary.text).toContain(`${a(full.aliases, "project_deliverable", IDS.dlvSide1)} 산출물: 문자 파싱 설계`);
+    expect(summary.text).not.toContain("숨겨질 산출물"); // deliverable of a draft project
   });
 
-  it("clips a detail's action to 200 characters", () => {
+  it("clips an affiliated project's action to 200 characters", () => {
     const rows = careerRowsFixture();
-    rows.projectDetails[0].action = "가".repeat(400);
+    rows.projects.find((p) => p.id === IDS.prjPay)!.action = "가".repeat(400);
     const summary = buildSummaryCareerPack(rows, { asOf: AS_OF });
     expect(summary.text).toContain(`행동: ${"가".repeat(SUMMARY_ACTION_MAX)}…`);
     expect(summary.text).not.toContain("가".repeat(SUMMARY_ACTION_MAX + 1));

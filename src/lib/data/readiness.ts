@@ -10,6 +10,8 @@ import { IDS } from "@/lib/mock/ids"
 import { previewOr } from "./source"
 import { requireUser } from "@/server/auth/session"
 import { loadDataReadiness } from "@/server/services/shell"
+import { DataReadiness as DataReadinessSchema, type DataReadiness as DataReadinessV44 } from "@/lib/contracts/career"
+import { AppError } from "@/lib/contracts/errors"
 
 /** `?state=insufficient-project-fields`: fixture project 8 really lacks its role (UQ-489) */
 const PREVIEW_PROJECT_ID = IDS.prj(8)
@@ -106,9 +108,57 @@ export function computeReadiness(db: MockDb): DataReadiness {
 export async function getDataReadiness(): Promise<DataReadiness> {
   return previewOr(
     async () => computeReadiness(await mockRequest()),
-    // The RPC's jsonb is the same DM §6 shape the mock computes; screens read it as is.
-    async () => (await loadDataReadiness((await requireUser()).supabase)) as DataReadiness,
+    async () => toLegacyReadiness(await getDataReadinessV44()),
   )
+}
+
+/**
+ * DM §6 v4.4 readiness (counts `projects_without_complete_star` / `standalone_projects_without_description`,
+ * hints `project_star` / `project_fields` / `profile`, next_action `writing_chat` / `form` / `create_project`,
+ * no `suggested_mode`). 연결 대기: the reworked C-09 / C-10 read this shape.
+ */
+export async function getDataReadinessV44(): Promise<DataReadinessV44> {
+  const parsed = DataReadinessSchema.safeParse(await loadDataReadiness((await requireUser()).supabase))
+  if (!parsed.success) throw new AppError("internal_error", undefined, { status: 500, cause: parsed.error })
+  return parsed.data
+}
+
+/**
+ * @deprecated R4 shim: v4.4 readiness → the v4.3b shape the current gate screens read.
+ * `project_star` → `complete_project_detail`; `writing_chat` → augment the suggested project (a chat now
+ * always needs a project); `create_project` → `form` (no "new project" chat any more).
+ */
+export function toLegacyReadiness(r: DataReadinessV44): DataReadiness {
+  const feature = (f: DataReadinessV44["features"]["insight"]): ReadinessFeature => {
+    const hints = (f.hints ?? []).map((h) => (h === "project_star" ? "complete_project_detail" : h))
+    if (f.ready) return { ready: true, missing: f.missing ?? [], hints }
+    if (f.next_action === "writing_chat" && f.suggested_project_id) {
+      return { ready: false, missing: f.missing, hints, next_action: "writing_chat", suggested_mode: "augment_project", suggested_project_id: f.suggested_project_id }
+    }
+    return { ready: false, missing: f.missing, hints, next_action: "form", ...(f.suggested_project_id ? { suggested_project_id: f.suggested_project_id } : {}) }
+  }
+  return {
+    counts: {
+      complete_experiences: r.counts.complete_experiences,
+      complete_educations: r.counts.complete_educations,
+      complete_projects: r.counts.complete_projects,
+      projects_without_complete_detail: r.counts.projects_without_complete_star,
+      complete_project_details: 0,
+      draft_project_details: 0,
+      draft_experiences: r.counts.draft_experiences,
+      draft_educations: r.counts.draft_educations,
+      draft_projects: r.counts.draft_projects,
+      profile_filled: r.counts.profile_filled,
+    },
+    draft_item_ids: { ...r.draft_item_ids, project_details: [] },
+    features: {
+      insight: feature(r.features.insight),
+      draft: feature(r.features.draft),
+      job_interview: feature(r.features.job_interview),
+      culture_fit_interview: r.features.culture_fit_interview,
+    },
+    ai_connection: r.ai_connection as DataReadiness["ai_connection"],
+  }
 }
 
 /**

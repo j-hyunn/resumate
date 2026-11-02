@@ -1,10 +1,15 @@
 /**
- * 커리어 data layer (experiences, educations, projects, project_details, achievements,
- * skills, project_skills, profiles). Server only — call from Server Components or from
- * server actions. W2: real services + RLS; `?state=` previews stay on src/lib/mock (`previewOr`).
+ * 커리어 data layer (experiences, educations, projects, skills, project_skills, profiles). Server only —
+ * call from Server Components or from server actions. W2: real services + RLS; `?state=` previews stay
+ * on src/lib/mock (`previewOr`).
+ *
+ * R4 (DM v4.4, CR-2·CR-7·CR-11): the current screens still use the v4.3b shapes. The real path maps
+ * v4.4 rows into them (`toLegacy*`): project details / achievements are always empty, their writes
+ * answer `not_supported`. These exports are @deprecated compatibility shims (list in
+ * _workspace/backend/R4/02_api_notes.md); the reworked screens use `./career-v44`.
  *
  * Writes follow DM-8: `status` is computed by the DB on every save ('draft' while required
- * fields are missing). Parent project status follows its details.
+ * fields are missing).
  */
 import { randomUUID } from "node:crypto"
 import type { z } from "zod"
@@ -24,12 +29,10 @@ import { newId, USER_ID } from "@/lib/mock/ids"
 import {
   AddManualSkillInput,
   AddProjectSkillInput,
+  CreateProjectInput,
   RemoveProjectSkillInput,
-  ReorderProjectDetailsInput,
-  SaveAchievementInput,
   SaveEducationInput,
   SaveExperienceInput,
-  SaveProjectDetailInput,
   SaveProjectInput,
   normalizeSkillName,
   type SkillDto,
@@ -40,15 +43,14 @@ import { requireConsentedUser } from "@/server/auth/session"
 import { wasRowDeleted } from "@/server/auth/user-cookies"
 import * as career from "@/server/services/career"
 import {
-  loadAchievementRow,
   loadCareerRows,
   loadEducationRow,
   loadExperienceRow,
   loadProfileRow,
-  loadProjectDetailRow,
   loadProjectRow,
   loadProjectSkillRows,
 } from "@/server/services/career/rows"
+import type { Database } from "@/server/db/database.types"
 import * as profiles from "@/server/services/profile"
 import { previewOr, unwrap } from "./source"
 
@@ -119,10 +121,76 @@ function maybeFail(opts?: WriteOptions) {
 /** The tables the screens join. Same shape from the mock store and from Postgres, so the join code is shared. */
 type CareerData = Pick<MockDb, "experiences" | "educations" | "projects" | "project_details" | "achievements" | "skills" | "project_skills" | "writing_chats">
 
+type ProjectRowV44 = Database["public"]["Tables"]["projects"]["Row"]
+type WritingChatRowV44 = Database["public"]["Tables"]["writing_chats"]["Row"]
+
+/**
+ * @deprecated R4 shim: v4.4 `projects` row → the v4.3b `Project` the screens read. `summary` shows a
+ * standalone project's `description`; `team_size` is gone (null).
+ */
+export function toLegacyProject(r: ProjectRowV44): Project {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    status: r.status as Project["status"],
+    experience_id: r.experience_id,
+    education_id: r.education_id,
+    name: r.name,
+    role: r.role,
+    summary: r.experience_id || r.education_id ? null : r.description,
+    start_month: r.start_month,
+    end_month: r.end_month,
+    team_size: null,
+    source_writing_chat_id: r.source_writing_chat_id,
+  }
+}
+
+/**
+ * @deprecated R4 shim: v4.4 `writing_chats` row → the v4.3b `WritingChat`. Every chat now belongs to a
+ * project (`augment_project`); `closed` reads as `saved` (read-only); the v3 draft is not shown (empty v1).
+ */
+export function toLegacyWritingChat(r: WritingChatRowV44, project?: Pick<ProjectRowV44, "experience_id" | "education_id">): WritingChat {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    mode: "augment_project",
+    project_id: r.project_id,
+    experience_id: project?.experience_id ?? null,
+    education_id: project?.education_id ?? null,
+    status: r.status === "closed" ? "saved" : "active",
+    structured_draft: {},
+    message_count: r.message_count,
+    last_extracted_sequence: r.last_extracted_sequence,
+    return_target: (r.return_target ?? null) as WritingChat["return_target"],
+    last_activity_at: r.last_activity_at,
+    saved_at: null,
+  }
+}
+
 async function loadCareerData(): Promise<CareerData> {
   const { supabase } = await requireConsentedUser()
-  // Generated types give CHECK columns and jsonb as string / Json; the DB guarantees the narrower UI types.
-  return (await loadCareerRows(supabase)) as unknown as CareerData
+  const rows = await loadCareerRows(supabase)
+  const projectById = new Map(rows.projects.map((p) => [p.id, p]))
+  // Generated types give CHECK columns as string; the DB guarantees the narrower UI types.
+  return {
+    experiences: rows.experiences as unknown as Experience[],
+    educations: rows.educations as unknown as Education[],
+    projects: rows.projects.map(toLegacyProject),
+    project_details: [],
+    achievements: [],
+    skills: rows.skills as unknown as Skill[],
+    project_skills: rows.project_skills,
+    writing_chats: rows.writing_chats.map((c) => toLegacyWritingChat(c, projectById.get(c.project_id))),
+  }
+}
+
+/** @deprecated R4: project details / achievements were removed (CR-2·CR-11). */
+function notSupported(): never {
+  throw new AppError("not_supported", "상세 내용·정량 성과는 새 커리어 구조에서 없어졌어요. 프로젝트의 STAR 섹션에 써 주세요.", { status: 410 })
 }
 
 function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
@@ -417,44 +485,46 @@ function careerTreeTotals(db: CareerData, profile: Profile): Omit<CareerTree, "y
 }
 
 /**
- * S-08 on the real year view (DM §2.4, `groupCareerByYear`): a project dated outside its affiliation's
- * years still shows under that affiliation. The `year: null` bucket maps to `undated_entries` (an experience /
- * education without a start month, with its undated projects) and `undated_projects` (no affiliation).
+ * @deprecated R4 shim: S-08 v4.3b tree from v4.4 rows. Experiences / educations appear once under
+ * their start year (CR-4) with all their projects; standalone projects are `other_projects` of their
+ * start year (or `undated_projects`).
  */
 async function realCareerTree(): Promise<CareerTree> {
-  const { supabase, user } = await requireConsentedUser()
-  const [rows, profile] = await Promise.all([loadCareerRows(supabase), loadProfileRow(supabase, user.id)])
-  const db = rows as unknown as CareerData
-  const projects = new Map(db.projects.map((p) => [p.id, projectWithChildren(db, p)]))
-  const pick = (ids: string[]) => ids.flatMap((id) => projects.get(id) ?? [])
-  const groups = career.groupCareerByYear(
-    {
-      experiences: db.experiences.map((e) => ({ id: e.id, startMonth: e.start_month, endMonth: e.end_month, isCurrent: e.is_current })),
-      educations: db.educations.map((e) => ({ id: e.id, startMonth: e.start_month, endMonth: e.end_month })),
-      projects: db.projects.map((p) => ({ id: p.id, experienceId: p.experience_id, educationId: p.education_id, startMonth: p.start_month, createdAt: p.created_at })),
-    },
-    career.currentYearInSeoul(new Date()),
-  )
-  const years: CareerTreeYear[] = []
-  const undated: ProjectWithChildren[] = []
-  const undatedEntries: CareerTreeAffiliationEntry[] = []
-  const entriesOf = (affiliations: (typeof groups)[number]["affiliations"]) =>
-    affiliations.flatMap((a): CareerTreeAffiliationEntry[] => {
-      const inYear = pick(a.projectIds)
-      const experience = a.type === "experience" ? db.experiences.find((e) => e.id === a.id) : undefined
-      const education = a.type === "education" ? db.educations.find((e) => e.id === a.id) : undefined
-      if (!experience && !education) return []
-      return [{ kind: a.type, ...(experience ? { experience } : { education }), projects: inYear, collapsed: inYear.length === 0 }]
-    })
-  for (const group of groups) {
-    if (group.year === null) {
-      undatedEntries.push(...entriesOf(group.affiliations))
-      undated.push(...pick(group.otherProjectIds))
-      continue
+  const { user, supabase } = await requireConsentedUser()
+  const [db, profile] = await Promise.all([loadCareerData(), loadProfileRow(supabase, user.id)])
+  const projects = db.projects.map((p) => projectWithChildren(db, p))
+  const years = new Map<number, CareerTreeYear>()
+  const yearEntry = (y: number) => {
+    let entry = years.get(y)
+    if (!entry) {
+      entry = { year: y, entries: [], other_projects: [] }
+      years.set(y, entry)
     }
-    years.push({ year: group.year, entries: entriesOf(group.affiliations), other_projects: pick(group.otherProjectIds) })
+    return entry
   }
-  return { years, undated_projects: undated, undated_entries: undatedEntries, ...careerTreeTotals(db, profile as Profile) }
+  const undatedEntries: CareerTreeAffiliationEntry[] = []
+  const undated: ProjectWithChildren[] = []
+  const addEntry = (entry: CareerTreeAffiliationEntry, start: string | null) => {
+    const y = yearOf(start)
+    if (y === null) undatedEntries.push(entry)
+    else yearEntry(y).entries.push(entry)
+  }
+  for (const experience of db.experiences) {
+    const own = projects.filter((p) => p.experience_id === experience.id)
+    addEntry({ kind: "experience", experience, projects: own, collapsed: own.length === 0 }, experience.start_month)
+  }
+  for (const education of db.educations) {
+    const own = projects.filter((p) => p.education_id === education.id)
+    addEntry({ kind: "education", education, projects: own, collapsed: own.length === 0 }, education.start_month)
+  }
+  for (const p of projects) {
+    if (p.experience_id || p.education_id) continue
+    const y = yearOf(p.start_month)
+    if (y === null) undated.push(p)
+    else yearEntry(y).other_projects.push(p)
+  }
+  const sorted = [...years.values()].sort((a, b) => b.year - a.year)
+  return clone({ years: sorted, undated_projects: undated, undated_entries: undatedEntries, ...careerTreeTotals(db, profile as Profile) })
 }
 
 async function mockCareerTree(): Promise<CareerTree> {
@@ -647,35 +717,51 @@ async function mockSaveEducation(id: string | null, patch: EducationPatch, opts?
 
 type ProjectPatch = Partial<Omit<Project, "id" | "user_id" | "created_at" | "updated_at" | "status">>
 
+/**
+ * @deprecated R4 shim (S-10 v4.3b form). Create = C-23 `createProject` (name required: an empty name
+ * becomes "새 프로젝트" [가정]); then a section save. `role` / `summary` (→ `description`) only on a
+ * standalone project, `team_size` is dropped (DM v4.4). A scope change is refused by the DB.
+ */
 export async function saveProject(id: string | null, patch: ProjectPatch, opts?: WriteOptions): Promise<Project> {
   return previewOr(
     () => mockSaveProject(id, patch, opts),
     async () => {
-      const { supabase } = await requireConsentedUser()
+      const { supabase, user } = await requireConsentedUser()
       requirePatch(patch)
-      const identity = await saveIdentity(id, opts, (rowId) => loadProjectRow(supabase, rowId))
       const affiliation =
         patch.experience_id === undefined && patch.education_id === undefined
           ? undefined
           : patch.experience_id
-            ? { type: "experience", id: patch.experience_id }
+            ? { type: "experience" as const, id: patch.experience_id }
             : patch.education_id
-              ? { type: "education", id: patch.education_id }
-              : { type: "none" }
+              ? { type: "education" as const, id: patch.education_id }
+              : { type: "none" as const }
+      let rowId = id
+      if (!rowId) {
+        const clientId = opts?.client_id
+        if (clientId && (await wasRowDeleted(user.id, clientId))) throw new AppError("not_found")
+        const created = await career.createProject(
+          supabase,
+          parseInput(CreateProjectInput, { id: clientId, name: patch.name?.trim() || "새 프로젝트", affiliation: affiliation ?? { type: "none" } }),
+        )
+        rowId = created.id
+      }
+      const current = saved(await loadProjectRow(supabase, rowId))
+      const standalone = !current.experience_id && !current.education_id
       const input = parseInput(SaveProjectInput, {
-        ...identity,
+        id: rowId,
+        ...(id ? { expectedUpdatedAt: opts?.expected_updated_at ?? current.updated_at } : {}),
         ...defined({
-          affiliation,
-          name: patch.name,
-          role: patch.role,
-          summary: patch.summary,
+          affiliation: id && affiliation && affiliation.type !== "none" ? affiliation : undefined,
+          name: patch.name?.trim() ? patch.name : undefined,
           startMonth: toYearMonth(patch.start_month),
           endMonth: toYearMonth(patch.end_month),
-          teamSize: patch.team_size,
+          role: standalone ? patch.role : undefined,
+          description: standalone ? patch.summary : undefined,
         }),
       })
-      const result = await career.saveProject(supabase, input)
-      return saved(await loadProjectRow(supabase, result.id)) as Project
+      await career.saveProject(supabase, input)
+      return toLegacyProject(saved(await loadProjectRow(supabase, rowId)))
     },
   )
 }
@@ -765,23 +851,8 @@ export async function saveProjectDetail(
   return previewOr(
     () => mockSaveProjectDetail(projectId, id, patch, opts),
     async () => {
-      const { supabase } = await requireConsentedUser()
-      requirePatch(patch)
-      const identity = await saveIdentity(id, opts, (rowId) => loadProjectDetailRow(supabase, rowId))
-      const input = parseInput(SaveProjectDetailInput, {
-        ...identity,
-        projectId,
-        ...defined({
-          title: patch.title,
-          situation: patch.situation,
-          task: patch.task,
-          action: patch.action,
-          result: patch.result,
-          learnings: patch.learnings,
-        }),
-      })
-      const result = await career.saveProjectDetail(supabase, input)
-      return saved(await loadProjectDetailRow(supabase, result.id)) as ProjectDetail
+      // @deprecated R4 shim: project_details was dropped (DM v4.4, CR-2).
+      notSupported()
     },
   )
 }
@@ -833,10 +904,8 @@ export async function reorderProjectDetails(projectId: string, orderedIds: strin
         if (d) d.sort_order = index + 1
       })
     },
-    async () => {
-      const { supabase } = await requireConsentedUser()
-      await career.reorderProjectDetails(supabase, parseInput(ReorderProjectDetailsInput, { projectId, orderedIds }))
-    },
+    // @deprecated R4 shim: project_details was dropped (DM v4.4, CR-2).
+    async () => notSupported(),
   )
 }
 
@@ -847,27 +916,8 @@ export async function saveAchievement(id: string | null, patch: AchievementPatch
   return previewOr(
     () => mockSaveAchievement(id, patch, opts),
     async () => {
-      const { supabase } = await requireConsentedUser()
-      requirePatch(patch)
-      const identity = await saveIdentity(id, opts, (rowId) => loadAchievementRow(supabase, rowId))
-      const target = patch.project_detail_id
-        ? { type: "project_detail", id: patch.project_detail_id }
-        : patch.experience_id
-          ? { type: "experience", id: patch.experience_id }
-          : undefined
-      const input = parseInput(SaveAchievementInput, {
-        ...identity,
-        ...defined({
-          target,
-          metricName: patch.metric_name,
-          valueBefore: patch.value_before,
-          valueAfter: patch.value_after,
-          unit: patch.unit,
-          description: patch.description,
-        }),
-      })
-      const result = await career.saveAchievement(supabase, input)
-      return saved(await loadAchievementRow(supabase, result.id)) as Achievement
+      // @deprecated R4 shim: achievements was dropped (DM v4.4, CR-11).
+      notSupported()
     },
   )
 }

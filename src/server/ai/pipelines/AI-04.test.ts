@@ -66,12 +66,11 @@ function source(ctx: Ctx, projectId: string, extra: Record<string, unknown> = {}
     project_ref: prj,
     experience_ref: null,
     education_ref: null,
-    detail_refs: [],
     role: "primary",
     rationale: "관련이 큽니다",
     requirement_refs: ["REQ-1"],
     reuse_reason: null,
-    evidence: [{ source_type: "project", ref: prj, field: "role", quote: null }],
+    evidence: [{ source_type: "project", ref: prj, field: "name", quote: null }],
     ...extra,
   };
 }
@@ -83,27 +82,26 @@ function output(ctx: Ctx, over: Record<string, unknown> = {}) {
 describe("streamCoverLetterSection (AI-04)", () => {
   it("job_competency: sources_selected first, V-7 on paragraphs, persisted payload", async () => {
     const ctx = context(question({ template_key: null, user_note: "결제 도메인에 계속 있고 싶다" }));
-    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
-    const det2 = a(ctx.aliases, "project_detail", IDS.detPay2);
-    const settleDet = a(ctx.aliases, "project_detail", IDS.detSettle);
+    const pay = a(ctx.aliases, "project", IDS.prjPay);
+    const settle = a(ctx.aliases, "project", IDS.prjSettle);
+    const side = a(ctx.aliases, "project", IDS.prjSide);
     const out = output(ctx, {
       question_class: "job_competency",
       sources: [
         source(ctx, IDS.prjPay, {
           experience_ref: "EXP-9", // wrong parent → corrected
-          detail_refs: [det1, settleDet], // settleDet belongs to another project → dropped
-          evidence: [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }],
+          evidence: [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }],
         }),
         source(ctx, IDS.prjSide, { role: "primary", evidence: [] }), // no evidence → dropped (V-4)
       ],
       paragraphs: [
         paragraph("q-p1", "저는 결제 승인 API의 병목을 찾아 응답 시간을 1.2초에서 0.7초로 줄였습니다.", [
-          { source_type: "project_detail", ref: det1, field: "result", quote: "응답 시간이 0.7초로 줄었다" },
+          { source_type: "project", ref: pay, field: "result", quote: "응답 시간이 0.7초로 줄었다" },
         ]),
-        // det2 is outside detail_refs → V-7 removal; settle detail outside sources → V-7 removal → flagged.
-        paragraph("q-p2", "장애 대응 런북을 정리했습니다.", [
-          { source_type: "project_detail", ref: det2, field: "action", quote: "런북을 작성하고 알림 규칙을 정리했다" },
-          { source_type: "project_detail", ref: settleDet, field: "action", quote: "정산 배치를 청크 단위로 재설계했다" },
+        // A sibling project and a dropped source's project are outside the sources → V-7 removal → flagged.
+        paragraph("q-p2", "배치를 청크 단위로 재설계하고 자동 기록 기능을 만들었습니다.", [
+          { source_type: "project", ref: settle, field: "action", quote: "정산 배치를 청크 단위로 재설계했다" },
+          { source_type: "project", ref: side, field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" },
         ]),
         paragraph("q-p3", "결제 도메인에서 계속 성장하고 싶습니다.", [{ source_type: "user_note", ref: "NOTE-1", field: null, quote: "결제 도메인에 계속 있고 싶다" }]),
       ],
@@ -125,7 +123,6 @@ describe("streamCoverLetterSection (AI-04)", () => {
         project_id: IDS.prjPay,
         experience_id: IDS.expA,
         education_id: null,
-        project_detail_ids: [IDS.detPay1],
         label: "예시페이 › 결제 승인 API 개선",
         rationale: "관련이 큽니다",
         reuse_reason: null,
@@ -143,7 +140,9 @@ describe("streamCoverLetterSection (AI-04)", () => {
     expect(payload.blocks[2].flags).toEqual([]);
     const noteRow = payload.evidence.find((e) => e.source_type === "user_note");
     expect(noteRow).toMatchObject({ source_id: SECTION_ID, source_field: null, item_key: paragraphBlockId(SECTION_ID, 3) });
-    expect(payload.evidence.find((e) => e.item_key === "sources.0")).toMatchObject({ source_id: IDS.detPay1, source_field: "action" });
+    expect(payload.evidence.find((e) => e.item_key === "sources.0")).toMatchObject({ source_id: IDS.prjPay, source_field: "action" });
+    expect(selected.sources[0]).not.toHaveProperty("project_detail_ids");
+    expect(payload.sources[0]).not.toHaveProperty("project_detail_ids");
     expect(payload.ai_char_count).toBe(countChars(payload.blocks.map((b) => b.text).join("\n"), "with_spaces"));
     expect(payload.correction_applied).toBe(false);
     expect(payload.char_adjust_needed).toBe(false);
@@ -151,7 +150,6 @@ describe("streamCoverLetterSection (AI-04)", () => {
     expect(payload.meta.validation_report).toMatchObject({
       evidence_removed_v7_scope: 2,
       source_parent_corrected: 1,
-      detail_refs_dropped: 1,
       sources_dropped_no_evidence: 1,
     });
     expect(JSON.stringify(payload.blocks)).not.toContain('"evidence"');
@@ -168,7 +166,7 @@ describe("streamCoverLetterSection (AI-04)", () => {
     const ctx = context(question({ question_text: "지원 동기", template_key: "motivation" }));
     const out = output(ctx, {
       question_class: "experience_story", // overridden by template_key
-      sources: [source(ctx, IDS.prjPay), source(ctx, IDS.prjSide, { role: "supporting", evidence: [{ source_type: "project", ref: a(ctx.aliases, "project", IDS.prjSide), field: "role", quote: null }] })],
+      sources: [source(ctx, IDS.prjPay), source(ctx, IDS.prjSide, { role: "supporting", evidence: [{ source_type: "project", ref: a(ctx.aliases, "project", IDS.prjSide), field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" }] })],
       paragraphs: [
         paragraph("q-p1", "[지원 동기 입력 필요] 그리고 결제 백엔드 공고에 끌렸습니다.", [{ source_type: "jd_sentence", ref: "S1", field: null, quote: null }], {
           placeholders: [{ token: "[지원 동기 입력 필요]", hint: "이 회사를 고른 개인적 이유" }],
@@ -187,11 +185,11 @@ describe("streamCoverLetterSection (AI-04)", () => {
 
   it("learnings: reflection allowed in future_plan, removed in job_competency (V-8)", async () => {
     const reflect = (ctx: Ctx) => {
-      const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
+      const pay = a(ctx.aliases, "project", IDS.prjPay);
       return output(ctx, {
         question_class: ctx.question.template_key,
-        sources: [source(ctx, IDS.prjPay, { detail_refs: [det1] })],
-        paragraphs: [paragraph("q-p1", "측정 없이 최적화하면 안 된다는 것을 배웠습니다.", [{ source_type: "project_detail", ref: det1, field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" }])],
+        sources: [source(ctx, IDS.prjPay)],
+        paragraphs: [paragraph("q-p1", "측정 없이 최적화하면 안 된다는 것을 배웠습니다.", [{ source_type: "project", ref: pay, field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" }])],
       });
     };
     const plan = context(question({ question_text: "입사 후 포부", template_key: "future_plan" }));
@@ -207,20 +205,20 @@ describe("streamCoverLetterSection (AI-04)", () => {
   });
 
   it("user mode: keeps the user's list, drops model sources outside it", async () => {
-    const userSources: UserSourceInput[] = [{ experience_id: null, education_id: null, project_id: IDS.prjEdu, project_detail_ids: [IDS.detEdu], role: "primary" }];
+    const userSources: UserSourceInput[] = [{ experience_id: null, education_id: null, project_id: IDS.prjEdu, role: "primary" }];
     const ctx = context(question(), "user", userSources);
     const capstone = a(ctx.aliases, "project", IDS.prjEdu);
     const out = output(ctx, {
       selection_mode: "user",
       sources: [
-        source(ctx, IDS.prjEdu, { rationale: "캐시 일관성 경험", evidence: [{ source_type: "project", ref: capstone, field: "role", quote: null }] }),
+        source(ctx, IDS.prjEdu, { rationale: "캐시 일관성 경험", evidence: [{ source_type: "project", ref: capstone, field: "situation", quote: "캐시 무효화가 늦었다" }] }),
         { ...source(ctx, IDS.prjEdu), project_ref: "PRJ-42" }, // not in the user's list (not even in the user-mode pack)
       ],
-      paragraphs: [paragraph("q-p1", "쓰기 시 무효화 메시지를 발행해 캐시 일관성을 맞췄습니다.", [{ source_type: "project_detail", ref: a(ctx.aliases, "project_detail", IDS.detEdu), field: "action", quote: "쓰기 시 무효화 메시지를 발행했다" }])],
+      paragraphs: [paragraph("q-p1", "쓰기 시 무효화 메시지를 발행해 캐시 일관성을 맞췄습니다.", [{ source_type: "project", ref: capstone, field: "action", quote: "쓰기 시 무효화 메시지를 발행했다" }])],
     });
     const { payload, llm } = await run(ctx, [{ json: out }]);
     expect(payload.sources).toEqual([
-      expect.objectContaining({ project_id: IDS.prjEdu, education_id: IDS.edu, role: "primary", rationale: "캐시 일관성 경험", project_detail_ids: [IDS.detEdu] }),
+      expect.objectContaining({ project_id: IDS.prjEdu, education_id: IDS.edu, role: "primary", rationale: "캐시 일관성 경험" }),
     ]);
     expect(payload.meta.validation_report).toMatchObject({ sources_dropped_not_in_user_list: 1 });
     // User-mode pack holds only the selection (+ profile).
@@ -230,8 +228,8 @@ describe("streamCoverLetterSection (AI-04)", () => {
 
   it("length correction: adjusting_length → adjust call → validated (correction_applied)", async () => {
     const ctx = context(question({ char_limit: 100 }));
-    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
-    const ev = [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
+    const pay = a(ctx.aliases, "project", IDS.prjPay);
+    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
     const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", `${koText(290)} 처리량 4321배`, ev)] });
     const fixed = { schema_version: 2, paragraphs: [paragraph("q-p1", koText(95), ev)] };
     const { events, payload, llm } = await run(ctx, [{ json: long }, { json: fixed }]);
@@ -248,14 +246,14 @@ describe("streamCoverLetterSection (AI-04)", () => {
     expect(payload.correction_applied).toBe(true);
     expect(payload.char_adjust_needed).toBe(false);
     expect(payload.ai_char_count).toBe(95);
-    expect(payload.meta.prompt_version).toContain("ai-04.adjust.v2");
+    expect(payload.meta.prompt_version).toContain("ai-04.adjust.v3");
     expect(payload.meta.usage?.inputTokens).toBe(200);
   });
 
   it("correction still out of range → char_adjust_needed; correction failure keeps the draft", async () => {
     const ctx = context(question({ char_limit: 100 }));
-    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
-    const ev = [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
+    const pay = a(ctx.aliases, "project", IDS.prjPay);
+    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
     const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", koText(300), ev)] });
 
     const still = await run(ctx, [{ json: long }, { json: { schema_version: 2, paragraphs: [paragraph("q-p1", koText(200), ev)] } }]);
@@ -269,8 +267,8 @@ describe("streamCoverLetterSection (AI-04)", () => {
 
   it("QA-S7-10: a cancel during the runner's spacing wait before the adjust call (plain AiError) ends the run, nothing persisted", async () => {
     const ctx = context(question({ char_limit: 100 }));
-    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
-    const ev = [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
+    const pay = a(ctx.aliases, "project", IDS.prjPay);
+    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
     const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", koText(300), ev)] });
     const fake = createFakeLlm([{ json: long }], { chunkSize: 13 });
     // The job runner's free-tier spaceCall throws AiError("canceled") (not a ProviderError) before the call goes out.
@@ -287,10 +285,10 @@ describe("streamCoverLetterSection (AI-04)", () => {
 
   it("invented numbers without a correction call are replaced and flagged", async () => {
     const ctx = context();
-    const det1 = a(ctx.aliases, "project_detail", IDS.detPay1);
+    const pay = a(ctx.aliases, "project", IDS.prjPay);
     const out = output(ctx, {
       sources: [source(ctx, IDS.prjPay)],
-      paragraphs: [paragraph("q-p1", "처리량을 4321배로 늘렸습니다.", [{ source_type: "project_detail", ref: det1, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }])],
+      paragraphs: [paragraph("q-p1", "처리량을 4321배로 늘렸습니다.", [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }])],
     });
     const { payload, events } = await run(ctx, [{ json: out }]);
     const completed = events.find((e) => e.type === "block_completed") as Extract<AiStreamEvent, { type: "block_completed" }>;
@@ -349,6 +347,23 @@ describe("AI-04 helpers", () => {
     expect(computeCoverLetterInputHash({ ...base, question: question({ char_limit: 600 }) })).not.toBe(h);
     expect(computeCoverLetterInputHash({ ...base, question: question({ char_limit: 500, user_note: "메모" }) })).not.toBe(h);
     expect(computeCoverLetterInputHash({ ...base, mode: "user" })).not.toBe(h);
+  });
+
+  it("user-mode hash: user sources count; a stale v4.4 project_detail_ids key is ignored", () => {
+    const src: UserSourceInput = { experience_id: null, education_id: null, project_id: IDS.prjEdu, role: "primary" };
+    const base = {
+      provider: "anthropic" as const,
+      model: "m",
+      careerSnapshotHash: "c",
+      requirementsHash: "r",
+      question: question(),
+      mode: "user" as const,
+      userSources: [src],
+    };
+    const h = computeCoverLetterInputHash(base);
+    const stale = { ...src, project_detail_ids: ["40000000-0000-4000-8000-000000000004"] } as unknown as UserSourceInput;
+    expect(computeCoverLetterInputHash({ ...base, userSources: [stale] })).toBe(h);
+    expect(computeCoverLetterInputHash({ ...base, userSources: [{ ...src, project_id: IDS.prjPay }] })).not.toBe(h);
   });
 
   it("schemas are canonical (C-10.2)", () => {

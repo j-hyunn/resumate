@@ -4,6 +4,7 @@ import {
   CAREER_SUPPORT_SOURCE_TYPES,
   EVIDENCE_RULES,
   EVIDENCE_SOURCE_TYPES,
+  PROJECT_SCOPE_FIELDS,
   WHOLE_SOURCE_FIELD,
   isCareerSupportEvidence,
   isQuoteRequired,
@@ -72,6 +73,10 @@ export function checkEvidence(raw: ModelEvidence, ctx: EvidenceContext): Evidenc
   // V-2: field allowed for the source type (field-less sources must not name one).
   const field = raw.field === undefined || raw.field === null || raw.field === "" ? null : raw.field;
   if (rule.fields.length === 0 ? field !== null : field === null || !rule.fields.includes(field)) {
+    return { ok: false, rule: "v2_field" };
+  }
+  // V-2 (v4.5): a PRJ-n takes STAR fields when affiliated, role/description when standalone.
+  if (sourceType === "project" && field !== null && entry.scope && !PROJECT_SCOPE_FIELDS[entry.scope].includes(field)) {
     return { ok: false, rule: "v2_field" };
   }
 
@@ -195,18 +200,14 @@ export function validateItem(item: ItemInput, ctx: EvidenceContext): { outcome: 
 }
 
 /**
- * V-7 scope from a selection (AI-03 포함 항목, AI-04 사용한 경력·프로젝트): the
- * selected experiences/educations/projects, their descendant details,
- * achievements and the skills of included projects, plus always-allowed
- * sources (profile, JD, notes, answers). `detailRefs` (AI-04) narrows details
- * to the listed ones (and their achievements).
+ * V-7 scope from a selection (AI-03 포함 항목, AI-04 사용한 경력·프로젝트, v4.5):
+ * the selected experiences/educations/projects, their descendants (a standalone
+ * project's deliverables) and the skills of included projects, plus
+ * always-allowed sources (profile, JD, notes, answers). Affiliated project STAR
+ * is on the PRJ-n itself (no DET-n / ACH-n since v4.5).
  */
-export function buildSelectionScope(
-  aliases: AliasMap,
-  selection: { refs: readonly string[]; detailRefs?: readonly string[] | null },
-): Set<string> {
+export function buildSelectionScope(aliases: AliasMap, selection: { refs: readonly string[] }): Set<string> {
   const selected = new Set(selection.refs);
-  const detailFilter = selection.detailRefs && selection.detailRefs.length ? new Set(selection.detailRefs) : null;
   const scope = new Set<string>();
   const alwaysAllowed: ReadonlySet<EvidenceSourceType> = new Set<EvidenceSourceType>([
     "profile",
@@ -223,7 +224,6 @@ export function buildSelectionScope(
     seen.add(alias);
     const entry = byAlias.get(alias);
     if (!entry) return false;
-    if (entry.sourceType === "project_detail" && detailFilter && !detailFilter.has(alias)) return false;
     return entry.parents.some((p) => inScope(p, seen));
   };
   for (const entry of entries) {

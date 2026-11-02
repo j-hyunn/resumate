@@ -42,7 +42,7 @@ describe("R-31 gate requirements in AI-12", () => {
     const llm = createFakeLlm([{ text: "결제 쪽에서 어떤 일을 하셨나요?" }]);
     await drain(reply(c, { llm }));
     expect(llm.requests[0].promptVersion).toBe(AI12_REPLY_PROMPT_VERSION);
-    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v2\+/);
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v3\+/);
   });
 
   it("QA-S5-04: <gate_requirements> is in the data-block (injection) rule of both calls", () => {
@@ -63,12 +63,12 @@ describe("R-31 gate requirements in AI-12", () => {
     expect(has(ctx({ gateRequirements: undefined }))).toBe(false);
   });
 
-  it("extract never sees the requirement list (and its prompt version is unchanged)", async () => {
+  it("extract never sees the requirement list", async () => {
     const text = extractUserBlocks(ctx()).map((b) => b.text).join("\n");
     expect(text).not.toContain("gate_requirements");
     expect(text).not.toContain("Kafka");
     expect(text).not.toContain("결제 도메인");
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v2\+/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v3\+/);
     const llm = createFakeLlm([{ json: output() }]);
     await extract(ctx(), { llm });
     const sent = [...llm.requests[0].systemBlocks, ...llm.requests[0].userBlocks].map((b) => b.text).join("\n");
@@ -79,27 +79,23 @@ describe("R-31 gate requirements in AI-12", () => {
     const llm = createFakeLlm([
       {
         json: output({
-          skills: [{ value: "Kafka", source_message_ids: ["M2"], source_quotes: ["결제 시스템 프로젝트를 했어요"] }],
-          new_details: [{ detail_key: "D1", source_message_ids: ["M2"] }],
-          detail_patches: [
-            {
-              detail_key: "D1",
-              detail_ref: null,
-              field: "action",
-              op: "set",
-              value: "Kafka 기반 메시지 큐를 운영했다",
-              source_message_ids: ["M2"],
-              source_quotes: ["결제 시스템 프로젝트를 했어요"],
-            },
+          star_patches: [
+            { field: "action", op: "set", value: "Kafka 기반 메시지 큐를 운영했다", source_message_ids: ["M2"], source_quotes: ["결제 시스템 프로젝트를 했어요"] },
           ],
         }),
       },
     ]);
     const r = await extract(ctx(), { llm });
-    const patch = JSON.stringify(r.patch);
-    expect(patch).not.toContain("Kafka");
-    expect(r.rejections.map((x) => x.target).sort()).toEqual(["detail.D1.action", "skill.0"].sort());
-    expect(r.rejections.every((x) => x.check.startsWith("V-9"))).toBe(true);
+    expect(JSON.stringify(r.patch)).not.toContain("Kafka");
+    expect(r.rejections).toEqual([{ check: "V-9d", target: "star.action" }]);
+  });
+
+  it("ready_to_return follows readiness (gate and nothing missing), not the proposal", () => {
+    expect(ctx().focus.readyToReturn).toBe(false);
+    const ready = ctx({ gate: { feature: "cover_letter", missing: [] } });
+    expect(ready.focus.readyToReturn).toBe(true);
+    expect(replyUserBlocks(ready).at(-1)!.text).toContain("ready_to_return: true");
+    expect(replyUserBlocks(ready).at(-1)!.text).toContain("gate_feature_label: 자기소개서");
   });
 
   it("V-9 context is built from the user's messages only (no requirement text)", () => {

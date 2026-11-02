@@ -46,11 +46,11 @@ select set_eq(
       join pg_namespace ns on ns.oid = c.relnamespace
       join pg_attribute a on a.attrelid = c.oid and a.attname = 'user_id' and a.attnum > 0 and not a.attisdropped
      where ns.nspname = 'public' and c.relkind in ('r', 'p')$$,
-  array['achievements', 'ai_data_use_consents', 'ai_jobs', 'ai_provider_keys', 'ai_usage_records',
+  array['ai_data_use_consents', 'ai_jobs', 'ai_provider_keys', 'ai_usage_records',
         'answer_evaluations', 'application_projects', 'application_stage_events', 'consents',
         'draft_section_sources', 'draft_sections', 'drafts', 'educations', 'evidence_links', 'experiences',
         'insights', 'interview_answers', 'interview_questions', 'interview_sessions', 'jd_requirements',
-        'job_descriptions', 'project_details', 'project_skills', 'projects', 'session_feedbacks', 'skills',
+        'job_descriptions', 'project_deliverables', 'project_skills', 'projects', 'session_feedbacks', 'skills',
         'writing_chat_messages', 'writing_chats'],
   'public user_id tables = the list this test seeds (new table: seed it here and delete it in delete_account)');
 
@@ -71,24 +71,23 @@ insert into public.experiences (id, company_name, start_month, job_rank)
   values ('a0000000-1111-0000-0000-000000000001', 'A사', '2020-01-01', 'S');
 insert into public.educations (id, institution_name, education_type, start_month)
   values ('a0000000-2222-0000-0000-000000000001', 'U', 'degree', '2014-03-01');
-insert into public.projects (id, experience_id, name, role) values
-  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', 'P1', 'Dev'),
-  ('a0000000-3333-0000-0000-000000000002', null, 'P2', 'Dev');
-insert into public.project_details (id, project_id, title, situation, action) values
-  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000001', 't1', 's', 'a1');
-insert into public.achievements (id, project_detail_id, experience_id, description) values
-  ('a0000000-5555-0000-0000-000000000001', 'a0000000-4444-0000-0000-000000000001', null, 'ach1'),
-  ('a0000000-5555-0000-0000-000000000002', null, 'a0000000-1111-0000-0000-000000000001', 'ach-e');
+insert into public.projects (id, experience_id, name, situation, action, description) values
+  ('a0000000-3333-0000-0000-000000000001', 'a0000000-1111-0000-0000-000000000001', 'P1', 's', 'a1', null),
+  ('a0000000-3333-0000-0000-000000000002', null, 'P2', null, null, 'side project');
+insert into public.project_deliverables (id, project_id, title, body) values
+  ('a0000000-4444-0000-0000-000000000001', 'a0000000-3333-0000-0000-000000000002', 'd1', 'body'),
+  ('a0000000-4444-0000-0000-000000000002', 'a0000000-3333-0000-0000-000000000002', 'd2', '');
 insert into public.skills (id, name) values
   ('a0000000-6666-0000-0000-000000000001', 'Go'), ('a0000000-6666-0000-0000-000000000002', 'SQL');
 insert into public.project_skills (project_id, skill_id)
-  values ('a0000000-3333-0000-0000-000000000001', 'a0000000-6666-0000-0000-000000000001');
+  values ('a0000000-3333-0000-0000-000000000002', 'a0000000-6666-0000-0000-000000000001');
 reset role;
 
-insert into public.writing_chats (id, user_id, mode, project_id, status) values
-  ('a0000000-c4a7-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'new_project', null, 'active'),
-  ('a0000000-c4a7-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'augment_project',
-   'a0000000-3333-0000-0000-000000000002', 'active');
+insert into public.writing_chats (id, user_id, project_id, status) values
+  ('a0000000-c4a7-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
+   'a0000000-3333-0000-0000-000000000001', 'active'),
+  ('a0000000-c4a7-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001',
+   'a0000000-3333-0000-0000-000000000001', 'closed');
 insert into public.writing_chat_messages (user_id, writing_chat_id, sequence, role, content) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-c4a7-0000-0000-000000000001', 1, 'user', 'hi'),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-c4a7-0000-0000-000000000002', 1, 'user', 'hi');
@@ -132,10 +131,10 @@ insert into public.draft_sections (id, user_id, draft_id, sort_order, section_ki
   ('a0000000-5c00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-cccc-0000-0000-000000000001',
    0, 'cover_letter_question', 'q', 'with_spaces');
 insert into public.draft_section_sources (user_id, draft_section_id, application_project_id, experience_id, education_id,
-                                          project_id, project_detail_ids, role, origin, sort_order, source_label) values
+                                          project_id, role, origin, sort_order, source_label) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-5c00-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
    'a0000000-1111-0000-0000-000000000001', null, 'a0000000-3333-0000-0000-000000000001',
-   '{a0000000-4444-0000-0000-000000000001}', 'primary', 'user', 0, 'A사 › P1');
+   'primary', 'user', 0, 'A사 › P1');
 
 insert into public.interview_sessions (id, user_id, application_project_id, interview_type, question_count,
                                        data_sufficiency, status, generation_status, question_provider, question_model,
@@ -157,8 +156,8 @@ insert into public.session_feedbacks (id, user_id, session_id, status) values
 insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id,
                                    source_field, quote) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'insight',
-   'a0000000-1a51-0000-0000-000000000001', 'strengths.0', 'project_detail', 'a0000000-4444-0000-0000-000000000001',
-   'action', 'a1'),
+   'a0000000-1a51-0000-0000-000000000001', 'strengths.0', 'project_deliverable', 'a0000000-4444-0000-0000-000000000001',
+   'body', 'body'),
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000002', 'interview_question',
    'a0000000-9001-0000-0000-000000000001', 'question', 'project', 'a0000000-3333-0000-0000-000000000001', 'name', 'P1');
 
@@ -188,6 +187,9 @@ insert into public.ai_usage_records (user_id, occurred_at, feature, job_type, ai
 -- ── user B: some rows that must survive ──
 insert into public.experiences (id, user_id, company_name, start_month, job_rank)
   values ('b0000000-1111-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'B사', '2021-01-01', 'S');
+insert into public.projects (id, user_id, experience_id, name)
+  values ('b0000000-3333-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
+          'b0000000-1111-0000-0000-000000000001', 'BP');
 insert into public.application_projects (id, user_id, name, name_source) values
   ('b0000000-aaaa-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'B', 'user');
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id,
@@ -196,8 +198,9 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
    'env-v1', 'bg01', 'valid');
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
   ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-10-01', true);
-insert into public.writing_chats (id, user_id, mode, status) values
-  ('b0000000-c4a7-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'new_project', 'active');
+insert into public.writing_chats (id, user_id, project_id, status) values
+  ('b0000000-c4a7-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
+   'b0000000-3333-0000-0000-000000000001', 'active');
 insert into public.ai_jobs (id, user_id, job_type, status, run_generation, provider, model_tier, connection_tier) values
   ('b0000000-7777-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'key_verification', 'running', 1,
    'gemini', 'light', 'free');
@@ -217,7 +220,7 @@ grant select on b_before to authenticated;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_account_deletion_summary(),
-          '{"career": {"experiences": 1, "educations": 1, "projects": 2, "project_details": 1, "achievements": 2,
+          '{"career": {"experiences": 1, "educations": 1, "projects": 2, "project_deliverables": 2,
                        "skills": 2, "writing_chats": 2},
             "applications": {"application_projects": 2, "insights": 1, "drafts": 1, "interview_sessions": 1,
                              "application_stage_events": 1},
@@ -227,7 +230,7 @@ select is(public.get_account_deletion_summary(),
 
 select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
 select is(public.get_account_deletion_summary(),
-          '{"career": {"experiences": 1, "educations": 0, "projects": 0, "project_details": 0, "achievements": 0,
+          '{"career": {"experiences": 1, "educations": 0, "projects": 1, "project_deliverables": 0,
                        "skills": 0, "writing_chats": 1},
             "applications": {"application_projects": 1, "insights": 0, "drafts": 0, "interview_sessions": 0,
                              "application_stage_events": 0},
@@ -261,7 +264,7 @@ select is(public.delete_account('0123456789abcdef0123456789abcdef0123456789abcde
           '{"deleted": true, "log_written": true, "in_flight_jobs": 2, "deleted_provider_keys": 2}'::jsonb,
           'delete_account: result shape (2 in-flight jobs, 2 keys)');
 select is(public.get_account_deletion_summary(),
-          '{"career": {"experiences": 0, "educations": 0, "projects": 0, "project_details": 0, "achievements": 0,
+          '{"career": {"experiences": 0, "educations": 0, "projects": 0, "project_deliverables": 0,
                        "skills": 0, "writing_chats": 0},
             "applications": {"application_projects": 0, "insights": 0, "drafts": 0, "interview_sessions": 0,
                              "application_stage_events": 0},

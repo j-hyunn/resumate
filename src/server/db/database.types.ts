@@ -37,38 +37,6 @@ export type Database = {
                   Relationships: [
                     
                   ]
-                },"achievements": {
-                  Row: {
-                    "created_at": string,"description": string | null,"experience_id": string | null,"id": string,"kind": string | null,"metric_name": string | null,"project_detail_id": string | null,"source_writing_chat_id": string | null,"status": string,"unit": string | null,"updated_at": string,"user_id": string,"value_after": number | null,"value_before": number | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "created_at"?: string,"description"?: string | null,"experience_id"?: string | null,"id"?: string,"kind"?: never,"metric_name"?: string | null,"project_detail_id"?: string | null,"source_writing_chat_id"?: string | null,"status"?: string,"unit"?: string | null,"updated_at"?: string,"user_id"?: string,"value_after"?: number | null,"value_before"?: number | null
-                  }
-                  Update: {
-                    "created_at"?: string,"description"?: string | null,"experience_id"?: string | null,"id"?: string,"kind"?: never,"metric_name"?: string | null,"project_detail_id"?: string | null,"source_writing_chat_id"?: string | null,"status"?: string,"unit"?: string | null,"updated_at"?: string,"user_id"?: string,"value_after"?: number | null,"value_before"?: number | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "achievements_experience_fkey"
-      columns: ["experience_id","user_id"]
-isOneToOne: false
-      referencedRelation: "experiences"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "achievements_project_detail_fkey"
-      columns: ["project_detail_id","user_id"]
-isOneToOne: false
-      referencedRelation: "project_details"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "achievements_source_writing_chat_fkey"
-      columns: ["source_writing_chat_id","user_id"]
-isOneToOne: false
-      referencedRelation: "writing_chats"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
                 },"ai_data_use_consents": {
                   Row: {
                     "agreed_at": string,"connection_tier": string,"created_at": string,"disclosure_version": string,"free_tier_acknowledged": boolean,"id": string,"provider": string,"user_id": string,"withdrawn_at": string | null
@@ -267,14 +235,14 @@ isOneToOne: false
                   ]
                 },"draft_section_sources": {
                   Row: {
-                    "application_project_id": string,"created_at": string,"draft_section_id": string,"education_id": string | null,"experience_id": string | null,"id": string,"origin": string,"project_detail_ids": (string)[],"project_id": string | null,"rationale": string | null,"requirement_ids": (string)[],"reuse_reason": string | null,"role": string,"sort_order": number,"source_deleted_at": string | null,"source_label": string | null,"updated_at": string,"user_id": string
+                    "application_project_id": string,"created_at": string,"draft_section_id": string,"education_id": string | null,"experience_id": string | null,"id": string,"origin": string,"project_id": string | null,"rationale": string | null,"requirement_ids": (string)[],"reuse_reason": string | null,"role": string,"sort_order": number,"source_deleted_at": string | null,"source_label": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "application_project_id": string,"created_at"?: string,"draft_section_id": string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"origin": string,"project_detail_ids"?: (string)[],"project_id"?: string | null,"rationale"?: string | null,"requirement_ids"?: (string)[],"reuse_reason"?: string | null,"role": string,"sort_order"?: number,"source_deleted_at"?: string | null,"source_label"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "application_project_id": string,"created_at"?: string,"draft_section_id": string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"origin": string,"project_id"?: string | null,"rationale"?: string | null,"requirement_ids"?: (string)[],"reuse_reason"?: string | null,"role": string,"sort_order"?: number,"source_deleted_at"?: string | null,"source_label"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "application_project_id"?: string,"created_at"?: string,"draft_section_id"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"origin"?: string,"project_detail_ids"?: (string)[],"project_id"?: string | null,"rationale"?: string | null,"requirement_ids"?: (string)[],"reuse_reason"?: string | null,"role"?: string,"sort_order"?: number,"source_deleted_at"?: string | null,"source_label"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "application_project_id"?: string,"created_at"?: string,"draft_section_id"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"origin"?: string,"project_id"?: string | null,"rationale"?: string | null,"requirement_ids"?: (string)[],"reuse_reason"?: string | null,"role"?: string,"sort_order"?: number,"source_deleted_at"?: string | null,"source_label"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -611,29 +579,23 @@ isOneToOne: false
       referencedColumns: ["user_id","provider"]
     }
                   ]
-                },"project_details": {
+                },"project_deliverables": {
                   Row: {
-                    "action": string | null,"created_at": string,"id": string,"learnings": string | null,"project_id": string,"result": string | null,"situation": string | null,"sort_order": number,"source_writing_chat_id": string | null,"status": string,"task": string | null,"title": string | null,"updated_at": string,"user_id": string
+                    "body": string,"created_at": string,"id": string,"project_id": string,"sort_order": number,"title": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "action"?: string | null,"created_at"?: string,"id"?: string,"learnings"?: string | null,"project_id": string,"result"?: string | null,"situation"?: string | null,"sort_order": number,"source_writing_chat_id"?: string | null,"status"?: string,"task"?: string | null,"title"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "body"?: string,"created_at"?: string,"id"?: string,"project_id": string,"sort_order"?: number,"title": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "action"?: string | null,"created_at"?: string,"id"?: string,"learnings"?: string | null,"project_id"?: string,"result"?: string | null,"situation"?: string | null,"sort_order"?: number,"source_writing_chat_id"?: string | null,"status"?: string,"task"?: string | null,"title"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "body"?: string,"created_at"?: string,"id"?: string,"project_id"?: string,"sort_order"?: number,"title"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "project_details_project_fkey"
+      foreignKeyName: "project_deliverables_project_fkey"
       columns: ["project_id","user_id"]
 isOneToOne: false
       referencedRelation: "projects"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "project_details_source_writing_chat_fkey"
-      columns: ["source_writing_chat_id","user_id"]
-isOneToOne: false
-      referencedRelation: "writing_chats"
       referencedColumns: ["id","user_id"]
     }
                   ]
@@ -665,14 +627,14 @@ isOneToOne: false
                   ]
                 },"projects": {
                   Row: {
-                    "created_at": string,"education_id": string | null,"end_month": string | null,"experience_id": string | null,"id": string,"name": string | null,"role": string | null,"source_writing_chat_id": string | null,"start_month": string | null,"status": string,"summary": string | null,"team_size": number | null,"updated_at": string,"user_id": string
+                    "action": string | null,"competencies": (string)[],"content_updated_at": string,"created_at": string,"description": string | null,"education_id": string | null,"end_month": string | null,"experience_id": string | null,"experience_type": string | null,"id": string,"is_current": boolean,"learnings": string | null,"link_url": string | null,"name": string,"project_type": string | null,"result": string | null,"role": string | null,"situation": string | null,"source_writing_chat_id": string | null,"start_month": string | null,"status": string,"task": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"education_id"?: string | null,"end_month"?: string | null,"experience_id"?: string | null,"id"?: string,"name"?: string | null,"role"?: string | null,"source_writing_chat_id"?: string | null,"start_month"?: string | null,"status"?: string,"summary"?: string | null,"team_size"?: number | null,"updated_at"?: string,"user_id"?: string
+                    "action"?: string | null,"competencies"?: (string)[],"content_updated_at"?: string,"created_at"?: string,"description"?: string | null,"education_id"?: string | null,"end_month"?: string | null,"experience_id"?: string | null,"experience_type"?: string | null,"id"?: string,"is_current"?: boolean,"learnings"?: string | null,"link_url"?: string | null,"name": string,"project_type"?: string | null,"result"?: string | null,"role"?: string | null,"situation"?: string | null,"source_writing_chat_id"?: string | null,"start_month"?: string | null,"status"?: string,"task"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"education_id"?: string | null,"end_month"?: string | null,"experience_id"?: string | null,"id"?: string,"name"?: string | null,"role"?: string | null,"source_writing_chat_id"?: string | null,"start_month"?: string | null,"status"?: string,"summary"?: string | null,"team_size"?: number | null,"updated_at"?: string,"user_id"?: string
+                    "action"?: string | null,"competencies"?: (string)[],"content_updated_at"?: string,"created_at"?: string,"description"?: string | null,"education_id"?: string | null,"end_month"?: string | null,"experience_id"?: string | null,"experience_type"?: string | null,"id"?: string,"is_current"?: boolean,"learnings"?: string | null,"link_url"?: string | null,"name"?: string,"project_type"?: string | null,"result"?: string | null,"role"?: string | null,"situation"?: string | null,"source_writing_chat_id"?: string | null,"start_month"?: string | null,"status"?: string,"task"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -757,29 +719,17 @@ isOneToOne: false
                   ]
                 },"writing_chats": {
                   Row: {
-                    "created_at": string,"education_id": string | null,"experience_id": string | null,"id": string,"last_activity_at": string,"last_extracted_sequence": number,"message_count": number,"mode": string,"project_id": string | null,"return_target": Json | null,"saved_at": string | null,"status": string,"structured_draft": NonNullable<Json>,"updated_at": string,"user_id": string
+                    "created_at": string,"id": string,"last_activity_at": string,"last_applied_at": string | null,"last_extracted_sequence": number,"message_count": number,"project_id": string,"return_target": Json | null,"status": string,"structured_draft": NonNullable<Json>,"title": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"last_activity_at"?: string,"last_extracted_sequence"?: number,"message_count"?: number,"mode": string,"project_id"?: string | null,"return_target"?: Json | null,"saved_at"?: string | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_id": string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"education_id"?: string | null,"experience_id"?: string | null,"id"?: string,"last_activity_at"?: string,"last_extracted_sequence"?: number,"message_count"?: number,"mode"?: string,"project_id"?: string | null,"return_target"?: Json | null,"saved_at"?: string | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_id"?: string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "writing_chats_education_fkey"
-      columns: ["education_id","user_id"]
-isOneToOne: false
-      referencedRelation: "educations"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "writing_chats_experience_fkey"
-      columns: ["experience_id","user_id"]
-isOneToOne: false
-      referencedRelation: "experiences"
-      referencedColumns: ["id","user_id"]
-    },{
       foreignKeyName: "writing_chats_project_fkey"
       columns: ["project_id","user_id"]
 isOneToOne: false
@@ -823,6 +773,9 @@ isOneToOne: false
                            },
 "apply_structured_draft_patch":
 { Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
+                           },
+"apply_writing_chat_proposal":
+{ Args: { "p_fields"?: (string)[],"p_writing_chat_id": string }; Returns: Json
                            },
 "begin_assistant_message":
 { Args: { "p_ai_job_id": string,"p_connection_tier": string,"p_model": string,"p_model_tier": string,"p_provider": string,"p_writing_chat_id": string }; Returns: {
@@ -950,9 +903,6 @@ isOneToOne: false
               "encryption_version": number,"kek_id": string,"key_ciphertext": string,"key_id": string,"key_nonce": string,"wrapped_dek": string
             }[]
                            },
-"hand_off_writing_chat":
-{ Args: { "p_writing_chat_id": string }; Returns: Json
-                           },
 "mark_interview_result_viewed":
 { Args: { "p_session_id": string }; Returns: Json
                            },
@@ -974,9 +924,6 @@ isOneToOne: false
 "purge_old_ai_usage_records":
 { Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
                            },
-"purge_unlinked_writing_chats":
-{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
-                           },
 "record_consents":
 { Args: { "items": Json,"user_agent_hash"?: string }; Returns: {
               "agreed_version": string,"consent_type": string,"current_version": string,"needs_consent": boolean,"required": boolean
@@ -991,7 +938,7 @@ isOneToOne: false
 "reorder_cover_letter_questions":
 { Args: { "p_draft_id": string,"p_section_ids": (string)[] }; Returns: Json
                            },
-"reorder_project_details":
+"reorder_project_deliverables":
 { Args: { "p_ordered_ids": (string)[],"p_project_id": string }; Returns: undefined
                            },
 "request_ai_job_cancel":
@@ -1012,9 +959,6 @@ isOneToOne: false
 "save_session_feedback":
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
                            },
-"save_writing_chat":
-{ Args: { "p_writing_chat_id": string }; Returns: Json
-                           },
 "set_active_ai_provider":
 { Args: { "p_provider": string }; Returns: undefined
                            },
@@ -1024,11 +968,8 @@ isOneToOne: false
 "set_section_sources":
 { Args: { "p_section_id": string,"p_sources": Json }; Returns: Json
                            },
-"set_writing_chat_affiliation":
-{ Args: { "p_dismiss_only"?: boolean,"p_education_id"?: string,"p_experience_id"?: string,"p_writing_chat_id": string }; Returns: undefined
-                           },
 "start_writing_chat":
-{ Args: { "p_mode": string,"p_project_id"?: string,"p_return_target"?: Json }; Returns: string
+{ Args: { "p_project_id": string,"p_return_target"?: Json }; Returns: string
                            },
 "submit_interview_session":
 { Args: { "p_session_id": string }; Returns: Json

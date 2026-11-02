@@ -19,12 +19,13 @@ const jd = buildJdContext({
 const aliases = AliasMap.merge(pack.aliases, jd.aliases);
 const ctx: EvidenceContext = { aliases, learnings: "forbidden" };
 
-const action: ModelEvidence = { source_type: "project_detail", ref: "DET-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" };
+const action: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" };
 
 describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
   it.each<[string, ModelEvidence, EvidenceContext, string]>([
-    ["V-1 unknown ref", { ...action, ref: "DET-99" }, ctx, "v1_ref"],
-    ["V-1 ref of another type", { ...action, ref: "PRJ-2" }, ctx, "v1_ref"],
+    ["V-1 unknown ref", { ...action, ref: "PRJ-99" }, ctx, "v1_ref"],
+    ["V-1 removed alias type (v4.5 DET-n)", { ...action, ref: "DET-2" }, ctx, "v1_ref"],
+    ["V-1 ref of another type", { ...action, ref: "EXP-1" }, ctx, "v1_ref"],
     ["V-1 malformed ref", { source_type: "skill", ref: "SKL-x", field: "name" }, ctx, "v1_ref"],
     ["V-1 writing_chat_message outside AI-12", { source_type: "writing_chat_message", ref: "M-1", quote: "x" }, ctx, "v1_ref"],
     ["V-2 field not allowed for type", { ...action, field: "company_name" }, ctx, "v2_field"],
@@ -33,21 +34,33 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
     ["V-3 required quote missing", { ...action, quote: null }, ctx, "v3_quote"],
     ["V-3 invented quote", { ...action, quote: "Kafka 기반 이벤트 파이프라인을 구축했다" }, ctx, "v3_quote"],
     ["V-3 quote against the wrong field", { ...action, field: "result", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" }, ctx, "v3_quote"],
-    ["V-3 quote on empty field", { source_type: "project", ref: "PRJ-1", field: "summary", quote: "무엇이든" }, ctx, "v3_quote"],
+    ["V-3 quote on empty field", { source_type: "project", ref: "PRJ-1", field: "task", quote: "무엇이든" }, ctx, "v3_quote"],
+    ["V-2 removed project field (summary)", { source_type: "project", ref: "PRJ-1", field: "summary", quote: "무엇이든" }, ctx, "v2_field"],
+    ["V-2 classification is never citable", { source_type: "project", ref: "PRJ-2", field: "project_type", quote: null }, ctx, "v2_field"],
+    ["V-2 STAR field on a standalone project", { source_type: "project", ref: "PRJ-4", field: "action", quote: "문자 파싱으로 자동 기록을 만들었다" }, ctx, "v2_field"],
+    ["V-2 role on an affiliated project", { source_type: "project", ref: "PRJ-2", field: "role", quote: "1인 개발" }, ctx, "v2_field"],
+    ["V-2 description on an affiliated project", { source_type: "project", ref: "PRJ-2", field: "description", quote: "병목 쿼리" }, ctx, "v2_field"],
+    ["V-3 deliverable body quote outside the pack text", { source_type: "project_deliverable", ref: "DLV-1", field: "body", quote: "Kafka 클러스터를 운영했다" }, ctx, "v3_quote"],
+    ["V-3 deliverable body quote required", { source_type: "project_deliverable", ref: "DLV-1", field: "body", quote: null }, ctx, "v3_quote"],
     [
       "V-8 learnings where C-9 forbids",
-      { source_type: "project_detail", ref: "DET-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" },
+      { source_type: "project", ref: "PRJ-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" },
       ctx,
       "v8_learnings",
     ],
-    ["V-7 out of selection scope", action, { ...ctx, scope: new Set(["PRJ-1", "DET-1"]) }, "v7_scope"],
+    ["V-7 out of selection scope", action, { ...ctx, scope: new Set(["PRJ-1"]) }, "v7_scope"],
   ])("%s → removed (%s)", (_, raw, context, rule) => {
     expect(checkEvidence(raw, context)).toEqual({ ok: false, rule });
   });
 
   it.each<[string, ModelEvidence]>([
     ["action with quote", action],
-    ["metric without quote (optional)", { source_type: "achievement", ref: "ACH-2", field: "metric" }],
+    ["project name without quote (optional)", { source_type: "project", ref: "PRJ-2", field: "name" }],
+    ["result quote (numbers live in the narrative)", { source_type: "project", ref: "PRJ-2", field: "result", quote: "응답 시간이 0.7초로 줄었다" }],
+    ["standalone role", { source_type: "project", ref: "PRJ-4", field: "role", quote: "1인 개발" }],
+    ["standalone description", { source_type: "project", ref: "PRJ-4", field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" }],
+    ["deliverable title without quote", { source_type: "project_deliverable", ref: "DLV-1", field: "title" }],
+    ["deliverable body on normalized text", { source_type: "project_deliverable", ref: "DLV-1", field: "body", quote: "은행 문자 10종의 형식을 정규식으로 분류했다" }],
     ["skill name", { source_type: "skill", ref: "SKL-1", field: "name" }],
     ["period", { source_type: "experience", ref: "EXP-1", field: "period" }],
     ["profile", { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }],
@@ -62,13 +75,13 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
   it("stores the exact source span and null field for field-less sources", () => {
     expect(checkEvidence({ ...action, quote: "병목쿼리를 찾아 인덱스를 재설계 했다" }, ctx)).toEqual({
       ok: true,
-      evidence: { source_type: "project_detail", ref: "DET-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다", quote_adjusted: false },
+      evidence: { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다", quote_adjusted: false },
     });
     expect(checkEvidence({ source_type: "jd_requirement", ref: "REQ-1", field: "" }, ctx)).toMatchObject({ ok: true, evidence: { field: null } });
   });
 
   it("learnings are valid under reflection_only", () => {
-    const raw: ModelEvidence = { source_type: "project_detail", ref: "DET-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
+    const raw: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
     expect(checkEvidence(raw, { ...ctx, learnings: "reflection_only" }).ok).toBe(true);
   });
 
@@ -80,9 +93,9 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
 });
 
 describe("validateItem V-4", () => {
-  const bad: ModelEvidence = { ...action, ref: "DET-99" };
+  const bad: ModelEvidence = { ...action, ref: "PRJ-99" };
   const jdOnly: ModelEvidence = { source_type: "jd_requirement", ref: "REQ-1" };
-  const learn: ModelEvidence = { source_type: "project_detail", ref: "DET-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
+  const learn: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
   const wish: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" };
   const industries: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "interested_industries", quote: null };
   const years: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "total_years_of_experience", quote: null };
@@ -149,19 +162,24 @@ describe("validateItem V-4", () => {
 });
 
 describe("buildSelectionScope (V-7)", () => {
-  it("expands selected projects to their details, achievements and skills, plus profile and JD", () => {
+  it("an affiliated project is its own STAR scope (no DET/ACH in v4.5), plus profile and JD", () => {
     const scope = buildSelectionScope(aliases, { refs: ["PRJ-2"] });
-    expect([...scope].sort()).toEqual(["ACH-2", "DET-2", "DET-3", "PRJ-2", "PROFILE", "REQ-1", "S1", "S2", "SKL-1", "SKL-2"].sort());
+    expect([...scope].sort()).toEqual(["PRJ-2", "PROFILE", "REQ-1", "S1", "S2"].sort());
   });
 
-  it("selecting an experience includes its projects and experience-level achievements; detailRefs narrows details", () => {
-    const scope = buildSelectionScope(aliases, { refs: ["EXP-1"], detailRefs: ["DET-2"] });
-    expect(scope.has("ACH-1")).toBe(true);
+  it("a selected standalone project brings its deliverables and skills, not other projects'", () => {
+    const scope = buildSelectionScope(aliases, { refs: ["PRJ-4"] });
+    expect([...scope].sort()).toEqual(["DLV-1", "DLV-2", "PRJ-4", "PROFILE", "REQ-1", "S1", "S2", "SKL-1", "SKL-2"].sort());
+    expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("DLV-1")).toBe(false);
+    expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("SKL-1")).toBe(false);
+  });
+
+  it("selecting an experience includes its projects only", () => {
+    const scope = buildSelectionScope(aliases, { refs: ["EXP-1"] });
     expect(scope.has("PRJ-1")).toBe(true);
-    expect(scope.has("DET-2")).toBe(true);
-    expect(scope.has("ACH-2")).toBe(true);
-    expect(scope.has("DET-3")).toBe(false);
-    expect(scope.has("DET-1")).toBe(false);
+    expect(scope.has("PRJ-2")).toBe(true);
+    expect(scope.has("PRJ-3")).toBe(false);
+    expect(scope.has("PRJ-4")).toBe(false);
     expect(scope.has("EXP-2")).toBe(false);
     expect(scope.has("SKL-3")).toBe(false); // manual skill isn't under a selected project
   });
@@ -172,7 +190,9 @@ describe("isCareerSupportEvidence (A10)", () => {
     ["profile desired_job_title", { source_type: "profile", field: "desired_job_title" }, false],
     ["profile interested_industries", { source_type: "profile", field: "interested_industries" }, false],
     ["profile total_years_of_experience", { source_type: "profile", field: "total_years_of_experience" }, true],
-    ["detail action", { source_type: "project_detail", field: "action" }, true],
+    ["project action", { source_type: "project", field: "action" }, true],
+    ["deliverable body", { source_type: "project_deliverable", field: "body" }, true],
+    ["removed type project_detail", { source_type: "project_detail", field: "action" }, false],
     ["skill", { source_type: "skill", field: "name" }, true],
     ["jd sentence", { source_type: "jd_sentence", field: null }, false],
     ["jd requirement", { source_type: "jd_requirement", field: null }, false],

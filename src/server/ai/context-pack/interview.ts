@@ -33,6 +33,12 @@ export type InterviewBaseInput = {
   cultureSids: readonly string[];
   requirements: readonly JdRequirementInput[];
   positionTitle: string | null;
+  /**
+   * C-1.1 (v4.5) AI-06: deliverables only of the standalone projects the
+   * session's questions cite (union over the session, so parallel answer
+   * calls share one pack). Undefined = every deliverable within the budget (AI-05).
+   */
+  deliverableProjectIds?: readonly string[];
 };
 
 export type InterviewBase = {
@@ -55,12 +61,15 @@ export type InterviewBase = {
 };
 
 export function emptyCareerRows(): CareerRows {
-  return { profile: null, experiences: [], educations: [], projects: [], projectDetails: [], achievements: [], skills: [], projectSkills: [] };
+  return { profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] };
 }
 
 export function buildInterviewBase(input: InterviewBaseInput): InterviewBase {
   const rows = input.careerRows ?? emptyCareerRows();
-  const pack = buildCareerPack(rows, { asOf: input.asOf });
+  const pack = buildCareerPack(rows, {
+    asOf: input.asOf,
+    deliverableProjectIds: input.deliverableProjectIds ? new Set(input.deliverableProjectIds) : undefined,
+  });
   const cultureSids = new Set(input.interviewType === "culture_fit" ? input.cultureSids : []);
   const jd = buildJdContext({
     jobDescriptionId: input.jobDescriptionId,

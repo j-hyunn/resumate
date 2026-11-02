@@ -1,4 +1,4 @@
--- S2 get_data_readiness() (DM §6 v3, D-01 v3, U-5).
+-- S2 get_data_readiness() — R4: DM §6 v4.4 (D-01 v4.4, project_star / project_fields / create_project).
 -- S3b: + ai_connection (DM §6 v4). The S2 cases run with a valid active key for A so the writing_chat
 -- branches stay reachable; the no-key / invalid-key branches are at the end.
 -- R3: A has no consent row here, so consent_required is true; its branches are in readiness_consent_required.test.sql.
@@ -14,10 +14,9 @@ insert into auth.users (id, email, aud, role) values
 -- B has a ready career; it must not leak into A's readiness.
 insert into public.experiences (id, user_id, company_name, start_month, job_rank)
 values ('bbbbbbbb-1111-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'B', '2020-01-01', 'S');
-insert into public.projects (id, user_id, name, role)
-values ('bbbbbbbb-3333-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'BP', 'L');
-insert into public.project_details (user_id, project_id, title, situation, action)
-values ('bbbbbbbb-0000-0000-0000-000000000002', 'bbbbbbbb-3333-0000-0000-000000000001', 't', 's', 'a');
+insert into public.projects (id, user_id, experience_id, name, situation, action)
+values ('bbbbbbbb-3333-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002',
+        'bbbbbbbb-1111-0000-0000-000000000001', 'BP', 's', 'a');
 
 -- S3b: A has a valid active Gemini key (written as owner; the key RPCs are tested elsewhere).
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek,
@@ -34,10 +33,10 @@ select is(public.get_data_readiness(), jsonb_build_object(
   'ai_connection', '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": true}'::jsonb,
   'counts', jsonb_build_object(
     'complete_experiences', 0, 'complete_educations', 0, 'complete_projects', 0,
-    'projects_without_complete_detail', 0, 'complete_project_details', 0, 'draft_project_details', 0,
+    'projects_without_complete_star', 0, 'standalone_projects_without_description', 0,
     'draft_experiences', 0, 'draft_educations', 0, 'draft_projects', 0, 'profile_filled', false),
   'draft_item_ids', jsonb_build_object('experiences', '[]'::jsonb, 'educations', '[]'::jsonb,
-                                       'projects', '[]'::jsonb, 'project_details', '[]'::jsonb),
+                                       'projects', '[]'::jsonb),
   'features', jsonb_build_object(
     'insight', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["profile"], "next_action": "form"}'::jsonb,
     'draft', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["profile"], "next_action": "form"}'::jsonb,
@@ -60,56 +59,68 @@ select is(public.get_data_readiness() #> '{features,insight}',
           'education only does not satisfy D-01');
 select is(public.get_data_readiness() #> '{counts,complete_educations}', '1'::jsonb, 'complete education counted');
 
--- 4. complete experience + project whose only detail is draft → augment_project
+-- 4. complete experience, no project at all → create_project (AI usable)
 insert into public.experiences (id, company_name, start_month, job_position)
 values ('aaaaaaaa-1111-0000-0000-000000000001', 'A', '2020-01-01', 'Dev');
-insert into public.projects (id, experience_id, name, role)
-values ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'P1', 'Dev');
-insert into public.project_details (id, project_id, title)
-values ('aaaaaaaa-4444-0000-0000-000000000001', 'aaaaaaaa-3333-0000-0000-000000000001', 'draft detail');
+select is(public.get_data_readiness() #> '{features,insight}',
+          '{"ready": false, "missing": ["complete_project"], "hints": [], "next_action": "create_project"}'::jsonb,
+          'no project to fill + AI usable → create_project (CR-6)');
 
+-- 5. affiliated project with STAR missing → writing_chat + suggested_project_id + project_star
+insert into public.projects (id, experience_id, name)
+values ('aaaaaaaa-3333-0000-0000-000000000001', 'aaaaaaaa-1111-0000-0000-000000000001', 'P1');
 select is(public.get_data_readiness() #> '{features,draft}',
-          '{"ready": false, "missing": ["complete_project"], "hints": ["complete_project_detail"],
-            "next_action": "writing_chat", "suggested_mode": "augment_project",
-            "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
-          'project without complete detail → writing_chat augment_project with its id');
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_star"],
+            "next_action": "writing_chat", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
+          'STAR-incomplete affiliated project → writing_chat with its id, no suggested_mode');
 select is(public.get_data_readiness() -> 'counts',
           '{"complete_experiences": 1, "complete_educations": 1, "complete_projects": 0,
-            "projects_without_complete_detail": 1, "complete_project_details": 0, "draft_project_details": 1,
+            "projects_without_complete_star": 1, "standalone_projects_without_description": 0,
             "draft_experiences": 0, "draft_educations": 0, "draft_projects": 1, "profile_filled": true}'::jsonb,
-          'counts for the augment case');
+          'counts for the STAR case');
 select is(public.get_data_readiness() -> 'draft_item_ids',
-          '{"experiences": [], "educations": [], "projects": ["aaaaaaaa-3333-0000-0000-000000000001"],
-            "project_details": ["aaaaaaaa-4444-0000-0000-000000000001"]}'::jsonb,
-          'draft_item_ids include project and project_detail ids');
+          '{"experiences": [], "educations": [], "projects": ["aaaaaaaa-3333-0000-0000-000000000001"]}'::jsonb,
+          'draft_item_ids: experiences / educations / projects only');
 select is(public.get_data_readiness() #> '{features,culture_fit_interview,data_sufficiency}', '"thin"'::jsonb,
           'complete experience without complete project → thin');
 
--- 5. completing the detail → ready, no next_action / suggested_* keys
-update public.project_details set situation = 's', action = 'a' where id = 'aaaaaaaa-4444-0000-0000-000000000001';
+-- a standalone project without description too: STAR still wins (order 2 before 3)
+insert into public.projects (id, name) values ('aaaaaaaa-3333-0000-0000-000000000002', 'Side');
+select is(public.get_data_readiness() #> '{features,insight,hints}', '["project_star"]'::jsonb,
+          'project_star comes before project_fields');
+select is(public.get_data_readiness() #>> '{counts,standalone_projects_without_description}', '1',
+          'standalone project without description counted');
+
+-- 6. filling the STAR → ready, no next_action / suggested_* keys
+update public.projects set situation = 's', action = 'a' where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": true, "missing": [], "hints": []}'::jsonb, 'D-01 met → ready, gate keys omitted');
 select is(public.get_data_readiness() #> '{features,job_interview}', public.get_data_readiness() #> '{features,insight}',
           'job_interview uses the same gate');
 select is(public.get_data_readiness() #> '{features,culture_fit_interview}',
           '{"ready": true, "data_sufficiency": "ok"}'::jsonb, 'culture fit ok when D-01 met');
-select is(public.get_data_readiness() #>> '{counts,complete_project_details}', '1', 'complete detail counted');
 
--- 6. draft parent excludes complete children: move the project under a draft experience
+-- 6b. draft parent excludes complete children: move the project under a draft experience
 insert into public.experiences (id, company_name) values ('aaaaaaaa-1111-0000-0000-000000000002', 'draft exp');
 update public.projects set experience_id = 'aaaaaaaa-1111-0000-0000-000000000002'
  where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_project"], "hints": [],
-            "next_action": "writing_chat", "suggested_mode": "new_project"}'::jsonb,
-          'complete project under a draft experience is excluded → new_project');
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields"],
+            "next_action": "form", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000002"}'::jsonb,
+          'complete project under a draft experience is excluded → standalone description step (project_fields)');
 select results_eq(
-  $$select (r #>> '{counts,complete_projects}')::int, (r #>> '{counts,complete_project_details}')::int,
-           (r #>> '{counts,projects_without_complete_detail}')::int, (r #>> '{counts,draft_experiences}')::int
+  $$select (r #>> '{counts,complete_projects}')::int, (r #>> '{counts,projects_without_complete_star}')::int,
+           (r #>> '{counts,draft_experiences}')::int
       from (select public.get_data_readiness() r) x$$,
-  $$values (0, 0, 0, 1)$$, 'draft parent: project and its detail not counted');
+  $$values (0, 0, 1)$$, 'draft parent: project not counted');
 
--- an education-affiliated complete project counts (affiliation can be experience, education, or none)
+-- a complete standalone project counts toward D-01 (DM §6 v4.4)
+update public.projects set description = '내용' where id = 'aaaaaaaa-3333-0000-0000-000000000002';
+select is(public.get_data_readiness() #> '{features,insight,ready}', 'true'::jsonb,
+          'standalone project with description counts toward D-01');
+update public.projects set description = null where id = 'aaaaaaaa-3333-0000-0000-000000000002';
+
+-- an education-affiliated complete project counts
 update public.projects set experience_id = null, education_id = 'aaaaaaaa-2222-0000-0000-000000000001'
  where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 select is(public.get_data_readiness() #> '{features,insight,ready}', 'true'::jsonb,
@@ -123,10 +134,9 @@ select is(public.get_data_readiness() #> '{features,insight,ready}', 'true'::jso
           'app_ai_writer can run get_data_readiness for the user');
 select is(public.get_data_readiness() #>> '{counts,complete_experiences}', '1', 'app_ai_writer sees A''s counts only');
 
--- 9. S3b ai_connection branches. Make A not ready again (project back under the draft experience).
+-- 9. S3b ai_connection branches. Make A not ready again: the affiliated project loses its action (STAR step).
 reset role;
-update public.projects set education_id = null, experience_id = 'aaaaaaaa-1111-0000-0000-000000000002'
- where id = 'aaaaaaaa-3333-0000-0000-000000000001';
+update public.projects set action = null where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
@@ -147,8 +157,9 @@ update public.ai_provider_keys set status = 'invalid' where id = 'aaaaaaaa-9999-
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_project"], "hints": [], "next_action": "form"}'::jsonb,
-          'invalid key → next_action form without suggested_mode');
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_star"], "next_action": "form",
+            "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
+          'invalid key → STAR step becomes form, still with the project to fill');
 select is(public.get_data_readiness() #> '{features,culture_fit_interview}',
           '{"ready": true, "data_sufficiency": "thin"}'::jsonb, 'culture fit has no next_action even without a usable key');
 
@@ -169,6 +180,12 @@ select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": null, "key_status": null, "connection_tier": null, "consent_required": null}'::jsonb,
           'no active provider → ai_connection all null');
 select is(public.get_data_readiness() #>> '{features,draft,next_action}', 'form', 'no key → form');
+reset role;
+delete from public.projects where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set local role authenticated;
+select is(public.get_data_readiness() #> '{features,insight}',
+          '{"ready": false, "missing": ["complete_project"], "hints": [], "next_action": "form"}'::jsonb,
+          'nothing to fill and no key → form instead of create_project');
 select is(public.get_data_readiness() #>> '{features,job_interview,next_action}', 'form', 'no key → form (job_interview)');
 
 -- B's key never shows in A's ai_connection.

@@ -9,6 +9,7 @@ import { resetServerEnvCache } from "@/server/env";
 import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext } from "@/server/jobs/provider-context";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
+import { createProject, saveExperience as createExperience } from "@/server/services/career";
 import { startWritingChat } from "@/server/services/writing-chat/chat";
 import { loadGateRequirements } from "@/server/services/writing-chat/pipelines";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
@@ -114,7 +115,8 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
   it("create without a key: default name, raw text + sentences stored, no extraction; idempotent retry", async () => {
     const created = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectA, rawText: KO_BACKEND.raw }));
     expect(created).toMatchObject({ applicationProjectId: projectA, nameSource: "default", extractionStatus: "pending", shouldExtract: false, created: true });
-    expect(created.name).toMatch(/^새 기업 JD \(\d{4}-\d{2}-\d{2}\)$/);
+    // R4 (CR-23 [가정]): the default name reads "새 자기소개서 (날짜)".
+    expect(created.name).toMatch(/^새 자기소개서 \(\d{4}-\d{2}-\d{2}\)$/);
     expect(created.warnings).toEqual([]);
 
     const again = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectA, rawText: "다른 원문" }));
@@ -140,7 +142,8 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     await expect(getJdView(otherUser, projectA)).rejects.toMatchObject({ code: "not_found" });
     await expect(moveApplicationStage(otherUser, { id: projectA, toStage: "document" })).rejects.toMatchObject({ code: "not_found" });
     await expect(deleteApplicationProject(otherUser, projectA)).rejects.toMatchObject({ code: "not_found" });
-    await expect(startWritingChat(otherUser, { mode: "new_project", returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } })).rejects.toMatchObject({
+    // A gate chat needs the other user's own project, but the application project is checked first.
+    await expect(startWritingChat(otherUser, { projectId: crypto.randomUUID(), returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } })).rejects.toMatchObject({
       code: "not_found",
     });
   });
@@ -231,7 +234,10 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(await loadGateRequirements(createAiWriterClient(userId), projectB)).toEqual([]);
     // Another user's project is invisible to this user's writer.
     expect(await loadGateRequirements(createAiWriterClient(otherId), projectA)).toEqual([]);
-    const { writingChatId } = await startWritingChat(user, { mode: "new_project", returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } });
+    // R4: a gate chat opens on an affiliated project of the user.
+    const exp = await createExperience(user, { id: crypto.randomUUID(), companyName: "가나다", startMonth: "2022-01", jobPosition: "백엔드" });
+    const prj = await createProject(user, { name: "결제", affiliation: { type: "experience", id: exp.id } });
+    const { writingChatId } = await startWritingChat(user, { projectId: prj.id, returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } });
     expect(writingChatId).toBeTruthy();
   });
 

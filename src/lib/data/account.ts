@@ -306,8 +306,9 @@ export async function getAccountDeletionSummary(): Promise<AccountDeletionSummar
         experiences: r.career.experiences,
         educations: r.career.educations,
         projects: r.career.projects,
-        project_details: r.career.projectDetails,
-        achievements: r.career.achievements,
+        // @deprecated R4 shim: the S-25 screen still lists these (dropped in DM v4.4); deliverables aren't shown yet.
+        project_details: 0,
+        achievements: 0,
         skills: r.career.skills,
         writing_chats: r.career.writingChats,
       },

@@ -21,12 +21,18 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   unknown_policy_version: { message: "약관이 변경되었습니다. 새로고침 후 다시 동의해 주세요.", status: 409 },
   policy_version_not_current: { message: "약관이 변경되었습니다. 새로고침 후 다시 동의해 주세요.", status: 409 },
   not_authenticated: { message: "로그인이 필요합니다.", status: 401 },
-  // S2 career RPCs (get_deletion_impact, delete_career_item, reorder_project_details)
+  // S2 career RPCs (get_deletion_impact, delete_career_item)
   career_item_not_found: { message: "요청한 항목을 찾을 수 없습니다.", status: 404 },
   invalid_entity_type: { message: "입력값을 확인해 주세요." },
   invalid_affiliation_mode: { message: "입력값을 확인해 주세요." },
   invalid_result_mode: { message: "입력값을 확인해 주세요." },
-  invalid_detail_order: { message: "상세 내용 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
+  // R4 (DM v4.4): career v4.4 triggers / RPCs (db notes "팀 전달 사항")
+  affiliation_mode_not_supported: { message: "경력·교육을 지우면 그 안의 프로젝트도 함께 지워져요. 새로고침 후 다시 시도해 주세요." },
+  project_scope_change_not_allowed: { message: "경력·교육 안 프로젝트와 독립 프로젝트는 서로 바꿀 수 없어요.", status: 409 },
+  deliverable_requires_standalone_project: { message: "산출물은 독립 프로젝트에만 추가할 수 있어요.", status: 409 },
+  deliverable_limit_reached: { message: "산출물은 프로젝트당 50개까지 쓸 수 있어요.", status: 409 },
+  invalid_deliverable_order: { message: "산출물 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
+  project_skill_requires_standalone_project: { message: "사용 기술은 독립 프로젝트에만 추가할 수 있어요.", status: 409 },
   // S3/S3a ai_jobs (status guard trigger, request_ai_job_cancel, complete_ai_job, sweep_stalled_ai_jobs)
   invalid_ai_job_transition: { message: "이미 끝난 작업입니다.", status: 409 },
   ai_job_not_found: { message: "요청한 항목을 찾을 수 없습니다.", status: 404 },
@@ -60,24 +66,20 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   disclosure_version_not_current: { message: "고지 내용이 바뀌었어요. 새 고지를 확인하고 다시 동의해 주세요.", status: 409 },
   // S4 writing chat (start / message / patch / affiliation / save RPCs)
   writing_chat_not_found: { message: "요청한 대화를 찾을 수 없습니다.", status: 404 },
-  writing_chat_not_active: { message: "저장했거나 그만둔 대화예요. 새 대화를 시작해 주세요.", status: 409 },
-  invalid_writing_chat_transition: { message: "저장했거나 그만둔 대화예요. 새 대화를 시작해 주세요.", status: 409 },
-  message_limit_reached: { message: "대화가 길어져 더 보낼 수 없어요. 지금까지 내용을 저장하거나 폼으로 옮겨 이어서 써 주세요.", status: 409 },
+  // R4: `closed` (메시지 상한 도달) replaces writing_chat_not_active (R4-DB-6).
+  writing_chat_closed: { message: "대화가 길어져 끝난 대화예요. 제안은 반영할 수 있고, 새 대화에서 이어 할 수 있어요.", status: 409 },
+  invalid_writing_chat_transition: { message: "대화가 길어져 끝난 대화예요. 새 대화에서 이어 해 주세요.", status: 409 },
+  writing_chat_requires_affiliated_project: { message: "AI 대화는 경력·교육 안 프로젝트에서만 시작할 수 있어요.", status: 409 },
+  message_limit_reached: { message: "대화가 길어져 더 보낼 수 없어요. 제안을 반영하고 새 대화에서 이어 해 주세요.", status: 409 },
   turn_in_progress: { message: "이전 메시지에 대한 응답을 만들고 있어요. 잠시 후 다시 보내 주세요.", status: 409 },
   no_pending_user_message: { message: "다시 보낼 응답이 없어요.", status: 409 },
   invalid_content: { message: "메시지는 1자 이상 4,000자 이하로 입력해 주세요." },
-  invalid_mode: { message: "입력값을 확인해 주세요." },
-  project_required: { message: "입력값을 확인해 주세요." },
-  project_not_allowed: { message: "입력값을 확인해 주세요." },
   project_not_found: { message: "대상 프로젝트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   invalid_return_target: { message: "입력값을 확인해 주세요." },
-  invalid_affiliation: { message: "소속은 경력이나 교육 중 하나만 고를 수 있어요." },
-  affiliation_not_found: { message: "연결할 경력·교육을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  affiliation_not_editable: { message: "기존 프로젝트를 보강하는 대화에서는 소속을 바꿀 수 없어요.", status: 409 },
   invalid_period: { message: "기간을 확인해 주세요. 종료 월이 시작 월보다 빠를 수 없어요." },
   // S5 application projects / JD (db notes "RPC 시그니처")
-  application_project_not_found: { message: "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  job_description_not_found: { message: "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  application_project_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  job_description_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   application_project_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_id: { message: "입력값을 확인해 주세요." },
   invalid_raw_text: { message: "공고 원문은 1자 이상 50,000자 이하로 입력해 주세요." },
@@ -123,12 +125,17 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // apply_structured_draft_patch: user-session rule violations (db notes "거부 사유")
   invalid_patch: { message: "입력값을 확인해 주세요." },
   invalid_value: { message: "입력값을 확인해 주세요." },
-  field_already_filled: { message: "기존 상세 내용에 이미 쓴 칸은 여기서 바꿀 수 없어요.", status: 409 },
+  field_already_filled: { message: "프로젝트에 이미 값이 있는 기간은 제안으로 바꿀 수 없어요.", status: 409 },
   protected_field: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_source: { message: "입력값을 확인해 주세요." },
-  detail_not_found: { message: "상세 내용 카드를 찾을 수 없어요. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  achievement_not_found: { message: "정량 성과를 찾을 수 없어요. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_review_transition: { message: "이미 검토한 항목이에요. 새로고침 후 확인해 주세요.", status: 409 },
+  classification_already_set: { message: "이미 고른 분류가 있어 추천을 쓸 수 없어요. 프로젝트 머리에서 직접 바꿔 주세요.", status: 409 },
+  field_already_applied: { message: "이미 반영한 항목이에요. 고치려면 왼쪽 섹션에서 수정해 주세요.", status: 409 },
+  field_not_patchable: { message: "입력값을 확인해 주세요." },
+  actor_mismatch: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  // apply_writing_chat_proposal (DM §3.3): detail = comma-separated field names
+  invalid_fields: { message: "입력값을 확인해 주세요." },
+  field_too_long: { message: "반영하면 2,000자를 넘는 항목이 있어 반영하지 않았어요. 제안이나 왼쪽 내용을 줄인 뒤 다시 반영해 주세요.", status: 409 },
   // Server-built arguments (AI turn path): our bug, not the user's input.
   invalid_ai_metadata: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_ai_job: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
@@ -137,15 +144,15 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   message_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sequence: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // W0 Q53-2 / Q53-11 update_failed_jd_raw_text (DM 2.6.1)
-  jd_job_in_progress: { message: "이 기업 JD에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
+  jd_job_in_progress: { message: "이 자기소개서에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
   jd_raw_text_locked: { message: "지금은 공고 원문을 고칠 수 없어요. 새로고침 후 확인해 주세요.", status: 409 },
   jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
-  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 기업 JD로 추가해 주세요.", status: 409 },
+  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요.", status: 409 },
   jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
   // W0 Q53-3 begin_interview_evaluation / 다시 채점 route (DM 2.7.1)
   interview_evaluation_input_only: { message: "남은 실패는 입력이 원인이라 다시 채점할 수 없어요. 새 면접에서 다시 답해 주세요.", status: 409 },
   // S8 interviews (db notes)
-  interview_in_progress: { message: "이 기업 JD에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
+  interview_in_progress: { message: "이 자기소개서에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
   session_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_interview_type: { message: "면접 유형을 골라 주세요." },
   invalid_question_count: { message: "질문 수는 3, 5, 7 중에서 골라 주세요." },
@@ -199,16 +206,16 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   unknown_disclosure_version: "ai_disclosure_changed",
   disclosure_version_not_current: "ai_disclosure_changed",
   writing_chat_not_found: "not_found",
-  invalid_writing_chat_transition: "writing_chat_not_active",
+  invalid_writing_chat_transition: "writing_chat_closed",
+  affiliation_mode_not_supported: "invalid_input",
+  invalid_deliverable_order: "conflict",
+  field_not_patchable: "invalid_input",
+  actor_mismatch: "internal_error",
+  invalid_fields: "invalid_input",
   no_pending_user_message: "nothing_to_retry",
   invalid_content: "invalid_input",
-  invalid_mode: "invalid_input",
-  project_required: "invalid_input",
-  project_not_allowed: "invalid_input",
   project_not_found: "not_found",
   invalid_return_target: "invalid_input",
-  invalid_affiliation: "invalid_input",
-  affiliation_not_found: "not_found",
   invalid_period: "invalid_input",
   invalid_patch: "invalid_input",
   invalid_value: "invalid_input",
@@ -267,7 +274,12 @@ export function mapDbError(error: DbError): AppError {
     const known = RAISE_MESSAGES[message]!;
     const appCode = RAISE_CODE_ALIASES[message] ?? message;
     // DM 2.7.1: the cause travels in the raise's detail, and in the response's details.
-    const details = message === "interview_evaluation_input_only" && error.details ? { cause: error.details } : undefined;
+    const details =
+      message === "interview_evaluation_input_only" && error.details
+        ? { cause: error.details }
+        : message === "field_too_long" && error.details
+          ? { fields: error.details.split(",").filter(Boolean) }
+          : undefined;
     return new AppError(appCode, known.message, { status: known.status, cause: error, details });
   }
   if (code === "42501" && message === "not_authenticated") return new AppError("unauthenticated", undefined, { cause: error });

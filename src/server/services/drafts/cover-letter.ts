@@ -151,7 +151,6 @@ export async function setSectionSources(user: UserSupabaseClient, input: z.outpu
     ...(s.projectId ? { project_id: s.projectId } : {}),
     ...(s.experienceId ? { experience_id: s.experienceId } : {}),
     ...(s.educationId ? { education_id: s.educationId } : {}),
-    ...(s.projectDetailIds ? { project_detail_ids: s.projectDetailIds } : {}),
     ...(s.role ? { role: s.role } : {}),
     ...(s.requirementIds ? { requirement_ids: s.requirementIds } : {}),
   }));
@@ -224,7 +223,7 @@ async function loadSourceInputs(db: DraftAiDeps["writer"], draftId: string, sect
   const { data: sources, error: srcError } = ids.length
     ? await db
         .from("draft_section_sources")
-        .select("draft_section_id, experience_id, education_id, project_id, project_detail_ids, role, origin, sort_order, source_deleted_at")
+        .select("draft_section_id, experience_id, education_id, project_id, role, origin, sort_order, source_deleted_at")
         .in("draft_section_id", ids)
         .order("sort_order", { ascending: true })
     : { data: [], error: null };
@@ -236,7 +235,6 @@ async function loadSourceInputs(db: DraftAiDeps["writer"], draftId: string, sect
       experience_id: s.experience_id,
       education_id: s.education_id,
       project_id: s.project_id,
-      project_detail_ids: s.project_detail_ids ?? [],
       role: s.role === "primary" ? "primary" : "supporting",
     }));
   const others = (sections ?? [])

@@ -126,14 +126,33 @@ describe("buildInsightContext", () => {
     expect(ctx.allowedNumbers.has("99")).toBe(false);
   });
 
-  it("data_sufficiency: ok with 4 complete projects and quantitative achievements", () => {
+  it("data_sufficiency: ok with 4 complete projects and numbers in results", () => {
     expect(ctxKo().dataSufficiency).toEqual({ level: "ok", hints: [] });
   });
 
-  it("data_sufficiency: thin with ≤ 2 projects and no quantitative achievement [가정 S6-4]", () => {
+  it("data_sufficiency: thin with ≤ 2 projects and no number in results [가정 C-14 v4.5]", () => {
     const ctx = ctxKo(thinRows());
     expect(ctx.dataSufficiency.level).toBe("thin");
     expect(ctx.dataSufficiency.hints).toEqual([THIN_HINTS.fewProjects, THIN_HINTS.noQuantitative]);
+  });
+
+  it("data_sufficiency: enough projects but no number in results, descriptions or deliverables → thin (numbers elsewhere don't count)", () => {
+    const rows = careerRowsFixture();
+    rows.projects = rows.projects.map((p) => ({
+      ...p,
+      result: p.result ? "결과가 좋아졌다" : null,
+      description: p.description ? "문자 파싱으로 자동 기록을 만들었다" : null,
+    }));
+    rows.deliverables = [];
+    const ctx = ctxKo(rows);
+    // situation "1.2초" and learnings "99%" still have numbers, but only results/descriptions/deliverables count.
+    expect(ctx.dataSufficiency).toEqual({ level: "thin", hints: [THIN_HINTS.noQuantitative] });
+  });
+
+  it("data_sufficiency: a number only in a deliverable body counts", () => {
+    const rows = careerRowsFixture();
+    rows.projects = rows.projects.map((p) => ({ ...p, result: p.result ? "결과가 좋아졌다" : null, description: p.description ? "자동 기록 앱" : null }));
+    expect(ctxKo(rows).dataSufficiency).toEqual({ level: "ok", hints: [] });
   });
 });
 
@@ -163,7 +182,7 @@ describe("matchRequirements (stage 1)", () => {
     expect(roundTrip(batches)).toEqual(batches);
     // UUIDs, not aliases
     const ev1 = batches[0].matches[0].evidence[0];
-    expect(ev1.source_id).toBe(IDS.detPay1);
+    expect(ev1.source_id).toBe(IDS.prjPay);
     expect(batches[0].matches[0].requirement_id).toBe(reqId(1));
   });
 
@@ -174,6 +193,8 @@ describe("matchRequirements (stage 1)", () => {
     const byReq = (n: number) => all.find((m) => m.requirement_id === reqId(n))!;
     expect(byReq(1).status).toBe("met");
     expect(byReq(2).status).toBe("met");
+    // v4.5: a deliverable body of a standalone project supports met (C-1.1)
+    expect(byReq(3)).toMatchObject({ status: "met", evidence: [{ source_type: "project_deliverable", source_id: IDS.dlvSide1, field: "body" }] });
     // skill tag only → partial (card 가드레일)
     expect(byReq(4).status).toBe("partial");
     expect(byReq(4).model_status).toBe("met");
@@ -204,14 +225,14 @@ describe("matchRequirements (stage 1)", () => {
     const ids = ctx.requirements.slice(0, 2).map((r) => r.id);
     const out = matchOutput([
       match("REQ-1", "met", [
-        { source_type: "project_detail", ref: "DET-99", field: "action", quote: "없는 상세" },
-        { source_type: "project_detail", ref: alias(ctx, "project_detail", IDS.detPay1), field: "outcome", quote: "응답 시간이 0.7초로 줄었다" },
-        { source_type: "project_detail", ref: alias(ctx, "project_detail", IDS.detPay1), field: "result", quote: "전혀 다른 문장이 인용되었다고 가정한다" },
-        ev.result(ctx, IDS.detPay1, "응답 시간이 0.7초로 줄었다"),
+        { source_type: "project", ref: "PRJ-99", field: "action", quote: "없는 프로젝트" },
+        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "outcome", quote: "응답 시간이 0.7초로 줄었다" },
+        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "result", quote: "전혀 다른 문장이 인용되었다고 가정한다" },
+        ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다"),
       ]),
       match("REQ-1", "no_evidence"),
-      match("REQ-9", "met", [ev.action(ctx, IDS.detPay2, "런북을 작성하고 알림 규칙을 정리했다")]),
-      match("REQ-2", "no_evidence", [ev.action(ctx, IDS.detSettle, "정산 배치를 청크 단위로 재설계했다")]),
+      match("REQ-9", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")]),
+      match("REQ-2", "no_evidence", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")]),
     ]);
     const llm = createFakeLlm([{ json: out }]);
     const result = await matchRequirements({ context: ctx, batchIndex: 0, requirementIds: ids }, { llm });
@@ -231,8 +252,8 @@ describe("matchRequirements (stage 1)", () => {
   it("V-5 in rationale: an invented number is replaced (no regeneration in stage 1)", async () => {
     const ctx = ctxKo();
     const out = matchOutput([
-      match("REQ-1", "met", [ev.action(ctx, IDS.detPay1, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
-        rationale: "응답 시간을 40% 줄이고 1.2초 병목을 해결했습니다.",
+      match("REQ-1", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
+        rationale: "응답 시간을 45% 줄이고 1.2초 병목을 해결했습니다.",
       }),
     ]);
     const llm = createFakeLlm([{ json: out }]);
@@ -246,15 +267,15 @@ describe("matchRequirements (stage 1)", () => {
   it("aliases in stage-1 prose become labels (QA-S6-04)", async () => {
     const ctx = ctxKo();
     const prj = alias(ctx, "project", IDS.prjPay);
-    const det = alias(ctx, "project_detail", IDS.detPay1);
+    const dlv = alias(ctx, "project_deliverable", IDS.dlvSide1);
     const out = matchOutput([
-      match("REQ-1", "met", [ev.action(ctx, IDS.detPay1, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
-        rationale: `${prj}의 ${det}.action이 REQ-1을 뒷받침합니다(PRJ-99).`,
+      match("REQ-1", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
+        rationale: `${prj}의 ${dlv}.body이 REQ-1을 뒷받침합니다(PRJ-99).`,
         missing_aspect: "REQ-1 운영 규모",
       }),
     ]);
     const result = await matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [reqId(1)] }, { llm: createFakeLlm([{ json: out }]) });
-    expect(result.matches[0].rationale).toBe("'결제 승인 API 개선'의 '승인 API 병목 제거'이 '결제 승인 API 설계 및 운영'을 뒷받침합니다.");
+    expect(result.matches[0].rationale).toBe("'결제 승인 API 개선'의 '문자 파싱 설계'이 '결제 승인 API 설계 및 운영'을 뒷받침합니다.");
     expect(result.matches[0].missing_aspect).toBe("'결제 승인 API 설계 및 운영' 운영 규모");
     expect(result.report).toMatchObject({ aliases_replaced: 4, aliases_removed: 1 });
   });
@@ -384,7 +405,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
       strengths: [
         good,
         { ...good, title: "근거 없음", evidence: [] },
-        { ...good, title: "회고만", evidence: [ev.learnings(ctx, IDS.detPay1, "측정 없이 최적화하면 안 된다는 것을 배웠다")] },
+        { ...good, title: "회고만", evidence: [ev.learnings(ctx, IDS.prjPay, "측정 없이 최적화하면 안 된다는 것을 배웠다")] },
         { ...good, title: "JD만", evidence: [ev.sentence(ctx, "Kafka")] },
         { ...good, title: "no_evidence 요건만", requirement_refs: ["REQ-8", "REQ-99"] },
         { ...good, title: "둘째", requirement_refs: ["REQ-8", "REQ-4"] },
@@ -422,7 +443,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
           description: "대용량 트래픽에서 본인 기여가 불명확합니다.",
           actions: [
             { type: "reframe", text: "근거 없는 재구성", evidence: [] },
-            { type: "prepare_answer", text: "회고만으로 대비", evidence: [ev.learnings(ctx, IDS.detPay1, "측정 없이 최적화하면 안 된다는 것을 배웠다")] },
+            { type: "prepare_answer", text: "회고만으로 대비", evidence: [ev.learnings(ctx, IDS.prjPay, "측정 없이 최적화하면 안 된다는 것을 배웠다")] },
             { type: "add_data", text: "트래픽 규모를 입력해 주세요.", evidence: [] },
           ],
           evidence: [],
@@ -451,7 +472,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
           { rank: 1, ref: "PRJ-99", reason: "없음", requirement_refs: [] },
           { rank: 2, ref: prj(IDS.prjPay), reason: "결제", requirement_refs: ["REQ-1", "REQ-8"] },
           { rank: 4, ref: prj(IDS.prjPay), reason: "중복", requirement_refs: [] },
-          { rank: 5, ref: alias(ctx, "project_detail", IDS.detPay1), reason: "상세는 프로젝트가 아님", requirement_refs: [] },
+          { rank: 5, ref: alias(ctx, "project_deliverable", IDS.dlvSide1), reason: "산출물은 프로젝트가 아님", requirement_refs: [] },
           { rank: 6, ref: prj(IDS.prjEdu), reason: "캡스톤", requirement_refs: [] },
           { rank: 7, ref: prj(IDS.prjSide), reason: "개인", requirement_refs: [] },
         ],
@@ -540,38 +561,38 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
   it("career data changed between stage 1 and stage 2: vanished evidence is dropped and verdicts re-ruled", async () => {
     const ctx1 = ctxKo();
     const { batches } = await runStage1(ctx1, koMatchOutputs(ctx1));
-    // detPay1 goes back to draft → its achievement (achPay) leaves the pack too.
+    // prjPay goes back to draft → its STAR leaves the pack.
     const rows = careerRowsFixture();
-    rows.projectDetails = rows.projectDetails.map((d) => (d.id === IDS.detPay1 ? { ...d, status: "draft" } : d));
+    rows.projects = rows.projects.map((p) => (p.id === IDS.prjPay ? { ...p, status: "draft" } : p));
     const ctx2 = ctxKo(rows);
     const restored = restoreMatches(roundTrip(batches), ctx2);
     const byReq = (n: number) => restored.matches.find((m) => m.requirementId === reqId(n))!;
-    expect(byReq(1).status).toBe("no_evidence"); // action + achievement both gone
+    expect(byReq(1).status).toBe("no_evidence"); // action + result both gone
     expect(byReq(1).rationale).toBe(NO_EVIDENCE_RATIONALE);
-    expect(byReq(6).status).toBe("no_evidence"); // situation of detPay1 gone
+    expect(byReq(6).status).toBe("no_evidence"); // situation of prjPay gone
     expect(byReq(7).status).toBe("no_evidence");
     expect(byReq(2).status).toBe("met"); // untouched
     expect(restored.report.evidence_lost_on_restore).toBe(4);
     // aliases were renumbered but restored evidence points at the same rows
-    expect(byReq(2).evidence[0].ref).toBe(alias(ctx2, "project_detail", IDS.detSettle));
+    expect(byReq(2).evidence[0].ref).toBe(alias(ctx2, "project", IDS.prjSettle));
   });
 
   it("career data changed between synthesize and validate: the stored attempt is re-mapped by row id", async () => {
     const { batches, synthesis } = await fullRun();
-    // A new project sorts first → every PRJ/DET/ACH alias shifts; detSettle disappears.
+    // A new project sorts first → every PRJ alias shifts; prjSettle's action is rewritten (old quote no longer matches).
     const rows = careerRowsFixture();
     rows.projects.push({ ...rows.projects.find((p) => p.id === IDS.prjSettle)!, id: "30000000-0000-4000-8000-0000000000ff", name: "새 프로젝트", start_month: "2025-01-01" });
-    rows.projectDetails = rows.projectDetails.filter((d) => d.id !== IDS.detSettle);
+    rows.projects = rows.projects.map((p) => (p.id === IDS.prjSettle ? { ...p, action: "야간 작업을 줄였다" } : p));
     const ctx2 = ctxKo(rows);
     expect(alias(ctx2, "project", IDS.prjPay)).not.toBe(synthesis.first.output.strategy.project_priorities[0].ref);
     const final = finalize(ctx2, roundTrip(batches), synthesis);
     const r = final.payload.result;
-    // strengths.1 cited only detSettle → dropped; priorities still point at the same projects
+    // strengths.1 cited only prjSettle's old action → dropped; priorities still point at the same projects
     expect(r.strengths.map((s) => s.title)).toEqual(["결제 승인 API 성능 개선"]);
     expect(r.strategy.project_priorities.map((p) => p.project_id)).toEqual([IDS.prjPay, IDS.prjSettle]);
     const ids = new Set(final.payload.evidence.map((e) => e.source_id));
-    expect(ids.has(IDS.detSettle)).toBe(false);
-    expect(ids.has(IDS.detPay1)).toBe(true);
+    expect(ids.has(IDS.prjSettle)).toBe(false);
+    expect(ids.has(IDS.prjPay)).toBe(true);
   });
 
   it("finalize stores the prepare-time snapshot hashes (QA-S6-09)", async () => {
@@ -608,7 +629,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
     const rows = thinRows();
     const ctx = ctxKo(rows);
     const outputs = [
-      matchOutput([match("REQ-2", "met", [ev.action(ctx, IDS.detSettle, "정산 배치를 청크 단위로 재설계했다")])]),
+      matchOutput([match("REQ-2", "met", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")])]),
       matchOutput([]),
     ];
     const { batches } = await runStage1(ctx, outputs);

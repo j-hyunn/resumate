@@ -45,7 +45,7 @@ export type InsightReadDeps = {
   loadInputs?: (db: UserSupabaseClient, applicationProjectId: string) => Promise<InsightInputs | null>;
 };
 
-const notFound = () => new AppError("not_found", "기업 JD를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 const INSIGHT_COLUMNS =
   "id, version_no, status, is_latest, result, requirements_hash, career_snapshot_hash, provider, model, model_tier, connection_tier, prompt_version, created_at, completed_at";

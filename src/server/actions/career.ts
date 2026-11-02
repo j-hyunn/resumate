@@ -3,44 +3,85 @@
 import {
   AddManualSkillInput,
   AddProjectSkillInput,
+  CreateProjectInput,
   DeleteCareerItemInput,
   DeletionImpactInput,
+  DeliverableIdInput,
+  ProjectIdInput,
   RemoveProjectSkillInput,
-  ReorderProjectDetailsInput,
-  SaveAchievementInput,
+  ReorderDeliverablesInput,
+  SaveDeliverableInput,
   SaveEducationInput,
   SaveExperienceInput,
-  SaveProjectDetailInput,
   SaveProjectInput,
   UpdateSkillInput,
-  type CareerTreeDto,
+  type CareerListDto,
   type DataReadiness,
   type DeleteCareerItemResponse,
   type DeletionImpact,
-  type SaveProjectDetailResult,
+  type DeliverableDetailDto,
+  type ProjectDetailDto,
   type SaveResult,
   type SkillDto,
+  type StandaloneProjectDetailDto,
 } from "@/lib/contracts/career";
-import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
+import { AppError, invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import { requireConsentedUser } from "@/server/auth/session";
 import * as career from "@/server/services/career";
+import type { DeliverableSaveResult } from "@/server/services/career/save";
 
 /**
- * S2 career Server Actions (DM §7). Thin: consent-gated user session → zod → service.
+ * Career Server Actions v4.4 (DM §7 v4.4). Thin: consent-gated user session → zod → service.
  * Every write goes through the user session (RLS, DM-13).
  */
 
 // ---------- reads ----------
 
-/** S-08 career tree with the year view (DM §2.4). Pages may call the service directly instead. */
-export async function getCareerTree(): Promise<ActionResult<CareerTreeDto>> {
+/** S-08 career list (DM §2.4 v4.4). Pages may call the service directly instead. */
+export async function getCareerList(): Promise<ActionResult<CareerListDto>> {
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
-    return career.getCareerTree(supabase);
+    return career.getCareerList(supabase);
   });
 }
 
-/** C-09 / C-10 data readiness (DM §6). */
+/** S-10 (affiliated project). `not_found` for a standalone id (the screen opens S-43). */
+export async function getProjectDetail(input: unknown): Promise<ActionResult<ProjectDetailDto>> {
+  const parsed = ProjectIdInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    const detail = await career.getProjectDetail(supabase, parsed.data.id);
+    if (!detail) throw notFound();
+    return detail;
+  });
+}
+
+/** S-43 (standalone project). */
+export async function getStandaloneProjectDetail(input: unknown): Promise<ActionResult<StandaloneProjectDetailDto>> {
+  const parsed = ProjectIdInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    const detail = await career.getStandaloneProjectDetail(supabase, parsed.data.id);
+    if (!detail) throw notFound();
+    return detail;
+  });
+}
+
+/** S-44. */
+export async function getDeliverable(input: unknown): Promise<ActionResult<DeliverableDetailDto>> {
+  const parsed = DeliverableIdInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    const detail = await career.getDeliverable(supabase, parsed.data.id);
+    if (!detail) throw notFound();
+    return detail;
+  });
+}
+
+/** C-09 / C-10 data readiness (DM §6 v4.4). */
 export async function getDataReadiness(): Promise<ActionResult<DataReadiness>> {
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
@@ -48,9 +89,9 @@ export async function getDataReadiness(): Promise<ActionResult<DataReadiness>> {
   });
 }
 
-// ---------- auto-save (F-P1-06) ----------
+// ---------- saves (C-24 section saves, F-P1-06) ----------
 
-/** S-09. Returns the DB-computed status. */
+/** S-09 재직 정보 / 근무 내용. Returns the DB-computed status. */
 export async function saveExperience(input: unknown): Promise<ActionResult<SaveResult>> {
   const parsed = SaveExperienceInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -60,7 +101,7 @@ export async function saveExperience(input: unknown): Promise<ActionResult<SaveR
   });
 }
 
-/** S-34 (F-P1-14). */
+/** S-34 교육 정보 / 교육 내용 (F-P1-14). */
 export async function saveEducation(input: unknown): Promise<ActionResult<SaveResult>> {
   const parsed = SaveEducationInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -70,7 +111,17 @@ export async function saveEducation(input: unknown): Promise<ActionResult<SaveRe
   });
 }
 
-/** S-10 (F-P1-03). Affiliation: experience / education / none. */
+/** C-23 "프로젝트 추가" (CR-6): name + affiliation → draft project; the screen opens S-10 / S-43. */
+export async function createProject(input: unknown): Promise<ActionResult<SaveResult>> {
+  const parsed = CreateProjectInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return career.createProject(supabase, parsed.data);
+  });
+}
+
+/** S-10 머리 / STAR 섹션, S-43 프로젝트 정보 / 내용 (section saves, update only). */
 export async function saveProject(input: unknown): Promise<ActionResult<SaveResult>> {
   const parsed = SaveProjectInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -80,37 +131,27 @@ export async function saveProject(input: unknown): Promise<ActionResult<SaveResu
   });
 }
 
-/** S-35 (F-P1-15). Also returns the parent project's recalculated status. */
-export async function saveProjectDetail(input: unknown): Promise<ActionResult<SaveProjectDetailResult>> {
-  const parsed = SaveProjectDetailInput.safeParse(input);
+/** S-44 산출물 저장 (create with projectId + title, then updates). */
+export async function saveDeliverable(input: unknown): Promise<ActionResult<DeliverableSaveResult>> {
+  const parsed = SaveDeliverableInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
-    return career.saveProjectDetail(supabase, parsed.data);
+    return career.saveDeliverable(supabase, parsed.data);
   });
 }
 
-/** S-11 (F-P1-04). Target (project detail / experience) on create only. */
-export async function saveAchievement(input: unknown): Promise<ActionResult<SaveResult>> {
-  const parsed = SaveAchievementInput.safeParse(input);
+/** S-43 산출물 순서 변경 → RPC reorder_project_deliverables ([가정]). */
+export async function reorderDeliverables(input: unknown): Promise<ActionResult<{ projectId: string; orderedIds: string[] }>> {
+  const parsed = ReorderDeliverablesInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
-    return career.saveAchievement(supabase, parsed.data);
+    return career.reorderProjectDeliverables(supabase, parsed.data);
   });
 }
 
-/** S-10 상세 내용 순서 변경 → RPC reorder_project_details. */
-export async function reorderProjectDetails(input: unknown): Promise<ActionResult<{ projectId: string; orderedIds: string[] }>> {
-  const parsed = ReorderProjectDetailsInput.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error);
-  return runAction(async () => {
-    const { supabase } = await requireConsentedUser();
-    return career.reorderProjectDetails(supabase, parsed.data);
-  });
-}
-
-// ---------- skills (F-P1-05) ----------
+// ---------- skills (F-P1-05: standalone projects only) ----------
 
 export async function addProjectSkill(input: unknown): Promise<ActionResult<{ projectId: string; skill: SkillDto }>> {
   const parsed = AddProjectSkillInput.safeParse(input);
@@ -166,4 +207,8 @@ export async function deleteCareerItem(input: unknown): Promise<ActionResult<Del
     const { supabase } = await requireConsentedUser();
     return career.deleteCareerItem(supabase, parsed.data);
   });
+}
+
+function notFound(): AppError {
+  return new AppError("not_found");
 }

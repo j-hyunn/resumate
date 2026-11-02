@@ -56,28 +56,70 @@ export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number];
 export const SKILL_PROFICIENCIES = ["basic", "practical", "expert"] as const;
 export type SkillProficiency = (typeof SKILL_PROFICIENCIES)[number];
 
-/** achievements.kind (generated column) values — [가정] spec-gaps 2026-10-25. */
-export const ACHIEVEMENT_KINDS = ["quantitative", "qualitative"] as const;
-export type AchievementKind = (typeof ACHIEVEMENT_KINDS)[number];
+// --- R4: projects v4.4 classification (DM 2.3, PRD F-P1-19, CR-17). DB stores keys only. ---
 
-/** get_deletion_impact / delete_career_item `entity_type` (DM §4.2; `writing_chat` since S4). */
-export const DELETABLE_ENTITY_TYPES = ["experience", "education", "project", "project_detail", "achievement", "skill", "writing_chat"] as const;
+/** projects.project_type CHECK (single). */
+export const PROJECT_TYPES = [
+  "new_build",
+  "improvement",
+  "operation",
+  "research",
+  "marketing",
+  "process_improvement",
+  "migration",
+  "coursework",
+  "other",
+] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+/** projects.experience_type CHECK (single). */
+export const EXPERIENCE_TYPES = ["impact", "problem_solving", "collaboration", "leadership", "failure_recovery", "new_challenge", "customer_facing"] as const;
+export type ExperienceType = (typeof EXPERIENCE_TYPES)[number];
+
+/** projects.competencies element CHECK (≤ 3, distinct, order kept). */
+export const COMPETENCIES = [
+  "problem_solving",
+  "analysis",
+  "planning",
+  "execution",
+  "communication",
+  "collaboration",
+  "leadership",
+  "technical_expertise",
+  "customer_insight",
+  "learning_agility",
+] as const;
+export type Competency = (typeof COMPETENCIES)[number];
+export const MAX_COMPETENCIES = 3;
+
+/** STAR columns on projects (DM 2.3 v4.4, affiliated projects only). */
+export const STAR_FIELDS = ["situation", "task", "action", "result", "learnings"] as const;
+export type StarField = (typeof STAR_FIELDS)[number];
+
+/** Classification columns (affiliated projects only; never AI evidence, AI C-1.2). */
+export const CLASSIFICATION_FIELDS = ["project_type", "experience_type", "competencies"] as const;
+export type ClassificationField = (typeof CLASSIFICATION_FIELDS)[number];
+
+/** get_deletion_impact / delete_career_item `entity_type` (DM §4.2 v4.4). */
+export const DELETABLE_ENTITY_TYPES = ["experience", "education", "project", "project_deliverable", "skill", "writing_chat"] as const;
 export type DeletableEntityType = (typeof DELETABLE_ENTITY_TYPES)[number];
 
-/** What happens to projects of a deleted experience/education (DM §4.1). [가정] value names. */
-export const AFFILIATION_MODES = ["keep_projects", "delete_projects"] as const;
+/**
+ * DM §4.2 v4.4 (CR-15): an experience / education delete always removes its projects.
+ * `keep_projects` is refused by the RPC (`affiliation_mode_not_supported`); the contract accepts only this.
+ */
+export const AFFILIATION_MODES = ["delete_projects"] as const;
 export type AffiliationMode = (typeof AFFILIATION_MODES)[number];
 
 /** What happens to AI results that cite the deleted rows (DM §4.2). [가정] value names (UX C-05 wording). */
 export const RESULT_MODES = ["keep_results", "delete_results"] as const;
 export type ResultMode = (typeof RESULT_MODES)[number];
 
-/** get_data_readiness `missing` / `hints` / `next_action` / `suggested_mode` values (DM §6). */
+/** get_data_readiness `missing` / `hints` / `next_action` values (DM §6 v4.4; `suggested_mode` removed). */
 export const READINESS_MISSING = ["complete_experience", "complete_project"] as const;
-/** R1 A18: `project_fields` = a draft project missing name/role → `next_action: form` + `suggested_project_id` (S-10). */
-export const READINESS_HINTS = ["complete_project_detail", "project_fields", "profile"] as const;
-export const READINESS_NEXT_ACTIONS = ["writing_chat", "form"] as const;
-export const READINESS_SUGGESTED_MODES = ["new_project", "augment_project"] as const;
+/** v4.4: `project_star` = affiliated project without situation/action, `project_fields` = standalone without description. */
+export const READINESS_HINTS = ["project_star", "project_fields", "profile"] as const;
+export const READINESS_NEXT_ACTIONS = ["writing_chat", "form", "create_project"] as const;
 export const DATA_SUFFICIENCIES = ["ok", "thin", "none"] as const;
 export type DataSufficiency = (typeof DATA_SUFFICIENCIES)[number];
 
@@ -202,8 +244,7 @@ export const EVIDENCE_SOURCE_TYPES = [
   "experience",
   "education",
   "project",
-  "project_detail",
-  "achievement",
+  "project_deliverable",
   "skill",
   "jd_requirement",
   "jd_sentence",
@@ -214,12 +255,8 @@ export type EvidenceSourceType = (typeof EVIDENCE_SOURCE_TYPES)[number];
 
 // --- S4: AI writing chat (DM §2.5, AI-12) ---
 
-/** writing_chats.mode CHECK. */
-export const WRITING_CHAT_MODES = ["new_project", "augment_project"] as const;
-export type WritingChatMode = (typeof WRITING_CHAT_MODES)[number];
-
-/** writing_chats.status CHECK: 진행 중 / 저장 완료 / 폼으로 전환 / 그만둠. */
-export const WRITING_CHAT_STATUSES = ["active", "saved", "handed_off", "abandoned"] as const;
+/** writing_chats.status CHECK (DM 2.5 v4.4): 진행 중 / 상한 도달로 끝남 (열람·반영만). */
+export const WRITING_CHAT_STATUSES = ["active", "closed"] as const;
 export type WritingChatStatus = (typeof WRITING_CHAT_STATUSES)[number];
 
 /** writing_chat_messages.role CHECK. */
@@ -239,27 +276,30 @@ export const DRAFT_FIELD_REVIEWS = ["ok", "needs_review", "accepted"] as const;
 export type DraftFieldReview = (typeof DRAFT_FIELD_REVIEWS)[number];
 
 /** structured_draft `clarifications[].kind` (AI-12 output schema). */
-export const CLARIFICATION_KINDS = ["actor_ambiguous", "number_vague", "period_unclear", "affiliation_unclear"] as const;
+export const CLARIFICATION_KINDS = ["actor_ambiguous", "number_vague", "period_unclear"] as const;
 export type ClarificationKind = (typeof CLARIFICATION_KINDS)[number];
 
 /** writing_chats.return_target.feature (DM §2.5 v3.2, U-5). */
 export const RETURN_TARGET_FEATURES = ["insight", "career_description", "cover_letter", "job_interview"] as const;
 export type ReturnTargetFeature = (typeof RETURN_TARGET_FEATURES)[number];
 
-/** structured_draft.project field keys = projects columns (DM §2.5 v3.1). */
-export const DRAFT_PROJECT_FIELDS = ["name", "role", "summary", "start_month", "end_month", "team_size"] as const;
-export type DraftProjectField = (typeof DRAFT_PROJECT_FIELDS)[number];
+/** structured_draft v3 `project` keys = projects period columns (DM 2.5 v4.4; `is_current` is never proposed). */
+export const DRAFT_PERIOD_FIELDS = ["start_month", "end_month"] as const;
+export type DraftPeriodField = (typeof DRAFT_PERIOD_FIELDS)[number];
 
-/** structured_draft.details[].fields keys = project_details columns. */
-export const DRAFT_DETAIL_FIELDS = ["title", "situation", "task", "action", "result", "learnings"] as const;
-export type DraftDetailField = (typeof DRAFT_DETAIL_FIELDS)[number];
+/** structured_draft v3 STAR field `op` (DM 2.5 v4.4). */
+export const DRAFT_STAR_OPS = ["set", "append"] as const;
 
-/** structured_draft.details[].achievements[] keys = achievements columns (quantitative). */
-export const DRAFT_ACHIEVEMENT_FIELDS = ["metric_name", "value_before", "value_after", "unit"] as const;
-export type DraftAchievementField = (typeof DRAFT_ACHIEVEMENT_FIELDS)[number];
+/** `apply_writing_chat_proposal` p_fields (DM 3.3 v4.4). */
+export const APPLY_PROPOSAL_FIELDS = [...STAR_FIELDS, ...DRAFT_PERIOD_FIELDS, ...CLASSIFICATION_FIELDS] as const;
+export type ApplyProposalField = (typeof APPLY_PROPOSAL_FIELDS)[number];
 
-/** AI-12 slot order (진행 단계 표시, `requested_slot`; ids agreed with ai-pipeline `SlotId`). */
-export const WRITING_CHAT_SLOTS = ["basic_info", "situation", "task", "action", "result", "learnings", "next_episode"] as const;
+/** `apply_writing_chat_proposal` skipped[].reason (DM 3.3 v4.4). */
+export const APPLY_PROPOSAL_SKIP_REASONS = ["needs_review", "already_applied", "empty", "period_already_set", "classification_already_set"] as const;
+export type ApplyProposalSkipReason = (typeof APPLY_PROPOSAL_SKIP_REASONS)[number];
+
+/** AI-12 v4.5 slot ids (`requested_slot`; = ai-pipeline `SLOT_IDS`). */
+export const WRITING_CHAT_SLOTS = ["period", "situation", "task", "action", "result", "learnings"] as const;
 export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
 
 // --- S5: application projects & JD (DM §2.6, A.5–A.7, AI-01) ---

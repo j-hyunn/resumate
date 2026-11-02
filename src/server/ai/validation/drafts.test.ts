@@ -24,11 +24,15 @@ describe("skill-name guard (AI-03 키워드 끼워 넣기)", () => {
 describe("situation/task-only self claim", () => {
   const ev = (source_type: ValidatedEvidence["source_type"], field: string | null): ValidatedEvidence => ({ source_type, ref: "X", field, quote: null, quote_adjusted: false });
   it.each([
-    [[ev("project_detail", "situation")], true],
-    [[ev("project_detail", "situation"), ev("project_detail", "task")], true],
-    [[ev("project_detail", "situation"), ev("project_detail", "action")], false],
-    [[ev("project_detail", "task"), ev("achievement", "metric")], false],
-    [[ev("project_detail", "situation"), ev("jd_requirement", null)], true],
+    [[ev("project", "situation")], true],
+    [[ev("project", "situation"), ev("project", "task")], true],
+    [[ev("project", "role")], true],
+    [[ev("project", "situation"), ev("project", "action")], false],
+    [[ev("project", "task"), ev("project", "result")], false],
+    [[ev("project", "role"), ev("project", "description")], false],
+    [[ev("project", "role"), ev("project_deliverable", "body")], false],
+    [[ev("project", "situation"), ev("jd_requirement", null)], true],
+    [[ev("project", "situation"), ev("project", "learnings")], true],
     [[ev("jd_requirement", null)], false],
     [[], false],
   ] as const)("%j → %s", (evidence, expected) => {
@@ -42,24 +46,31 @@ describe("buildSourceScope (AI-04 V-7)", () => {
   const pay = a(al, "project", IDS.prjPay);
   const exp = a(al, "experience", IDS.expA);
 
-  it("project source: its subtree (detail filter), the parent, experience-level achievements; not siblings", () => {
-    const det1 = a(al, "project_detail", IDS.detPay1);
-    const scope = buildSourceScope(al, [{ projectAlias: pay, parentAlias: exp, detailAliases: [det1] }]);
+  it("affiliated project source: the project (STAR) and its parent; not siblings", () => {
+    const scope = buildSourceScope(al, [{ projectAlias: pay, parentAlias: exp }]);
     expect(scope.has(pay)).toBe(true);
     expect(scope.has(exp)).toBe(true);
-    expect(scope.has(det1)).toBe(true);
-    expect(scope.has(a(al, "achievement", IDS.achPay))).toBe(true);
-    expect(scope.has(a(al, "achievement", IDS.achExp))).toBe(true);
-    expect(scope.has(a(al, "skill", IDS.sklKotlin))).toBe(true);
-    expect(scope.has(a(al, "project_detail", IDS.detPay2))).toBe(false); // outside detail_refs
     expect(scope.has(a(al, "project", IDS.prjSettle))).toBe(false); // sibling
+    expect(scope.has(a(al, "skill", IDS.sklKotlin))).toBe(false); // standalone project's skill
+    expect(scope.has(a(al, "project_deliverable", IDS.dlvSide1))).toBe(false);
     expect(scope.has("PROFILE")).toBe(true);
   });
 
+  it("standalone project source: its deliverables and skills", () => {
+    const side = a(al, "project", IDS.prjSide);
+    const scope = buildSourceScope(al, [{ projectAlias: side, parentAlias: null }]);
+    expect(scope.has(side)).toBe(true);
+    expect(scope.has(a(al, "project_deliverable", IDS.dlvSide1))).toBe(true);
+    expect(scope.has(a(al, "project_deliverable", IDS.dlvSide2))).toBe(true);
+    expect(scope.has(a(al, "skill", IDS.sklKotlin))).toBe(true);
+    expect(scope.has(pay)).toBe(false);
+    expect(scope.has(exp)).toBe(false);
+  });
+
   it("experience-only source: the whole experience", () => {
-    const scope = buildSourceScope(al, [{ projectAlias: null, parentAlias: exp, detailAliases: [] }]);
+    const scope = buildSourceScope(al, [{ projectAlias: null, parentAlias: exp }]);
     expect(scope.has(a(al, "project", IDS.prjSettle))).toBe(true);
-    expect(scope.has(a(al, "project_detail", IDS.detPay2))).toBe(true);
+    expect(scope.has(pay)).toBe(true);
     expect(scope.has(a(al, "project", IDS.prjEdu))).toBe(false);
   });
 

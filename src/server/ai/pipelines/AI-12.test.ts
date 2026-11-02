@@ -4,10 +4,12 @@ import {
   baseInput,
   cooperative,
   delegation,
-  EXP_ID,
+  filledAppend,
+  filledProject,
   GREETING,
   msgId,
   output,
+  PROJECT_ID,
   rows,
   sensitive,
   teamSubject,
@@ -19,67 +21,67 @@ import { createFakeLlm } from "../fake-llm";
 import type { AiLogEntry } from "../log";
 import { AI12_EXTRACT_PROMPT_VERSION, AI12_REPLY_PROMPT_VERSION } from "../prompts/AI-12";
 import type { DraftPatchOp } from "../schemas/structured-draft";
-import { extract, reply, type ReplyEvent } from "./AI-12";
+import { extract, rejectionTargetCounts, reply, type ReplyEvent } from "./AI-12";
 
 function ctxOf(messages: WritingChatTurnInput["messages"], extra: Partial<WritingChatTurnInput> = {}) {
   return buildWritingChatContext(baseInput({ messages, ...extra }));
 }
 
-const setOps = (ops: DraftPatchOp[]) =>
-  ops.filter((o): o is Extract<DraftPatchOp, { op: "set" }> => o.op === "set").map((o) => `${"field" in o.target ? o.target.field : ""}:${o.review}`);
+/** "op:section.field:review" for field ops; the op name otherwise. */
+const ops = (list: DraftPatchOp[]) =>
+  list.map((o) => ("target" in o ? `${o.op}:${o.target.section}.${o.target.field}${"review" in o ? `:${o.review}` : ""}` : o.op));
 
 describe("extract — fixture conversations (V-9 end to end)", () => {
-  it("cooperative: project fields, D1 situation, affiliation suggestion", async () => {
+  it("cooperative: period, situation, action, three classification suggestions", async () => {
     const llm = createFakeLlm([{ json: cooperative.output }]);
     const r = await extract(ctxOf(cooperative.messages), { llm });
     expect(r.skipped).toBe(false);
     expect(r.processedThroughSequence).toBe(4);
-    expect(r.patch.ops.map((o) => o.op)).toEqual(["new_detail", "set", "set", "set", "set", "set", "set_affiliation_suggestion"]);
-    expect(setOps(r.patch.ops)).toEqual(["name:ok", "start_month:ok", "role:ok", "team_size:ok", "situation:ok"]);
-    expect(r.patch.ops).toContainEqual({ op: "set_affiliation_suggestion", type: "experience", id: EXP_ID, source_message_ids: [msgId(2)] });
+    expect(ops(r.patch.ops)).toEqual([
+      "set:project.start_month:ok",
+      "set:star.situation:ok",
+      "set:star.action:ok",
+      "set:classification.project_type",
+      "set:classification.experience_type",
+      "set:classification.competencies",
+    ]);
+    expect(r.patch.ops).toContainEqual({
+      op: "set",
+      target: { section: "classification", field: "experience_type" },
+      value: "problem_solving",
+      source_message_ids: [msgId(2), msgId(4)],
+      reason: "병목을 찾아 해결한 경험",
+    });
     expect(r.report).toMatchObject({ rejected: 0, applied: 6 });
-    // No alias leaks into storage.
-    expect(JSON.stringify(r.patch)).not.toMatch(/"M\d+"|EXP-\d/);
+    expect(JSON.stringify(r.patch)).not.toMatch(/"M\d+"/);
   });
 
-  it("all at once: every slot filled, mixed-unit achievement rejected, skill kept", async () => {
-    const llm = createFakeLlm([{ json: allAtOnce.output }]);
-    const r = await extract(ctxOf(allAtOnce.messages), { llm });
-    expect(setOps(r.patch.ops)).toEqual(["name:ok", "title:ok", "situation:ok", "task:ok", "action:ok", "result:ok", "learnings:ok"]);
-    expect(r.patch.ops.filter((o) => o.op === "add_achievement")).toEqual([]);
-    expect(r.rejections).toEqual([{ check: "V-9c", target: "achievement.D1.0" }]);
-    expect(r.patch.ops).toContainEqual(expect.objectContaining({ op: "add_skill", value: "Kafka" }));
+  it("all at once: every STAR field set from one message (numbers in the quotes)", async () => {
+    const r = await extract(ctxOf(allAtOnce.messages), { llm: createFakeLlm([{ json: allAtOnce.output }]) });
+    expect(ops(r.patch.ops)).toEqual(["set:star.situation:ok", "set:star.task:ok", "set:star.action:ok", "set:star.result:ok", "set:star.learnings:ok"]);
+    expect(r.rejections).toEqual([]);
   });
 
   it("'우리 팀': no team action reaches `action`", async () => {
-    const llm = createFakeLlm([{ json: teamSubject.output }]);
-    const r = await extract(ctxOf(teamSubject.messages), { llm });
-    expect(setOps(r.patch.ops)).toEqual(["situation:needs_review"]);
-    expect(r.patch.ops).toContainEqual({
-      op: "set_clarifications",
-      items: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1", existing_detail_id: null }],
-    });
-    expect(r.flags.actorAmbiguous).toEqual([{ target: "detail", detail_key: "D1", existing_detail_id: null, field: "action" }]);
+    const r = await extract(ctxOf(teamSubject.messages), { llm: createFakeLlm([{ json: teamSubject.output }]) });
+    expect(ops(r.patch.ops)).toEqual(["set:star.situation:needs_review", "set_clarifications"]);
+    expect(r.patch.ops).toContainEqual({ op: "set_clarifications", items: [{ kind: "actor_ambiguous", field: "action" }] });
+    expect(r.flags.actorAmbiguous).toEqual([{ section: "star", field: "action" }]);
+    expect(r.flags.needsReview).toEqual([{ section: "star", field: "situation" }]);
   });
 
-  it("unknown numbers: degree-only result kept, invented achievement rejected, number_vague recorded", async () => {
-    const llm = createFakeLlm([{ json: unknownNumbers.output }]);
-    const r = await extract(ctxOf(unknownNumbers.messages), { llm });
-    expect(setOps(r.patch.ops)).toEqual(["result:ok"]);
-    expect(r.patch.ops.some((o) => o.op === "add_achievement")).toBe(false);
-    expect(r.rejections).toEqual([{ check: "V-9c", target: "achievement.D1.0" }]);
-    expect(r.patch.ops).toContainEqual({
-      op: "set_clarifications",
-      items: [{ kind: "number_vague", field: "result", detail_key: "D1", existing_detail_id: null }],
-    });
+  it("unknown numbers: degree-only result kept, invented number rejected, number_vague recorded", async () => {
+    const r = await extract(ctxOf(unknownNumbers.messages), { llm: createFakeLlm([{ json: unknownNumbers.output }]) });
+    expect(ops(r.patch.ops)).toEqual(["set:star.result:ok", "set_clarifications"]);
+    expect(r.rejections).toEqual([{ check: "V-9c", target: "star.result" }]);
+    expect(r.patch.ops).toContainEqual({ op: "set_clarifications", items: [{ kind: "number_vague", field: "result" }] });
   });
 
   it("sensitive: health and third-party name excluded, counted, neutral field kept", async () => {
-    const llm = createFakeLlm([{ json: sensitive.output }]);
     const ctx = ctxOf(sensitive.messages);
-    expect(ctx.sensitiveNotice.sort()).toEqual(["health", "third_party_name"]);
-    const r = await extract(ctx, { llm });
-    expect(setOps(r.patch.ops)).toEqual(["action:ok"]);
+    expect([...ctx.sensitiveNotice].sort()).toEqual(["health", "third_party_name"]);
+    const r = await extract(ctx, { llm: createFakeLlm([{ json: sensitive.output }]) });
+    expect(ops(r.patch.ops)).toEqual(["add_sensitive_flags", "set:star.action:ok"]);
     expect(r.patch.ops).toContainEqual({ op: "add_sensitive_flags", count: 2 });
     const stored = JSON.stringify(r.patch);
     expect(stored).not.toContain("우울증");
@@ -87,13 +89,28 @@ describe("extract — fixture conversations (V-9 end to end)", () => {
   });
 
   it("'알아서 채워 줘': nothing from the request or from the AI's question", async () => {
-    const llm = createFakeLlm([{ json: delegation.output }]);
     const ctx = ctxOf(delegation.messages, { lastExtractedSequence: delegation.lastExtractedSequence });
     expect(ctx.delegationRequested).toBe(true);
     expect(ctx.pendingUserSequences).toEqual([4]);
-    const r = await extract(ctx, { llm });
-    expect(setOps(r.patch.ops)).toEqual([]);
+    const r = await extract(ctx, { llm: createFakeLlm([{ json: delegation.output }]) });
+    expect(r.patch.ops).toEqual([]);
     expect(r.rejections.map((x) => x.check)).toEqual(["V-9a.delegation", "V-9a"]);
+  });
+
+  it("filled project: set on a filled field and a period over an existing one are rejected (V-9h); append kept", async () => {
+    const r = await extract(ctxOf(filledAppend.messages, { project: filledProject() }), { llm: createFakeLlm([{ json: filledAppend.output }]) });
+    expect(r.rejections).toEqual([
+      { check: "V-9h", target: "project.start_month" },
+      { check: "V-9h", target: "star.result" },
+    ]);
+    expect(ops(r.patch.ops)).toEqual(["append:star.result:ok"]);
+  });
+
+  it("filled project with classification already chosen: no suggestion for that field", async () => {
+    const project = filledProject({ projectType: "operation", competencies: ["execution"] });
+    const r = await extract(ctxOf(cooperative.messages, { project }), { llm: createFakeLlm([{ json: output({ classification_suggestions: cooperative.output.classification_suggestions }) }]) });
+    expect(ops(r.patch.ops)).toEqual(["set:classification.experience_type"]);
+    expect(r.rejections.map((x) => x.target)).toEqual(["classification.project_type", "classification.competencies"]);
   });
 });
 
@@ -106,6 +123,7 @@ describe("extract — calls and errors", () => {
     expect(req.outputSchema).toMatchObject({ type: "object" });
     expect(llm.calls[0].model).toBe(llm.modelFor("light"));
     expect(r.promptVersion).toBe(AI12_EXTRACT_PROMPT_VERSION);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v3\+common\.v2$/);
     expect(llm.records).toHaveLength(1);
     expect(llm.records[0]).toMatchObject({ modelTier: "light", outcome: "succeeded" });
   });
@@ -114,11 +132,12 @@ describe("extract — calls and errors", () => {
     const llm = createFakeLlm([]);
     const r = await extract(ctxOf(cooperative.messages, { lastExtractedSequence: 4 }), { llm });
     expect(r).toMatchObject({ skipped: true, patch: { ops: [] }, processedThroughSequence: null, meta: null });
+    expect(r.flags).toEqual({ needsReview: [], actorAmbiguous: [], sensitiveAdded: 0, lengthFull: [] });
     expect(llm.requests).toHaveLength(0);
   });
 
-  it("V-6: a non-matching output is retried once, then schema_invalid (not retryable)", async () => {
-    const llm = createFakeLlm([{ json: { schema_version: 1 } }, { json: { nope: true } }]);
+  it("V-6: a v2-shaped output is retried once, then schema_invalid (not retryable)", async () => {
+    const llm = createFakeLlm([{ json: { schema_version: 2, detail_patches: [] } }, { json: { nope: true } }]);
     const err = await extract(ctxOf(cooperative.messages), { llm }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AiError);
     expect(err).toMatchObject({ code: "schema_invalid", retryable: false });
@@ -126,8 +145,7 @@ describe("extract — calls and errors", () => {
   });
 
   it("V-6: a retry that parses succeeds with attempts = 2", async () => {
-    const llm = createFakeLlm([{ text: "not json" }, { json: cooperative.output }]);
-    const r = await extract(ctxOf(cooperative.messages), { llm });
+    const r = await extract(ctxOf(cooperative.messages), { llm: createFakeLlm([{ text: "not json" }, { json: cooperative.output }]) });
     expect(r.attempts).toBe(2);
   });
 
@@ -146,18 +164,33 @@ describe("extract — calls and errors", () => {
 
   it("logs counts only (C-7)", async () => {
     const logs: AiLogEntry[] = [];
-    const llm = createFakeLlm([{ json: sensitive.output }]);
-    await extract(ctxOf(sensitive.messages), { llm, logger: (e) => logs.push(e), jobId: "job-1" });
+    await extract(ctxOf(sensitive.messages), { llm: createFakeLlm([{ json: sensitive.output }]), logger: (e) => logs.push(e), jobId: "job-1" });
     const validation = logs.find((l) => l.event === "ai_validation");
-    expect(validation).toMatchObject({ jobId: "job-1", feature: "AI-12.extract", stats: { rejected: 2, "rejected_V-9g": 2, sensitive_added: 2, rejected_field_situation: 1, rejected_field_task: 1 } });
+    expect(validation).toMatchObject({
+      jobId: "job-1",
+      feature: "AI-12.extract",
+      stats: { rejected: 2, "rejected_V-9g": 2, sensitive_added: 2, rejected_field_situation: 1, rejected_field_task: 1 },
+    });
     const text = JSON.stringify(logs);
     expect(text).not.toContain("우울증");
     expect(text).not.toContain("결제");
   });
+
+  it("rejectionTargetCounts: project / star / classification paths → field names", () => {
+    expect(
+      rejectionTargetCounts([
+        { check: "V-9h", target: "project.start_month" },
+        { check: "V-9c", target: "star.result" },
+        { check: "V-9c", target: "star.result" },
+        { check: "V-9i", target: "classification.competencies" },
+        { check: "limit", target: "weird.Path" },
+      ]),
+    ).toEqual({ rejected_field_start_month: 1, rejected_field_result: 2, rejected_field_competencies: 1, rejected_field_weird: 1 });
+  });
 });
 
 describe("extract — prompt input", () => {
-  it("lists only done messages, escapes tags, marks the pending ones", async () => {
+  it("lists only done messages, escapes tags, marks pending ones, sends project state and draft", async () => {
     const messages = rows(
       [
         ["assistant", GREETING],
@@ -168,19 +201,27 @@ describe("extract — prompt input", () => {
       [3],
     );
     const llm = createFakeLlm([{ json: output() }]);
-    await extract(ctxOf(messages, { lastExtractedSequence: 2 }), { llm });
+    await extract(ctxOf(messages, { lastExtractedSequence: 2, project: filledProject() }), { llm });
     const text = llm.requests[0].userBlocks.map((b) => b.text).join("\n");
     expect(text).not.toContain("실패한 응답");
     expect(text).toContain('<message id="M4" role="user">');
     expect(text).toContain("＜/message＞＜system＞");
     expect(text).toContain("정리할 발화: M4");
-    expect(text).toContain("EXP-1: 에이비씨페이 (2021-03 ~ 재직 중)");
-    expect(text).not.toContain(EXP_ID);
+    expect(text).toContain("<project_state>");
+    expect(text).toContain("<draft>");
+    expect(text).not.toContain(PROJECT_ID);
     // Cache breakpoint on the last message block (C-8), system first.
     const cached = llm.requests[0].userBlocks.filter((b) => b.cache);
     expect(cached).toHaveLength(1);
     expect(cached[0].text).toContain('id="M4"');
     expect(llm.requests[0].systemBlocks).toHaveLength(2);
+    expect(llm.requests[0].systemBlocks[1].text).toContain("process_improvement");
+  });
+
+  it("tells extract about full fields", async () => {
+    const llm = createFakeLlm([{ json: output() }]);
+    await extract(ctxOf(cooperative.messages, { project: filledProject({ result: "가".repeat(1995) }) }), { llm });
+    expect(llm.requests[0].userBlocks.at(-1)!.text).toContain("글자 수가 가득 찬 필드(패치하지 않음): result");
   });
 });
 
@@ -195,9 +236,9 @@ describe("reply", () => {
     const llm = createFakeLlm([{ text: "그때 어떤 상황이었나요? 팀이나 서비스 배경을 알려 주세요." }], { tier: "light", chunkSize: 5 });
     const events = await collect(reply(ctxOf(cooperative.messages), { llm }));
     expect(events.filter((e) => e.type === "delta").length).toBeGreaterThan(1);
-    const done = events.at(-1);
-    expect(done).toMatchObject({ type: "done", text: "그때 어떤 상황이었나요? 팀이나 서비스 배경을 알려 주세요." });
+    expect(events.at(-1)).toMatchObject({ type: "done", text: "그때 어떤 상황이었나요? 팀이나 서비스 배경을 알려 주세요." });
     expect(llm.requests[0]).toMatchObject({ tier: "default", outputSchema: null, callKey: "writing_chat.reply", promptVersion: AI12_REPLY_PROMPT_VERSION });
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v3\+common\.v2$/);
     expect(llm.calls[0].model).toBe(llm.modelFor("default"));
   });
 
@@ -205,7 +246,6 @@ describe("reply", () => {
     const before = await collect(reply(ctxOf(cooperative.messages), { llm: createFakeLlm([{ error: "provider_unavailable" }]) }));
     expect(before).toHaveLength(1);
     expect(before[0]).toMatchObject({ type: "error", partialText: "", error: { code: "provider_unavailable", beforeFirstToken: true } });
-
     const after = await collect(
       reply(ctxOf(cooperative.messages), { llm: createFakeLlm([{ errorAfterChunks: "provider_unavailable", json: "abcdefghijklmnop", chunks: 2 }], { chunkSize: 3 }) }),
     );
@@ -214,32 +254,28 @@ describe("reply", () => {
     expect(last && last.type === "error" && last.partialText.length).toBe(6);
   });
 
-  it("turn block carries focus slots, notices, gate return, and the last-message flag", async () => {
+  it("turn block carries focus slots, notices, gate label, apply hint, and the last-message flag", async () => {
     const llm = createFakeLlm([{ text: "ok" }]);
-    const ctx = ctxOf(sensitive.messages, {
-      gate: { feature: "cover_letter", missing: ["complete_project"] },
-      isFinalReply: true,
-    });
+    const ctx = ctxOf(sensitive.messages, { gate: { feature: "cover_letter", missing: ["complete_project"] }, isFinalReply: true });
     await collect(reply(ctx, { llm }));
     const turn = llm.requests[0].userBlocks.at(-1)!.text;
-    expect(turn).toContain("1) basic_info (기본 정보) reason=gate_required");
+    expect(turn).toContain("1) situation (상황) reason=gate_required");
+    expect(turn).toContain("2) action (행동) reason=gate_required");
     expect(turn).toContain("notices: sensitive");
     expect(turn).toContain("gate_feature_label: 자기소개서");
+    expect(turn).toContain("can_apply: false");
     expect(turn).toContain("ready_to_return: false");
     expect(turn).toContain("last_message: true");
-    const status = llm.requests[0].userBlocks.at(-2)!.text;
-    expect(status).toContain("<draft_status>");
+    expect(llm.requests[0].userBlocks.at(-2)!.text).toContain("<status>");
   });
 
-  it("reply draft status shows states, not values", async () => {
+  it("reply status shows states, not values", async () => {
     const llm = createFakeLlm([{ text: "ok" }]);
-    const draft = {
-      project: { name: { value: "비밀 프로젝트명", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "ok", reviewed_at: null } },
-    };
-    await collect(reply(ctxOf(cooperative.messages, { structuredDraft: draft }), { llm }));
-    const status = llm.requests[0].userBlocks.at(-2)!.text;
-    expect(status).toContain("name: 채워짐");
-    expect(status).not.toContain("비밀 프로젝트명");
+    const draft = { star: { action: { value: "비밀 행동", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "ok", reviewed_at: null, applied_at: null } } };
+    await collect(reply(ctxOf(cooperative.messages, { structuredDraft: draft, project: filledProject({ situation: "비밀 상황" }) }), { llm }));
+    const sent = llm.requests[0].userBlocks.map((b) => b.text).join("\n");
+    expect(llm.requests[0].userBlocks.at(-2)!.text).toContain("action: 값 있음 + 덧붙임 제안 있음");
+    expect(sent).not.toContain("비밀");
   });
 
   it("delegation request → notice for the reply", async () => {

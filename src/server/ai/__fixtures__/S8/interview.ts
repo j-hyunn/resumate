@@ -39,7 +39,7 @@ export function sid(aliases: AliasMap, needle: string): string {
 /** Rows with profile + one experience (no projects) → culture `thin`. */
 export function thinCultureRows(): CareerRows {
   const rows = careerRowsFixture();
-  return { ...rows, projects: [], projectDetails: [], achievements: [], projectSkills: [] };
+  return { ...rows, projects: [], deliverables: [], projectSkills: [] };
 }
 
 export function q(over: Record<string, unknown>) {

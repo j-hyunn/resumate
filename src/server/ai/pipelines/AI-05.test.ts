@@ -41,16 +41,18 @@ function context(over: { type?: "job" | "culture_fit"; count?: QuestionCount; le
 }
 
 const R = (ctx: InterviewQuestionContext, n: number) => a(ctx.aliases, "jd_requirement", reqId(n));
-const det = (ctx: InterviewQuestionContext, id: string, field: string, quote: string) => ({ source_type: "project_detail", ref: a(ctx.aliases, "project_detail", id), field, quote });
+const det = (ctx: InterviewQuestionContext, id: string, field: string, quote: string) => ({ source_type: "project", ref: a(ctx.aliases, "project", id), field, quote });
+const dlv = (ctx: InterviewQuestionContext, id: string, quote: string) => ({ source_type: "project_deliverable", ref: a(ctx.aliases, "project_deliverable", id), field: "body", quote });
 
 /** A valid job set of 5 (pdd 3, rf 1, gap 1). */
 function jobSet(ctx: InterviewQuestionContext) {
   return [
-    q({ text: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄이셨는데, 병목을 어떻게 찾았고 직접 바꾼 부분은 무엇이었나요?", target_requirement_refs: [R(ctx, 6)], evidence: [det(ctx, IDS.detPay1, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] }),
-    q({ text: "정산 배치를 청크 단위로 재설계하실 때 어떤 기준으로 나누셨나요?", target_requirement_refs: [R(ctx, 2)], evidence: [det(ctx, IDS.detSettle, "action", "정산 배치를 청크 단위로 재설계했다")] }),
-    q({ source_kind: "requirement_fit", text: "장애 대응 체계 운영 요건과 관련해 런북을 작성하신 과정을 설명해 주세요.", target_requirement_refs: [R(ctx, 3)], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 3), field: null, quote: null }, det(ctx, IDS.detPay2, "action", "런북을 작성하고 알림 규칙을 정리했다")] }),
+    q({ text: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄이셨는데, 병목을 어떻게 찾았고 직접 바꾼 부분은 무엇이었나요?", target_requirement_refs: [R(ctx, 6)], evidence: [det(ctx, IDS.prjPay, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] }),
+    q({ text: "정산 배치를 청크 단위로 재설계하실 때 어떤 기준으로 나누셨나요?", target_requirement_refs: [R(ctx, 2)], evidence: [det(ctx, IDS.prjSettle, "action", "정산 배치를 청크 단위로 재설계했다")] }),
+    // v4.5: a standalone project's deliverable body is a fact basis (4.1, C-1.1).
+    q({ source_kind: "requirement_fit", text: "장애 대응 체계 운영 요건과 관련해 문자 형식을 분류하신 과정을 설명해 주세요.", target_requirement_refs: [R(ctx, 3)], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 3), field: null, quote: null }, dlv(ctx, IDS.dlvSide1, "은행 문자 10종의 형식을 정규식으로 분류했다")] }),
     q({ source_kind: "gap_probe", anchor: "jd", text: "메시지 큐 운영 경험이 데이터에 보이지 않는데, 비동기 처리 장애를 어떻게 다루시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 8), field: null, quote: null }] }),
-    q({ text: "캐시 무효화 메시지를 발행하는 방식을 고른 이유는 무엇인가요?", evidence: [det(ctx, IDS.detEdu, "action", "쓰기 시 무효화 메시지를 발행했다")] }),
+    q({ text: "캐시 무효화 메시지를 발행하는 방식을 고른 이유는 무엇인가요?", evidence: [det(ctx, IDS.prjEdu, "action", "쓰기 시 무효화 메시지를 발행했다")] }),
   ];
 }
 
@@ -79,7 +81,7 @@ describe("AI-05 job interview", () => {
     expect(result).toMatchObject({ remaining: 0, totalSaved: 5, dropped: 0, missingKinds: {} });
     expect(result.weakRequirementIds).toEqual([reqId(8)]);
     expect(result.report).toMatchObject({ weak_refs_dropped: 1 });
-    expect(saved[0].evidence[0]).toMatchObject({ item_key: "question", source_type: "project_detail", source_id: IDS.detPay1, source_field: "action" });
+    expect(saved[0].evidence[0]).toMatchObject({ item_key: "question", source_type: "project", source_id: IDS.prjPay, source_field: "action" });
     expect(saved[0].target_requirement_ids).toEqual([reqId(6)]);
     expect(saved[3].target_gap_requirement_ids).toEqual([reqId(8)]);
     expect(saved[0].meta).toMatchObject({ prompt_version: AI05_PROMPT_VERSION, model_tier: "default", provider: "anthropic", schema_version: 2 });
@@ -124,10 +126,10 @@ describe("AI-05 job interview", () => {
     const ctx = context();
     const set = jobSet(ctx);
     const bad = [
-      q({ text: "결혼 계획이 있으신가요? 업무에 영향이 있을까요?", evidence: [det(ctx, IDS.detPay1, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] }),
-      q({ text: "응답 시간을 4321배 줄이셨는데 어떻게 하셨나요?", evidence: [det(ctx, IDS.detPay1, "result", "응답 시간이 0.7초로 줄었다")] }),
-      q({ text: "측정 없이 최적화하면 안 된다는 것을 어떻게 배우셨나요?", evidence: [det(ctx, IDS.detPay1, "learnings", "측정 없이 최적화하면 안 된다는 것을 배웠다")] }),
-      q({ text: "없는 상세 내용 질문", evidence: [{ source_type: "project_detail", ref: "DET-99", field: "action", quote: "x" }] }),
+      q({ text: "결혼 계획이 있으신가요? 업무에 영향이 있을까요?", evidence: [det(ctx, IDS.prjPay, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] }),
+      q({ text: "응답 시간을 4321배 줄이셨는데 어떻게 하셨나요?", evidence: [det(ctx, IDS.prjPay, "result", "응답 시간이 0.7초로 줄었다")] }),
+      q({ text: "측정 없이 최적화하면 안 된다는 것을 어떻게 배우셨나요?", evidence: [det(ctx, IDS.prjPay, "learnings", "측정 없이 최적화하면 안 된다는 것을 배웠다")] }),
+      q({ text: "없는 프로젝트 질문", evidence: [{ source_type: "project", ref: "PRJ-99", field: "action", quote: "x" }] }),
     ];
     const { saved, result } = await gen(ctx, [{ json: ai05Output("job", [...bad, ...set.slice(0, 3)]) }]);
     expect(saved.map((s) => s.question_text)).toEqual(set.slice(0, 3).map((x) => x.text));
@@ -148,11 +150,11 @@ describe("AI-05 job interview", () => {
     const req = (n: number) => ({ source_type: "jd_requirement", ref: R(ctx, n), field: null, quote: null });
     const bad = [
       // requirement_fit premised on a situation only (팀 맥락일 수 있음).
-      q({ source_kind: "requirement_fit", text: "장애 대응이 사람마다 달랐던 상황에서 어떤 원칙을 세우셨나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), det(ctx, IDS.detPay2, "situation", "야간 장애 대응이 사람마다 달랐다")] }),
+      q({ source_kind: "requirement_fit", text: "장애 대응이 사람마다 달랐던 상황에서 어떤 원칙을 세우셨나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), det(ctx, IDS.prjPay, "situation", "피크 시간 결제 승인 API 응답이 1.2초까지 늘었다")] }),
       // requirement_fit on the profile's wish only (A10: not a career fact → no experience evidence).
       q({ source_kind: "requirement_fit", text: "백엔드 개발자로서 장애 대응 요건을 어떻게 충족하시나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }] }),
-      // gap_probe citing a project summary as its "similar experience".
-      q({ source_kind: "gap_probe", anchor: "jd", text: "응답 속도 개선 경험을 메시지 큐 운영에 어떻게 연결하시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8), { source_type: "project", ref: a(ctx.aliases, "project", IDS.prjPay), field: "summary", quote: "결제 승인 응답 속도 개선" }] }),
+      // gap_probe citing a standalone project's role (담당 업무 = scope, not a fact) as its "similar experience".
+      q({ source_kind: "gap_probe", anchor: "jd", text: "1인 개발 경험을 메시지 큐 운영에 어떻게 연결하시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8), det(ctx, IDS.prjSide, "role", "1인 개발 (기획·백엔드)")] }),
       // gap_probe naming a project with no fact evidence at all.
       q({ source_kind: "gap_probe", anchor: "jd", text: "결제 승인 API 개선 때처럼 메시지 큐 장애를 다뤄 보셨나요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8)] }),
       // gap_probe anchored on experience with a skill tag only.
@@ -172,11 +174,11 @@ describe("AI-05 job interview", () => {
     const gap = q({
       source_kind: "gap_probe",
       anchor: "experience",
-      text: "런북을 작성하신 경험을 메시지 큐 운영 장애에는 어떻게 적용하시겠어요?",
+      text: "병목을 찾아 인덱스를 다시 설계하신 경험을 메시지 큐 운영 장애에는 어떻게 적용하시겠어요?",
       target_gap_requirement_refs: [R(ctx, 8)],
-      evidence: [{ source_type: "jd_requirement", ref: R(ctx, 8), field: null, quote: null }, det(ctx, IDS.detPay2, "action", "런북을 작성하고 알림 규칙을 정리했다")],
+      evidence: [{ source_type: "jd_requirement", ref: R(ctx, 8), field: null, quote: null }, det(ctx, IDS.prjPay, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")],
     });
-    const rf = q({ ...set[2], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 3), field: null, quote: null }, det(ctx, IDS.detSettle, "action", "정산 배치를 청크 단위로 재설계했다")] });
+    const rf = q({ ...set[2], evidence: [{ source_type: "jd_requirement", ref: R(ctx, 3), field: null, quote: null }, det(ctx, IDS.prjSettle, "action", "정산 배치를 청크 단위로 재설계했다")] });
     const { saved, result } = await gen(ctx, [{ json: ai05Output("job", [set[0], rf, gap]) }]);
     expect(result).toMatchObject({ dropped: 0, remaining: 0 });
     expect(saved.map((s) => s.source_kind)).toEqual(["project_deep_dive", "requirement_fit", "gap_probe"]);
@@ -194,20 +196,35 @@ describe("AI-05 job interview", () => {
     expect(premisesUserFacts(...args)).toBe(expected);
   });
 
-  it("duplicates: same project ≤ 2, same detail 1, same requirement 1, same text", async () => {
+  it("duplicates: same project ≤ 2, same requirement 1, same text (v4.5: no per-detail rule)", async () => {
     const ctx = context();
     const set = jobSet(ctx);
     const out = [
       set[0],
-      q({ text: "같은 상세 내용으로 다른 질문을 합니다", evidence: [det(ctx, IDS.detPay1, "result", "응답 시간이 0.7초로 줄었다")] }),
-      set[2], // prjPay #2
-      q({ text: "결제 프로젝트에 대한 세 번째 질문입니다", evidence: [{ source_type: "project", ref: a(ctx.aliases, "project", IDS.prjPay), field: "role", quote: null }, det(ctx, IDS.detPay2, "result", "장애 복구 시간이 줄었다")] }),
+      // Same project, another STAR field: allowed (v4.4 "same detail 1" is gone, CR-2).
+      q({ text: "같은 프로젝트의 결과로 다른 질문을 합니다", evidence: [det(ctx, IDS.prjPay, "result", "응답 시간이 0.7초로 줄었다")] }),
+      q({ text: "결제 프로젝트에 대한 세 번째 질문입니다", evidence: [det(ctx, IDS.prjPay, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] }),
       q({ ...set[1], target_requirement_refs: [R(ctx, 6)] }), // REQ-6 already primary of Q1
       set[0],
     ];
     const { result } = await gen(ctx, [{ json: ai05Output("job", out) }]);
-    expect(result.report).toMatchObject({ dropped_duplicate_detail: 1, dropped_duplicate_project: 1, dropped_duplicate_requirement: 1, dropped_duplicate_text: 1 });
-    expect(result.saved.map((s) => s.question_text)).toEqual([set[0].text, set[2].text]);
+    expect(result.report).toMatchObject({ dropped_duplicate_project: 1, dropped_duplicate_requirement: 1, dropped_duplicate_text: 1 });
+    expect(result.report).not.toHaveProperty("dropped_duplicate_detail");
+    expect(result.saved.map((s) => s.question_text)).toEqual([set[0].text, "같은 프로젝트의 결과로 다른 질문을 합니다"]);
+  });
+
+  it("duplicates: deliverable evidence counts toward its standalone project's cap", async () => {
+    const ctx = context();
+    const set = jobSet(ctx);
+    const out = [
+      set[2], // rf, primary = 개인 가계부 앱 via DLV-1
+      q({ text: "출시 후 리뷰를 받은 과정에서 직접 한 일은 무엇인가요?", evidence: [dlv(ctx, IDS.dlvSide2, "출시 후 2주 만에 리뷰 40건을 받았다.")] }),
+      q({ text: "가계부 앱의 자동 기록은 어떻게 만드셨나요?", evidence: [det(ctx, IDS.prjSide, "description", "문자 파싱으로 자동 기록을 만들었다")] }),
+    ];
+    const { result } = await gen(ctx, [{ json: ai05Output("job", out) }]);
+    expect(result.report).toMatchObject({ dropped_duplicate_project: 1 });
+    expect(result.saved.map((s) => s.question_text)).toEqual([set[2].text, "출시 후 리뷰를 받은 과정에서 직접 한 일은 무엇인가요?"]);
+    expect(result.saved[0].evidence.find((e) => e.source_type === "project_deliverable")).toMatchObject({ source_id: IDS.dlvSide1, source_field: "body" });
   });
 
   it("composition: a question that would make the 4.1 minimum impossible is dropped; regeneration relaxes it", async () => {
@@ -228,7 +245,7 @@ describe("AI-05 job interview", () => {
     const ctx = context();
     const set = jobSet(ctx);
     const existing: ExistingInterviewQuestion[] = [
-      { sequence: 1, source_kind: "project_deep_dive", anchor: "experience", question_text: set[0].text as string, target_requirement_ids: [reqId(6)], target_gap_requirement_ids: [], evidence_sources: [{ source_type: "project_detail", source_id: IDS.detPay1 }] },
+      { sequence: 1, source_kind: "project_deep_dive", anchor: "experience", question_text: set[0].text as string, target_requirement_ids: [reqId(6)], target_gap_requirement_ids: [], evidence_sources: [{ source_type: "project", source_id: IDS.prjPay }] },
       { sequence: 2, source_kind: "project_deep_dive", anchor: "experience", question_text: set[1].text as string, target_requirement_ids: [reqId(2)], target_gap_requirement_ids: [] },
       { sequence: 4, source_kind: "requirement_fit", anchor: "experience", question_text: set[2].text as string, target_requirement_ids: [reqId(3)], target_gap_requirement_ids: [] },
     ];
@@ -251,7 +268,7 @@ describe("AI-05 job interview", () => {
   it("runInterviewQuestions: first call short → one regeneration with existing + V-5 feedback; still short → schema_invalid", async () => {
     const ctx = context();
     const set = jobSet(ctx);
-    const invented = q({ text: "처리량을 4321배 늘리셨는데요?", evidence: [det(ctx, IDS.detPay1, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] });
+    const invented = q({ text: "처리량을 4321배 늘리셨는데요?", evidence: [det(ctx, IDS.prjPay, "action", "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")] });
     const llm = createFakeLlm([{ json: ai05Output("job", [set[0], set[1], set[2], invented]) }, { json: ai05Output("job", [set[3], set[4]]) }], { chunkSize: 23 });
     const saved: SaveInterviewQuestionPayload[] = [];
     const run = await runInterviewQuestions({ context: ctx }, { llm, onQuestion: async (p) => void saved.push(p) });
@@ -333,7 +350,7 @@ describe("AI-05 culture fit", () => {
   it("thin: career proper nouns in a non-experience question are dropped; experience anchor uses learnings only as quoted reflection", async () => {
     const rows = careerRowsFixture();
     const ctx = context({ type: "culture_fit", level: "ok", rows, count: 5 });
-    const learn = det(ctx, IDS.detPay1, "learnings", "측정 없이 최적화하면 안 된다는 것을 배웠다");
+    const learn = det(ctx, IDS.prjPay, "learnings", "측정 없이 최적화하면 안 된다는 것을 배웠다");
     const out = [
       q({ source_kind: "collaboration", anchor: "general", text: "예시페이에서 파트장으로 일하실 때 협업은 어땠나요?" }),
       q({ source_kind: "failure_growth", anchor: "experience", text: "측정 없이 최적화하면 안 된다는 것을 배웠다고 정리하셨는데, 그 뒤 실제로 바뀐 점은 무엇인가요?", evidence: [learn] }),

@@ -12,8 +12,8 @@ function link(over: Partial<EvidenceLinkRow> = {}): EvidenceLinkRow {
     owner_id: "o1",
     item_key: "strengths.0",
     sort_order: 0,
-    source_type: "project_detail",
-    source_id: "d1",
+    source_type: "project",
+    source_id: "p1",
     source_field: "action",
     source_locator: null,
     source_label: "결제 API 개선",
@@ -26,19 +26,21 @@ function link(over: Partial<EvidenceLinkRow> = {}): EvidenceLinkRow {
 }
 
 describe("evidence chips (C-01)", () => {
-  it("labels: STAR field for project details, learnings as 회고 및 배운 점", () => {
-    expect(evidenceKindLabel("project_detail", "action")).toBe("상세 내용 · 행동");
-    expect(evidenceKindLabel("project_detail", "learnings")).toBe("회고 및 배운 점");
-    expect(evidenceKindLabel("achievement", "metric")).toBe("정량 성과");
+  it("labels (DM v4.4): STAR field on projects, learnings as 배운 점, deliverables", () => {
+    expect(evidenceKindLabel("project", "action")).toBe("프로젝트 · 행동");
+    expect(evidenceKindLabel("project", "task")).toBe("프로젝트 · 역할");
+    expect(evidenceKindLabel("project", "learnings")).toBe("배운 점");
+    expect(evidenceKindLabel("project", "name")).toBe("프로젝트");
+    expect(evidenceKindLabel("project_deliverable", "body")).toBe("산출물");
     expect(evidenceKindLabel("jd_sentence", null)).toBe("공고 원문");
   });
 
-  it("current / changed / deleted", () => {
-    const sources: SourceLookup = new Map([["project_detail:d1", { updatedAt: SNAP, projectId: "p1" }]]);
+  it("current / changed (content_updated_at) / deleted", () => {
+    const sources: SourceLookup = new Map([["project:p1", { updatedAt: SNAP, standalone: false }]]);
     const current = toEvidenceChip(link(), sources)!;
-    expect(current).toMatchObject({ state: "current", quote: "인덱스를 재설계했다", target: { type: "project_detail", projectId: "p1", projectDetailId: "d1", field: "action" } });
+    expect(current).toMatchObject({ state: "current", quote: "인덱스를 재설계했다", target: { type: "project", projectId: "p1", field: "action", standalone: false } });
 
-    const changed = toEvidenceChip(link(), new Map([["project_detail:d1", { updatedAt: "2026-10-02T00:00:00.000Z", projectId: "p1" }]]))!;
+    const changed = toEvidenceChip(link(), new Map([["project:p1", { updatedAt: "2026-10-02T00:00:00.000Z", standalone: false }]]))!;
     expect(changed.state).toBe("changed");
 
     const deleted = toEvidenceChip(link({ source_deleted_at: "2026-10-03T00:00:00.000Z", quote: null }), sources)!;
@@ -56,13 +58,17 @@ describe("evidence chips (C-01)", () => {
     expect(chip).toMatchObject({ state: "current", kindLabel: "공고 원문", target: { type: "jd_sentence", jobDescriptionId: "jd1", sid: "S3", start: 10, end: 20 } });
   });
 
-  it("reflection flag and achievement navigation parents", () => {
-    expect(toEvidenceChip(link({ source_field: "learnings" }), new Map([["project_detail:d1", { updatedAt: SNAP, projectId: "p1" }]]))!.isReflection).toBe(true);
-    const ach = toEvidenceChip(
-      link({ source_type: "achievement", source_id: "a1", source_field: "metric" }),
-      new Map([["achievement:a1", { updatedAt: SNAP, projectDetailId: "d1", projectId: "p1", experienceId: null }]]),
+  it("reflection flag (project.learnings, V-8) and deliverable navigation parent", () => {
+    expect(toEvidenceChip(link({ source_field: "learnings" }), new Map([["project:p1", { updatedAt: SNAP }]]))!.isReflection).toBe(true);
+    const dlv = toEvidenceChip(
+      link({ source_type: "project_deliverable", source_id: "v1", source_field: "body", source_locator: { start: 0, end: 4 } }),
+      new Map([["project_deliverable:v1", { updatedAt: SNAP, projectId: "p2" }]]),
     )!;
-    expect(ach.target).toEqual({ type: "achievement", achievementId: "a1", projectDetailId: "d1", projectId: "p1", experienceId: null });
+    expect(dlv).toMatchObject({ state: "current", kindLabel: "산출물", target: { type: "project_deliverable", deliverableId: "v1", projectId: "p2" } });
+  });
+
+  it("v4.3 source types are skipped", () => {
+    expect(toEvidenceChip(link({ source_type: "project_detail" }), new Map())).toBeNull();
   });
 
   it("unknown source types are skipped", () => {

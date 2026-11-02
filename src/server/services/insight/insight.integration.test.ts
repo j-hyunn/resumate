@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
-import { SaveAchievementInput, SaveExperienceInput, SaveProjectDetailInput, SaveProjectInput } from "@/lib/contracts/career";
+import { CreateProjectInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { ProviderError } from "@/server/ai/errors";
 import type { Llm } from "@/server/ai/llm";
@@ -22,7 +22,7 @@ import { createJdExtractionDb } from "@/server/services/application/db";
 import { ensureJdExtracted } from "@/server/services/application/extraction";
 import { loadProgress } from "@/server/services/application/read";
 import { createApplicationProject, deleteApplicationProject } from "@/server/services/application/write";
-import { getDeletionImpact, saveAchievement, saveExperience, saveProject, saveProjectDetail } from "@/server/services/career";
+import { createProject, getDeletionImpact, saveExperience, saveProject } from "@/server/services/career";
 import { connectTestProvider } from "@/test/ai-connection-db";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
@@ -82,7 +82,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   const queue: Lazy[] = [];
   const pipeline = createAi02InsightPipeline(silentAiLogger);
   const project = crypto.randomUUID();
-  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID(), detail: crypto.randomUUID(), achievement: crypto.randomUUID() };
+  const ids = { experience: crypto.randomUUID(), project: crypto.randomUUID() };
   const ACTION = "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다";
 
   async function newUser(prefix: string): Promise<{ id: string; client: Client }> {
@@ -106,8 +106,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   function matchResponse(): () => Promise<ScriptedResponse> {
     return async () => {
       const ctx = await context();
-      const det = ctx.aliases.aliasOf("project_detail", ids.detail)!;
-      const ach = ctx.aliases.aliasOf("achievement", ids.achievement)!;
+      const prj = ctx.aliases.aliasOf("project", ids.project)!;
       const output: Ai02MatchOutput = {
         schema_version: 1,
         matches: ctx.requirements.map((r, i) =>
@@ -117,10 +116,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
                 status: "met" as const,
                 rationale: "결제 승인 API를 직접 개선한 행동이 있습니다.",
                 missing_aspect: null,
-                evidence: [
-                  { source_type: "project_detail" as const, ref: det, field: "action", quote: ACTION },
-                  { source_type: "achievement" as const, ref: ach, field: "metric", quote: null },
-                ],
+                evidence: [{ source_type: "project" as const, ref: prj, field: "action", quote: ACTION }],
               }
             : { requirement_ref: r.ref, status: "no_evidence" as const, rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] },
         ),
@@ -132,7 +128,6 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   function synthesisResponse(): () => Promise<ScriptedResponse> {
     return async () => {
       const ctx = await context();
-      const det = ctx.aliases.aliasOf("project_detail", ids.detail)!;
       const prj = ctx.aliases.aliasOf("project", ids.project)!;
       const sentence = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence")!.alias;
       const [req1, req2] = ctx.requirements;
@@ -143,7 +138,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
             title: "결제 승인 API 개선",
             description: "결제 승인 API의 병목을 직접 찾아 개선한 경험이 핵심 업무와 맞닿습니다.",
             requirement_refs: [req1!.ref],
-            evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }],
+            evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }],
           },
         ],
         gaps: [
@@ -157,7 +152,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
         ],
         strategy: {
           positioning: "결제 API 성능을 직접 개선해 온 백엔드 엔지니어로 포지셔닝합니다.",
-          positioning_evidence: [{ source_type: "project_detail", ref: det, field: "action", quote: ACTION }],
+          positioning_evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }],
           project_priorities: [{ rank: 1, ref: prj, reason: "결제 승인 업무와 가장 직접 연결됩니다.", requirement_refs: [req1!.ref] }],
         },
       };
@@ -263,12 +258,8 @@ describe.skipIf(!ready)("insights (local stack)", () => {
 
   it("first run: D-30 extraction in prepare → match → synthesize → ready insight with evidence", async () => {
     await saveExperience(user, SaveExperienceInput.parse({ id: ids.experience, companyName: "알파", startMonth: "2021-03", jobPosition: "백엔드", isCurrent: true }));
-    await saveProject(user, SaveProjectInput.parse({ id: ids.project, affiliation: { type: "experience", id: ids.experience }, name: "결제 개선", role: "리드", startMonth: "2024-02" }));
-    await saveProjectDetail(user, SaveProjectDetailInput.parse({ id: ids.detail, projectId: ids.project, title: "응답 속도", situation: "피크 시간 응답이 느렸다", action: ACTION }));
-    await saveAchievement(
-      user,
-      SaveAchievementInput.parse({ id: ids.achievement, target: { type: "project_detail", id: ids.detail }, metricName: "p95", valueBefore: 800, valueAfter: 200, unit: "ms" }),
-    );
+    await createProject(user, CreateProjectInput.parse({ id: ids.project, name: "결제 개선", affiliation: { type: "experience", id: ids.experience } }));
+    await saveProject(user, SaveProjectInput.parse({ id: ids.project, startMonth: "2024-02", situation: "피크 시간 응답이 느렸다", action: ACTION }));
 
     queue.push({ json: KO_BACKEND.output }, matchResponse(), synthesisResponse());
     const h = harness();
@@ -294,7 +285,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     firstInsightId = rows.data![0]!.id;
     const links = await admin.from("evidence_links").select("item_key, source_type").eq("owner_type", "insight").eq("owner_id", firstInsightId);
     expect(links.data!.length).toBeGreaterThanOrEqual(4);
-    expect(links.data!.map((l) => l.source_type)).toEqual(expect.arrayContaining(["project_detail", "achievement", "jd_sentence"]));
+    expect(links.data!.map((l) => l.source_type)).toEqual(expect.arrayContaining(["project", "jd_sentence"]));
 
     // S-16 partial from the job's match checkpoint.
     const record = await createSupabaseJobStore(createAiWriterClient(userId)).get(jobId);
@@ -317,7 +308,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(insight.requirementMatches).toHaveLength(6);
     const met = insight.requirementMatches.find((m) => m.status === "met")!;
     expect(met.requirement?.content).toBeTruthy();
-    expect(met.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["상세 내용 · 행동", "정량 성과"]));
+    expect(met.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["프로젝트 · 행동"]));
     expect(met.evidence.every((c) => c.state === "current")).toBe(true);
     expect(insight.strengths).toHaveLength(1);
     expect(insight.gaps[0]!.actions[0]).toMatchObject({ type: "add_data" });
@@ -342,11 +333,11 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   });
 
   it("career edit → stale (F-P2-07) and the chip shows 변경됨; regenerate swaps latest", async () => {
-    await saveProjectDetail(user, SaveProjectDetailInput.parse({ id: ids.detail, result: "응답 시간이 줄었다" }));
+    await saveProject(user, SaveProjectInput.parse({ id: ids.project, result: "응답 시간이 줄었다" }));
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
     expect(view.insight).toMatchObject({ stale: true, staleReasons: { career: true, requirements: false } });
     const met = view.insight!.requirementMatches.find((m) => m.status === "met")!;
-    expect(met.evidence.find((c) => c.sourceType === "project_detail")?.state).toBe("changed");
+    expect(met.evidence.find((c) => c.sourceType === "project")?.state).toBe("changed");
 
     queue.push(matchResponse(), synthesisResponse());
     const h = harness();
@@ -432,8 +423,8 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   });
 
   it("deletion impact counts insights per application project (§4.2)", async () => {
-    const impact = await getDeletionImpact(user, { entityType: "project_detail", entityId: ids.detail, affiliationMode: "keep_projects" });
-    expect(impact.affected_results.by_application_project).toEqual([
+    const impact = await getDeletionImpact(user, { entityType: "project", entityId: ids.project });
+    expect("affected_results" in impact && impact.affected_results.by_application_project).toEqual([
       // v1, v2, v3 (QA-S6-01 retry) + the R2 cross-provider retry row.
       expect.objectContaining({ application_project_id: project, insights: 4, drafts: 0, draft_sections: 0, interview_sessions: 0 }),
     ]);

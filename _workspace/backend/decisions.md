@@ -46,3 +46,7 @@
 - W5 재검증 항목: W1은 QA를 받지 않고 W2~W4와 병렬로 진행했다. W5에서 W1 전체(인증, 게이트, 미리보기 분리, `components/account/actions.ts`의 `provider_url` 수정)를 함께 본다.
 - W5 확인 추가: AI 게이트 경로 ①·④·⑤(서비스 계층, 코드만 읽음), `registerProviderKey`가 공급자 호출 전에 동의를 확인하는지, `mapRunGate` 실제 실행. 기존 `cross_border_transfer` 행은 철회 불가로 남음(선택 동의 철회 규칙 밖). DM 머리말 버전을 v4.3b로 맞출 것.
 - W5: UI 요청은 `frontend-engineer`가 일괄 처리한다(W1에서 준 예외를 넓히지 않음). 그 뒤 api-engineer가 중간 상태(`isMockRow`, `listActiveAiJobs` 병합, `startAiJob`)를 걷어내고, backend-qa·ui-qa가 통합 검증한다.
+
+## 2026-11-07 R4 커리어 재설계 (db-engineer)
+- `[가정]` 기존 데이터는 이관하지 않고 비운다(DM v4.4 11.2 권고, 운영 데이터 없음). 마이그레이션 `20261109100100_r4_clear_career_chat_data`가 `writing_chats`(+메시지), `projects`(+`project_details`·`achievements`·`project_skills` 연쇄, 고아 태그 스킬 정리), 경력 단위 `achievements`, 이것에 걸린 `evidence_links`(source_type `project`·`project_detail`·`achievement`)와 `draft_section_sources`(project_id 있는 행)를 지운다. 경력·교육·프로필·수동 스킬·지원 프로젝트와 그 결과(인사이트·서류·면접)는 남는다(근거 일부만 빠짐). 원격(스테이징 등)에 같은 마이그레이션을 적용하면 같은 데이터가 지워진다 — 적용 전에 확인할 것.
+- `apply_structured_draft_patch` v3 payload 형식은 DB 노트(`R4/02_db_notes.md`)를 기준으로 한다(기존 `{ops:[…]}` 방식 유지, STAR `append` op 추가, 섹션 `project`/`star`/`classification`).

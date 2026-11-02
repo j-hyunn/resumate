@@ -46,7 +46,7 @@ select is(public.create_application_project('a0000000-aaaa-0000-0000-00000000000
             'hash1', (select v from t_s), null, null, null, '2026-11-30') - 'job_description_id',
           '{"application_project_id":"a0000000-aaaa-0000-0000-000000000001","name":null,"name_source":"default",
             "extraction_status":"pending","ai_run_allowed":false,"created":true}'::jsonb
-            || jsonb_build_object('name', '새 기업 JD (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
+            || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
           'no key, no company/position -> default name (KST date)');
 select is((select array[stage, coalesce(stage_outcome, '-'), deadline::text] from public.application_projects
             where id = 'a0000000-aaaa-0000-0000-000000000001'),

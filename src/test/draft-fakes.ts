@@ -202,7 +202,7 @@ export function draftKit(opts: {
     createLlm: (input: LlmFactoryInput) => llmFactory(input),
     drafts: createDraftStore(db.client as AiWriterSupabaseClient),
     pipelines: fakeDraftPipelines(seen),
-    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [{ id: PRJ1 } as never, { id: PRJ2 } as never], projectDetails: [], achievements: [], skills: [], projectSkills: [] }),
+    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [{ id: PRJ1 } as never, { id: PRJ2 } as never], deliverables: [], skills: [], projectSkills: [] }),
     getReadiness: async () =>
       ({
         features: {

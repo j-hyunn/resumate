@@ -104,7 +104,6 @@ export type UserSourceInput = {
   experience_id: string | null;
   education_id: string | null;
   project_id: string | null;
-  project_detail_ids: string[];
   role: "primary" | "supporting";
 };
 

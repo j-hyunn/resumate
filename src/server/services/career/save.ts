@@ -1,10 +1,10 @@
 import type { PostgrestError } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import type {
-  SaveAchievementPatch,
+  CreateProjectInput,
+  SaveDeliverablePatch,
   SaveEducationPatch,
   SaveExperiencePatch,
-  SaveProjectDetailPatch,
-  SaveProjectDetailResult,
   SaveProjectPatch,
   SaveResult,
 } from "@/lib/contracts/career";
@@ -14,11 +14,10 @@ import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 import {
   SAVE_RESULT_COLUMNS,
-  toAchievementColumns,
+  toDeliverableColumns,
   toEducationColumns,
   toExperienceColumns,
   toProjectColumns,
-  toProjectDetailColumns,
 } from "./mappers";
 
 /**
@@ -158,15 +157,43 @@ export async function saveEducation(supabase: UserSupabaseClient, patch: SaveEdu
   return toSaveResult(row);
 }
 
+/**
+ * C-23 "프로젝트 추가" (CR-6, DM §7 v4.4): a draft project from its name and affiliation only, then
+ * the screen opens it (S-10 affiliated / S-43 standalone). Retry-safe with a client id: an
+ * existing never-edited row with that id is returned as is (QA-S2-03).
+ */
+export async function createProject(
+  supabase: UserSupabaseClient,
+  input: { id?: string; name: string; affiliation: CreateProjectInput["affiliation"] },
+): Promise<SaveResult> {
+  const id = input.id ?? randomUUID();
+  const a = input.affiliation;
+  const res = await supabase
+    .from("projects")
+    .insert({
+      id,
+      name: input.name,
+      experience_id: a.type === "experience" ? a.id : null,
+      education_id: a.type === "education" ? a.id : null,
+    })
+    .select(SAVE_RESULT_COLUMNS)
+    .single();
+  if (res.data && !res.error) return toSaveResult(res.data);
+  if (!isPrimaryKeyViolation(res.error)) throw res.error ? mapSaveError(res.error) : new AppError("internal_error", undefined, { status: 500 });
+  const row = single(await projectState(supabase, id));
+  if (row.updated_at !== row.created_at) throw new AppError("conflict");
+  return toSaveResult(row);
+}
+
+/**
+ * Section save (C-24, DM §7 v4.4 "섹션 저장"): update only, the given columns only. Status and
+ * content_updated_at come from DB triggers. Scope change (affiliated ↔ standalone) →
+ * `project_scope_change_not_allowed`; a column of the other scope → DM-20 CHECK (`invalid_input`).
+ */
 export async function saveProject(supabase: UserSupabaseClient, patch: SaveProjectPatch): Promise<SaveResult> {
   const values = toProjectColumns(patch);
   const row = await upsertRow(patch, has(values), {
-    insert: () =>
-      supabase
-        .from("projects")
-        .insert({ ...values, id: patch.id })
-        .select(SAVE_RESULT_COLUMNS)
-        .single(),
+    insert: null,
     update: (id, expected) => {
       let q = supabase.from("projects").update(values).eq("id", id);
       if (expected !== undefined) q = q.eq("updated_at", expected);
@@ -181,81 +208,43 @@ export function projectState(supabase: UserSupabaseClient, id: string) {
   return supabase.from("projects").select(SAVE_RESULT_COLUMNS).eq("id", id).maybeSingle();
 }
 
-// ---------- project_details ----------
+// ---------- project_deliverables (S-44, CR-8) ----------
 
-const DETAIL_RESULT_COLUMNS = "id, status, created_at, updated_at, sort_order, project_id" as const;
+const DELIVERABLE_RESULT_COLUMNS = "id, created_at, updated_at" as const;
+
+export type DeliverableSaveResult = { id: string; updatedAt: string };
 
 /**
- * Create appends at the end (sort_order = last + 1). The (project_id, sort_order)
- * unique is deferred, so two concurrent appends collide at commit (23505 on that
- * constraint, not the pkey): retry once with a fresh number.
- * The parent project's status is recalculated by the DB trigger and read back here
- * (a detail save can flip it, DM §2.2; QA-S2-04).
+ * S-44 save. Create (no expectedUpdatedAt) needs projectId + title; sort_order comes from the DB
+ * trigger (max + 1). The parent must be a standalone project (`deliverable_requires_standalone_project`)
+ * with fewer than 50 deliverables (`deliverable_limit_reached`, [가정]). Deliverables have no status.
  */
-export async function saveProjectDetail(
-  supabase: UserSupabaseClient,
-  patch: SaveProjectDetailPatch,
-): Promise<SaveProjectDetailResult> {
-  const values = toProjectDetailColumns(patch);
-  const table = () => supabase.from("project_details");
+export async function saveDeliverable(supabase: UserSupabaseClient, patch: SaveDeliverablePatch): Promise<DeliverableSaveResult> {
+  const values = toDeliverableColumns(patch);
+  const table = () => supabase.from("project_deliverables");
   const projectId = patch.projectId;
-  const detail = await upsertRow(patch, has(values), {
-    insert: projectId
-      ? async () => {
-          for (let attempt = 0; ; attempt += 1) {
-            const last = await table()
-              .select("sort_order")
-              .eq("project_id", projectId)
-              .order("sort_order", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (last.error) return { data: null, error: last.error };
-            const res = await table()
-              .insert({ ...values, id: patch.id, project_id: projectId, sort_order: (last.data?.sort_order ?? 0) + 1 })
-              .select(DETAIL_RESULT_COLUMNS)
-              .single();
-            if (res.error?.code === "23505" && !isPrimaryKeyViolation(res.error) && attempt === 0) continue;
-            return res;
-          }
-        }
-      : null,
-    update: (id, expected) => {
+  const title = patch.title;
+  type Row = { id: string; status: string; created_at: string; updated_at: string };
+  const withStatus = <T extends { data: { id: string; created_at: string; updated_at: string } | null; error: PostgrestError | null }>(res: T) =>
+    ({ data: res.data ? { ...res.data, status: "complete" } : null, error: res.error }) as Res<Row>;
+  const row = await upsertRow<Row>(patch, has(values), {
+    insert:
+      projectId && title !== undefined
+        ? async () =>
+            withStatus(
+              await table()
+                // sort_order omitted: the column defaults to 0 and the insert trigger appends (max + 1).
+                .insert({ id: patch.id, project_id: projectId, title, body: patch.body ?? "" })
+                .select(DELIVERABLE_RESULT_COLUMNS)
+                .single(),
+            )
+        : null,
+    update: async (id, expected) => {
       let q = table().update(values).eq("id", id);
       if (expected !== undefined) q = q.eq("updated_at", expected);
-      return q.select(DETAIL_RESULT_COLUMNS).maybeSingle();
+      return withStatus(await q.select(DELIVERABLE_RESULT_COLUMNS).maybeSingle());
     },
-    current: (id) => table().select(DETAIL_RESULT_COLUMNS).eq("id", id).maybeSingle(),
+    current: async (id) => withStatus(await table().select(DELIVERABLE_RESULT_COLUMNS).eq("id", id).maybeSingle()),
   });
-  const project = single(await projectState(supabase, detail.project_id));
-  return { ...toSaveResult(detail), sortOrder: detail.sort_order, project: toSaveResult(project) };
-}
-
-// ---------- achievements ----------
-
-/** The owner (project detail or experience) is set on create and fixed afterwards (DM §2.3, S-11). */
-export async function saveAchievement(supabase: UserSupabaseClient, patch: SaveAchievementPatch): Promise<SaveResult> {
-  const values = toAchievementColumns(patch);
-  const table = () => supabase.from("achievements");
-  const target = patch.target;
-  const row = await upsertRow(patch, has(values), {
-    insert: target
-      ? () => {
-          const owner =
-            target.type === "project_detail"
-              ? { project_detail_id: target.id, experience_id: null }
-              : { project_detail_id: null, experience_id: target.id };
-          return table()
-            .insert({ ...values, ...owner, id: patch.id })
-            .select(SAVE_RESULT_COLUMNS)
-            .single();
-        }
-      : null,
-    update: (id, expected) => {
-      let q = table().update(values).eq("id", id);
-      if (expected !== undefined) q = q.eq("updated_at", expected);
-      return q.select(SAVE_RESULT_COLUMNS).maybeSingle();
-    },
-    current: (id) => table().select(SAVE_RESULT_COLUMNS).eq("id", id).maybeSingle(),
-  });
-  return toSaveResult(row);
+  return { id: row.id, updatedAt: row.updated_at };
 }

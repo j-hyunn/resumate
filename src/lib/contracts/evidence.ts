@@ -23,8 +23,7 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   experience: "경력",
   education: "교육",
   project: "프로젝트",
-  project_detail: "상세 내용",
-  achievement: "정량 성과",
+  project_deliverable: "산출물",
   skill: "스킬",
   jd_requirement: "JD 요건",
   jd_sentence: "공고 원문",
@@ -32,27 +31,31 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   user_note: "내 메모",
 };
 
-/** C-01 `project_detail` field labels ("상세 내용 · 행동"). */
-export const PROJECT_DETAIL_FIELD_LABELS: Record<string, string> = {
-  title: "제목",
+/**
+ * C-01 `project` field labels (DM v4.4 2.8, CR-2): "프로젝트 · 행동". `learnings` reads "배운 점"
+ * alone (the user's reflection, NFR-AI-06). name / period stay "프로젝트".
+ */
+export const PROJECT_FIELD_LABELS: Record<string, string> = {
   situation: "상황",
-  task: "과제",
+  task: "역할",
   action: "행동",
-  result: "결과",
-  learnings: "회고 및 배운 점",
+  result: "결과/성과",
+  learnings: "배운 점",
+  role: "담당 업무",
+  description: "프로젝트 내용",
 };
 
 /**
  * Where "원본으로 이동" goes (C-02). Ids only; the screen builds the route.
- * `project_detail` → S-35 field focus, `achievement` → S-11, `education` → S-34.
+ * `project` → S-10 (affiliated, STAR section focus) or S-08 `?item=project:` (standalone, S-43);
+ * `project_deliverable` → S-44; `education` → S-34.
  */
 export type EvidenceTarget =
   | { type: "profile" }
   | { type: "experience"; experienceId: string }
   | { type: "education"; educationId: string }
-  | { type: "project"; projectId: string }
-  | { type: "project_detail"; projectId: string; projectDetailId: string; field: string | null }
-  | { type: "achievement"; achievementId: string; projectDetailId: string | null; projectId: string | null; experienceId: string | null }
+  | { type: "project"; projectId: string; field: string | null; standalone: boolean | null }
+  | { type: "project_deliverable"; deliverableId: string; projectId: string | null }
   | { type: "skill"; skillId: string }
   | { type: "jd_requirement"; requirementId: string }
   | { type: "jd_sentence"; jobDescriptionId: string; sid: string | null; start: number | null; end: number | null }
@@ -67,8 +70,8 @@ export type EvidenceChip = {
   sourceId: string;
   sourceField: string | null;
   /**
-   * C-01 chip label: kind (+ STAR field for project details), e.g. "상세 내용 · 행동".
-   * A `learnings` chip reads "회고 및 배운 점" (U-2, no extra marker).
+   * C-01 chip label: kind (+ STAR field for projects), e.g. "프로젝트 · 행동".
+   * A `learnings` chip reads "배운 점" (CR-2, no extra marker).
    */
   kindLabel: string;
   /** Name of the source at generation time (`source_label`). */
@@ -76,7 +79,7 @@ export type EvidenceChip = {
   /** Quote kept with the evidence; null after the source was deleted (D-AI-04 (b)). */
   quote: string | null;
   quoteAdjusted: boolean;
-  /** `project_detail.learnings` evidence (C-9, NFR-AI-06). */
+  /** `project.learnings` evidence (C-9, NFR-AI-06, V-8). */
   isReflection: boolean;
   state: EvidenceSourceState;
   sourceSnapshotAt: string | null;

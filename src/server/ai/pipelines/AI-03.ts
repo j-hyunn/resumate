@@ -57,7 +57,8 @@ export const AI03_MAX_BULLETS_PER_PROJECT = 4;
 export const AI03_MAX_PROJECTS = MAX_DRAFT_PROJECTS;
 /** Output ≈ 5k tokens incl. evidence JSON and reasoning (card 비용); headroom. */
 export const AI03_MAX_OUTPUT_TOKENS = 16_000;
-export const STANDALONE_HEADING = "기타 프로젝트";
+/** CR-7: the standalone group is "독립 프로젝트" (v4.4 "기타 프로젝트"). */
+export const STANDALONE_HEADING = "독립 프로젝트";
 export const TRUNCATED_PROJECTS_NOTE = `프로젝트는 최대 ${MAX_DRAFT_PROJECTS}개까지 넣었습니다. 빠진 프로젝트는 포함 항목에서 순서를 바꿔 다시 생성할 수 있습니다.`;
 
 export { AI03_PROMPT_VERSION };
@@ -470,7 +471,10 @@ export function finalizeCareerDescription(input: {
       blocks.push(headerBlock(claimBlockId(`h${si + 1}-${pi + 1}`, used, serverId, sectionReport), s, projectEntry, projectId));
       const p = written.get(projectId);
       if (!p) return void addToReport(sectionReport, { projects_missing: 1 });
-      if (p.role_line) blocks.push(addAiBlock(p.role_line, "role_line", projectId, sectionReport, sectionId));
+      // AI-03 v4.5: the role line comes from `task` (affiliated) / `role` (standalone); none without it [가정].
+      const roleSource = projectEntry?.scope === "standalone" ? projectEntry.fields.role : projectEntry?.fields.task;
+      if (p.role_line && roleSource && roleSource.trim() !== "") blocks.push(addAiBlock(p.role_line, "role_line", projectId, sectionReport, sectionId));
+      else if (p.role_line) addToReport(sectionReport, { role_line_dropped_no_source: 1 });
       p.bullets.slice(0, AI03_MAX_BULLETS_PER_PROJECT).forEach((b) => blocks.push(addAiBlock(b, "bullet", projectId, sectionReport, sectionId)));
       if (p.bullets.length > AI03_MAX_BULLETS_PER_PROJECT) addToReport(sectionReport, { bullets_truncated: p.bullets.length - AI03_MAX_BULLETS_PER_PROJECT });
     });

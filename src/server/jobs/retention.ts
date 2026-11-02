@@ -3,7 +3,7 @@ import { AppError } from "@/lib/contracts/errors";
 import type { ServiceRoleClient } from "./service-role";
 
 /**
- * Retention cron (NFR-PRV-06, DM §4.4, D-DM-08 / D-DM-09). Calls the purge
+ * Retention cron (NFR-PRV-06, DM §4.4, D-DM-09). Calls the purge
  * RPCs (security definer, service_role only) one after another. Each call
  * deletes at most RETENTION_BATCH_LIMIT rows; a full batch is followed by
  * another, up to RETENTION_MAX_BATCHES_PER_RUN, and what's left goes to the
@@ -11,8 +11,8 @@ import type { ServiceRoleClient } from "./service-role";
  */
 
 export const RETENTION_PURGES = [
-  // Unlinked AI writing chats, 90 days after last activity (D-DM-08 [가정]).
-  { key: "unlinkedWritingChats", rpc: "purge_unlinked_writing_chats" },
+  // DM v4.4 (CR-6): every writing chat belongs to a project, so the 90-day purge of unlinked chats
+  // (D-DM-08, purge_unlinked_writing_chats) is gone.
   // Finished ai_jobs older than 90 days (in-flight jobs are kept).
   { key: "aiJobs", rpc: "purge_old_ai_jobs" },
   // ai_usage_records older than 13 KST months (D-DM-09 [가정]).

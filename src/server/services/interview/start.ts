@@ -141,7 +141,7 @@ export async function startInterviewSession(
     if (raiseName(error) === "interview_in_progress") {
       // [가정 5] one in-progress session per project: continue it (C-14 / S-20 배너).
       const sessionId = typeof error.details === "string" && error.details ? error.details : null;
-      throw new AppError("interview_in_progress", "이 기업 JD에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", {
+      throw new AppError("interview_in_progress", "이 자기소개서에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", {
         status: 409,
         details: { sessionId },
       });

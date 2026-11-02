@@ -93,8 +93,6 @@ export const SOURCE_COUNT_RULES: Readonly<Record<QuestionClass, { min: number; m
   future_plan: { min: 0, max: 1 },
   experience_story: { min: 1, max: 2 },
 };
-/** Card: "detail_refs, 1~2개". */
-export const MAX_DETAIL_REFS = 2;
 
 // ---------- context ----------
 
@@ -112,12 +110,11 @@ export type UserSourceInput = {
   experience_id: string | null;
   education_id: string | null;
   project_id: string | null;
-  project_detail_ids: string[];
   role: DraftSourceRole;
 };
 
 /** A user source resolved to this call's aliases. */
-type ResolvedUserSource = UserSourceInput & { projectAlias: string | null; parentAlias: string | null; detailAliases: string[] };
+type ResolvedUserSource = UserSourceInput & { projectAlias: string | null; parentAlias: string | null };
 
 export type CoverLetterContext = {
   question: CoverLetterQuestion;
@@ -254,21 +251,17 @@ function resolveUserSource(s: UserSourceInput, aliases: AliasMap): ResolvedUserS
     const projectAlias = aliases.aliasOf("project", s.project_id);
     if (!projectAlias) return null;
     const parentAlias = aliases.get(projectAlias)?.parents[0] ?? null;
-    const detailAliases = s.project_detail_ids
-      .map((id) => aliases.aliasOf("project_detail", id))
-      .filter((a): a is string => !!a && (aliases.get(a)?.parents.includes(projectAlias) ?? false));
-    return { ...s, projectAlias, parentAlias, detailAliases };
+    return { ...s, projectAlias, parentAlias };
   }
   const parentAlias = s.experience_id ? aliases.aliasOf("experience", s.experience_id) : s.education_id ? aliases.aliasOf("education", s.education_id) : undefined;
-  return parentAlias ? { ...s, projectAlias: null, parentAlias, detailAliases: [] } : null;
+  return parentAlias ? { ...s, projectAlias: null, parentAlias } : null;
 }
 
 function userSourcesBlock(sources: readonly ResolvedUserSource[], aliases: AliasMap): string {
   const lines = sources.map((s, i) => {
     const target = s.projectAlias ? `${s.projectAlias}${s.parentAlias ? ` (${s.parentAlias})` : ""}` : `${s.parentAlias} 전체`;
     const label = sourceLabel(aliases, { projectAlias: s.projectAlias, parentAlias: s.parentAlias });
-    const details = s.detailAliases.length ? ` | 상세 내용: ${s.detailAliases.join(", ")}` : "";
-    return `${i + 1}. ${s.role} | ${target} '${escLine(label)}'${details}`;
+    return `${i + 1}. ${s.role} | ${target} '${escLine(label)}'`;
   });
   return ["<user_sources>", ...(lines.length ? lines : ["(사용자가 모든 프로젝트를 제외했습니다)"]), "</user_sources>"].join("\n");
 }
@@ -307,10 +300,7 @@ export function computeCoverLetterInputHash(parts: {
       count_basis: q.count_basis,
       user_note: q.user_note?.trim() || null,
       mode: parts.mode,
-      user_sources:
-        parts.mode === "user"
-          ? parts.userSources.map((s) => ({ ...s, project_detail_ids: [...s.project_detail_ids].sort() }))
-          : [],
+      user_sources: parts.mode === "user" ? parts.userSources.map(({ experience_id, education_id, project_id, role }) => ({ experience_id, education_id, project_id, role })) : [],
     },
   });
 }
@@ -320,7 +310,6 @@ export function computeCoverLetterInputHash(parts: {
 export type ValidatedSource = {
   projectAlias: string | null;
   parentAlias: string | null;
-  detailAliases: string[];
   view: SelectedSourceView;
   evidence: ValidatedEvidence[];
 };
@@ -340,8 +329,8 @@ export function resolveQuestionClass(context: CoverLetterContext, modelClass: Qu
 }
 
 /**
- * AI mode: refs → rows (V-1), real parent (model's parent corrected), details
- * of that project (≤ 2), one source per project, evidence within the source
+ * AI mode: refs → rows (V-1), real parent (model's parent corrected),
+ * one source per project, evidence within the source
  * (V-1..V-3, V-8, V-7) — a source with no valid evidence is dropped (V-4,
  * "선택마다 근거 인용 1개 이상"), roles normalized (one primary), per-class
  * count cap (truncate). User mode: exactly the user's list; the model only
@@ -371,7 +360,7 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
 
   const build = (
     s: Ai04Source | null,
-    target: { projectAlias: string | null; parentAlias: string | null; detailAliases: string[]; role: DraftSourceRole },
+    target: { projectAlias: string | null; parentAlias: string | null; role: DraftSourceRole },
   ): ValidatedSource | null => {
     const scope = buildSourceScope(aliases, [target]);
     const outcome = s
@@ -389,7 +378,6 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
     return {
       projectAlias: target.projectAlias,
       parentAlias: target.parentAlias,
-      detailAliases: target.detailAliases,
       evidence: outcome.outcome.action === "drop" ? [] : outcome.outcome.evidence,
       view: {
         sort_order: 0,
@@ -397,7 +385,6 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
         project_id: id(target.projectAlias, "project"),
         experience_id: parentEntry?.sourceType === "experience" ? parentEntry.id : null,
         education_id: parentEntry?.sourceType === "education" ? parentEntry.id : null,
-        project_detail_ids: target.detailAliases.map((a) => aliases.resolveId(a, "project_detail")).filter((v): v is string => !!v),
         label: sourceLabel(aliases, target),
         rationale: s ? (clipText(cleanProse(s.rationale, env, report), RATIONALE_MAX) ?? "") : "",
         reuse_reason: s?.reuse_reason ? clipText(cleanProse(s.reuse_reason, env, report), RATIONALE_MAX) : null,
@@ -417,7 +404,7 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
       else if (k && !byKey.has(k)) byKey.set(k, s);
     }
     for (const u of context.userSources) {
-      const v = build(byKey.get(key(u)) ?? null, { projectAlias: u.projectAlias, parentAlias: u.parentAlias, detailAliases: u.detailAliases, role: u.role });
+      const v = build(byKey.get(key(u)) ?? null, { projectAlias: u.projectAlias, parentAlias: u.parentAlias, role: u.role });
       if (v) out.push(v);
     }
   } else {
@@ -433,11 +420,7 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
         continue;
       }
       seen.add(key(r));
-      const details = r.projectAlias
-        ? s.detail_refs.map((d) => d.trim()).filter((d, i, all) => all.indexOf(d) === i && (aliases.get(d)?.parents.includes(r.projectAlias as string) ?? false))
-        : [];
-      if (details.length !== s.detail_refs.length) addToReport(report, { detail_refs_dropped: s.detail_refs.length - details.length });
-      const v = build(s, { ...r, detailAliases: details.slice(0, MAX_DETAIL_REFS), role: s.role });
+      const v = build(s, { ...r, role: s.role });
       if (!v || v.evidence.length === 0) {
         addToReport(report, { sources_dropped_no_evidence: 1 });
         continue;
@@ -462,7 +445,7 @@ export function validateSources(raw: readonly Ai04Source[], questionClass: Quest
 }
 
 function paragraphScope(context: CoverLetterContext, sources: readonly ValidatedSource[]): Set<string> {
-  const items: SourceScopeItem[] = sources.map((s) => ({ projectAlias: s.projectAlias, parentAlias: s.parentAlias, detailAliases: s.detailAliases }));
+  const items: SourceScopeItem[] = sources.map((s) => ({ projectAlias: s.projectAlias, parentAlias: s.parentAlias }));
   return buildSourceScope(context.aliases, items);
 }
 
@@ -661,7 +644,6 @@ async function* finalizeStream(
     project_id: s.view.project_id,
     experience_id: s.view.experience_id,
     education_id: s.view.education_id,
-    project_detail_ids: s.view.project_detail_ids,
     role: s.view.role,
     rationale: s.view.rationale || null,
     requirement_ids: s.view.requirement_ids,
@@ -675,7 +657,7 @@ async function* finalizeStream(
     requirementsHash: context.requirementsHash,
     question: context.question,
     mode: context.mode,
-    userSources: context.userSources.map(({ experience_id, education_id, project_id, project_detail_ids, role }) => ({ experience_id, education_id, project_id, project_detail_ids, role })),
+    userSources: context.userSources.map(({ experience_id, education_id, project_id, role }) => ({ experience_id, education_id, project_id, role })),
   });
   const payload: CompleteCoverLetterSectionPayload = {
     question_class: questionClass,

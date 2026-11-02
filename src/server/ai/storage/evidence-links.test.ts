@@ -25,7 +25,7 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
         key: "strengths.0",
         kind: "judgment",
         evidence: [
-          { source_type: "project_detail", ref: "DET-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" },
+          { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" },
           { source_type: "jd_sentence", ref: "S1" },
           { source_type: "jd_requirement", ref: "REQ-1" },
           { source_type: "profile", ref: "PROFILE", field: "desired_job_title" },
@@ -41,13 +41,14 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
         application_project_id: "ap-uuid",
         item_key: "strengths.0",
         sort_order: 0,
-        source_type: "project_detail",
-        source_id: IDS.detPay1,
+        source_type: "project",
+        source_id: IDS.prjPay,
         source_field: "action",
         quote: "병목 쿼리를 찾아 인덱스를 재설계했다",
         quote_adjusted: false,
+        // DM 2.8 v4.4: project evidence snapshots projects.content_updated_at (not updated_at).
         source_snapshot_at: "2026-02-01T00:00:00.000Z",
-        source_label: "결제 승인 API 개선 › 승인 API 병목 제거",
+        source_label: "결제 승인 API 개선",
         source_locator: null,
       },
       expect.objectContaining({
@@ -70,6 +71,37 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
       }),
     ]);
     for (const row of rows) expect(row).not.toHaveProperty("user_id");
+  });
+
+  it("deliverable body: quote checked on the normalized pack text, locator = raw markdown span (C-1.1)", () => {
+    const rawBody = careerRowsFixture().deliverables.find((d) => d.id === IDS.dlvSide1)!.body;
+    const { outcome } = validateItem(
+      {
+        key: "strengths.1",
+        kind: "judgment",
+        evidence: [
+          { source_type: "project_deliverable", ref: "DLV-1", field: "body", quote: "은행 문자 10종의 형식을 정규식으로 분류했다" },
+          { source_type: "project_deliverable", ref: "DLV-1", field: "title" },
+        ],
+      },
+      { aliases, learnings: "forbidden" },
+    );
+    expect(outcome.evidence).toHaveLength(2);
+    const rows = toEvidenceLinkRows({ owner, items: [{ itemKey: outcome.key, evidence: outcome.evidence }], aliases, now });
+    const start = rawBody.indexOf("은행");
+    const end = rawBody.indexOf("분류했다") + "분류했다".length;
+    expect(rows[0]).toMatchObject({
+      source_type: "project_deliverable",
+      source_id: IDS.dlvSide1,
+      source_field: "body",
+      quote: "은행 문자 10종의 형식을 정규식으로 분류했다",
+      source_snapshot_at: "2026-02-01T00:00:00.000Z",
+      source_label: "문자 파싱 설계",
+      source_locator: { start, end },
+    });
+    // The raw span still carries the markdown the user wrote.
+    expect(rawBody.slice(start, end)).toBe("은행 문자 *10종*의 형식을 [정규식](https://example.com/re)으로 분류했다");
+    expect(rows[1]).toMatchObject({ source_field: "title", quote: null, source_locator: null });
   });
 
   it("refuses writing_chat_message (DM-15) and evidence that isn't in the map", () => {
@@ -95,8 +127,8 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
 describe("stripEvidence / resolveRefs", () => {
   it("removes evidence arrays at any depth without mutating the input", () => {
     const value = {
-      strengths: [{ title: "t", evidence: [{ ref: "DET-2" }], requirement_refs: ["REQ-1"] }],
-      strategy: { positioning: "p", positioning_evidence: [{ ref: "ACH-2" }] },
+      strengths: [{ title: "t", evidence: [{ ref: "PRJ-2" }], requirement_refs: ["REQ-1"] }],
+      strategy: { positioning: "p", positioning_evidence: [{ ref: "DLV-1" }] },
     };
     expect(stripEvidence(value, ["evidence", "positioning_evidence"])).toEqual({
       strengths: [{ title: "t", requirement_refs: ["REQ-1"] }],

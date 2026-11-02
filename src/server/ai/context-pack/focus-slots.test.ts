@@ -1,143 +1,117 @@
 import { describe, expect, it } from "vitest";
-import { DETAIL_DONE_ID, DETAIL_DRAFT_ID } from "../__fixtures__/AI-12/conversations";
-import { parseStructuredDraft, type DetailField, type ProjectField } from "../schemas/structured-draft";
-import { computeFocusSlots, nextDetailKey, predictReadyToReturn, type FocusInput } from "./focus-slots";
+import { parseStructuredDraft, type StarField } from "../schemas/structured-draft";
+import { computeFocusSlots, quickChips, type FocusInput, type ProjectSlotState } from "./focus-slots";
 
-const f = (value: string | number, review: "ok" | "needs_review" | "accepted" = "ok") => ({
-  value,
-  origin: "ai",
-  source_message_ids: ["m"],
-  source_quotes: ["q"],
-  review,
-  reviewed_at: null,
-});
+const EMPTY_STAR: Record<StarField, string | null> = { situation: null, task: null, action: null, result: null, learnings: null };
 
-type InputOverrides = Omit<Partial<FocusInput>, "draft"> & { draft?: unknown };
+function project(star: Partial<Record<StarField, string>> = {}, startMonth: string | null = null): ProjectSlotState {
+  return { star: { ...EMPTY_STAR, ...star }, startMonth };
+}
 
-function input(overrides: InputOverrides = {}): FocusInput {
-  const { draft, ...rest } = overrides;
+const field = (value: string, extra: Record<string, unknown> = {}) => ({ value, origin: "ai", source_message_ids: [], source_quotes: [], review: "ok", reviewed_at: null, applied_at: null, ...extra });
+
+function input(over: Partial<Omit<FocusInput, "draft">> & { draft?: unknown } = {}): FocusInput {
   return {
-    mode: "new_project",
-    draft: parseStructuredDraft(draft ?? {}),
-    existingProject: null,
-    existingDetails: [],
+    project: project(),
     gate: null,
     requestedSlot: null,
-    affiliationParentStatus: null,
-    ...rest,
+    ...over,
+    draft: parseStructuredDraft(over.draft ?? {}),
   };
 }
 
-const slotsOf = (i: FocusInput) => computeFocusSlots(i).slots.map((s) => `${s.slot}${s.detail ? `:${s.detail.label}` : ""}/${s.reason}`);
+const slots = (plan: ReturnType<typeof computeFocusSlots>) => plan.slots.map((s) => `${s.slot}:${s.reason}`);
 
-describe("computeFocusSlots — order (AI-12 대화 진행 규칙)", () => {
-  it("empty new project: basic info then situation of a new D1", () => {
-    expect(slotsOf(input())).toEqual(["basic_info/order", "situation:D1/order"]);
-    expect(computeFocusSlots(input()).slots[0].missingFields).toEqual(["name", "role", "start_month"]);
+describe("computeFocusSlots — order", () => {
+  it("non-gate: period first (only when empty), then S → T → A → R → learnings", () => {
+    const plan = computeFocusSlots(input());
+    expect(slots(plan)).toEqual(["period:order", "situation:order"]);
+    expect(plan.upcoming.map((s) => s.slot)).toEqual(["task", "action", "result"]);
+    expect(slots(computeFocusSlots(input({ project: project({}, "2023-03") })))).toEqual(["situation:order", "task:order"]);
   });
 
-  it("follows S → T → A → R → learnings for the latest detail", () => {
-    const draft = {
-      project: { name: f("결제"), role: f("백엔드"), start_month: f("2023-03") },
-      details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s") } }],
-    };
-    expect(slotsOf(input({ draft }))).toEqual(["task:D1/order", "action:D1/order"]);
+  it("a pending proposal counts as filled", () => {
+    const plan = computeFocusSlots(input({ project: project({}, "2023-03"), draft: { star: { situation: field("상황") } } }));
+    expect(slots(plan)).toEqual(["task:order", "action:order"]);
   });
 
-  it("an achievement counts as a result", () => {
-    const draft = {
-      project: { name: f("결제"), role: f("백엔드"), start_month: f("2023-03") },
-      details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s"), task: f("t"), action: f("a") }, achievements: [{ value_after: f(3) }] }],
-    };
-    expect(slotsOf(input({ draft }))).toEqual(["learnings:D1/order", "next_episode/order"]);
+  it("once required is filled, optional slots are offered", () => {
+    const plan = computeFocusSlots(input({ project: project({ situation: "s", action: "a" }, "2023-03") }));
+    expect(slots(plan)).toEqual(["task:optional_offer", "result:optional_offer"]);
   });
 
-  it("asks the period once name and role are known", () => {
-    const draft = {
-      project: { name: f("결제"), role: f("백엔드") },
-      details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s"), task: f("t"), action: f("a"), result: f("r"), learnings: f("l") } }],
-    };
-    expect(slotsOf(input({ draft }))).toEqual(["basic_info/follow_up", "next_episode/order"]);
+  it("gate: situation, action first, then period, then optional_offer", () => {
+    const plan = computeFocusSlots(input({ gate: { feature: "insight", missing: ["complete_project"] } }));
+    expect(slots(plan)).toEqual(["situation:gate_required", "action:gate_required"]);
+    expect(plan.upcoming.map((s) => `${s.slot}:${s.reason}`)).toEqual(["period:order", "task:optional_offer", "result:optional_offer"]);
   });
 
-  it("works on the last D-key detail and offers the next key", () => {
-    const draft = { details: [{ detail_key: "D1" }, { detail_key: "D2" }] };
-    expect(nextDetailKey(parseStructuredDraft(draft))).toBe("D3");
-    expect(computeFocusSlots(input({ draft })).slots[1].detail?.label).toBe("D2");
+  it("everything filled → no slots", () => {
+    const all = project({ situation: "s", task: "t", action: "a", result: "r", learnings: "l" }, "2023-03");
+    expect(computeFocusSlots(input({ project: all })).slots).toEqual([]);
   });
 });
 
-describe("computeFocusSlots — requested_slot and clarifications", () => {
-  it("puts requested_slot first; filled slot → reinforce", () => {
-    const draft = { details: [{ detail_key: "D1", fields: { action: f("a") } }] };
-    expect(slotsOf(input({ draft, requestedSlot: { slot: "action", detail_key: "D1", existing_detail_id: null } }))).toEqual([
-      "action:D1/requested_reinforce",
-      "basic_info/order",
-    ]);
-    expect(slotsOf(input({ requestedSlot: { slot: "result", detail_key: null, existing_detail_id: null } }))[0]).toBe("result:D1/requested");
+describe("computeFocusSlots — requested, clarifications, full fields", () => {
+  it("requested_slot goes first; a filled slot is asked as reinforcement", () => {
+    expect(slots(computeFocusSlots(input({ requestedSlot: { slot: "learnings" } })))).toEqual(["learnings:requested", "period:order"]);
+    const filled = computeFocusSlots(input({ project: project({ action: "a" }), requestedSlot: { slot: "action" } }));
+    expect(filled.slots[0]).toEqual({ slot: "action", missingFields: [], reason: "requested_reinforce" });
   });
 
-  it("re-asks an unresolved clarification before new questions", () => {
-    const draft = { clarifications: [{ kind: "actor_ambiguous", field: "action", detail_key: "D1" }], details: [{ detail_key: "D1" }] };
-    const plan = computeFocusSlots(input({ draft }));
-    expect(plan.slots[0]).toMatchObject({ slot: "action", reason: "clarification", clarification: "actor_ambiguous" });
+  it("the first clarification comes before ordered slots", () => {
+    const plan = computeFocusSlots(input({ project: project({}, "2023-03"), draft: { clarifications: [{ kind: "number_vague", field: "result" }] } }));
+    expect(plan.slots[0]).toMatchObject({ slot: "result", reason: "clarification", clarification: "number_vague" });
     expect(plan.clarifications).toHaveLength(1);
+    const period = computeFocusSlots(input({ draft: { clarifications: [{ kind: "period_unclear", field: "start_month" }] } }));
+    expect(period.slots.map((s) => s.slot)).toEqual(["period", "situation"]);
   });
 
-  it("a needs_review value counts as asked (not re-asked)", () => {
-    const draft = { project: { name: f("x"), role: f("y", "needs_review"), start_month: f("2023-01") } };
-    expect(slotsOf(input({ draft }))[0]).toBe("situation:D1/order");
-  });
-});
-
-describe("computeFocusSlots — gate entry (U-5)", () => {
-  const gate = { feature: "insight" as const, missing: ["complete_project" as const] };
-
-  it("required fields first, then optional once", () => {
-    expect(slotsOf(input({ gate }))).toEqual(["basic_info/gate_required", "situation:D1/gate_required"]);
-    const draft = { project: { name: f("n"), role: f("r"), start_month: f("2023-01") }, details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s") } }] };
-    expect(slotsOf(input({ gate, draft }))).toEqual(["action:D1/gate_required", "task:D1/optional_offer"]);
-  });
-
-  it("augment: fills the first draft existing detail's required fields", () => {
-    const existingDetails = [
-      { id: DETAIL_DRAFT_ID, alias: "DET-1", status: "draft" as const, sortOrder: 1, filled: new Set<DetailField>(["title"]) },
-      { id: DETAIL_DONE_ID, alias: "DET-2", status: "complete" as const, sortOrder: 2, filled: new Set<DetailField>(["title", "situation", "action"]) },
-    ];
-    const plan = computeFocusSlots(
-      input({ mode: "augment_project", gate, existingProject: { filled: new Set<ProjectField>(["name", "role"]) }, existingDetails }),
-    );
-    expect(plan.slots.map((s) => `${s.slot}:${s.detail?.label}`)).toEqual(["situation:DET-1", "action:DET-1"]);
-    expect(plan.slots[0].missingFields).toEqual(["situation"]);
+  it("full fields are never asked (even when requested)", () => {
+    const plan = computeFocusSlots(input({ project: project({}, "2023-03"), fullFields: ["situation"], requestedSlot: { slot: "situation" } }));
+    expect(plan.slots.map((s) => s.slot)).toEqual(["task", "action"]);
+    expect(plan.fullFields).toEqual(["situation"]);
   });
 });
 
-describe("predictReadyToReturn (D-01)", () => {
-  const gate = { feature: "insight" as const, missing: ["complete_project" as const] };
-  const complete = {
-    project: { name: f("n"), role: f("r") },
-    details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s"), action: f("a") } }],
-  };
-
-  it.each([
-    ["no gate", { draft: complete, gate: null }, false],
-    ["complete draft", { draft: complete, gate }, true],
-    ["missing experience can't be fixed here", { draft: complete, gate: { feature: "insight" as const, missing: ["complete_experience" as const, "complete_project" as const] } }, false],
-    ["needs_review action is skipped on save", { draft: { ...complete, details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s"), action: f("a", "needs_review") } }] }, gate }, false],
-    ["accepted counts", { draft: { ...complete, details: [{ detail_key: "D1", fields: { title: f("t"), situation: f("s"), action: f("a", "accepted") } }] }, gate }, true],
-    ["no role", { draft: { ...complete, project: { name: f("n") } }, gate }, false],
-    ["draft parent experience", { draft: complete, gate, affiliationParentStatus: "draft" as const }, false],
-    ["already ready", { draft: {}, gate: { feature: "insight" as const, missing: [] } }, true],
-  ])("%s → %s", (_name, overrides, expected) => {
-    expect(predictReadyToReturn(input(overrides as InputOverrides))).toBe(expected);
-    expect(computeFocusSlots(input(overrides as InputOverrides)).readyToReturn).toBe(expected);
+describe("computeFocusSlots — flags", () => {
+  it("requiredComplete / canApply: needs_review proposals don't count; project values do", () => {
+    const pending = computeFocusSlots(input({ draft: { star: { situation: field("s"), action: field("a") } } }));
+    expect(pending).toMatchObject({ requiredComplete: true, canApply: true });
+    const review = computeFocusSlots(input({ draft: { star: { situation: field("s"), action: field("a", { review: "needs_review" }) } } }));
+    expect(review).toMatchObject({ requiredComplete: false, canApply: false });
+    const onProject = computeFocusSlots(input({ project: project({ situation: "s", action: "a" }) }));
+    expect(onProject).toMatchObject({ requiredComplete: true, canApply: false });
   });
 
-  it("augment: existing values + draft values combine", () => {
-    const existingDetails = [{ id: DETAIL_DRAFT_ID, alias: "DET-1", status: "draft" as const, sortOrder: 1, filled: new Set<DetailField>(["title"]) }];
-    const draft = { details: [{ detail_key: null, existing_detail_id: DETAIL_DRAFT_ID, fields: { situation: f("s"), action: f("a") } }] };
-    expect(
-      predictReadyToReturn(input({ mode: "augment_project", gate, draft, existingProject: { filled: new Set<ProjectField>(["name", "role"]) }, existingDetails })),
-    ).toBe(true);
+  it("readyToReturn = gate and nothing missing", () => {
+    expect(computeFocusSlots(input()).readyToReturn).toBe(false);
+    expect(computeFocusSlots(input({ gate: { feature: "insight", missing: ["complete_project"] } })).readyToReturn).toBe(false);
+    expect(computeFocusSlots(input({ gate: { feature: "insight", missing: [] } })).readyToReturn).toBe(true);
+  });
+});
+
+describe("quickChips", () => {
+  const chips = (p: ProjectSlotState, draft: unknown = {}) => quickChips({ project: p, draft: parseStructuredDraft(draft) }).map((c) => `${c.label}→${c.requested_slot}`);
+
+  it("required empty → first empty required, result, learnings", () => {
+    expect(chips(project())).toEqual(["비어 있는 항목부터 물어봐 줘→situation", "결과/성과도 정리하고 싶어요→result", "배운 점도 정리하고 싶어요→learnings"]);
+    expect(chips(project({ situation: "s" }))[0]).toBe("비어 있는 항목부터 물어봐 줘→action");
+  });
+
+  it("required filled (project or proposal), optional empty → first empty, action, result", () => {
+    expect(chips(project({ situation: "s" }), { star: { action: field("a") } })).toEqual([
+      "남은 항목 채우기→task",
+      "본인이 한 일을 더 구체적으로→action",
+      "결과/성과에 수치 더하기→result",
+    ]);
+  });
+
+  it("all filled → reinforce action, result, learnings", () => {
+    expect(chips(project({ situation: "s", task: "t", action: "a", result: "r", learnings: "l" }))).toEqual([
+      "행동 보강하기→action",
+      "결과/성과 보강하기→result",
+      "배운 점 보강하기→learnings",
+    ]);
   });
 });

@@ -251,6 +251,27 @@ export function formatPeriod(start: string | null, end: string | null, ongoingLa
   return e ? `${s} ~ ${e}` : s
 }
 
+/**
+ * v5.5 기간 "2023.11 - 2025.09" (C-25 · S-09 · S-34 · S-43). `ongoing` → "현재";
+ * an open end that isn't ongoing → "2023.11 -". No start month → "".
+ */
+export function formatRange(start: string | null, end: string | null, ongoing = false): string {
+  if (!start) return ""
+  const s = formatMonth(start)
+  if (ongoing) return `${s} - 현재`
+  return end ? `${s} - ${formatMonth(end)}` : `${s} -`
+}
+
+/** C-25 개월 수, both ends counted: 2023.11~2025.09 → "1년 11개월". Needs both months. */
+export function formatMonthSpan(start: string | null, end: string | null): string {
+  if (!start || !end) return ""
+  const months = (Number(end.slice(0, 4)) - Number(start.slice(0, 4))) * 12 + (Number(end.slice(5, 7)) - Number(start.slice(5, 7))) + 1
+  if (months < 1) return ""
+  const y = Math.floor(months / 12)
+  const m = months % 12
+  return [y ? `${y}년` : null, m ? `${m}개월` : null].filter(Boolean).join(" ")
+}
+
 const KST_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" })
 
 /** "2026-10-28" — calendar date in KST (UQ-234). Date-only strings ("2026-10-28") pass through. */

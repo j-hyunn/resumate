@@ -27,7 +27,7 @@ Write cards in Korean; translate the field labels below. Keep JSON keys in Engli
 - Input context:
   | Source | entity.field | Required | Size estimate (tokens) |
 - Processing: single call / chain (list steps) / tool-using agent
-- Model: Codex-sonnet-5-5 etc. + reason
+- Model: claude-sonnet-5-5 etc. + reason
 - Response mode: streaming / sync / async
 - Prompt strategy: role, key instructions, how evidence is cited, whether few-shot is needed (do not write the full prompt)
 - Output schema:

@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — real values live only in .env*.local; .env.example is committed
 .env*
+!.env.example
+
+# supabase local state
+supabase/.temp
+supabase/.branches
 
 # vercel
 .vercel
@@ -39,3 +44,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# vitest cache
+.vitest/

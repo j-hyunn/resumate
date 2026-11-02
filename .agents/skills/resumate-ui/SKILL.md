@@ -1,11 +1,11 @@
 ---
 name: resumate-ui
-description: "Orchestrator for the Resumate UI team. Coordinates ui-designer, frontend-engineer (foundation + one per screen area), and ui-qa to turn the planning documents (docs/planning/) into a design system (docs/ui/design-system.md) and working Next.js + Tailwind + shadcn/ui screens backed by a mock data layer, tracked in docs/ui/screen-status.md. Always use when starting UI work, building or designing screens, setting up the frontend, implementing the dashboard/career/기업 JD/interview/board screens, or applying a Figma design. Follow-ups: always use for UI revisions, re-runs, next screen batches, 'continue the UI', partial re-runs (e.g. only the career screens, only the board, only the design system), applying screen-spec changes to code, and fixing QA issues. Korean triggers: UI 작업, 화면 구현 시작, 프론트엔드 구축, 디자인 시스템 만들기, 화면 만들어줘, 커리어 화면 구현, 보드 화면만 다시, UI 이어서, 다음 화면, UI 수정, 기획 변경 반영해서 화면 수정, 디자인 다시, QA 이슈 수정. Not for planning documents (resumate-planning) or backend work (Supabase migrations, real Codex API integration)."
+description: "Orchestrator for the Resumate UI team. Coordinates ui-designer, frontend-engineer (foundation + one per screen area), and ui-qa to turn the planning documents (docs/planning/) into a design system (docs/ui/design-system.md) and working Next.js + Tailwind + shadcn/ui screens backed by a mock data layer, tracked in docs/ui/screen-status.md. Always use when starting UI work, building or designing screens, setting up the frontend, implementing the dashboard/career/기업 JD/interview/board screens, or applying a Figma design. Follow-ups: always use for UI revisions, re-runs, next screen batches, 'continue the UI', partial re-runs (e.g. only the career screens, only the board, only the design system), applying screen-spec changes to code, and fixing QA issues. Korean triggers: UI 작업, 화면 구현 시작, 프론트엔드 구축, 디자인 시스템 만들기, 화면 만들어줘, 커리어 화면 구현, 보드 화면만 다시, UI 이어서, 다음 화면, UI 수정, 기획 변경 반영해서 화면 수정, 디자인 다시, QA 이슈 수정. Not for planning documents (resumate-planning) or backend work (Supabase migrations, real Claude API integration)."
 ---
 
 # Resumate UI Orchestrator
 
-Coordinate the UI team to turn the settled planning documents into a design system and working screens. You (the main session) are the leader. Everyone reads `.Codex/skills/resumate-ui/references/ui-context.md` first — it holds the stack, repository layout, area ownership, and data-layer rules this workflow depends on.
+Coordinate the UI team to turn the settled planning documents into a design system and working screens. You (the main session) are the leader. Everyone reads `.agents/skills/resumate-ui/references/ui-context.md` first — it holds the stack, repository layout, area ownership, and data-layer rules this workflow depends on.
 
 All paths are relative to the repository root. **Language:** skills and agent definitions are English; reports, `docs/ui/`, UI copy, and everything you say to the user are Korean.
 
@@ -24,9 +24,9 @@ If the session has no `TeamCreate`, run Phase 3 with background sub-agents inste
 
 | Member | Agent definition | Skill | Output |
 |--------|------------------|-------|--------|
-| ui-designer | `.Codex/agents/ui-designer.md` | ui-design-system | `docs/ui/design-system.md`, `_workspace/ui/01_ui-designer_notes.md` |
-| frontend-engineer (one per area) | `.Codex/agents/frontend-engineer.md` | ui-implementation | code in the area's folders, `_workspace/ui/{phase}_frontend-engineer-{area}_report.md` |
-| ui-qa | `.Codex/agents/ui-qa.md` | ui-qa-review | `_workspace/ui/{phase}_ui-qa_{scope}_review.md` |
+| ui-designer | `.codex/agents/ui-designer.toml` | ui-design-system | `docs/ui/design-system.md`, `_workspace/ui/01_ui-designer_notes.md` |
+| frontend-engineer (one per area) | `.codex/agents/frontend-engineer.toml` | ui-implementation | code in the area's folders, `_workspace/ui/{phase}_frontend-engineer-{area}_report.md` |
+| ui-qa | `.codex/agents/ui-qa.toml` | ui-qa-review | `_workspace/ui/{phase}_ui-qa_{scope}_review.md` |
 
 Spawn every member with `model: "opus"` and `subagent_type` set to the agent name. Give each engineer instance an explicit area and screen list; the area table in ui-context.md is the default split.
 
@@ -99,7 +99,7 @@ If a browser tool is available, also open the dev server yourself (`pnpm dev`, r
 1. Update `docs/ui/screen-status.md`.
 2. In team mode, shut down members and `TeamDelete`. Keep `_workspace/ui/` (audit trail).
 3. Report to the user in Korean: what was built (screens per area, how to run: `pnpm dev`, `?state=` preview), QA result (open issues by severity), `[UI-가정]` count, and the **기획 확인 필요** list — those questions go to the user, and answering them is planning work (`resumate-planning`), not UI work.
-4. Ask for feedback on the result and on the team setup. Harness-level feedback → update the relevant agent/skill and log it in `.Codex/harness/CHANGELOG.md` (AGENTS.md only holds a pointer).
+4. Ask for feedback on the result and on the team setup. Harness-level feedback → update the relevant agent/skill and log it in `.claude/harness/CHANGELOG.md` (AGENTS.md only holds a pointer).
 
 ## docs/ui/screen-status.md template (Korean)
 
@@ -136,7 +136,7 @@ docs/planning/* ─→ [ui-designer] ─→ docs/ui/design-system.md
 | Scaffold or install fails (network, Node version) | Report the exact command and output; don't switch package manager or libraries silently |
 | Two areas need conflicting changes to a common component | Don't pick silently — ask ui-designer (visual) or record it as `기획 확인 필요` (behavior), keep both callers working meanwhile |
 | Spec gap or contradiction | Conservative implementation + `[UI-가정]` + 기획 확인 필요. Never edit `docs/planning/` from this harness |
-| An engineer starts wiring real Supabase or Codex calls | Stop it and redirect to the mock data layer; backend is out of scope |
+| An engineer starts wiring real Supabase or Claude calls | Stop it and redirect to the mock data layer; backend is out of scope |
 
 ## Test scenarios
 

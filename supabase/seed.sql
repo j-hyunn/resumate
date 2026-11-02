@@ -1,0 +1,3 @@
+-- Resumate local dev seed (applied by `supabase db reset` after all migrations).
+-- Local stack only: fake users and fake career data, never real personal data.
+-- Intentionally empty in S0; seed rows arrive with the slices that create their tables (S1+).

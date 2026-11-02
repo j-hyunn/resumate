@@ -1,6 +1,6 @@
 ---
 name: resumate-backend
-description: "Orchestrator for the Resumate backend implementation team. Coordinates a four-member team — db-engineer (Supabase migrations, RLS, RPC), api-engineer (Next.js Server Actions, Route Handlers, auth, ai_jobs, usage ledger), ai-pipeline-engineer (Codex calls, prompts, evidence validation), backend-qa (boundary cross-checks, tests) — to build the backend slice by slice from docs/planning/. Always use when starting backend work, bootstrapping the project, implementing a feature's server side, building DB schema/API/AI pipelines, or asking 'what's next' on the backend. Follow-ups: always use for backend fixes, re-runs, QA re-checks, continuing to the next slice, re-implementing a slice after planning changes, connecting UI screens' mock data layer to the real backend, and improving previous backend output. Korean triggers: 백엔드 작업, 백엔드 구현, 서버 개발, API 개발, DB 구축, 프로젝트 셋업, 다음 슬라이스, 기능 구현(커리어·AI 작성 대화·JD·인사이트·서류·모의 면접), 백엔드 수정, 다시 실행, QA 다시, 기획 변경 반영해서 구현 수정, 백엔드 연결, mock을 실제 데이터로 교체. Not for planning documents (use resumate-planning) or UI pages, components, and design (use resumate-ui)."
+description: "Orchestrator for the Resumate backend implementation team. Coordinates a four-member team — db-engineer (Supabase migrations, RLS, RPC), api-engineer (Next.js Server Actions, Route Handlers, auth, ai_jobs runner, BYOK key handling, usage records), ai-pipeline-engineer (OpenAI / Gemini / Claude provider adapters, prompts, evidence validation), backend-qa (boundary cross-checks, tests) — to build the backend slice by slice from docs/planning/. Always use when starting backend work, bootstrapping the project, implementing a feature's server side, building DB schema/API/AI pipelines, or asking 'what's next' on the backend. Follow-ups: always use for backend fixes, re-runs, QA re-checks, continuing to the next slice, re-implementing a slice after planning changes, connecting UI screens' mock data layer to the real backend, and improving previous backend output. Korean triggers: 백엔드 작업, 백엔드 구현, 서버 개발, API 개발, DB 구축, 프로젝트 셋업, 다음 슬라이스, 기능 구현(커리어·AI 작성 대화·JD·인사이트·서류·모의 면접), 백엔드 수정, 다시 실행, QA 다시, 기획 변경 반영해서 구현 수정, 백엔드 연결, mock을 실제 데이터로 교체. Not for planning documents (use resumate-planning) or UI pages, components, and design (use resumate-ui)."
 ---
 
 # Resumate Backend Orchestrator
@@ -16,12 +16,12 @@ Coordinate the four-member backend team to implement Resumate's server side one 
 
 | Teammate | Agent definition | Skill | Owns |
 |----------|------------------|-------|------|
-| db-engineer | `.Codex/agents/db-engineer.md` | supabase-migration | `supabase/`, `src/server/db/database.types.ts` |
-| api-engineer | `.Codex/agents/api-engineer.md` | nextjs-server-api | `src/app/api/`, `src/app/auth/`, `middleware.ts`, `src/server/{actions,services,jobs,db/*.ts}`, `src/lib/contracts/`; backend additions to shared config; `src/lib/data/` + `src/types/db.ts` in the wiring step only |
-| ai-pipeline-engineer | `.Codex/agents/ai-pipeline-engineer.md` | ai-pipeline-impl (+ Codex-api) | `src/server/ai/` |
-| backend-qa | `.Codex/agents/backend-qa.md` (`subagent_type: general-purpose`) | backend-integration-qa | `_workspace/backend/{slice}/03_*` |
+| db-engineer | `.codex/agents/db-engineer.toml` | supabase-migration | `supabase/`, `src/server/db/database.types.ts` |
+| api-engineer | `.codex/agents/api-engineer.toml` | nextjs-server-api | `src/app/api/`, `src/app/auth/`, `src/proxy.ts`, `src/server/{actions,services,jobs,keys,db/*.ts}`, `src/lib/contracts/`; backend additions to shared config; `src/lib/data/` + `src/types/db.ts` in the wiring step only |
+| ai-pipeline-engineer | `.codex/agents/ai-pipeline-engineer.toml` | ai-pipeline-impl (+ claude-api for the Claude adapter) | `src/server/ai/` (incl. `providers/`) |
+| backend-qa | `.codex/agents/backend-qa.toml` (`subagent_type: general-purpose`) | backend-integration-qa | `_workspace/backend/{slice}/03_*` |
 
-Spawn every teammate with `model: "opus"`. Every teammate reads `.Codex/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner. UI-owned paths (pages, components, `src/lib/mock/`, `docs/ui/`) are read-only for the whole team.
+Spawn every teammate with `model: "opus"`. Every teammate reads `.agents/skills/resumate-backend/references/backend-context.md` first. File ownership doesn't overlap, so parallel teammates never edit the same file; if one needs a change in another's area, it asks the owner. UI-owned paths (pages, components, `src/lib/mock/`, `docs/ui/`) are read-only for the whole team.
 
 Paths are relative to the repository root. **Language:** skills and agent definitions are English; code is English; `_workspace/backend/` files and everything you say to the user are Korean.
 
@@ -93,7 +93,7 @@ db-engineer applies the slice's migrations to the development branch per the `su
 2. In team mode, shut teammates down and `TeamDelete`.
 3. Report to the user: what was built, check results (say plainly which checks were skipped and why), open issues, new entries in `spec-gaps.md` (these need a planning fix via `resumate-planning`), and the next slice.
 4. Offer to commit. Don't commit unless the user says so.
-5. Ask for feedback on the output and the team flow. If it's about the harness, update the agent/skill and log it in `.Codex/harness/CHANGELOG.md`. AGENTS.md only holds pointers, so don't edit it for this.
+5. Ask for feedback on the output and the team flow. If it's about the harness, update the agent/skill and log it in `.claude/harness/CHANGELOG.md`. AGENTS.md only holds pointers, so don't edit it for this.
 
 ## Data flow
 
@@ -138,9 +138,9 @@ docs/planning/* + slice-catalog ─→ [leader] ─→ {slice}/01_plan.md
 
 ### Feature slice flow
 1. User: "AI 작성 대화 구현해줘"
-2. Phase 0: maps to S4; S3 not `done` → propose S3 first; user agrees, run S3 then S4
-3. S4: db-engineer builds `writing_chats` + 5 RPCs + pgTAP; api-engineer builds the turn SSE handler and ledger; ai-pipeline-engineer builds AI-12 extract/reply with V-9 checks
-4. QA round 1: Q6 mismatch (`draft_patch` payload key) + Q9 (abort leaves `reserved`) → fixed → round 2 clean
+2. Phase 0: maps to S4; S3b not `done` → propose S3a/S3b first; user agrees, run them, then S4
+3. S4: db-engineer builds `writing_chats` + 5 RPCs + pgTAP; api-engineer builds the turn SSE handler and usage records; ai-pipeline-engineer builds AI-12 extract/reply with V-9 checks
+4. QA round 1: Q6 mismatch (`draft_patch` payload key) + Q9 (stream cut after the first token is retried, double-recording usage) → fixed → round 2 clean
 
 ### Error flow
 1. Docker isn't running in S2

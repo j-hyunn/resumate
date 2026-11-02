@@ -16,13 +16,13 @@ Coordinate the five-member planning team to produce and update Resumate's planni
 
 | Teammate | Agent definition | Skill | Output |
 |----------|------------------|-------|--------|
-| product-planner | `.Codex/agents/product-planner.md` | prd-writing | `_workspace/01_product-planner_prd.md` |
-| ux-planner | `.Codex/agents/ux-planner.md` | ux-flow-spec | `_workspace/02_ux-planner_flows.md` |
-| ai-feature-designer | `.Codex/agents/ai-feature-designer.md` | ai-feature-spec | `_workspace/02_ai-feature-designer_ai-spec.md` |
-| data-architect | `.Codex/agents/data-architect.md` | data-model-spec | `_workspace/02_data-architect_data-model.md` |
-| spec-reviewer | `.Codex/agents/spec-reviewer.md` | spec-consistency-review | `_workspace/03_spec-reviewer_review.md` |
+| product-planner | `.codex/agents/product-planner.toml` | prd-writing | `_workspace/01_product-planner_prd.md` |
+| ux-planner | `.codex/agents/ux-planner.toml` | ux-flow-spec | `_workspace/02_ux-planner_flows.md` |
+| ai-feature-designer | `.codex/agents/ai-feature-designer.toml` | ai-feature-spec | `_workspace/02_ai-feature-designer_ai-spec.md` |
+| data-architect | `.codex/agents/data-architect.toml` | data-model-spec | `_workspace/02_data-architect_data-model.md` |
+| spec-reviewer | `.codex/agents/spec-reviewer.toml` | spec-consistency-review | `_workspace/03_spec-reviewer_review.md` |
 
-Spawn every teammate with `model: "opus"`. Every teammate reads `.Codex/skills/resumate-planning/references/product-context.md` before working.
+Spawn every teammate with `model: "opus"`. Every teammate reads `.agents/skills/resumate-planning/references/product-context.md` before working.
 
 All paths are relative to the repository root (`/Users/jehyun/Resumate`).
 
@@ -120,7 +120,7 @@ Write the final documents to `docs/planning/` (drop the working request/reply se
 1. In team mode, tell teammates to shut down and run `TeamDelete`.
 2. Don't delete `_workspace/` (kept for audit trail).
 3. Report to the user: documents produced, MVP summary, unresolved issues, and **the top 3–5 decisions the user needs to answer**.
-4. Ask for feedback: what to fix in the output, what to change in team composition or flow. If the feedback is about the harness itself, update the relevant agent/skill and log it in `.Codex/harness/CHANGELOG.md`. AGENTS.md only holds a pointer, so don't edit it.
+4. Ask for feedback: what to fix in the output, what to change in team composition or flow. If the feedback is about the harness itself, update the relevant agent/skill and log it in `.claude/harness/CHANGELOG.md`. AGENTS.md only holds a pointer, so don't edit it.
 
 ## Data flow
 

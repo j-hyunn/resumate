@@ -39,6 +39,9 @@ The data model document (`docs/planning/04-data-model.md`) is the spec; this ski
   Wrap `auth.uid()` in `(select ...)` so Postgres evaluates it once per query.
 - "RPC only" in the matrix means: no insert/update policy for `authenticated` on those columns, and the RPC does the write. Column-restricted updates use column-level `grant update (col, ...)` rather than trying to express it in a policy.
 - `app_ai_writer`: `create role app_ai_writer nologin; grant app_ai_writer to authenticator;` then explicit `grant select` / `grant insert` / `grant update (cols)` per DM §5. Its policies use `to app_ai_writer` and still check `user_id = (select auth.uid())`. Record the auth mechanism decision from S1 in the notes.
+- `app_key_reader` (BYOK, DM 2.11.2): `create role app_key_reader nologin noinherit; grant app_key_reader to authenticator;` with **no table privileges at all** — only `grant execute` on `get_provider_key_secret(ai_job_id)` (security definer). That function returns the ciphertext columns only when the job is `running`, its heartbeat is recent, and a key row with the job's `user_id` and `provider` exists; everything else is refused.
+- **Key ciphertext columns** (`key_ciphertext`, `key_nonce`, `wrapped_dek`, `kek_id`) get **no grant** for `anon`, `authenticated`, `app_ai_writer`, or any operator-facing role. Screens read keys through column grants on the metadata columns or the `ai_provider_keys_public` view (security invoker). Writes go through the key RPCs (DM 2.11.3), which never read the ciphertext except `save_provider_key` storing what the server sends.
+- No reservation / charging / quota tables or RPCs (D-34). AI usage is the append-only `ai_usage_records` (insert by `app_ai_writer` only, no update/delete) plus the operator-maintained `ai_price_tables` (new version rows, never edited).
 
 ## RPC functions
 
@@ -51,6 +54,7 @@ The data model document (`docs/planning/04-data-model.md`) is the spec; this ski
 
 - Every new user-data table: RLS enabled (`policies_are` or `row_security_enabled`), user B can't select/update/delete user A's rows.
 - `app_ai_writer` can't insert/update career tables; can write what DM §5 allows.
+- Key isolation (BYOK): user sessions and `app_ai_writer` can't select ciphertext columns; `get_provider_key_secret` refuses another user's job, another provider, and non-running or stale jobs; `app_key_reader` can do nothing else.
 - Each RPC: happy path + each `raise` branch.
 - Cascades and deletion triggers: deleting a source sets `evidence_links.quote = null` and `source_deleted_at` (C-3).
 - Simulate users with `set local role authenticated; set local request.jwt.claims = '{"sub":"<uuid>","role":"authenticated"}';`.

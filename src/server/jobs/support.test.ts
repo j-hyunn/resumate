@@ -23,7 +23,7 @@ import {
   readDevAiEnv,
 } from "./provider-context";
 import { decideRetry } from "./retry";
-import { loadActiveForPreview, retryPreviewOf, toAiJobStatusResponse } from "./status";
+import { loadActiveForPreview, loadRetryBlocked, retryPreviewOf, toAiJobStatusResponse } from "./status";
 import { parseRetryResult } from "./supabase-store";
 import { toUsageInsert } from "./supabase-usage";
 import type { JobRecord, NormalizedUsage, PriceRow } from "./types";
@@ -90,6 +90,54 @@ const base: JobRecord = {
   stepOutputs: { match: { privateModelOutput: true } },
   meta: { runBase: 1, waitBase: 0, retries: { match: { rate_limited: 2 } } },
 };
+
+describe("status response — evaluation with no re-grade target (Q53-5)", () => {
+  const evaluation: JobRecord = { ...base, jobType: "interview_evaluation", targetType: "interview_session", targetId: "s1" };
+  const db = (rows: unknown[] | Error) =>
+    ({
+      rpc: async () => {
+        if (rows instanceof Error) throw rows;
+        return { data: rows, error: null };
+      },
+    }) as unknown as Parameters<typeof loadRetryBlocked>[1];
+  const row = (regrade_target_count: number) => ({ session_id: "s1", decision: "resummarize", cause: null, regrade_target_count, succeeded_count: 1 });
+
+  it("a blocked job offers no retry", () => {
+    const res = toAiJobStatusResponse(evaluation, null, { provider: "gemini", connectionTier: "free" }, true);
+    expect(res.canRetry).toBe(false);
+    expect(res.retry).toBeNull();
+  });
+
+  it("QA-W0-04: a questions job past prepare is blocked once the JD left `succeeded`", async () => {
+    const jdDb = (extraction_status: string | Error) =>
+      ({
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => {
+                if (extraction_status instanceof Error) throw extraction_status;
+                return { data: { extraction_status }, error: null };
+              },
+            }),
+          }),
+        }),
+      }) as unknown as Parameters<typeof loadRetryBlocked>[1];
+    const questions = { ...evaluation, jobType: "interview_questions" as const, applicationProjectId: "ap1", stepOutputs: { prepare: {} } };
+    await expect(loadRetryBlocked(questions, jdDb("pending"))).resolves.toBe(true);
+    await expect(loadRetryBlocked(questions, jdDb("succeeded"))).resolves.toBe(false);
+    await expect(loadRetryBlocked({ ...questions, stepOutputs: {} }, jdDb("pending"))).resolves.toBe(false);
+    await expect(loadRetryBlocked(questions, jdDb(new Error("down")))).resolves.toBe(false);
+  });
+
+  it("loadRetryBlocked: only a failed, retryable evaluation with 0 targets; errors → false", async () => {
+    await expect(loadRetryBlocked(evaluation, db([row(0)]))).resolves.toBe(true);
+    await expect(loadRetryBlocked(evaluation, db([row(1)]))).resolves.toBe(false);
+    await expect(loadRetryBlocked(evaluation, db([]))).resolves.toBe(false);
+    await expect(loadRetryBlocked(evaluation, db(new Error("down")))).resolves.toBe(false);
+    await expect(loadRetryBlocked(base, db([row(0)]))).resolves.toBe(false);
+    await expect(loadRetryBlocked({ ...evaluation, status: "running", errorCode: null }, db([row(0)]))).resolves.toBe(false);
+  });
+});
 
 describe("status response", () => {
   it("matches the contract, carries category / cause / retryAfter / provider, and never exposes step_outputs / params", () => {

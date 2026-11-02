@@ -1,5 +1,5 @@
 import { aiErrorEvent } from "@/lib/contracts/ai";
-import { toAiFailure } from "@/lib/contracts/application";
+import { isFailureBeforeRawTextEdit, toAiFailure } from "@/lib/contracts/application";
 import { AI_ERROR_CODES, AI_PROVIDERS, CONNECTION_TIERS, DATA_SUFFICIENCIES, type AiErrorCode, type AiProvider, type ConnectionTier } from "@/lib/contracts/enums";
 import {
   ANSWER_SCORE_STATUSES,
@@ -12,6 +12,7 @@ import {
   type ExecutionProviderView,
   type InterviewActiveJob,
   type InterviewGenerationStatus,
+  type InterviewGradingDecision,
   type InterviewJobFailure,
   type InterviewSessionHeader,
   type InterviewSessionListItem,
@@ -168,6 +169,8 @@ export type ResolvedRun = {
   activeJob: InterviewActiveJob | null;
   /** The failure behind a failed generation / evaluation (null otherwise, and after a user cancel of generation [가정]). */
   failure: InterviewJobFailure | null;
+  /** DM 2.6.1: why a failed generation shows no failure ("지난 실패"). */
+  failureHidden: "raw_text_edited" | "job_gone" | null;
 };
 
 /**
@@ -176,8 +179,10 @@ export type ResolvedRun = {
  * - `generating` with no active questions job → `failed` (leftover rule).
  * - `evaluating` with no active evaluation job → `evaluation_failed`.
  * - `failed` generation / `evaluation_failed` → the newest job of that type's failure.
+ * - A generation failure older than the raw text edit is not shown (DM 2.6.1 지난 실패); an
+ *   evaluation failure always is: evaluating needs questions, and those lock the text.
  */
-export function resolveSessionRun(row: Pick<SessionRow, "status" | "generation_status">, jobs: readonly InterviewJobRow[]): ResolvedRun {
+export function resolveSessionRun(row: Pick<SessionRow, "status" | "generation_status">, jobs: readonly InterviewJobRow[], rawTextEditedAt: string | null = null): ResolvedRun {
   let status = oneOf(INTERVIEW_SESSION_STATUSES, row.status) ?? "in_progress";
   let generationStatus = oneOf(INTERVIEW_GENERATION_STATUSES, row.generation_status) ?? "generating";
   const questionJobs = jobs.filter((j) => j.job_type === QUESTIONS_JOB_TYPE);
@@ -192,15 +197,18 @@ export function resolveSessionRun(row: Pick<SessionRow, "status" | "generation_s
   const activeJob = activeRow ? toActiveJob(activeRow) : null;
 
   let failure: InterviewJobFailure | null = null;
+  let failureHidden: ResolvedRun["failureHidden"] = null;
   if (!activeJob) {
     if (status === "evaluation_failed") failure = toJobFailure(evaluationJobs[0] ?? null, EVALUATION_JOB_TYPE);
     else if (generationStatus === "failed" && status === "in_progress") {
       const newest = questionJobs[0] ?? null;
+      if (rawTextEditedAt && !newest) failureHidden = "job_gone";
+      else if (newest && isFailureBeforeRawTextEdit(newest.finished_at, rawTextEditedAt)) failureHidden = "raw_text_edited";
       // A canceled generation (user cancel) still needs "남은 질문 다시 만들기", shown as a failure [가정].
-      failure = toJobFailure(newest, QUESTIONS_JOB_TYPE);
+      else failure = toJobFailure(newest, QUESTIONS_JOB_TYPE);
     }
   }
-  return { status, generationStatus, activeJob, failure };
+  return { status, generationStatus, activeJob, failure, failureHidden };
 }
 
 /** C-17 session score; `status: null` before submission. */
@@ -258,7 +266,7 @@ export function toSessionHeader(row: SessionRow, projectName: string, run: Resol
   };
 }
 
-export function toListItem(row: SessionRow, projectName: string, jobs: readonly InterviewJobRow[]): InterviewSessionListItem {
+export function toListItem(row: SessionRow, projectName: string, jobs: readonly InterviewJobRow[], grading: InterviewGradingDecision = { kind: "none" }): InterviewSessionListItem {
   const run = resolveSessionRun(row, jobsOfSession(jobs, row.id));
   const finished = run.status === "completed" || run.status === "evaluation_failed";
   return {
@@ -281,6 +289,7 @@ export function toListItem(row: SessionRow, projectName: string, jobs: readonly 
     isNewResult: finished && row.submitted_at !== null && row.result_viewed_at === null,
     executionProvider: executionProviderOf(row),
     activeJob: run.activeJob,
+    grading,
   };
 }
 

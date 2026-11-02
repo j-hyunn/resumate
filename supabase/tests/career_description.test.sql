@@ -352,9 +352,10 @@ values ('a0000000-7777-0000-0000-000000000007', 'career_description', 'a0000000-
 select lives_ok($$select public.begin_career_description('a0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000007',
                     (select v from t_opt), (select v from t_sec))$$, 'begin 7');
 update public.ai_jobs set status = 'canceled', error_code = 'canceled' where id = 'a0000000-7777-0000-0000-000000000007';
-select is((select status from public.drafts where id = 'a0000000-eeee-0000-0000-000000000007'), 'failed', 'trigger: canceled -> failed');
-select is(public.begin_career_description('a0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000007',
-            '{}', '[]') ->> 'status', 'failed', 'begin: canceled job does not reopen its draft');
+-- Q53-7: first generation stopped -> composing (details: career_description_cancel.test.sql).
+select is((select status from public.drafts where id = 'a0000000-eeee-0000-0000-000000000007'), 'composing', 'trigger: canceled -> composing (Q53-7)');
+select throws_ok($$select public.begin_career_description('a0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000007',
+            '{}', '[]')$$, 'P0001', 'invalid_ai_job', 'begin: a canceled job does not reopen its draft');
 
 -- A job whose target_id is a draft of another job.
 insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,

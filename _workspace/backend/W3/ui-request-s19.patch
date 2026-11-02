@@ -1,0 +1,79 @@
+--- a/src/app/(dashboard)/(gated)/applications/_lib/actions.ts
++++ b/src/app/(dashboard)/(gated)/applications/_lib/actions.ts
+@@ -21,7 +21,9 @@
+   markDraftCopied,
+   markDraftEdited,
+   prepareCareerDescription,
++  prepareCareerDescriptionStream,
+   prepareCoverLetterSection,
++  prepareCoverLetterStream,
+   MockAiError,
+   rankDraftSources,
+   retryJdExtraction,
+@@ -189,7 +191,8 @@
+ }
+ 
+ export async function prepareCareerDescriptionAction(draftId: string) {
+-  return (await prepareCareerDescription(draftId)) ?? refusal()
++  // real: `{ generation_id, request }` for the SSE route; `?state=`: the mock plan
++  return (await prepareCareerDescriptionStream(draftId)) ?? (await prepareCareerDescription(draftId)) ?? refusal()
+ }
+ 
+ export async function finalizeCareerDescriptionAction(draftId: string, generationId: string, result: GenerationResult) {
+@@ -197,7 +200,7 @@
+ }
+ 
+ export async function prepareCoverLetterSectionAction(sectionId: string) {
+-  return (await prepareCoverLetterSection(sectionId)) ?? refusal()
++  return (await prepareCoverLetterStream(sectionId)) ?? (await prepareCoverLetterSection(sectionId)) ?? refusal()
+ }
+ 
+ export async function finalizeCoverLetterSectionAction(sectionId: string, generationId: string, result: GenerationResult) {
+--- a/src/components/applications/draft-editor.tsx
++++ b/src/components/applications/draft-editor.tsx
+@@ -240,6 +240,10 @@
+       return
+     }
+     generationRef.current = plan.generation_id
++    if ("request" in plan) {
++      stream.start({ ...plan.request, discardOnError: true })
++      return
++    }
+     // v5.3 A4: a failure keeps no block (discardOnError); validated replaces the whole draft (F9)
+     stream.start({
+       blocks: plan.blocks,
+@@ -280,6 +284,10 @@
+         return
+       }
+       generationRef.current = plan.generation_id
++      if ("request" in plan) {
++        stream.start(plan.request)
++        return
++      }
+       stream.start({
+         sources: plan.sources,
+         blocks: plan.blocks.map((b) => ({ ...b, section_id: sectionId })),
+--- a/src/components/common/streaming.tsx
++++ b/src/components/common/streaming.tsx
+@@ -155,7 +155,8 @@
+               setBlocks((prev) => {
+                 const confirmed: StreamBlock[] = ev.blocks.map((b) => ({ ...b, state: "validated", section_id: ev.section_id }))
+                 const firstIndex = prev.findIndex((b) => (b.section_id ?? "") === key)
+-                const rest = prev.filter((b) => (b.section_id ?? "") !== key)
++                // A real stream's provisional blocks have no section_id: they go too, whatever the key
++                const rest = prev.filter((b) => (b.section_id ?? "") !== key && b.state === "validated")
+                 const at = firstIndex < 0 ? rest.length : Math.min(firstIndex, rest.length)
+                 return [...rest.slice(0, at), ...confirmed, ...rest.slice(at)]
+               })
+--- a/src/lib/data/ai-stream-client.ts
++++ b/src/lib/data/ai-stream-client.ts
+@@ -87,7 +87,8 @@
+         block_id: o.block_id,
+         text: o.text,
+         flags: (Array.isArray(o.flags) ? o.flags : []) as DraftBlockFlag[],
+-        evidence_count: Array.isArray(o.evidence) ? o.evidence.length : typeof o.evidence_count === "number" ? o.evidence_count : 0,
++        // AI-03 / AI-04: blocks carry no evidence; the chips are `result.evidence` with `item_key = block_id`
++        evidence_count: Array.isArray((result as Raw | null)?.evidence) ? ((result as Raw).evidence as Raw[]).filter((e) => e.item_key === o.block_id).length : 0,
+       })
+       return
+     }

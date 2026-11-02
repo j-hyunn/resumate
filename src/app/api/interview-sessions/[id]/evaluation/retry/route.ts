@@ -8,10 +8,10 @@ import { retryInterviewEvaluation } from "@/server/services/interview/start";
 export const maxDuration = 60;
 
 /**
- * `POST /api/interview-sessions/{id}/evaluation/retry` — 다시 채점 (S-22, AI-06/07).
- * Only for `evaluation_failed`, or `completed` with `not_scored` answers.
- * 200 `{ data: RetryInterviewEvaluationResponse }`; 409 `interview_evaluation_not_retryable` /
- * connection codes; 404, 401.
+ * `POST /api/interview-sessions/{id}/evaluation/retry` — 다시 채점 and 종합 평가 다시 정리
+ * (S-22, S-37, AI-06/07, DM 2.7.1 판정표).
+ * 200 `{ data: RetryInterviewEvaluationResponse }`; 409 `interview_evaluation_input_only`
+ * (`details.cause`) / `interview_evaluation_not_retryable` / connection codes; 404, 401.
  */
 export async function POST(_request: Request, ctx: RouteContext<"/api/interview-sessions/[id]/evaluation/retry">) {
   try {

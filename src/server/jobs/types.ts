@@ -397,6 +397,12 @@ export type JobStep<TLlm = unknown> = {
    * (S6 `synthesize_regen`): when false, the C-12 free-tier spacing is skipped. Default true.
    */
   callsProvider?: boolean | ((previous: Readonly<Record<string, unknown>>) => boolean);
+  /**
+   * True when this run has nothing to do in the stage: it still runs and checkpoints, but
+   * `progress` never shows it (S8 Q53-5: `evaluate` with no answers). Such a run must not call
+   * `reportProgress`.
+   */
+  hiddenFromProgress?: (previous: Readonly<Record<string, unknown>>) => boolean;
   /** Returns a JSON-serializable result (stored as the stage checkpoint). */
   run: (ctx: StepContext<TLlm>) => Promise<unknown>;
 };
@@ -415,6 +421,12 @@ export type JobTypeDefinition<TLlm = unknown> = {
   freeTierSteps?: (params: JsonObject) => JobStep<TLlm>[];
   /** Optional final value stored in ai_jobs.output (draft_source_ranking only, DM A.15). */
   output?: (previous: Readonly<Record<string, unknown>>) => unknown;
+  /**
+   * True when a manual same-row retry of this failed job makes no sense. Checked BEFORE the
+   * connection gates (DM 2.11.7 path ② order): `ai_job_not_retryable` wins over `key_missing`.
+   * The DB repeats its own check under the row lock (Q53-5, `retry_ai_job`).
+   */
+  retryBlocked?: (input: { db: AiWriterSupabaseClient; job: JobRecord }) => Promise<boolean>;
 };
 
 /** The per-user handles the runner needs. */

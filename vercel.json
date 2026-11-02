@@ -1,7 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/**/page.tsx": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
-    { "path": "/api/cron/ai-jobs", "schedule": "0 17 * * *" },
-    { "path": "/api/cron/retention", "schedule": "0 18 * * *" }
+    {
+      "path": "/api/cron/ai-jobs",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 18 * * *"
+    }
   ]
 }

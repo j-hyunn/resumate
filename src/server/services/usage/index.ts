@@ -80,3 +80,23 @@ export async function getAiUsageSummary(supabase: UserSupabaseClient, input: Get
   if (error) throw mapDbError(error);
   return toAiUsageSummary(data);
 }
+
+/** S-42 "가격표 보기": rows of `versions`, or of the latest effective version. */
+export async function loadPriceTables(supabase: UserSupabaseClient, versions?: string[]) {
+  let want = versions ?? [];
+  if (want.length === 0) {
+    const latest = await supabase
+      .from("ai_price_tables")
+      .select("version")
+      .lte("effective_from", new Date().toISOString().slice(0, 10))
+      .order("effective_from", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latest.error) throw mapDbError(latest.error);
+    if (!latest.data) return [];
+    want = [latest.data.version];
+  }
+  const { data, error } = await supabase.from("ai_price_tables").select("*").in("version", want).order("provider").order("model");
+  if (error) throw mapDbError(error);
+  return data ?? [];
+}

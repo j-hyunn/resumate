@@ -678,8 +678,8 @@ select throws_ok($$insert into public.draft_section_sources (user_id, draft_sect
                  'source needs experience / education / project');
 select throws_ok($$insert into public.drafts (user_id, application_project_id, draft_type, title, status)
                    values ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-                           'career_description', 't', 'composing')$$, '23514', null,
-                 'career description cannot be composing');
+                           'career_description', 't', 'partially_failed')$$, '23514', null,
+                 'career description cannot be partially_failed (composing is allowed since Q53-7)');
 select throws_ok($$insert into public.drafts (user_id, application_project_id, draft_type, title, status, options)
                    values ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
                            'cover_letter', 't', 'composing', '{"color":"red"}')$$, '23514', null, 'options: unknown key');

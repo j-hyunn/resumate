@@ -243,3 +243,25 @@ function dbCodeOf(err: unknown): string {
 }
 
 export const ALL_PAIRS = AI_PROVIDERS.flatMap((p) => CONNECTION_TIERS.map((t) => [p, t] as const));
+
+/** Whole `ai_disclosures` row in effect for provider × tier (C-21 data layer). Null when none. */
+export async function loadCurrentDisclosureRow(supabase: UserSupabaseClient, provider: AiProvider, tier: ConnectionTier, now: Date = new Date()) {
+  const { data, error } = await supabase
+    .from("ai_disclosures")
+    .select("*")
+    .eq("provider", provider)
+    .eq("connection_tier", tier)
+    .lte("effective_at", now.toISOString())
+    .order("effective_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw mapDbError(error);
+  return data;
+}
+
+/** Live (not withdrawn) consent rows of the user, oldest first (S-40 "동의한 내용"). */
+export async function loadLiveConsentRows(supabase: UserSupabaseClient) {
+  const { data, error } = await supabase.from("ai_data_use_consents").select("*").is("withdrawn_at", null).order("agreed_at", { ascending: true });
+  if (error) throw mapDbError(error);
+  return data ?? [];
+}

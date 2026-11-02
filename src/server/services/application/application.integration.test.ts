@@ -18,7 +18,7 @@ import { createJdExtractionDb } from "./db";
 import type { JdExtractionDeps } from "./extraction";
 import { runJdExtraction } from "./extraction-response";
 import { getApplicationHub, getBoard, getJdView, listApplicationProjects } from "./read";
-import { createApplicationProject, deleteApplicationProject, moveApplicationStage, setApplicationOutcome, updateApplicationProject } from "./write";
+import { createApplicationProject, deleteApplicationProject, moveApplicationStage, setApplicationOutcome, updateApplicationProject, updateFailedJdRawText } from "./write";
 
 /**
  * S5 end-to-end against the local stack: create (no key → default / user
@@ -248,6 +248,82 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(res.jd.lastFailure).toMatchObject({ code: "not_a_jd", jobId: res.jobId });
     const usage = await admin.from("ai_usage_records").select("id").eq("ai_job_id", res.jobId!);
     expect(usage.data).toEqual([]);
+    await deleteApplicationProject(user, id);
+  });
+
+  it("Q53-2: input-caused failure → editable; edit → pending with new sentences; refusals follow the view; re-extraction uses the new text", async () => {
+    const id = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
+    const before = await getJdView(user, id);
+    expect(before).toMatchObject({ rawTextEditable: false, rawTextLock: "jd_raw_text_locked", rawTextEditedAt: null }); // pending
+
+    const failed = await runJdExtraction(user, extractionDeps(), id);
+    expect(failed.jd).toMatchObject({ extractionStatus: "failed", rawTextEditable: true, rawTextLock: null });
+
+    await expect(updateFailedJdRawText(user, { id, rawText: "  ----\n• • •\n" })).rejects.toMatchObject({ code: "jd_raw_text_unchanged", status: 409 });
+    await expect(updateFailedJdRawText(otherUser, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found", status: 404 });
+    await expect(updateFailedJdRawText(user, { id: crypto.randomUUID(), rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found" });
+
+    const saved = await updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw });
+    expect(saved).toMatchObject({ applicationProjectId: id, extractionStatus: "pending", aiRunAllowed: false, warnings: [] });
+
+    const after = await getJdView(user, id);
+    expect(after).toMatchObject({ rawText: KO_BACKEND.raw, extractionStatus: "pending", lastFailure: null, rawTextEditable: false, rawTextLock: "jd_raw_text_locked", techKeywords: [] });
+    expect(Date.parse(after.rawTextEditedAt!)).toBe(Date.parse(saved.rawTextEditedAt));
+    expect(after.sentences).toHaveLength(13);
+    for (const sentence of after.sentences) expect(after.rawText.slice(sentence.start, sentence.end)).toBe(sentence.text);
+    await expect(updateFailedJdRawText(user, { id, rawText: `${KO_BACKEND.raw} 또 고침` })).rejects.toMatchObject({ code: "jd_raw_text_locked" });
+
+    responses.push({ json: KO_BACKEND.output });
+    const done = await runJdExtraction(user, extractionDeps(), id);
+    expect(done.status).toBe("succeeded");
+    expect(done.jd).toMatchObject({ extractionStatus: "succeeded", rawTextEditable: false, rawTextLock: "jd_raw_text_locked" });
+    expect(done.jd.requirements).toHaveLength(6);
+    await deleteApplicationProject(user, id);
+  });
+
+  it("Q53-2: getJdView lock reasons against real rows: not an input cause, empty results, job in progress", async () => {
+    const id = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
+    const failed = await runJdExtraction(user, extractionDeps(), id);
+    const jobId = failed.jobId!;
+
+    await admin.from("ai_jobs").update({ error_code: "timeout" }).eq("id", jobId);
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_failure_not_input" });
+    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_failure_not_input" });
+    await admin.from("ai_jobs").update({ error_code: "not_a_jd" }).eq("id", jobId);
+
+    // Condition 5 reads against the real tables: an empty session and a draft without AI content aren't results.
+    // (The positive rows need the AI writer's full flow; pgTAP covers them on the RPC, jdRawTextLockOf on the view.)
+    const session = await user.rpc("create_interview_session", { p_application_project_id: id, p_interview_type: "culture_fit", p_question_count: 3, p_data_sufficiency: "ok" });
+    expect(session.error).toBeNull();
+    const draft = await user.rpc("create_cover_letter_draft", { p_application_project_id: id });
+    expect(draft.error).toBeNull();
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });
+
+    // Condition 1: any job type on the project.
+    const writer = createAiWriterClient(userId);
+    const inFlight = crypto.randomUUID();
+    await createSupabaseJobStore(writer).insert({
+      id: inFlight,
+      userId,
+      jobType: "insight",
+      applicationProjectId: id,
+      targetType: null,
+      targetId: null,
+      provider: "anthropic",
+      modelTier: "default",
+      connectionTier: "paid",
+      params: {},
+      inputHash: null,
+      promptVersion: null,
+      model: null,
+      progress: { stage: "prepare", done: 0, total: 1 },
+      meta: { runBase: 1, waitBase: 0, retries: {} },
+    });
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_job_in_progress" });
+    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_job_in_progress" });
+
     await deleteApplicationProject(user, id);
   });
 

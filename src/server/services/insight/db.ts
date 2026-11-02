@@ -18,6 +18,8 @@ export type InsightJd = {
   updatedAt: string | null;
   extractionStatus: "pending" | "running" | "succeeded" | "failed";
   extractionJobId: string | null;
+  /** DM 2.6.1: failures that ended before this belong to the old text. */
+  rawTextEditedAt: string | null;
   sentences: JdSentence[];
   positionTitle: string | null;
   /** job_descriptions.extraction.seniority.label */
@@ -44,7 +46,7 @@ function seniorityLabelOf(extraction: Json | null): string | null {
 export async function loadInsightJd(db: Client, applicationProjectId: string): Promise<InsightJd | null> {
   const { data, error } = await db
     .from("job_descriptions")
-    .select("id, updated_at, extraction_status, extraction_job_id, sentences, position_title, extraction")
+    .select("id, updated_at, extraction_status, extraction_job_id, raw_text_edited_at, sentences, position_title, extraction")
     .eq("application_project_id", applicationProjectId)
     .maybeSingle();
   if (error) throw mapDbError(error);
@@ -54,6 +56,7 @@ export async function loadInsightJd(db: Client, applicationProjectId: string): P
     updatedAt: data.updated_at,
     extractionStatus: data.extraction_status as InsightJd["extractionStatus"],
     extractionJobId: data.extraction_job_id,
+    rawTextEditedAt: data.raw_text_edited_at,
     sentences: parseSentences(data.sentences),
     positionTitle: data.position_title,
     seniorityLabel: seniorityLabelOf(data.extraction),

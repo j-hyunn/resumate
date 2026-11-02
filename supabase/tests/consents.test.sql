@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 -- pgTAP lives in `extensions`; let the AI role call it inside this rolled-back test only.
 grant usage on schema extensions to app_ai_writer;
-select plan(41);
+select plan(51);
 
 insert into auth.users (id, email, aud, role) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated'),
@@ -18,8 +18,14 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select is((select count(*)::int from public.get_consent_status()), 5, 'status returns 5 types');
-select is((select count(*)::int from public.get_consent_status() where required and needs_consent), 3,
-          'new user needs the 3 required consents');
+select is((select count(*)::int from public.get_consent_status() where required and needs_consent), 2,
+          'new user needs the 2 required consents');
+select is((select array_agg(consent_type order by consent_type) from public.get_consent_status() where required),
+          array['privacy_required', 'terms'], 'required set is terms + privacy_required (F-COM-02, D-39)');
+select is((select required from public.get_consent_status() where consent_type = 'cross_border_transfer'),
+          false, 'cross_border_transfer is not required');
+select is((select needs_consent from public.get_consent_status() where consent_type = 'cross_border_transfer'),
+          false, 'cross_border_transfer does not need consent at sign-up');
 select is((select current_version from public.get_consent_status() where consent_type = 'marketing'),
           '2026-10-01', 'optional consents follow the privacy version');
 
@@ -36,27 +42,46 @@ select throws_ok($$select * from public.record_consents(
                    '[{"consent_type":"marketing","agreed":true},{"consent_type":"marketing","agreed":false}]'::jsonb, null)$$,
                  'P0001', 'duplicate_consent_type', 'duplicate type rejected');
 select throws_ok($$select * from public.record_consents(
-                   '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":false},
-                     {"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null)$$,
+                   '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":false}]'::jsonb, null)$$,
                  'P0001', 'required_consent_missing', 'required agreed=false rejected');
 select throws_ok($$select * from public.record_consents(
-                   '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":true}]'::jsonb, null)$$,
-                 'P0001', 'required_consent_missing', 'missing cross_border_transfer rejected');
+                   '[{"consent_type":"terms","agreed":true}]'::jsonb, null)$$,
+                 'P0001', 'required_consent_missing', 'missing privacy_required rejected');
+select throws_ok($$select * from public.record_consents(
+                   '[{"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null)$$,
+                 'P0001', 'required_consent_missing', 'cross_border_transfer alone does not satisfy the gate');
 select is((select count(*)::int from public.consents), 0, 'failed calls left no rows');
 
 -- happy path
 select is(
   (select count(*)::int from public.record_consents(
      '[{"consent_type":"terms","agreed":true},{"consent_type":"privacy_required","agreed":true},
-       {"consent_type":"cross_border_transfer","agreed":true},{"consent_type":"service_improvement","agreed":true},
+       {"consent_type":"service_improvement","agreed":true},
        {"consent_type":"marketing","agreed":false}]'::jsonb, 'ua-hash') where needs_consent),
   0, 'after recording, nothing needs consent');
-select is((select count(*)::int from public.consents), 5, 'one row per item');
+select is((select count(*)::int from public.consents), 4, 'one row per item');
+select is((select count(*)::int from public.consents where consent_type = 'cross_border_transfer'),
+          0, 'sign-up records no cross_border_transfer row');
 select is((select count(distinct policy_version)::int from public.consents), 1, 'server filled the version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'marketing'),
           null, 'declined optional consent has no agreed_version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'service_improvement'),
           '2026-10-01', 'agreed optional consent has agreed_version');
+
+-- cross_border_transfer stays a valid type: recordable as agreed or declined, by RPC and direct insert.
+select is(
+  (select agreed_version from public.record_consents(
+     '[{"consent_type":"cross_border_transfer","agreed":false}]'::jsonb, null)
+    where consent_type = 'cross_border_transfer'),
+  null, 'cross_border_transfer can be recorded as declined');
+select is(
+  (select agreed_version from public.record_consents(
+     '[{"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null)
+    where consent_type = 'cross_border_transfer'),
+  '2026-10-01', 'cross_border_transfer can be recorded as agreed');
+select lives_ok($$insert into public.consents (consent_type, policy_version, agreed)
+                  values ('cross_border_transfer', '2026-10-01', true)$$,
+                'direct insert of cross_border_transfer at the current version works');
 
 -- withdrawal rules
 select lives_ok($$update public.consents set withdrawn_at = now() where consent_type = 'service_improvement'$$,
@@ -124,16 +149,21 @@ reset role;
 insert into public.policy_versions (policy_type, version, effective_at, requires_reconsent, document_path)
 values ('cross_border_transfer', '2026-10-20', now() - interval '1 minute', true,
         '/policies/cross_border_transfer/2026-10-20'),
+       ('privacy', '2026-10-20', now() - interval '1 minute', true, '/policies/privacy/2026-10-20'),
        ('terms', '2026-10-20', now() - interval '1 minute', false, '/policies/terms/2026-10-20');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
+select is((select needs_consent from public.get_consent_status() where consent_type = 'privacy_required'),
+          true, 'requires_reconsent version triggers re-consent of a required type');
 select is((select needs_consent from public.get_consent_status() where consent_type = 'cross_border_transfer'),
-          true, 'requires_reconsent version triggers re-consent');
+          false, 'requires_reconsent version of cross_border_transfer does not reopen the gate');
+select is((select agreed_version from public.get_consent_status() where consent_type = 'cross_border_transfer'),
+          '2026-10-01', 'an existing cross_border_transfer agreement keeps its version');
 select is((select needs_consent from public.get_consent_status() where consent_type = 'terms'),
           false, 'version without requires_reconsent does not');
 select is(
   (select count(*)::int from public.record_consents(
-     '[{"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null) where needs_consent),
+     '[{"consent_type":"privacy_required","agreed":true}]'::jsonb, null) where needs_consent),
   0, 'partial re-consent of the needed type is accepted');
 
 -- user B isolation

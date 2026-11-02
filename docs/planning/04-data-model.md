@@ -1,7 +1,7 @@
-# Resumate 데이터 모델 v4.2
+# Resumate 데이터 모델 v4.3b
 
 > 작성: data-architect / 기준 입력: `_workspace/01_product-planner_prd.md` (**PRD v4.3**, BYOK), `_workspace/02_ux-planner_flows.md` (**화면 명세 v5.3**), `_workspace/02_ai-feature-designer_ai-spec.md` (**AI 명세 v4.3**), `_workspace/00_input/brief-2026-11-05.md` (백엔드 구현 반영 부분 재실행), `planning-decisions-2026-11-05.md` (사용자 확정 A1~A24), `spec-gaps-summary.md`, `product-context.md`
-> 상태: **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
+> 상태: **v4.3b — 가입 필수 동의에서 `cross_border_transfer` 제외(spec-gaps ⑲, A.2)** / **v4.3a — 요건 0개로 성공한 JD의 공고 원문 수정(Q53-11, 2.6.1)** / **v4.3 — UI v5.3 QA 사용자 결정 반영(`_workspace/00_input/planning-decisions-v53-qa.md`, Q53-1~9)**: 입력 원인으로 요건 추출에 실패한 JD의 공고 원문 수정(Q53-2, 2.6.1), 생성 RPC 게이트(Q53-1), 답변별 실패 원인·종합만 다시 정리(Q53-3·5), 경력기술서 중단(Q53-7), 실패 세션과 새 면접, 입력 원인 실패 세션의 새 결과 표식(Q53-10)(2.7.1). UX v5.4와 맞췄다. ★ 표시는 이미 구현된 백엔드도 고쳐야 한다. / **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
 > 이 문서의 테이블·컬럼명이 **확정명**이다. v4.2에서 새로 생긴 이름은 11.5절에 정리했다. UX v5·AI v4 문서와 다른 이름은 11장 `요청 회신`에 old → new로 정리했다. 버전별 변경은 10장.
 > 표기: "프로젝트"(`projects`)는 커리어의 업무 단위. 지원 건 단위는 문서·데이터에서 **"지원 프로젝트"**(`application_projects`), 메뉴 라벨 **"기업 JD 관리"**, 화면 표기 **"기업 JD"**, JD 원문(`job_descriptions.raw_text`)은 화면에서 **"공고 원문"**(PRD D-20, UX D-UX-10). "상세 내용"(`project_details`)은 프로젝트 아래 STAR 기록. "AI 작성 대화"(`writing_chats`)는 커리어 채팅(`chat_threads`, Should)과 다르다.
 
@@ -28,6 +28,7 @@
 | DM-13 (v3 개정) | **커리어 데이터 쓰기는 사용자 세션에서만.** AI 작업용 DB 역할 `app_ai_writer`는 커리어 테이블을 읽기만 한다. AI 작성 대화의 "저장"·"폼으로 전환"은 AI 호출이 없는 **사용자 확정 동작**이며 사용자 세션 RPC로 실행한다(3.3절) | NFR-AI-05 v3 |
 | **DM-14 (v3)** | **커리어 계층: 경력 / 교육 > 프로젝트 > 상세 내용(STAR) > 정량 성과.** 연도는 저장하지 않는 보기 계층(D-22) | PRD v3 F-P1-09, 14, 15 |
 | **DM-15 (v3)** | **AI 작성 대화의 출처(필드별 발화)는 `writing_chats.structured_draft` 안에 둔다. `evidence_links`에는 넣지 않는다** | 커리어 데이터를 만드는 과정의 기록이며, 저장 후의 근거 원본은 커리어 항목 자체다(AI 명세 AI-12 동의) |
+| **DM-18 (v4.3)** | **공고 원문은 만든 뒤 바꾸지 않는다(U-6·D-19). 예외는 입력 원인으로 요건 추출에 실패했거나 추출은 성공했는데 요건이 0개라서(Q53-11) 그 원문에서 나온 결과가 하나도 없는 JD뿐이고, RPC `update_failed_jd_raw_text`로만 바꾼다**(2.6.1) | 요건·근거의 문장 ID(`source_sids`, `jd_sentence`)가 원문에 묶여 있어 결과가 있으면 바꿀 수 없다. 결과가 없으면 깨질 것도 없다. 확정 2026-10-30 (사용자, Q53-2) |
 
 ### 공통 컬럼
 `id` uuid PK / `user_id` (DM-1) / `created_at` / `updated_at`(트리거, 모든 근거 원본 테이블 필수). 예외는 표에 명시.
@@ -360,6 +361,94 @@ erDiagram
   - `jd_extraction` 작업이 성공하지 못하고 끝나면(멈춤 처리 포함) 트리거가 그 작업으로 `running`인 JD를 `failed`로 바꾸고 대체 이름을 넣는다.
   - 길이 상한(4.5) `[가정]`.
 
+#### 2.6.1 입력 원인 실패 JD의 공고 원문 수정 (v4.3, 확정 2026-10-30 (사용자, Q53-2) ★)
+
+U-6·D-19 "JD 필수·교체 불가"의 유일한 예외다. 그 밖의 경우(추출 전, 요건이 있는 추출 성공, 공급자·키·시스템 원인 실패)에는 원문을 바꿀 수 없다. 키가 없어도 된다(AI 호출 없음, D-30).
+
+**RPC**
+
+```
+update_failed_jd_raw_text(
+  p_application_project_id uuid,
+  p_raw_text text,
+  p_raw_text_hash text,
+  p_sentences jsonb
+) returns jsonb  -- {application_project_id, job_description_id, extraction_status: 'pending', raw_text_edited_at, ai_run_allowed}
+```
+
+- security definer, `search_path = ''`, 소유 검사는 `auth.uid()`. 사용자 세션에서 Server Action이 부른다. 문장 분할(`splitJdSentences`)과 해시는 `create_application_project`와 같은 서버 코드로 만든다.
+- 권한: `public`·`anon` revoke, **`authenticated`만 execute**. `app_ai_writer`·`service_role` execute 없음. 테이블 권한은 그대로다(`job_descriptions` 사용자 update grant 없음).
+- 잠금 순서: `application_projects` → `job_descriptions`(다른 JD 쓰기 RPC와 같음). 그 아래에서 조건을 판정한다.
+- 저장과 재추출은 별도 요청이다. RPC는 AI를 부르지 않고, 재추출은 기존 `POST /api/application-projects/{id}/jd-extraction`이다(게이트는 2.11.7 경로 ⑤).
+
+**허용 조건 (모두 만족)**
+
+| # | 조건 | 어기면 |
+|---|------|--------|
+| 1 | 같은 지원 프로젝트에 `queued`/`running` `ai_jobs`가 없다(유형 무관). 인사이트·면접의 `prepare` 선행 추출도 여기서 막힌다 | `jd_job_in_progress` |
+| 2 | `extraction_status = 'failed'`. `running`인데 그 작업이 이미 `failed`로 끝난 행도 실패로 본다(읽기 규칙과 같음, 트리거가 `skip locked`로 건너뛴 경우). **또는 `extraction_status = 'succeeded'`(조건 3과 함께 요건 0개, 확정 2026-11-01 (사용자, Q53-11))** | `jd_raw_text_locked` |
+| 3 | `jd_requirements` 0행(`origin` 무관) | `jd_raw_text_locked` |
+| 4 | **실패 행에만 적용(`succeeded`는 건너뜀).** `extraction_job_id`의 작업이 `job_type = 'jd_extraction'`, `status = 'failed'`, `error_code in ('not_a_jd', 'input_too_long', 'safety_blocked')`. 원인은 **가장 최근 추출 실행**의 값이다 | `jd_failure_not_input` |
+| 5 | 이 원문으로 만든 결과가 없다: `insights.status = 'ready'` 0행, `interview_questions` 0행, `draft_sections.ai_content` 있는 행 0행, `evidence_links.source_type in ('jd_requirement', 'jd_sentence')` 0행 | `jd_has_results` |
+| 6 | 원문이 지금 값과 다르다 `[가정]` | `jd_raw_text_unchanged` |
+
+- 조건 5는 실패 행에서는 방어용이다. 인사이트·서류·질문 생성은 모두 `extraction_status = 'succeeded'`를 요구하므로 실패 행에는 문장을 참조하는 AI 결과가 없다(UX S-15 "지우거나 다시 만들 AI 결과가 없다" 확인). **`succeeded` + 요건 0개 행은 뒤 기능이 돌았을 수 있어 이 조건이 실제로 막는다**(Q53-11).
+- **`succeeded` + 요건 0개는 AI-01 정상 경로에서 생기지 않는 안전망이다**(AI-01: 요건 0개면 `not_a_jd` 또는 `schema_invalid`로 실패). 수정 저장으로만 `succeeded`가 `pending`으로 돌아가고, 저장 전 재추출은 `begin_jd_extraction`이 그대로 거부한다.
+- 조건 1은 UX S-15 ③(요건 추출·인사이트·면접 질문 생성)보다 넓게 쓰여 있지만, 서류 작업은 추출 성공을 요구하므로 이 상태에서 실제 차이는 없다.
+- `insufficient_data`는 제외한다. 커리어 데이터 부족이라 원문과 무관하고 AI-01이 내지도 않는다(C-09로 간다, Q53-9).
+- **`ai_jobs` 90일 정리 뒤** `extraction_job_id`가 null이면 원인을 알 수 없어 `jd_failure_not_input`이다 `[가정]`. "요건 정리하기"를 다시 실행해 같은 원인이 나오면 수정할 수 있다. 원인을 JD 행에 복사하는 컬럼은 두지 않았다.
+
+**거부 코드** (판정 순서대로. `P0001`, 앞에서 걸리면 뒤는 보지 않는다. `ai_jobs.error_code` 값이 아닌 API 응답 코드)
+
+| 코드 | HTTP | 뜻 |
+|------|------|-----|
+| `not_authenticated` | 401 | 세션 없음(`42501`) |
+| `invalid_raw_text` / `invalid_raw_text_hash` / `invalid_sentences` | 400 `[가정]` | `create_application_project`와 같은 검사(공백뿐, 50,000자 초과 등) |
+| `job_description_not_found` | 404 `not_found` | 없음 또는 다른 사용자 |
+| `jd_job_in_progress` | 409 | 조건 1 |
+| `jd_raw_text_locked` | 409 | 조건 2·3. 수정한 뒤 재추출 전(`pending`)도 여기 걸린다 `[가정]` |
+| `jd_failure_not_input` | 409 | 조건 4 |
+| `jd_has_results` | 409 | 조건 5 |
+| `jd_raw_text_unchanged` | 409 | 조건 6 |
+
+**바꾸는 값** (한 트랜잭션)
+
+| 대상 | 값 |
+|------|-----|
+| `raw_text`, `raw_text_hash`, `sentences` | 인자 값 |
+| `detected_language`, `extraction`, `tech_keywords`, `requirements_hash` | null |
+| `extraction_status` | `'pending'` |
+| `extraction_job_id`, `extraction_provider`, `extraction_model` | null. 지난 실패가 현재 상태로 읽히지 않게 한다 |
+| `company_name`·`position_title` | 출처가 `ai`면 값과 출처를 함께 null, **`user`면 유지** |
+| **`raw_text_edited_at`** (v4.3 신설) | `now()` |
+| `application_projects.last_activity_at` | `now()`. `name`·`name_source`는 그대로다(`default`면 재추출 성공 때 AI 값으로 바뀜, 2.6) |
+
+- 이전 원문은 보관하지 않는다(덮어씀) `[가정]`. 전형 이력(`application_stage_events`)에도 남기지 않는다 `[가정]`.
+- 끝난 `ai_jobs`·`ai_usage_records`는 바꾸지 않는다(토큰은 이미 썼다).
+- 수정 횟수 제한은 없다. 다시 고치려면 그 사이에 재추출 실패가 필요하다.
+
+**이미 묶인 행** — 조건에서 제외하지 않는다. 선행 추출 실패로 생긴 실패 행이 있는 JD가 바로 Q53-9가 S-15로 보내는 대상이기 때문이다.
+
+| 대상 | 처리 |
+|------|------|
+| 실패한 `insight` 작업·`insights` 행 | 그대로 둔다. 다음 "다시 생성"이 새 행을 만든다 |
+| `interview_sessions`(`generation_status = 'failed'`, 질문 0개) | 그대로 둔다. `in_progress` 세션은 지원 프로젝트당 1개라 새 세션은 `interview_in_progress`로 막힌다. S-20 **"그만두고 새로 시작"**으로 이어 간다(2.7.1) |
+| `composing`·`failed` 초안(`drafts`, `draft_sections`) | 그대로 둔다. 자소서 문항은 사용자 입력이고 JD 문장을 담지 않는다. 다음 생성이 새 요건을 읽는다 |
+| 같은 행 다시 시도가 가능한 예전 실패 작업(공급자 원인 등) | 그대로 둔다. 추출 실패로 끝난 작업에는 `prepare` 출력이 없어 다시 돌면 새 원문으로 추출한다 |
+
+- **지난 실패 표시**: 작업의 `finished_at < job_descriptions.raw_text_edited_at`이면 그 실패는 지난 원문의 것이므로 `lastFailure`로 내리지 않는다(S-16 인사이트, S-33·S-37 질문 생성). 그 뒤의 빈 상태·버튼은 UX 담당.
+
+**`input_hash`와의 관계** — 해시·재사용 규칙은 바꾸지 않고, RPC도 `input_hash`를 건드리지 않는다.
+- AI-01은 `input_hash`를 쓰지 않는다(구현 `null`, `begin_jd_extraction`이 `succeeded`를 거부하는 것으로 충분). 그래서 재추출이 지난 결과로 재사용될 일이 없다.
+- 뒤 기능의 `input_hash`는 `requirements_hash`를 포함하고 재사용 대상은 성공·`ready` 행뿐이다. 조건 5로 그런 행이 없고 `requirements_hash`는 null로 돌아가므로, 옛 원문의 결과가 재사용될 수 없다.
+- `requirements_hash`에 원문이 들어가지 않아도(AI-01) 문제없다. 수정이 일어나는 시점에 비교할 이전 해시가 없다.
+
+**백엔드 후속 (★, 문서만 고쳤고 구현은 아직 없다)**
+1. 마이그레이션: `job_descriptions.raw_text_edited_at` timestamptz null, RPC + grant. **`private.job_descriptions_guard` 트리거 완화**: 지금은 모든 역할의 `raw_text`·`raw_text_hash`·`sentences` 변경을 `job_description_immutable`로 막는다. `old.extraction_status in ('failed', 'running', 'succeeded')`(Q53-11), `new.extraction_status = 'pending'`, `raw_text_edited_at` 변경을 함께 만족할 때만 통과시킨다. `application_project_id`·`user_id`는 계속 불변.
+2. **`ensureJdExtracted` 순서 변경**: 지금은 `begin_jd_extraction` 전에 `sentences`를 읽는다. 읽은 직후 수정이 끼어들면 옛 문장 결과가 새 원문에 저장되므로, **`begin` 성공 뒤에 읽는다**(그 뒤로는 조건 1·2가 수정을 막는다).
+3. 조회: `getJdView`에 `rawTextEditedAt`과 `rawTextEditable`(조건 1~5와 같은 판정, 최종 판정은 RPC). 인사이트·면접 조회에 위 지난 실패 규칙. Server Action과 거부 코드 → 메시지 매핑(`src/server/db/errors.ts`).
+4. pgTAP: 조건별 거부, 다른 사용자, `anon`·`app_ai_writer` execute 거부, 초기화 값, 가드 트리거(그 밖 경로의 원문 변경 거부).
+
 ### 2.7 인사이트·서류·면접 (v2와 같음, 변경분만)
 
 | 테이블 | v3 변경 |
@@ -384,6 +473,70 @@ erDiagram
 - 세션 목록 "실행 공급자"는 `interview_sessions.provider`가 아니라 위 v4.1 규칙(`evaluation_*` / `question_*` / 둘 다)이다(UX S-20 반영 대상).
 
 - `draft_section_sources.project_detail_ids`의 원본 삭제: 배열 원소 단위 soft 표시가 어려우므로 삭제 트리거가 해당 ID를 배열에서 빼고 `source_deleted_at`은 프로젝트·경력·교육 삭제 때만 기록한다. 상세 내용 단위 "원본 삭제됨"은 같은 문항의 `evidence_links`(source_type `project_detail`)가 표시한다.
+
+#### 2.7.1 UI v5.3 QA 결정의 데이터 영향 (v4.3)
+
+| 결정 | 데이터 변경 | 내용 |
+|------|-------------|------|
+| **Q53-1 (S-14 만들기 전 게이트)** | **`create_application_project` 거부 추가 ★** | 아래 |
+| **Q53-3 (입력 원인 채점 실패)** | **`answer_evaluations.error_code` 신설 ★** | 아래 |
+| **Q53-5 (종합만 실패)** | 컬럼 없음, **서버 분기 ★** | 아래 |
+| Q53-6 (S-37 메뉴) | 없음 | `status`와 `answer_evaluations.status`로 읽는다. 세션 목록 조회에 집계만 더한다. 입력 원인을 빼는 데는 Q53-3 컬럼을 쓴다 |
+| **Q53-7 (S-19 중단)** | **`drafts` CHECK 완화, 중단 처리 ★** | 아래 |
+| Q53-4 · Q53-8 · Q53-9 | 없음 | 화면 흐름·문구. Q53-9의 "원문을 고칠 수 있는 곳"은 2.6.1 |
+| S-20 실패 세션과 새 면접 (UX v5.4 요청) | 없음 | 아래 |
+| **Q53-10 (입력 원인 실패 세션의 새 결과 표식)** | 컬럼 없음, **`mark_interview_result_viewed` 조건 변경 ★** | 아래 |
+
+**Q53-1 — 생성 RPC 게이트** (만들기 전에 막는 것은 확정 2026-10-30 (사용자, Q53-1). 서버 검사와 코드는 `[가정]`)
+- `create_application_project`가 insert **전에** 활성 공급자를 판정한다. 활성 공급자 없음 → 통과(추출 없이 저장, D-30) / 키 `invalid` → **`key_invalid`** / `private.ai_consent_allows_run` 거짓 → **`ai_consent_required`**. `needs_check`는 통과한다. 둘 다 HTTP 409이고 행을 만들지 않는다(2.11.7 경로 ⑥).
+- 순서: 인자 검사 → 같은 `p_id` 기존 행 확인(있으면 지금처럼 `created: false`, 게이트 안 봄) → 게이트 → insert. 같은 `p_id`로 동의 뒤 다시 보내면 그대로 만들어진다.
+- 화면은 `get_data_readiness().ai_connection`으로 먼저 막고, RPC는 그 사이 상태가 바뀐 경우의 방어다. 통과 뒤 추출 단계에서 상태가 바뀌면 기존 경로 ⑤대로 실패하고 JD는 남는다.
+
+**Q53-5 — 종합만 다시 정리** (답변 재호출 없음은 확정 2026-10-30 (사용자, Q53-5). 경로는 `[가정]`)
+- **새 작업 경로만 쓴다**: `POST /api/interview-sessions/{id}/evaluation/retry` → 새 `interview_evaluation` 작업 → `begin_interview_evaluation`. 평가 대상이 0개라 `evaluate`는 공급자 호출 없이 끝나고 종합만 다시 만든다(구현도 대상 0이면 호출 없음). 화면 진행은 `evaluate`를 건너뛴다. 답변 평가의 공급자 메타는 그대로이고 `session_feedbacks`·`evaluation_provider`·`evaluation_model`만 활성 값이 된다(A9와 같이 공급자가 섞일 수 있음).
+- **2.9.1과의 충돌 해소**: 같은 행 다시 시도에서 공급자가 다르면 R-63이 답변 평가를 전부 다시 연다. 그래서 **다시 채점 대상이 0개인 세션의 `interview_evaluation` 작업은 같은 행 다시 시도를 `ai_job_not_retryable`로 거부**한다(공급자가 같아도). R-63 규칙 자체는 바꾸지 않는다. S-22는 원래 같은 행 경로를 쓰지 않으므로 직접 호출 방어다.
+- 종합의 입력 원인은 `interview_sessions.evaluation_job_id` 작업의 `error_code`로 읽는다(이 상태에서 작업 실패 원인은 종합의 것). 작업이 90일 정리로 없으면 입력 원인이 아닌 것으로 본다.
+
+**Q53-7 — 경력기술서 중단** (블록 없이 이전 상태로는 확정 2026-10-30 (사용자, Q53-7). 저장 방식은 `[가정]`)
+- 이전 블록은 이미 보존된다. 블록은 `complete_career_description`(`validated`)에서만 저장하고, 다시 생성은 새 행이라 기존 초안의 블록·편집본·상태·`generation_no`는 건드리지 않는다.
+- 지금 구현은 취소된 작업의 초안을 `failed`로 만든다(`ai_jobs_release_drafts`, 실행기의 `fail_career_description`). 이것을 바꾼다. 작업이 `canceled`이거나 `cancel_requested_at`이 있으면:
+
+  | 경우 | 처리 |
+  |------|------|
+  | 다시 생성(`regenerated_from_id` 있음) | 새 초안 행을 삭제(문항·근거 연쇄). 기존 초안이 그대로 보인다 |
+  | 첫 생성(`regenerated_from_id` 없음) | `status = 'composing'`, `options` 유지(포함 항목·문체 복원용), 문항 행 삭제, `ai_job_id`·AI 메타 null |
+
+- `drafts_type_status_check`에 경력기술서 `composing`을 추가한다. 경력기술서 `composing` 행은 지원 프로젝트당 1개이고, `begin_career_description`이 새 초안을 만들 때 그 프로젝트의 `composing` 경력기술서 행을 같은 트랜잭션에서 지운다.
+- `validated`가 먼저면 완료다(`generating`일 때만 위 처리). 조회의 "`generating`인데 작업이 끝남 → 실패" 규칙도 작업이 `canceled`면 위와 같이 본다. 다른 이유의 취소(커리어 항목 삭제, 동의 철회)도 같은 처리다.
+- 쓴 토큰의 `ai_usage_records`는 남는다. 자소서 문항 중단은 이번 결정 범위 밖이라 그대로다(`ai_content`는 완료 때만 덮어씀).
+
+**S-20 실패 세션과 새 면접** `[가정]`
+- `unique (application_project_id) where status = 'in_progress'`는 유지한다. 푸는 경로는 **기존 RPC 두 번**: `abandon_interview_session` → `create_interview_session`(S-20 "그만두고 새로 시작"). 실패 세션의 답변은 비어 있고(생성 완료 전에는 편집 불가) 잃을 내용이 없으므로 새 RPC로 묶지 않는다. 뒤 호출이 게이트로 실패해도 잃는 것이 없다.
+- 이 버튼은 실효 `generation_status = 'failed'`(`generating`인데 작업이 끝난 행 포함)에서만 보인다. 일부 질문이 저장된 뒤 실패한 세션도 그만둘 수 있고 답변은 비어 있다. 그만둔 세션은 S-37 "그만둔 면접" 묶음에 남고, 질문이 없으면 질문 없는 행으로 남는다.
+
+**`answer_evaluations.error_code`** (text null, `ai_jobs.error_code`와 같은 CHECK, 확정 2026-10-30 (사용자, Q53-3)의 저장 근거 `[가정]`)
+- 왜 필요한가: 지금 답변별 실패 원인은 `ai_jobs.step_outputs`(사용자 select 없음, 90일 정리)에만 있다. 일부 답변만 실패하면 작업은 `succeeded`(`error_code` null)로 끝나고, 전부 실패하면 첫 답변의 원인만 작업에 남는다. 그래서 작업 행으로는 Q53-3을 판정할 수 없다.
+- 쓰기: `fail_answer_evaluation(p_answer_id, p_ai_job_id, p_error_code)`(인자 추가). `save_answer_evaluation` 성공과 R-63 다시 열기(`pending`)가 null로 비운다. 기존 행과 원인 없는 실패는 null이며 **다시 채점 대상**으로 본다(소급 없음).
+- **입력 원인 답변**(`failed` + `error_code in ('input_too_long', 'safety_blocked')`)은 제출 뒤 고칠 수 없어 같은 입력이면 같은 원인으로 실패한다. `begin_interview_evaluation`의 평가 대상에서 뺀다 `[가정]`.
+- `다시 채점 대상` = 제출 답변 중 평가 성공이 없고 입력 원인도 아닌 답변.
+- **거부 코드 `interview_evaluation_input_only`** (HTTP 409, `[가정]`): 남은 실패가 입력 원인뿐이라 다시 할 것이 없을 때. 다시 채점 라우트가 작업을 만들기 전에 내고, `begin_interview_evaluation`도 같은 코드로 거부한다. 응답 details에 원인(`input_too_long`/`safety_blocked`)을 넣는다. 실패가 아예 없을 때의 기존 코드(라우트 `interview_evaluation_not_retryable`, RPC `interview_evaluation_not_needed`)는 그대로다. 라우트의 `completed` 판정(`score_status = 'not_scored'`)도 입력 원인 답변을 빼야 한다.
+
+| 세션 `status` | 조건 | 동작 (S-22, S-37 메뉴도 같음) |
+|---------------|------|------------------------------|
+| `evaluation_failed` | 다시 채점 대상 ≥ 1 | 다시 채점 |
+| `evaluation_failed` | 대상 0, 평가 성공 ≥ 1, 종합 실패가 입력 원인 아님 | **"종합 평가 다시 정리"**(Q53-5) |
+| `evaluation_failed` | 대상 0, 평가 성공 ≥ 1, 종합 실패가 입력 원인 | 버튼 없음, 원인 + 새 면접(Q53-3). 서버 `interview_evaluation_input_only` |
+| `evaluation_failed` | 대상 0, 평가 성공 0 | 버튼 없음, 원인 + 이 기업 JD로 새 면접(Q53-3). 서버 `interview_evaluation_input_only` |
+| `completed` | 다시 채점 대상 ≥ 1 | "실패한 답변 다시 채점"(Q53-6) |
+| `completed` | 대상 0, 입력 원인 답변 ≥ 1 | 버튼 없음, 그 답변에 원인 표시(메뉴도 숨김, UX S-22·S-37). 서버 `interview_evaluation_input_only` |
+
+**Q53-10 — 새 결과 표식** (확정 2026-10-30 (사용자, Q53-10))
+- 위 표에서 **`evaluation_failed`이고 서버 판정이 `interview_evaluation_input_only`인 두 행**(다시 채점 대상 0이고 다시 정리할 종합도 없음)은 **첫 열람에 `result_viewed_at`을 기록**해 "새 결과" 표식을 지운다. 다시 할 수 있는 것이 없어 표식이 삭제 전까지 남기 때문이다.
+- 다시 채점 대상이 있거나 "종합 평가 다시 정리"가 가능한 `evaluation_failed` 세션은 A9 그대로 열어도 표식이 남는다. 판정을 내릴 수 없는 경우(`error_code` null, 작업 정리 뒤 종합 원인 모름)는 위 규칙대로 다시 할 수 있는 쪽으로 보므로 표식도 남는다.
+- **`mark_interview_result_viewed` 허용 조건**: `status = 'completed'` 또는 (`status = 'evaluation_failed'` + 위 판정). 그 밖은 지금처럼 오류 없이 `changed: false`. `completed`인데 입력 원인 답변만 남은 행은 원래 `completed` 규칙으로 지워진다.
+- 판정은 `begin_interview_evaluation`·다시 채점 라우트·세션 조회·이 RPC가 **같은 헬퍼**를 쓴다 `[가정]`(이름은 구현이 정함).
+- 다시 채점 시작 때 `result_viewed_at`을 비우는 규칙(A9)은 그대로다.
+- **백엔드 후속 ★**: 위 RPC 조건 변경과 판정 헬퍼, 세션 조회(`read.ts` `getInterviewResult`의 `row.status === "completed"` 검사)가 이 세션에도 열람 RPC를 부르게 하기, `canRetryEvaluation`도 같은 판정으로 바꾸기, pgTAP(입력 원인 세션 기록, 다시 채점 가능 세션 `changed: false`). L-01 배지·S-20 목록은 같은 컬럼을 읽으므로 따로 고치지 않는다.
 
 ### 2.8 근거 (evidence_links)
 
@@ -449,7 +602,8 @@ erDiagram
   - 두 경우 모두 공급자는 같다(활성). 차이는 작업 행을 새로 만드느냐, 같은 행을 다시 여느냐(`run_generation` 증가)뿐이다.
   - **같은 행 다시 시도 대상이 아닌 작업 (409 `ai_job_not_retryable`, 리뷰 R-69, 구현 42f7611과 같음)**: 경우 (1)의 공용 라우트는 아래 작업을 받지 않는다.
     - **요청 범위 작업 유형**: `jd_extraction`, `draft_source_ranking`, `career_description`, `cover_letter`, `key_verification`, `writing_chat_turn`(그리고 생산자가 아직 없는 Should 값 `writing_assist`·`chat_reply`). 각 생성 라우트를 다시 부른다(경우 (2)).
-    - **입력 원인 실패**(`error_category = 'input'`): `input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`. 같은 입력으로 같은 행을 다시 돌리면 같은 원인으로 실패하므로, 입력을 고친 뒤 **새 실행**(인사이트 "다시 생성", 면접은 해당 실행 버튼 — 경우 (2))으로 간다. 작업 상태 응답의 다시 시도 미리보기(배지)도 이 작업에는 오지 않는다.
+    - **입력 원인 실패**(`error_category = 'input'`): `input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`. 같은 입력으로 같은 행을 다시 돌리면 같은 원인으로 실패하므로, 입력을 고친 뒤 **새 실행**(인사이트 "다시 생성", 면접은 해당 실행 버튼 — 경우 (2))으로 간다. 고칠 입력이 공고 원문이면 2.6.1 RPC로 고친다(v4.3, Q53-2).
+    - **다시 채점 대상이 0개인 세션의 `interview_evaluation` 작업**(v4.3 `[가정]`, Q53-5, 2.7.1): 종합만 다시 만들 때 R-63이 답변 평가를 다시 열지 않도록 새 작업 경로로만 간다. 작업 상태 응답의 다시 시도 미리보기(배지)도 이 작업에는 오지 않는다.
     - **`failed`가 아닌 종료 행**(`succeeded`·`canceled`)과 `error_code`가 없는 행, 결과 대상(인사이트의 지원 프로젝트·면접 세션)이 없어진 행.
     - `queued`/`running` 행은 거부하지 않고 그 작업을 따라간다(202 `inProgress: true`).
   - **경로 ② 전체 판정 순서**(구현 `retryJob`·`retry_ai_job` 기준, 2.11.7): 작업 없음 404 `not_found` → 작업이 진행 중이면 그 작업을 따라감(202 `inProgress`) → **`ai_job_not_retryable`(연결 게이트보다 먼저)** → `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed` → 같은 대상의 다른 작업이 진행 중이면(진행 중 unique 위반) 그 작업을 따라감(202 `inProgress`). 경쟁으로 RPC가 행을 옮기지 못했으면(`requeued: false`) 그 사이 진행 중이 된 경우 따라가고, 아니면 `ai_job_not_retryable`.
@@ -678,8 +832,9 @@ erDiagram
 | ③ 실행 중 단계 확인 `check_ai_run_allowed`(비동기 실행기) | 작업 `failed`, `ai_jobs.error_code` | `key_missing` | **`key_missing`**(`error_code` CHECK에 동의 값이 없음. `failure_cause` null → 화면 "AI 연결하기" 잠금) | `key_invalid` |
 | ④ AI 작성 대화 턴(SSE) | `error` 이벤트 1개, 사용자 메시지 저장 안 함 | `key_missing` | **`key_missing`** | `key_invalid` |
 | ⑤ **요청 범위 작업 시작**(2026-11-06 추가) — JD 요건 추출(AI-01, 동기), 서류 3종 AI-11·AI-03·AI-04(동기·SSE) | 요건 추출: HTTP 200 응답 안 `failed` / 서류 3종: 동기 응답 또는 SSE `error` 이벤트 | `key_missing` | **`key_missing`** | `key_invalid` |
+| ⑥ **지원 프로젝트 생성**(v4.3, Q53-1, `create_application_project`) | HTTP 409, 행 없음 | 거부 안 함(추출 없이 저장, D-30) | `ai_consent_required` `[가정]` | `key_invalid` `[가정]` |
 
-- **규칙**: 동의 필요를 **별도 코드 `ai_consent_required`로 내는 곳은 HTTP 409로 바로 거부하는 경로(①·②)뿐**이다. 작업 행이나 응답·스트림 안에서 끝나는 경로(③·④·⑤)는 `key_missing`으로 합친다(⑤는 현재 구현과 같음, 2026-11-06 리더 판단). ②도 ①처럼 **활성 공급자·등급** 기준이다(A1 변경, 2026-11-05 후속) — 화면은 `ai_consent_required`를 받으면 **활성 공급자·등급**으로 C-21을 연다(작업에 기록된 옛 `provider`·`connection_tier`가 아님. UX C-20 행 추가 대상).
+- **규칙**: 동의 필요를 **별도 코드 `ai_consent_required`로 내는 곳은 HTTP 409로 바로 거부하는 경로(①·②·⑥)뿐**이다. 작업 행이나 응답·스트림 안에서 끝나는 경로(③·④·⑤)는 `key_missing`으로 합친다(⑤는 현재 구현과 같음, 2026-11-06 리더 판단). ②도 ①처럼 **활성 공급자·등급** 기준이다(A1 변경, 2026-11-05 후속) — 화면은 `ai_consent_required`를 받으면 **활성 공급자·등급**으로 C-21을 연다(작업에 기록된 옛 `provider`·`connection_tier`가 아님. UX C-20 행 추가 대상).
 - **경로 ② 판정 순서**(2026-11-06, 2026-11-06 재검토 R-69로 전체 순서 보강 — 구현 42f7611과 같음): 작업 없음 404 `not_found` → 진행 중(`queued`/`running`)이면 그 작업을 따라감(202 `inProgress`) → **`ai_job_not_retryable`**(요청 범위 작업 유형, 입력 원인 실패 `input_too_long`/`safety_blocked`/`insufficient_data`/`not_a_jd`, `failed`가 아닌 행 — 2.9.1. **연결 게이트보다 먼저** 본다) → `key_missing` → `key_invalid` → `ai_consent_required` → `ai_connection_changed` → 같은 대상의 다른 작업이 진행 중이면 그 작업을 따라감(202). 앞에서 걸리면 뒤는 보지 않는다. 게이트 4개는 실행기가 먼저 보고 `retry_ai_job`이 행 잠금 아래에서 다시 본다.
 - **경로 ② `ai_connection_changed`**(HTTP 409, 2026-11-06 추가 — 사용자가 판단 위임 → 리더 판단): 서버가 활성 공급자·등급을 읽은 뒤 작업 행에 기록하기 전에 사용자가 공급자나 등급을 바꾼 경우. 서버는 한 번 다시 읽어 재호출하고, 그래도 어긋날 때만 이 코드를 낸다. 작업 행은 `failed` 그대로이고, 사용자가 다시 시도하면 풀린다. 화면 문구는 UX C-20 "다시 시도 거부" 행.
 - `ai_consent_required`·`ai_not_connected`·`ai_job_not_retryable`·`ai_connection_changed`는 API 응답 코드이며 `ai_jobs.error_code` 값이 아니다(CHECK 목록 변경 없음).
@@ -844,7 +999,7 @@ erDiagram
 | **writing_chat_messages** | 본인 | **v4.2: definer RPC만** — user = `append_writing_chat_message`(사용자 세션), assistant = `begin_assistant_message`(`app_ai_writer`) | definer RPC만(`finish_assistant_message`, `app_ai_writer`) | 연쇄만 |
 | application_projects | 본인 | RPC | 본인(`name`, `deadline`, `memo`). **`stage`·`stage_outcome`·`stage_changed_at`은 RPC만**. v4.2: AI 쪽 `name`·`name_source`·`last_activity_at`은 `apply_jd_extraction` / `fail_jd_extraction`만 | 본인 |
 | **application_stage_events** | 본인 | RPC만 | 없음 | 연쇄만 |
-| job_descriptions / jd_requirements | 본인 | RPC(`create_application_project`), 요건은 추출 RPC | v4.2: AI 쪽은 `begin/apply/fail_jd_extraction`만 | 연쇄만 |
+| job_descriptions / jd_requirements | 본인 | RPC(`create_application_project`, v4.3: 동의 필요·키 무효면 거부, 2.7.1), 요건은 추출 RPC | v4.2: AI 쪽은 `begin/apply/fail_jd_extraction`만. **v4.3: 사용자 쪽은 `update_failed_jd_raw_text`만**(직접 update grant 없음, 2.6.1) | 연쇄만 |
 | 결과 테이블 (insights, drafts, draft_sections, draft_section_sources, interview_*, answer_evaluations, session_feedbacks) | 본인(면접 질문 비공개 컬럼 제외) | **v4.2: 소유·세대 검사 definer RPC만**(`begin_*` / `complete_*` / `fail_*` / `save_*`) | 같음. 사용자 편집은 사용자 세션의 해당 컬럼·RPC(F-DOC-04 편집본, F-DOC-08 근거 선택, 답변 `answer_text`) | 본인(지원 프로젝트·세션·초안 단위) |
 | **evidence_links** | 본인 | **v4.2: 결과 저장 RPC 안에서만**. `app_ai_writer` 직접 INSERT 없음(A24) | 삭제 트리거만(원본 삭제 표시) | 연쇄·결과 삭제만 |
 | **ai_provider_keys** (v4) / 뷰 **`ai_provider_keys_public`** (security invoker, 메타 컬럼만) | 본인, **메타 컬럼만**(암호 컬럼 grant 없음, `user_id`도 없음). 화면·서버는 뷰 `ai_provider_keys_public` 사용 | RPC `save_provider_key`(**v4.2: 서버 전용 역할**) | RPC(`save_provider_key` 교체·`record_provider_key_check` = **서버 전용 역할**, `mark_provider_key_invalid`·`record_provider_key_success` = `app_ai_writer`) | RPC `delete_provider_key`(사용자 세션) |
@@ -862,7 +1017,7 @@ erDiagram
 - **서버 전용 역할 (v4.2, A19 ★)**: `save_provider_key`·`record_provider_key_check` 실행 권한. 서버가 세션 확인 뒤 `p_user_id`를 넘긴다. `authenticated`·`anon` execute 없음.
 - **`app_key_reader` (v4 신설 역할)**: `get_provider_key_secret(ai_job_id)` 실행 권한만. 테이블 권한 없음. 작업 실행 서버만 이 역할로 연결한다.
 - 운영자 SQL 역할·`pg_read_all_data` 구성원도 KEK 없이는 `ai_provider_keys` 암호문만 본다(KMS 권한이 서버 실행 계정에만 있음, NFR-KEY-07, 2.11.1 v4.2 문구). `application_stage_events`·`application_projects.stage*` 쓰기 없음(보드는 AI와 무관).
-- RPC 실행 주체: `save_writing_chat`, `hand_off_writing_chat`, `delete_career_item`은 security invoker(사용자 RLS). **v4.2: `append_writing_chat_message`는 security definer + 소유 검사**(invoker면 사용자에게 메시지 직접 insert·`message_count` update를 열어야 해서 상한을 우회할 수 있음). `move_application_stage`, `set_application_outcome`은 security definer + 소유 검사(이벤트 insert를 사용자에게 직접 열지 않기 위해).
+- RPC 실행 주체: `save_writing_chat`, `hand_off_writing_chat`, `delete_career_item`은 security invoker(사용자 RLS). **v4.2: `append_writing_chat_message`는 security definer + 소유 검사**(invoker면 사용자에게 메시지 직접 insert·`message_count` update를 열어야 해서 상한을 우회할 수 있음). `move_application_stage`, `set_application_outcome`은 security definer + 소유 검사(이벤트 insert를 사용자에게 직접 열지 않기 위해). **v4.3: `update_failed_jd_raw_text`도 security definer + 소유 검사**(`job_descriptions` update를 사용자에게 열지 않기 위해, `authenticated`만 execute, 2.6.1).
 - `service_role`: 보관 정리·탈퇴 RPC, 서버 전용 키 RPC. 대화 테이블은 select·delete만.
 - Storage: v2와 같음(MVP 버킷 없음).
 
@@ -951,7 +1106,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | F-P1-13 AI 작성 대화 | W `writing_chats`(+`return_target`), `writing_chat_messages`, `ai_jobs`(`writing_chat_turn`), `ai_usage_records`; 저장 시 W `projects`, `project_details`, `achievements`, `skills`, `project_skills` | `append_writing_chat_message`, `apply_structured_draft_patch`, `set_writing_chat_affiliation`, `save_writing_chat`, `hand_off_writing_chat` |
 | F-P1-14 교육 | R/W `educations` | `delete_career_item`(`affiliation_mode`) |
 | F-P1-15 상세 내용 (STAR + 배운 점) | R/W `project_details`, `achievements` | `delete_career_item` |
-| F-AP-01 지원 프로젝트 만들기 | W `application_projects`(`stage = before_apply`), `job_descriptions`, `application_stage_events`(`created`); AI-01 W `jd_requirements`, `ai_jobs` | `create_application_project` |
+| F-AP-01 지원 프로젝트 만들기 | W `application_projects`(`stage = before_apply`), `job_descriptions`, `application_stage_events`(`created`); AI-01 W `jd_requirements`, `ai_jobs` | `create_application_project`(v4.3 게이트, 2.7.1) |
 | F-AP-02 목록 | R `application_projects`, `job_descriptions`, `insights`, `drafts`, `interview_sessions` | — |
 | F-AP-03 허브 | R 위 + `profiles.career_data_updated_at`, `ai_jobs` | — |
 | F-AP-05 삭제 | W `application_projects` delete(하위 전체 + `application_stage_events` 연쇄) | — |
@@ -961,7 +1116,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | F-ST-03 전형 결과 | W `application_projects.stage_outcome`, `application_stage_events` | `move_application_stage`(outcome 인자), `set_application_outcome` |
 | F-ST-04 인터뷰 전형 팝업 | R `interview_sessions`(작성 중 세션) — 세션·사용량 쓰기 없음 | `move_application_stage` 반환값 `interview_prompt` |
 | F-ST-05 전형 이력 기록 | W `application_stage_events` | `move_application_stage`, `set_application_outcome`, `create_application_project` |
-| F-P2-01 JD 등록 | W `job_descriptions` | `create_application_project` |
+| F-P2-01 JD 등록 | W `job_descriptions` | `create_application_project`. v4.3 입력 원인 실패 원문 수정: `update_failed_jd_raw_text`(2.6.1) |
 | F-P2-02 요건 추출 확인 | R/W `job_descriptions`(`extraction*`), `jd_requirements`, `ai_jobs` | — |
 | F-P2-04 인사이트 | R 커리어(팩), `jd_requirements`; W `insights`, `evidence_links`, `ai_jobs`, `ai_usage_records` | `get_data_readiness` |
 | F-P2-05 근거 확인 | R `evidence_links` + 원본 테이블 | — |
@@ -976,8 +1131,8 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | F-P3-02 질문 일괄 생성 | W `interview_questions`, `interview_answers`(빈 행), `evidence_links`, `ai_jobs`, `interview_sessions.question_validation_report`·`question_usage`(v4.2) | `complete_interview_questions` |
 | F-P3-03 답변 작성·일괄 제출 | W `interview_answers.answer_text`, `interview_sessions` | `submit_interview_session` |
 | F-P3-04 이어 쓰기 | R `interview_sessions`, `interview_questions`(공개 컬럼), `interview_answers` | — |
-| F-P3-06 점수·평가 | W `answer_evaluations`, `session_feedbacks`, `evidence_links`, 점수 슬롯(`interview_answers.score_*`, `interview_sessions.score_*`), `ai_jobs` | — |
-| F-P3-07 세션 기록 | R 위 테이블; W `interview_sessions.result_viewed_at` | — |
+| F-P3-06 점수·평가 | W `answer_evaluations`(v4.3 `error_code`, 2.7.1), `session_feedbacks`, `evidence_links`, 점수 슬롯(`interview_answers.score_*`, `interview_sessions.score_*`), `ai_jobs` | — |
+| F-P3-07 세션 기록 | R 위 테이블; W `interview_sessions.result_viewed_at`(v4.3 Q53-10, 2.7.1) | `mark_interview_result_viewed` |
 | F-P3-13 컬처핏 데이터 부족 허용 | R `interview_sessions.data_sufficiency` | `get_data_readiness`(`culture_fit_interview`) |
 | F-P3-15 모의 면접 메뉴 | R `interview_sessions` + `application_projects.name` (필터 `application_project_id`, `interview_type`, `status`) | — |
 | F-COM-01 가입·로그인 | W `auth.users`, `profiles`(가입 트리거) | — |
@@ -1035,6 +1190,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | **사용량 미터** (v4) | Server Component → RPC `get_ai_usage_summary(period_month)` | R: `ai_usage_records`, `ai_price_tables` | 사용량 미터 화면 |
 | **AI 실행 공통** (v4) | 모든 AI Route Handler: 활성 공급자·키 상태·동의 확인(**v4.2: 2.11.5 통일 규칙 — 동의 후 시행된 `requires_reconsent` 버전이 있을 때만 재동의**) → `ai_jobs`(provider·tier 기록, 실행 중 고정) → 단계마다 `check_ai_run_allowed` + `get_provider_key_secret` → 공급자 호출 → `ai_usage_records` insert → 결과는 소유·세대 검사 RPC로 저장 → 성공이면 `record_provider_key_success`, 키 원인 최종 실패면 `mark_provider_key_invalid` → 실패 시 `error_code`·`quota_resets_at`·`retry_after` | | 전체 |
 | **실패 작업 다시 시도** (v4.2) | **경우 (1) 같은 행**: `POST /api/ai-jobs/{id}/retry`, 같은 행 `failed → queued`, **다시 시도 시점의 활성 공급자·등급으로**(A1 변경) — 작업 행 `provider`·`model`·`model_tier`·`connection_tier` 갱신, 다르면 `step_outputs` 비우고 그 작업이 저장한 결과 행(면접 질문·답변 평가·종합 등) 모두 다시 열어 덮어씀, 같으면 `step_outputs` 유지·실패한 행만 다시 엶(R-63). 결과 행 다시 열기는 `retry_ai_job` 안에서(R-70). 거부 코드는 2.11.7 경로 ②(활성 공급자 기준) — 다시 시도 대상 아님 409 `ai_job_not_retryable`(요청 범위 작업 유형, 입력 원인 실패 `input_too_long`/`safety_blocked`/`insufficient_data`/`not_a_jd`, `failed`가 아닌 행 — 연결 게이트보다 먼저, R-69), 키 없음 409 `key_missing`, 무효 409 `key_invalid`, 동의 필요 409 `ai_consent_required`, 준비 중 연결이 바뀜 409 `ai_connection_changed`(서버가 한 번 다시 읽은 뒤에도 어긋날 때만, 행 `failed` 유지). 진행 중이면 202 `inProgress`로 그 작업을 따라감. 판정 순서는 2.11.7. **경우 (2) 새 작업**: 인사이트 "다시 생성"(F-P2-07, 인사이트 생성 라우트를 다시 불러 새 `insight` 작업·새 버전, R-65), 요청 범위 작업의 다시 생성, 면접 "다시 채점"·"남은 질문 다시 만들기"는 각 생성·시작 라우트를 다시 불러 새 작업 행을 만들고 현재 활성 공급자로 돈다(거부 코드는 인사이트·면접 = 2.11.7 경로 ①, 요청 범위 작업 = 경로 ⑤, R-75). 두 경우 모두 활성 공급자, 구분은 2.9.1 | W: ai_jobs | 전체 |
+| **공고 원문 수정** (v4.3, Q53-2) | Server Action(사용자 세션): 문장 분할·해시 → RPC `update_failed_jd_raw_text`. 재추출은 별도 요청(기존 추출 라우트) | W: `job_descriptions`, `application_projects.last_activity_at` | S-15 (S-16·S-33에서 이동) |
 | 정기 배치 (v4 추가) | `ai_usage_records` 13개월 정리, 재시도 예약 스케줄러(`next_run_at`) — v4.2: 작업 재개 주 경로는 화면 상태 폴링, 크론은 안전망(4.5) | | — |
 | 정기 배치 (추가) | Vercel Cron: 연결 안 된 AI 작성 대화 90일 정리 | writing_chats | — |
 | 그 밖 | v2와 같음 | | |
@@ -1058,7 +1214,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | D-32 일부, D-39 | 등급 사용자 선택·고지 문구 / 법적 성격 | 동의 테이블이 공급자·등급·고지 버전별로 수용 | `[가정]` / 법무 |
 | D-14, D-16 | 점수 산식·미응답 반영 | 스키마는 점수 슬롯만(산식 없음). D-16 (b) `[가정]` 유지 | **사용자 정의 대기** (U-1) |
 | D-25 | 전형 결과 종류 | `stage_outcome` = `passed` / `failed` | **확정** (U-3) |
-| 사용자 결정 일괄 (2026-10-24) | U-2 "회고 및 배운 점"(표시명, 컬럼 `learnings` 유지) / U-4 메뉴 4개 / U-5 데이터 부족 → AI 작성 대화 → 복귀(6장) / U-6 JD 필수·교체 불가(D-19, DM-12 전제 확정) / U-7 면접 유형 `job`·`culture_fit` / U-8 대화 한도 10(**v4에서 폐기**, D-34) / U-9 묶인 대화 계속 보관 / U-10 D-02·04·05·06·09·10·11·17·18 확정 | **확정** |
+| 사용자 결정 일괄 (2026-10-24) | U-2 "회고 및 배운 점"(표시명, 컬럼 `learnings` 유지) / U-4 메뉴 4개 / U-5 데이터 부족 → AI 작성 대화 → 복귀(6장) / U-6 JD 필수·교체 불가(D-19, DM-12 전제 확정. **v4.3 예외: 입력 원인 실패 JD의 원문 수정, Q53-2, 2.6.1**) / U-7 면접 유형 `job`·`culture_fit` / U-8 대화 한도 10(**v4에서 폐기**, D-34) / U-9 묶인 대화 계속 보관 / U-10 D-02·04·05·06·09·10·11·17·18 확정 | **확정** |
 | **사용자 결정 일괄 (2026-11-05)** | A3 동의 재동의 현행 유지 / A5 메시지 40 = 사용자 + AI, 시작 인사 제외 / A6 그만둔 대화 재개 / A8 그만둔 세션 답변 편집 불가 / A15 소속 제안 거절 미저장 / A17 `tone` = `concise`·`detailed` / A18 hint `project_fields` / A19 키 RPC 서버 전용 역할 / A20 재동의 규칙 통일 / A21 서류 안내 미저장 / A22 세션 `question_validation_report`·`question_usage` / A23 AI-11 대체 선택 없음(`user`) / A24 `evidence_links` 직접 INSERT 제거 | 2.5, 2.7, 2.11, 5장, 6장, A.2, A.9, A.12, A.13 반영 | **확정 2026-11-05 (사용자)**. ★(A5, A6, A18, A19, A20, A22, A23, A24)는 백엔드 후속 수정 |
 | 구현이 정한 값 | 탈퇴 순서·파기 증빙, 보관 크론 기준, 초기 정책·고지 버전, 길이 상한 | 4.5 | `[가정]` (확인만) |
 | 해소 | D-DM-06 (a), D-DM-07 무차감, D-AI-05 (STAR로 해소), D-AI-07~09 | PRD v3 9.2 | — |
@@ -1110,6 +1266,9 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 | v4.1 | 2026-10-26 | BYOK 리뷰 라운드 1. **R-40**: `interview_sessions.question_provider`·`question_model`·`evaluation_provider`·`evaluation_model` 신설, 세션 목록 "실행 공급자" 표시 규칙. **R-38**: 검증 중 429·일일 한도·장애면 `needs_check`로 저장(`save_provider_key` 인자 `verification_result`), `record_provider_key_check` 상태 규칙. **R-43**: 3.3 "(1회 차감)" 삭제, T-10 행 "v4 폐기" 주석. **UB-2 (b) `[가정]`**: `get_ai_usage_summary` 기본 응답 = 요청 월 기능별 + 공급자별, 지난달 비교는 `include_previous` 인자로 선택. **이름 변경 없음**(신규 컬럼 4개, RPC 인자 2개 추가) |
 | v4.1a | 2026-10-27 | BYOK 리뷰 라운드 2. R-38 잔여: 2.11.2 등록 저장 문구를 2.11.3 `valid`/`limited` 규칙으로 정렬. R-45: `ai_jobs.retry_wait_total_ms` 신설(재시도 대기 누적, 120초 상한), `save_provider_key` 시그니처에 `verification_result` 추가, `ai_provider_keys_public` 뷰를 5장·9장에 명시. **이름 변경 없음** |
 | **v4.2** | 2026-11-05 | **백엔드 구현 반영(2026-11-05)** (PRD v4.3·UX v5.3·AI v4.3). **사용자 확정**: A3(A.2 재동의 판정), A5(시작 인사 제외 40, 2.5·2.9.4), A6(`abandoned → active` 재개, 2.5·3.4·7장), A8(A.13 그만둔 세션 답변 편집 불가), A15(소속 제안 거절 미저장), A17(`options.tone` `concise`/`detailed`), A18(hint `project_fields` + `form` + `suggested_project_id`, 판정 순서, 6장), A19(`save_provider_key`·`record_provider_key_check` 서버 전용 역할 + `p_user_id`), A20(재동의 규칙 통일, 2.11.5), A21(서류 안내 미저장), A22(`interview_sessions.question_validation_report`·`question_usage`), A23(대체 선택 없음 → `user`), A24(`app_ai_writer` `evidence_links` 직접 INSERT 제거). **구현 반영(B)**: 쓰기 경로를 definer RPC로 좁힘(대화·지원 프로젝트·JD·결과·근거, 5장), `app_ai_writer`의 `ai_usage_records` 본인 select, `ai_jobs.step_outputs`·`run_generation`·`target_type` 값·상태 전이·경력기술서 프로젝트당 1개 인덱스, `check_ai_run_allowed`, 가격표 `long_context_cached_input_usd_per_mtok`·`long_context_cache_write_usd_per_mtok`, `save_provider_key` 인자 `p_key_id`·`p_failure_cause`·`p_encryption_version`, `record_provider_key_success`, `get_provider_key_secret`의 `key_id`·`key_not_available`, 뷰 `ai_provider_keys_public` 사용 이유, 2.11.1 암호 컬럼 문구 정정, 결과 테이블 내부 컬럼(`run_generation`, `completed_at`, 세션 작업 컬럼, `ai_job_id` 복합 FK), `writing_chats.last_extracted_sequence`, `interview_prompt.in_progress_session`, 근거 규칙(`user_note`·`interview_answer`, 저장 직전 원본 삭제, 소유자별 허용 출처), 4.2 모드 값·집계·초기화 범위, S2 규칙(`kind`, `normalized_name`, `profile_filled`, readiness 세부), 6.1 탈퇴 표현. **구현 값(C)**: 4.5 신설 `[가정]`. **이름 변경 없음**(신규 이름은 11.5). **리뷰 R-48·R-49·R-50·R-53·R-54 반영**: 2.9.1 다시 시도 경우 구분(같은 행 / 새 작업), 2.11.7 연결 게이트 거부 코드 경로별 표(`ai_consent_required`는 HTTP 409 경로만), 6.1 탈퇴 미완료 판정 `get_account_deletion_state` `[가정]` ★, 2.5 재개 진입점 UX 기준, `tone` null = `concise`. **A1 변경(사용자, 2026-11-05 후속) 반영**: 모든 다시 시도·재실행 = 활성 공급자(R-48 리더 해석 "같은 행 = 처음 공급자" 폐기). 같은 행 다시 시도 때 `ai_jobs.provider`·`model`·`model_tier`·`connection_tier` 활성 값으로 갱신, 다르면 `step_outputs` 비움(0장 DM-17, 2.9.1 `provider`·상태 전이·다시 시도 표, 2.11.7 경로 ②, 7장, 11.1 표, 11.5). **리뷰 R-63·R-65 반영**: R-63 공급자·등급이 다른 같은 행 다시 시도는 그 작업이 저장한 결과 행도 모두 다시 열어 덮어씀(같으면 실패 행만) — 0장 결과 테이블 내부 컬럼, 2.9.1 상태 전이·표·RPC 동작·★, 7장, 11.5 ★. R-65 인사이트 "다시 생성"을 2.9.1 (2)·7장 새 작업 목록에 추가. R-62 DM 몫: 11.5 해소 항목 표시. **2026-11-06 추가(사용자가 판단 위임 → 리더 판단)**: 2.11.7 경로 ② `ai_connection_changed`(409)·판정 순서, 경로 ⑤ 요청 범위 작업 시작(동의 필요 = `key_missing`). **2026-11-06 재검토 반영**(리뷰 재검토 라운드 1, 버전 유지): R-67 리더 판단 (a) → **사용자 확정 2026-11-06** ★ — readiness `ai_connection.consent_required` 추가(6장, 2.11.7, 11.5). R-69 `ai_job_not_retryable` 대상을 구현에 맞춤(요청 범위 작업 유형·입력 원인 실패·`failed` 아닌 행) + 경로 ② 전체 판정 순서(not-retryable이 게이트보다 먼저, 2.9.1·2.11.7·7장). R-70 결과 행 다시 열기 주체 `begin_*` → `retry_ai_job`(같은 트랜잭션), 끝난 결과 묶음 제외 `[가정]`·질문 삭제 후 재생성 `[가정]`·`input_hash` 비움(2.9.1). R-71 2.9.1·11.5·2.11.7 ① ★를 "구현됨 (42f7611)"으로. R-72 7장 retry 행·11.5 표에 `ai_connection_changed`·경로 ⑤ 추가. 이름 변경 없음 |
+| **v4.3b** | 2026-11-02 | **spec-gaps ⑲ 해소**: A.2 필수 동의에서 `cross_border_transfer`를 뺐다(F-COM-02, UX S-03, D-39). `consent_type`·`policy_type` 값은 기존 행과 S-30 고지를 위해 유지. 구현 `20261108000100_w1_signup_consent_required_set.sql`. 이름 변경 없음 |
+| **v4.3a** | 2026-11-01 | **Q53-11**: `succeeded` + 요건 0개 JD도 공고 원문 수정 허용. 2.6.1 조건 2·4, 조건 5 설명, 가드 트리거 후속 수정 |
+| **v4.3** | 2026-10-30 | **UI v5.3 QA 사용자 결정 반영(Q53-1~9).** **Q53-2**: U-6·D-19 예외로 입력 원인(`not_a_jd`·`input_too_long`·`safety_blocked`) 요건 추출 실패 JD의 원문 수정 허용. RPC `update_failed_jd_raw_text`(security definer, `authenticated`), 허용 조건·거부 코드 6종·초기화 값·`input_hash` 무영향(2.6.1), `job_descriptions.raw_text_edited_at` 신설, 가드 트리거 완화와 `ensureJdExtracted` 읽기 순서 변경은 백엔드 후속 ★. DM-18, 5장, 6.1, 7장, A.6. **Q53-1**: `create_application_project`가 insert 전에 거부, 경로 ⑥(2.7.1, 2.11.7) ★. **Q53-3**: `answer_evaluations.error_code` 신설, `fail_answer_evaluation` 인자 추가, 입력 원인 답변은 다시 채점 대상에서 제외, 거부 코드 `interview_evaluation_input_only` `[가정]` ★(2.7.1, A.12, A.13). **Q53-5**: 종합만 다시 정리는 새 작업 경로, 대상 0 세션의 같은 행 다시 시도 거부 ★(2.7.1, 2.9.1). **Q53-7**: 중단 시 다시 생성은 새 행 삭제, 첫 생성은 `composing`, 경력기술서 `composing` 허용 ★(2.7.1, A.9). **S-20 실패 세션**: `in_progress` 1개 제약 유지, 그만두기 + 새로 만들기 `[가정]`(리뷰 R-90 반영: 2.6.1 복구 경로 문구, 일부 생성 세션). **Q53-10 (확정 2026-10-30 (사용자))**: 다시 할 것이 없는 입력 원인 채점 실패 세션은 첫 열람에 새 결과 표식을 지움, `mark_interview_result_viewed` 조건 변경 ★(2.7.1, A.12). Q53-4·6·8·9는 데이터 변경 없음. 이름 변경 없음(UX v5.4와 맞춤) |
 
 ---
 
@@ -1133,12 +1292,13 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 ### A.2 consents / policy_versions
 | 테이블 | 컬럼 |
 |--------|------|
-| consents | `consent_type` CHECK in (`terms`, `privacy_required`, `cross_border_transfer`, `service_improvement`, `marketing`), `policy_version`, `agreed` boolean, `agreed_at`, `withdrawn_at`, `user_agent_hash`. 동의 1회 = 1행, 철회는 `withdrawn_at`, 재동의는 새 행. RLS select/insert 본인, update는 선택 동의의 `withdrawn_at`만 |
+| consents | `consent_type` CHECK in (`terms`, `privacy_required`, `cross_border_transfer`, `service_improvement`, `marketing`), `policy_version`, `agreed` boolean, `agreed_at`, `withdrawn_at`, `user_agent_hash`. 동의 1회 = 1행, 철회는 `withdrawn_at`, 재동의는 새 행. RLS select/insert 본인, update는 선택 동의의 `withdrawn_at`만. **`cross_border_transfer`는 필수가 아니다**(v4.3b, 2026-11-02, F-COM-02·D-39): 가입 때 받지 않고, 기존 행과 S-30 고지를 위해 값만 남는다. AI 공급자 국외 이전 동의는 키 연결 때 공급자별로 받는다(C-21, `ai_data_use_consents`) |
 | policy_versions | `policy_type`(terms/privacy/cross_border_transfer), `version`, `effective_at`, `requires_reconsent`, `document_path`. 비사용자, 전체 select. 초기값 4.5 `[가정]` |
 
 - **재동의 판정 (확정 2026-11-05 (사용자), A3 — 현행 유지)**
   - **선택 동의**(`service_improvement`, `marketing`)는 정책 버전이 바뀌어도 다시 묻지 않는다. 이전 선택 동의는 버전과 무관하게 유효(철회 전까지). 동의 게이트(`get_consent_status().needs_consent`)에 영향 없음. 선택 동의는 `privacy` 버전을 따른다 `[가정]`.
-  - **필수 동의**(`terms`, `privacy_required`, `cross_border_transfer`)는 동의한 버전보다 뒤이고 지금 시행 중인 버전 중 **하나라도 `requires_reconsent = true`면** 재동의 필요(중간 버전을 건너뛴 경우도 잡는다). AI 고지 재동의(2.11.5)와 같은 모양이다.
+  - **필수 동의**(`terms`, `privacy_required`)는 동의한 버전보다 뒤이고 지금 시행 중인 버전 중 **하나라도 `requires_reconsent = true`면** 재동의 필요(중간 버전을 건너뛴 경우도 잡는다). AI 고지 재동의(2.11.5)와 같은 모양이다.
+  - **`cross_border_transfer` (v4.3b, 2026-11-02)**: 필수 동의에서 뺐다. 근거는 PRD F-COM-02(AI 공급자 고지·동의는 키 연결 시점)와 D-39(공급자별 고지·동의, 2026-10-28 사용자 확정)이다. 동의 게이트에 영향이 없고(`required = false`, `needs_consent = false`), 새 버전이 시행돼도 재동의를 묻지 않는다. AI 실행 게이트는 이 행을 보지 않고 `ai_data_use_consents`만 본다(2.11.5, 2.11.7). D-39의 법무 확인은 아직 열려 있다.
 
 ### A.3 experiences
 `status`, `company_name`(complete 필수), `start_month`(complete 필수, 1일 고정), `end_month`(≥ start), `is_current`(true면 end_month null), `job_rank`, `job_position`(둘 중 하나 complete 필수), `department`, `employment_type` CHECK in (`full_time`, `contract`, `freelance`, `intern`, `other`), `summary`(≤ 2,000자). `unique (id, user_id)`.
@@ -1153,7 +1313,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 `name`(≤ 100자, null = 추출 대기), `name_source` CHECK in (`user`, `ai`, `default`), `deadline` date, `memo`(≤ 2,000자, Should), `stage`, `stage_outcome`, `stage_changed_at`(본문 2.6), `last_activity_at`, `duplicated_from_id`(FK set null, Could). `unique (id, user_id)`. insert는 RPC `create_application_project`.
 
 ### A.6 job_descriptions
-`application_project_id`(unique, 복합 FK cascade, 변경 불가), `raw_text`(1~50,000자, 변경 불가), `raw_text_hash`, `sentences` jsonb `[{sid, text, start, end}]`, `detected_language`, `company_name`, `company_name_source`(user/ai), `position_title`, `position_title_source`(user/ai), `extraction_status` CHECK in (`pending`(추출 전·키 없음 포함), `running`, `succeeded`, `failed`), `extraction` jsonb, `extraction_job_id`, `extraction_provider`, `extraction_model`(v4), `tech_keywords` jsonb `[{keyword, source_sids}]`, `requirements_hash`. delete 정책 없음(지원 프로젝트 연쇄만).
+`application_project_id`(unique, 복합 FK cascade, 변경 불가), `raw_text`(1~50,000자, **변경 불가. 유일한 예외는 입력 원인으로 요건 추출에 실패했거나 요건 0개로 성공한 JD를 `update_failed_jd_raw_text`로 고칠 때, 확정 2026-10-30 (사용자, Q53-2)·2026-11-01 (사용자, Q53-11), 2.6.1**), `raw_text_hash`·`sentences` jsonb `[{sid, text, start, end}]`(`raw_text`와 함께만 바뀜), **`raw_text_edited_at`** timestamptz null(v4.3, 수정한 시각, null = 수정한 적 없음), `detected_language`, `company_name`, `company_name_source`(user/ai), `position_title`, `position_title_source`(user/ai), `extraction_status` CHECK in (`pending`(추출 전·키 없음 포함), `running`, `succeeded`, `failed`), `extraction` jsonb, `extraction_job_id`, `extraction_provider`, `extraction_model`(v4), `tech_keywords` jsonb `[{keyword, source_sids}]`, `requirements_hash`. delete 정책 없음(지원 프로젝트 연쇄만).
 
 ### A.7 jd_requirements
 `job_description_id`(복합 FK cascade), `category` CHECK in (`responsibility`, `required`, `preferred`), `content`, `keywords` text[], `importance` CHECK in (`high`, `normal`), `source_sids` text[], `sort_order`, `origin` CHECK in (`ai`, `user`), `is_user_edited`.
@@ -1163,7 +1323,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 
 ### A.9 drafts
 `application_project_id`, `insight_id`(FK set null), `draft_type` CHECK in (`career_description`, `cover_letter`), `title`, `status` CHECK in (`composing`, `generating`, `ready`, `partially_failed`, `failed`), `options` jsonb(`included_experience_ids`, `included_education_ids`, `included_project_ids`, `project_order`, `selection_origin` in insight/ai_ranking/user, `ranking`, `tone` in `concise`/`detailed` 또는 null — null은 `concise`로 처리, 2.7 v4.2 표), `edited_at`, `first_copied_at`, `regenerated_from_id`(FK set null), `completed_at`, `run_generation`(내부) + AI 메타.
-- v4.2 (**확정 2026-11-05 (사용자)**): `tone` 값 2개(A17). `selection_origin`에 대체 값 없음 — AI-11 실패 시 사용자가 직접 고르고 `user`(A23). `omitted`·`notes_for_user` 컬럼 없음(A21). 경력기술서 생성은 지원 프로젝트당 진행 중 1개(2.9.1). 생성 실패 초안은 블록 없이 `failed`, 다시 시도는 새 초안 행(A4, AI-03).
+- v4.2 (**확정 2026-11-05 (사용자)**): `tone` 값 2개(A17). `selection_origin`에 대체 값 없음 — AI-11 실패 시 사용자가 직접 고르고 `user`(A23). `omitted`·`notes_for_user` 컬럼 없음(A21). 경력기술서 생성은 지원 프로젝트당 진행 중 1개(2.9.1). 생성 실패 초안은 블록 없이 `failed`, 다시 시도는 새 초안 행(A4, AI-03). **v4.3 (Q53-7)**: 중단은 실패가 아니다. 경력기술서도 `composing`을 쓸 수 있고(프로젝트당 1개), 다시 생성 중단은 새 행 삭제, 첫 생성 중단은 `composing`으로 돌아간다 `[가정]`(2.7.1).
 
 ### A.10 draft_sections (v3 반영 전체)
 `draft_id`(cascade), `sort_order`(unique per draft), `section_kind` CHECK in (`experience`, `education`, `standalone_projects`, `cover_letter_question`), `experience_id`(soft), `education_id`(soft), `heading`, `question_text`, `template_key` CHECK in (`motivation`, `job_competency`, `future_plan`), `char_limit`, `count_basis` CHECK in (`with_spaces`, `without_spaces`), `user_note`(≤ 300자), `source_selection_mode` CHECK in (`ai`, `user`), `sources_modified_at`, `generation_no`, `question_class` CHECK in (`motivation`, `job_competency`, `future_plan`, `experience_story`), `status` CHECK in (`pending`, `generating`, `ready`, `failed`), `ai_content` jsonb(블록: `block_id`, `block_kind` in header/summary/role_line/bullet/paragraph, `project_id`, `text`, `requirement_ids`, `placeholders`, `flags`, `generated_by`, `user_modified`), `edited_content` jsonb, `ai_char_count`, `correction_applied`, `validation_report`, `completed_at`, `run_generation`(내부). 자소서 생성 시 기본 3문항 시드.
@@ -1175,7 +1335,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 ### A.12 interview_sessions
 `application_project_id`, `insight_id`(set null), `source_session_id`(set null), `interview_type` not null 기본값 없음 CHECK in (`job`, `culture_fit`), `question_count` CHECK in (3, 5, 7) default 5, `data_sufficiency` not null CHECK in (`ok`, `thin`, `none`), `weak_requirement_ids` uuid[], `status` CHECK in (`in_progress`, `evaluating`, `completed`, `evaluation_failed`, `abandoned`), `generation_status` CHECK in (`generating`, `ready`, `failed`), `answered_count`, `unanswered_count`, `submitted_at`, `completed_at`, `result_viewed_at`, `abandoned_at`, `last_activity_at`, `career_snapshot_hash`, 점수 슬롯 `score_status`(pending_method/scored/not_scored), `score_value`, `score_max`, `score_method_version`, `score_rationale`, `score_counted_count`. `unique (application_project_id) where status = 'in_progress'`. v4.1: `question_provider`, `question_model`, `evaluation_provider`, `evaluation_model`.
 - **v4.2**: **`question_validation_report`** jsonb null, **`question_usage`** jsonb null — 질문 세트 단위 검증 기록·사용량(**확정 2026-11-05 (사용자), A22 ★**). 내부 컬럼 `question_job_id`, `question_run_generation`, `evaluation_job_id`, `evaluation_run_generation`.
-- **v4.2 다시 채점·결과 확인 표식 (확정 2026-11-05 (사용자), A9 — 구현과 같음)**: 다시 채점은 평가 성공이 없는 응답 답변만 다시 평가하고 종합(`session_feedbacks`)은 항상 다시 만든다(이전 result는 행에 남고 `pending`). 다시 채점이 시작되면 `score_status`·`completed_at`·`result_viewed_at`을 비운다. `result_viewed_at`은 `completed`일 때만 기록한다(채점 중·채점 실패 화면을 열어도 "새 결과" 표식 유지). `completed`인데 다시 할 답변이 없으면 `interview_evaluation_not_needed`. 응답 0개 제출은 `completed` + `not_scored`(채점 작업 없음).
+- **v4.2 다시 채점·결과 확인 표식 (확정 2026-11-05 (사용자), A9 — 구현과 같음)**: 다시 채점은 평가 성공이 없는 응답 답변만 다시 평가하고 종합(`session_feedbacks`)은 항상 다시 만든다(이전 result는 행에 남고 `pending`). 다시 채점이 시작되면 `score_status`·`completed_at`·`result_viewed_at`을 비운다. `result_viewed_at`은 `completed`일 때와 **다시 할 것이 없는 입력 원인 `evaluation_failed`일 때**(확정 2026-10-30 (사용자, Q53-10), 2.7.1)만 기록한다. 그 밖의 채점 중·채점 실패 화면을 열어도 "새 결과" 표식은 유지한다. `completed`인데 다시 할 답변이 없으면 `interview_evaluation_not_needed`(v4.3: 입력 원인 답변은 다시 할 답변에서 빼고, 입력 원인만 남으면 `interview_evaluation_input_only` `[가정]`, Q53-3, 2.7.1). 응답 0개 제출은 `completed` + `not_scored`(채점 작업 없음).
 - 세션 삭제 트리거가 그 세션 대상 queued/running 질문·채점 작업에 취소를 요청한다. 그만두기는 질문 생성 작업만 취소 요청.
 
 ### A.13 interview_questions / interview_answers / answer_evaluations / session_feedbacks
@@ -1183,7 +1343,7 @@ v4.2 `project_fields` 예(이름·역할이 빠진 draft 프로젝트):
 |--------|------|
 | interview_questions | `session_id`, `sequence`(unique per session), `source_kind` CHECK in (`project_deep_dive`, `requirement_fit`, `gap_probe`, `collaboration`, `conflict`, `failure_growth`, `values`, `org_adaptation`, `motivation_career`), `anchor` CHECK in (`experience`, `jd`, `general`), `question_text`, `intent`, `focus_criteria` text[], `target_requirement_ids`, `target_gap_requirement_ids`, `good_answer_signals` jsonb, `copied_from_question_id` + AI 메타. 비공개 컬럼은 클라이언트 grant 없음 |
 | interview_answers | `session_id`, `question_id`(unique), `answer_text`(≤ 5,000자), `status` CHECK in (`draft`, `submitted`, `unanswered`), 점수 슬롯 `score_status`(pending_method/scored/unanswered/not_scored, 제출 전 null), `score_value`, `score_max`, `score_method_version`, `score_rationale`. update는 `status = 'draft'` + 미제출 + 생성 완료 + **세션 `status = 'in_progress'`**일 때 `answer_text`만(**v4.2 확정 2026-11-05 (사용자), A8**: 그만둔 세션은 미제출이어도 편집 불가. RLS로 막아 조건 밖 update는 0행) |
-| answer_evaluations | `session_id`, `answer_id`(unique), `status` CHECK in (`pending`, `succeeded`, `failed`), `result` jsonb(criteria, strengths, improvements, intent_reveal, model_answer, consistency_notes, answer_quotes) + AI 메타. v4.2: `consistency_notes` 원소는 result에 `{text, answer_quotes}`, 근거는 `evidence_links`(`consistency_notes.<n>`) |
+| answer_evaluations | `session_id`, `answer_id`(unique), `status` CHECK in (`pending`, `succeeded`, `failed`), **`error_code`**(v4.3, 실패 원인, null = 원인 없음·성공, Q53-3, 2.7.1), `result` jsonb(criteria, strengths, improvements, intent_reveal, model_answer, consistency_notes, answer_quotes) + AI 메타. v4.2: `consistency_notes` 원소는 result에 `{text, answer_quotes}`, 근거는 `evidence_links`(`consistency_notes.<n>`) |
 | session_feedbacks | `session_id`(unique), `status` CHECK in (`pending`, `succeeded`, `failed`), `result` jsonb(headline, overall_strengths, overall_weaknesses, next_practice, criteria_summary, unanswered_note) + AI 메타 |
 
 ### A.14 evidence_links (v3 반영 전체)

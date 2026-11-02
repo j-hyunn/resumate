@@ -62,6 +62,33 @@ export async function startWritingChat(supabase: UserSupabaseClient, input: z.ou
   return { writingChatId: data };
 }
 
+export type StartAffiliation = { type: "experience"; id: string } | { type: "education"; id: string };
+
+/**
+ * QA-W5-09: "새 프로젝트" started from an experience / education (S-36 with an affiliation). The
+ * affiliation must be the user's (RLS read) before the chat exists; if setting it still fails
+ * (deleted in between), the just-created chat is removed so no empty `active` chat is left behind.
+ */
+export async function startWritingChatWithAffiliation(
+  supabase: UserSupabaseClient,
+  input: z.output<typeof StartWritingChatInput>,
+  affiliation: StartAffiliation,
+): Promise<{ writingChatId: string }> {
+  const table = affiliation.type === "experience" ? "experiences" : "educations";
+  const { data: row, error } = await supabase.from(table).select("id").eq("id", affiliation.id).maybeSingle();
+  if (error) throw mapDbError(error);
+  if (!row) throw new AppError("not_found", "소속을 찾을 수 없어요. 새로고침 후 다시 시도해 주세요.", { status: 404 });
+  const started = await startWritingChat(supabase, input);
+  try {
+    await setWritingChatAffiliation(supabase, { writingChatId: started.writingChatId, affiliation, clearSuggestionOnly: false });
+  } catch (err) {
+    // Same removal as "대화 삭제" (delete_career_item RPC); a failure here keeps the original error.
+    await deleteWritingChat(supabase, started.writingChatId).catch(() => undefined);
+    throw err;
+  }
+  return started;
+}
+
 // ---------------- read ----------------
 
 /** C-19 badge + C-18 lock for "send" (never blocks reading). */

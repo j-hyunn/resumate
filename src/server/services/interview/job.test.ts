@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AiError, ProviderError } from "@/server/ai/errors";
 import type { Llm } from "@/server/ai/llm";
-import { createRecordingKeyStatusReporter, createStaticProviderContext, type KeySource, type ProviderContext } from "@/server/jobs/provider-context";
+import { createRecordingKeyStatusReporter, type KeySource, type ProviderContext } from "@/server/jobs/provider-context";
 import { createJobRunner } from "@/server/jobs/runner";
 import type { JobTypeDefinition } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, memoryScope, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
@@ -45,6 +45,7 @@ class FakeInterviewDb implements InterviewStore {
   feedback: "succeeded" | null = null;
   completedQuestions: unknown[] = [];
   failCalls: string[] = [];
+  failCodes: Record<string, string> = {};
   evaluationProvider: string | null = null;
 
   constructor(questionCount = 5) {
@@ -114,8 +115,9 @@ class FakeInterviewDb implements InterviewStore {
     this.answers.get(answerId)!.score = "pending_method";
     return { applied: true };
   }
-  async failAnswerEvaluation(answerId: string) {
+  async failAnswerEvaluation(answerId: string, _jobId: string, errorCode: string) {
     this.failCalls.push(answerId);
+    this.failCodes[answerId] = errorCode;
     this.evaluations.set(answerId, "failed");
     this.answers.get(answerId)!.score = "not_scored";
     return true;
@@ -261,9 +263,10 @@ function fakePipelines(db: FakeInterviewDb, calls: string[], b: Behavior): Inter
   };
 }
 
-function setup(opts: { context?: ProviderContext; responses?: ScriptedResponse[]; questionCount?: number; behavior?: Behavior; keySource?: KeySource } = {}) {
+function setup(opts: { context?: ProviderContext | null; responses?: ScriptedResponse[]; questionCount?: number; behavior?: Behavior; keySource?: KeySource; gradingTargets?: () => number } = {}) {
   const clock = fakeClock();
-  const context = opts.context ?? PAID;
+  let currentContext: ProviderContext | null = opts.context === undefined ? PAID : opts.context;
+  const context = currentContext ?? PAID;
   const store = new MemoryJobStore(clock.now);
   const usage = new MemoryUsageStore(USER);
   const scripted = createScriptedAdapter(context.provider, opts.responses ?? Array.from({ length: 30 }, () => OK), clock.ms);
@@ -282,6 +285,10 @@ function setup(opts: { context?: ProviderContext; responses?: ScriptedResponse[]
       existingQuestions: async () => db.existing(),
       questionEvidence: async () => new Map(),
       session: async () => db.sessionView(),
+      gradingDecision: async () => {
+        const count = opts.gradingTargets?.() ?? 1;
+        return { sessionId: SESSION, decision: count > 0 ? ({ kind: "regrade", count } as const) : ({ kind: "resummarize" } as const), regradeTargetCount: count, succeededCount: 1 };
+      },
     },
   };
   const questions = createInterviewQuestionsJobDefinition(deps);
@@ -290,7 +297,10 @@ function setup(opts: { context?: ProviderContext; responses?: ScriptedResponse[]
   const scheduled: (() => Promise<void>)[] = [];
   const runner = createJobRunner<Llm>({
     forUser: () => memoryScope(store, usage, { keySource, keyStatus: createRecordingKeyStatusReporter() }),
-    providerContext: createStaticProviderContext(context),
+    providerContext: {
+      forUser: async () => currentContext,
+      peekActive: async () => currentContext,
+    },
     createLlm: scriptedLlmFactory(scripted.adapter, clock.ms),
     settleLlm: (llm, ms) => llm.settle(ms),
     getDefinition: (t) => ({ interview_questions: questions, interview_evaluation: evaluation })[t as string] as JobTypeDefinition<Llm> | undefined,
@@ -327,7 +337,11 @@ function setup(opts: { context?: ProviderContext; responses?: ScriptedResponse[]
     await drain();
     for (let i = 0; i < max && store.jobs.get(jobId)!.status === "queued"; i++) await wake(jobId);
   }
-  return { clock, store, usage, db, calls, runner, drain, start, wake, settle, job: (id: string) => store.jobs.get(id)! };
+  /** Connection changes after setup (key deleted, consent withdrawn). */
+  const setContext = (next: ProviderContext | null) => {
+    currentContext = next;
+  };
+  return { clock, store, usage, db, calls, runner, drain, start, wake, settle, setContext, job: (id: string) => store.jobs.get(id)! };
 }
 
 describe("interview_questions job (AI-05)", () => {
@@ -534,6 +548,98 @@ describe("interview_evaluation job (AI-06 + AI-07)", () => {
     expect(h.job(retry).status).toBe("succeeded");
     expect(h.calls).toEqual(["summarize:2"]);
     expect(h.db.status).toBe("completed");
+  });
+});
+
+describe("interview_evaluation — answer failure cause (Q53-3)", () => {
+  it("a closed answer's error code reaches fail_answer_evaluation", async () => {
+    const h = setup({ behavior: { evaluateErrors: { 1: [new AiError("input_too_long", { retryable: false })] } } });
+    await readySession(h, { 1: "a", 2: "b" });
+    await h.start("interview_evaluation");
+    await h.drain();
+    expect(h.db.failCodes).toEqual({ [aid(1)]: "input_too_long" });
+  });
+});
+
+describe("interview_evaluation — summary-only redo (Q53-5)", () => {
+  /** Every progress write of the job, in order. */
+  function recordStages(h: ReturnType<typeof setup>): string[] {
+    const stages: string[] = [];
+    const note = (patch?: { progress?: { stage: string | null } }) => {
+      if (patch?.progress && stages[stages.length - 1] !== patch.progress.stage) stages.push(String(patch.progress.stage));
+    };
+    const update = h.store.update.bind(h.store);
+    h.store.update = (id, gen, patch) => {
+      note(patch);
+      return update(id, gen, patch);
+    };
+    const save = h.store.saveStepOutputs.bind(h.store);
+    h.store.saveStepOutputs = (id, gen, outputs, meta, patch) => {
+      note(patch);
+      return save(id, gen, outputs, meta, patch);
+    };
+    return stages;
+  }
+
+  async function summaryFailed(context: ProviderContext = PAID) {
+    const h = setup({ context, behavior: { summarizeError: new AiError("schema_invalid", { retryable: false }) } });
+    await readySession(h, { 1: "a", 2: "b" });
+    const failedJob = await h.start("interview_evaluation");
+    await h.settle(failedJob);
+    expect(h.job(failedJob).status).toBe("failed");
+    h.calls.length = 0;
+    return { h, failedJob };
+  }
+
+  it("progress goes prepare → summarize → score → complete; no evaluate call, one summary call", async () => {
+    const { h } = await summaryFailed();
+    const stages = recordStages(h);
+    const before = h.usage.records.length;
+    const retry = await h.start("interview_evaluation");
+    await h.drain();
+    expect(h.job(retry).status).toBe("succeeded");
+    expect(h.calls).toEqual(["summarize:2"]);
+    expect(stages).toEqual(["prepare", "summarize", "score", "complete"]);
+    expect(h.usage.records.length - before).toBe(1);
+    expect(h.job(retry).stepOutputs.evaluate).toMatchObject({ succeededCount: 2, failed: {} });
+    expect(h.db.status).toBe("completed");
+  });
+
+  it("a normal run still shows evaluate", async () => {
+    const h = setup();
+    await readySession(h, { 1: "a" });
+    const stages = recordStages(h);
+    const jobId = await h.start("interview_evaluation");
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+    expect(stages).toEqual(["prepare", "evaluate", "summarize", "score", "complete"]);
+  });
+
+  it("free tier: the empty evaluate takes no spacing, only the summary call does", async () => {
+    const { h } = await summaryFailed(FREE);
+    const stages = recordStages(h);
+    const retry = await h.start("interview_evaluation");
+    await h.settle(retry);
+    expect(h.job(retry).status).toBe("succeeded");
+    expect(h.calls).toEqual(["summarize:2"]);
+    expect(stages).not.toContain("evaluate");
+  });
+
+  it("same-row retry with no re-grade target → ai_job_not_retryable, ahead of the connection gate", async () => {
+    let targets = 0;
+    const h = setup({ behavior: { summarizeError: new AiError("schema_invalid", { retryable: false }) }, gradingTargets: () => targets });
+    await readySession(h, { 1: "a" });
+    const jobId = await h.start("interview_evaluation");
+    await h.drain();
+    expect(h.job(jobId).status).toBe("failed");
+
+    h.setContext(null);
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+
+    // With targets the gate decides as before.
+    targets = 1;
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "key_missing", status: 409 });
+    expect(h.job(jobId).status).toBe("failed");
   });
 });
 

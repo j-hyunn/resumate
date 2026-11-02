@@ -136,7 +136,7 @@
 | A6 | 그만둔 AI 작성 대화를 다시 이어 할 수 있음(`abandoned → active`), 90일 자동 정리 전까지 | PRD F-P1-06·F-P1-13, UX S-08·S-36, DM 2.5·3.4 | ★ |
 | A7 | 탈퇴 화면(S-25)을 약관 동의 게이트 밖에 둠. 미완료 상태로 로그인하면 바로 "탈퇴 마무리" | UX FL-07·S-25, DM 6.1 | ★ |
 | A8 | 그만둔 면접 세션의 답변은 편집 불가(현행 유지) | DM A.13, UX S-33 | |
-| A9 | 다시 채점은 실패한 답변만 다시 평가, 종합은 항상 다시. "새 결과" 표식은 완료 때만 지우고 다시 채점하면 되살림 | AI AI-06·AI-07, UX S-22·S-37 | |
+| A9 | 다시 채점은 실패한 답변만 다시 평가, 종합은 항상 다시. "새 결과" 표식은 완료 때만 지우고 다시 채점하면 되살림 (예외: Q53-10) | AI AI-06·AI-07, UX S-22·S-37 | |
 | A10 | 프로필 희망 정보(희망 직무·관심 산업)는 판정·강점·포지셔닝 근거가 아님(문맥 참고만) | AI C-3 V-4, AI-02 | ★ |
 | A11 | 모든 직무 면접 질문의 사실 전제는 상세 내용의 행동·결과와 성과에서만 | AI 4.1 | ★ |
 | A12 | 자소서 글자 수 보정 ±10% 유지("최대 10% 초과까지 통과") | AI AI-04, UX S-18·S-19 | |
@@ -170,6 +170,24 @@
 | R-51 | 진행 단계 문구의 최종 권한은 UX C-03. 채점 `prepare`는 "채점 준비 중" |
 | B·D | 구현이 정한 내용(쓰기 경로 RPC화, `ai_jobs` 컬럼·상태 전이, 2.11 RPC 인자·뷰, 진행 단계 값, 저장 키 UUID 변환, 별칭 노출 금지, AI-04 이벤트 순서, 공급자 오류 표·가격표 등)을 네 문서에 반영 |
 
+### 3.8 사용자 확정 (2026-10-30, UI v5.3 QA 질문)
+
+UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대기 9건과, 그 리뷰(`_workspace/03_spec-reviewer_review_q53.md`)에서 나온 1건. 원문은 `_workspace/00_input/planning-decisions-v53-qa.md`.
+
+| # | 결정 | 반영 문서 | ★ |
+|---|------|-----------|---|
+| Q53-1 | S-14: 동의 필요·키 무효면 만들기 전에 막음(C-21 / 키 교체), 동의 뒤 만들면서 추출. 입력 보존, 키 없음 흐름은 그대로 | PRD 3.3, UX S-14·FL-10·C-18, AI AI-01, DM 2.7.1·2.11.7 | ★ |
+| Q53-2 | 입력 원인으로 요건 추출이 실패해 요건이 없는 JD는 공고 원문 수정 허용. U-6·D-19의 예외 | PRD F-AP-01·D-19, UX S-15·C-20, AI AI-01, DM 2.6.1·A.6 | ★ |
+| Q53-3 | 입력 원인 채점 실패는 다시 채점 버튼 없음, 원인 + "이 기업 JD로 새 면접 시작" | UX S-22, AI 다시 채점, DM 2.7.1 | ★ |
+| Q53-4 | S-17: 요건 없는 JD는 추출 먼저 → 설정 화면, 기본 "AI에게 맡기기". 동의 필요·키 무효면 자동 실행 대신 누를 때 C-21 / 키 교체 | UX FL-03·S-17·C-11, AI AI-11 | |
+| Q53-5 | 종합만 실패하면 "종합 평가 다시 정리"(답변 재호출 없음, 활성 공급자) | UX S-22, AI 다시 채점, DM 2.7.1·2.9.1 | ★ |
+| Q53-6 | S-37 다시 채점 메뉴는 채점 실패 행 + 완료인데 실패 답변이 남은 행 모두 | UX S-37 | |
+| Q53-7 | 경력기술서 생성 중단은 블록 없이 이전 상태로 | UX C-04·S-19, AI AI-03, DM 2.7.1·A.9 | ★ |
+| Q53-8 | `project_fields`일 때 C-09 제목 변경 | UX C-09 | |
+| Q53-9 | 질문 생성 입력 원인 실패는 S-15로, `insufficient_data`만 S-20 C-09 | UX C-20·S-33·S-20·FL-12 | |
+| Q53-10 | 다시 채점 대상이 없고 종합 평가 다시 정리도 할 수 없는 입력 원인 채점 실패 세션의 "새 결과" 표식은 처음 열면 지움. 다시 할 수 있는 실패 세션은 A9 그대로 | UX S-22·S-37·L-01·S-20, AI 다시 채점, DM 2.7.1·A.12 | ★ |
+| Q53-11 | 추출은 성공했는데 요건이 0개인 JD도 공고 원문 수정 허용. 이 원문으로 만든 결과가 있으면 잠금(2026-11-01, UQ-610). AI-01 정상 경로에서는 생기지 않는 안전망 | PRD F-AP-01·D-19, UX S-15, AI AI-01, DM 2.6.1 | ★ |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -194,6 +212,18 @@
 | R-67 | `get_data_readiness().ai_connection.consent_required` 추가(활성 공급자·키 현재 등급의 2.11.5 재동의 판정, `private.ai_consent_allows_run`과 같은 기준) — 사용자 확정 2026-11-06, 백엔드 R3에서 구현 |
 
 - A1(다시 시도 = 활성 공급자, 공급자가 다르면 `step_outputs` 비우고 결과 행 다시 열기)은 **구현됨**(백엔드 R2, 42f7611, 2026-11-06).
+
+### 4.1a UI QA 결정 후속 (2026-10-30)
+
+| # | 백엔드에서 할 일 |
+|---|------------------|
+| Q53-1 | `create_application_project`가 행을 넣기 전에 동의·키를 확인하고 거부(`key_invalid`/`ai_consent_required`, 경로 ⑥, 고아 행 금지) |
+| Q53-2 | RPC `update_failed_jd_raw_text`, `raw_text_edited_at`, `private.job_descriptions_guard` 완화, `ensureJdExtracted`가 `begin` 뒤에 문장을 읽게 수정, `getJdView.rawTextEditable`, 지난 실패 표시 규칙, pgTAP (DM 2.6.1) |
+| Q53-3 | `answer_evaluations.error_code`, `fail_answer_evaluation` 인자, 입력 원인 답변 다시 채점 제외, `interview_evaluation_input_only`, 라우트의 `not_scored` 판정 변경 (DM 2.7.1) |
+| Q53-5 | 다시 채점의 종합만 다시 정리 경로(`evaluate` 없음), 대상 0 세션의 같은 행 다시 시도 거부 |
+| Q53-7 | `drafts_type_status_check`에 경력기술서 `composing`, 취소 처리 변경(`ai_jobs_release_drafts`, `fail_career_description`), `begin_career_description`의 `composing` 행 삭제, 조회 규칙 (DM 2.7.1) |
+| Q53-10 | `mark_interview_result_viewed` 조건 변경, 공용 판정 헬퍼(`begin_interview_evaluation`·다시 채점 라우트·세션 조회·이 RPC), `getInterviewResult`가 이 세션에도 RPC 호출, `canRetryEvaluation` 같은 판정, pgTAP (DM 2.7.1) |
+| Q53-11 | `update_failed_jd_raw_text` 조건 2·4에 `succeeded` + 요건 0개 추가, `job_descriptions_guard`가 `succeeded → pending`도 통과, pgTAP (DM 2.6.1) |
 
 ### 4.2 리뷰 중 생긴 백엔드 확인 항목
 

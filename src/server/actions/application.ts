@@ -7,6 +7,7 @@ import {
   MoveApplicationStageInput,
   SetApplicationOutcomeInput,
   UpdateApplicationProjectInput,
+  UpdateFailedJdRawTextInput,
   type ApplicationBoard,
   type ApplicationHub,
   type ApplicationProjectListItem,
@@ -15,6 +16,7 @@ import {
   type JdView,
   type MoveApplicationStageResult,
   type StageChangeResult,
+  type UpdateFailedJdRawTextResult,
 } from "@/lib/contracts/application";
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import { requireConsentedUser } from "@/server/auth/session";
@@ -36,6 +38,19 @@ export async function createApplicationProject(input: unknown): Promise<ActionRe
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return writes.createApplicationProject(supabase, parsed.data);
+  });
+}
+
+/**
+ * S-15 공고 원문 수정 (Q53-2 / Q53-11, DM 2.6.1): replaces the text and sends the JD back to
+ * `pending`. No AI, no key needed. 409 codes in `JD_RAW_TEXT_REFUSAL_CODES`.
+ */
+export async function updateFailedJdRawText(input: unknown): Promise<ActionResult<UpdateFailedJdRawTextResult>> {
+  const parsed = UpdateFailedJdRawTextInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return writes.updateFailedJdRawText(supabase, parsed.data);
   });
 }
 

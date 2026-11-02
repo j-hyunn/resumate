@@ -1,5 +1,5 @@
 import { aiErrorEvent } from "@/lib/contracts/ai";
-import { toAiFailure } from "@/lib/contracts/application";
+import { isFailureBeforeRawTextEdit, toAiFailure } from "@/lib/contracts/application";
 import { AI_ERROR_CODES, AI_PROVIDERS, CONNECTION_TIERS, MODEL_TIERS, type AiErrorCode, type AiProvider, type ConnectionTier, type ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { EvidenceChip } from "@/lib/contracts/evidence";
@@ -210,22 +210,26 @@ export function toInsightResultView(
  * - its job failed → that failure; succeeded without complete_insight or gone → `stalled`;
  *   canceled → no failure (a user cancel isn't an error [가정])
  * Otherwise the newest insight job, when it failed after the shown result, is the failure.
+ * A failure that ended before the raw text was edited is never returned (DM 2.6.1 지난 실패).
  */
 export function resolveInsightRun(
   jobs: readonly JobRow[],
   pendingRow: { status: string; ai_job_id: string | null } | null,
   shownAt: number,
+  rawTextEditedAt: string | null = null,
 ): { activeJob: InsightActiveJob | null; lastFailure: InsightLastFailure | null } {
   const activeJob = jobs.map(toActiveJob).find((j): j is InsightActiveJob => j !== null) ?? null;
   if (activeJob) return { activeJob, lastFailure: null };
   if (pendingRow?.status === "generating" && pendingRow.ai_job_id) {
     const job = jobs.find((j) => j.id === pendingRow.ai_job_id);
+    if (job && isFailureBeforeRawTextEdit(job.finished_at, rawTextEditedAt)) return { activeJob: null, lastFailure: null };
     if (!job || job.status === "succeeded") {
       return { activeJob: null, lastFailure: { ...toAiFailure(aiErrorEvent("stalled")), jobId: pendingRow.ai_job_id, failedAt: job?.finished_at ?? null } };
     }
     if (job.status === "failed") return { activeJob: null, lastFailure: toFailure(job) };
   }
   const newest = jobs[0];
+  if (newest && isFailureBeforeRawTextEdit(newest.finished_at, rawTextEditedAt)) return { activeJob: null, lastFailure: null };
   const lastFailure = newest && newest.status === "failed" && Date.parse(newest.finished_at ?? newest.created_at) > shownAt ? toFailure(newest) : null;
   return { activeJob: null, lastFailure };
 }
@@ -317,12 +321,13 @@ export async function getInsight(user: UserSupabaseClient, input: { applicationP
     insight = toInsightResultView(row, { chips: chips.get(row.id) ?? new Map(), requirements: requirementMap, projectNames, stale });
   }
 
-  const { activeJob: active, lastFailure } = resolveInsightRun(jobs, (pendingResult.data ?? [])[0] ?? null, insight ? Date.parse(insight.completedAt) : -Infinity);
+  const { activeJob: active, lastFailure } = resolveInsightRun(jobs, (pendingResult.data ?? [])[0] ?? null, insight ? Date.parse(insight.completedAt) : -Infinity, jd.rawTextEditedAt);
 
   return {
     applicationProjectId,
     requirements,
     extractionStatus: resolveExtraction({ extraction_status: jd.extractionStatus, extraction_job_id: jd.extractionJobId }, extractionJobs).status,
+    rawTextEditedAt: jd.rawTextEditedAt,
     insight,
     activeJob: active,
     lastFailure,

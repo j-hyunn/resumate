@@ -3,7 +3,9 @@ import type { UserSupabaseClient } from "@/server/db/types";
 import { fakeSupabase } from "@/test/fake-supabase";
 import { countShownChars, parseBlocks, toBlockViews } from "./blocks";
 import { markDraftCopied, saveSectionEdit } from "./edit";
-import { coverLetterStatus, effectiveSectionStatus, getDraft, listDrafts } from "./read";
+import { isTargetGone } from "./ai-run";
+import { loadDraftCounts } from "./progress";
+import { coverLetterStatus, effectiveDraftStatus, effectiveSectionStatus, getDraft, isStoppedRegeneration, listDrafts } from "./read";
 
 const AP = "00000000-0000-4000-8000-0000000000a1";
 const D1 = "00000000-0000-4000-8000-0000000000d1";
@@ -201,5 +203,92 @@ describe("edit / copy", () => {
     expect(await markDraftCopied(db.client as UserSupabaseClient, D1, now)).toEqual({ draftId: D1, firstCopiedAt: "2026-10-01T00:00:00.000Z" });
     const fresh = fakeSupabase({ drafts: [draftRow()] });
     expect((await markDraftCopied(fresh.client as UserSupabaseClient, D1, now)).firstCopiedAt).toBe("2026-10-29T03:00:00.000Z");
+  });
+});
+
+describe("stopped career description (Q53-7, DM 2.7.1)", () => {
+  const JOB = "00000000-0000-4000-8000-0000000000f1";
+  const career = (over: Record<string, unknown> = {}) => draftRow({ draft_type: "career_description", title: "경력기술서", status: "generating", ai_job_id: JOB, provider: "gemini", model: "m", model_tier: "default", connection_tier: "free", ...over });
+  const canceledJob = { id: JOB, job_type: "career_description", status: "canceled", application_project_id: AP, target_id: D1, provider: "gemini", connection_tier: "free", error_code: "canceled" };
+  const tables = (draft: Record<string, unknown>, job: Record<string, unknown> | null = canceledJob) => ({
+    application_projects: [{ id: AP }],
+    drafts: [draft],
+    draft_sections: [{ ...sectionRow({ status: "generating", ai_job_id: JOB, ai_content: null }), draft_id: D1 }],
+    draft_section_sources: [],
+    ai_jobs: job ? [job] : [],
+    evidence_links: [],
+  });
+
+  it("status: canceled job → composing; failed job or gone job → failed as before; running → generating", () => {
+    const row = { draft_type: "career_description", status: "generating", ai_job_id: JOB };
+    expect(effectiveDraftStatus(row, [], new Set(), new Set([JOB]))).toBe("composing");
+    expect(effectiveDraftStatus({ ...row, status: "failed" }, [], new Set(), new Set([JOB]))).toBe("composing");
+    expect(effectiveDraftStatus(row, [], new Set(), new Set())).toBe("failed");
+    expect(effectiveDraftStatus(row, [], new Set([JOB]))).toBe("generating");
+    expect(effectiveDraftStatus({ ...row, status: "ready" }, [], new Set(), new Set([JOB]))).toBe("ready");
+    expect(effectiveDraftStatus({ ...row, status: "composing", ai_job_id: null }, [], new Set())).toBe("composing");
+  });
+
+  it("a cover letter is out of scope: its status still comes from the questions", () => {
+    expect(effectiveDraftStatus({ draft_type: "cover_letter", status: "generating", ai_job_id: JOB }, ["failed"], new Set(), new Set([JOB]))).toBe("failed");
+  });
+
+  it("only a regeneration whose job was canceled counts as gone", () => {
+    const row = { draft_type: "career_description", status: "generating", ai_job_id: JOB, regenerated_from_id: D2 };
+    expect(isStoppedRegeneration(row, new Set([JOB]))).toBe(true);
+    expect(isStoppedRegeneration({ ...row, regenerated_from_id: null }, new Set([JOB]))).toBe(false);
+    expect(isStoppedRegeneration(row, new Set())).toBe(false);
+  });
+
+  it("list: a stopped first generation reads composing", async () => {
+    const db = fakeSupabase(tables(career()));
+    const list = await listDrafts(db.client as UserSupabaseClient, AP);
+    expect(list.drafts.map((d) => d.status)).toEqual(["composing"]);
+    // Same blanks as getDraft (QA-W0-03): the stale row's run info isn't shown.
+    expect(list.drafts[0]).toMatchObject({ sectionCount: 0, readySectionCount: 0, badge: { provider: null, model: null, modelTier: null, connectionTier: null } });
+  });
+
+  it("list and read: a stopped regeneration isn't shown; the draft it came from stands", async () => {
+    const source = career({ id: D2, status: "ready", ai_job_id: null });
+    const t = tables(career({ regenerated_from_id: D2 }));
+    t.drafts.push(source);
+    const db = fakeSupabase(t);
+    const list = await listDrafts(db.client as UserSupabaseClient, AP);
+    expect(list.drafts.map((d) => [d.id, d.status])).toEqual([[D2, "ready"]]);
+    await expect(getDraft(db.client as UserSupabaseClient, D1)).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("read: composing has no sections, blocks, badge or failure; options stay for S-17", async () => {
+    const db = fakeSupabase(tables(career({ options: { tone: "concise", included_project_ids: [PRJ] } })));
+    const view = await getDraft(db.client as UserSupabaseClient, D1);
+    expect(view.status).toBe("composing");
+    expect(view.sections).toEqual([]);
+    expect(view.failures).toEqual([]);
+    expect(view.badge).toEqual({ provider: null, model: null, modelTier: null, connectionTier: null });
+    expect(view.options).toMatchObject({ tone: "concise", includedProjectIds: [PRJ] });
+  });
+
+  it("read: a failed job still reads failed with its failure", async () => {
+    const db = fakeSupabase(tables(career(), { ...canceledJob, status: "failed", error_code: "timeout" }));
+    const view = await getDraft(db.client as UserSupabaseClient, D1);
+    expect(view.status).toBe("failed");
+    expect(view.failures.map((f) => f.code)).toContain("timeout");
+  });
+
+  it("counts: career description composing is left out, cover letter composing stays", async () => {
+    const db = fakeSupabase({
+      drafts: [
+        { application_project_id: AP, draft_type: "career_description", status: "composing" },
+        { application_project_id: AP, draft_type: "career_description", status: "ready" },
+        { application_project_id: AP, draft_type: "cover_letter", status: "composing" },
+      ],
+    });
+    expect((await loadDraftCounts(db.client as UserSupabaseClient, [AP])).get(AP)).toBe(2);
+  });
+
+  it("a late complete_career_description on a stopped row counts as target gone → canceled", () => {
+    expect(isTargetGone({ raise: "draft_not_found" })).toBe(true); // regeneration: row deleted
+    expect(isTargetGone({ raise: "invalid_ai_job" })).toBe(true); // first generation: composing, ai_job_id null
+    expect(isTargetGone({ raise: "something_else" })).toBe(false);
   });
 });

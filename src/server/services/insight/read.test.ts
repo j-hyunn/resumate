@@ -155,3 +155,41 @@ describe("resolveInsightRun (generating row outliving its job, QA-S5-06 skip loc
     expect(resolveInsightRun([job("j2", "failed")], null, Date.parse("2026-11-03T00:00:00Z")).lastFailure).toBeNull();
   });
 });
+
+describe("resolveInsightRun — failures of the old raw text (DM 2.6.1)", () => {
+  const row = (over: Partial<JobRow>): JobRow => ({
+    id: "j1",
+    status: "failed",
+    progress: {},
+    provider: "gemini",
+    connection_tier: "free",
+    error_code: "not_a_jd",
+    retry_after: null,
+    quota_resets_at: null,
+    finished_at: "2026-11-01T00:00:00Z",
+    created_at: "2026-11-01T00:00:00Z",
+    ...over,
+  });
+  const EDITED = "2026-11-02T00:00:00Z";
+
+  it("a job failed before the edit isn't surfaced; never edited → as before", () => {
+    expect(resolveInsightRun([row({})], null, -Infinity, EDITED).lastFailure).toBeNull();
+    expect(resolveInsightRun([row({})], null, -Infinity, null).lastFailure).toMatchObject({ code: "not_a_jd", jobId: "j1" });
+  });
+
+  it("a job failed after the edit is surfaced", () => {
+    expect(resolveInsightRun([row({ finished_at: "2026-11-03T00:00:00Z" })], null, -Infinity, EDITED).lastFailure).toMatchObject({ code: "not_a_jd" });
+  });
+
+  it("a generating row whose job failed before the edit isn't surfaced either; a gone job can't be compared", () => {
+    const pending = { status: "generating", ai_job_id: "j1" };
+    expect(resolveInsightRun([row({})], pending, -Infinity, EDITED).lastFailure).toBeNull();
+    expect(resolveInsightRun([], pending, -Infinity, EDITED).lastFailure).toMatchObject({ code: "stalled" });
+  });
+
+  it("an active job still wins", () => {
+    const out = resolveInsightRun([row({ id: "j2", status: "running", finished_at: null }), row({})], null, -Infinity, EDITED);
+    expect(out.activeJob?.jobId).toBe("j2");
+    expect(out.lastFailure).toBeNull();
+  });
+});

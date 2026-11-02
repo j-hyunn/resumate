@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { createLlm } from "@/server/ai/llm";
 import { consoleAiLogger } from "@/server/ai/log";
 import { extractJdRequirements } from "@/server/ai/pipelines/AI-01";
@@ -6,7 +7,7 @@ import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { createDbRunGate } from "@/server/services/ai-connection/keys";
 import { createJdExtractionDb } from "@/server/services/application/db";
-import type { JdExtractionDeps, JdExtractor } from "@/server/services/application/extraction";
+import { ensureJdExtracted, type EnsureJdResult, type JdExtractionDeps, type JdExtractor } from "@/server/services/application/extraction";
 import { connections } from "./connections";
 import { logJobEvent } from "./log";
 import { createSupabaseJobStore } from "./supabase-store";
@@ -41,4 +42,39 @@ export function createJdExtractionDeps(user: UserSupabaseClient, userId: string)
     extract: productionJdExtractor,
     log: logJobEvent,
   };
+}
+
+/**
+ * W3 (S-14 자동 추출, S-15 / S-17 요건 먼저): the same sync extraction, but the screen doesn't wait for the
+ * provider. Resolves as soon as the JD is `running` (begin_jd_extraction committed, so the next read shows
+ * it and polling works), or with the result when it ended first (connection gate, already extracted).
+ * The rest of the run stays alive through after().
+ */
+export async function startJdExtractionInBackground(user: UserSupabaseClient, userId: string, applicationProjectId: string): Promise<EnsureJdResult | { status: "started" }> {
+  const deps = createJdExtractionDeps(user, userId);
+  let markBegun = () => {};
+  const begun = new Promise<{ status: "started" }>((resolve) => {
+    markBegun = () => resolve({ status: "started" });
+  });
+  const run = ensureJdExtracted(
+    {
+      ...deps,
+      jds: {
+        ...deps.jds,
+        begin: async (...args: Parameters<JdExtractionDeps["jds"]["begin"]>) => {
+          const out = await deps.jds.begin(...args);
+          markBegun();
+          return out;
+        },
+      },
+    },
+    applicationProjectId,
+  );
+  after(() =>
+    run.then(
+      () => undefined,
+      (err: unknown) => logJobEvent("jd_extraction.background_failed", { code: err instanceof Error ? err.name : "unknown" }),
+    ),
+  );
+  return Promise.race([begun, run]);
 }

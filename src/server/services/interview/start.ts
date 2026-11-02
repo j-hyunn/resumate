@@ -15,6 +15,7 @@ import type { JobRunner } from "@/server/jobs/runner";
 import { assertApplicationProjectOwned } from "@/server/services/application/db";
 import { getDataReadiness } from "@/server/services/career";
 import { raiseName } from "@/server/services/insight/db";
+import { loadGradingDecisions } from "./grading";
 import {
   EVALUATION_JOB_TYPE,
   INTERVIEW_JOB_COLUMNS,
@@ -162,6 +163,29 @@ export async function startInterviewSession(
   return { kind: "started", data: { sessionId, jobId, dataSufficiency } };
 }
 
+/**
+ * S-20 "그만두고 새로 시작" (DM 2.7.1: abandon_interview_session → create_interview_session). Same
+ * checks as 시작하기 BEFORE abandoning, so a refusal leaves the session as it is. A session that
+ * stopped being in progress meanwhile (already abandoned, submitted elsewhere) just starts the new one.
+ */
+export async function restartInterviewSession(
+  deps: InterviewStartDeps,
+  sessionId: string,
+  applicationProjectId: string,
+  input: { interviewType: InterviewType; questionCount: 3 | 5 | 7 },
+): Promise<StartInterviewOutcome> {
+  const session = await loadSessionCore(deps.user, sessionId);
+  if (session.application_project_id !== applicationProjectId) throw sessionNotFound();
+  if (input.interviewType === "job") {
+    const readiness = await (deps.getReadiness ?? getDataReadiness)(deps.user);
+    if (!readiness.features.job_interview.ready) return { kind: "insufficient_data", readiness: readiness.features.job_interview };
+  }
+  await assertConnected(deps);
+  const { error } = await deps.user.rpc("abandon_interview_session", { p_session_id: sessionId });
+  if (error && raiseName(error) !== "interview_not_in_progress") throw mapDbError(error);
+  return startInterviewSession(deps, applicationProjectId, input);
+}
+
 /** `POST /api/interview-sessions/{id}/questions/retry` — only while generation failed (S-33). */
 export async function retryInterviewQuestions(deps: InterviewStartDeps, sessionId: string): Promise<RetryInterviewQuestionsResponse> {
   const session = await loadSessionCore(deps.user, sessionId);
@@ -192,25 +216,22 @@ export async function submitInterviewSession(deps: InterviewStartDeps, sessionId
 }
 
 /**
- * `POST /api/interview-sessions/{id}/evaluation/retry` (다시 채점): when the
- * session is `evaluation_failed` (effective), or `completed` with `not_scored`
- * answers. begin_interview_evaluation picks the answers without a success.
+ * `POST /api/interview-sessions/{id}/evaluation/retry` (다시 채점 / 종합 평가 다시 정리):
+ * DM 2.7.1 판정표, refused before any job. `input_only` → `interview_evaluation_input_only`
+ * (details.cause), `none` → `interview_evaluation_not_retryable`. Then the connection gate.
+ * begin_interview_evaluation picks the answers, none for a summary-only redo (Q53-5).
  */
 export async function retryInterviewEvaluation(deps: InterviewStartDeps, sessionId: string): Promise<RetryInterviewEvaluationResponse> {
   const session = await loadSessionCore(deps.user, sessionId);
   const run = resolveSessionRun(session, await loadSessionJobs(deps.user, sessionId));
   if (run.activeJob?.jobType === EVALUATION_JOB_TYPE) return { sessionId, jobId: run.activeJob.jobId, inProgress: true };
-  let retryable = run.status === "evaluation_failed";
-  if (!retryable && run.status === "completed") {
-    const { count, error } = await deps.user
-      .from("interview_answers")
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", sessionId)
-      .eq("score_status", "not_scored");
-    if (error) throw mapDbError(error);
-    retryable = (count ?? 0) > 0;
+  const decision = (await loadGradingDecisions(deps.user, [sessionId])).get(sessionId)?.decision;
+  if (decision?.kind === "input_only") {
+    throw mapDbError({ code: "P0001", message: "interview_evaluation_input_only", details: decision.cause });
   }
-  if (!retryable) throw new AppError("interview_evaluation_not_retryable", "다시 채점할 답변이 없어요.", { status: 409 });
+  if (decision?.kind !== "regrade" && decision?.kind !== "resummarize") {
+    throw new AppError("interview_evaluation_not_retryable", "다시 채점할 답변이 없어요.", { status: 409 });
+  }
   await assertConnected(deps);
   const started = await startEvaluationJob(deps, { id: sessionId, applicationProjectId: session.application_project_id });
   return { sessionId, jobId: started.jobId, inProgress: started.inProgress };

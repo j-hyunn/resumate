@@ -377,7 +377,8 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     expect(grouped.abandoned.map((x) => x.id)).toEqual([second.data.sessionId]);
 
     const progress = await loadProgress(user, [project]);
-    expect(progress.get(project)).toMatchObject({ interviewCount: 2, interviewInProgress: false });
+    // UQ-700: the 0-question abandoned session is listed but not counted (Q53-9).
+    expect(progress.get(project)).toMatchObject({ interviewCount: 1, interviewInProgress: false });
 
     expect((await listInterviewSessions(other, {})).sessions).toEqual([]);
     await deleteInterviewSession(user, { sessionId: second.data.sessionId });
@@ -469,6 +470,70 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
       expect(session.data).toEqual({ status: "completed", evaluation_provider: "openai" });
       const usage = await admin.from("ai_usage_records").select("provider").eq("ai_job_id", jobId).order("occurred_at");
       expect(usage.data?.slice(-3).map((u) => u.provider)).toEqual(["openai", "openai", "openai"]);
+    });
+  });
+
+  describe("W0 (DM 2.7.1 판정표): input-caused answer, summary-only redo", () => {
+    const project3 = crypto.randomUUID();
+    let session3 = "";
+    let failedJob = "";
+
+    it("one answer blocked + summary failed → resummarize; the view asks the RPC and keeps the mark; same-row retry refused", async () => {
+      await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: project3, rawText: KO_BACKEND.raw }));
+      queue.push({ json: KO_BACKEND.output }, { json: AI05_OUTPUT });
+      const h = harness();
+      const out = await startInterviewSession(h.startDeps, project3, { interviewType: "culture_fit", questionCount: 3 });
+      if (out.kind !== "started") throw new Error("not started");
+      session3 = out.data.sessionId;
+      await h.drain();
+      const sheet = await getAnswerSheet(user, { sessionId: session3 });
+      for (const item of sheet.items.slice(0, 2)) await saveInterviewAnswer(user, { answerId: item.answer!.id, answerText: ANSWER });
+
+      queue.push({ json: AI06_OUTPUT }, { error: "safety_blocked" }, { error: "billing_required" });
+      const submitted = await submitInterviewSession(h.startDeps, session3);
+      await h.drain();
+      expect(queue).toHaveLength(0);
+      failedJob = submitted.jobId!;
+      expect((await admin.from("ai_jobs").select("status, error_code").eq("id", failedJob).single()).data).toEqual({ status: "failed", error_code: "billing_required" });
+      const rows = await admin.from("answer_evaluations").select("status, error_code").eq("session_id", session3).eq("status", "failed");
+      expect(rows.data).toEqual([{ status: "failed", error_code: "safety_blocked" }]); // Q53-3: the cause reached the row
+
+      const view = await getInterviewResult(user, { sessionId: session3 });
+      expect(view.session.status).toBe("evaluation_failed");
+      expect(view.grading).toEqual({ kind: "resummarize" });
+      expect(view.canRetryEvaluation).toBe(true);
+      expect(view.firstView).toBe(false); // A9: something can still be done
+      expect(view.items.map((i) => i.evaluationErrorCode).filter(Boolean)).toEqual(["safety_blocked"]);
+
+      const list = await listInterviewSessions(user, { applicationProjectId: project3 });
+      expect(list.sessions[0]!.grading).toEqual({ kind: "resummarize" });
+
+      await expect(h.runner.retryJob({ jobId: failedJob, userId })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+    });
+
+    it("resummarize: a new job with one AI-07 call and no AI-06; then input_only: no button, 409 with the cause", async () => {
+      queue.push({ json: AI07_OUTPUT });
+      const h = harness();
+      const res = await retryInterviewEvaluation(h.startDeps, session3);
+      expect(res.jobId).not.toBe(failedJob);
+      await h.drain();
+      expect(queue).toHaveLength(0);
+      expect((await admin.from("ai_jobs").select("status, step_outputs").eq("id", res.jobId).single()).data).toMatchObject({ status: "succeeded", step_outputs: { evaluate: { succeededCount: 1 } } });
+      const usage = await admin.from("ai_usage_records").select("id").eq("ai_job_id", res.jobId);
+      expect(usage.data).toHaveLength(1);
+
+      const view = await getInterviewResult(user, { sessionId: session3 });
+      expect(view.session.status).toBe("completed");
+      expect(view.feedback).not.toBeNull();
+      expect(view.grading).toEqual({ kind: "input_only", cause: "safety_blocked" });
+      expect(view.canRetryEvaluation).toBe(false);
+      expect(view.firstView).toBe(true);
+      await expect(retryInterviewEvaluation(h.startDeps, session3)).rejects.toMatchObject({ code: "interview_evaluation_input_only", status: 409, details: { cause: "safety_blocked" } });
+    });
+
+    afterAll(async () => {
+      queue.length = 0;
+      await deleteApplicationProject(user, project3);
     });
   });
 

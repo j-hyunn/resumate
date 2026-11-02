@@ -240,3 +240,12 @@ export function createDbRunGate(db: AiWriterSupabaseClient): (jobId: string) => 
     return mapRunGate((data as string | null) ?? null);
   };
 }
+
+/** All `ai_provider_keys_public` columns (view without ciphertext, DM 2.11.1) for the data layer. */
+export async function loadPublicKeyRows(supabase: UserSupabaseClient, provider?: AiProvider) {
+  let q = supabase.from("ai_provider_keys_public").select("*");
+  if (provider) q = q.eq("provider", provider);
+  const { data, error } = await q;
+  if (error) throw mapDbError(error);
+  return data ?? [];
+}

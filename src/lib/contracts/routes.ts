@@ -1,22 +1,27 @@
 /**
  * App paths the auth flow redirects between. Page routes are owned by the UI
- * harness; `/login` and `/onboarding/consent` are assumed names ([가정], S1 plan)
- * and change here only.
+ * harness (src/lib/routes.ts); this contract follows them and changes here only.
  */
 export const ROUTES = {
   /** S-02 sign-in. */
-  login: "/login",
+  login: "/sign-in",
   /** S-03 consent. */
-  consent: "/onboarding/consent",
+  consent: "/consent",
   /** S-08 career — the default screen after sign-in (F-COM-02, UX S-02/S-03). */
   home: "/career",
   /** OAuth / magic link callback (Route Handler). */
   authCallback: "/auth/callback",
   /**
-   * S-25 회원 탈퇴 — OUTSIDE the consent gate (R1 A7). [가정] path; the page must use
+   * S-25 회원 탈퇴 — OUTSIDE the consent gate (R1 A7). The page must use
    * `requireUserForAccountDeletion`, not the consented-user gate.
    */
-  accountDeletion: "/settings/account/delete",
+  accountDeletion: "/settings/withdraw",
+  /**
+   * S-25 탈퇴 마무리 (v5.3 A7): where a half-deleted account goes. Outside the shell and the
+   * consent gate. Guards redirect here directly: `/settings/withdraw` sits in the dashboard
+   * layout, so a layout guard redirecting to it would loop.
+   */
+  accountDeletionFinalize: "/settings/withdraw/finalize",
 } as const;
 
 /** Paths that need a signed-in user. The proxy redirects anonymous requests to login. */
@@ -26,12 +31,16 @@ export const PROTECTED_PREFIXES = [
   "/interviews",
   "/board",
   "/settings",
-  "/onboarding/consent",
+  "/consent",
 ] as const;
 
-/** Error query values `/login?error=` can receive from the server. */
+/** Error query values `/sign-in?error=` can receive from the server. */
 export const LOGIN_ERRORS = ["auth_callback"] as const;
 export type LoginError = (typeof LOGIN_ERRORS)[number];
+
+export function isLoginError(value: unknown): value is LoginError {
+  return typeof value === "string" && (LOGIN_ERRORS as readonly string[]).includes(value);
+}
 
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

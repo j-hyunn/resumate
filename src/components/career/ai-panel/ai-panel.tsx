@@ -10,17 +10,29 @@
  *            onUserMessageClick={(m) => …}                                // flash the card section citing it
  *            onDirectInput={() => focusFirstField()} />                   // C-18 대안 "직접 입력"
  *
+ * Thread: shadcn Chat (Message Scroller · Message · Bubble); input: Input Group.
  * Frame: header (Sparkles · "Resumate AI" · C-19 · 기록 · 새 대화 · ⋯ · ×) → chat view (messages → 제안 독 →
  * chip row → input) or the history view. States: C-18 area / inline lock, closed (40 / `closed`), before-send
  * blocks, failed turn (C-20 + 다시 보내기), streaming (C-04 caret), first-message processing.
  */
 import * as React from "react"
-import { ArrowLeft, History, Info, Loader2, Lock, MoreHorizontal, Plus, Sparkles, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowLeft, History, Info, Loader2, Lock, MoreHorizontal, Plus, Sparkles, Trash2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Item } from "@/components/ui/item"
 import { Button } from "@/components/ui/button"
+import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+  useMessageScroller,
+} from "@/components/ui/message-scroller"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -241,11 +253,36 @@ function highlightQuotes(text: string, quotes: string[]): React.ReactNode {
 
 function AiAvatar() {
   return (
-    <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-ai-subtle">
+    <MessageAvatar aria-hidden className="size-6 min-w-6 self-start bg-ai-subtle">
       <Sparkles className="size-3.5 text-ai" />
-    </span>
+    </MessageAvatar>
   )
 }
+
+/** AI turn: avatar + ghost bubble (full width, no fill) — design-system v4 5.10 AI 메시지 */
+function AiMessage({ children, className, ...props }: React.ComponentProps<typeof Message>) {
+  return (
+    <Message className={cn("gap-2.5", className)} {...props}>
+      <AiAvatar />
+      <MessageContent>
+        <Bubble variant="ghost">
+          <BubbleContent className="text-base leading-[1.75] whitespace-pre-wrap">{children}</BubbleContent>
+        </Bubble>
+      </MessageContent>
+    </Message>
+  )
+}
+
+/** a flashed user message (onUserMessageClick from a card's 근거) is brought into view inside the scroller */
+function FlashScroll({ messageId }: { messageId: string | undefined }) {
+  const { scrollToMessage } = useMessageScroller()
+  React.useEffect(() => {
+    if (messageId) scrollToMessage(messageId, { align: "center", behavior: "smooth" })
+  }, [messageId, scrollToMessage])
+  return null
+}
+
+const USER_BUBBLE = "rounded-2xl rounded-br-md border-border bg-card px-3.5 py-2.5 text-base leading-[1.75] whitespace-pre-wrap"
 
 function MessageList({
   panel,
@@ -258,23 +295,10 @@ function MessageList({
   onDeleteChat: () => void
   hideFailure?: boolean
 }) {
-  const scroller = React.useRef<HTMLDivElement | null>(null)
-  const stick = React.useRef(true)
   const messages = panel.chat?.messages ?? []
   const startArea = !panel.chat || panel.chat.message_count === 0
   const providerLabel = panel.connection?.active_provider ? AI_PROVIDER_LABELS[panel.connection.active_provider] : null
   const freeTier = panel.connection?.connection_tier === "free" && providerLabel
-
-  React.useEffect(() => {
-    const el = scroller.current
-    if (el && stick.current) el.scrollTop = el.scrollHeight
-  }, [messages.length, panel.reply, panel.phase, panel.failure])
-
-  React.useEffect(() => {
-    const id = panel.flashedMessage?.id
-    if (!id) return
-    document.getElementById(`wcm-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })
-  }, [panel.flashedMessage])
 
   if (panel.loadingChat) {
     return (
@@ -287,117 +311,115 @@ function MessageList({
     )
   }
 
+  // shadcn Chat: Message Scroller keeps the user's turn as the scroll anchor and follows the reply (autoScroll)
+  // while the user stays at the live edge. Remounted per chat so a switched chat opens at its end.
   return (
-    <div
-      ref={scroller}
-      onScroll={(e) => {
-        const el = e.currentTarget
-        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
-      }}
-      className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
-    >
-      <ol className="space-y-5">
-        {/* 시작 영역: no chat row yet → the local greeting (same copy the start RPC stores) */}
-        {!panel.chat ? (
-          <li className="flex gap-2.5">
-            <AiAvatar />
-            <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
-              {panel.greeting}
-              {freeTier ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
-            </p>
-          </li>
-        ) : null}
-        {messages.map((m) => {
-          const flashed = panel.flashedMessage?.id === m.id
-          if (m.role === "user") {
-            return (
-              <li key={m.id} id={`wcm-${m.id}`} className="ml-auto max-w-[85%] space-y-1">
-                <p className="text-right text-xs text-muted-foreground tabular-nums">내 답변 #{m.user_number ?? "?"}</p>
-                {/* a button only when the page wires the click (no inert tab stops, UQ-PA-16) */}
-                {onUserMessageClick ? (
-                  <button
-                    type="button"
-                    onClick={() => onUserMessageClick(m)}
-                    className={cn(
-                      "w-full cursor-pointer rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 text-left text-base leading-[1.75] whitespace-pre-wrap hover:ring-1 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                      flashed && "animate-field-flash",
-                    )}
-                  >
-                    {flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content}
-                  </button>
+    <MessageScrollerProvider key={panel.chat?.id ?? "start"} autoScroll defaultScrollPosition="end">
+      <MessageScroller className="h-auto flex-1">
+        <FlashScroll messageId={panel.flashedMessage?.id} />
+        {/* Content is role="log": an added message is announced; the streaming item is aria-hidden (A-6) */}
+        <MessageScrollerViewport aria-label="대화 메시지">
+          <MessageScrollerContent className="gap-5 px-4 py-4">
+            {/* 시작 영역: no chat row yet → the local greeting (same copy the start RPC stores) */}
+            {!panel.chat ? (
+              <MessageScrollerItem messageId="greeting">
+                <AiMessage>
+                  {panel.greeting}
+                  {freeTier ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
+                </AiMessage>
+              </MessageScrollerItem>
+            ) : null}
+            {messages.map((m) => {
+              const flashed = panel.flashedMessage?.id === m.id
+              if (m.role === "user") {
+                const text = flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content
+                return (
+                  <MessageScrollerItem key={m.id} messageId={m.id} scrollAnchor>
+                    <Message align="end">
+                      <MessageContent className="gap-1">
+                        <MessageHeader className="justify-end px-0 tabular-nums">내 답변 #{m.user_number ?? "?"}</MessageHeader>
+                        <Bubble align="end" variant="outline" className="max-w-[85%]">
+                          {/* a button only when the page wires the click (no inert tab stops, UQ-PA-16) */}
+                          {onUserMessageClick ? (
+                            <BubbleContent asChild className={cn(USER_BUBBLE, "cursor-pointer hover:ring-1 hover:ring-border", flashed && "animate-field-flash")}>
+                              <button type="button" onClick={() => onUserMessageClick(m)}>
+                                {text}
+                              </button>
+                            </BubbleContent>
+                          ) : (
+                            <BubbleContent className={cn(USER_BUBBLE, flashed && "animate-field-flash")}>{text}</BubbleContent>
+                          )}
+                        </Bubble>
+                      </MessageContent>
+                    </Message>
+                  </MessageScrollerItem>
+                )
+              }
+              return (
+                <MessageScrollerItem key={m.id} messageId={m.id} className="space-y-2">
+                  <AiMessage>
+                    {m.content}
+                    {m.is_greeting && freeTier && !m.content.includes("무료 등급") ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
+                  </AiMessage>
+                  {panel.sensitiveMessageIds.has(m.id) ? (
+                    <Alert variant="info" className="ml-8 w-auto">
+                      <AlertDescription className="text-sm">
+                        {PANEL_COPY.sensitive}{" "}
+                        <Button variant="link" size="sm" className="h-auto px-0" onClick={onDeleteChat}>
+                          대화 삭제
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                </MessageScrollerItem>
+              )
+            })}
+            {startArea ? (
+              <MessageScrollerItem messageId="notice" className="flex items-start gap-1.5 pl-8 text-sm text-muted-foreground">
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {PANEL_NOTICE[panel.target]}
+              </MessageScrollerItem>
+            ) : null}
+            {/* streaming reply (C-04): announced on completion only (A-6) */}
+            {panel.phase === "streaming" ? (
+              <MessageScrollerItem messageId="streaming" aria-hidden>
+                {panel.reply ? (
+                  <AiMessage>
+                    {panel.reply}
+                    <StreamingCaret />
+                  </AiMessage>
                 ) : (
-                  <div className={cn("rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 text-base leading-[1.75] whitespace-pre-wrap", flashed && "animate-field-flash")}>
-                    {flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content}
-                  </div>
+                  <Message className="items-center gap-2.5 text-muted-foreground">
+                    <AiAvatar />
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                    <span>답을 쓰는 중…</span>
+                  </Message>
                 )}
-              </li>
-            )
-          }
-          return (
-            <li key={m.id} id={`wcm-${m.id}`} className="space-y-2">
-              <div className="flex gap-2.5">
-                <AiAvatar />
-                <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
-                  {m.content}
-                  {m.is_greeting && freeTier && !m.content.includes("무료 등급") ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
-                </p>
-              </div>
-              {panel.sensitiveMessageIds.has(m.id) ? (
-                <Alert variant="info" className="ml-8 w-auto">
-                  <AlertDescription className="text-sm">
-                    {PANEL_COPY.sensitive}{" "}
-                    <Button variant="link" size="sm" className="h-auto px-0" onClick={onDeleteChat}>
-                      대화 삭제
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-            </li>
-          )
-        })}
-        {startArea ? (
-          <li className="flex items-start gap-1.5 pl-8 text-sm text-muted-foreground">
-            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {PANEL_NOTICE[panel.target]}
-          </li>
-        ) : null}
-        {/* streaming reply (C-04): announced on completion only (A-6) */}
-        {panel.phase === "streaming" && panel.reply ? (
-          <li className="flex gap-2.5" aria-hidden>
-            <AiAvatar />
-            <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
-              {panel.reply}
-              <StreamingCaret />
-            </p>
-          </li>
-        ) : null}
-        {panel.phase === "streaming" && !panel.reply ? (
-          <li className="flex items-center gap-2.5 text-sm text-muted-foreground">
-            <AiAvatar />
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            <span>답을 쓰는 중…</span>
-          </li>
-        ) : null}
-        {panel.failure && !hideFailure ? (
-          <li className="pl-8">
-            <AiErrorNotice
-              code={panel.failure.code as Parameters<typeof AiErrorNotice>[0]["code"]}
-              provider={panel.failure.provider}
-              retryAfter={panel.failure.retry_after}
-              quotaResetsAt={panel.failure.quota_resets_at}
-              size="inline"
-              requestPath
-              retryLabel="다시 보내기"
-              onRetry={panel.retry}
-              lockEntry="writing_chat"
-            />
-          </li>
-        ) : null}
-      </ol>
-      <div role="status" aria-live="polite" className="sr-only">
-        {panel.phase === "idle" && messages.length ? (messages[messages.length - 1].role === "assistant" ? messages[messages.length - 1].content : "") : ""}
-      </div>
-    </div>
+              </MessageScrollerItem>
+            ) : null}
+            {panel.failure && !hideFailure ? (
+              <MessageScrollerItem messageId="failure" className="pl-8">
+                <AiErrorNotice
+                  code={panel.failure.code as Parameters<typeof AiErrorNotice>[0]["code"]}
+                  provider={panel.failure.provider}
+                  retryAfter={panel.failure.retry_after}
+                  quotaResetsAt={panel.failure.quota_resets_at}
+                  size="inline"
+                  requestPath
+                  retryLabel="다시 보내기"
+                  onRetry={panel.retry}
+                  lockEntry="writing_chat"
+                />
+              </MessageScrollerItem>
+            ) : null}
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton>
+          <ArrowDown aria-hidden />
+          <span className="sr-only">최근 메시지로 이동</span>
+        </MessageScrollerButton>
+      </MessageScroller>
+    </MessageScrollerProvider>
   )
 }
 

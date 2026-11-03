@@ -32,7 +32,7 @@ function SelectValue({
 
 /** (v4) design-system 2: `variant="chip"` = S-10 머리 분류 회색 알약 (ChipSelect). */
 const SELECT_TRIGGER_CHIP =
-  "h-8 w-auto gap-1 rounded-full border-transparent bg-muted px-3 text-sm hover:bg-accent data-[placeholder]:text-muted-foreground max-md:h-11 data-[size=default]:h-8 data-[size=sm]:h-8 data-[size=sm]:rounded-full max-md:data-[size=default]:h-11 max-md:data-[size=sm]:h-11 dark:bg-muted dark:hover:bg-accent [&>svg]:size-3.5"
+  "h-8 w-auto gap-1 rounded-full border-transparent bg-muted px-3 text-sm hover:bg-primary/10 hover:text-primary-text data-[state=open]:bg-primary/10 data-[state=open]:text-primary-text data-[placeholder]:text-muted-foreground max-md:h-11 data-[size=default]:h-8 data-[size=sm]:h-8 data-[size=sm]:rounded-full max-md:data-[size=default]:h-11 max-md:data-[size=sm]:h-11 dark:bg-muted dark:hover:bg-primary/10 [&>svg]:size-3.5"
 
 function SelectTrigger({
   className,

@@ -547,8 +547,8 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
               {projectId ? (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteOpen(true)}>
-                    <Trash2 aria-hidden className="text-destructive" />
+                  <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+                    <Trash2 aria-hidden />
                     프로젝트 삭제
                   </DropdownMenuItem>
                 </>
@@ -679,7 +679,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="-ml-2 text-muted-foreground"
+                            className="-ml-2"
                             disabled={panel.responding}
                             onClick={() => {
                               panel.show()

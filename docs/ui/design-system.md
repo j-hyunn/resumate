@@ -1,7 +1,7 @@
 # Resumate 디자인 시스템 v5
 
 > 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영)
-> 기준 기획: **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`로 표시했다.
+> 기준 기획: **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
 
@@ -56,7 +56,7 @@
 | `--input` | 입력란·outline 버튼 테두리 = 외곽선 기본색 (v4, 1.4.11 3:1 미충족 — 8장 v4 메모) | `#E2E2E2` | `oklch(0.54 0.01 260)` #6b6f75 |
 | `--ring` | 포커스 링 = primary (v4) | `#15A76E` | `oklch(0.66 0.12 158)` |
 | `--sidebar` 외 | 셸 왼쪽 메뉴 | 아래 블록 | 아래 블록 |
-| (v5) `--shell` / `--shell-foreground` | **L-02 전체 페이지 셸 바탕**(상단 바와 흰 본문 카드 바깥). Figma의 연한 민트 그레이 | `oklch(0.955 0.012 165)` #e9f3ee / = foreground | `oklch(0.165 0.006 165)` #0c0f0e / = foreground |
+| (v5) `--shell` / `--shell-foreground` | **L-02 전체 페이지 셸 바탕**(상단 바와 흰 본문 카드 바깥). L-01 앱 바탕과 같은 연한 민트 | `#F3FBF8` (= `--sidebar`, v4 앱 바탕 — v5, UQ-BR-13) / = foreground | `oklch(0.165 0.006 165)` #0c0f0e / = foreground |
 | (v5) `--panel` / `--panel-foreground` | **Resumate AI 패널 바탕**(L-02 본문 카드 안의 오른쪽 패널). 패널 안 빠른 버튼 칩은 `bg-muted`, 입력창은 `bg-card`라서 패널은 그 사이 밝기 | `oklch(0.972 0.003 260)` #f4f6f8 / = foreground | `oklch(0.235 0.007 260)` #1c1e21 / = foreground |
 | `--stage-*` | 보드 단계 점(장식, 글자 없이 쓰지 않음) | 1.1.4 | 1.1.4 |
 | `--chart-1..5` | 차트(현재 MVP 화면에 차트 없음, shadcn 기본 이름 유지) | 아래 블록 | 아래 블록 |
@@ -450,6 +450,8 @@ v4 후속(UQ-708~722)으로 더한 variant·prop — 색이 필요하면 아래�
 | 삭제·버리기를 시작하는 ghost 버튼(삭제, 그래도 닫기) | `Button variant="destructive-ghost"` — `text-destructive`, hover·열림 `bg-destructive/10`(다크 `/20`). 확인 단계의 solid 버튼은 그대로 `destructive` |
 | 빨간 오류 문장 안 링크(저장 실패 — 다시 시도) | `Button variant="destructive-link"` |
 | 검토가 필요한 항목으로 보내는 경고 버튼 | `Button variant="warning-outline"` — `border-warning text-warning-subtle-foreground`, hover `bg-warning-subtle` |
+| (v5, UQ-BR-9) 경고 묶음을 여닫는 가벼운 트리거("확인이 필요한 내용 N개") | `Button variant="warning-ghost"` — `text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground aria-expanded:bg-warning-subtle aria-expanded:text-warning-subtle-foreground`. 테두리 없음. 아이콘(`TriangleAlert`)은 자기 클래스 `text-warning` |
+| (v5, UQ-BR-7) 눌림 상태를 가진 ghost 아이콘 버튼(AI 패널 "대화 기록") | `Button variant="ghost"` + `aria-pressed` — `aria-pressed:bg-primary/10 aria-pressed:text-primary-text`(= `aria-current`과 같은 초록). 사용처에서 `bg-*`를 붙이지 않는다 |
 | 아직 닿지 않은 단계(ghost 단계 버튼) | `Button variant="ghost"` + `data-pending` — hover 전까지 `text-muted-foreground` |
 | 없음·근거 없음·중단·해당 없음·잠금·편집됨처럼 흐린 상태 배지 | `Badge variant="muted"` — `border-border text-muted-foreground` |
 | 단계 색 옆의 중립 개수 알약(보드 열 머리) | `Badge variant="count-neutral"` — `bg-background text-muted-foreground` |
@@ -469,6 +471,16 @@ v4 후속(UQ-708~722)으로 더한 variant·prop — 색이 필요하면 아래�
 | 토글 선택 | `Toggle`·`ToggleGroupItem` 기본값(`data-[state=on]` 초록, outline이면 테두리도 primary) |
 
 예외(전용 모양 유지): 근거 칩(C-01·C-15), 공급자 배지(C-19), 초안 편집기 블록 hover, 보드 카드 손잡이, 채팅 사용자 말풍선 버튼(S-36, `focus-visible:ring-2` 있음), 빈 긴 글 자리 글자 "내용을 입력해주세요"(C-24, muted 글자 + 포커스 링). 본문 텍스트 링크(브레드크럼·동의·정책 뒤로 가기 등)는 줄 단위 항목이 아니므로 `underline` + `hover:text-foreground`를 허용한다.
+
+(v5, UQ-BR-14·15) **L-02·AI 패널과 라디오 카드의 예외** — 아래는 위 규칙과 다른 모양을 일부러 둔다. 목록에 없는 것은 위 표를 따른다.
+
+| 대상 | 예외 내용 | 근거 |
+|------|-----------|------|
+| L-02 원형 아이콘 버튼: CrumbRow "←"(`secondary`), 패널 보내기(`default`, R-C8)·중단(`outline`), 좁은 화면의 떠 있는 "Resumate AI"(`outline` + `shadow-md`) | 반경만 `rounded-full`(className). 색·hover는 variant 그대로(덧씌우기 없음) | Figma 원형 버튼. 반경은 색이 아니라 모양이라 1.3 "색 덧씌우기 금지"에 걸리지 않는다. 일반 버튼은 `rounded-control` |
+| 문서형 입력 `DocTitleInput`·`DocTextarea`(5.9, A-13) | 반경 `rounded-md`(6), hover 바탕 `hover:bg-accent/60`(제목)·`hover:bg-accent/50`(본문) 회색 | 입력은 "선택·이동" 대상이 아니라서 초록 hover를 쓰지 않는다. 테두리 없는 글 칸이 본문 글처럼 보이도록 반경을 작게 둔다. 대화 입력창·다이얼로그·패널 폼 입력은 그대로 `rounded-control` + `border-input` |
+| 패널 사용자 말풍선 버튼(5.10) | `hover:ring-1 hover:ring-border` + `focus-visible:ring-2 ring-ring`, 바탕 그대로 | 위 "채팅 사용자 말풍선 버튼(S-36)" 예외를 5.10 패널 말풍선에 그대로 옮긴다(S-36은 폐기) |
+| 제안 카드 머리(3.24·3.25 접기 토글) | hover 바탕 없음. `focus-visible:ring-2 focus-visible:ring-ring`만 | 카드 머리 전체가 접기 단추라 바탕을 칠하면 카드 위쪽만 초록 띠가 된다. `ChevronDown`과 `aria-expanded`가 접기를 알린다 |
+| 카드형 라디오 선택지(C-05·C-23 소속 선택·소속 변경·결과 처리·S-20 면접 유형·교육 폼, 3.24 분류 추천 체크 칩) | `Label` + `RadioGroupItem`(체크 칩은 `Checkbox`) 모양 유지: `has-[:checked]:border-primary has-[:checked]:bg-primary-subtle`(분류 체크 칩은 `border-primary/50` + `text-primary-subtle-foreground`), hover 없음 | 리더 판정(2026-11-03, UQ-BR-15): main의 `education-form`·`interview-prep`도 같은 모양이라 이번에는 통일하지 않는다. 위 표의 "카드형 선택지 → `Item`"은 **누르면 바로 이동·선택되는 카드**(공급자 카드 등)에만 적용한다. `Item outline` + `active`로 통일할지는 다음 개정에서 정한다 |
 
 hover와 선택은 같은 `bg-primary/10`이다(사용자 결정, UQ-715). 선택 행은 `font-medium`(+ `aria-current`)으로만 구분된다.
 
@@ -535,7 +547,7 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 
 | shadcn 컴포넌트 | 쓰는 곳 | 커스텀 variant / 규칙 |
 |-----------------|---------|----------------------|
-| `button` | 전부 | variant: `default`(primary, 화면당 주 버튼 1개) · `secondary` · `outline` · `ghost`(`aria-current` 선택, `data-pending` 흐림) · `link` · `destructive` · (v4) `destructive-ghost`(삭제를 시작하는 ghost, 빨간 글자 + `bg-destructive/10` hover) · (v4) `destructive-link`(빨간 오류 문장 안 링크) · (v4) `warning-outline`(경고 테두리 버튼). size: `sm`(h-8, text-sm) · `default`(h-10, text-base) · `lg`(h-11) · `icon`(size-9) · `icon-sm`(size-8). 좁은 화면에서 터치 대상은 최소 44px(`h-11` 또는 `min-h-11` 감싸기). 로딩: `disabled` + 왼쪽 `Loader2 animate-spin` + 글자 유지 |
+| `button` | 전부 | variant: `default`(primary, 화면당 주 버튼 1개) · `secondary` · `outline` · `ghost`(`aria-current` 선택, `data-pending` 흐림) · `link` · `destructive` · (v4) `destructive-ghost`(삭제를 시작하는 ghost, 빨간 글자 + `bg-destructive/10` hover) · (v4) `destructive-link`(빨간 오류 문장 안 링크) · (v4) `warning-outline`(경고 테두리 버튼) · (v5, UQ-BR-9) `warning-ghost`(경고 묶음 여닫기 트리거, 1.3 표). (v5, UQ-BR-7) ghost는 `aria-pressed`도 `aria-current`과 같은 초록 선택 모양. size: `sm`(h-8, text-sm) · `default`(h-10, text-base) · `lg`(h-11) · `icon`(size-9) · `icon-sm`(size-8). 좁은 화면에서 터치 대상은 최소 44px(`h-11` 또는 `min-h-11` 감싸기). 로딩: `disabled` + 왼쪽 `Loader2 animate-spin` + 글자 유지 |
 | `badge` | 상태·카운트·칩 | 추가 variant: `success` · `warning` · `info` · `ai` · `destructive-subtle` (모두 `bg-{x}-subtle text-{x}-subtle-foreground border-transparent`) · `draft`(= warning, 아이콘 `CircleDashed`) · `count`(rounded-full, `min-w-5 h-5 px-1.5 text-xs tabular-nums bg-primary-subtle text-primary-subtle-foreground`) · `evidence`(3.1) · (v2) `recommend`(`bg-primary-subtle text-primary-subtle-foreground border-transparent`, S-40 "추천: 무료로 시작") · (v4) `muted`(`border-border text-muted-foreground`, 없음·근거 없음·중단·해당 없음 같은 흐린 상태) · (v4) `count-neutral`(`count` 모양 + `bg-background text-muted-foreground`, 보드 열 머리 개수) |
 | `card` | 카드·패널 | 기본 `rounded-lg border bg-card`, 그림자 없음(shadcn 기본 `shadow-sm` 제거). (v4) `interactive`(전체 클릭 카드 초록 hover) · `tone="success"`(완료 카드 `border-success/30`) |
 | `sidebar` | L-01 | `collapsible="offcanvas"`, 모바일 기준 1024 |
@@ -549,7 +561,7 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `tooltip` | 아이콘 버튼 이름, 잘린 칩 라벨 | 지연 500ms. 정보를 Tooltip에만 두지 않는다 |
 | `tabs` | S-31 하위 탐색 보조, 좁은 화면 보드 열 탭, S-36 좁은 화면 전환, S-20 유형 | |
 | `toggle-group` | S-20 질문 수 3/5/7 | |
-| `radio-group` | C-05 선택지, S-20 면접 유형(카드형) | 카드형 옵션: `rounded-lg border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary-subtle` |
+| `radio-group` | C-05 선택지, S-20 면접 유형(카드형) | 카드형 옵션: `rounded-lg border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary-subtle` (v5, UQ-BR-15: 1.3 예외 목록에 등록) |
 | `checkbox` | C-11 체크 트리, C-05 확인 체크 | |
 | `input` · `textarea` · `label` · `form` · `select` | 모든 폼 | Textarea: `field-sizing-content min-h-24 max-h-[60vh]`(지원하지 않는 브라우저는 `min-h`로 고정 + 세로 크기 조절) |
 | `collapsible` | S-08 트리, 근거 펼치기, 점수 근거 펼치기 | |
@@ -558,8 +570,8 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `progress` | C-03 | 막대 색 `bg-ai`, 트랙 `bg-ai-subtle`, 높이 `h-1.5` |
 | `skeleton` | ST-LOADING | |
 | `sonner` | 토스트 | 넓은 화면 `bottom-right`, 좁은 화면 `top-center`. `richColors` 끔(중립 토스트 + 아이콘). (v5) L-02에서는 넓은 화면도 `bottom-left`로 띄운다 — 오른쪽 아래가 Resumate AI 입력창이라 가리지 않게 `[가정]` |
-| (v5) `button` 추가 variant | L-02·AI 패널 | `chip`: `h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-accent` (빠른 버튼 칩, Figma 회색 채움 알약) · `chip-dashed`: `chip`과 같되 `border border-dashed border-input bg-transparent hover:bg-accent` (`missing_slots` 슬롯 묻기). 두 variant 모두 `max-md:h-11`(A-4) |
-| (v5) `select` 추가 trigger variant | S-10 머리 분류 | `SelectTrigger variant="chip"`: `h-8 w-auto gap-1 rounded-full border-transparent bg-muted px-3 text-sm hover:bg-accent data-[placeholder]:text-muted-foreground [&>svg]:size-3.5`. 기존 테두리형은 `variant="default"`(기본값) |
+| (v5) `button` 추가 variant | L-02·AI 패널 | `chip`: `h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11` (빠른 버튼 칩, 바탕은 Figma 회색 채움 알약) · `chip-dashed`: `h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11` (`missing_slots` 슬롯 묻기). (v5, UQ-BR-5) hover·열림은 v4 규칙(`bg-primary/10` + `text-primary-text`)을 따르고 회색 hover 예외를 두지 않는다(리더 판정 2026-11-03) |
+| (v5) `select` 추가 trigger variant | S-10 머리 분류 | `SelectTrigger variant="chip"`: `h-8 w-auto gap-1 rounded-full border-transparent bg-muted px-3 text-sm hover:bg-primary/10 hover:text-primary-text data-[state=open]:bg-primary/10 data-[state=open]:text-primary-text data-[placeholder]:text-muted-foreground [&>svg]:size-3.5` (v5, UQ-BR-5 — `dark:hover:bg-accent` 없음). 기존 테두리형은 `variant="default"`(기본값) |
 | `separator` · `scroll-area` | 구분선, 보드·대화 스크롤 | |
 
 쓰지 않는 것: `drawer`(vaul 추가 의존성 → `sheet side="bottom"`으로 대체), `calendar`/date picker(react-day-picker 의존 → 날짜는 `Input type="date"`, 월은 1.2의 "연·월 선택" 패턴) `[가정]`, `hover-card`, `carousel`, 차트 라이브러리.
@@ -1111,7 +1123,7 @@ Dialog sm:max-w-md (좁은 화면은 Sheet side="bottom", C-22와 같게)
 - "계속"은 요청이 없으므로 로딩 표시가 없다. 누르면 다이얼로그를 닫고 S-10 새 페이지로 간다.
 - 시각 규칙은 v3까지의 다이얼로그 규칙(5.6)과 같다. 새 토큰·variant는 없다.
 
-### 3.24 S-10 STAR 제안 카드 (`StarProposalCard`, v4 신설)
+### 3.24 S-10 STAR 제안 카드 (`StarProposalCard`, v5 신설)
 
 Resumate AI 패널의 **제안 독**(5.10)에 놓이는 대화당 1개 카드. 원천: 플로우 S-10 "STAR 제안 카드"·"반영 규칙"·"분류 추천", AI-12 "카드 상태 3단계".
 
@@ -1119,7 +1131,7 @@ Resumate AI 패널의 **제안 독**(5.10)에 놓이는 대화당 1개 카드. �
 
 ```
 Card: rounded-xl border bg-card (그림자 없음)
-머리 (button, 접기 토글): flex items-center gap-2 px-4 py-3
+머리 (button, 접기 토글): flex items-center gap-2 px-4 py-3 focus-visible:ring-2 focus-visible:ring-ring — hover 바탕 없음(1.3 v5 예외, UQ-BR-14)
   ListChecks size-4 text-muted-foreground + "STAR 제안" text-sm font-semibold
   요약 caption text-muted-foreground tabular-nums: "반영할 수 있는 섹션 3 · 검토 필요 1"
   (정리 중이면 요약 자리에 C-03 축약형 "정리 중")
@@ -1178,7 +1190,7 @@ div.px-4 py-3 space-y-3 bg-muted/40
 - **[반영] 직후**: 왼쪽 칸에 `animate-field-flash`(1.3, 줄인 모션이면 왼쪽 2px `ai` 테두리 2초) + 칸이 화면 밖이면 그 칸으로 스크롤하지 **않는다**(대화를 읽던 흐름을 끊지 않음) `[가정]` + Sonner "{섹션}에 채웠어요" 액션 "되돌리기"(8초, `[가정]`) + `aria-live` 명세 문구.
 - 상태 "AI 응답 중"·"정리 중"에는 모든 [반영]·[모두 반영]·[수락]이 `disabled`다(명세 "AI 응답 중"과 같음 — 카드가 바뀌는 도중 누르는 일을 막음).
 
-### 3.25 S-44 본문 초안 제안 카드 (`DraftProposalCard`, v4 신설)
+### 3.25 S-44 본문 초안 제안 카드 (`DraftProposalCard`, v5 신설)
 
 S-44 패널 제안 독의 대화당 1개 카드. **블록 단위**다. 원천: 플로우 S-44 "본문 초안 제안 카드 구성"·"반영 규칙"·"AI 응답 방식", AI-13.
 
@@ -1186,7 +1198,7 @@ S-44 패널 제안 독의 대화당 1개 카드. **블록 단위**다. 원천: �
 
 ```
 Card: rounded-xl border bg-card
-머리 (button, 접기 토글): flex items-center gap-2 px-4 py-3
+머리 (button, 접기 토글): flex items-center gap-2 px-4 py-3 focus-visible:ring-2 focus-visible:ring-ring — hover 바탕 없음(1.3 v5 예외, UQ-BR-14)
   FileText size-4 text-muted-foreground + "본문 초안" text-sm font-semibold
   상태 배지 (아래 표) · 오른쪽 caption tabular-nums "초안 남은 횟수 4 / 6" (0이면 text-warning-subtle-foreground)
   ChevronDown
@@ -1204,7 +1216,7 @@ Card: rounded-xl border bg-card
 | `heading` level 2 / 3 | `text-sm font-semibold mt-3 first:mt-0` / `text-sm font-semibold text-muted-foreground mt-2`. 출처 칩 없음 |
 | `paragraph` | `text-sm leading-6` |
 | `bullet_list` / `numbered_list` | `list-disc` / `list-decimal` + `pl-5 space-y-1 text-sm leading-6`. 항목마다 출처가 있으면 칩은 목록 블록 아래에 모아 한 줄 |
-| `table` | `overflow-x-auto` 안 shadcn `Table` 작은 형(`text-sm`, 셀 `px-2 py-1.5`, 머리 행 `font-medium bg-muted/50`) |
+| `table` | `overflow-x-auto` 안 shadcn `Table` 작은 형(`text-sm`, 셀 `px-2 py-1.5`, 머리 행은 `TableHead` 기본 굵기로만 구분 — `TableRow`에 바탕을 덧씌우지 않는다, v5 UQ-BR-10) |
 | `quote` | `border-l-2 border-border pl-3 text-sm leading-6 text-muted-foreground` |
 | `code` | `rounded-md bg-muted px-3 py-2 font-mono text-sm overflow-x-auto whitespace-pre` |
 
@@ -1219,7 +1231,7 @@ Card: rounded-xl border bg-card
 | 상태 | 머리 배지 | 본문 | 바닥 |
 |------|-----------|------|------|
 | 초안 없음 (사실만) | 없음 | "확인이 필요한 내용"만 | 없음 |
-| **초안 작성 중** (`draft_started` ~ `draft_done`) | C-03 축약형 `Loader2 animate-spin text-ai` "초안 작성 중"(`compose` 단계 문구). 무료 등급이면 `meta` 한 줄 C-03 무료 등급 문구 | 이전 초안이 있으면 맨 위 `Collapsible` 접힘 "이전 초안"(`caption` 트리거). 그 아래 받은 `draft_block`을 C-04 임시 블록(`border-l-2 border-ai pl-3`, 마지막 블록 끝 커서)으로 차례로 쌓는다. 칩·검토 표시·버튼 없음. 첫 블록 전 자리는 `Skeleton` 3줄. 첫 블록 전 15초가 지나면 `meta text-muted-foreground` "긴 글이라 조금 더 걸려요" | 반영 버튼 모두 `disabled`. 마지막 블록 뒤 `draft_done` 전에는 머리 글자를 "마무리 중…"(C-04)으로 (리더 판정 2026-11-03, P-3: S-44에는 C-04 "마무리 중" 단계를 두지 않는다 — `draft_block`에 마지막 블록 표시가 없으므로 `draft_done`까지 "초안 작성 중" `[가정]`) |
+| **초안 작성 중** (`draft_started` ~ `draft_done`) | C-03 축약형 `Loader2 animate-spin text-ai` "초안 작성 중"(`compose` 단계 문구). 무료 등급이면 `meta` 한 줄 C-03 무료 등급 문구 | 이전 초안이 있으면 맨 위 `Collapsible` 접힘 "이전 초안"(트리거 `CollapsibleTrigger asChild` + `Button variant="ghost" size="xs"`, v5 UQ-BR-11). 그 아래 받은 `draft_block`을 C-04 임시 블록(`border-l-2 border-ai pl-3`, 마지막 블록 끝 커서)으로 차례로 쌓는다. 칩·검토 표시·버튼 없음. 첫 블록 전 자리는 `Skeleton` 3줄. 첫 블록 전 15초가 지나면 `meta text-muted-foreground` "긴 글이라 조금 더 걸려요" | 반영 버튼 모두 `disabled`. 마지막 블록 뒤 `draft_done` 전에는 머리 글자를 "마무리 중…"(C-04)으로 (리더 판정 2026-11-03, P-3: S-44에는 C-04 "마무리 중" 단계를 두지 않는다 — `draft_block`에 마지막 블록 표시가 없으므로 `draft_done`까지 "초안 작성 중" `[가정]`) |
 | 제안 (`draft_done` 뒤) | 없음 | 확정 블록으로 **통째로 교체**(C-04 `validated` 규칙, 스크롤 위치 유지) + 검토 강조 + 아래 부가 정보 | 반영 버튼(아래) |
 | **폼에 채움 · 저장 전** | `Badge variant="info"` + `ArrowLeftToLine size-3` "폼에 채움" | 블록 [수락]·[빼기] `disabled`(블록은 그대로 읽힘). 사실 [수락]·[거절]은 계속 가능 | 버튼 자리에 `caption text-info-subtle-foreground` "저장하기를 눌러야 저장돼요" |
 | 반영됨 | `Badge variant="success"` + `Check size-3` "반영됨 · 교체" / "반영됨 · 덧붙임"(`applied_mode`) `[가정: 방식 글자]` | 블록 목록 기본 접힘(머리만). 펼치면 읽기 전용 | 없음 |
@@ -1228,7 +1240,7 @@ Card: rounded-xl border bg-card
 
 **부가 정보** (블록 목록 아래, `mt-3 space-y-2`, 있을 때만)
 
-- **확인이 필요한 내용 N개**: `Collapsible` 기본 접힘. 트리거 `Button variant="ghost" size="sm"` + `TriangleAlert size-4 text-warning` + `text-sm text-warning-subtle-foreground` "확인이 필요한 내용 N개" + `ChevronRight`(펼침 `rotate-90`). 펼친 행 = `rounded-md border border-warning/40 p-2.5 space-y-1.5`: 사실 문장 `text-sm` + 사실 칩 + `[수락]` outline sm · `[거절]` ghost sm.
+- **확인이 필요한 내용 N개**: `Collapsible` 기본 접힘. 트리거 `CollapsibleTrigger asChild` + `Button variant="warning-ghost" size="sm" className="-ml-2"` + `TriangleAlert size-4 text-warning` + "확인이 필요한 내용 N개" + `ChevronRight`(펼침 `rotate-90`). 글자색은 variant가 정한다(사용처 `text-*` 없음, v5 UQ-BR-9). 펼친 행 = `rounded-md border border-warning/40 p-2.5 space-y-1.5`: 사실 문장 `text-sm` + 사실 칩 + `[수락]` outline sm · `[거절]` ghost sm.
 - **아직 비어 있는 부분**: `flex flex-wrap items-center gap-1.5` — `caption text-muted-foreground` "아직 비어 있는 부분:" + 슬롯마다 `Button variant="chip-dashed"` (`h-7`, `MessageCircleQuestion size-3.5` + 슬롯 표시명). 누르면 그 슬롯 묻기 메시지를 보낸다(칩과 같음). 응답 중·상한이면 `disabled`.
 - **뺀 문장**: `caption text-muted-foreground` + `EyeOff size-3.5` "확인되지 않은 문장 N개는 뺐어요".
 - **교체 불가**: `meta text-muted-foreground` + `Info size-4` 명세 문구(`replace_allowed = false`).
@@ -1584,7 +1596,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 - 바탕: `div.flex h-dvh flex-col overflow-hidden bg-shell text-shell-foreground`. 창(body)은 스크롤하지 않는다(L-01과 같은 원칙).
 - **본문 카드**: `mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card shadow-sm`(L-01 inset 패널처럼 테두리 없이 `shadow-sm`) `[가정]`. 카드 안 스크롤은 5.9 규칙(왼쪽 영역과 패널이 따로 스크롤).
 - **ShellBar**: `flex h-14 shrink-0 items-center gap-2 px-4`(바탕은 셸과 같은 `bg-shell`, 테두리 없음).
-  - 왼쪽 로고: `Link`(`aria-label="Resumate 커리어로 가기"`) 안에 L-01 사이드바 머리와 **같은 로고 마크**(`size-7 rounded-lg bg-primary text-primary-foreground` + 아이콘) + `text-base font-semibold` "Resumate". Figma 워드마크 "ResuMate"의 대소문자는 서비스 표기 "Resumate"로 맞춘다 `[가정]`(8.3 Q-9). 누르면 S-08(이탈 확인 대상).
+  - 왼쪽 로고: `Link`(`aria-label="Resumate 커리어로 가기"`) 안에 L-01 사이드바 머리와 **같은 공용 `LogoMark`**(`components/common/shell/logo-mark.tsx`, `size-7 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground` + 아이콘 — v4에서 `--sidebar-primary` = `--primary`, v5 UQ-BR-17) + `text-base font-semibold` "Resumate". Figma 워드마크 "ResuMate"의 대소문자는 서비스 표기 "Resumate"로 맞춘다 `[가정]`(8.3 Q-9). 누르면 S-08(이탈 확인 대상).
   - 오른쪽 묶음 `ml-auto flex items-center gap-2` — 순서 고정: ① **[Resumate AI]**(패널이 닫혔을 때만) `Button variant="outline" size="sm"` + `Sparkles size-4 text-ai`(R-C9) + "Resumate AI". 다시 열면 패널 입력창에 포커스 ② **C-06 저장 상태 글자**(`SaveButton` 바로 왼쪽, `meta`, `aria-live="polite"`) ③ **`SaveButton`** ④ 계정: `Button variant="ghost" size="icon"` + `CircleUserRound size-5`(`aria-label="계정 메뉴"`) → `DropdownMenu align="end"`, 항목은 L-01 `NavUser` 메뉴와 같은 목록·순서(명세: 기본 프로필 · 설정 · AI 연결 · 처리방침 · 로그아웃). 앱 안으로 가는 항목은 이탈 확인 대상.
 - **`SaveButton`** = `Button size="default"`(primary, L-02의 유일한 주 버튼 — R-C8) `min-w-[6.5rem]`(글자가 바뀌어도 폭 고정). 단축키 Ctrl/⌘+S, 툴팁 "저장하기 (⌘S)"(Windows는 Ctrl+S) `[가정]`.
 
@@ -1600,9 +1612,9 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 
 - 표식 점의 `warning`은 "아직 저장 안 됨"이라는 상태라서 쓴다(R-C4: 점 = 아이콘 자리, 글자는 `sr-only`와 버튼 활성 상태가 함께 알린다).
 - **변경 충돌 확인**(`stale_write`): `AlertDialog sm:max-w-md`. 제목 "다른 곳에서 이 {프로젝트/산출물}이(가) 바뀌었어요", 설명 `body text-muted-foreground` — "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요"(명세 "버린다고 함께 알림"의 글자, `[가정]`). 버튼 `새로 불러오기`(outline) · `내 내용으로 저장`(default). Esc·바깥 누름은 닫기만 하고 편집 상태를 그대로 둔다 `[가정]`.
-- **CrumbRow**: 카드 맨 위 `flex h-12 shrink-0 items-center gap-2 px-6`. "←" = `Button variant="secondary" size="icon-sm" className="rounded-full"` + `ArrowLeft size-4`(`aria-label="뒤로"`, Figma 둥근 회색 버튼). 이동 경로 = `Breadcrumb`(14px). 누를 수 있는 마디(S-10 회사명/기관명, S-44 프로젝트명)는 `text-muted-foreground hover:text-foreground hover:underline`, 누를 수 없는 이름 마디는 `text-muted-foreground`, 마지막 마디("프로젝트 상세"/"산출물 상세")는 `font-medium text-foreground` + `aria-current="page"`. 이름 마디는 `max-w-[16rem] truncate` + `title`. 입력 중인 이름을 따라가며, 비면 "새 프로젝트"·"새 산출물"을 `text-muted-foreground`로.
+- **CrumbRow**: 카드 맨 위 `flex h-12 shrink-0 items-center gap-2 px-6`. "←" = `Button variant="secondary" size="icon-sm" className="rounded-full"` + `ArrowLeft size-4`(`aria-label="뒤로"`, Figma 둥근 버튼. 색은 v4 `secondary` 그대로 — 원형 반경은 1.3 v5 예외, UQ-BR-14). 이동 경로 = `Breadcrumb`(14px). 누를 수 있는 마디(S-10 회사명/기관명, S-44 프로젝트명)는 `text-muted-foreground hover:text-foreground hover:underline`, 누를 수 없는 이름 마디는 `text-muted-foreground`, 마지막 마디("프로젝트 상세"/"산출물 상세")는 `font-medium text-foreground` + `aria-current="page"`. 이름 마디는 `max-w-[16rem] truncate` + `title`. 입력 중인 이름을 따라가며, 비면 "새 프로젝트"·"새 산출물"을 `text-muted-foreground`로.
 - **배너 자리**: CrumbRow 바로 아래 `px-6 pb-2 space-y-2`. C-10 복귀 배너(3.9)와 **입력 보존 배너**: `Alert variant="info"` 작은 형 + `History size-4` "저장하지 않은 수정이 있어요" + 오른쪽 `Button variant="outline" size="sm"` "이어서 편집" · `Button variant="ghost" size="sm"` "버리기" `[가정: 배너형 — 다이얼로그로 막지 않음]`. 고르기 전에는 저장된 값을 보인다. 둘 다 있으면 C-10이 위.
-- **이탈 확인**(`LeaveGuard`): `AlertDialog sm:max-w-md`. 제목 "저장하지 않은 변경이 있어요". 버튼 3개를 오른쪽 정렬 `계속 편집`(outline) · `저장하지 않고 나가기`(ghost + `text-destructive`) · `저장하고 나가기`(default, 요청 중 `Loader2`). 좁은 화면은 `flex-col-reverse` 전체 폭(저장하고 나가기가 맨 위). "저장하고 나가기"가 실패·검증 오류로 끝나면 다이얼로그를 닫고 SaveButton 실패·오류 모양으로 남는다. 브라우저 닫기·새로 고침은 `beforeunload` 기본 확인(문구 지정 불가).
+- **이탈 확인**(`LeaveGuard`): `AlertDialog sm:max-w-md`. 제목 "저장하지 않은 변경이 있어요". 버튼 3개를 오른쪽 정렬 `계속 편집`(outline) · `저장하지 않고 나가기`(`Button variant="destructive-ghost"`, v5 UQ-BR-1·12) · `저장하고 나가기`(default, 요청 중 `Loader2`). 좁은 화면은 `flex-col-reverse` 전체 폭(저장하고 나가기가 맨 위). "저장하고 나가기"가 실패·검증 오류로 끝나면 다이얼로그를 닫고 SaveButton 실패·오류 모양으로 남는다. 브라우저 닫기·새로 고침은 `beforeunload` 기본 확인(문구 지정 불가).
 - 토스트 위치: L-02에서는 `bottom-left`(2장 sonner).
 
 **좁은 화면(<1024)**
@@ -1610,7 +1622,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 - ShellBar: 로고 · `SaveButton` · 계정. [Resumate AI] 다시 열기는 상단 바에 두지 않는다(아래 떠 있는 버튼이 대신). C-06 글자는 `md` 이상에서만 상단 바에 보이고, 그보다 좁으면 저장 성공은 버튼 왼쪽 `Check text-success` 아이콘(`sr-only` "저장됨 HH:MM")만, 실패는 토스트 + 버튼 표식 점 `[가정]`.
 - CrumbRow: 이동 경로 대신 "← {상위 이름}" 한 마디(`Button variant="ghost" size="sm"` + `ArrowLeft`, `max-w-[60vw] truncate`).
 - `<768`: 본문 카드 `m-0 rounded-none shadow-none`(셸 바탕이 안 보이게 전체 폭), ShellBar 아래 `border-b`. 머리 필드 행은 한 열(5.9).
-- 본문은 한 단. 패널은 화면 아래 **떠 있는 "Resumate AI" 버튼**(`fixed bottom-4 right-4 z-30`, `Button variant="outline" className="h-11 rounded-full bg-card px-4 shadow-md"` + `Sparkles text-ai`)으로 연다. 열면 `Sheet side="right"`: `<768`은 `w-full max-w-none`(전체 화면), 768~1023은 `sm:max-w-md` `[가정]`. 시트 머리는 패널 머리(5.10)와 같고, "×" 앞에 `Button variant="ghost" size="sm"` "STAR 보기"(S-44는 "본문 보기" `[가정]`)를 둔다 — 누르면 시트를 닫는다. 손잡이는 없다.
+- 본문은 한 단. 패널은 화면 아래 **떠 있는 "Resumate AI" 버튼**(`fixed bottom-4 right-4 z-30`, `Button variant="outline" className="h-11 rounded-full px-4 shadow-md"` + `Sparkles text-ai` — outline 기본 바탕이 이미 `bg-card`라 덧씌우지 않는다. 원형·그림자는 1.3 v5 예외, v5 UQ-BR-11·14)으로 연다. 열면 `Sheet side="right"`: `<768`은 `w-full max-w-none`(전체 화면), 768~1023은 `sm:max-w-md` `[가정]`. 시트 머리는 패널 머리(5.10)와 같고, "×" 앞에 `Button variant="ghost" size="sm"` "STAR 보기"(S-44는 "본문 보기" `[가정]`)를 둔다 — 누르면 시트를 닫는다. 손잡이는 없다.
 - 터치 대상은 A-4.
 
 ### 5.9 L-02 문서형 페이지 — S-10 · S-44 본문 배치 (v5 신설)
@@ -1628,8 +1640,8 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 
 **머리 — 제목 줄**
 
-- `DocTitleInput`: `flex items-start gap-2` 안 `input`(S-44도 한 줄) — `doc-title` 글자 + `w-full min-w-0 rounded-md bg-transparent px-2 -mx-2 py-0.5 outline-none placeholder:text-muted-foreground hover:bg-accent/60 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring`. 자리 표시는 명세 문구("프로젝트명을 입력해 주세요" / "산출물 제목을 입력해 주세요"). `aria-label`은 "프로젝트명"·"산출물 제목", 필수는 `aria-required`. 오른쪽 아래 글자 수는 90% 넘을 때만 C-07 규칙으로 보인다 `[가정]`.
-- 오른쪽 `⋯`: `Button variant="ghost" size="icon-sm"` `MoreHorizontal`(`aria-label="{프로젝트/산출물} 메뉴"`) → `DropdownMenu align="end"`. 항목은 명세(S-10: 소속 변경 `ArrowRightLeft` · 구분선 · 프로젝트 삭제 `text-destructive` `Trash2` / S-44: 산출물 삭제). 보일 항목이 없으면(새 산출물) 버튼을 그리지 않는다.
+- `DocTitleInput`: `flex items-start gap-2` 안 `input`(S-44도 한 줄) — `doc-title` 글자 + `w-full min-w-0 rounded-md bg-transparent px-2 -mx-2 py-0.5 outline-none placeholder:text-muted-foreground hover:bg-accent/60 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring`(반경 `rounded-md`·회색 hover는 1.3 v5 예외, UQ-BR-14). 자리 표시는 명세 문구("프로젝트명을 입력해 주세요" / "산출물 제목을 입력해 주세요"). `aria-label`은 "프로젝트명"·"산출물 제목", 필수는 `aria-required`. 오른쪽 아래 글자 수는 90% 넘을 때만 C-07 규칙으로 보인다 `[가정]`.
+- 오른쪽 `⋯`: `Button variant="ghost" size="icon-sm"` `MoreHorizontal`(`aria-label="{프로젝트/산출물} 메뉴"`) → `DropdownMenu align="end"`. 항목은 명세(S-10: 소속 변경 `ArrowRightLeft` · 구분선 · 프로젝트 삭제 `DropdownMenuItem variant="destructive"` + `Trash2` / S-44: 산출물 삭제 — 같은 variant. 항목·아이콘에 `text-destructive`를 덧씌우지 않는다, v5 UQ-BR-2·12). 보일 항목이 없으면(새 산출물) 버튼을 그리지 않는다.
 - 제목 아래 메시지 줄(있을 때만, `pl-0 text-sm`): 저장 검증 오류는 A-10(`text-destructive` + `CircleAlert`). **대화 시작 전 이름 필요**("대화를 시작하려면 … 먼저 입력해 주세요")는 오류가 아니라 남은 할 일이라 `text-warning-subtle-foreground` + `TriangleAlert size-4 text-warning`이고, 동시에 입력 칸에 `ring-2 ring-primary ring-offset-2 ring-offset-card`를 이름이 들어갈 때까지 둔다(3.8 v3 `project_fields`와 같은 원칙) `[가정]`.
 - S-44만: 제목 아래 G-2 안내 1줄(C-07 모양, `ShieldAlert`, 명세 문구).
 
@@ -1658,11 +1670,11 @@ dl.grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2
   - 칸 = `section.space-y-1.5` (`aria-labelledby` 칸 제목)
     - 제목 줄 `flex items-center gap-2`: `star-heading` "상황" + `span.font-normal.text-muted-foreground` "Situation" · (반영 안 한 제안이 있으면) `Badge variant="ai"` 단추형 `h-5 gap-1 px-1.5` + `Sparkles size-3` "AI 제안 있음"(누르면 패널 카드의 그 섹션으로, R-C3 "AI 결과 출처 표시")
     - `DocTextarea`(아래)
-    - 도움 줄 `flex min-h-6 items-start justify-between gap-3`: 왼쪽 C-07 가이드(행동 G-1, 역할이 비었을 때 G-4) 또는 (칸이 비고 키 있음) `Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground"` + `MessageCircleQuestion size-4` "AI에게 물어보기" / 오른쪽 글자 수 `caption tabular-nums text-muted-foreground` "1,240 / 2,000" — **칸에 포커스가 있거나 1,800자(90%)를 넘을 때만** 보인다 `[가정]`. 색 규칙은 C-07.
+    - 도움 줄 `flex min-h-6 items-start justify-between gap-3`: 왼쪽 C-07 가이드(행동 G-1, 역할이 비었을 때 G-4) 또는 (칸이 비고 키 있음) `Button variant="ghost" size="sm" className="-ml-2"`(덧씌우기 없는 기본 ghost, v5 UQ-BR-6·12) + `MessageCircleQuestion size-4` "AI에게 물어보기" / 오른쪽 글자 수 `caption tabular-nums text-muted-foreground` "1,240 / 2,000" — **칸에 포커스가 있거나 1,800자(90%)를 넘을 때만** 보인다 `[가정]`. 색 규칙은 C-07.
     - 오류는 도움 줄 대신 A-10.
 - **S-44 본문 한 칸**: 위에 (반영 안 한 초안이 있으면) `Badge variant="ai"` 단추형 "AI 초안 있음". `DocTextarea` `min-h-[24rem]`. 비어 있고 키가 있으면 자리 표시 아래가 아니라 도움 줄 왼쪽에 `Button variant="outline" size="sm"` + `Sparkles size-4 text-ai` "AI와 초안 쓰기"(패널 열고 입력창 포커스) `[가정]`. 글자 수 "n / 20,000"는 항상 보인다(긴 글이라 상한이 중요) `[가정]`.
 - **`DocTextarea`** (문서형 마크다운 입력, A-13 예외):
-  `w-full resize-none bg-transparent rounded-md -mx-2 px-2 py-1.5 prose(text-base leading-[1.75]) field-sizing-content min-h-[5.25rem](3줄) outline-none placeholder:text-muted-foreground hover:bg-accent/50 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring aria-invalid:ring-2 aria-invalid:ring-destructive`.
+  `w-full resize-none bg-transparent rounded-md -mx-2 px-2 py-1.5 prose(text-base leading-[1.75]) field-sizing-content min-h-[5.25rem](3줄) outline-none placeholder:text-muted-foreground hover:bg-accent/50 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring aria-invalid:ring-2 aria-invalid:ring-destructive`. 반경 `rounded-md`·회색 hover는 1.3 v5 예외(UQ-BR-14).
   - 테두리 없이 본문 글처럼 보인다. 입력임은 칸 제목(라벨)·자리 표시·hover 바탕·포커스 링으로 알린다.
   - 마크다운은 **원문 그대로** 보인다(입력 중 서식 미리보기·렌더링 없음, 새 의존성 없음) `[가정]`. 다만 편의 동작 두 가지: 목록 줄(`- `, `* `, `1. `)에서 Enter를 누르면 같은 기호로 다음 줄을 시작하고(빈 목록 줄에서 Enter는 기호를 지움), 목록 줄에서 Tab / Shift+Tab은 2칸 들여쓰기 / 내어쓰기 `[가정]`. 목록이 아닌 줄의 Tab은 기본(포커스 이동)으로 둔다(키보드 함정 방지).
   - (v5, UQ-PA-5) **키보드 함정 방지**: Tab·Shift+Tab은 실제로 들여쓰거나 내어쓸 것이 있을 때만 가로챈다. 내어쓸 공백이 없거나 들여쓰기 깊이 상한(공백 6칸)에 닿으면 원래대로 포커스가 이동한다. Esc를 누른 뒤의 Tab은 항상 칸을 빠져나간다 `[가정]`.
@@ -1677,7 +1689,7 @@ dl.grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2
 - 폭 규칙: `w-ai-panel`(1.4) 안에서, 왼쪽 `min-w-doc-left`를 지킨다. 창이 줄어 둘을 모두 지킬 수 없으면 패널이 최소 폭까지 먼저 줄고, 그래도 안 되면(카드 폭 < 약 820px) 1024 미만 규칙(시트)과 같게 그린다. 기억한 폭(`localStorage`, try/catch)이 범위 밖이면 범위 안으로 자른다.
 - 패널이 닫히면 손잡이도 없다.
 
-### 5.10 Resumate AI 패널 (`AiPanel`, S-10 · S-44 공통, v4 신설)
+### 5.10 Resumate AI 패널 (`AiPanel`, S-10 · S-44 공통, v5 신설)
 
 S-36 대화 화면(5.4, 폐기)의 메시지·입력 규칙을 좁은 패널에 맞춰 다시 쓴 것이다. S-10과 S-44는 같은 컴포넌트를 쓰고, 다른 것은 **제안 카드**(3.24 / 3.25)와 **칩 계산**(`quickChips(state)` — 화면이 넘김)뿐이다.
 
@@ -1694,19 +1706,19 @@ aside(aria-label="Resumate AI") — 넓은 화면: my-3 mr-3 flex w-[var(--ai-pa
 **머리**
 
 - 왼쪽 `Sparkles size-4 text-ai`(R-C9) + `text-base font-semibold` "Resumate AI" + C-19 연결 배지(작은 형, `truncate max-w-[10rem]`). 패널 폭이 `24rem` 미만이면 배지는 아이콘형(점 + 툴팁)으로 줄인다 `[가정]`.
-- 오른쪽 `ml-auto` 아이콘 버튼 4개(`Button variant="ghost" size="icon-sm"`, 모두 `Tooltip` + `aria-label`): `History`("대화 기록", 기록 보기일 때 `aria-pressed=true` + `bg-accent`) · `Plus`("새 대화") · `MoreHorizontal`("대화 메뉴" → "이 대화 삭제" `text-destructive` `Trash2` → C-05) · `X`("패널 닫기"). 열린 대화가 없으면 ⋯를 `disabled`로 둔다. 키가 없으면 "새 대화"는 `disabled`가 아니라 누르면 C-18 인라인형으로 안내한다(3.18 규칙) `[가정]`.
+- 오른쪽 `ml-auto` 아이콘 버튼 4개(`Button variant="ghost" size="icon-sm"`, 모두 `Tooltip` + `aria-label`): `History`("대화 기록", 기록 보기일 때 `aria-pressed=true` — ghost의 `aria-pressed` 초록 선택 모양, 사용처 `bg-*` 없음, v5 UQ-BR-7·12) · `Plus`("새 대화") · `MoreHorizontal`("대화 메뉴" → "이 대화 삭제" `DropdownMenuItem variant="destructive"` + `Trash2` → C-05, v5 UQ-BR-2·12) · `X`("패널 닫기"). 열린 대화가 없으면 ⋯를 `disabled`로 둔다. 키가 없으면 "새 대화"는 `disabled`가 아니라 누르면 C-18 인라인형으로 안내한다(3.18 규칙) `[가정]`.
 
 **기록 보기** (대화 기록 목록)
 
 - 목록 위 `px-3 pt-1 pb-2`: `Button variant="ghost" size="sm"` + `ArrowLeft` "대화로 돌아가기"(열린 대화가 있을 때) `[가정]`.
-- 행 = `button.w-full rounded-lg px-3 py-2.5 text-left hover:bg-accent focus-visible:ring-2 ring-ring`, 목록 `px-2 space-y-0.5`. 1행 `text-sm font-medium truncate` 제목(없으면 "새 대화" `text-muted-foreground`). 2행 `caption text-muted-foreground tabular-nums` "{상대 시각} · {n}/40" + 상한 도달이면 `Badge variant="outline" h-5` + `Lock size-3` "끝난 대화". 지금 연 대화 행은 `bg-card shadow-xs` + `aria-current="true"`.
+- 행 = `Item asChild active={지금 연 대화} className="flex-col items-start gap-0.5 px-3 py-2.5"` 안에 `button type="button"`(v5 UQ-BR-4·12). hover·선택 색과 `aria-current`은 `Item`이 정한다(사용처 색 없음). 목록 `px-2 space-y-0.5`. 1행 `text-sm font-medium truncate` 제목(없으면 "새 대화" `text-muted-foreground`). 2행 `caption text-muted-foreground tabular-nums` "{상대 시각} · {n}/40" + 상한 도달이면 `Badge variant="muted" h-5` + `Lock size-3` "끝난 대화"(잠금 = 흐린 상태 배지, v5 UQ-BR-8).
 - 빈 목록(새 페이지 포함): `py-10 text-center meta text-muted-foreground` "아직 대화가 없어요" `[가정]`.
 - 로딩: 행 모양 `Skeleton` 3개.
 
 **대화 보기 — 메시지 목록** (`px-4 py-4 space-y-5`, `aria-live`는 완료 때만 — A-6)
 
 - AI 메시지: `flex gap-2.5` — 아바타 `size-6 shrink-0 rounded-full bg-ai-subtle grid place-items-center` + `Sparkles size-3.5 text-ai`, 본문 `prose min-w-0`(16/1.75). 스트리밍은 C-04 커서.
-- 사용자 메시지: `ml-auto max-w-[85%]` 위 `caption text-muted-foreground text-right` "내 답변 #n", 말풍선 `rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 prose`. 패널 바탕(`panel`) 위라 v3의 `bg-secondary` 대신 `bg-card` + 테두리로 바꿨다(5.4는 폐기 화면이라 그대로 둔다). 누르면 그 발화를 출처로 가진 카드 섹션·블록에 `animate-field-flash` → `cursor-pointer hover:ring-1 hover:ring-border`.
+- 사용자 메시지: `ml-auto max-w-[85%]` 위 `caption text-muted-foreground text-right` "내 답변 #n", 말풍선 `rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 prose`. 패널 바탕(`panel`) 위라 v3의 `bg-secondary` 대신 `bg-card` + 테두리로 바꿨다(5.4는 폐기 화면이라 그대로 둔다). 누르면 그 발화를 출처로 가진 카드 섹션·블록에 `animate-field-flash` → `cursor-pointer hover:ring-1 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring`(1.3 v5 예외 — 말풍선 버튼, UQ-BR-14).
 - 시작 영역(대화가 없거나 새 대화, 새 페이지): 시작 인사 = AI 메시지 모양(번호·칩 없음, 커서 없음) → 고정 안내 `meta text-muted-foreground` + `Info size-4`(명세 문구) → 무료 등급이면 5.4 (v3) `FreeTierNotice` 작은 형. 칩은 칩 줄에 있다(시작 영역 안에 따로 두지 않는다 — Figma는 입력창 위 한 줄) `[가정]`.
 - 민감정보 안내: 해당 AI 메시지 아래 `Alert variant="info"` 작은 형(`text-sm`) + 끝에 `Button variant="link" size="sm"` "대화 삭제".
 - AI 되묻기("본인이 직접 한 부분은…")는 일반 AI 메시지. 배지는 카드 쪽(C-15).
@@ -1734,7 +1746,7 @@ form.flex items-end gap-2 rounded-3xl border border-input bg-card py-1.5 pl-4 pr
   Textarea: flex-1 resize-none border-0 bg-transparent p-0 py-1.5 text-base leading-6 shadow-none
             field-sizing-content min-h-9 max-h-40 focus-visible:ring-0
             placeholder "Resumate AI에게 물어보세요"
-  보내기: Button size="icon-sm" className="size-8 rounded-full" (default — R-C8) ArrowUp, aria-label="보내기"
+  보내기: Button size="icon-sm" className="rounded-full" (default — R-C8, 원형은 1.3 v5 예외 UQ-BR-14) ArrowUp, aria-label="보내기"
           글자가 없으면 disabled. 응답 중에는 같은 자리 Button variant="outline" size="icon-sm" rounded-full Square size-3.5 "중단"
 아래 줄 flex items-start justify-between gap-3 px-2:
   왼쪽 G-2 (C-07 모양, ShieldAlert size-3.5, text-xs leading-4 — 패널이 좁아 caption 크기) [가정]
@@ -1819,8 +1831,8 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
   - **S-10 프로젝트 상세**: L-02(5.8) + 문서형 페이지(5.9) + Resumate AI 패널(5.10) + STAR 제안 카드(3.24). 새 프로젝트(`/career/projects/new?…`)는 같은 화면의 빈 상태다 — 제목 입력에 포커스, ⋯에는 "소속 변경"만, 패널은 시작 영역(행 없음)이고 기록 목록은 비어 있다. 로딩은 머리 제목 `Skeleton h-8 w-64` + 필드 행 4개 `Skeleton h-8 w-40` + STAR 칸 5개(제목 `h-5 w-32` + 본문 `h-20`) + 패널 기록 행 3개.
   - **S-44 산출물 상세**: S-10과 같은 셸·패널. 머리는 제목 + ⋯ + G-2 한 줄뿐(분류 없음, PA-2 — Figma의 분류 드롭다운은 그리지 않는다). 왼쪽은 본문 한 칸(5.9). 카드는 3.25.
   - **S-43 독립 프로젝트 패널 — 산출물 섹션**: 기존 `PanelSection`(제목 `text-base font-medium` + 오른쪽 동작) 모양을 그대로 쓴다.
-    - 동작: `Button asChild variant="ghost" size="sm" className="text-muted-foreground"` + `Plus` "산출물 추가"(→ S-44 새 산출물). 50개면 `disabled`이고, 제목 줄 아래 `meta text-muted-foreground` + `Info size-4` 명세 문구를 둔다(비활성 이유를 툴팁에만 두지 않음).
-    - 목록: `ul.flex flex-col gap-0.5`. 행 = `Link` `flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring`(프로젝트 카드 C-25와 같은 반경·hover) 안에 `FileText size-4 shrink-0 text-muted-foreground` + 제목 `min-w-0 flex-1 truncate text-base`(+ `title`) + `ChevronRight size-4 text-muted-foreground`. 분류·날짜·글자 수는 보이지 않는다(PA-2, 명세에 없음). 제목이 빈 행은 없다(제목 필수).
+    - 동작: `Button asChild variant="ghost" size="sm"`(덧씌우기 없는 기본 ghost — 같은 `PanelSection`의 다른 섹션 동작 버튼과 같음, v5 UQ-BR-6·12) + `Plus` "산출물 추가"(→ S-44 새 산출물). 50개면 `disabled`이고, 제목 줄 아래 `meta text-muted-foreground` + `Info size-4` 명세 문구를 둔다(비활성 이유를 툴팁에만 두지 않음).
+    - 목록: `ul.flex flex-col gap-0.5`. 행 = `Item asChild`(기본 `variant="ghost"`·`size="default"` = `min-h-11 rounded-xl`, 프로젝트 카드 C-25와 **같은 컴포넌트**) 안에 `Link` — `FileText size-4 shrink-0` + 제목 `min-w-0 flex-1 truncate text-base`(+ `title`) + `ChevronRight size-4`. 아이콘 색은 `Item`이 정한다(기본 muted, hover 초록 — 아이콘에 `text-muted-foreground`를 붙이지 않는다). hover·포커스·반경을 사용처에서 지정하지 않는다(v5 UQ-BR-3·12·16). 분류·날짜·글자 수는 보이지 않는다(PA-2, 명세에 없음). 제목이 빈 행은 없다(제목 필수).
     - 빈 상태: 프로젝트 섹션의 빈 문구와 같은 모양 `p.py-2.5 text-sm text-muted-foreground` 명세 문구. 버튼·일러스트를 더하지 않는다(동작은 제목 줄의 "산출물 추가").
     - 로딩: 행 모양 `Skeleton h-11` 2개.
   - **C-23**: 3.23. C-22에서 "프로젝트"를 고른 뒤, C-09·S-16의 소속 선택에서만 연다.
@@ -2043,7 +2055,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | P-12 | S-36 · S-33 (v3) | 그만둔 대화를 열었을 때의 안내 문구, 그만둔 면접의 빈 답변 표시 문구가 없다. 임시 "그만둔 대화예요", "답변 없음" |
 | P-13 | S-17 · S-18 (v3) | 선택 상한(프로젝트 8개, 문항 10개)과 1개 이상 선택 조건의 안내 문구가 없다(자소서 근거 5개만 있음). 임시 문구는 G-39 |
 | P-14 | C-21 (v3) | 실행 전에 여는 동의 창의 제목과 확인 버튼 글자가 없다. 임시 "{공급자}({등급}) 데이터 사용 동의" / "동의하고 계속" |
-| P-15 | S-08 · S-09 · S-34 · C-22 · C-24 · C-25 (v5) | v5.5 커리어 재설계 화면의 시각 규칙이 이 문서에 아직 없다(이번 범위 밖). 구현은 앞서 진행됐으므로 다음 디자인 시스템 개정에서 구현을 기준으로 정리할지 리더 판단 필요 |
+| P-15 | S-08 · S-09 · S-34 · C-22 · C-24 · C-25 (v5) | v5.5 커리어 재설계 화면의 시각 규칙이 이 문서에 아직 없다(이번 범위 밖). 구현은 앞서 진행됐으므로 다음 디자인 시스템 개정에서 구현을 기준으로 정리할지 리더 판단 필요. (v5, UQ-BR-16) 정리할 때 S-08 패널 안 클릭 요소는 v4 컴포넌트로 적는다 — 프로젝트 카드 C-25·산출물 행 = `Item`(ghost), 섹션 동작 버튼 = 덧씌우기 없는 `ghost sm`, 삭제 메뉴 = `DropdownMenuItem variant="destructive"` |
 | P-16 | S-10 · S-44 패널 (v5) | 명세 "제안 카드 — 대화 목록 아래 고정, 접기 가능"의 "대화 목록"이 메시지 목록인지 대화 기록 목록인지 모호하다. 메시지 목록 아래(= 입력창 위) 독으로 읽었다(5.10) |
 | P-17 | S-10 (v5) | 제안 카드의 "직접 고치기" 완료·취소 버튼 글자가 없다. 임시 "저장" / "취소"(G-58). 상단 바 "저장하기"와 헷갈릴 수 있어 "고치기 완료"도 후보 |
 | P-18 | S-44 (v5) | 블록 [빼기]에 되돌리기가 없다(명세상 `rev` + 1 사용자 패치). 실수로 뺀 블록을 살릴 길이 새 초안뿐인데 맞는지 |
@@ -2077,4 +2089,4 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | v2 | 2026-10-28 | **BYOK 반영**(PRD v4.2 · 플로우 v5.2 · AI v4.2 · 데이터 모델 v4.1a). 이후 반영된 5.1 sidebar-08 셸과 S-24 sidebar-13 설정 다이얼로그는 그대로 두었다. 신설: C-18 `AiLock`(3.18), C-19 `ProviderBadge`·`ProviderResultTag`(3.19), C-20 `AiErrorNotice`·`RetryButton`(3.20), C-21 `DataUseConsent`·`FreeTierNotice`(3.21), `AiRunButton`(3.22), C-03 무료 등급 순차·대기 줄, ST-AI-LOCKED / ST-AI-KEY-MISSING / ST-AI-KEY-CHECK, 공급자별 장애 배너, L-01 `NavAiStatus`, 설정 다이얼로그 섹션 2개, 5.7 S-40/S-41/S-42(`ProviderCard`, `StepIndicator`), badge `recommend` variant, A-11·A-12. **삭제와 이전**: `UsageHint` → `AiRunButton`(사용처: C-09, C-11 다시 생성, S-16 다시 생성, S-20 시작하기, S-08 시작 버튼, S-33 제출) / `AiFailed`·ST-AI-FAILED → `AiErrorNotice`(사용처: C-04 error, S-36 실패한 턴, S-16·S-19·S-22·S-15·S-33 결과 영역) / `LimitNotice`·ST-LIMIT → 삭제(대체 없음, 공급자 한도는 C-20) / C-09 10회 소진 분기 → 키 무효·대화 실패 분기 / "사용량은 차감되지 않았습니다"·"이번 달 N회 남음"·"{N}/10회" 문구 → 삭제. 토큰 추가 없음(기존 상태 토큰 재사용) |
 | v4 | 2026-11-03 | **사용자 지정 브랜드 토큰**. `--primary`·`--ring`·`--sidebar-primary`·`--chart-1` = `#15A76E`, `--primary-subtle` `#E3F5EE` / `-foreground` `#0E7A50`, 기본 바탕 `--sidebar` = `#F3FBF8`, 콘텐츠 패널 `--background` = `#FFFFFF`(`--sidebar-accent` = primary 10%, `-foreground` = `--primary-text`: 사이드바 메뉴 hover·선택도 ghost와 같은 초록), `--border`·`--input`·`--chip-border`·`--sidebar-border` = `#E2E2E2`. 신설 `--radius-control: 12px`(버튼·드롭다운·입력). 팝오버·메뉴·Select 상자 `p-2`, 외곽선 `ring-border`. outline 버튼 바탕 `bg-card`. secondary 버튼은 `bg-primary/10 text-primary-text`(hover `bg-primary/15`). ghost 버튼은 hover·열림 시 `bg-primary/10 text-primary-text`. 초록 글자는 `--primary-text` `#118658`. 팝오버 메뉴 항목(DropdownMenu·Select·Command)도 hover·포커스 시 같은 색(삭제 항목은 destructive 유지). 사용처의 색 덧씌우기 제거 규칙 추가. 공통 컴포넌트 `Item` 신설, `Card`·`TableRow`에 `interactive`, ghost 버튼 `aria-current` 선택 상태, Toggle 선택 색 초록. 다크 토큰은 `--sidebar-accent`만 같은 방식으로 바꾸고 나머지는 그대로. **후속(UQ-708~722)**: 신설 Button `destructive-ghost`·`destructive-link`·`warning-outline`, ghost `data-pending`, Badge `muted`·`count-neutral`, Card `tone="success"`, TableRow `muted`(+ hover는 `interactive` 행에만), Alert `warning`·`destructive` 아이콘 색을 variant로 이동, Item `active` → `aria-current` 자동·`aria-disabled` 지원·data 속성 보호·`row` 첫/마지막 행 모서리. 문서 토큰 코드 블록에 `--primary-text`·`--color-primary-text` 추가, 8장 대비 메모를 측정값으로 교체, 예외 목록에 `nav-user`·채팅 말풍선·빈 긴 글 자리 글자 추가. 사용처: 삭제 버튼(drafts-view·form-parts DangerZone·achievement-dialog·cover-letter-questions), 저장 실패 링크(save-status), 흐린 배지(basics·stage-menu·insight-view·session-status·result-view·applications/[id]·placeholders·project-form), 작성 중 면접 배너(interview-prep), 커리어 추가 버튼(빈 상태 쪽 secondary) |
 | v3 | 2026-10-30 | **기획 v5.3 반영**(PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2). 새 시각 규칙만 더했다. 토큰·shadcn 컴포넌트·의존성 추가 없음, 기존 토큰·패턴 이름 변경 없음. 추가: C-03 단계 `prepare`·`synthesize_regen`·`complete`와 `AiFeatureStatus`(진행 표시 우선순위, 3.3) / C-04 `sources_selected`·`adjusting_length`·"마무리 중"·`validated` 통째 교체·경력기술서 실패(3.4) / C-09 `project_fields`(3.8) / C-14 마지막 활동·생성 상태·유형 불일치(3.13) / C-18 `consent_required` 행(3.18) / C-19 동의 필요형 배지(3.19) / C-20 다시 시도 배지 = 활성 공급자, "처음부터 다시" 줄, 입력 원인 실패 다시 시도 없음, 요청 안 경로 대기 카운트다운, 다시 시도 거부 표, `key_missing` 동의 원인(3.20) / C-21 동의 창형(3.21) / `AiRunButton` 상태 3행(3.22) / S-36 시작 인사·상한·전송 차단·그만두기·그만둔 대화(5.4) / S-40 동의 필요 카드(5.7) / S-25 확인 체크·오류 2종·탈퇴 마무리 상태, S-08 그만둔 대화 묶음, S-10 그만둠·필드 강조, S-17 상태 배지·실패 초안 행·선행 추출·문체·AI 선택 실패, S-18 글자 수 안내, S-19 생성 직후 안내 상자(`GenerationNotes`)·글자 수 표시·경력기술서 실패, S-22 다시 채점·흐린 종합, S-37 메뉴·표식, S-33 그만둔 세션·근거 칩(6장). **바뀐 것**: 5.3 자소서 문항 머리의 글자 수 글자("1,180 / 1,200자" → "현재 1,180자 / 제한 1,200자", 사용처: S-19 문항 머리) / C-20 `input_rejected` 행에서 `RetryButton` 삭제(사용처: S-16·S-19·S-33·S-36·S-15의 입력 원인 실패) |
-| v4 | 2026-11-03 | **프로젝트 상세·산출물 상세 반영**(PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5, Figma `1034:8565`·`1041:8783`·`1041:8904` — MCP 한도로 리더 관찰값 사용). **토큰 추가**: `--shell`·`--shell-foreground`·`--panel`·`--panel-foreground`(+ `@theme` `--color-*`), 타입 `doc-title`·`star-heading`, 폭 `h-shellbar`·`w-ai-panel`·`min-w-doc-left`·`max-w-doc`, 반경 사용처 `rounded-2xl`·`rounded-3xl`. **variant 추가**: `button` `chip`·`chip-dashed`, `SelectTrigger variant="chip"`. **규칙 추가**: R-C8(보내기만 default), R-C9(AI 패널 식별 아이콘), A-13(문서형 입력 테두리 예외), A-14(손잡이), A-15(반영 알림). **신설 패턴**: 5.8 L-02 셸(`PageShell`·`ShellBar`·`SaveButton`·`CrumbRow`·`LeaveGuard`), 5.9 문서형 페이지(`DocTitleInput`·`DocTextarea`·`FieldRows`·`ChipSelect`·`CompetencyChips`·`ResizeHandle`), 5.10 `AiPanel`, 3.23 C-23, 3.24 `StarProposalCard`, 3.25 `DraftProposalCard`, 3.14 C-15 패널 칩 4종(`SourceChip`), 6장 A2 S-43 산출물 섹션. **이름 변경 없음**. **폐기 표시(코드 이전 대상)**: 5.4 S-36 대화 배치(→ 5.10. 사용처: `components/career/writing-chat/*`, `career/writing-chats/*` 화면), 5.3 "폼 화면"의 S-10과 "긴 글 편집"의 S-35(→ 5.9. 사용처: `project-form.tsx`, `detail-form.tsx`, `projects/[id]/details/*`), 6장 A2 v3 이하 S-08 트리·S-35·S-36·S-11·S-10 메모(→ "(v5) 커리어 v5.6"). **바뀐 규칙**: 패널 제안 카드 안의 C-15 [수락]은 `default` → `outline`(3.14 v4, 사용처: 새 카드만 — 기존 S-36 코드는 폐기 대상이라 고치지 않는다), 사용자 말풍선 바탕 `bg-secondary` → 패널 안에서는 `bg-card` + 테두리(5.10) |
+| v5 | 2026-11-03 | **프로젝트 상세·산출물 상세 반영**(PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5, Figma `1034:8565`·`1041:8783`·`1041:8904` — MCP 한도로 리더 관찰값 사용). **토큰 추가**: `--shell`·`--shell-foreground`·`--panel`·`--panel-foreground`(+ `@theme` `--color-*`), 타입 `doc-title`·`star-heading`, 폭 `h-shellbar`·`w-ai-panel`·`min-w-doc-left`·`max-w-doc`, 반경 사용처 `rounded-2xl`·`rounded-3xl`. **variant 추가**: `button` `chip`·`chip-dashed`, `SelectTrigger variant="chip"`. **규칙 추가**: R-C8(보내기만 default), R-C9(AI 패널 식별 아이콘), A-13(문서형 입력 테두리 예외), A-14(손잡이), A-15(반영 알림). **신설 패턴**: 5.8 L-02 셸(`PageShell`·`ShellBar`·`SaveButton`·`CrumbRow`·`LeaveGuard`), 5.9 문서형 페이지(`DocTitleInput`·`DocTextarea`·`FieldRows`·`ChipSelect`·`CompetencyChips`·`ResizeHandle`), 5.10 `AiPanel`, 3.23 C-23, 3.24 `StarProposalCard`, 3.25 `DraftProposalCard`, 3.14 C-15 패널 칩 4종(`SourceChip`), 6장 A2 S-43 산출물 섹션. **이름 변경 없음**. **폐기 표시(코드 이전 대상)**: 5.4 S-36 대화 배치(→ 5.10. 사용처: `components/career/writing-chat/*`, `career/writing-chats/*` 화면), 5.3 "폼 화면"의 S-10과 "긴 글 편집"의 S-35(→ 5.9. 사용처: `project-form.tsx`, `detail-form.tsx`, `projects/[id]/details/*`), 6장 A2 v3 이하 S-08 트리·S-35·S-36·S-11·S-10 메모(→ "(v5) 커리어 v5.6"). **바뀐 규칙**: 패널 제안 카드 안의 C-15 [수락]은 `default` → `outline`(3.14 v4, 사용처: 새 카드만 — 기존 S-36 코드는 폐기 대상이라 고치지 않는다), 사용자 말풍선 바탕 `bg-secondary` → 패널 안에서는 `bg-card` + 테두리(5.10). **v4 정합 후속(UQ-BR-5·9·12~17, 2026-11-03)**: main의 v4 브랜드 토큰과 머지한 뒤 v5 문장을 v4 variant로 고쳤다. 신설 Button `warning-ghost`(경고 묶음 트리거), ghost `aria-pressed` 선택 모양(= `aria-current`). 바뀐 클래스: `chip`·`chip-dashed`·`SelectTrigger chip` hover·열림 `bg-accent` → `bg-primary/10` + `text-primary-text`(사용처: `button.tsx`, `select.tsx` — AI 패널 칩·슬롯 칩, S-10 `ChipSelect`, `CompetencyChips` 추가 트리거) / 이탈 확인 "저장하지 않고 나가기" → `destructive-ghost`(`page-shell.tsx`) / 삭제 메뉴 3곳 → `DropdownMenuItem variant="destructive"`(`project-page.tsx`, `ai-panel.tsx`, `deliverable-page.tsx`) / AI 패널 기록 행 → `Item active`, 끝난 대화 배지 `outline` → `muted`, 기록 아이콘 버튼 `bg-accent` 제거(`ai-panel.tsx`) / S-43 산출물 행 → `Item asChild`, "산출물 추가"·"AI에게 물어보기"·본문 AI 버튼의 `text-muted-foreground` 제거(`career-overview.tsx`, `project-page.tsx`, `deliverable-page.tsx`) / "확인이 필요한 내용" 트리거 → `warning-ghost`, 이전 초안 트리거 → `ghost xs`, 초안 표 머리 행 바탕 제거(`deliverable-draft-card.tsx`) / 떠 있는 Resumate AI 버튼 `bg-card` 제거(`doc-body.tsx`). 1.3에 v5 예외 표(L-02 원형 버튼, 문서형 입력 `rounded-md` + 회색 hover, 패널 말풍선, 제안 카드 머리 hover 없음, 카드형 라디오 `primary-subtle` 선택 — 리더 판정 UQ-BR-15) 추가. 1.1 `--shell` 표 값 #F3FBF8로 정정, 5.8 로고 = 공용 `LogoMark`(`sidebar-primary`), P-15에 S-08 패널 클릭 요소 기준 추가. 3.24·3.25·5.10 제목의 "v4 신설" → "v5 신설"(이 행도 v4 → v5). 토큰·패턴 이름 변경 없음 |

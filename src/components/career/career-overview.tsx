@@ -497,12 +497,12 @@ function DeliverablesSection({ projectId, data }: { projectId: string; data: Del
       title="산출물"
       action={
         limit ? (
-          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled aria-describedby={`dlv-limit-${projectId}`}>
+          <Button variant="ghost" size="sm" disabled aria-describedby={`dlv-limit-${projectId}`}>
             <Plus aria-hidden />
             산출물 추가
           </Button>
         ) : (
-          <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+          <Button asChild variant="ghost" size="sm">
             <Link href={routes.deliverableNew(projectId)}>
               <Plus aria-hidden />
               산출물 추가
@@ -522,16 +522,16 @@ function DeliverablesSection({ projectId, data }: { projectId: string; data: Del
         <ul className="flex flex-col gap-0.5">
           {rows.map((d) => (
             <li key={d.id}>
-              <Link
-                href={routes.deliverable(d.id)}
-                className="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2.5 transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-base" title={d.title}>
-                  {d.title}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              </Link>
+              {/* UQ-BR-3: the shared clickable row (same hover / radius as the C-25 project cards) */}
+              <Item asChild className="gap-3">
+                <Link href={routes.deliverable(d.id)}>
+                  <FileText aria-hidden />
+                  <span className="min-w-0 flex-1 truncate" title={d.title}>
+                    {d.title}
+                  </span>
+                  <ChevronRight aria-hidden />
+                </Link>
+              </Item>
             </li>
           ))}
         </ul>

@@ -15,7 +15,7 @@ const buttonVariants = cva(
           "bg-primary/10 text-primary-text hover:bg-primary/15 aria-expanded:bg-primary/15 aria-expanded:text-primary-text",
         // data-pending (v4, UQ-712): a not-yet-reached step (writing-chat step bar) stays muted until hovered
         ghost:
-          "hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text aria-[current]:bg-primary/10 aria-[current]:font-medium aria-[current]:text-primary-text data-pending:not-hover:text-muted-foreground",
+          "hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text aria-[current]:bg-primary/10 aria-[current]:font-medium aria-[current]:text-primary-text aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text data-pending:not-hover:text-muted-foreground",
         // design-system 3.5: solid destructive for confirm-delete buttons
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
@@ -29,10 +29,14 @@ const buttonVariants = cva(
         // design-system 3.5 v4 (UQ-708): inline link inside a red error sentence (저장 실패 — 다시 시도)
         "destructive-link": "text-destructive underline-offset-4 hover:underline",
         // (v4) design-system 2: L-02 / Resumate AI 패널 빠른 버튼 칩 (Figma 회색 채움 알약), A-4 max-md:h-11
-        chip: "h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-accent max-md:h-11",
+        // (v5) UQ-BR-9: warning-coloured ghost (S-44 "확인이 필요한 내용 N개" 트리거)
+        "warning-ghost":
+          "text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground aria-expanded:bg-warning-subtle aria-expanded:text-warning-subtle-foreground",
+        // UQ-BR-5 (leader): Figma grey fill at rest, v4 hover / open = bg-primary/10 + text-primary-text
+        chip: "h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11",
         // (v4) missing_slots 슬롯 묻기: chip 모양 + 점선 테두리
         "chip-dashed":
-          "h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-accent max-md:h-11",
+          "h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11",
       },
       // design-system 2: sm h-8 text-sm / default h-10 text-base / lg h-11 / icon size-9 / icon-sm size-8
       // design-system 7 A-4 (UQ-120): every size is ≥44px below 768px; desktop keeps the original size

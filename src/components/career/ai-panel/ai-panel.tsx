@@ -19,6 +19,7 @@ import { ArrowLeft, History, Info, Loader2, Lock, MoreHorizontal, Plus, Sparkles
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Item } from "@/components/ui/item"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -114,7 +115,8 @@ function IconAction({ label, onClick, children, pressed, disabled }: { label: st
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={onClick} className={cn(pressed && "bg-accent")}>
+        {/* UQ-BR-7 (design-system v5): ghost + aria-pressed — the ghost variant colours the pressed state */}
+        <Button variant="ghost" size="icon-sm" aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={onClick}>
           {children}
         </Button>
       </TooltipTrigger>
@@ -151,8 +153,8 @@ function PanelHeader({ panel, onDelete }: { panel: AiPanelController; onDelete: 
             <TooltipContent>대화 메뉴</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-              <Trash2 aria-hidden className="text-destructive" />
+            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+              <Trash2 aria-hidden />
               이 대화 삭제
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -195,23 +197,22 @@ function HistoryView({ panel }: { panel: AiPanelController }) {
             const ended = c.status === "closed" || c.message_count >= PAGE_LIMITS.messageLimit
             return (
               <li key={c.id}>
-                <button
-                  type="button"
-                  aria-current={current ? "true" : undefined}
-                  onClick={() => void panel.openChat(c.id)}
-                  className={cn("w-full rounded-lg px-3 py-2.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", current && "bg-card shadow-xs")}
-                >
-                  <span className={cn("block truncate text-sm font-medium", !c.title && "text-muted-foreground")}>{c.title ?? PANEL_COPY.newChatTitle}</span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+                {/* UQ-BR-4: Item row — hover / current = bg-primary/10, aria-current from `active` */}
+                <Item asChild active={current} className="flex-col items-start gap-0.5">
+                  <button type="button" onClick={() => void panel.openChat(c.id)}>
+                  <span className={cn("block w-full truncate text-sm font-medium", !c.title && "text-muted-foreground")}>{c.title ?? PANEL_COPY.newChatTitle}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
                     {formatRelative(c.last_activity_at)} · {c.message_count}/{PAGE_LIMITS.messageLimit}
                     {ended ? (
-                      <Badge variant="outline" className="h-5">
+                      // UQ-BR-8: 잠금 상태 배지 = muted
+                      <Badge variant="muted" className="h-5">
                         <Lock className="size-3" aria-hidden />
                         {PANEL_COPY.closedChatBadge}
                       </Badge>
                     ) : null}
                   </span>
-                </button>
+                  </button>
+                </Item>
               </li>
             )
           })}

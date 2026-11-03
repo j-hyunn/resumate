@@ -232,9 +232,11 @@ function DraftingView({ provisional, previous }: { provisional: DeliverableDraft
     <div className="space-y-3 px-4 pb-3" aria-live="polite" aria-busy="true">
       {previous ? (
         <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ChevronRight className="size-3.5 transition-transform [[data-state=open]>&]:rotate-90" aria-hidden />
-            {DRAFT_STAGE_COPY.previous}
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="xs" className="-ml-2 group/prev">
+              <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/prev:rotate-90" aria-hidden />
+              {DRAFT_STAGE_COPY.previous}
+            </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2 space-y-2 opacity-70">
             {previous.blocks.map((b) => (
@@ -628,7 +630,7 @@ function BlockBody({ block: b }: { block: DeliverableDraftBlock }) {
         <div className="overflow-x-auto">
           <Table className="text-sm">
             <TableHeader>
-              <TableRow className="bg-muted/50">
+              <TableRow>
                 {head.map((c, i) => (
                   <TableHead key={i} className="h-auto px-2 py-1.5 font-medium">
                     {c}
@@ -676,7 +678,7 @@ function ReviewFacts({ panel, facts }: { panel: AiPanelController; facts: Delive
     <div className="px-4 pb-3">
       <Collapsible>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="-ml-2 text-warning-subtle-foreground">
+          <Button variant="warning-ghost" size="sm" className="-ml-2">
             <TriangleAlert className="size-4 text-warning" aria-hidden />
             확인이 필요한 내용 {facts.length.toLocaleString("ko-KR")}개
             <ChevronRight className="size-4 transition-transform [[data-state=open]>&]:rotate-90" aria-hidden />

@@ -384,7 +384,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-destructive"
+                  variant="destructive"
                   onSelect={() => setDeleting({ kind: "career", entity_type: "project_deliverable", entity_id: id, label: form.title.trim() || data.title, unsavedChanges: dirty })}
                 >
                   산출물 삭제
@@ -448,7 +448,6 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-muted-foreground"
                   onClick={() => {
                     panel.show()
                     panel.focusInput()

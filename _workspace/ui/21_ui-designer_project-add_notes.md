@@ -64,3 +64,36 @@
 8. **`SourceChip`**: 기존 C-15 칩을 4종 라벨(3.14 v4 표)로 받는 공통 컴포넌트로. "프로젝트 내용에서"는 `button`이 아닌 `span tabIndex=0` + Tooltip.
 9. A2 영역(커리어)에 둘 것으로 보는 것: `components/career/ai-panel/`(`AiPanel` 틀·기록 목록·메시지·제안 독·칩 줄·입력), `StarProposalCard`, `DraftProposalCard`. 둘 다 S-10·S-44(같은 A2)만 쓰므로 영역 소유로 봤다. 다른 영역이 쓰게 되면 공통으로 옮긴다.
 10. QA 참고: 지금 `career-overview.tsx`의 카드·행은 `focus-visible:ring-[3px] ring-ring/50`을 쓰는데, A-3은 `ring-2 ring-ring`(불투명)이다. 새 S-43 산출물 행은 A-3대로 적었다. 기존 행을 맞출지는 QA 판단.
+
+## 6. v4 정합 수정 (2026-11-03, QA `27_ui-qa_v5-brand-conformance.md`)
+
+main의 v4 브랜드 토큰과 머지한 뒤, v5 문장이 v4 규칙(색 덧씌우기 금지, 초록 hover, 클릭 항목은 공통 컴포넌트)과 부딪힌 곳을 `docs/ui/design-system.md`에서 고쳤다. 표시는 `(v5, UQ-BR-n)`, 9장 v5 행에 후속으로 적었다. 토큰·패턴 이름은 바꾸지 않았다.
+
+| 이슈 | 결정 |
+|------|------|
+| UQ-BR-5 | 리더 판정대로 `chip`·`chip-dashed`·`SelectTrigger chip`도 v4 hover(`bg-primary/10` + `text-primary-text`)를 따른다. 회색 hover 예외 없음. 바탕(회색 채움 / 점선 투명)은 그대로 |
+| UQ-BR-9 | `warning-ghost` variant 신설. `warning-outline`은 카드 안 가벼운 접기 트리거에 너무 무겁고, 기본 ghost는 hover 때 초록이 되어 경고 의미가 사라진다 |
+| UQ-BR-12 | 2장·3.25·5.8·5.9·5.10·6장의 v5 클래스 문자열을 v4 variant로 바꿨다(`destructive-ghost`, `DropdownMenuItem variant="destructive"`, `Item`/`Item active`, 덧씌우기 없는 ghost, `Badge muted`, ghost `aria-pressed`). 3.25 표 머리 행 바탕(UQ-BR-10), 이전 초안 트리거(UQ-BR-11), 떠 있는 버튼 `bg-card`(UQ-BR-11)도 문서에서 같이 지웠다 |
+| UQ-BR-7 | 기록 아이콘 버튼은 `Toggle`이 아니라 ghost + `aria-pressed`로 정했다. 같은 머리의 다른 아이콘 버튼(`Button icon-sm`, `rounded-control`)과 크기·반경을 맞추기 위해서다(Toggle은 `rounded-lg`·크기 다름) |
+| UQ-BR-13 | 1.1 표 `--shell` 라이트 값 → `#F3FBF8`(= `--sidebar`) |
+| UQ-BR-14 | 1.3에 v5 예외 표 추가: L-02 원형 아이콘 버튼(반경만 `rounded-full`, 색은 variant), 문서형 입력 `rounded-md` + 회색 hover(입력은 선택 대상이 아님), 패널 사용자 말풍선(S-36 예외 이전), 제안 카드 머리 hover 없음 + 포커스 링 |
+| UQ-BR-15 | 리더 판정대로 카드형 라디오의 `primary-subtle` 선택을 예외로 등록(main `education-form`·`interview-prep` 포함). "카드형 선택지 → Item"은 누르면 바로 이동·선택되는 카드에만 해당한다고 범위를 적었다. 통일은 다음 개정 |
+| UQ-BR-16 | 6장 S-43 산출물 행 = `Item asChild`(C-25와 같은 컴포넌트)로 고치고, P-15에 S-08 패널 클릭 요소의 v4 기준을 적었다 |
+| UQ-BR-17 | 5.8 로고 = 공용 `LogoMark`(`bg-sidebar-primary text-sidebar-primary-foreground`). 코드 변경 없음 |
+
+### 엔지니어 적용 필요
+
+foundation (`components/ui/*`, 셸):
+
+1. `button.tsx` — `chip`: `hover:bg-accent` → `hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text` (나머지 클래스 유지). `chip-dashed`: 같게 바꾼다 (UQ-BR-5)
+2. `select.tsx` — `SELECT_TRIGGER_CHIP`: `hover:bg-accent`·`dark:hover:bg-accent` 제거 → `hover:bg-primary/10 hover:text-primary-text data-[state=open]:bg-primary/10 data-[state=open]:text-primary-text` (UQ-BR-5)
+3. `button.tsx` — variant 신설 `"warning-ghost": "text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground aria-expanded:bg-warning-subtle aria-expanded:text-warning-subtle-foreground"` (UQ-BR-9)
+4. `button.tsx` — `ghost`에 `aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text` 추가 (UQ-BR-7)
+5. `page-shell.tsx` "저장하지 않고 나가기" → `variant="destructive-ghost"`, className 색 제거 (UQ-BR-1)
+6. `doc-body.tsx` 떠 있는 Resumate AI 버튼의 `bg-card` 제거(`rounded-full`·`shadow-md` 유지) (UQ-BR-11)
+
+A2 (커리어):
+
+7. `deliverable-draft-card.tsx:679` "확인이 필요한 내용" 트리거 → `variant="warning-ghost" size="sm" className="-ml-2"`, `text-warning-subtle-foreground` 제거, 아이콘 `text-warning`은 유지 (UQ-BR-9, 3번 다음)
+8. `ai-panel.tsx:117` 기록 버튼 → `className={cn(pressed && "bg-accent")}` 제거, `aria-pressed`만 (UQ-BR-7, 4번 다음)
+9. 그 밖에 QA 27의 UQ-BR-2·3·4·6·8·10·11(draft card)은 QA 기대값 그대로이고 문서도 그 모양으로 맞췄다

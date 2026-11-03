@@ -235,3 +235,23 @@ const panel = useAiPanel({
 | UQ-S44-4 (파운데이션 쪽) | 해결 | `TurnFailure.draft_turn` — `draft_started`가 왔거나 compose_draft 요청이면 true. `<AiPanel hideDraftTurnFailure>`는 `true`면 `draft_turn`으로 숨기고, 함수 `(failure) => boolean`도 받는다(페이지가 자기 `draftFailed`로 판정 가능). `draft_started` 전에 실패한 자유 입력 "초안 써 줘"는 질문 턴과 구분할 수 없어 목록에 남는다 | `ai-panel/use-ai-panel.ts`, `ai-panel/ai-panel.tsx` | **E2**: 지금 `hideDraftTurnFailure` 그대로 두면 `draft_started` 뒤 실패도 숨겨진다. 카드의 `draftFailed` 기준과 맞추려면 `hideDraftTurnFailure={(f) => f.draft_turn \|\| draftFailed}`처럼 함수로 |
 
 검사: `pnpm lint` 0건, `pnpm typecheck` 통과(`.next/dev` 삭제 후), `pnpm test` 1,842개 중 1,839 통과(실패 3 = 같은 로컬 Supabase 통합 테스트 `PGRST202`), 새 `readiness-v44.test.ts` 2개 통과, `pnpm build` 성공(exit 0, 공개 env 임시 값).
+
+## 브랜드 토큰 정합 (`27_ui-qa_v5-brand-conformance.md`, 디자인 시스템 v5 / main v4 variant)
+
+| ID | 상태 | 수정 | 파일 |
+|---|---|---|---|
+| UQ-BR-1 | 해결 | 이탈 확인 "저장하지 않고 나가기" = `Button variant="destructive-ghost"`(색 덧씌우기 제거) | `common/shell/page-shell.tsx` |
+| UQ-BR-2 | 해결 | 삭제 메뉴 3곳(프로젝트 삭제·이 대화 삭제·산출물 삭제) = `DropdownMenuItem variant="destructive"`, 항목·아이콘 색 class 제거 | `project-page/project-page.tsx`, `ai-panel/ai-panel.tsx`, `deliverable/deliverable-page.tsx` |
+| UQ-BR-3 | 해결 | S-43 산출물 행 = `<Item asChild><Link>…</Link></Item>`(C-25 카드와 같은 hover·반경), 아이콘 muted 덧씌우기 제거 | `career/career-overview.tsx` |
+| UQ-BR-4 | 해결 | 패널 대화 기록 행 = `<Item asChild active={현재}>`(hover·선택 `bg-primary/10`, `aria-current`는 Item) | `ai-panel/ai-panel.tsx` |
+| UQ-BR-5 | 해결 (리더 판정) | `Button chip`·`chip-dashed`: 평소 바탕 그대로(회색 채움 / 투명 점선), hover·열림 `hover:bg-primary/10 hover:text-primary-text aria-expanded:…`. `SelectTrigger variant="chip"`: 같은 hover + `data-[state=open]:bg-primary/10 data-[state=open]:text-primary-text` | `ui/button.tsx`, `ui/select.tsx` |
+| UQ-BR-6 | 해결 | ghost 버튼의 `text-muted-foreground` 제거 4곳("산출물 추가" 2, "AI에게 물어보기", 본문 빈 칸 AI 버튼). `-ml-2` 레이아웃은 유지 | `career-overview.tsx`, `project-page.tsx`, `deliverable-page.tsx` |
+| UQ-BR-7 | 해결 (디자이너 결정) | `ghost` variant에 `aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text` 추가, "대화 기록" 아이콘은 ghost icon `Button` + `aria-pressed`(`bg-accent` 덧씌우기 제거). 처음 적용했던 `Toggle`은 되돌림(머리 아이콘 버튼과 크기·반경을 맞추려는 디자이너 결정) | `ui/button.tsx`, `ai-panel/ai-panel.tsx` |
+| UQ-BR-8 | 해결 | "끝난 대화" = `Badge variant="muted"` | `ai-panel/ai-panel.tsx` |
+| UQ-BR-9 | 해결 (디자이너 결정) | `Button` variant `warning-ghost` 신설(`text-warning-subtle-foreground hover:bg-warning-subtle … aria-expanded:…`), S-44 "확인이 필요한 내용 N개" 트리거 = `variant="warning-ghost" size="sm" className="-ml-2"`(글자 색 class 제거, 아이콘 `text-warning` 유지) | `ui/button.tsx`, `deliverable-draft-card.tsx` |
+| UQ-BR-10 | 해결 | 초안 표 머리 행 `bg-muted/50` 제거 | `deliverable-draft-card.tsx` |
+| UQ-BR-11 | 해결 | 이전 초안 접기 = `CollapsibleTrigger asChild` + `Button variant="ghost" size="xs"`(포커스 링·초록 hover), 떠 있는 "Resumate AI" 버튼의 `bg-card` 제거, 역량 메뉴 라벨의 중복 muted 제거 | `deliverable-draft-card.tsx`, `common/shell/doc-body.tsx`, `common/doc-inputs.tsx` |
+
+동작 변경 없음(클릭 대상·키보드·문구 동일). 검사: `pnpm lint` 0건, `pnpm typecheck` 통과, `pnpm test` 126개 파일 1,975개 전부 통과(머지 뒤 로컬 통합 테스트도 통과), `pnpm build` 성공(exit 0, 공개 env 임시 값). 실행 중인 dev 서버(:3000)에서 `/career?state=default`·`/dev/page-shell`(S-10·S-44 모양) SSR 200, S-43 산출물 행이 `data-slot="item"`으로 렌더되는 것 확인. 브라우저 상호작용(hover 색 실제 확인)은 하지 않았다.
+
+- 디자이너 §6 후속(2026-11-03): UQ-BR-7·9를 위 표대로 반영. `SELECT_TRIGGER_CHIP`(hover·open 초록, `hover:bg-accent` 없음)과 떠 있는 버튼 `bg-card` 제거는 이미 들어가 있어 §6 2·6번과 일치. 재검사: lint 0건, typecheck 통과, `pnpm test` 전부 통과.

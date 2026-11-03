@@ -291,7 +291,7 @@ export function CompetencyChips<K extends string>({
         <DropdownMenuContent align="start" className="min-w-52">
           {full ? (
             <>
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">최대 3개까지 고를 수 있어요</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs font-normal">최대 3개까지 고를 수 있어요</DropdownMenuLabel>
               <DropdownMenuSeparator />
             </>
           ) : null}

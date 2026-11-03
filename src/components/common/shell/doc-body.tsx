@@ -104,7 +104,7 @@ export function DocBody({
           <Button
             ref={openerRef}
             variant="outline"
-            className={cn("fixed right-4 bottom-4 z-30 h-11 rounded-full bg-card px-4 shadow-md", placement.sheetOpen && "invisible")}
+            className={cn("fixed right-4 bottom-4 z-30 h-11 rounded-full px-4 shadow-md", placement.sheetOpen && "invisible")}
             aria-hidden={placement.sheetOpen || undefined}
             tabIndex={placement.sheetOpen ? -1 : undefined}
             onClick={() => placement.setSheetOpen(true)}

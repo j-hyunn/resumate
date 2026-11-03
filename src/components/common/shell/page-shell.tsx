@@ -200,7 +200,7 @@ export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
         </AlertDialogHeader>
         <AlertDialogFooter className="max-sm:flex-col-reverse max-sm:[&>*]:w-full">
           <AlertDialogCancel disabled={guard.saving}>계속 편집</AlertDialogCancel>
-          <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
+          <Button variant="destructive-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
             저장하지 않고 나가기
           </Button>
           <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>

@@ -19,6 +19,11 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         link: "text-primary underline-offset-4 hover:underline",
+        // (v4) design-system 2: L-02 / Resumate AI 패널 빠른 버튼 칩 (Figma 회색 채움 알약), A-4 max-md:h-11
+        chip: "h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-accent max-md:h-11",
+        // (v4) missing_slots 슬롯 묻기: chip 모양 + 점선 테두리
+        "chip-dashed":
+          "h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-accent max-md:h-11",
       },
       // design-system 2: sm h-8 text-sm / default h-10 text-base / lg h-11 / icon size-9 / icon-sm size-8
       // design-system 7 A-4 (UQ-120): every size is ≥44px below 768px; desktop keeps the original size

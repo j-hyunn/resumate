@@ -10,6 +10,7 @@ import type {
   ResultMode,
 } from "@/types/db"
 import { mockRequest } from "@/lib/mock/store"
+import { mockV45DeletionImpact, mockV45Delete } from "@/lib/mock/career-v45"
 import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { loadDraftCounts } from "@/server/services/drafts/progress"
@@ -161,12 +162,19 @@ function legacyAffiliationMode(entityType: DeletionEntityType, mode: Affiliation
 function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpact): DeletionImpact {
   if ("cascade" in impact) {
     return {
-      cascade: { projects: impact.cascade.projects, project_details: 0, achievements: 0, project_skills: impact.cascade.project_skills, writing_chats: impact.cascade.writing_chats },
+      cascade: {
+        projects: impact.cascade.projects,
+        project_details: 0,
+        achievements: 0,
+        project_skills: impact.cascade.project_skills,
+        writing_chats: impact.cascade.writing_chats,
+        project_deliverables: impact.cascade.project_deliverables,
+      },
       affected_results: impact.affected_results,
     }
   }
   return {
-    cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0 },
+    cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0, project_deliverables: 0 },
     affected_results: { by_application_project: [] },
     // v4.4 has no saved rows: `last_applied_at` set → "반영된 STAR는 남아요" (shown as 1 kept row).
     writing_chat: { message_count: impact.message_count, linked_saved_rows: impact.last_applied_at ? 1 : 0 },
@@ -201,18 +209,27 @@ export async function deleteCareerEntity(
 async function mockDeletionImpact(entityType: DeletionEntityType, entityId: string, affiliationMode: AffiliationMode): Promise<DeletionImpact> {
   const db = await mockRequest(400)
   const set = collect(db, entityType, entityId, affiliationMode)
+  // v4.5 rows (S-10 / S-44 mock: deliverables, deliverable chats, STAR chats) live in lib/mock/career-v45
+  const projectIds = entityType === "project" ? [...new Set([...set.projects, entityId])] : set.projects
+  const v45 = await mockV45DeletionImpact(entityType, entityId, projectIds)
   const impact: DeletionImpact = {
     cascade: {
       projects: set.projects.length,
       project_details: set.project_details.length,
       achievements: set.achievements.length,
       project_skills: set.project_skills,
-      writing_chats: set.writing_chats.length,
+      writing_chats: set.writing_chats.length + v45.writing_chats,
+      project_deliverables: v45.project_deliverables,
     },
     affected_results: { by_application_project: [] },
   }
+  if (entityType === "project_deliverable") return impact
   if (entityType === "writing_chat") {
     const chat = db.writing_chats.find((c) => c.id === entityId)
+    if (v45.found) {
+      impact.writing_chat = { message_count: v45.message_count ?? 0, linked_saved_rows: v45.last_applied_at ? 1 : 0 }
+      return impact
+    }
     impact.writing_chat = {
       message_count: chat?.message_count ?? 0,
       linked_saved_rows:
@@ -289,6 +306,9 @@ export async function deleteCareerItem(
 async function mockDeleteCareerItem(entityType: DeletionEntityType, entityId: string, affiliationMode: AffiliationMode, resultMode: ResultMode): Promise<void> {
   const db = await mockRequest()
   const set = collect(db, entityType, entityId, affiliationMode)
+  // v4.5 mock rows first (FK cascade: deliverable → its chats, project → its deliverables / chats)
+  await mockV45Delete(entityType, entityId, entityType === "project" ? [...new Set([...set.projects, entityId])] : set.projects)
+  if (entityType === "project_deliverable") return
   const now = new Date().toISOString()
 
   if (entityType !== "writing_chat") {

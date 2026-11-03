@@ -140,6 +140,7 @@ export function toLegacyProject(r: ProjectRowV44): Project {
     name: r.name,
     role: r.role,
     summary: r.experience_id || r.education_id ? null : r.description,
+    description: r.experience_id || r.education_id ? null : r.description,
     start_month: r.start_month,
     end_month: r.end_month,
     team_size: null,
@@ -337,6 +338,8 @@ function projectWithChildren(db: CareerData, project: Project): ProjectWithChild
   const skillIds = db.project_skills.filter((ps) => ps.project_id === project.id).map((ps) => ps.skill_id)
   return {
     ...project,
+    // S-43 reads `description` (mock rows only had `summary`)
+    description: project.experience_id || project.education_id ? null : (project.description ?? project.summary ?? null),
     details,
     skills: db.skills.filter((s) => skillIds.includes(s.id)),
     writing_chats: db.writing_chats.filter((c) => c.project_id === project.id),
@@ -759,7 +762,7 @@ export async function saveProject(id: string | null, patch: ProjectPatch, opts?:
           startMonth: toYearMonth(patch.start_month),
           endMonth: toYearMonth(patch.end_month),
           role: standalone ? patch.role : undefined,
-          description: standalone ? patch.summary : undefined,
+          description: standalone ? (patch.description !== undefined ? patch.description : patch.summary) : undefined,
           isCurrent: standalone ? patch.is_current : undefined,
           linkUrl: standalone ? patch.link_url : undefined,
         }),
@@ -791,6 +794,8 @@ async function mockSaveProject(id: string | null, patch: ProjectPatch, opts?: Wr
     db.projects.push(row)
   }
   Object.assign(row, patch)
+  // keep the legacy `summary` in step with `description` (old readers)
+  if (patch.description !== undefined) row.summary = patch.description
   // affiliation: at most one (CHECK num_nonnulls <= 1)
   if (patch.experience_id) row.education_id = null
   if (patch.education_id) row.experience_id = null

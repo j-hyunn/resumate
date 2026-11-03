@@ -14,7 +14,7 @@ export type GuideId = "G-1" | "G-2" | "G-3" | "G-4"
 
 /** Spec copy (02 C-07). G-3/G-4 take extra content (action link / per-field example). */
 export const GUIDE_COPY: Record<"G-1" | "G-2" | "G-3", string> = {
-  "G-1": "'우리 팀은'보다 '저는'으로 써 주세요. 팀이 한 일·배경은 상황(S)에 써 주세요",
+  "G-1": "'우리 팀은'보다 '저는'으로 써 주세요. 팀이 한 일·배경은 상황에 써 주세요",
   "G-2": "건강·종교·노조 활동 같은 민감정보, 동료·고객의 개인정보, 회사 기밀은 쓰지 마세요",
   "G-3": "수치를 정량 성과로 정리하면 AI가 숫자를 정확히 써요",
 }
@@ -90,6 +90,9 @@ export function MonthField({
   ongoing,
   className,
   describedBy,
+  size = "default",
+  labelHidden = false,
+  invalid,
 }: {
   id: string
   label: string
@@ -103,6 +106,11 @@ export function MonthField({
   ongoing?: { label: string; checked: boolean; onCheckedChange: (checked: boolean) => void }
   className?: string
   describedBy?: string
+  /** (v4) design-system 5.9: "sm" = L-02 머리 행 (h-8, 연 6.5rem / 월 5rem). Default keeps the form size. */
+  size?: "default" | "sm"
+  /** (v4) L-02 FieldRows: the row label (dt) is the visible label, so this one is sr-only. */
+  labelHidden?: boolean
+  invalid?: boolean
 }) {
   // UQ-8: a year without a month stays local; the value is emitted only when both are set
   const [draftYear, setDraftYear] = React.useState<string>("")
@@ -121,9 +129,11 @@ export function MonthField({
     onChange(`${y}-${m.padStart(2, "0")}-01`)
   }
 
+  const sm = size === "sm"
+  const triggerSm = "h-8 text-sm data-[size=sm]:h-8 data-[size=default]:h-8"
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <span id={`${id}-label`} className="block text-sm leading-5 font-medium">
+    <div className={cn(labelHidden ? "contents" : "space-y-1.5", className)}>
+      <span id={`${id}-label`} className={labelHidden ? "sr-only" : "block text-sm leading-5 font-medium"}>
         {label}
         {required ? (
           <>
@@ -134,7 +144,13 @@ export function MonthField({
       </span>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby={`${id}-label`} aria-describedby={describedBy}>
         <Select value={year} onValueChange={(y) => emit(y, month)} disabled={isDisabled}>
-          <SelectTrigger id={`${id}-year`} className="w-28" aria-label={`${label} 연도`}>
+          <SelectTrigger
+            id={`${id}-year`}
+            size={sm ? "sm" : "default"}
+            className={sm ? cn("w-[6.5rem]", triggerSm) : "w-28"}
+            aria-label={`${label} 연도`}
+            aria-invalid={invalid || undefined}
+          >
             <SelectValue placeholder="연도" />
           </SelectTrigger>
           <SelectContent className="max-h-72">
@@ -146,7 +162,13 @@ export function MonthField({
           </SelectContent>
         </Select>
         <Select value={month} onValueChange={(m) => emit(year, m)} disabled={isDisabled || !year}>
-          <SelectTrigger id={`${id}-month`} className="w-24" aria-label={`${label} 월`}>
+          <SelectTrigger
+            id={`${id}-month`}
+            size={sm ? "sm" : "default"}
+            className={sm ? cn("w-[5rem]", triggerSm) : "w-24"}
+            aria-label={`${label} 월`}
+            aria-invalid={invalid || undefined}
+          >
             <SelectValue placeholder="월" />
           </SelectTrigger>
           <SelectContent>

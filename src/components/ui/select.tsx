@@ -30,20 +30,28 @@ function SelectValue({
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+/** (v4) design-system 2: `variant="chip"` = S-10 머리 분류 회색 알약 (ChipSelect). */
+const SELECT_TRIGGER_CHIP =
+  "h-8 w-auto gap-1 rounded-full border-transparent bg-muted px-3 text-sm hover:bg-accent data-[placeholder]:text-muted-foreground max-md:h-11 data-[size=default]:h-8 data-[size=sm]:h-8 data-[size=sm]:rounded-full max-md:data-[size=default]:h-11 max-md:data-[size=sm]:h-11 dark:bg-muted dark:hover:bg-accent [&>svg]:size-3.5"
+
 function SelectTrigger({
   className,
   size = "default",
+  variant = "default",
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: "sm" | "default"
+  variant?: "default" | "chip"
 }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
+      data-variant={variant}
       className={cn(
         "flex w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-transparent py-2 pr-2 pl-2.5 text-base whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-10 data-[size=sm]:h-9 max-md:data-[size=default]:h-11 max-md:data-[size=sm]:h-11 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        variant === "chip" && SELECT_TRIGGER_CHIP,
         className
       )}
       {...props}

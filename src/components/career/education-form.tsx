@@ -191,7 +191,7 @@ export function EducationForm({ education }: { education: EducationWithChildren 
         actions={
           id ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={routes.projectNew({ education_id: id })}>
+              <Link href={routes.projectPageNew({ education: id })}>
                 <Plus aria-hidden />
                 프로젝트 추가
               </Link>
@@ -203,7 +203,7 @@ export function EducationForm({ education }: { education: EducationWithChildren 
           <ul className="divide-y rounded-md border">
             {education.projects.map((p) => (
               <li key={p.id}>
-                <Link href={routes.project(p.id)} className="flex min-h-11 items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent">
+                <Link href={routes.projectPage(p.id)} className="flex min-h-11 items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent">
                   <span className="min-w-0 flex-1 truncate font-medium">{p.name ?? "이름 없는 프로젝트"}</span>
                   {p.status === "draft" ? <DraftBadge label="작성 중 — AI 미반영" /> : null}
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">상세 내용 {p.details.length}</span>

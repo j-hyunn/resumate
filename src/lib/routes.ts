@@ -5,7 +5,7 @@
  * Query strings carry only non-personal values (spec: C-14 "쿼리에는 유형 값만",
  * FL-13 "URL에는 지원 프로젝트 ID와 기능 이름만").
  */
-import type { InterviewType, PolicyType, ProjectDetailField } from "@/types/db"
+import type { InterviewType, PolicyType, ProjectStarField } from "@/types/db"
 import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
 
 type Id = string
@@ -37,34 +37,34 @@ export const routes = {
   experience: (id: Id, query?: { achievement?: Id }) => withQuery(`/career/experiences/${id}`, query), // S-09
   educationNew: () => "/career/educations/new", // S-34
   education: (id: Id) => `/career/educations/${id}`, // S-34
-  /** S-10 new; affiliation pre-selected via query (ids only) */
-  projectNew: (query?: { experience_id?: Id; education_id?: Id; requirement_id?: Id }) =>
-    withQuery("/career/projects/new", query), // S-10 (`requirement_id`: 관련 요건 참고 문구)
-  /**
-   * S-10. `requirement_id` (S-16 보완점) shows "관련 요건: {요건 content}" (A2 request 3).
-   * v5.3 `focus: "fields"` (C-09 hint project_fields, A18): focus + highlight the empty name / role.
-   */
-  project: (id: Id, query?: { requirement_id?: Id; application_project_id?: Id; focus?: "fields" }) =>
-    withQuery(`/career/projects/${id}`, query), // S-10
-  projectDetailNew: (projectId: Id) => `/career/projects/${projectId}/details/new`, // S-35
-  /** S-35; `focus` moves focus to a STAR field (C-02 "원본으로 이동") */
-  projectDetail: (projectId: Id, detailId: Id, focus?: ProjectDetailField, achievement?: Id) =>
-    withQuery(`/career/projects/${projectId}/details/${detailId}`, { focus, achievement }), // S-35 (`achievement` → S-11 open)
   skills: () => "/career/skills", // S-12
+  // --- v5.6 L-02 (S-10 · S-44, PA-1·PA-3). A2 moves the S-10 / S-44 pages into `(page)`; ids only in queries ---
+  /** S-08 with one item selected in the right panel (`?item={kind}:{id}`, S-09 / S-34 / S-43) */
+  careerItem: (kind: "experience" | "education" | "project", id: Id, query?: { edit?: "info" | "content" }) =>
+    // `edit` [UI-가정] = open that S-43 section edit on arrival (C-23 "만들기" → 정보, C-09 project_fields → 내용)
+    `/career?item=${kind}:${id}${query?.edit ? `&edit=${query.edit}` : ""}`, // S-08
   /**
-   * S-36 new chat. mode/project/affiliation ids only. From the C-09 gate also
-   * `application_project_id` + `feature` (FL-13: "URL에는 지원 프로젝트 ID와 기능 이름만");
-   * the in-progress settings travel in session storage (return-target.ts).
+   * S-10 새 프로젝트 (UX v5.6 URL [가정]): `?experience={id}` or `?education={id}`; `requirement_id` = S-16 관련 요건
    */
-  writingChatNew: (query?: {
-    mode?: "new_project" | "augment_project"
-    project_id?: Id
-    experience_id?: Id
-    education_id?: Id
-    application_project_id?: Id
-    feature?: "insight" | "career_description" | "cover_letter" | "job_interview"
-  }) => withQuery("/career/writing-chats/new", query), // S-36
-  writingChat: (id: Id) => `/career/writing-chats/${id}`, // S-36
+  projectPageNew: (affiliation: ({ experience: Id } | { education: Id }) & { requirement_id?: Id }) => withQuery("/career/projects/new", affiliation), // S-10
+  /**
+   * S-10 프로젝트 상세. `chat` = the open panel chat (`?chat=`, [가정]); `focus` = a STAR 칸 (C-02 → that 칸) or
+   * `star` (C-09 project_star → the first empty STAR 칸); `requirement_id` = S-16 관련 요건.
+   */
+  projectPage: (id: Id, query?: { chat?: Id; focus?: ProjectStarField | "star"; requirement_id?: Id }) => withQuery(`/career/projects/${id}`, query), // S-10
+  /** S-44 새 산출물 (`/career/projects/{project_id}/deliverables/new`, [가정]) */
+  deliverableNew: (projectId: Id) => `/career/projects/${projectId}/deliverables/new`, // S-44
+  /**
+   * S-44 산출물 상세; `chat` = the open panel chat; `range` = C-02 근거 구간 강조 — `source_locator {start, end}`
+   * as `?range={start}-{end}` (character offsets in the body) [UI-가정]. S-44 parses it with `parseRangeParam`.
+   */
+  deliverable: (id: Id, query?: { chat?: Id; range?: { start: number; end: number } | null }) =>
+    withQuery(`/career/deliverables/${id}`, { chat: query?.chat, range: query?.range ? `${query.range.start}-${query.range.end}` : undefined }), // S-44
+  /**
+   * A writing chat by id when its target isn't known here (C-09 "이어서 대화하기"): the retired S-36 path is a
+   * redirect to that chat's S-10 / S-44 panel (`?chat=`).
+   */
+  writingChatRedirect: (id: Id) => `/career/writing-chats/${id}`, // → S-10 / S-44
 
   // 기업 JD 관리 — A3
   applications: () => "/applications", // S-13
@@ -156,4 +156,14 @@ export function safeNextPath(next: unknown): string | null {
     if (pathname === authPath || pathname.startsWith(`${authPath}/`)) return null
   }
   return safe
+}
+
+/** S-44 `?range={start}-{end}` → `{start, end}` (null when absent / malformed / empty). */
+export function parseRangeParam(value: string | string[] | null | undefined): { start: number; end: number } | null {
+  const v = Array.isArray(value) ? value[0] : value
+  const m = typeof v === "string" ? /^(\d+)-(\d+)$/.exec(v) : null
+  if (!m) return null
+  const start = Number(m[1])
+  const end = Number(m[2])
+  return end > start ? { start, end } : null
 }

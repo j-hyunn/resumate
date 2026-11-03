@@ -24,6 +24,12 @@ import type {
   StageOutcome,
   WritingChatMode,
   WritingChatStatus,
+  Competency,
+  DeliverableSlot,
+  ExperienceType,
+  ProjectStarField,
+  ProjectType,
+  WritingKind,
 } from "@/types/db"
 
 /** 1.1.4 / S-39 열 순서 */
@@ -421,4 +427,125 @@ export type AiFeatureKey = keyof typeof AI_FEATURE_NAMES
 export function returnToFeatureLabel(key: AiFeatureKey): string {
   const name = AI_FEATURE_NAMES[key]
   return `${name}${directionParticle(name)} 돌아가기`
+}
+
+// ---------------------------------------------------------------------------
+// v5.6 S-10 · S-44 (PRD F-P1-19 / CR-17 표시명, DM 2.3 키 → 표시명)
+// ---------------------------------------------------------------------------
+
+/** projects.project_type → 화면 "프로젝트 종류" (C-25 카드 태그) */
+export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  new_build: "신규 구축",
+  improvement: "개선·고도화",
+  operation: "운영·유지보수",
+  research: "분석·리서치",
+  marketing: "마케팅·캠페인",
+  process_improvement: "프로세스·조직 개선",
+  migration: "전환·마이그레이션",
+  coursework: "교육·학습 과제",
+  other: "기타",
+}
+
+/** projects.experience_type → 화면 "경험 유형" */
+export const EXPERIENCE_TYPE_LABELS: Record<ExperienceType, string> = {
+  impact: "성과 창출",
+  problem_solving: "문제 해결",
+  collaboration: "협업·갈등 조정",
+  leadership: "주도·리딩",
+  failure_recovery: "실패·극복",
+  new_challenge: "새로운 시도",
+  customer_facing: "고객·사용자 대응",
+}
+
+/** projects.competencies 원소 → 화면 "역량" */
+export const COMPETENCY_LABELS: Record<Competency, string> = {
+  problem_solving: "문제 해결력",
+  analysis: "분석력",
+  planning: "기획력",
+  execution: "실행력",
+  communication: "커뮤니케이션",
+  collaboration: "협업",
+  leadership: "리더십",
+  technical_expertise: "기술 전문성",
+  customer_insight: "고객 이해",
+  learning_agility: "학습 민첩성",
+}
+
+/** S-10 STAR 칸 제목 (한글 · 영문, CR-2) */
+export const STAR_FIELD_LABELS: Record<ProjectStarField, { ko: string; en: string }> = {
+  situation: { ko: "상황", en: "Situation" },
+  task: { ko: "역할", en: "Task" },
+  action: { ko: "행동", en: "Action" },
+  result: { ko: "결과/성과", en: "Result" },
+  learnings: { ko: "배운 점", en: "Insights" },
+}
+
+/** structured_draft.writing_kind (AI-13 종류 표시명) */
+export const WRITING_KIND_LABELS: Record<WritingKind, string> = {
+  planning_summary: "기획서 요약",
+  design_doc: "설계 문서",
+  retrospective: "회고",
+  presentation: "발표",
+  other: "기타",
+}
+
+/**
+ * AI-13 종류별 슬롯 (위에서부터 묻는 순서, 슬롯 3 = 본인 기여 필수). Display names = the AI spec's slot table,
+ * keys = the AI-13 output schema's 19 `facts[].slot` keys. 회고 슬롯 1 reuses `scope` (no separate key in the list).
+ */
+export const DELIVERABLE_SLOTS_BY_KIND: Record<WritingKind, ReadonlyArray<{ slot: DeliverableSlot; label: string }>> = {
+  planning_summary: [
+    { slot: "background", label: "배경·해결할 문제" },
+    { slot: "goal", label: "목표·대상 사용자" },
+    { slot: "contribution", label: "본인이 맡은 부분" },
+    { slot: "scope", label: "핵심 기능·범위" },
+    { slot: "outcome", label: "결과·검증" },
+  ],
+  design_doc: [
+    { slot: "requirements", label: "해결할 문제·요구사항" },
+    { slot: "structure", label: "구조(구성 요소·흐름)" },
+    { slot: "contribution", label: "본인이 맡은 부분" },
+    { slot: "decisions", label: "주요 결정과 대안·이유" },
+    { slot: "limits", label: "결과·한계" },
+  ],
+  retrospective: [
+    { slot: "scope", label: "무엇을 했나(범위)" },
+    { slot: "went_well", label: "잘된 점" },
+    { slot: "contribution", label: "본인이 맡은 부분" },
+    { slot: "went_wrong", label: "아쉬운 점·원인" },
+    { slot: "learnings", label: "배운 점·다음에 다르게 할 점" },
+  ],
+  presentation: [
+    { slot: "audience", label: "발표 자리·청중" },
+    { slot: "message", label: "핵심 메시지" },
+    { slot: "contribution", label: "본인이 맡은 부분" },
+    { slot: "outline", label: "구성" },
+    { slot: "reaction", label: "반응·결과" },
+  ],
+  other: [
+    { slot: "what", label: "어떤 결과물인가" },
+    { slot: "purpose", label: "목적" },
+    { slot: "contribution", label: "본인이 맡은 부분" },
+    { slot: "content", label: "주요 내용" },
+    { slot: "outcome", label: "결과" },
+  ],
+}
+
+/** "아직 비어 있는 부분: {슬롯 표시명}" — the kind's label first, then any kind, then the raw key. */
+export function deliverableSlotLabel(slot: string, kind: WritingKind | null): string {
+  const own = kind ? DELIVERABLE_SLOTS_BY_KIND[kind].find((s) => s.slot === slot) : undefined
+  if (own) return own.label
+  for (const list of Object.values(DELIVERABLE_SLOTS_BY_KIND)) {
+    const hit = list.find((s) => s.slot === slot)
+    if (hit) return hit.label
+  }
+  return slot
+}
+
+/** C-25 "(1년 11개월)" with the 진행 중 rule: `is_current` counts to this month (KST). 'YYYY-MM-DD' or 'YYYY-MM'. */
+export function projectSpanLabel(start: string | null, end: string | null, isCurrent: boolean, today = kstToday()): string {
+  if (!start) return ""
+  const last = isCurrent ? today : end
+  const span = formatMonthSpan(start, last)
+  return span ? `(${span})` : ""
 }

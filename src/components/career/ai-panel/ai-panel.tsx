@@ -1,0 +1,408 @@
+"use client"
+
+/**
+ * Resumate AI 패널 (S-10 · S-44 shared core — design-system v4 5.10, UX v5.6 S-10 / S-44 패널).
+ *
+ *   <AiPanel panel={panel}                                   // useAiPanel(…)
+ *            renderProposal={(p) => <StarProposalCard panel={p} … />}   // A2: the card in the 제안 독 slot
+ *            renderClosedActions={(p) => <Button …>모두 반영</Button>}   // S-10 [모두 반영] on a closed chat
+ *            renderAboveInput={(p) => …}                                  // e.g. "{기능}으로 돌아가기" (ready_to_return)
+ *            onUserMessageClick={(m) => …}                                // flash the card section citing it
+ *            onDirectInput={() => focusFirstField()} />                   // C-18 대안 "직접 입력"
+ *
+ * Frame: header (Sparkles · "Resumate AI" · C-19 · 기록 · 새 대화 · ⋯ · ×) → chat view (messages → 제안 독 →
+ * chip row → input) or the history view. States: C-18 area / inline lock, closed (40 / `closed`), before-send
+ * blocks, failed turn (C-20 + 다시 보내기), streaming (C-04 caret), first-message processing.
+ */
+import * as React from "react"
+import { ArrowLeft, History, Info, Loader2, Lock, MoreHorizontal, Plus, Sparkles, Trash2, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { AiErrorNotice } from "@/components/common/ai-error-notice"
+import { AiLock } from "@/components/common/ai-lock"
+import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
+import { ProviderBadge } from "@/components/common/provider-badge"
+import { StreamingCaret } from "@/components/common/streaming"
+import { useDocBodyMode } from "@/components/common/shell/doc-body"
+import { PAGE_LIMITS, PANEL_COPY, PANEL_NOTICE, freeTierGreetingLine, type WritingChatMessageView } from "@/lib/data/career-v45-shared"
+import { formatRelative } from "@/lib/data/labels"
+import { AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
+import type { AiPanelController, TurnFailure } from "./use-ai-panel"
+import { PanelInputArea } from "./panel-input"
+
+export interface AiPanelProps {
+  panel: AiPanelController
+  /** 제안 독 slot (STAR 제안 카드 / 본문 초안 제안 카드) — area-owned */
+  renderProposal?: (panel: AiPanelController) => React.ReactNode
+  /** extra buttons in the closed-chat box (S-10 [모두 반영]) */
+  renderClosedActions?: (panel: AiPanelController) => React.ReactNode
+  /** a line right above the input (e.g. ready_to_return "돌아가기") */
+  renderAboveInput?: (panel: AiPanelController) => React.ReactNode
+  onUserMessageClick?: (message: WritingChatMessageView) => void
+  /** C-18 대안 "직접 입력" → focus the left column */
+  onDirectInput?: () => void
+  /**
+   * S-44: a failed **draft** turn shows its C-20 + 다시 시도 on the draft card only ("이전 초안은 그대로예요"),
+   * not again in the message list. `true` = hide when `panel.failure.draft_turn` (draft_started arrived or
+   * compose_draft was requested); a function = the page decides (e.g. its own `draftFailed`). The card reads
+   * `panel.failure` and calls `panel.retry`.
+   */
+  hideDraftTurnFailure?: boolean | ((failure: TurnFailure) => boolean)
+  className?: string
+}
+
+export function AiPanel({ panel, renderProposal, renderClosedActions, renderAboveInput, onUserMessageClick, onDirectInput, hideDraftTurnFailure, className }: AiPanelProps) {
+  const [deleting, setDeleting] = React.useState<string | null>(null)
+  const areaLock = panel.locked && !panel.chat && panel.chats.length === 0
+  return (
+    <aside aria-label="Resumate AI" className={cn("flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground", className)}>
+      <PanelHeader panel={panel} onDelete={() => panel.chat && setDeleting(panel.chat.id)} />
+      {areaLock ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="m-4 space-y-3 rounded-lg border bg-card p-5">
+            <AiLock
+              entry="writing_chat"
+              size="area"
+              description={PANEL_COPY.lock[panel.target]}
+              alternativeLabel="직접 입력"
+              onAlternative={onDirectInput}
+              className="max-w-none border-0 p-0 shadow-none"
+            />
+          </div>
+        </div>
+      ) : panel.view === "history" ? (
+        <HistoryView panel={panel} />
+      ) : (
+        <>
+          <MessageList
+            panel={panel}
+            onUserMessageClick={onUserMessageClick}
+            onDeleteChat={() => panel.chat && setDeleting(panel.chat.id)}
+            hideFailure={Boolean(
+              panel.failure &&
+                (typeof hideDraftTurnFailure === "function" ? hideDraftTurnFailure(panel.failure) : hideDraftTurnFailure && panel.failure.draft_turn),
+            )}
+          />
+          {renderProposal ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
+          {renderAboveInput ? <div className="shrink-0 px-3 pt-2">{renderAboveInput(panel)}</div> : null}
+          <PanelInputArea panel={panel} renderClosedActions={renderClosedActions} onDirectInput={onDirectInput} />
+        </>
+      )}
+      {panel.consentDialog}
+      <DeleteConfirmDialog
+        target={deleting ? { kind: "writing_chat", entity_id: deleting, label: panel.chats.find((c) => c.id === deleting)?.title ?? undefined } : null}
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        onConfirm={async () => {
+          if (deleting) await panel.deleteChat(deleting)
+        }}
+      />
+    </aside>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// header
+// ---------------------------------------------------------------------------
+
+function IconAction({ label, onClick, children, pressed, disabled }: { label: string; onClick?: () => void; children: React.ReactNode; pressed?: boolean; disabled?: boolean }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={onClick} className={cn(pressed && "bg-accent")}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function PanelHeader({ panel, onDelete }: { panel: AiPanelController; onDelete: () => void }) {
+  const { mode, closeSheet } = useDocBodyMode()
+  const history = panel.view === "history"
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-1 px-3">
+      <Sparkles className="size-4 shrink-0 text-ai" aria-hidden />
+      <h2 className="text-base font-semibold whitespace-nowrap">Resumate AI</h2>
+      <ProviderBadge className="ml-1 max-w-[10rem] truncate" />
+      <div className="ml-auto flex items-center gap-0.5">
+        <IconAction label="대화 기록" pressed={history} onClick={() => panel.setView(history ? "chat" : "history")}>
+          <History aria-hidden />
+        </IconAction>
+        {/* without a key this still opens: the start area shows C-18 inline [가정] */}
+        <IconAction label="새 대화" onClick={() => void panel.newChat()} disabled={panel.responding}>
+          <Plus aria-hidden />
+        </IconAction>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="대화 메뉴" disabled={!panel.chat || panel.responding}>
+                  <MoreHorizontal aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>대화 메뉴</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+              <Trash2 aria-hidden className="text-destructive" />
+              이 대화 삭제
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {mode === "narrow" ? (
+          <Button variant="ghost" size="sm" onClick={closeSheet}>
+            {/* [가정 G-59] */}
+            {panel.target === "project" ? "STAR 보기" : "본문 보기"}
+          </Button>
+        ) : null}
+        <IconAction label="패널 닫기" onClick={mode === "narrow" ? closeSheet : panel.hide}>
+          <X aria-hidden />
+        </IconAction>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// history view
+// ---------------------------------------------------------------------------
+
+function HistoryView({ panel }: { panel: AiPanelController }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+      {panel.chat ? (
+        <div className="px-3 pt-1 pb-2">
+          <Button variant="ghost" size="sm" onClick={() => panel.setView("chat")}>
+            <ArrowLeft aria-hidden />
+            {PANEL_COPY.backToChat}
+          </Button>
+        </div>
+      ) : null}
+      {panel.chats.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">{PANEL_COPY.emptyHistory}</p>
+      ) : (
+        <ul className="space-y-0.5 px-2">
+          {panel.chats.map((c) => {
+            const current = panel.chat?.id === c.id
+            const ended = c.status === "closed" || c.message_count >= PAGE_LIMITS.messageLimit
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => void panel.openChat(c.id)}
+                  className={cn("w-full rounded-lg px-3 py-2.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", current && "bg-card shadow-xs")}
+                >
+                  <span className={cn("block truncate text-sm font-medium", !c.title && "text-muted-foreground")}>{c.title ?? PANEL_COPY.newChatTitle}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+                    {formatRelative(c.last_activity_at)} · {c.message_count}/{PAGE_LIMITS.messageLimit}
+                    {ended ? (
+                      <Badge variant="outline" className="h-5">
+                        <Lock className="size-3" aria-hidden />
+                        {PANEL_COPY.closedChatBadge}
+                      </Badge>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// messages
+// ---------------------------------------------------------------------------
+
+function highlightQuotes(text: string, quotes: string[]): React.ReactNode {
+  const q = quotes.find((x) => x && text.includes(x))
+  if (!q) return text
+  const i = text.indexOf(q)
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="rounded-sm bg-ai-subtle text-inherit">{q}</mark>
+      {text.slice(i + q.length)}
+    </>
+  )
+}
+
+function AiAvatar() {
+  return (
+    <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-ai-subtle">
+      <Sparkles className="size-3.5 text-ai" />
+    </span>
+  )
+}
+
+function MessageList({
+  panel,
+  onUserMessageClick,
+  onDeleteChat,
+  hideFailure,
+}: {
+  panel: AiPanelController
+  onUserMessageClick?: (m: WritingChatMessageView) => void
+  onDeleteChat: () => void
+  hideFailure?: boolean
+}) {
+  const scroller = React.useRef<HTMLDivElement | null>(null)
+  const stick = React.useRef(true)
+  const messages = panel.chat?.messages ?? []
+  const startArea = !panel.chat || panel.chat.message_count === 0
+  const providerLabel = panel.connection?.active_provider ? AI_PROVIDER_LABELS[panel.connection.active_provider] : null
+  const freeTier = panel.connection?.connection_tier === "free" && providerLabel
+
+  React.useEffect(() => {
+    const el = scroller.current
+    if (el && stick.current) el.scrollTop = el.scrollHeight
+  }, [messages.length, panel.reply, panel.phase, panel.failure])
+
+  React.useEffect(() => {
+    const id = panel.flashedMessage?.id
+    if (!id) return
+    document.getElementById(`wcm-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })
+  }, [panel.flashedMessage])
+
+  if (panel.loadingChat) {
+    return (
+      <div className="min-h-0 flex-1 space-y-5 overflow-hidden px-4 py-4" aria-busy="true">
+        <span className="sr-only">대화를 불러오는 중</span>
+        <Skeleton className="h-16 w-4/5" />
+        <Skeleton className="ml-auto h-12 w-3/5" />
+        <Skeleton className="h-16 w-4/5" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={scroller}
+      onScroll={(e) => {
+        const el = e.currentTarget
+        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+      }}
+      className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+    >
+      <ol className="space-y-5">
+        {/* 시작 영역: no chat row yet → the local greeting (same copy the start RPC stores) */}
+        {!panel.chat ? (
+          <li className="flex gap-2.5">
+            <AiAvatar />
+            <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
+              {panel.greeting}
+              {freeTier ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
+            </p>
+          </li>
+        ) : null}
+        {messages.map((m) => {
+          const flashed = panel.flashedMessage?.id === m.id
+          if (m.role === "user") {
+            return (
+              <li key={m.id} id={`wcm-${m.id}`} className="ml-auto max-w-[85%] space-y-1">
+                <p className="text-right text-xs text-muted-foreground tabular-nums">내 답변 #{m.user_number ?? "?"}</p>
+                {/* a button only when the page wires the click (no inert tab stops, UQ-PA-16) */}
+                {onUserMessageClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onUserMessageClick(m)}
+                    className={cn(
+                      "w-full cursor-pointer rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 text-left text-base leading-[1.75] whitespace-pre-wrap hover:ring-1 hover:ring-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      flashed && "animate-field-flash",
+                    )}
+                  >
+                    {flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content}
+                  </button>
+                ) : (
+                  <div className={cn("rounded-2xl rounded-br-md border bg-card px-3.5 py-2.5 text-base leading-[1.75] whitespace-pre-wrap", flashed && "animate-field-flash")}>
+                    {flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content}
+                  </div>
+                )}
+              </li>
+            )
+          }
+          return (
+            <li key={m.id} id={`wcm-${m.id}`} className="space-y-2">
+              <div className="flex gap-2.5">
+                <AiAvatar />
+                <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
+                  {m.content}
+                  {m.is_greeting && freeTier && !m.content.includes("무료 등급") ? `\n${freeTierGreetingLine(providerLabel)}` : ""}
+                </p>
+              </div>
+              {panel.sensitiveMessageIds.has(m.id) ? (
+                <Alert variant="info" className="ml-8 w-auto">
+                  <AlertDescription className="text-sm">
+                    {PANEL_COPY.sensitive}{" "}
+                    <Button variant="link" size="sm" className="h-auto px-0" onClick={onDeleteChat}>
+                      대화 삭제
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </li>
+          )
+        })}
+        {startArea ? (
+          <li className="flex items-start gap-1.5 pl-8 text-sm text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {PANEL_NOTICE[panel.target]}
+          </li>
+        ) : null}
+        {/* streaming reply (C-04): announced on completion only (A-6) */}
+        {panel.phase === "streaming" && panel.reply ? (
+          <li className="flex gap-2.5" aria-hidden>
+            <AiAvatar />
+            <p className="min-w-0 text-base leading-[1.75] whitespace-pre-wrap">
+              {panel.reply}
+              <StreamingCaret />
+            </p>
+          </li>
+        ) : null}
+        {panel.phase === "streaming" && !panel.reply ? (
+          <li className="flex items-center gap-2.5 text-sm text-muted-foreground">
+            <AiAvatar />
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <span>답을 쓰는 중…</span>
+          </li>
+        ) : null}
+        {panel.failure && !hideFailure ? (
+          <li className="pl-8">
+            <AiErrorNotice
+              code={panel.failure.code as Parameters<typeof AiErrorNotice>[0]["code"]}
+              provider={panel.failure.provider}
+              retryAfter={panel.failure.retry_after}
+              quotaResetsAt={panel.failure.quota_resets_at}
+              size="inline"
+              requestPath
+              retryLabel="다시 보내기"
+              onRetry={panel.retry}
+              lockEntry="writing_chat"
+            />
+          </li>
+        ) : null}
+      </ol>
+      <div role="status" aria-live="polite" className="sr-only">
+        {panel.phase === "idle" && messages.length ? (messages[messages.length - 1].role === "assistant" ? messages[messages.length - 1].content : "") : ""}
+      </div>
+    </div>
+  )
+}
+
+/** 제안 독 (5.10): a card right above the chip row; the card handles fold / max height (≤ 55%). */
+function ProposalDock({ children }: { children: React.ReactNode }) {
+  if (children === null || children === undefined || children === false) return null
+  return <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-border/60 px-3 pt-3">{children}</div>
+}
+

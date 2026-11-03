@@ -104,13 +104,14 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? x.name ?? "",
         current_value: value,
         path: [projectYear(db, x), parent, x.name].filter(Boolean) as string[],
-        href: routes.project(x.id),
+        // v5.6: affiliated → S-10 with that STAR 칸 focused (C-02), standalone → S-08 panel (S-43)
+        href: x.experience_id || x.education_id ? routes.projectPage(x.id, { focus: starFocus(field) }) : routes.careerItem("project", x.id),
         to_career: true,
         updated_at: v44.content_updated_at ?? x.updated_at,
       }
     }
     case "project_deliverable": {
-      // R4 (DM v4.4): deliverables of standalone projects. 연결 대기: no S-44 route in the current UI yet.
+      // R4 (DM v4.4): deliverables of standalone projects → S-44 with the 근거 구간 (`?range=`, C-02)
       const d = (db as unknown as { project_deliverables?: Array<Record<string, string | null>> }).project_deliverables?.find((r) => r.id === sid)
       if (!d) return empty
       const p = db.projects.find((r) => r.id === d.project_id)
@@ -118,7 +119,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? d.title ?? "",
         current_value: e.source_field === "body" ? (d.body ?? null) : (d.title ?? null),
         path: [projectYear(db, p), p?.name, d.title].filter(Boolean) as string[],
-        href: null,
+        href: routes.deliverable(String(d.id), { range: e.source_field === "body" ? locatorRange(e.source_locator) : null }),
         to_career: true,
         updated_at: d.updated_at ?? null,
       }
@@ -133,7 +134,8 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? d.title ?? "",
         current_value: d[field] ?? null,
         path: [projectYear(db, p), parent, p?.name, d.title, DETAIL_FIELD_LABELS[field]].filter(Boolean) as string[],
-        href: routes.projectDetail(d.project_id, d.id, field),
+        // v5.5: 상세 내용 merged into S-10's STAR (CR-2)
+        href: routes.projectPage(d.project_id, { focus: starFocus(field) }),
         to_career: true,
         updated_at: d.updated_at,
       }
@@ -158,7 +160,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         ).filter(Boolean) as string[],
         // `?achievement=` opens S-11 for this row on arrival (A2 request 4)
         href: d
-          ? routes.projectDetail(d.project_id, d.id, "result", a.id)
+          ? routes.projectPage(d.project_id, { focus: "result" })
           : a.experience_id
             ? routes.experience(a.experience_id, { achievement: a.id })
             : null,
@@ -250,4 +252,16 @@ export async function getEvidenceForOwners(ownerType: EvidenceOwnerType, ownerId
     ;(byKey[e.item_key] ??= []).push(toEvidenceView(db, e))
   }
   return clone(out)
+}
+
+/** C-02 → S-10: STAR source fields focus that 칸; others (name, period, …) open the page plainly. */
+function starFocus(field: string | null | undefined): "situation" | "task" | "action" | "result" | "learnings" | undefined {
+  return field === "situation" || field === "task" || field === "action" || field === "result" || field === "learnings" ? field : undefined
+}
+
+/** `source_locator {start, end}` (character offsets in the deliverable body) → S-44 `?range=` */
+function locatorRange(locator: Record<string, unknown> | null | undefined): { start: number; end: number } | null {
+  const start = Number(locator?.start)
+  const end = Number(locator?.end)
+  return Number.isInteger(start) && Number.isInteger(end) && end > start && start >= 0 ? { start, end } : null
 }

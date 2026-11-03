@@ -304,6 +304,11 @@ export interface Project extends BaseRow {
   /** v4.4 columns the career add modal writes (standalone projects); absent on v4.3b mock rows */
   is_current?: boolean
   link_url?: string | null
+  /**
+   * DM v4.4 `projects.description` (standalone "프로젝트 내용", S-43). Always set on reads (real = the column,
+   * mock = the legacy `summary` until saved); a patch with `description` writes the column. Prefer it over `summary`.
+   */
+  description?: string | null
 }
 
 /**
@@ -506,6 +511,193 @@ export type ProjectWritingChat = Row<"writing_chats", {
   structured_draft: StructuredDraftV3
   return_target: ReturnTarget | null
 }>
+
+// --- v4.5 (DM 2.5 · 2.5.0 · 2.5.1, PA-1·PA-3) — 연결 대기 (DM v4.5 11.3): the backend has not migrated yet,
+// so these are written from the planning document, not generated. Names are the DM keys verbatim.
+
+/** writing_chats v4.5 (DM 2.5): STAR chat (`project_deliverable_id` null) or deliverable chat. */
+export type WritingChatV45 = Row<"writing_chats", {
+  status: "active" | "closed"
+  /** v4.5 신설: the deliverable this chat writes (null = STAR chat of `project_id`). */
+  project_deliverable_id: Uuid | null
+  structured_draft: ProjectStructuredDraft | DeliverableStructuredDraft
+  return_target: ReturnTarget | null
+}>
+
+/** structured_draft field object review / origin (DM 2.5, same for both chat targets). */
+export type DraftReview = StructuredFieldReview
+
+/** v4.5 field object base: `rev` (slot-monotonic, missing = 1) + `applied_at` (written by the page-save RPC only). */
+interface DraftFieldObjectBase {
+  origin: StructuredFieldOrigin
+  source_message_ids: Uuid[]
+  review: DraftReview
+  reviewed_at: Timestamp | null
+  /** null = not applied (saved) yet. Written by `save_project_page` (v4.5), never by a form fill. */
+  applied_at: Timestamp | null
+  /** v4.5 (AI DA-8): +1 on every value change of this slot. Absent on old rows → read as 1. */
+  rev?: number
+}
+
+/** structured_draft.project.{start_month,end_month} — value 'YYYY-MM' */
+export interface DraftPeriodFieldObject extends DraftFieldObjectBase {
+  value: string | null
+  source_quotes: string[]
+}
+
+/** structured_draft.star.{situation,task,action,result,learnings} */
+export interface DraftStarFieldObject extends DraftFieldObjectBase {
+  value: string | null
+  /** set = value for an empty field / append = new sentences only, added after the form value */
+  op: "set" | "append"
+  source_quotes: string[]
+}
+
+/** structured_draft.classification.{project_type,experience_type,competencies} (CR-20, no `op`, no quotes) */
+export interface DraftClassificationFieldObject<V = string> extends DraftFieldObjectBase {
+  value: V | null
+  /** one-line reason (≤ 200 DM / ≤ 100 AI), shown on the card */
+  reason: string | null
+}
+
+export type ProjectStarField = "situation" | "task" | "action" | "result" | "learnings"
+export type DraftPeriodField = "start_month" | "end_month"
+export type ProjectClassificationField = "project_type" | "experience_type" | "competencies"
+export type DraftClarificationKind = "actor_ambiguous" | "number_vague" | "period_unclear"
+
+/** writing_chats.structured_draft for a STAR chat (DM 2.5 v3 shape + v4.5 `rev`). */
+export interface ProjectStructuredDraft {
+  schema_version: 3
+  project: Partial<Record<DraftPeriodField, DraftPeriodFieldObject>>
+  star: Partial<Record<ProjectStarField, DraftStarFieldObject>>
+  classification: {
+    project_type?: DraftClassificationFieldObject<ProjectType>
+    experience_type?: DraftClassificationFieldObject<ExperienceType>
+    competencies?: DraftClassificationFieldObject<Competency[]>
+  }
+  clarifications: Array<{ kind: DraftClarificationKind; field: ProjectStarField | DraftPeriodField | null }>
+  sensitive_flags_count: number
+}
+
+/** structured_draft.writing_kind (AI-13, in the draft only — not a project_deliverables column, PA-2) */
+export type WritingKind = "planning_summary" | "design_doc" | "retrospective" | "presentation" | "other"
+export type DeliverableFactActor = "self" | "team" | "unknown"
+export type DeliverableBlockType = "heading" | "paragraph" | "bullet_list" | "numbered_list" | "table" | "quote" | "code"
+export type DeliverableBlockBasis = "new" | "current_body"
+/** `PRJ.*` source fields of a draft block (AI-13 초안 출처) */
+export type DeliverableProjectField = "PRJ.description" | "PRJ.role" | "PRJ.skills" | "PRJ.name" | "PRJ.period"
+/** deliverable.body.applied_mode / p_applied_proposals[].mode */
+export type DeliverableAppliedMode = "replace" | "append"
+/** AI-13 slot keys (AI v4.6 AI-13 출력 스키마 `facts[].slot`, 19 keys verbatim; DM 2.5.0 `slot`) */
+export type DeliverableSlot =
+  | "background"
+  | "goal"
+  | "contribution"
+  | "scope"
+  | "outcome"
+  | "requirements"
+  | "structure"
+  | "decisions"
+  | "limits"
+  | "went_well"
+  | "went_wrong"
+  | "learnings"
+  | "audience"
+  | "message"
+  | "outline"
+  | "reaction"
+  | "what"
+  | "purpose"
+  | "content"
+
+/** structured_draft.facts[] (DM 2.5.0) */
+export interface DeliverableFact {
+  id: Uuid
+  slot: DeliverableSlot | string
+  text: string
+  actor: DeliverableFactActor
+  source_message_ids: Uuid[]
+  source_quotes: string[]
+  review: DraftReview
+  reviewed_at: Timestamp | null
+  origin: StructuredFieldOrigin
+}
+
+/** structured_draft.deliverable.body.blocks[] (DM 2.5.0) */
+export interface DeliverableDraftBlock {
+  block_id: string
+  type: DeliverableBlockType
+  /** heading / paragraph / quote / code text */
+  text?: string
+  /** bullet_list / numbered_list */
+  items?: string[]
+  /** table */
+  rows?: string[][]
+  /** heading depth 2–3 ([가정] default 2) */
+  level?: number
+  basis: DeliverableBlockBasis
+  source_fact_ids: Uuid[]
+  source_body_quotes: string[]
+  source_project_fields: DeliverableProjectField[]
+  review: DraftReview
+}
+
+/** structured_draft.deliverable.body (DM 2.5.0) — one draft per chat, no history */
+export interface DeliverableDraftBody {
+  value: string
+  blocks: DeliverableDraftBlock[]
+  rev: number
+  generated_at: Timestamp
+  base_body_hash: string
+  replace_allowed: boolean
+  missing_slots: Array<DeliverableSlot | string>
+  dropped_block_count: number
+  applied_at: Timestamp | null
+  applied_mode: DeliverableAppliedMode | null
+  applied_rev: number | null
+}
+
+/** writing_chats.structured_draft for a deliverable chat (DM 2.5.0). `deliverable = {}` before the first draft. */
+export interface DeliverableStructuredDraft {
+  schema_version: 1
+  target: "project_deliverable"
+  writing_kind: WritingKind | null
+  facts: DeliverableFact[]
+  deliverable: { body?: DeliverableDraftBody }
+  clarifications: Array<{ kind: "actor_ambiguous" | "number_vague"; slot: DeliverableSlot | string | null; note: string | null }>
+  sensitive_flags_count: number
+  /** 0–6 drafts made in this chat; 6 → `writing_chat_draft_limit_reached` (409) */
+  draft_count: number
+}
+
+/** DM 2.5.1 `skipped[].reason`, judged in this order. */
+export type PageSaveSkipReason = "not_found" | "already_applied" | "proposal_changed" | "needs_review" | "invalid_entry" | "mark_failed"
+
+/** DM 2.5.1 / 2.5.0 refusal codes the page save and the panel can get (v4.5 new + reused). */
+export type PageSaveErrorCode =
+  | "stale_write"
+  | "project_name_required"
+  | "project_affiliation_required"
+  | "project_not_affiliated"
+  | "deliverable_title_required"
+  | "invalid_period"
+  | "invalid_classification"
+  | "invalid_fields"
+  | "field_too_long"
+  | "not_found"
+  | "project_scope_change_not_allowed"
+  | "deliverable_limit_reached"
+  | "deliverable_requires_standalone_project"
+
+/** Panel refusals (DM 2.5 / 2.5.0 / 2.5.1, turn request). */
+export type WritingChatErrorCode =
+  | "invalid_patch"
+  | "invalid_form_snapshot"
+  | "writing_chat_draft_limit_reached"
+  | "writing_chat_closed"
+  | "writing_chat_requires_affiliated_project"
+  | "field_already_applied"
+  | "not_found"
 
 /** writing_chat_messages (2.5) */
 export type WritingChatMessage = Row<"writing_chat_messages", {
@@ -940,18 +1132,25 @@ export type AiProvider = Row<"ai_providers", {
 // ---------------------------------------------------------------------------
 
 export type ReadinessMissing = "complete_experience" | "complete_project"
-/** v4.2 A18: `project_fields` = complete detail but the draft project lacks name / role */
-export type ReadinessHint = "complete_project_detail" | "project_fields" | "profile"
+/**
+ * DM §6 v4.4: `project_star` = an affiliated draft project lacks 상황·행동; `project_fields` = a standalone draft
+ * project lacks 프로젝트 내용 (`description`). `complete_project_detail` = @deprecated v4.2 name (never produced now).
+ */
+export type ReadinessHint = "project_star" | "project_fields" | "profile" | "complete_project_detail"
 export type ReadinessFeatureKey = "insight" | "draft" | "job_interview" | "culture_fit_interview"
 
 export interface ReadinessFeature {
   ready: boolean
   missing?: ReadinessMissing[]
   hints?: ReadinessHint[]
-  /** only when ready = false */
-  next_action?: "writing_chat" | "form"
+  /**
+   * only when ready = false (DM §6 v4.4 order): `form` (no experience / project_fields / AI unusable),
+   * `writing_chat` + suggested_project_id (STAR 미완 소속 프로젝트), `create_project` (채울 프로젝트 없음 → C-23)
+   */
+  next_action?: "writing_chat" | "form" | "create_project"
+  /** @deprecated v4.2 (DM v4.4 removed it). Still set to 'augment_project' with writing_chat for old readers */
   suggested_mode?: WritingChatMode
-  /** suggested_mode = 'augment_project', or (v4.2) next_action = 'form' with hint project_fields */
+  /** writing_chat / form + project_star → that affiliated project; form + project_fields → that standalone project */
   suggested_project_id?: Uuid
   data_sufficiency?: DataSufficiency
 }
@@ -962,6 +1161,11 @@ export interface DataReadiness {
     complete_experiences: number
     complete_educations: number
     complete_projects: number
+    /** DM §6 v4.4 */
+    projects_without_complete_star: number
+    /** DM §6 v4.4 */
+    standalone_projects_without_description: number
+    /** @deprecated v4.2 name = projects_without_complete_star */
     projects_without_complete_detail: number
     complete_project_details: number
     draft_project_details: number
@@ -1032,6 +1236,8 @@ export type DeletionEntityType =
   | "achievement"
   | "skill"
   | "writing_chat"
+  /** v5.5 S-44 산출물 (DM v4.4 `delete_career_item('project_deliverable', …)`, v4.5 cascades its chats) */
+  | "project_deliverable"
 export type AffiliationMode = "keep_projects" | "delete_projects"
 export type ResultMode = "keep_results" | "delete_results"
 
@@ -1043,6 +1249,8 @@ export interface DeletionImpact {
     achievements: number
     project_skills: number
     writing_chats: number
+    /** DM v4.4 §4.2: a standalone project's deliverables (0 for other targets) */
+    project_deliverables: number
   }
   affected_results: {
     // [UI-가정] 04 says "v2 형식: 이름, insights, drafts, draft_sections, interview_sessions"; key names follow that list.

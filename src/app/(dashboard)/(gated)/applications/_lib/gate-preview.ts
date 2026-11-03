@@ -14,11 +14,14 @@ export function gateReadinessPreview(base: DataReadiness, state: string | null):
   const r = insufficientReadinessPreview(base, {
     noExperience: state === "insufficient-no-experience",
     projectFields: state === "insufficient-project-fields",
+    // DM §6 v4.4 (UQ-INT-4): 채울 프로젝트 없음 → create_project (C-23) / AI 못 씀 + STAR 미완 → form + 제안 프로젝트
+    createProject: state === "insufficient-create-project",
+    starForm: state === "insufficient-star-form",
   })
   if (state === "insufficient-key-invalid") {
-    // v5 C-09: key invalid → the server answers next_action = 'form'
+    // v5 C-09: key invalid → the server answers next_action = 'form' (v4.4 keeps the STAR project: "'{이름}' 마저 채우기")
     const provider = base.ai_connection.active_provider ?? "gemini"
-    const form = (f: DataReadiness["features"]["insight"]) => ({ ...f, next_action: "form" as const, suggested_mode: undefined, suggested_project_id: undefined })
+    const form = (f: DataReadiness["features"]["insight"]) => ({ ...f, next_action: "form" as const, suggested_mode: undefined })
     return {
       ...r,
       ai_connection: { active_provider: provider, key_status: "invalid", connection_tier: base.ai_connection.connection_tier ?? "free", consent_required: false },

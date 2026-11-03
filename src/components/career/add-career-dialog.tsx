@@ -138,7 +138,7 @@ function fromRow(target: CareerEditTarget): Values {
     name: p.name ?? "",
     role: p.role ?? "",
     link: p.link_url ?? "",
-    body: p.summary ?? "",
+    body: p.description ?? p.summary ?? "",
     period: { start: p.start_month, end: p.end_month, ongoing: p.is_current ?? false },
     skills: target.skills,
   }
@@ -182,7 +182,7 @@ function toItem(kind: AddCareerKind, v: Values, editing?: CareerEditTarget): New
   }
   return {
     kind,
-    patch: { name: v.name.trim(), role: nn(v.role), start_month: start, end_month: end, is_current: ongoing, link_url: nn(v.link), summary: nn(v.body) },
+    patch: { name: v.name.trim(), role: nn(v.role), start_month: start, end_month: end, is_current: ongoing, link_url: nn(v.link), description: nn(v.body) },
     skills: v.skills,
   }
 }

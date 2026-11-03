@@ -9,6 +9,7 @@
 import * as React from "react"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { routes } from "@/lib/routes"
 import { Card } from "@/components/ui/card"
 import type { DataReadiness, InterviewSession } from "@/types/db"
 import type { EvidenceView } from "@/lib/data/evidence"
@@ -199,7 +200,7 @@ export function DevStateGallery({
           <AiLock entry="insight" size="area" featureLabel="인사이트" alternativeHref="/career" />
           <AiLock entry="requirements" size="area" featureLabel="요건 정리" alternativeNote="공고 원문은 그대로 볼 수 있어요" />
           <AiLock entry="usage" size="area" featureLabel="AI 사용량" />
-          <AiLock entry="writing_chat" size="inline" actionName="AI와 대화하며 정리" alternativeHref="/career/projects/new" />
+          <AiLock entry="writing_chat" size="inline" actionName="AI와 대화하며 정리" alternativeHref={routes.projectPageNew({ experience: "00000000-0000-4e01-8000-000000000001" })} />
           <AiLock entry="draft" size="inline" actionName="초안 생성" />
           <AiLock entry="interview_new" size="inline" actionName="시작하기" alternativeHref="/interviews" />
           <AiLock entry="interview_submit" size="inline" actionName="제출" />

@@ -144,6 +144,8 @@ export function toLegacyProject(r: ProjectRowV44): Project {
     end_month: r.end_month,
     team_size: null,
     source_writing_chat_id: r.source_writing_chat_id,
+    is_current: r.is_current,
+    link_url: r.link_url,
   }
 }
 
@@ -719,7 +721,7 @@ type ProjectPatch = Partial<Omit<Project, "id" | "user_id" | "created_at" | "upd
 
 /**
  * @deprecated R4 shim (S-10 v4.3b form). Create = C-23 `createProject` (name required: an empty name
- * becomes "새 프로젝트" [가정]); then a section save. `role` / `summary` (→ `description`) only on a
+ * becomes "새 프로젝트" [가정]); then a section save. `role` / `summary` (→ `description`) / `is_current` / `link_url` only on a
  * standalone project, `team_size` is dropped (DM v4.4). A scope change is refused by the DB.
  */
 export async function saveProject(id: string | null, patch: ProjectPatch, opts?: WriteOptions): Promise<Project> {
@@ -758,6 +760,8 @@ export async function saveProject(id: string | null, patch: ProjectPatch, opts?:
           endMonth: toYearMonth(patch.end_month),
           role: standalone ? patch.role : undefined,
           description: standalone ? patch.summary : undefined,
+          isCurrent: standalone ? patch.is_current : undefined,
+          linkUrl: standalone ? patch.link_url : undefined,
         }),
       })
       await career.saveProject(supabase, input)

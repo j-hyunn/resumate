@@ -115,7 +115,8 @@ export function DeleteConfirmDialog(props: DeleteConfirmDialogProps) {
 function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: DeleteConfirmDialogProps) {
   const [loaded, setLoaded] = React.useState<{ key: string; impact: Impact } | null>(null)
   const [resultMode, setResultMode] = React.useState<ResultMode>("keep_results")
-  const [affiliationMode, setAffiliationMode] = React.useState<AffiliationMode>("keep_projects")
+  // CR-15: an experience / education delete always removes its projects (no "keep" choice)
+  const affiliationMode: AffiliationMode = "delete_projects"
   const [acknowledged, setAcknowledged] = React.useState(false)
   const [running, setRunning] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
@@ -211,16 +212,6 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
             </p>
           ) : null}
 
-          {hasAffiliation ? (
-            <fieldset className="space-y-2">
-              <legend className="text-sm leading-5 font-medium">소속 프로젝트 처리</legend>
-              <RadioGroup value={affiliationMode} onValueChange={(v) => setAffiliationMode(v as AffiliationMode)} className="gap-2">
-                <CardRadio id="affiliation-keep" value="keep_projects" title="독립 프로젝트로 남기기" />
-                <CardRadio id="affiliation-delete" value="delete_projects" title="함께 삭제" />
-              </RadioGroup>
-            </fieldset>
-          ) : null}
-
           {target.kind === "career" ? (
             <fieldset className="space-y-2">
               <legend className="text-sm leading-5 font-medium">결과 처리</legend>
@@ -273,15 +264,12 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
 
   if (impact.kind === "career" && target.kind === "career") {
     const c = impact.data.cascade
-    if (target.entity_type === "project_detail") lines.push(`붙어 있는 정량 성과 ${c.achievements}건도 삭제돼요`)
-    if (target.entity_type === "project") {
-      lines.push(`상세 내용 ${c.project_details}건, 정량 성과 ${c.achievements}건이 함께 삭제돼요.`)
-      if (c.writing_chats > 0) lines.push("이 프로젝트의 AI 작성 대화도 삭제돼요")
-    }
+    // F-COM-04 v4.5 (CR-11·CR-15): no 상세 내용·정량 성과 any more; a project takes its AI 작성 대화 with it
+    if (target.entity_type === "project" && c.writing_chats > 0) lines.push(`이 프로젝트의 AI 작성 대화 ${c.writing_chats}개도 함께 삭제돼요`)
     if (target.entity_type === "experience" || target.entity_type === "education") {
       // [UI-가정] cascade line copy for 경력·교육 is not in the spec
-      if (c.projects > 0) lines.push(`프로젝트 ${c.projects}건, 상세 내용 ${c.project_details}건, 정량 성과 ${c.achievements}건이 함께 삭제돼요`)
-      else if (c.achievements > 0) lines.push(`정량 성과 ${c.achievements}건이 함께 삭제돼요`)
+      if (c.projects > 0)
+        lines.push(`소속 프로젝트 ${c.projects}건${c.writing_chats > 0 ? `과 그 AI 작성 대화 ${c.writing_chats}개` : ""}도 함께 삭제돼요`)
     }
     byAp = impact.data.affected_results.by_application_project
   }

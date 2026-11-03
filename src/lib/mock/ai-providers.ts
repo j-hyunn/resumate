@@ -46,7 +46,7 @@ export interface AiProviderInfo extends AiProvider {
   /** 기본 등급 (S-41 ①: Gemini 무료, 그 밖 유료) */
   default_tier: ConnectionTier
   /** mock key-format check (S-41 ③ "{공급자} 키 형식이 아니에요") — // [UI-가정] */
-  key_prefix: string
+  key_prefixes: string[]
 }
 
 export const AI_PROVIDERS: Record<AiProviderName, AiProviderInfo> = {
@@ -64,7 +64,7 @@ export const AI_PROVIDERS: Record<AiProviderName, AiProviderInfo> = {
     upgrade_url: "https://ai.google.dev/pricing",
     description: "결제 등록 없이 무료 키 발급",
     default_tier: "free",
-    key_prefix: "AIza",
+    key_prefixes: ["AIza", "AQ."],
   },
   anthropic: {
     provider: "anthropic",
@@ -80,7 +80,7 @@ export const AI_PROVIDERS: Record<AiProviderName, AiProviderInfo> = {
     upgrade_url: "https://docs.anthropic.com/",
     description: "유료 결제 필요",
     default_tier: "paid",
-    key_prefix: "sk-ant-",
+    key_prefixes: ["sk-ant-"],
   },
   openai: {
     provider: "openai",
@@ -96,7 +96,7 @@ export const AI_PROVIDERS: Record<AiProviderName, AiProviderInfo> = {
     upgrade_url: "https://platform.openai.com/docs/guides/rate-limits",
     description: "유료 결제 필요",
     default_tier: "paid",
-    key_prefix: "sk-",
+    key_prefixes: ["sk-"],
   },
 }
 

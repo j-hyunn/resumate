@@ -382,7 +382,7 @@ const LIMITED: AiErrorCode[] = ["rate_limited", "daily_quota_exhausted", "provid
 
 function keyFormatOk(provider: AiProviderName, raw: string): boolean {
   const v = raw.trim()
-  return v.length >= 12 && v.startsWith(AI_PROVIDERS[provider].key_prefix)
+  return v.length >= 12 && AI_PROVIDERS[provider].key_prefixes.some((p) => v.startsWith(p))
 }
 
 /**

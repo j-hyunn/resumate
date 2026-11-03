@@ -301,6 +301,9 @@ export interface Project extends BaseRow {
   end_month: DateString | null
   team_size: number | null
   source_writing_chat_id: Uuid | null
+  /** v4.4 columns the career add modal writes (standalone projects); absent on v4.3b mock rows */
+  is_current?: boolean
+  link_url?: string | null
 }
 
 /**

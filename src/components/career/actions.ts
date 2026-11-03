@@ -107,6 +107,43 @@ export async function saveProjectAction(id: string | null, patch: Partial<Projec
   )
 }
 
+export type NewCareerItem =
+  | { kind: "experience"; patch: Partial<Experience> }
+  | { kind: "education"; patch: Partial<Education> }
+  | { kind: "project"; patch: Partial<Project>; skills: string[] }
+
+/** S-08 커리어 추가 모달: one create (no autosave draft), then the list re-renders with the new item */
+export async function createCareerItemAction(item: NewCareerItem, opts?: Opts): Promise<{ ok: true; id: string } | { ok: false }> {
+  const result =
+    item.kind === "experience"
+      ? await saveExperienceAction(null, item.patch, opts)
+      : item.kind === "education"
+        ? await saveEducationAction(null, item.patch, opts)
+        : await saveProjectAction(null, item.patch, opts)
+  if (!result.ok) return { ok: false }
+  if (item.kind === "project" && item.skills.length > 0) await setProjectSkills(result.row.id, item.skills, opts)
+  refresh()
+  return { ok: true, id: result.row.id }
+}
+
+/** S-08 커리어 수정 모달: the same fields as the add modal, saved over the row (`expected_updated_at` guards a stale edit) */
+export async function updateCareerItemAction(
+  id: string,
+  item: NewCareerItem,
+  opts?: Opts,
+): Promise<{ ok: true } | { ok: false; reason: "conflict" | "gone" | "invalid" }> {
+  const result =
+    item.kind === "experience"
+      ? await saveExperienceAction(id, item.patch, opts)
+      : item.kind === "education"
+        ? await saveEducationAction(id, item.patch, opts)
+        : await saveProjectAction(id, item.patch, opts)
+  if (!result.ok) return { ok: false, reason: result.reason }
+  if (item.kind === "project") await setProjectSkills(id, item.skills)
+  refresh()
+  return { ok: true }
+}
+
 export async function setProjectSkillsAction(projectId: string, names: string[], opts?: Opts) {
   return setProjectSkills(projectId, names, opts)
 }

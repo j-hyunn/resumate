@@ -5,9 +5,8 @@
  * Experiences, educations and independent projects show once under their start year; the
  * selected item lives in the URL (`?item={kind}:{id}`) and the panel is S-09 / S-34 / S-43.
  *
- * // [UI-가정] 이번 단계는 레이아웃만 바꾼다. C-24 섹션 인라인 편집·C-23 이름 입력·S-44 산출물과
- * DM v4.4 새 컬럼(project_type·is_current·link_url·description·project_deliverables)은 아직 없어서,
- * "수정"·"추가"는 기존 편집 화면으로 보내고 종류 태그·Link·산출물은 그리지 않는다.
+ * // [UI-가정] 커리어 추가는 모달(add-career-dialog.tsx)로 만든다. C-24 섹션 인라인 편집·C-23 이름 입력·S-44
+ * 산출물은 아직 없어서 "수정"·"+ 프로젝트 추가"는 기존 편집 화면으로 보내고 종류 태그·Link·산출물은 그리지 않는다.
  */
 import * as React from "react"
 import Link from "next/link"
@@ -30,7 +29,6 @@ import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/dele
 import type { Education, Experience } from "@/types/db"
 import type { CareerTree, ProjectWithChildren } from "@/lib/data/career"
 import {
-  EDUCATION_TYPE_LABELS,
   EMPLOYMENT_TYPE_LABELS,
   ENROLLMENT_STATUS_LABELS,
   formatMonthSpan,
@@ -38,6 +36,7 @@ import {
 } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { deleteCareerItemAction } from "./actions"
+import { AddCareerDialog, type AddCareerKind, type CareerEditTarget } from "./add-career-dialog"
 
 type ItemKind = "experience" | "education" | "project"
 
@@ -124,18 +123,25 @@ export function CareerOverview({ tree }: { tree: CareerTree }) {
   // 기본 선택 = 목록 맨 위 [가정]
   const selected = requestedItem ?? items[0]
   const [deleting, setDeleting] = React.useState<DeleteTarget | null>(null)
+  const [editing, setEditing] = React.useState<CareerEditTarget | null>(null)
 
-  const missing = requested !== null && requestedItem === undefined
+  // a just-added item can reach the URL a moment before the refreshed list does
+  const [justAdded, setJustAdded] = React.useState<string | null>(null)
+  const missing = requested !== null && requestedItem === undefined && justAdded !== itemKey(requested)
   React.useEffect(() => {
     if (missing) toast("찾을 수 없는 항목이에요")
   }, [missing])
 
-  const select = React.useCallback((item: CareerItem | null) => {
+  const select = React.useCallback((item: Pick<CareerItem, "kind" | "id"> | null) => {
     const url = new URL(window.location.href)
     if (item) url.searchParams.set("item", itemKey(item))
     else url.searchParams.delete("item")
     window.history.pushState(null, "", url)
   }, [])
+  const onAdded = (item: Pick<CareerItem, "kind" | "id">) => {
+    setJustAdded(itemKey(item))
+    select(item)
+  }
 
   const confirmDelete = async (opts: { result_mode?: "keep_results" | "delete_results"; affiliation_mode?: "keep_projects" | "delete_projects" }) => {
     if (!deleting || deleting.kind !== "career") return
@@ -150,7 +156,7 @@ export function CareerOverview({ tree }: { tree: CareerTree }) {
     <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:gap-0">
       <nav aria-label="커리어 목록" className={cn("flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:px-3", showDetailOnNarrow && "hidden lg:flex")}>
         <h2 className="text-sm font-semibold text-muted-foreground">커리어</h2>
-        <AddCareerMenu />
+        <AddCareerMenu onCreated={onAdded} />
         <CareerList groups={groups} selectedKey={selected ? itemKey(selected) : null} onSelect={select} />
       </nav>
 
@@ -166,52 +172,61 @@ export function CareerOverview({ tree }: { tree: CareerTree }) {
         ) : null}
         <h2 className="hidden text-sm font-semibold text-muted-foreground lg:block">커리어 상세</h2>
         {selected ? (
-          <DetailPanel key={itemKey(selected)} item={selected} onDelete={setDeleting} />
+          <DetailPanel key={itemKey(selected)} item={selected} onDelete={setDeleting} onEdit={setEditing} />
         ) : (
           <EmptyState
             icon={Layers}
             title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"
             description="경력·교육 아래에 프로젝트를 만들면 Resumate AI와 대화하며 내용을 채울 수 있어요(AI 연결 필요)"
-            actions={<AddCareerMenu primary />}
+            actions={<AddCareerMenu primary onCreated={onAdded} />}
           />
         )}
       </section>
 
+      <AddCareerDialog editing={editing} onOpenChange={(o) => !o && setEditing(null)} onSaved={() => setEditing(null)} />
       <DeleteConfirmDialog target={deleting} open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)} onConfirm={confirmDelete} />
     </div>
   )
 }
 
 /**
- * C-22 커리어 추가 — 유형 선택. // [UI-가정] 명세는 작은 다이얼로그. 새 경력·교육 패널과 C-23이 아직 없어
- * 기존 새 항목 화면으로 보내는 메뉴로 둔다.
+ * C-22 커리어 추가 — 유형 선택 → 피그마 1009:2 추가 모달(AddCareerDialog). 만든 항목을 바로 선택한다.
  */
-function AddCareerMenu({ primary = false }: { primary?: boolean }) {
-  const options = [
-    { href: routes.experienceNew(), label: "경력", hint: "회사에서 일한 기간" },
-    { href: routes.educationNew(), label: "교육", hint: "학위 과정, 부트캠프·교육 과정" },
-    { href: routes.projectNew(), label: "프로젝트", hint: "회사·학교에 속하지 않은 개인·사이드 프로젝트" },
+function AddCareerMenu({ primary = false, onCreated }: { primary?: boolean; onCreated: (item: { kind: AddCareerKind; id: string }) => void }) {
+  const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
+  const options: Array<{ kind: AddCareerKind; label: string; hint: string }> = [
+    { kind: "experience", label: "경력", hint: "회사에서 일한 기간" },
+    { kind: "education", label: "교육", hint: "학위 과정, 부트캠프·교육 과정" },
+    { kind: "project", label: "프로젝트", hint: "회사·학교에 속하지 않은 개인·사이드 프로젝트" },
   ]
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant={primary ? "default" : "secondary"} className={cn(!primary && "w-full")}>
-          <CirclePlus aria-hidden />
-          커리어 추가
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align={primary ? "center" : "start"} className="w-72">
-        <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
-        {options.map((o) => (
-          <DropdownMenuItem key={o.label} asChild>
-            <Link href={o.href} className="flex flex-col items-start gap-0.5">
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant={primary ? "default" : "secondary"} className={cn(!primary && "w-full")}>
+            <CirclePlus aria-hidden />
+            커리어 추가
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={primary ? "center" : "start"} className="w-72">
+          <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
+          {options.map((o) => (
+            <DropdownMenuItem key={o.kind} onSelect={() => setAdding(o.kind)} className="flex flex-col items-start gap-0.5">
               <span className="font-medium">{o.label}</span>
               <span className="text-xs text-muted-foreground">{o.hint}</span>
-            </Link>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AddCareerDialog
+        kind={adding}
+        onOpenChange={(open) => !open && setAdding(null)}
+        onCreated={(item) => {
+          setAdding(null)
+          onCreated(item)
+        }}
+      />
+    </>
   )
 }
 
@@ -270,7 +285,7 @@ function CareerList({
   )
 }
 
-function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: DeleteTarget) => void }) {
+function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (t: DeleteTarget) => void; onEdit: (t: CareerEditTarget) => void }) {
   const name = itemName(item)
   const head = (
     <div className="flex items-start gap-2">
@@ -296,11 +311,11 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
 
   if (item.kind === "experience") {
     const e = item.experience
-    const edit = routes.experience(e.id)
+    const edit = () => onEdit({ kind: "experience", row: e })
     return (
       <div className="flex flex-col gap-6">
         {head}
-        <PanelSection title="재직 정보" action={<EditLink href={edit} label="재직 정보 수정" />}>
+        <PanelSection title="재직 정보" action={<EditButton onClick={edit} label="재직 정보 수정" />}>
           <InfoList
             rows={[
               ["재직 기간 / 고용 형태", [formatRange(e.start_month, e.end_month, e.is_current), e.employment_type ? EMPLOYMENT_TYPE_LABELS[e.employment_type] : null].filter(Boolean).join(" · ")],
@@ -310,8 +325,8 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
           />
         </PanelSection>
         <Separator />
-        <PanelSection title="근무 내용" action={<EditLink href={edit} label="근무 내용 수정" />}>
-          <LongText text={e.summary} href={edit} />
+        <PanelSection title="근무 내용" action={<EditButton onClick={edit} label="근무 내용 수정" />}>
+          <LongText text={e.summary} onEdit={edit} />
         </PanelSection>
         <Separator />
         <ProjectsSection
@@ -326,11 +341,11 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
 
   if (item.kind === "education") {
     const e = item.education
-    const edit = routes.education(e.id)
+    const edit = () => onEdit({ kind: "education", row: e })
     return (
       <div className="flex flex-col gap-6">
         {head}
-        <PanelSection title="교육 정보" action={<EditLink href={edit} label="교육 정보 수정" />}>
+        <PanelSection title="교육 정보" action={<EditButton onClick={edit} label="교육 정보 수정" />}>
           <InfoList
             rows={[
               [
@@ -339,14 +354,13 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
                   .filter(Boolean)
                   .join(" · "),
               ],
-              ["구분", e.education_type ? EDUCATION_TYPE_LABELS[e.education_type] : null],
               ["전공/과정명", e.program_name],
             ]}
           />
         </PanelSection>
         <Separator />
-        <PanelSection title="교육 내용" action={<EditLink href={edit} label="교육 내용 수정" />}>
-          <LongText text={e.description} href={edit} />
+        <PanelSection title="교육 내용" action={<EditButton onClick={edit} label="교육 내용 수정" />}>
+          <LongText text={e.description} onEdit={edit} />
         </PanelSection>
         <Separator />
         <ProjectsSection
@@ -359,17 +373,17 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
     )
   }
 
-  // S-43 독립 프로젝트 — STAR·AI 패널 없음 (CR-7). // [UI-가정] Link·산출물은 DM v4.4 컬럼이 생기면 추가
+  // S-43 독립 프로젝트 — STAR·AI 패널 없음 (CR-7). // [UI-가정] 산출물(S-44)은 아직 그리지 않는다
   const p = item.project
-  const edit = routes.project(p.id)
+  const edit = () => onEdit({ kind: "project", row: p, skills: p.skills.map((s) => s.name) })
   const span = formatMonthSpan(p.start_month, p.end_month)
   return (
     <div className="flex flex-col gap-6">
       {head}
-      <PanelSection title="프로젝트 정보" action={<EditLink href={edit} label="프로젝트 정보 수정" />}>
+      <PanelSection title="프로젝트 정보" action={<EditButton onClick={edit} label="프로젝트 정보 수정" />}>
         <InfoList
           rows={[
-            ["프로젝트 기간", [formatRange(p.start_month, p.end_month), span ? `(${span})` : null].filter(Boolean).join(" ")],
+            ["프로젝트 기간", [formatRange(p.start_month, p.end_month, p.is_current), span ? `(${span})` : null].filter(Boolean).join(" ")],
             ["담당 업무", p.role],
             [
               "사용 기술",
@@ -383,13 +397,20 @@ function DetailPanel({ item, onDelete }: { item: CareerItem; onDelete: (t: Delet
                 </span>
               ) : null,
             ],
+            [
+              "프로젝트 링크",
+              p.link_url ? (
+                <a href={p.link_url} target="_blank" rel="noopener noreferrer" className="break-all underline underline-offset-2">
+                  {p.link_url}
+                </a>
+              ) : null,
+            ],
           ]}
         />
       </PanelSection>
       <Separator />
-      <PanelSection title="프로젝트 내용" action={<EditLink href={edit} label="프로젝트 내용 수정" />}>
-        {/* [UI-가정] DM v4.4 `projects.description` 전까지는 기존 summary를 보여 준다 */}
-        <LongText text={p.summary} href={edit} />
+      <PanelSection title="프로젝트 내용" action={<EditButton onClick={edit} label="프로젝트 내용 수정" />}>
+        <LongText text={p.summary} onEdit={edit} />
       </PanelSection>
     </div>
   )
@@ -407,13 +428,12 @@ function PanelSection({ title, action, children, className }: { title: string; a
   )
 }
 
-function EditLink({ href, label }: { href: string; label: string }) {
+/** 수정 → the add modal, filled in with the item */
+function EditButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-      <Link href={href} aria-label={label}>
-        <Pencil aria-hidden />
-        수정
-      </Link>
+    <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onClick} aria-label={label}>
+      <Pencil aria-hidden />
+      수정
     </Button>
   )
 }
@@ -432,12 +452,12 @@ function InfoList({ rows }: { rows: Array<[string, React.ReactNode]> }) {
 }
 
 /** 긴 글 보기. 비면 "내용을 입력해주세요" — 누르면 수정과 같음 (C-24 빈 섹션) */
-function LongText({ text, href }: { text: string | null; href: string }) {
+function LongText({ text, onEdit }: { text: string | null; onEdit: () => void }) {
   if (!text?.trim())
     return (
-      <Link href={href} className="rounded-sm py-2.5 text-base text-muted-foreground hover:underline">
+      <button type="button" onClick={onEdit} className="self-start rounded-sm py-2.5 text-left text-base text-muted-foreground hover:underline">
         내용을 입력해주세요
-      </Link>
+      </button>
     )
   return <p className="text-base leading-relaxed whitespace-pre-wrap break-words">{text}</p>
 }
@@ -474,7 +494,7 @@ function ProjectsSection({ title, projects, addHref, empty }: { title: string; p
 function ProjectCard({ project: p }: { project: ProjectWithChildren }) {
   const name = p.name ?? "이름 없는 프로젝트"
   const span = formatMonthSpan(p.start_month, p.end_month)
-  const period = [formatRange(p.start_month, p.end_month), span ? `(${span})` : null].filter(Boolean).join(" ")
+  const period = [formatRange(p.start_month, p.end_month, p.is_current), span ? `(${span})` : null].filter(Boolean).join(" ")
   return (
     <Link
       href={routes.project(p.id)}

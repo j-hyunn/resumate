@@ -40,6 +40,7 @@ import {
 import { routes } from "@/lib/routes"
 import { deleteCareerItemAction } from "./actions"
 import { AddCareerDialog, type AddCareerKind, type CareerEditTarget } from "./add-career-dialog"
+import { Item } from "@/components/ui/item"
 import { AddProjectDialog } from "./add-project-dialog"
 
 /** S-43 산출물 섹션 data per standalone project (`listProjectDeliverables`); null = not standalone / not found */
@@ -188,7 +189,8 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
     <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:gap-0">
       <nav aria-label="커리어 목록" className={cn("flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:px-3", showDetailOnNarrow && "hidden lg:flex")}>
         <h2 className="text-sm font-semibold text-muted-foreground">커리어</h2>
-        <AddCareerMenu onCreated={onAdded} />
+        {/* UQ-723: with no careers the empty state's button is the start point (FL-09), so don't show two */}
+        {items.length > 0 ? <AddCareerMenu onCreated={onAdded} /> : null}
         <CareerList groups={groups} selectedKey={selected ? itemKey(selected) : null} onSelect={select} />
       </nav>
 
@@ -210,7 +212,7 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
             icon={Layers}
             title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"
             description="경력·교육 아래에 프로젝트를 만들면 Resumate AI와 대화하며 내용을 채울 수 있어요(AI 연결 필요)"
-            actions={<AddCareerMenu primary onCreated={onAdded} />}
+            actions={<AddCareerMenu placement={items.length > 0 ? "empty" : "start"} onCreated={onAdded} />}
           />
         )}
       </section>
@@ -225,12 +227,16 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
  * C-22 커리어 추가 — 유형 선택 → 피그마 1009:2 추가 모달(AddCareerDialog). 만든 항목을 바로 선택한다.
  */
 function AddCareerMenu({
-  primary = false,
+  placement = "list",
   onCreated,
 }: {
-  primary?: boolean
+  /** "list": the main button atop the career list (primary, full width). "empty": the repeat inside the
+   * empty state, secondary so the screen never shows two primary buttons (UQ-718). "start": the only
+   * button when there are no careers yet (primary, list button hidden — UQ-723) */
+  placement?: "list" | "empty" | "start"
   onCreated: (item: { kind: AddCareerKind; id: string }, opts?: { edit?: boolean }) => void
 }) {
+  const inList = placement === "list"
   const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
   // C-22 "프로젝트" → C-23 ① 이름 다이얼로그 (D-UX-28 (a))
   const [addingProject, setAddingProject] = React.useState(false)
@@ -243,12 +249,12 @@ function AddCareerMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant={primary ? "default" : "secondary"} className={cn(!primary && "w-full")}>
+          <Button variant={placement === "empty" ? "secondary" : "default"} className={cn(inList && "w-full")}>
             <CirclePlus aria-hidden />
             커리어 추가
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={primary ? "center" : "start"} className="w-72">
+        <DropdownMenuContent align={inList ? "start" : "center"} className="w-72">
           <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
           {options.map((o) => (
             <DropdownMenuItem key={o.kind} onSelect={() => (o.kind === "project" ? setAddingProject(true) : setAdding(o.kind))} className="flex flex-col items-start gap-0.5">
@@ -313,21 +319,16 @@ function CareerList({
               const Icon = KIND_ICONS[item.kind]
               return (
                 <li key={key}>
-                  <button
-                    type="button"
+                  <Item
                     data-career-item
-                    aria-current={active ? "true" : undefined}
+                    active={active}
                     onClick={() => onSelect(item)}
-                    className={cn(
-                      "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-base transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                      active ? "bg-muted" : "hover:bg-muted/60",
-                    )}
                   >
                     {/* 종류가 섞인 목록이라 작은 표식을 함께 둔다 [가정] */}
-                    <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <Icon aria-hidden />
                     <span className="sr-only">{KIND_LABELS[item.kind]}</span>
                     <span className="min-w-0 flex-1 truncate">{itemName(item)}</span>
-                  </button>
+                  </Item>
                 </li>
               )
             })}
@@ -362,7 +363,7 @@ function DetailPanel({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
-            className="text-destructive"
+            variant="destructive"
             onSelect={() =>
               onDelete({ kind: "career", entity_type: item.kind, entity_id: item.id, label: name, ...(item.kind === "project" ? { scope: "standalone" as const } : {}) })
             }
@@ -557,7 +558,7 @@ function PanelSection({ title, action, children, className }: { title: string; a
 /** 수정 → the add modal, filled in with the item */
 function EditButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onClick} aria-label={label}>
+    <Button variant="ghost" size="sm" onClick={onClick} aria-label={label}>
       <Pencil aria-hidden />
       수정
     </Button>
@@ -577,11 +578,12 @@ function InfoList({ rows }: { rows: Array<[string, React.ReactNode]> }) {
   )
 }
 
-/** 긴 글 보기. 비면 "내용을 입력해주세요" — 누르면 수정과 같음 (C-24 빈 섹션) */
+/** 긴 글 보기. 비면 "내용을 입력해주세요" — 누르면 수정과 같음 (C-24 빈 섹션).
+ * The empty placeholder is a DS exception (design-system 2, 직접 만든 클릭 요소 예외): muted text, not an Item (UQ-720). */
 function LongText({ text, onEdit }: { text: string | null; onEdit: () => void }) {
   if (!text?.trim())
     return (
-      <button type="button" onClick={onEdit} className="self-start rounded-sm py-2.5 text-left text-base text-muted-foreground hover:underline">
+      <button type="button" onClick={onEdit} className="self-start rounded-sm py-2.5 text-left text-base text-muted-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         내용을 입력해주세요
       </button>
     )
@@ -593,7 +595,7 @@ function ProjectsSection({ title, projects, addHref, empty }: { title: string; p
     <PanelSection
       title={title}
       action={
-        <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+        <Button asChild variant="ghost" size="sm">
           <Link href={addHref}>
             <Plus aria-hidden />
             프로젝트 추가
@@ -622,15 +624,14 @@ function ProjectCard({ project: p }: { project: ProjectWithChildren }) {
   const span = formatMonthSpan(p.start_month, p.end_month)
   const period = [formatRange(p.start_month, p.end_month, p.is_current), span ? `(${span})` : null].filter(Boolean).join(" ")
   return (
-    <Link
-      href={routes.projectPage(p.id)}
-      className="flex h-full min-h-11 flex-col justify-center gap-2 rounded-[10px] px-3 py-2.5 transition-colors outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
+    <Item asChild className="h-full flex-col items-start justify-center">
+      <Link href={routes.projectPage(p.id)}>
       {/* [UI-가정] 종류 태그(projects.project_type)는 컬럼이 생기면 여기에 Badge로 */}
       <span className="truncate text-base" title={name}>
         {name}
       </span>
       {period ? <span className="text-sm text-muted-foreground tabular-nums">{period}</span> : null}
-    </Link>
+      </Link>
+    </Item>
   )
 }

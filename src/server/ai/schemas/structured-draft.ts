@@ -43,8 +43,14 @@ const fieldBase = {
   source_message_ids: z.array(z.string()).default([]),
   review: z.enum(REVIEW_STATES).default("ok"),
   reviewed_at: z.string().nullable().default(null),
-  /** v4.4: set by apply_writing_chat_proposal; null = not applied yet. */
+  /** v4.5 (DM 2.5.1, PA-3): set by save_project_page ("저장하기"); null = not saved as applied yet. */
   applied_at: z.string().nullable().default(null),
+  /**
+   * v4.5 (DM 2.5 `rev`): proposal version, monotonic per slot. The screen
+   * remembers it when filling the form and sends it on save (`proposal_changed`).
+   * Objects written before v4.5 have none → 1.
+   */
+  rev: z.number().int().min(1).default(1),
 };
 
 export const PeriodFieldSchema = z.object({
@@ -116,7 +122,7 @@ export function isPending(field: AnyDraftField | undefined | null): boolean {
   return hasValue(field) && field!.applied_at === null;
 }
 
-/** What apply_writing_chat_proposal would write: pending, review ok/accepted (needs_review is skipped, T-18). */
+/** What the screen's fill rule takes (AI-12 채우기 규칙): pending, review ok/accepted (needs_review is skipped, T-18). */
 export function isApplicable(field: AnyDraftField | undefined | null): boolean {
   return isPending(field) && field!.review !== "needs_review";
 }
@@ -133,8 +139,13 @@ export function isProtected(field: AnyDraftField | undefined | null): boolean {
 export type PatchSource = { source_message_ids: string[]; source_quotes: string[] };
 
 export type PeriodChange = PatchSource & { field: PeriodField; value: string; review: "ok" | "needs_review" };
-/** `value` is only this turn's text; the RPC replaces (set) or appends to (append) the pending proposal. */
-export type StarChange = PatchSource & { field: StarField; op: StarOp; value: string; review: "ok" | "needs_review" };
+/**
+ * `value` is only this turn's text; the RPC replaces (set) or appends to (append) the pending proposal.
+ * `new_object` (v4.5, DM 2.5 DA-10): the pending object is already in this turn's form
+ * snapshot (filled, not saved) → the RPC replaces the slot with a new object (rev + 1)
+ * instead of appending to it, so the filled sentence is not offered twice.
+ */
+export type StarChange = PatchSource & { field: StarField; op: StarOp; value: string; review: "ok" | "needs_review"; new_object?: boolean };
 export type ClassificationChange = { field: ClassificationField; value: string | string[]; source_message_ids: string[]; reason: string | null };
 
 export type DraftChanges = {
@@ -158,7 +169,7 @@ export function isEmptyDraftChanges(c: DraftChanges): boolean {
 
 export type DraftPatchOp =
   | ({ op: "set"; target: { section: "project"; field: PeriodField }; value: string; review: "ok" | "needs_review" } & PatchSource)
-  | ({ op: StarOp; target: { section: "star"; field: StarField }; value: string; review: "ok" | "needs_review" } & PatchSource)
+  | ({ op: StarOp; target: { section: "star"; field: StarField }; value: string; review: "ok" | "needs_review"; new_object?: true } & PatchSource)
   | { op: "set"; target: { section: "classification"; field: ClassificationField }; value: string | string[]; source_message_ids: string[]; reason: string | null }
   | { op: "set_clarifications"; items: Clarification[] }
   | { op: "add_sensitive_flags"; count: number };
@@ -193,7 +204,17 @@ export function toDraftPatch(changes: DraftChanges): DraftPatch {
     ops.push(clampSources({ op: "set" as const, target: { section: "project" as const, field: p.field }, value: p.value, review: p.review, source_message_ids: p.source_message_ids, source_quotes: p.source_quotes }));
   }
   for (const s of changes.star) {
-    ops.push(clampSources({ op: s.op, target: { section: "star" as const, field: s.field }, value: s.value, review: s.review, source_message_ids: s.source_message_ids, source_quotes: s.source_quotes }));
+    ops.push(
+      clampSources({
+        op: s.op,
+        target: { section: "star" as const, field: s.field },
+        value: s.value,
+        review: s.review,
+        ...(s.new_object ? { new_object: true as const } : {}),
+        source_message_ids: s.source_message_ids,
+        source_quotes: s.source_quotes,
+      }),
+    );
   }
   for (const c of changes.classification) {
     ops.push({

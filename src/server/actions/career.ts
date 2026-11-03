@@ -13,7 +13,9 @@ import {
   SaveDeliverableInput,
   SaveEducationInput,
   SaveExperienceInput,
+  SaveProjectDeliverableInput,
   SaveProjectInput,
+  SaveProjectPageInput,
   UpdateSkillInput,
   type CareerListDto,
   type DataReadiness,
@@ -21,6 +23,8 @@ import {
   type DeletionImpact,
   type DeliverableDetailDto,
   type ProjectDetailDto,
+  type SaveProjectDeliverableResult,
+  type SaveProjectPageResult,
   type SaveResult,
   type SkillDto,
   type StandaloneProjectDetailDto,
@@ -138,6 +142,38 @@ export async function saveDeliverable(input: unknown): Promise<ActionResult<Deli
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return career.saveDeliverable(supabase, parsed.data);
+  });
+}
+
+// ---------- page saves (DM 2.5.1 v4.5 ★, PA-3) ----------
+
+/**
+ * S-10 상단 바 "저장하기" → `save_project_page` (create when `projectId` is null). Records the
+ * proposals filled into the form this visit (`applied` / `skipped`). No AI, no key. Errors:
+ * `stale_write` {current_updated_at}, `project_name_required`, `project_affiliation_required`,
+ * `project_not_affiliated`, `field_too_long` / `invalid_period` / `invalid_classification` {field},
+ * `project_scope_change_not_allowed`, `not_found`.
+ */
+export async function saveProjectPage(input: unknown): Promise<ActionResult<SaveProjectPageResult>> {
+  const parsed = SaveProjectPageInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return career.saveProjectPage(supabase, parsed.data);
+  });
+}
+
+/**
+ * S-44 상단 바 "저장하기" → `save_project_deliverable` (create when `projectDeliverableId` is null).
+ * Errors: `stale_write`, `deliverable_title_required`, `field_too_long` {field},
+ * `deliverable_limit_reached`, `deliverable_requires_standalone_project`, `not_found`.
+ */
+export async function saveProjectDeliverable(input: unknown): Promise<ActionResult<SaveProjectDeliverableResult>> {
+  const parsed = SaveProjectDeliverableInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return career.saveProjectDeliverable(supabase, parsed.data);
   });
 }
 

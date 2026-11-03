@@ -22,6 +22,7 @@ import { routes } from "@/lib/routes"
 import { saveEducationAction } from "./actions"
 import { DangerZone, FormSection, PeriodError, RequiredMark, SaveProblemNotice, TextField, monthText, nn, useRowAutosave, type ConflictField } from "./form-parts"
 import { periodPatch, storedPeriod } from "@/lib/data/row-save"
+import { Item } from "@/components/ui/item"
 
 interface Values {
   institution_name: string
@@ -203,12 +204,14 @@ export function EducationForm({ education }: { education: EducationWithChildren 
           <ul className="divide-y rounded-md border">
             {education.projects.map((p) => (
               <li key={p.id}>
-                <Link href={routes.projectPage(p.id)} className="flex min-h-11 items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent">
+                <Item asChild variant="row">
+                  <Link href={routes.projectPage(p.id)}>
                   <span className="min-w-0 flex-1 truncate font-medium">{p.name ?? "이름 없는 프로젝트"}</span>
                   {p.status === "draft" ? <DraftBadge label="작성 중 — AI 미반영" /> : null}
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">상세 내용 {p.details.length}</span>
-                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                  <ChevronRight aria-hidden />
                 </Link>
+                </Item>
               </li>
             ))}
           </ul>

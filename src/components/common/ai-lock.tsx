@@ -175,7 +175,7 @@ export function AiLock({
       className={cn("max-w-xl gap-4 p-6", className)}
     >
       <div className="grid size-10 place-items-center rounded-full bg-primary-subtle">
-        <PlugZap className="size-5 text-primary" aria-hidden />
+        <PlugZap className="size-5 text-primary-text" aria-hidden />
       </div>
       <div className="space-y-1">
         <h2 className="text-lg leading-7 font-semibold">{title}</h2>

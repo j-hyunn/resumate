@@ -4,21 +4,30 @@ import { cn } from "cn"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-base font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-control border border-transparent bg-clip-padding text-base font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
-          "border-input bg-background hover:bg-accent hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-input bg-card hover:bg-accent hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-primary/10 text-primary-text hover:bg-primary/15 aria-expanded:bg-primary/15 aria-expanded:text-primary-text",
+        // data-pending (v4, UQ-712): a not-yet-reached step (writing-chat step bar) stays muted until hovered
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text aria-[current]:bg-primary/10 aria-[current]:font-medium aria-[current]:text-primary-text data-pending:not-hover:text-muted-foreground",
         // design-system 3.5: solid destructive for confirm-delete buttons
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        link: "text-primary underline-offset-4 hover:underline",
+        // design-system 3.5 v4 (UQ-712): outline button that points at items needing review (경고)
+        "warning-outline":
+          "border-warning bg-card text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground",
+        // design-system 3.5 v4 (UQ-708): ghost button that starts a destructive action (삭제, 그래도 닫기)
+        "destructive-ghost":
+          "text-destructive hover:bg-destructive/10 hover:text-destructive aria-expanded:bg-destructive/10 aria-expanded:text-destructive dark:hover:bg-destructive/20",
+        link: "text-primary-text underline-offset-4 hover:underline",
+        // design-system 3.5 v4 (UQ-708): inline link inside a red error sentence (저장 실패 — 다시 시도)
+        "destructive-link": "text-destructive underline-offset-4 hover:underline",
         // (v4) design-system 2: L-02 / Resumate AI 패널 빠른 버튼 칩 (Figma 회색 채움 알약), A-4 max-md:h-11
         chip: "h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-accent max-md:h-11",
         // (v4) missing_slots 슬롯 묻기: chip 모양 + 점선 테두리

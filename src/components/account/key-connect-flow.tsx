@@ -46,6 +46,7 @@ import { ProviderBadge } from "@/components/common/provider-badge"
 import { verifyEta } from "./ai-format"
 import { KeyMask, ProviderCardFrame, providerCardState } from "./provider-card"
 import { needsDataUseConsentAction } from "@/lib/data/actions"
+import { Item } from "@/components/ui/item"
 
 type StepId = "tier" | "consent" | "key"
 const STEP_NAMES: Record<StepId, string> = { tier: "등급", consent: "데이터 사용 동의", key: "키 등록" }
@@ -510,30 +511,35 @@ function ProviderPick({
           const disabled = !c.info.is_available
           return (
             <li key={p}>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onPick(p)}
-                className="block w-full rounded-lg text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed"
-              >
-                <ProviderCardFrame
-                  provider={p}
-                  description={c.info.description}
-                  recommended={c.info.is_recommended}
-                  state={providerCardState({ key: null, isAvailable: c.info.is_available })}
-                  inButton
-                  className="transition-colors hover:bg-accent"
-                  statusLine={
-                    c.key ? (
-                      <span className="block text-sm text-muted-foreground">
-                        이미 연결됨 · <KeyMask last4={c.key.key_last4} />
-                      </span>
-                    ) : disabled ? (
-                      <span className="block text-sm text-muted-foreground">{AI_PROVIDER_LABELS[p]} 연결을 잠시 멈췄어요</span>
-                    ) : null
-                  }
-                />
-              </button>
+              {(() => {
+                const card = (
+                  <ProviderCardFrame
+                    provider={p}
+                    description={c.info.description}
+                    recommended={c.info.is_recommended}
+                    state={providerCardState({ key: null, isAvailable: c.info.is_available })}
+                    inButton
+                    statusLine={
+                      c.key ? (
+                        <span className="block text-sm text-muted-foreground">
+                          이미 연결됨 · <KeyMask last4={c.key.key_last4} />
+                        </span>
+                      ) : disabled ? (
+                        <span className="block text-sm text-muted-foreground">{AI_PROVIDER_LABELS[p]} 연결을 잠시 멈췄어요</span>
+                      ) : null
+                    }
+                  />
+                )
+                // UQ-721: a paused provider is not clickable, so it is not an Item. The card's own
+                // unavailable state is the only dimming (no extra disabled opacity).
+                return disabled ? (
+                  card
+                ) : (
+                  <Item size="none" className="block rounded-lg" onClick={() => onPick(p)}>
+                    {card}
+                  </Item>
+                )
+              })()}
             </li>
           )
         })}

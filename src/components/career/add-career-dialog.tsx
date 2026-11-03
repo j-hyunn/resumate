@@ -372,7 +372,7 @@ function AddCareerForm({
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" variant="secondary" disabled={pending}>
+        <Button type="submit" disabled={pending}>
           {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
           {editing ? "저장하기" : "추가하기"}
         </Button>

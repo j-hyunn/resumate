@@ -650,3 +650,40 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - R4-API-7 **옛 대화 화면의 `closed`**: 호환 껍데기는 v4.4 `closed`를 옛 `saved`(읽기 전용)로, 모든 대화를 `augment_project`로 보이고 v3 정리 결과는 비워(`{}`) 보인다. 옛 저장·폼 전환·소속·그만두기·다시 이어 하기는 `not_supported`(410) 또는 무동작. UI 재작업 전까지 옛 S-36에서는 제안을 볼 수 없다. `[가정]`
 - R4-API-8 **근거 "변경됨" 기준** (DM 2.8 v4.4 `source_snapshot_at` = `content_updated_at`): 칩 상태 계산(`services/evidence`, `lib/data/evidence`)이 프로젝트는 `content_updated_at`, 산출물은 `updated_at`과 비교한다. 분류·Link만 바뀐 프로젝트는 "변경됨"이 아니다.
 - R4-API-9 **`pnpm build`와 환경 변수**: `.env.local`이 없는 작업 트리에서는 정적 생성 단계가 `NEXT_PUBLIC_SUPABASE_URL` 누락으로 실패한다(R4 이전부터, `/career/skills` 등 서버 데이터를 읽는 페이지). 로컬 스택 값을 환경 변수로 주면 통과한다. 동작 영향 없음, 기록만.
+
+## R5 (db-engineer, 2026-11-03) — DM v4.5 페이지 저장·산출물 대화
+- R5-DB-1 **시작 RPC 반환 모양** (DM 2.5 "반환 `{ writing_chat_id, greeting_message }`(v4.4 반환 모양 유지)" ↔ 구현된 v4.4 `start_writing_chat`은 `uuid`만 반환): "v4.4 유지"를 따라 `start_writing_chat`·`start_deliverable_writing_chat` 둘 다 **`uuid`** 반환. 인사 문구는 `writing_chat_messages` sequence 1에서 읽는다. 문서가 jsonb 반환을 뜻했다면 DM 고치기 또는 새 마이그레이션 필요. `[가정]`
+- R5-DB-2 **`new_object`와 보호 필드** (DM 2.5 "AI는 `user_edit`·`accepted` 미반영 필드를 덮어쓰지 않는다" ↔ "`new_object`면 슬롯을 새 객체로 바꾼다"): `new_object: true`는 보호를 넘어선다(서버가 "그 값이 이미 폼에 있다"고 판정한 경우에만 다는 표시이므로 덮어써도 내용 손실이 없음). `[가정]`
+- R5-DB-3 **사용자 "값 비우기" 모양** (DM 2.5 rev 규칙 "거절로 값 비움 +1, 1로 되돌리지 않는다"): R4는 사용자 `set null`이 슬롯을 지웠으나, 지우면 다음 객체가 rev 1로 돌아가므로 거절과 같은 빈 객체(`value null`, `origin ai`, rev + 1)로 남긴다. `[가정]`
+- R5-DB-4 **산출물 패치 연산 이름·모양** (DM 2.5.0은 동작만 정함): `add_facts` / `replace_draft` / `count_draft` / `set_writing_kind` / `set_clarifications`(kind `actor_ambiguous`·`number_vague`, `slot`, `note` ≤ 200) / `add_sensitive_flags`(AI), `accept_fact` / `reject_fact` / `accept_block` / `remove_block`(사용자). 사실 거절은 배열에서 **지운다**(DM "값 비움"을 사실에서는 삭제로 해석). 모르는 사실·블록 id는 `invalid_patch`. 계약은 R5/02_db_notes.md. `[가정]`
+- R5-DB-5 **초안 `value` 조립 주체** (DM 2.5.0 "`value` = 서버가 `blocks`로 조립한 마크다운"): **DB가 정본 조립기**다. `replace_draft`의 `value`는 무시하고 블록으로 다시 만든다(사용자 [빼기] 뒤 재조립과 같은 함수 — 두 조립기가 어긋나는 경로를 없앰). 규칙은 노트에. 파이프라인이 미리보기용으로 같은 규칙을 쓰려면 노트 규칙을 따라야 한다. `[가정]`
+- R5-DB-6 **DB의 V-10 방어 범위**: 블록 출처의 `source_fact_ids`가 대화의 사실 id에 있는지·형식·길이만 본다. "제목 외 블록은 출처 1개 이상"(V-10a)·`basis = new`면 사실 출처(V-10h)는 DB가 강제하지 않는다(파이프라인 몫). `[가정]`
+- R5-DB-7 **반영됨 기록 판정 순서** (DM 2.5.1 "not_found → already_applied → proposal_changed → needs_review → invalid_entry → mark_failed"): 원소 모양 오류(uuid 아님, `rev` 정수 아님, `field`/`mode` 문자열 아님)는 대화를 찾기 전에 `invalid_entry`로 판정한다(대화를 찾을 수 없는 입력이라). 허용 목록 밖 `field`(예: `is_current`)·`mode`도 `invalid_entry`. 그 밖은 문서 순서. `value`가 null인 필드 객체(거절·비우기 뒤)는 `not_found`. `[가정]`
+- R5-DB-8 **오류 detail 형식** (DM 2.5.1 "details `{field}`", `stale_write` "details `{current_updated_at}`"): R4 관례대로 raise `detail`에 **문자열**로 싣는다 — `field_too_long`·`invalid_period`·`invalid_classification`·`invalid_fields`는 필드 이름(쉼표 구분), `stale_write`는 ISO 8601 UTC(`YYYY-MM-DDTHH:MM:SS.ffffffZ`), 만들기의 부모 `not_found`는 `experience_id`/`education_id`/`project_id`. api-engineer가 `{field}`·`{current_updated_at}`로 바꿔 응답한다. `[가정]`
+- R5-DB-9 **만들기 부모 소유 검사 코드**: `save_project_page` 만들기·소속 이동에서 남의(또는 없는) 경력·교육이면 `not_found`(detail 필드), `save_project_deliverable` 만들기에서 `p_project_id`가 null·남의 것이면 `not_found`(detail `project_id`). DM은 이 경우 코드를 정하지 않음. `[가정]`
+- R5-DB-10 **시작 RPC 대상 없음 코드**: `start_deliverable_writing_chat`은 `project_deliverable_not_found`(STAR 쪽 `project_not_found`와 같은 방식). `p_form_snapshot` 모양·길이 오류는 `invalid_form_snapshot`. `[가정]`
+- R5-DB-11 **변경 없는 저장**: 값이 하나도 바뀌지 않은 저장은 update를 하지 않아 `updated_at`이 그대로다(다른 탭의 기대 버전을 깨지 않음). 반영됨 기록·`source_writing_chat_id`는 그대로 처리. `[가정]`
+- R5-DB-12 **STAR 공백 값**: `save_project_page`는 STAR 값이 공백뿐이면 null로 저장한다(완료 판정 트리거가 이미 빈 값으로 보던 것과 같음). 이름은 앞뒤 공백을 자른다. STAR 본문은 자르지 않는다. `[가정]`
+- R5-DB-13 **산출물 종류 짐작 키워드** (AI-13 "서버 상수 키워드"): 회고/retrospective/retro → `retrospective`, 설계/아키텍처/architecture/design doc → `design_doc`, 기획/planning → `planning_summary`, 발표/presentation/keynote → `presentation`(이 순서로 첫 일치). 시작 인사 슬롯 1 질문 문구는 DB 상수(UX 최종 문구 아님). `[가정]`
+
+## R5 (ai-pipeline-engineer, 2026-11-03) — AI-12 v4.6·AI-13
+- R5-AI-1 **AI-13 "제거된 블록 30%"의 셈 단위** (AI-13 V-10 "제거된 블록이 전체 블록의 30%를 넘으면 1회 재생성", "확인되지 않은 문장 N개"): 목록 항목·표 행을 하나씩 검증해 빼므로 블록 수로 세면 목록 안 날조가 비율에 안 잡힌다. **내용 단위**(문단·인용·코드 = 1, 목록 항목·표 행 = 각 1, 제목 = 0)로 센다. `dropped_block_count`와 안내 문구 N도 같은 단위. `[가정]`
+- R5-AI-2 **칩 "프로젝트 내용을 바탕으로 물어봐 줘"의 요청 값** (AI-13 칩 표 "부모 `description` 기반 질문" — 턴 계약에 값 없음): 턴 요청 `requested_action`에 **`ask_from_project`**를 더했다(`compose_draft`와 함께 2개). 서버는 첫 빈 슬롯을 `from_project` 사유로 묻는다. api 계약(zod)에 추가 필요. `[가정]`
+- R5-AI-3 **자유 문장 초안 요청 감지** (AI-13 "초안 턴 = requested_action 또는 정리 결과 intent"): 질문 턴은 정리 ∥ 응답 병렬이라 정리의 `intent`를 기다리면 응답이 이미 나간다. 서버 어휘(`COMPOSE_REQUEST_PATTERN`, "초안 써 줘" 등)로 먼저 초안 턴 후보로 잡고 정리 → `intent = compose_draft`로 확정한다. 어휘에 안 걸린 요청은 질문 턴이 되고, 응답이 "초안 만들기" 버튼을 안내한다. `[가정]`
+- R5-AI-4 **초안 호출 횟수**: V-6 스키마 재시도와 V-10 재생성을 합쳐 **턴당 초안 호출 최대 2회**(함수 1회 60초, C-6). 재생성이 공급자 오류·스키마 실패면 첫 초안(검증 통과분)을 쓴다. `[가정]`
+- R5-AI-5 **V-10d 확장**: "제가/직접…" 문장뿐 아니라, 출처가 `actor = team` 사실뿐이고 문장에 팀 주어가 없으면(주어 생략 → 본인 행동으로 읽힘) `needs_review`. 품질 기준 "team 사실이 본인 행동 문장으로 반영 0건"을 지키기 위함. `[가정]`
+
+## R5 (api-engineer, 2026-11-03)
+
+- **R5-API-1** DM 7장 턴 요청 본문 `{content, requested_slot?, requested_action?, style?, form_snapshot}` — 기존 계약이 camelCase(`requestedSlot`, R4-API-4)라 `requestedAction`·`style`·`formSnapshot`으로 받는다. 스냅숏 **안의** 키는 DM 모양 그대로(snake_case: `start_month`, `star.{…}`). `[가정]`
+- **R5-API-2** 페이지 저장 zod는 JSON 모양만 검사(타입·uuid·배열 크기·문자 20,000/40,000 상한)하고 규칙은 RPC가 판정한다 — 화면이 받는 거부 코드가 DM 2.5.1 코드 하나로 통일된다(`invalid_input`이 앞에서 섞이지 않게). `[가정]`
+- **R5-API-3** `field_too_long` 상태 409 → **400**(DM 2.5.1 "모두 400"). 응답 details는 `{field, fields}`(R4의 `fields` 유지 + `field`). `invalid_period`·`invalid_fields`는 더 이상 `invalid_input`으로 별칭하지 않고 자기 코드(400, details `{field}`)로 내려간다. `not_found` raise(부모 없음)도 매핑 추가(404, detail 있으면 `{field}`).
+- **R5-API-4** R-PA-5 반영: STAR `turn_done`·`WritingChatDto`에서 `chips` 제거. `services/writing-chat/draft.ts` `chipsFor`는 순수 함수로 남겨 둠(화면 재작업 때 이동·삭제 판단).
+- **R5-API-5** 초안 저장 RPC가 경합으로 `writing_chat_draft_limit_reached`를 던지면(다른 탭이 마지막 초안을 씀) 오류 대신 고정 문구 응답("이 대화에서는 초안을 6번까지…")으로 턴을 끝낸다. AI 오류 코드 목록에 해당 코드가 없어서다. `[가정]`
+- **R5-API-6** RPC가 `replace_draft`를 `rejected`로 돌려주면(파이프라인이 더 엄격해 정상 경로에선 없음) 턴을 `schema_invalid`(재시도 불가)로 실패 처리, 이전 초안 유지. `[가정]`
+- **R5-API-7** 초안(compose) 호출의 C-11.3 즉시 재시도는 `draft_block`을 하나도 보내기 전까지만. 재시도 시 새 `draft_started`(attempt 1)가 다시 나가므로 화면은 `draft_started`마다 블록을 비운다. `[가정]`
+- **R5-API-8** `DeliverableDetailDto`에 `writingChats` 추가(DM 7장 산출물 상세). `listProjectWritingChats`는 `project_deliverable_id is null`만(산출물 대화도 부모 `project_id`를 갖기 때문).
+- **R5-API-9** 산출물 대화 `turn_done`은 `readyToReturn: false` 고정(복귀 대상 없음), `draftCount`·`needsReviewCount`(검토 필요 사실 수) 포함.
+
+## R5 (backend-qa, 2026-11-03)
+- **R5-QA-1 AI-13 초안 턴 SSE 순서** (AI 명세 AI-13 "응답 모드" 초안 턴: `turn_started → facts_patch → draft_started → … → draft_done → reply_done → turn_done` — `draft_flags` 없음 ↔ 구현 `turn.ts` `emitFacts`는 초안 턴에서도 `facts_patch` 바로 뒤 `draft_flags`를 보냄, `src/lib/contracts/writing-chat.ts` 주석도 같은 순서): 질문 턴과 같은 모양이라 화면에 해가 없어 구현을 그대로 두었다. 명세 초안 턴 순서에 `draft_flags`(사실 갱신이 있을 때만)를 넣을지 planning이 확인. `[가정]`

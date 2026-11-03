@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { STAR_FIELDS, WRITING_CHAT_SLOTS, CLASSIFICATION_FIELDS, COMPETENCIES, EXPERIENCE_TYPES, PROJECT_TYPES } from "@/lib/contracts/enums";
 import {
   ApplyDraftEditInput,
-  ApplyProposalInput,
-  ApplyProposalRpcResult,
+  DeliverableDraftEditInput,
+  DeliverableFormSnapshotSchema,
+  DeliverableTurnEventSchema,
+  ProjectFormSnapshotSchema,
+  StartDeliverableWritingChatInput,
   parseStructuredDraft,
   StartWritingChatInput,
   WRITING_CHAT_TURN_TERMINAL_EVENTS,
@@ -16,6 +19,8 @@ import { STAR_FIELDS as AI_STAR_FIELDS } from "@/server/ai/schemas/structured-dr
 import { mapDbError } from "@/server/db/errors";
 import { createSseResponse, type SseEvent } from "@/server/sse";
 import { toPatchTarget } from "./chat";
+import { SaveProjectDeliverableInput, SaveProjectDeliverableRpcResult, SaveProjectPageInput, SaveProjectPageRpcResult } from "@/lib/contracts/career";
+import { toPageValues } from "@/server/services/career/page-save";
 import { applicableFields, chipsFor, diffDrafts, needsReviewCount } from "./draft";
 import { toMessageDtos } from "./mappers";
 
@@ -109,7 +114,7 @@ describe("contracts", () => {
   it("turn input: trimmed content 1..4000, requested slot = AI-12 v4.5 slot ids", () => {
     expect(WritingChatTurnInput.safeParse({ content: "  " }).success).toBe(false);
     expect(WritingChatTurnInput.safeParse({ content: "x".repeat(4001) }).success).toBe(false);
-    expect(WritingChatTurnInput.parse({ content: " a ", requestedSlot: { slot: "action" } })).toEqual({ content: "a", requestedSlot: { slot: "action" } });
+    expect(WritingChatTurnInput.parse({ content: " a ", requestedSlot: { slot: "action" } })).toEqual({ content: "a", requestedSlot: { slot: "action" }, requestedAction: null, style: null });
     expect(WritingChatTurnInput.safeParse({ content: "a", requestedSlot: { slot: "basic_info" } }).success).toBe(false);
   });
 
@@ -124,13 +129,57 @@ describe("contracts", () => {
     expect(ApplyDraftEditInput.safeParse({ writingChatId: U1, path: { section: "project", field: "is_current" }, value: "x" }).success).toBe(false);
   });
 
-  it("apply input / RPC result (DM 3.3)", () => {
-    expect(ApplyProposalInput.safeParse({ writingChatId: U1 }).success).toBe(true);
-    expect(ApplyProposalInput.safeParse({ writingChatId: U1, fields: ["is_current"] }).success).toBe(false);
-    expect(ApplyProposalInput.safeParse({ writingChatId: U1, fields: ["action", "action"] }).success).toBe(false);
+  it("page save inputs / RPC results (DM 2.5.1)", () => {
+    // Create: projectId null; shape only (the RPC owns the rules and their codes).
+    const create = SaveProjectPageInput.parse({ projectId: null, values: { name: "결제 개선", experienceId: U1, situation: null } });
+    expect(toPageValues(create.values)).toEqual({ name: "결제 개선", experience_id: U1, situation: null });
+    // Omitted keys stay omitted (= keep the stored value).
+    expect(Object.keys(toPageValues(SaveProjectPageInput.parse({ projectId: U1, values: {} }).values))).toEqual([]);
+    expect(SaveProjectPageInput.safeParse({ projectId: U1, values: { summary: "x" } }).success).toBe(false);
+    expect(SaveProjectPageInput.safeParse({ projectId: U1, values: {}, appliedProposals: [{ writingChatId: U1, field: "is_current", rev: 1 }] }).success).toBe(false);
+    expect(SaveProjectPageInput.safeParse({ projectId: U1, values: {}, appliedProposals: [{ writingChatId: U1, field: "action", rev: 2 }] }).success).toBe(true);
+    expect(SaveProjectDeliverableInput.safeParse({ projectDeliverableId: null, projectId: U1, title: "회고", body: null, appliedProposals: [{ writingChatId: U1, rev: 1, mode: "append" }] }).success).toBe(true);
+    expect(SaveProjectDeliverableInput.safeParse({ projectDeliverableId: U1, projectId: null, title: "회고", body: "", appliedProposals: [{ writingChatId: U1, rev: 1, mode: "merge" }] }).success).toBe(false);
     expect(
-      ApplyProposalRpcResult.parse({ applied: ["action"], skipped: [{ field: "result", reason: "needs_review" }], project_status: "complete" }),
-    ).toMatchObject({ applied: ["action"] });
+      SaveProjectPageRpcResult.parse({
+        project_id: U1,
+        status: "complete",
+        updated_at: "2026-11-03T00:00:00Z",
+        applied: [{ writing_chat_id: U1, field: "action" }],
+        skipped: [{ writing_chat_id: null, field: null, reason: "invalid_entry" }, { writing_chat_id: U1, field: "task", reason: "proposal_changed" }],
+      }).skipped,
+    ).toHaveLength(2);
+    expect(
+      SaveProjectDeliverableRpcResult.parse({ project_deliverable_id: U1, project_id: U1, sort_order: 3, updated_at: "x", applied: [], skipped: [{ writing_chat_id: U1, reason: "needs_review" }] }).sort_order,
+    ).toBe(3);
+  });
+
+  it("form snapshot contracts (DM 2.5.1: DB length limits, unknown keys dropped)", () => {
+    expect(ProjectFormSnapshotSchema.parse({ name: "x", star: { action: "y" }, secret: "dropped" })).toEqual({ name: "x", star: { action: "y" } });
+    expect(ProjectFormSnapshotSchema.safeParse({ name: "가".repeat(101) }).success).toBe(false);
+    expect(ProjectFormSnapshotSchema.safeParse({ star: { result: "가".repeat(2001) } }).success).toBe(false);
+    expect(ProjectFormSnapshotSchema.safeParse({ start_month: "2023-13" }).success).toBe(false);
+    expect(ProjectFormSnapshotSchema.safeParse({ competencies: ["analysis", "analysis"] }).success).toBe(false);
+    expect(DeliverableFormSnapshotSchema.safeParse({ title: "t", body: "가".repeat(20000) }).success).toBe(true);
+    expect(DeliverableFormSnapshotSchema.safeParse({ body: "가".repeat(20001) }).success).toBe(false);
+    // QA-R5-07: code points like the DB char_length — 100 emoji (200 UTF-16 units) still fit a 100-char title.
+    expect(DeliverableFormSnapshotSchema.safeParse({ title: "😀".repeat(100) }).success).toBe(true);
+    expect(DeliverableFormSnapshotSchema.safeParse({ title: "😀".repeat(101) }).success).toBe(false);
+    expect(ProjectFormSnapshotSchema.safeParse({ star: { action: "😀".repeat(2000) } }).success).toBe(true);
+    expect(StartDeliverableWritingChatInput.safeParse({ projectDeliverableId: U1, formSnapshot: { title: "회고" } }).success).toBe(true);
+    // AI-13 turn options ride on the same body; the turn service checks them against the chat's target.
+    expect(WritingChatTurnInput.parse({ content: "초안 만들어 줘", requestedAction: "compose_draft", requestedSlot: { slot: "contribution" } })).toMatchObject({
+      requestedAction: "compose_draft",
+      style: null,
+    });
+    expect(WritingChatTurnInput.safeParse({ content: "x", requestedAction: "delete_all" }).success).toBe(false);
+    expect(DeliverableDraftEditInput.safeParse({ writingChatId: U1, op: "remove_block", blockId: "b2" }).success).toBe(true);
+    expect(DeliverableDraftEditInput.safeParse({ writingChatId: U1, op: "reject_draft" }).success).toBe(false);
+  });
+
+  it("deliverable SSE events parse (AI-13 order names)", () => {
+    expect(DeliverableTurnEventSchema.safeParse({ type: "draft_started", attempt: 1, reason: "initial" }).success).toBe(true);
+    expect(DeliverableTurnEventSchema.safeParse({ type: "draft_block", attempt: 1, block: { block_id: "b1", type: "paragraph", text: "x" } }).success).toBe(true);
   });
 
   it("SSE: a gate-blocked turn is one normalized error event (F-AI-08 lock)", async () => {
@@ -147,13 +196,32 @@ describe("contracts", () => {
     expect(mapDbError({ code: "P0001", message: "writing_chat_closed" })).toMatchObject({ code: "writing_chat_closed", status: 409 });
     expect(mapDbError({ code: "P0001", message: "invalid_writing_chat_transition" })).toMatchObject({ code: "writing_chat_closed" });
     expect(mapDbError({ code: "P0001", message: "writing_chat_requires_affiliated_project" })).toMatchObject({ status: 409 });
+    expect(mapDbError({ code: "P0001", message: "invalid_ai_job" })).toMatchObject({ code: "internal_error", status: 500 });
+  });
+
+  it("maps R5 page save / start / draft raise names (DM 2.5.1, details from the RPC detail)", () => {
     expect(mapDbError({ code: "P0001", message: "field_too_long", details: "action,learnings" })).toMatchObject({
       code: "field_too_long",
-      status: 409,
-      details: { fields: ["action", "learnings"] },
+      status: 400,
+      details: { field: "action", fields: ["action", "learnings"] },
     });
-    expect(mapDbError({ code: "P0001", message: "invalid_fields" })).toMatchObject({ code: "invalid_input" });
-    expect(mapDbError({ code: "P0001", message: "classification_already_set" })).toMatchObject({ code: "classification_already_set", status: 409 });
+    expect(mapDbError({ code: "P0001", message: "stale_write", details: "2026-11-03T01:02:03.456789Z" })).toMatchObject({
+      code: "stale_write",
+      status: 409,
+      details: { current_updated_at: "2026-11-03T01:02:03.456789Z" },
+    });
+    expect(mapDbError({ code: "P0001", message: "invalid_period", details: "end_month" })).toMatchObject({ code: "invalid_period", status: 400, details: { field: "end_month" } });
+    expect(mapDbError({ code: "P0001", message: "invalid_classification", details: "competencies" })).toMatchObject({ code: "invalid_classification", details: { field: "competencies" } });
+    expect(mapDbError({ code: "P0001", message: "invalid_fields", details: "summary" })).toMatchObject({ code: "invalid_fields", status: 400, details: { field: "summary" } });
+    expect(mapDbError({ code: "P0001", message: "not_found", details: "experience_id" })).toMatchObject({ code: "not_found", status: 404, details: { field: "experience_id" } });
+    expect(mapDbError({ code: "P0001", message: "not_found" })).toMatchObject({ code: "not_found", status: 404 });
+    for (const code of ["project_name_required", "project_affiliation_required", "project_not_affiliated", "deliverable_title_required", "invalid_form_snapshot"]) {
+      expect(mapDbError({ code: "P0001", message: code })).toMatchObject({ code, status: 400 });
+    }
+    expect(mapDbError({ code: "P0001", message: "project_deliverable_not_found" })).toMatchObject({ code: "not_found", status: 404 });
+    expect(mapDbError({ code: "P0001", message: "writing_chat_draft_limit_reached" })).toMatchObject({ code: "writing_chat_draft_limit_reached", status: 409 });
+    // Removed from the DB in R5 (V-9h / classification DB refusals dropped): unknown → internal.
+    expect(mapDbError({ code: "P0001", message: "classification_already_set" })).toMatchObject({ code: "internal_error" });
     expect(mapDbError({ code: "P0001", message: "invalid_ai_job" })).toMatchObject({ code: "internal_error", status: 500 });
   });
 });

@@ -305,7 +305,7 @@ const STATUS_BADGE: Record<RequirementMatchStatus, React.ReactNode> = {
     </Badge>
   ),
   no_evidence: (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="muted">
       <Circle aria-hidden />
       {MATCH_STATUS_LABELS.no_evidence}
     </Badge>
@@ -461,7 +461,7 @@ function InsightResultView({
                       <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium tabular-nums">{p.rank}</span>
                       <div className="min-w-0 space-y-1">
                         {projectNames[p.project_id] ? (
-                          <Link href={routes.projectPage(p.project_id)} onClick={() => markCareerReturn(returnTarget)} className="font-medium text-primary hover:underline">
+                          <Link href={routes.projectPage(p.project_id)} onClick={() => markCareerReturn(returnTarget)} className="font-medium text-primary-text hover:underline">
                             {projectNames[p.project_id]}
                           </Link>
                         ) : (

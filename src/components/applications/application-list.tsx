@@ -159,7 +159,7 @@ function ApplicationRow({
 
   if (layout === "table")
     return (
-      <TableRow className="h-12 cursor-pointer hover:bg-accent" onClick={() => router.push(href)}>
+      <TableRow interactive className="h-12" onClick={() => router.push(href)}>
         <TableCell className="max-w-0">
           <NameCell row={row} name={name} href={href} />
         </TableCell>
@@ -179,7 +179,7 @@ function ApplicationRow({
 
   return (
     <li>
-      <Card size="sm" className="relative gap-2 px-4 transition-colors hover:bg-accent">
+      <Card size="sm" interactive className="relative gap-2 px-4">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <NameCell row={row} name={name} href={href} stretched />

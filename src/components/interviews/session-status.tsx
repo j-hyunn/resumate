@@ -42,7 +42,7 @@ export function SessionStatusBadge({ status, className }: { status: InterviewSes
       )
     case "abandoned":
       return (
-        <Badge variant="outline" className={cn("text-muted-foreground", className)}>
+        <Badge variant="muted" className={className}>
           <Ban aria-hidden />
           {label}
         </Badge>

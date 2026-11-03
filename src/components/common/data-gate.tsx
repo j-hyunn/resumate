@@ -154,7 +154,7 @@ export function DataInsufficientGate({
   return (
     <Card className={cn("max-w-xl gap-4 p-6", className)} role="region" aria-labelledby={titleId}>
       <div className="grid size-10 place-items-center rounded-full bg-primary-subtle">
-        <ClipboardList className="size-5 text-primary" aria-hidden />
+        <ClipboardList className="size-5 text-primary-text" aria-hidden />
       </div>
       <h2 id={titleId} className="text-lg leading-7 font-semibold">
         {fillKind === "fields" ? (

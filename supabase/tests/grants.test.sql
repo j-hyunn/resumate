@@ -286,7 +286,7 @@ select ok(has_column_privilege('app_ai_writer', 'public.application_projects', '
           'app_ai_writer: application_projects name readable, memo not');
 
 -- S4: writing chat RPCs by role (DM §5, §7). R4: save / hand-off / affiliation retired; the career-writing
--- apply_writing_chat_proposal is user-session only (DM-13).
+-- R5: apply_writing_chat_proposal dropped; the page-save RPCs and the deliverable chat start are user-session only (DM-13).
 select set_eq(
   $$select p.proname::text || ':' || r.rolname
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -294,10 +294,12 @@ select set_eq(
      where n.nspname = 'public'
        and p.proname in ('start_writing_chat', 'append_writing_chat_message', 'begin_assistant_message',
                          'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
-                         'apply_writing_chat_proposal')
+                         'apply_writing_chat_proposal', 'start_deliverable_writing_chat', 'save_project_page',
+                         'save_project_deliverable')
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['start_writing_chat:authenticated', 'append_writing_chat_message:authenticated',
-        'apply_writing_chat_proposal:authenticated',
+        'start_deliverable_writing_chat:authenticated', 'save_project_page:authenticated',
+        'save_project_deliverable:authenticated',
         'apply_structured_draft_patch:authenticated', 'apply_structured_draft_patch:app_ai_writer',
         'begin_assistant_message:app_ai_writer', 'finish_assistant_message:app_ai_writer',
         'mark_writing_chat_extracted:app_ai_writer'],
@@ -345,7 +347,7 @@ select set_eq(
         'get_data_readiness', 'get_deletion_impact', 'get_interview_question_reveals',
         'mark_interview_result_viewed', 'move_application_stage', 'record_consents',
         'reorder_cover_letter_questions', 'reorder_project_deliverables', 'request_ai_job_cancel',
-        'apply_writing_chat_proposal', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
+        'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
         'start_writing_chat', 'submit_interview_session',
         'get_interview_grading_decisions', 'update_failed_jd_raw_text'],
   'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role)');

@@ -265,10 +265,10 @@ export function CareerDescriptionSources({
           }}
           aria-labelledby="cds-tone"
         >
-          <ToggleGroupItem value="concise" className="h-9 px-4 text-sm data-[state=on]:bg-primary-subtle data-[state=on]:text-primary-subtle-foreground">
+          <ToggleGroupItem value="concise" className="h-9 px-4 text-sm">
             간결
           </ToggleGroupItem>
-          <ToggleGroupItem value="detailed" className="h-9 px-4 text-sm data-[state=on]:bg-primary-subtle data-[state=on]:text-primary-subtle-foreground">
+          <ToggleGroupItem value="detailed" className="h-9 px-4 text-sm">
             상세
           </ToggleGroupItem>
         </ToggleGroup>

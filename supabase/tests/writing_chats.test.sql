@@ -202,8 +202,10 @@ select is((select count(*)::int from public.writing_chats), 2, 'app_ai_writer re
 select throws_ok($$insert into public.projects (name) values ('x')$$, '42501', null,
                  'app_ai_writer cannot insert career rows');
 select throws_ok($$update public.projects set name = 'x'$$, '42501', null, 'app_ai_writer cannot update career rows');
-select throws_ok($$select public.apply_writing_chat_proposal(current_setting('t.chat')::uuid)$$, '42501', null,
-                 'app_ai_writer cannot execute apply_writing_chat_proposal (no career write on the AI path)');
+select throws_ok($$select public.save_project_page('aaaaaaaa-3333-0000-0000-000000000001', '{}')$$, '42501', null,
+                 'app_ai_writer cannot execute save_project_page (no career write on the AI path)');
+select throws_ok($$select public.save_project_deliverable(null, 'aaaaaaaa-3333-0000-0000-000000000002', 't', '')$$,
+                 '42501', null, 'app_ai_writer cannot execute save_project_deliverable');
 select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001')$$, '42501', null,
                  'app_ai_writer cannot start a chat');
 select throws_ok($$select * from public.append_writing_chat_message(current_setting('t.chat')::uuid, 'x')$$, '42501', null,
@@ -378,8 +380,12 @@ select throws_ok($$select * from public.append_writing_chat_message(current_sett
 select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"star","field":"situation"},"value":"직접 정리"}]}')$$,
                 'closed chat: user may still edit the proposal');
-select lives_ok($$select public.apply_writing_chat_proposal(current_setting('t.chat')::uuid)$$,
-                'closed chat: user may still apply');
+select is(public.save_project_page('aaaaaaaa-3333-0000-0000-000000000001', '{"situation":"직접 정리"}', null,
+            jsonb_build_array(jsonb_build_object('writing_chat_id', current_setting('t.chat'), 'field', 'situation',
+              'rev', (select (structured_draft #>> '{star,situation,rev}')::int from public.writing_chats
+                       where id = current_setting('t.chat')::uuid)))) -> 'applied',
+          jsonb_build_array(jsonb_build_object('writing_chat_id', current_setting('t.chat'), 'field', 'situation')),
+          'closed chat: saving still records the filled proposal (R5)');
 reset role;
 select throws_ok($$update public.writing_chats set status = 'active' where id = current_setting('t.chat')::uuid$$,
                  'P0001', 'invalid_writing_chat_transition', 'closed -> active refused even for the owner role');

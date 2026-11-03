@@ -719,17 +719,23 @@ isOneToOne: false
                   ]
                 },"writing_chats": {
                   Row: {
-                    "created_at": string,"id": string,"last_activity_at": string,"last_applied_at": string | null,"last_extracted_sequence": number,"message_count": number,"project_id": string,"return_target": Json | null,"status": string,"structured_draft": NonNullable<Json>,"title": string | null,"updated_at": string,"user_id": string
+                    "created_at": string,"id": string,"last_activity_at": string,"last_applied_at": string | null,"last_extracted_sequence": number,"message_count": number,"project_deliverable_id": string | null,"project_id": string,"return_target": Json | null,"status": string,"structured_draft": NonNullable<Json>,"title": string | null,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_id": string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_deliverable_id"?: string | null,"project_id": string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_id"?: string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "created_at"?: string,"id"?: string,"last_activity_at"?: string,"last_applied_at"?: string | null,"last_extracted_sequence"?: number,"message_count"?: number,"project_deliverable_id"?: string | null,"project_id"?: string,"return_target"?: Json | null,"status"?: string,"structured_draft"?: NonNullable<Json>,"title"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "writing_chats_project_deliverable_fkey"
+      columns: ["project_deliverable_id","project_id","user_id"]
+isOneToOne: false
+      referencedRelation: "project_deliverables"
+      referencedColumns: ["id","project_id","user_id"]
+    },{
       foreignKeyName: "writing_chats_project_fkey"
       columns: ["project_id","user_id"]
 isOneToOne: false
@@ -773,9 +779,6 @@ isOneToOne: false
                            },
 "apply_structured_draft_patch":
 { Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
-                           },
-"apply_writing_chat_proposal":
-{ Args: { "p_fields"?: (string)[],"p_writing_chat_id": string }; Returns: Json
                            },
 "begin_assistant_message":
 { Args: { "p_ai_job_id": string,"p_connection_tier": string,"p_model": string,"p_model_tier": string,"p_provider": string,"p_writing_chat_id": string }; Returns: {
@@ -953,6 +956,12 @@ isOneToOne: false
 "save_interview_question":
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
                            },
+"save_project_deliverable":
+{ Args: { "p_applied_proposals"?: Json,"p_body": string,"p_expected_updated_at"?: string,"p_project_deliverable_id": string,"p_project_id": string,"p_title": string }; Returns: Json
+                           },
+"save_project_page":
+{ Args: { "p_applied_proposals"?: Json,"p_expected_updated_at"?: string,"p_project_id": string,"p_values": Json }; Returns: Json
+                           },
 "save_provider_key":
 { Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_user_id": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
                            },
@@ -968,8 +977,11 @@ isOneToOne: false
 "set_section_sources":
 { Args: { "p_section_id": string,"p_sources": Json }; Returns: Json
                            },
+"start_deliverable_writing_chat":
+{ Args: { "p_form_snapshot"?: Json,"p_project_deliverable_id": string }; Returns: string
+                           },
 "start_writing_chat":
-{ Args: { "p_project_id": string,"p_return_target"?: Json }; Returns: string
+{ Args: { "p_form_snapshot"?: Json,"p_project_id": string,"p_return_target"?: Json }; Returns: string
                            },
 "submit_interview_session":
 { Args: { "p_session_id": string }; Returns: Json

@@ -212,7 +212,9 @@ export function ProviderCardFrame({
   className?: string
 }) {
   const frame = cn(
-    "grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2 rounded-lg border bg-card p-4",
+    // inButton: the wrapping Item paints hover/background, so the frame stays transparent (UQ-721)
+    "grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2 rounded-lg border p-4",
+    inButton ? "bg-transparent" : "bg-card",
     active ? "border-primary bg-primary-subtle/40" : BORDER[state],
     className,
   )

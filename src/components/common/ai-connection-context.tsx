@@ -46,6 +46,19 @@ interface AiConnectionContextValue {
 
 const AiConnectionContext = React.createContext<AiConnectionContextValue | null>(null)
 
+const noopSubscribe = () => () => {}
+
+/**
+ * Context value as the server rendered it (no connection, no keys) until this component has
+ * hydrated. Suspense boundaries that stream in later (the shell sidebar) can hydrate after the
+ * provider's first fetch resolved; reading the live value there would mismatch the server HTML.
+ */
+function useHydratedContext(): AiConnectionContextValue | null {
+  const ctx = React.useContext(AiConnectionContext)
+  const hydrated = React.useSyncExternalStore(noopSubscribe, () => true, () => false)
+  return hydrated || !ctx ? ctx : { ...ctx, connection: null, hasAnyKey: false }
+}
+
 export function AiConnectionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<{ connection: AiConnection | null; hasAnyKey: boolean; tick: number }>({
     connection: null,
@@ -100,7 +113,7 @@ export const CONNECTION_PREVIEW_STATES = ["ai-locked", "key-invalid", "key-check
  * Components using it must sit under <Suspense> (reads ?state=).
  */
 export function useAiConnection(explicit?: AiConnection | null): AiConnection | null {
-  const ctx = React.useContext(AiConnectionContext)
+  const ctx = useHydratedContext()
   const state = usePreviewState()
   return applyConnectionPreview(explicit ?? ctx?.connection ?? null, state)
 }
@@ -112,7 +125,7 @@ export function useAiConnectionBase(): AiConnection | null {
 
 /** True once the provider has loaded (or an explicit value was given) */
 export function useAiConnectionLoaded(explicit?: AiConnection | null): boolean {
-  const ctx = React.useContext(AiConnectionContext)
+  const ctx = useHydratedContext()
   const state = usePreviewState()
   return explicit != null || ctx?.connection != null || (CONNECTION_PREVIEW_STATES as readonly string[]).includes(state ?? "")
 }
@@ -140,7 +153,7 @@ export function useAiConnectionRefresh(startPending = false): [boolean, () => vo
  * `?state=ai-locked` previews treat the account as having no keys.
  */
 export function useAiConnectHref(): string {
-  const ctx = React.useContext(AiConnectionContext)
+  const ctx = useHydratedContext()
   const state = usePreviewState()
   const hasKey = state === "ai-locked" ? false : (ctx?.hasAnyKey ?? false)
   return hasKey ? routes.aiConnection() : routes.aiConnect()

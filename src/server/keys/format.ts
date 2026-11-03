@@ -8,10 +8,11 @@ import type { AiProvider } from "@/lib/contracts/enums";
  * check is the verification call (C-10.5). Only obviously wrong input — empty,
  * whitespace inside, wrong well-known prefix, absurd length — is refused here.
  */
-const PREFIX: Record<AiProvider, string> = {
-  openai: "sk-",
-  anthropic: "sk-ant-",
-  gemini: "AIza",
+const PREFIXES: Record<AiProvider, readonly string[]> = {
+  openai: ["sk-"],
+  anthropic: ["sk-ant-"],
+  // AI Studio issues "AQ." keys since 2026; older keys start with "AIza".
+  gemini: ["AIza", "AQ."],
 };
 
 export const KEY_MIN_LENGTH = 20;
@@ -21,7 +22,7 @@ export function isPlausibleProviderKey(provider: AiProvider, key: string): boole
   if (key.length < KEY_MIN_LENGTH || key.length > KEY_MAX_LENGTH) return false;
   // Printable ASCII, no whitespace (a pasted key with a space or newline inside is not a key).
   if (!/^[\x21-\x7e]+$/.test(key)) return false;
-  return key.startsWith(PREFIX[provider]);
+  return PREFIXES[provider].some((prefix) => key.startsWith(prefix));
 }
 
 /** Trims surrounding whitespace that copy-paste adds. Everything else is kept as typed. */

@@ -161,6 +161,7 @@ describe("key format and verification target", () => {
     expect(isPlausibleProviderKey("anthropic", FAKE_KEY)).toBe(true);
     expect(isPlausibleProviderKey("openai", "sk-proj-FAKE000000000000000000")).toBe(true);
     expect(isPlausibleProviderKey("gemini", "AIzaFAKE0000000000000000000000000000000")).toBe(true);
+    expect(isPlausibleProviderKey("gemini", "AQ.FAKE0000000000000000000000000000000")).toBe(true);
     expect(isPlausibleProviderKey("gemini", FAKE_KEY)).toBe(false);
     expect(isPlausibleProviderKey("openai", "sk-short")).toBe(false);
     expect(isPlausibleProviderKey("openai", "sk-FAKE 0000000000000000000000")).toBe(false);

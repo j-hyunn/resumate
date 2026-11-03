@@ -124,6 +124,8 @@ export function DeleteConfirmDialog(props: DeleteConfirmDialogProps) {
 
 function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: DeleteConfirmDialogProps) {
   const [loaded, setLoaded] = React.useState<{ key: string; impact: Impact } | null>(null)
+  // The impact read failed (e.g. the item is already gone): say so instead of an endless skeleton.
+  const [loadFailedKey, setLoadFailedKey] = React.useState<string | null>(null)
   const [resultMode, setResultMode] = React.useState<ResultMode>("keep_results")
   // CR-15: an experience / education delete always removes its projects (no "keep" choice)
   const affiliationMode: AffiliationMode = "delete_projects"
@@ -151,15 +153,21 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           return { kind: "api_key", data: { running_jobs: await getRunningAiJobCountAction(target.entity_id) } }
       }
     }
-    void load().then((impact) => {
-      if (alive) setLoaded({ key, impact })
-    })
+    load().then(
+      (impact) => {
+        if (alive) setLoaded({ key, impact })
+      },
+      () => {
+        if (alive) setLoadFailedKey(key)
+      },
+    )
     return () => {
       alive = false
     }
   }, [open, target, affiliationMode])
 
   const impact = target && loaded?.key === `${target.entity_id}-${affiliationMode}` ? loaded.impact : null
+  const loadFailed = !!target && loadFailedKey === `${target.entity_id}-${affiliationMode}`
   if (!target) return null
   const name = targetName(target)
   const hasAffiliation = target.kind === "career" && (target.entity_type === "experience" || target.entity_type === "education")
@@ -206,7 +214,12 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
         </AlertDialogHeader>
 
         <div className="space-y-4">
-          {impact === null ? (
+          {impact === null && loadFailed ? (
+            // [UI-가정] copy not in the spec (C-05 has no impact-load failure state)
+            <p className="rounded-md bg-muted p-3 text-sm text-destructive" role="alert">
+              삭제할 항목을 불러오지 못했어요. 이미 삭제됐을 수 있어요. 새로고침 후 다시 확인해 주세요
+            </p>
+          ) : impact === null ? (
             <div className="space-y-2 rounded-md bg-muted p-3" aria-busy="true">
               <span className="sr-only">삭제 영향 확인 중</span>
               <Skeleton className="h-4 w-2/3" />

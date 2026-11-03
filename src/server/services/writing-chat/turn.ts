@@ -490,7 +490,8 @@ export async function runTurn(
       provider: job.provider,
       tier: modelTier,
       connectionTier: tier,
-      keySource: deps.keySource,
+      // Bind the job's provider: the envelope key source needs it for the AAD (like runner.ts).
+      keySource: { forJob: (id: string) => deps.keySource.forJob(id, job.provider) },
       jobId: job.id,
       signal: callSignalValue,
       onCall,

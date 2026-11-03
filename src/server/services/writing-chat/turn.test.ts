@@ -227,6 +227,21 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(t.replyAdapter.calls).toHaveLength(1);
   });
 
+  it("asks the key source for the job's provider (the envelope key source refuses a call without it)", async () => {
+    const t = setup({ reply: [{ json: "어떤 프로젝트였나요?" }], extract: [{ json: draftWith(FIRST_USER_MSG) }] });
+    const asked: (string | undefined)[] = [];
+    t.deps.keySource = {
+      forJob: async (_jobId, provider) => {
+        asked.push(provider);
+        return KEY;
+      },
+    };
+    const { events } = await runFull(t.deps, "결제 개선 프로젝트였어요");
+    expect(events.at(-1)?.type).toBe("turn_done");
+    expect(asked.length).toBeGreaterThan(0);
+    expect(new Set(asked)).toEqual(new Set(["anthropic"]));
+  });
+
   it("key_invalid marks the key invalid", async () => {
     const t = setup({ reply: [{ error: "key_invalid" }], extract: [{ error: "key_invalid" }] });
     const { events } = await runFull(t.deps, "답변");

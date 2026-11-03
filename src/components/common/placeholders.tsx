@@ -100,7 +100,7 @@ export function BlockFlagBadges({
         </Badge>
       ) : null}
       {userModified ? (
-        <Badge variant="outline" className="h-6 text-muted-foreground">
+        <Badge variant="muted" className="h-6">
           <PenLine aria-hidden />
           편집됨 — 근거 재확인 권장
         </Badge>

@@ -94,7 +94,7 @@ export function OutcomeBadge({ outcome, className }: { outcome: StageOutcome | n
       </Badge>
     )
   return (
-    <Badge variant="outline" className={cn("text-muted-foreground", className)}>
+    <Badge variant="muted" className={className}>
       <CircleHelp aria-hidden />
       {OUTCOME_LABELS.none}
     </Badge>

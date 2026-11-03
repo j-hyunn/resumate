@@ -446,7 +446,7 @@ export function DangerZone({
   const target: DeleteTarget = { kind: "career", entity_type: entityType, entity_id: entityId, label }
   return (
     <div className="flex justify-end border-t pt-4">
-      <Button variant="ghost" className="text-destructive" onClick={() => setOpen(true)}>
+      <Button variant="destructive-ghost" onClick={() => setOpen(true)}>
         <Trash2 aria-hidden />
         {buttonLabel}
       </Button>

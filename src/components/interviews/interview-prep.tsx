@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -247,8 +246,9 @@ export function InterviewPrep({
       ) : null}
 
       {inProgress ? (
-        <Card className="gap-3 border-warning bg-warning-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex flex-wrap items-center gap-2 text-base text-warning-subtle-foreground">
+        // UQ-709: in-progress / failed session banner uses the DS warning Alert (not a recolored Card)
+        <Alert variant="warning" role={undefined} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex flex-wrap items-center gap-2 text-base">
             {/* 실패 세션 문구는 02 S-20. 그 밖 배너 문구: [UI-가정] (C-14 변형 문구와 맞춤) */}
             <span className="font-medium">
               {failedSession
@@ -287,7 +287,7 @@ export function InterviewPrep({
               <Link href={routes.interviewSession(applicationProjectId, inProgress.id)}>이어서 쓰기</Link>
             </Button>
           </div>
-        </Card>
+        </Alert>
       ) : null}
 
       <section className="space-y-3" aria-labelledby={typeLabelId}>
@@ -340,7 +340,7 @@ export function InterviewPrep({
             <ToggleGroupItem
               key={n}
               value={String(n)}
-              className="h-10 min-w-14 px-4 max-md:h-11 text-base tabular-nums data-[state=on]:border-primary data-[state=on]:bg-primary-subtle data-[state=on]:text-primary-subtle-foreground"
+              className="h-10 min-w-14 px-4 max-md:h-11 text-base tabular-nums"
               aria-label={`${n}문항`}
             >
               {n}

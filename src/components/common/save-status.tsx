@@ -46,7 +46,7 @@ export function SaveStatus({
         <>
           <CircleAlert className="size-3.5 text-destructive" aria-hidden />
           <span className="text-destructive">저장 실패 —</span>
-          <Button variant="link" size="sm" className="h-auto px-0 text-destructive" onClick={onRetry}>
+          <Button variant="destructive-link" size="sm" className="h-auto px-0" onClick={onRetry}>
             다시 시도
           </Button>
         </>

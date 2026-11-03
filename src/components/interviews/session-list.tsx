@@ -229,7 +229,7 @@ export function SessionList({
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.id} className="relative h-12 cursor-pointer text-base hover:bg-accent">
+              <TableRow key={row.id} interactive className="relative h-12 text-base">
                 {showApplication ? (
                   <TableCell className="max-w-[18rem]">
                     <span className="flex items-center gap-2">
@@ -290,7 +290,7 @@ export function SessionList({
       <ul className="space-y-2 md:hidden" aria-label={caption}>
         {rows.map((row) => (
           <li key={row.id}>
-            <Card className="relative gap-2 p-4 hover:bg-accent">
+            <Card interactive className="relative gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 space-y-0.5">
                   <p className="flex items-center gap-2">

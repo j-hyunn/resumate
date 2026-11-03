@@ -280,9 +280,8 @@ function QuestionCard({
         </p>
         {canDelete ? (
           <Button
-            variant="ghost"
+            variant="destructive-ghost"
             size="sm"
-            className="text-destructive"
             onClick={() => {
               if (hasDraft) setConfirmDelete(true)
               else {

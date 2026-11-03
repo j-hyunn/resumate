@@ -30,6 +30,7 @@ import { DangerZone, FormSection, PeriodError, RequiredMark, SaveProblemNotice, 
 import { periodPatch, storedPeriod } from "@/lib/data/row-save"
 import { AchievementList } from "./achievement-list"
 import { GateNextStep } from "./gate-next-step"
+import { Item } from "@/components/ui/item"
 
 interface Values {
   company_name: string
@@ -247,12 +248,14 @@ export function ExperienceForm({
           <ul className="divide-y rounded-md border">
             {experience.projects.map((p) => (
               <li key={p.id}>
-                <Link href={routes.project(p.id)} className="flex min-h-11 items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent">
+                <Item asChild variant="row">
+                  <Link href={routes.project(p.id)}>
                   <span className="min-w-0 flex-1 truncate font-medium">{p.name ?? "이름 없는 프로젝트"}</span>
                   {p.status === "draft" ? <DraftBadge label="작성 중 — AI 미반영" /> : null}
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">상세 내용 {p.details.length}</span>
-                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                  <ChevronRight aria-hidden />
                 </Link>
+                </Item>
               </li>
             ))}
           </ul>
@@ -294,7 +297,7 @@ function GateCompletion({
   experienceId: string | null
 }) {
   return (
-    <Card className="gap-3 border-success/30 p-5" role="status">
+    <Card tone="success" className="gap-3 p-5" role="status">
       <p className="flex items-center gap-2 font-semibold">
         <CircleCheck className="size-5 text-success" aria-hidden />
         경력이 저장됐어요

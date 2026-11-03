@@ -287,7 +287,7 @@ function AchievementForm({
               <Button size="sm" variant="ghost" onClick={() => setConfirmClose(false)}>
                 계속 편집
               </Button>
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={onClose}>
+              <Button size="sm" variant="destructive-ghost" onClick={onClose}>
                 그래도 닫기
               </Button>
             </div>
@@ -299,8 +299,7 @@ function AchievementForm({
         <div className="flex flex-col-reverse gap-2 sm:flex-row">
           {current ? (
             <Button
-              variant="ghost"
-              className="text-destructive"
+              variant="destructive-ghost"
               onClick={async () => {
                 await autosave.flush()
                 onClose()

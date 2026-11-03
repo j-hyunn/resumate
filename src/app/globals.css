@@ -1,5 +1,5 @@
 /*
- * Design tokens copied from docs/ui/design-system.md 1.1.2 (v1).
+ * Design tokens copied from docs/ui/design-system.md 1.1.2 (v4 — primary #15A76E, --primary-text #118658, shell base --sidebar #F3FBF8 / white inset, stroke #E2E2E2, --radius-control 12px).
  * Deviations (A0 foundation): shadcn/tailwind.css import (custom data-* variants used by
  * shadcn primitives), dark tokens under the .dark class set by the theme script (Q-2),
  * next/font/local Pretendard variable prepended to --font-sans (Q-1), radius-2xl..4xl added.
@@ -19,17 +19,18 @@
 :root {
   --radius: 0.5rem;
 
-  --background: oklch(0.985 0.002 260);
+  --background: #FFFFFF;
   --foreground: oklch(0.21 0.01 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.21 0.01 260);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.21 0.01 260);
 
-  --primary: oklch(0.48 0.115 158);
+  --primary: #15A76E;
   --primary-foreground: oklch(0.99 0 0);
-  --primary-subtle: oklch(0.965 0.03 158);
-  --primary-subtle-foreground: oklch(0.40 0.09 158);
+  --primary-text: #118658; /* 초록 글자(링크·secondary/ghost·메뉴 hover) */
+  --primary-subtle: #E3F5EE;
+  --primary-subtle-foreground: #0E7A50;
 
   --secondary: oklch(0.955 0.005 260);
   --secondary-foreground: oklch(0.25 0.01 260);
@@ -65,11 +66,11 @@
 
   --chip: oklch(0.955 0.006 260);
   --chip-foreground: oklch(0.21 0.01 260);
-  --chip-border: oklch(0.87 0.01 260);
+  --chip-border: #E2E2E2;
 
-  --border: oklch(0.91 0.006 260);
-  --input: oklch(0.64 0.01 260);
-  --ring: oklch(0.52 0.12 158);
+  --border: #E2E2E2;
+  --input: #E2E2E2;
+  --ring: #15A76E;
 
   --stage-before-apply: oklch(0.62 0.01 260);
   --stage-document: oklch(0.60 0.13 240);
@@ -78,21 +79,22 @@
   --stage-culture-fit-interview: oklch(0.62 0.15 350);
   --stage-closed: oklch(0.35 0.01 260);
 
-  --chart-1: oklch(0.48 0.115 158);
+  --chart-1: #15A76E;
   --chart-2: oklch(0.60 0.13 240);
   --chart-3: oklch(0.75 0.15 75);
   --chart-4: oklch(0.62 0.15 350);
   --chart-5: oklch(0.55 0.16 275);
 
-  /* L-01 sidebar-08 inset: --sidebar is the base, a clear step darker than the floating --background panel */
-  --sidebar: oklch(0.945 0.006 260);
+  /* L-01 sidebar-08 inset: --sidebar #F3FBF8 is the app base (사이드바·바깥 영역), the inset --background panel is white */
+  --sidebar: #F3FBF8;
   --sidebar-foreground: oklch(0.21 0.01 260);
-  --sidebar-primary: oklch(0.48 0.115 158);
+  --sidebar-primary: #15A76E;
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.905 0.01 260);
-  --sidebar-accent-foreground: oklch(0.21 0.01 260);
-  --sidebar-border: oklch(0.91 0.006 260);
-  --sidebar-ring: oklch(0.52 0.12 158);
+  /* 메뉴 hover·선택 = ghost 버튼과 같은 초록 (primary 10% + primary-text) */
+  --sidebar-accent: color-mix(in srgb, var(--primary) 10%, transparent);
+  --sidebar-accent-foreground: var(--primary-text);
+  --sidebar-border: #E2E2E2;
+  --sidebar-ring: #15A76E;
 }
 
 :root {
@@ -110,6 +112,7 @@
 
   --primary: oklch(0.74 0.14 158);
   --primary-foreground: oklch(0.18 0.03 158);
+  --primary-text: oklch(0.74 0.14 158);
   --primary-subtle: oklch(0.26 0.045 158);
   --primary-subtle-foreground: oklch(0.86 0.09 158);
 
@@ -171,8 +174,8 @@
   --sidebar-foreground: oklch(0.95 0.004 260);
   --sidebar-primary: oklch(0.74 0.14 158);
   --sidebar-primary-foreground: oklch(0.18 0.03 158);
-  --sidebar-accent: oklch(0.30 0.01 260);
-  --sidebar-accent-foreground: oklch(0.95 0.004 260);
+  --sidebar-accent: color-mix(in srgb, var(--primary) 10%, transparent);
+  --sidebar-accent-foreground: var(--primary-text);
   --sidebar-border: oklch(0.33 0.008 260);
   --sidebar-ring: oklch(0.66 0.12 158);
 }
@@ -184,12 +187,13 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);  /* 4px  칩·작은 배지 */
-  --radius-md: calc(var(--radius) - 2px);  /* 6px  버튼·입력·보드 카드 */
+  --radius-md: calc(var(--radius) - 2px);  /* 6px  보드 카드·메뉴 항목 */
   --radius-lg: var(--radius);              /* 8px  카드·패널·다이얼로그 */
   --radius-xl: calc(var(--radius) + 4px);  /* 12px 보드 열 */
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  --radius-control: 12px;                 /* 12px 버튼·드롭다운·입력 */
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -199,6 +203,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-primary-subtle: var(--primary-subtle);
   --color-primary-subtle-foreground: var(--primary-subtle-foreground);
   --color-secondary: var(--secondary);

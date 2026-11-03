@@ -739,11 +739,7 @@ export function AiErrorNotice({
   return (
     <Alert
       variant={copy.tone}
-      className={cn(
-        "gap-x-3 p-4 has-[>svg]:gap-x-3",
-        copy.tone === "warning" ? "*:[svg]:text-warning" : "*:[svg]:text-destructive",
-        className,
-      )}
+      className={cn("gap-x-3 p-4 has-[>svg]:gap-x-3", className)}
       role={undefined}
     >
       <Icon className="size-5" aria-hidden />

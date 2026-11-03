@@ -9,16 +9,23 @@ import { prepareTurn, runTurn } from "@/server/services/writing-chat/turn";
 export const maxDuration = 60;
 
 /**
- * `POST /api/writing-chats/{id}/turns` — one AI-12 conversation turn (SSE).
- * Body `{ content, requestedSlot? }`; `?retry=1` = "다시 보내기" of the last
- * failed reply (body optional `{ requestedSlot? }`, no new user message,
- * message count unchanged).
+ * `POST /api/writing-chats/{id}/turns` — one AI writing chat turn (SSE): AI-12
+ * on a project chat, AI-13 on a deliverable chat (picked by the chat row).
+ * Body `{ content, requestedSlot?, requestedAction?, style?, formSnapshot? }`;
+ * `?retry=1` = "다시 보내기" of the last failed reply (body optional, same
+ * options without `content`, no new user message, message count unchanged).
+ * `formSnapshot` (S-10 / S-44 form values, DM 2.5.1) is validated by the turn
+ * service against the chat's target (`invalid_form_snapshot` 400) and is never
+ * stored or logged. `requestedAction = compose_draft` at the draft limit → 409
+ * `writing_chat_draft_limit_reached` before anything is saved.
  *
  * Before the stream: auth, validation, chat checks, job + user message +
  * assistant row (JSON error responses: 400 / 404 / 409). The AI connection
  * gate answers as a stream with one `error` event (F-AI-08 lock: key_missing /
  * key_invalid). Then: turn_started → reply_delta* → reply_done → draft_patch →
- * draft_flags → turn_done | error.
+ * draft_flags → turn_done | error (deliverable chats: facts_patch / draft_flags /
+ * draft_started / draft_block / draft_done instead of draft_patch, see
+ * `DeliverableTurnEvent`).
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/writing-chats/[id]/turns">) {
   try {
@@ -35,6 +42,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/writing-cha
       chatId: id,
       content: retry ? null : (parsed.data as z.output<typeof WritingChatTurnInput>).content,
       requestedSlot: parsed.data.requestedSlot,
+      requestedAction: parsed.data.requestedAction,
+      style: parsed.data.style,
+      formSnapshot: parsed.data.formSnapshot,
     });
 
     const options = { requestSignal: request.signal, terminalEvents: WRITING_CHAT_TURN_TERMINAL_EVENTS };

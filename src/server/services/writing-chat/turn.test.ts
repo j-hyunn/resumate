@@ -12,7 +12,7 @@ import {
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import type { LlmFactoryInput } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
-import { MemoryChatDb, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
+import { MemoryChatDb, fakeDeliverablePipelines, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
 import { ProviderError } from "@/server/ai/errors";
 import { hasRoomForTurn, prepareTurn, remainingMessages, runTurn, type PreparedTurn } from "./turn";
 import type { TurnDeps } from "./types";
@@ -86,6 +86,7 @@ function setup(opts: {
       return input.tier === "light" ? extractLlm(input) : replyLlm(input);
     },
     pipelines,
+    deliverablePipelines: fakeDeliverablePipelines(),
     now: clock.now,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -99,7 +100,7 @@ async function runFull(deps: TurnDeps, content: string | null, signal: AbortSign
   const prepared = await prepareTurn(deps, { chatId: CHAT, content, requestedSlot: null });
   if (prepared.kind !== "ready") return { prepared, events: [] as WritingChatTurnEvent[] };
   const events: WritingChatTurnEvent[] = [];
-  await runTurn(deps, prepared, (e) => events.push(e), signal);
+  await runTurn(deps, prepared, (e) => events.push(e as WritingChatTurnEvent), signal);
   return { prepared, events };
 }
 
@@ -129,9 +130,8 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(done.closed).toBe(false);
     expect(done.needsReviewCount).toBe(1);
     expect(done.applicableFields).toEqual(["start_month"]);
-    // AI-12 v4.5 chips from the new draft (situation proposed → action is the first empty required slot).
-    expect(done.chips).toHaveLength(3);
-    expect(done.chips[0]).toEqual({ label: "비어 있는 항목부터 물어봐 줘", requestedSlot: "action" });
+    // R-PA-5 (v4.6): quick chips are computed by the screen, not sent.
+    expect("chips" in done).toBe(false);
     expect(done.readyToReturn).toBe(false);
 
     const job = t.store.jobs.get(started.jobId)!;
@@ -239,7 +239,7 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     const client = new AbortController();
     const prepared = (await prepareTurn(t.deps, { chatId: CHAT, content: "답변", requestedSlot: null })) as PreparedTurn;
     const events: WritingChatTurnEvent[] = [];
-    const running = runTurn(t.deps, prepared, (e) => events.push(e), client.signal);
+    const running = runTurn(t.deps, prepared, (e) => events.push(e as WritingChatTurnEvent), client.signal);
     await new Promise((r) => setTimeout(r, 5));
     client.abort();
     await running;
@@ -280,7 +280,7 @@ describe("AI-12 turn — draftStatus and orphaned replies (QA-S4-04 / 05)", () =
     const t = setup({ reply: [{ json: "마지막" }], extract: [{ json: null }] });
     t.chats.chat.messageCount = 38;
     const { events } = await runFull(t.deps, "마지막 답변");
-    expect(events.at(-1)).toMatchObject({ type: "turn_done", messageCount: 40, limitReached: true, closed: true, chips: [] });
+    expect(events.at(-1)).toMatchObject({ type: "turn_done", messageCount: 40, limitReached: true, closed: true });
     expect(t.chats.chat.status).toBe("closed");
     await expect(prepareTurn(t.deps, { chatId: CHAT, content: "더", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_closed" });
   });

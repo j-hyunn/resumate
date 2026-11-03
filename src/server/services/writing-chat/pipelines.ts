@@ -1,14 +1,18 @@
 import { selectGateRequirements, type GateRequirement, type GateRequirementRow } from "@/server/ai/context-pack/gate-requirements";
-import { buildWritingChatContext, type WritingChatContext, type WritingChatTurnInput } from "@/server/ai/context-pack/writing-chat";
+import { buildWritingChatContext, type ProjectFormSnapshot as AiProjectFormSnapshot, type WritingChatContext, type WritingChatTurnInput } from "@/server/ai/context-pack/writing-chat";
+import type { DeliverableChatTurnInput, DeliverableFormSnapshot as AiDeliverableFormSnapshot } from "@/server/ai/context-pack/deliverable-chat";
+import { isDeliverableSlot } from "@/server/ai/context-pack/deliverable-slots";
 import { extract, reply } from "@/server/ai/pipelines/AI-12";
+import * as ai13 from "@/server/ai/pipelines/AI-13";
+import type { ReplyNotice } from "@/server/ai/prompts/AI-13";
 import { isEmptyDraftPatch } from "@/server/ai/schemas/structured-draft";
 import { AppError } from "@/lib/contracts/errors";
 import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career/rpc";
 import type { AiLogger } from "@/server/ai/log";
-import type { RequirementCategory, RequirementImportance } from "@/lib/contracts/enums";
-import type { Log, TurnSnapshot, WritingChatPipelines } from "./types";
+import { WRITING_CHAT_SLOTS, type RequirementCategory, type RequirementImportance } from "@/lib/contracts/enums";
+import type { DeliverablePipelines, DeliverablePlan, Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
  * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
@@ -121,11 +125,18 @@ export function toTurnInput(snap: TurnSnapshot, loaded: Loaded): WritingChatTurn
     messages: chat.messages.map((m) => ({ id: m.id, sequence: m.sequence, role: m.role, content: m.content, status: m.status })),
     structuredDraft: chat.structuredDraft,
     lastExtractedSequence: chat.lastExtractedSequence,
-    requestedSlot: snap.requestedSlot ? { slot: snap.requestedSlot.slot } : null,
+    // STAR chats only take AI-12 slots (checked by the turn service).
+    requestedSlot: snap.requestedSlot && isStarChatSlot(snap.requestedSlot.slot) ? { slot: snap.requestedSlot.slot } : null,
     // begin_assistant_message.is_final (no further user message fits after this reply).
     isFinalReply: snap.isLastTurn,
+    // v4.6 (PA-3): the S-10 form's unsaved values win over the DB row (validated by the turn service).
+    formSnapshot: (snap.formSnapshot as AiProjectFormSnapshot | null) ?? null,
     ...loaded,
   };
+}
+
+function isStarChatSlot(slot: string): slot is (typeof WRITING_CHAT_SLOTS)[number] {
+  return (WRITING_CHAT_SLOTS as readonly string[]).includes(slot);
 }
 
 export type PipelineLogOptions = {
@@ -189,6 +200,151 @@ export function createWritingChatPipelines(opts: PipelineLogOptions = {}): Writi
       } catch {
         return null;
       }
+    },
+  };
+}
+
+// ---------------- AI-13 deliverable chats (ai notes §3.2–3.3) ----------------
+
+type DeliverableLoaded = Pick<DeliverableChatTurnInput, "deliverable" | "project" | "siblingTitles" | "desiredJobTitle">;
+
+/**
+ * AI-13 input reads (app_ai_writer, RLS = this user): the deliverable row, its parent standalone
+ * project (name, period, role, description — no link_url) + skills, the other deliverables' titles
+ * (≤ 20, not a source), desired job title. Reads only (NFR-AI-05).
+ */
+export async function loadDeliverableInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<DeliverableLoaded> {
+  const chat = snap.chat;
+  const deliverableId = chat.projectDeliverableId;
+  if (!deliverableId) throw new AppError("internal_error", undefined, { status: 500 });
+  const [deliverableRes, projectRes, skillsRes, siblingsRes, profile] = await Promise.all([
+    db.from("project_deliverables").select("id, title, body").eq("id", deliverableId).maybeSingle(),
+    db.from("projects").select("id, name, start_month, end_month, is_current, role, description").eq("id", chat.projectId).maybeSingle(),
+    db.from("project_skills").select("skill_id, created_at").eq("project_id", chat.projectId).order("created_at"),
+    db.from("project_deliverables").select("id, title").eq("project_id", chat.projectId).neq("id", deliverableId).order("sort_order").limit(20),
+    db.from("profiles").select("desired_job_title").eq("id", chat.userId).maybeSingle(),
+  ]);
+  for (const r of [deliverableRes, projectRes, skillsRes, siblingsRes, profile]) if (r.error) throw mapDbError(r.error);
+  const d = deliverableRes.data;
+  const p = projectRes.data;
+  // The chat cascades with its deliverable / project; a missing row is a race with a delete.
+  if (!d || !p) throw new AppError("not_found", "대상 산출물을 찾을 수 없습니다.");
+  const skillIds = (skillsRes.data ?? []).map((r) => r.skill_id);
+  let skills: string[] = [];
+  if (skillIds.length > 0) {
+    const names = await db.from("skills").select("id, name").in("id", skillIds);
+    if (names.error) throw mapDbError(names.error);
+    const byId = new Map((names.data ?? []).map((r) => [r.id, r.name]));
+    skills = skillIds.map((id) => byId.get(id)).filter((n): n is string => !!n);
+  }
+  return {
+    deliverable: { id: d.id, title: d.title, body: d.body ?? "" },
+    project: {
+      id: p.id,
+      name: p.name,
+      startMonth: p.start_month,
+      endMonth: p.end_month,
+      isCurrent: p.is_current,
+      role: p.role,
+      description: p.description,
+      skills,
+    },
+    siblingTitles: (siblingsRes.data ?? []).map((r) => r.title),
+    desiredJobTitle: profile.data?.desired_job_title ?? null,
+  };
+}
+
+export function toDeliverableTurnInput(
+  snap: TurnSnapshot,
+  loaded: DeliverableLoaded,
+  draft?: { structuredDraft: unknown; lastExtractedSequence: number },
+): DeliverableChatTurnInput {
+  const chat = snap.chat;
+  const slot = snap.requestedSlot?.slot;
+  return {
+    messages: chat.messages.map((m) => ({ id: m.id, sequence: m.sequence, role: m.role, content: m.content, status: m.status })),
+    structuredDraft: draft ? draft.structuredDraft : chat.deliverableDraft,
+    lastExtractedSequence: draft ? draft.lastExtractedSequence : chat.lastExtractedSequence,
+    // v4.6 (PA-3): the S-44 form's unsaved title / body (validated by the turn service, never stored).
+    formSnapshot: (snap.formSnapshot as AiDeliverableFormSnapshot | null) ?? null,
+    requestedSlot: slot && isDeliverableSlot(slot) ? slot : null,
+    requestedAction: snap.requestedAction,
+    style: snap.style,
+    isFinalReply: snap.isLastTurn,
+    ...loaded,
+  };
+}
+
+/** Production AI-13 pipelines: one context per turn, rebuilt once after the facts patch (draft turn). */
+export function createDeliverablePipelines(opts: PipelineLogOptions = {}): DeliverablePipelines {
+  type State = { loaded: Promise<DeliverableLoaded>; ctx: Promise<ai13.DeliverableChatContext>; latest: Promise<ai13.DeliverableChatContext> };
+  const states = new WeakMap<TurnSnapshot, State>();
+  const stateFor = (snap: TurnSnapshot): State => {
+    let st = states.get(snap);
+    if (!st) {
+      const loaded = loadDeliverableInputs(snap.db, snap);
+      const ctx = loaded.then((l) => ai13.buildDeliverableChatContext(toDeliverableTurnInput(snap, l)));
+      st = { loaded, ctx, latest: ctx };
+      // A failed load is not cached (the next call may retry).
+      ctx.catch(() => states.delete(snap));
+      states.set(snap, st);
+    }
+    return st;
+  };
+
+  return {
+    async plan(snapshot) {
+      const plan = ai13.planDeliverableTurn(await stateFor(snapshot).ctx);
+      // reject_draft_limit is refused in prepareTurn before the message is saved; here it can only
+      // come from a race (another tab's draft) — composeDecision answers it with the limit notice.
+      const out: DeliverablePlan = plan.kind === "reject_draft_limit" ? { kind: "compose", source: "requested_action" } : plan;
+      return out;
+    },
+    async extract(call) {
+      const ctx = await stateFor(call.snapshot).ctx;
+      const result = await ai13.extract(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey, jobId: call.jobId, logger: opts.logger });
+      if (result.rejections.length > 0) {
+        // Rejected facts: check numbers only (C-7).
+        opts.log?.("writing_chat.v10_facts_rejected", {
+          jobId: call.jobId,
+          count: result.rejections.length,
+          checks: [...new Set(result.rejections.map((r) => r.check))].sort().join(","),
+        });
+      }
+      return {
+        skipped: result.skipped,
+        patch: result.skipped || result.patch.ops.length === 0 ? null : result.patch,
+        processedThroughSequence: result.processedThroughSequence,
+        intent: result.intent,
+        style: result.style,
+        sensitiveAdded: result.sensitiveAdded,
+      };
+    },
+    async decide(snapshot, after, plan) {
+      const st = stateFor(snapshot);
+      if (after.stored) {
+        const loaded = await st.loaded;
+        const through = after.processedThroughSequence ?? snapshot.chat.lastExtractedSequence;
+        st.latest = Promise.resolve(
+          ai13.buildDeliverableChatContext(toDeliverableTurnInput(snapshot, loaded, { structuredDraft: after.stored, lastExtractedSequence: through })),
+        );
+      }
+      const ctx = await st.latest;
+      const extracted = after.extracted ? { intent: after.extracted.intent, style: after.extracted.style } : null;
+      return ai13.composeDecision(ctx, plan, extracted);
+    },
+    async *reply(call, notices) {
+      const ctx = await stateFor(call.snapshot).latest;
+      for await (const event of ai13.reply(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey }, notices as ReplyNotice[])) {
+        if (event.type === "delta") yield { type: "delta", text: event.text };
+        else if (event.type === "done") yield { type: "done" };
+        else yield { type: "error", error: event.error };
+      }
+    },
+    async *compose(call, style) {
+      const ctx = await stateFor(call.snapshot).latest;
+      const result = yield* ai13.compose(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey, jobId: call.jobId, logger: opts.logger }, { style });
+      return { outcome: result.outcome, patch: result.patch, validation: { needsReviewBlockIds: result.validation.needsReviewBlockIds }, assistantMessage: result.assistantMessage };
     },
   };
 }

@@ -17,6 +17,10 @@ import {
   EXPERIENCE_TYPES,
   MAX_COMPETENCIES,
   PROJECT_TYPES,
+  APPLY_PROPOSAL_FIELDS,
+  DELIVERABLE_APPLIED_MODES,
+  PAGE_SAVE_SKIP_REASONS,
+  CAREER_STATUSES,
   type CareerStatus,
   type Competency,
   type ExperienceType,
@@ -244,6 +248,117 @@ export type ReorderDeliverablesInput = z.input<typeof ReorderDeliverablesInput>;
 
 export const DeliverableIdInput = z.object({ id: uuid });
 export const ProjectIdInput = z.object({ id: uuid });
+
+// ---------- page save (DM 2.5.1 v4.5 ★, PA-3: S-10 / S-44 "저장하기") ----------
+
+/**
+ * Page save inputs carry the whole form; the RPC owns the rules and answers with field-specific
+ * codes (`project_name_required`, `field_too_long` {field}, `invalid_period` {field},
+ * `invalid_classification` {field}, `stale_write` {current_updated_at}, …). zod here checks the
+ * JSON shape only (types, ids, array sizes, a hard size cap), so the screen gets one set of codes.
+ */
+const PAGE_TEXT_CAP = 20_000;
+const pageText = z.string().max(PAGE_TEXT_CAP).nullable().optional();
+/** `p_applied_proposals` ≤ 50 ([가정] DM 2.5.1). */
+export const PAGE_SAVE_MAX_APPLIED = 50;
+const rev = z.number().int().min(0).max(999_999_999);
+
+/**
+ * S-10 form values (`save_project_page` p_values, DM 2.5.1). An omitted key keeps the stored value
+ * (create: null / default); `null` clears it. Months are `'YYYY-MM'`.
+ */
+export const ProjectPageValues = z
+  .object({
+    name: z.string().max(PAGE_TEXT_CAP).nullable().optional(),
+    experienceId: uuid.nullable().optional(),
+    educationId: uuid.nullable().optional(),
+    startMonth: z.string().max(10).nullable().optional(),
+    endMonth: z.string().max(10).nullable().optional(),
+    isCurrent: z.boolean().nullable().optional(),
+    projectType: z.string().max(50).nullable().optional(),
+    experienceType: z.string().max(50).nullable().optional(),
+    competencies: z.array(z.string().max(50)).max(10).nullable().optional(),
+    situation: pageText,
+    task: pageText,
+    action: pageText,
+    result: pageText,
+    learnings: pageText,
+  })
+  .strict();
+export type ProjectPageValues = z.input<typeof ProjectPageValues>;
+
+/** One proposal the screen filled into the S-10 form this visit (DM 2.5.1 `{writing_chat_id, field, rev}`). */
+export const AppliedProjectProposal = z.object({ writingChatId: uuid, field: z.enum(APPLY_PROPOSAL_FIELDS), rev });
+/** One draft the screen filled into the S-44 body this visit (`{writing_chat_id, rev, mode}`). */
+export const AppliedDeliverableProposal = z.object({ writingChatId: uuid, rev, mode: z.enum(DELIVERABLE_APPLIED_MODES) });
+
+/**
+ * S-10 "저장하기" → `save_project_page`. `projectId: null` = create (affiliation + name required;
+ * the screen then replaces the URL with the new id). `expectedUpdatedAt` = the `updatedAt` the page
+ * last loaded / saved; omit it for "내 내용으로 저장" (overwrite).
+ */
+export const SaveProjectPageInput = z.object({
+  projectId: uuid.nullable(),
+  values: ProjectPageValues,
+  expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+  appliedProposals: z.array(AppliedProjectProposal).max(PAGE_SAVE_MAX_APPLIED).optional(),
+});
+export type SaveProjectPageInput = z.input<typeof SaveProjectPageInput>;
+
+/**
+ * S-44 "저장하기" → `save_project_deliverable`. `projectDeliverableId: null` = create (`projectId`
+ * required, standalone only). Edit: `projectId` null or the parent (moving is refused, `not_found`).
+ */
+export const SaveProjectDeliverableInput = z.object({
+  projectDeliverableId: uuid.nullable(),
+  projectId: uuid.nullable(),
+  title: z.string().max(PAGE_TEXT_CAP),
+  body: z.string().max(PAGE_TEXT_CAP * 2).nullable(),
+  expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+  appliedProposals: z.array(AppliedDeliverableProposal).max(PAGE_SAVE_MAX_APPLIED).optional(),
+});
+export type SaveProjectDeliverableInput = z.input<typeof SaveProjectDeliverableInput>;
+
+const nullableId = z.string().nullable().catch(null);
+const skipReason = z.enum(PAGE_SAVE_SKIP_REASONS);
+
+/** RPC `save_project_page` jsonb (DM 2.5.1). `skipped` entries may echo a malformed element (`invalid_entry`). */
+export const SaveProjectPageRpcResult = z.object({
+  project_id: z.string(),
+  status: z.enum(CAREER_STATUSES),
+  updated_at: z.string(),
+  applied: z.array(z.object({ writing_chat_id: z.string(), field: z.string() })),
+  skipped: z.array(z.object({ writing_chat_id: nullableId, field: nullableId, reason: skipReason })),
+});
+
+/** RPC `save_project_deliverable` jsonb (DM 2.5.1). */
+export const SaveProjectDeliverableRpcResult = z.object({
+  project_deliverable_id: z.string(),
+  project_id: z.string(),
+  sort_order: z.number().int(),
+  updated_at: z.string(),
+  applied: z.array(z.object({ writing_chat_id: z.string() })),
+  skipped: z.array(z.object({ writing_chat_id: nullableId, reason: skipReason })),
+});
+
+/** S-10 save answer. `updatedAt` is the next save's `expectedUpdatedAt`. */
+export type SaveProjectPageResult = {
+  projectId: string;
+  status: CareerStatus;
+  updatedAt: string;
+  applied: { writingChatId: string; field: string }[];
+  skipped: { writingChatId: string | null; field: string | null; reason: (typeof PAGE_SAVE_SKIP_REASONS)[number] }[];
+};
+
+/** S-44 save answer. */
+export type SaveProjectDeliverableResult = {
+  projectDeliverableId: string;
+  projectId: string;
+  sortOrder: number;
+  updatedAt: string;
+  applied: { writingChatId: string }[];
+  skipped: { writingChatId: string | null; reason: (typeof PAGE_SAVE_SKIP_REASONS)[number] }[];
+};
 
 // ---------- skills (DM A.4, S-12, F-P1-05) ----------
 
@@ -540,5 +655,5 @@ export type ProjectDetailDto = {
   writingChats: ProjectWritingChatSummary[];
 };
 
-/** S-44: one deliverable + its project name (이동 경로). */
-export type DeliverableDetailDto = { deliverable: DeliverableDto; project: { id: string; name: string } };
+/** S-44: one deliverable + its project name (이동 경로) + its writing chats (v4.5, latest activity first). */
+export type DeliverableDetailDto = { deliverable: DeliverableDto; project: { id: string; name: string }; writingChats: ProjectWritingChatSummary[] };

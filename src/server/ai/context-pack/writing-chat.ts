@@ -20,6 +20,7 @@ import {
 import {
   detectSensitive,
   isDelegationRequest,
+  pendingInForm,
   remainingStarChars,
   type V9Context,
   type V9Message,
@@ -71,14 +72,39 @@ export type WritingChatProjectInput = {
   learnings: string | null;
 };
 
+/**
+ * v4.6 (PA-3, DM 2.5.1 `form_snapshot`): the S-10 form's unsaved values, sent
+ * with every turn request. Never stored or logged; api-engineer validates
+ * lengths (`invalid_form_snapshot`). A key that is absent (undefined) falls back
+ * to the DB value; an explicit null / "" means the user cleared it in the form.
+ */
+export type ProjectFormSnapshot = {
+  name?: string;
+  /** 'YYYY-MM' (or 'YYYY-MM-DD'); null = empty in the form. */
+  start_month?: string | null;
+  end_month?: string | null;
+  is_current?: boolean;
+  project_type?: string | null;
+  experience_type?: string | null;
+  competencies?: readonly string[];
+  star?: Partial<Record<StarField, string | null>>;
+};
+
 export type WritingChatTurnInput = {
   messages: readonly WritingChatMessageRow[];
   /** writing_chats.structured_draft as stored (jsonb, '{}' allowed). */
   structuredDraft: unknown;
   /** writing_chats.last_extracted_sequence. */
   lastExtractedSequence: number;
-  /** writing_chats.project_id, read fresh every turn (the user may edit or apply between turns). */
+  /** writing_chats.project_id, read fresh every turn (DB values; the form snapshot overrides them). */
   project: WritingChatProjectInput;
+  /**
+   * v4.6 (PA-3): the turn request's `form_snapshot`. When present, its values
+   * are "the project's current values" for everything the AI judges (V-9h
+   * set/append, empty-field, classification "empty only", period, C-14 room,
+   * focus slots). Omitted / null (old screen) → DB values.
+   */
+  formSnapshot?: ProjectFormSnapshot | null;
   desiredJobTitle: string | null;
   /** return_target.feature + get_data_readiness() `missing` for that feature (recomputed every turn). */
   gate: { feature: GateFeature; missing: readonly ReadinessMissing[] } | null;
@@ -99,6 +125,10 @@ export type WritingChatTurnInput = {
 
 export type WritingChatContext = {
   input: WritingChatTurnInput;
+  /** DB project with the form snapshot applied — what every judgment uses. */
+  project: WritingChatProjectInput;
+  /** Where the current values came from (log / tests only). */
+  valueSource: "form_snapshot" | "db";
   draft: StructuredDraft;
   v9: V9Context;
   focus: FocusPlan;
@@ -133,6 +163,32 @@ export function projectStar(p: WritingChatProjectInput): Record<StarField, strin
   return { situation: p.situation, task: p.task, action: p.action, result: p.result, learnings: p.learnings };
 }
 
+/**
+ * v4.6 (PA-3): the project as the form shows it now. Snapshot keys win over DB
+ * values; absent keys keep the DB value. Parent / id never come from the form.
+ */
+export function applyFormSnapshot(project: WritingChatProjectInput, snapshot: ProjectFormSnapshot | null | undefined): WritingChatProjectInput {
+  if (!snapshot) return project;
+  const pick = <T,>(v: T | undefined, fallback: T): T => (v === undefined ? fallback : v);
+  const star = snapshot.star ?? {};
+  const name = typeof snapshot.name === "string" && snapshot.name.trim() !== "" ? snapshot.name : project.name;
+  return {
+    ...project,
+    name,
+    startMonth: pick(snapshot.start_month, project.startMonth),
+    endMonth: pick(snapshot.end_month, project.endMonth),
+    isCurrent: pick(snapshot.is_current, project.isCurrent),
+    projectType: pick(snapshot.project_type, project.projectType),
+    experienceType: pick(snapshot.experience_type, project.experienceType),
+    competencies: pick(snapshot.competencies, project.competencies),
+    situation: pick(star.situation, project.situation),
+    task: pick(star.task, project.task),
+    action: pick(star.action, project.action),
+    result: pick(star.result, project.result),
+    learnings: pick(star.learnings, project.learnings),
+  };
+}
+
 export function buildWritingChatContext(input: WritingChatTurnInput): WritingChatContext {
   const draft = parseStructuredDraft(input.structuredDraft);
   const done = [...input.messages].filter((m) => m.status === "done").sort((a, b) => a.sequence - b.sequence);
@@ -147,7 +203,7 @@ export function buildWritingChatContext(input: WritingChatTurnInput): WritingCha
   const pending = done.filter((m) => m.role === "user" && m.sequence > input.lastExtractedSequence);
   const pendingAliases = new Set(pending.map((m) => messageAlias(m.sequence)));
 
-  const p = input.project;
+  const p = applyFormSnapshot(input.project, input.formSnapshot);
   const project: V9Project = {
     star: projectStar(p),
     startMonth: toMonth(p.startMonth),
@@ -182,6 +238,8 @@ export function buildWritingChatContext(input: WritingChatTurnInput): WritingCha
   const latestUser = [...done].reverse().find((m) => m.role === "user");
   return {
     input,
+    project: p,
+    valueSource: input.formSnapshot ? "form_snapshot" : "db",
     draft,
     v9,
     focus,
@@ -222,7 +280,8 @@ function classificationValue(field: (typeof CLASSIFICATION_FIELDS)[number], proj
  */
 export function renderProjectForExtract(ctx: WritingChatContext): string {
   const project = ctx.v9.project;
-  const out = ["<project_state>", `period: ${renderPeriod(project)}`, "classification (참고, 출처 아님):"];
+  const source = ctx.valueSource === "form_snapshot" ? "화면 폼의 현재 값(저장 전 편집 포함)" : "저장된 값";
+  const out = ["<project_state>", `values: ${source}`, `period: ${renderPeriod(project)}`, "classification (참고, 출처 아님):"];
   for (const f of CLASSIFICATION_FIELDS) out.push(`  ${f}: ${classificationValue(f, project)}`);
   out.push("star (프로젝트에 이미 있는 값 — 값이 있는 필드는 append만):");
   for (const f of STAR_FIELDS) {
@@ -249,7 +308,10 @@ export function renderDraftForExtract(ctx: WritingChatContext): string {
   out.push("star:");
   for (const f of STAR_FIELDS) {
     const d = draft.star[f];
-    out.push(isPending(d) ? `  ${f} [${d!.op}/${d!.origin}/${d!.review}]: ${esc(d!.value ?? "").replace(/\n/g, "\n    ")}${src(d!.source_message_ids)}` : `  ${f}: (제안 없음)`);
+    if (!isPending(d)) out.push(`  ${f}: (제안 없음)`);
+    // v4.6: filled into the form already — it is part of <project_state> now.
+    else if (pendingInForm(f, ctx.v9.project, draft)) out.push(`  ${f}: (폼에 채워짐 — <project_state>에 있음)`);
+    else out.push(`  ${f} [${d!.op}/${d!.origin}/${d!.review}]: ${esc(d!.value ?? "").replace(/\n/g, "\n    ")}${src(d!.source_message_ids)}`);
   }
   out.push("classification:");
   for (const f of CLASSIFICATION_FIELDS) {
@@ -269,7 +331,7 @@ export function renderStatusForReply(ctx: WritingChatContext): string {
   const state = (f: StarField) => {
     const onProject = !!project.star[f] && project.star[f]!.trim() !== "";
     const d = draft.star[f];
-    const proposal = isPending(d) ? (d!.review === "needs_review" ? "제안(검토 필요)" : "제안 있음") : null;
+    const proposal = isPending(d) && !pendingInForm(f, project, draft) ? (d!.review === "needs_review" ? "제안(검토 필요)" : "제안 있음") : null;
     if (onProject) return proposal ? `값 있음 + 덧붙임 ${proposal}` : "값 있음";
     return proposal ?? "비어 있음";
   };

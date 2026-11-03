@@ -1,5 +1,5 @@
 import { AppError } from "@/lib/contracts/errors";
-import { parseStructuredDraft, type StructuredDraft } from "@/lib/contracts/writing-chat";
+import { parseDeliverableDraft, parseStructuredDraft, type DeliverableDraft, type StructuredDraft } from "@/lib/contracts/writing-chat";
 import { mapDbError } from "@/server/db/errors";
 import type { Json } from "@/server/db/database.types";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
@@ -47,6 +47,26 @@ export async function applyDraftPatch(supabase: UserSupabaseClient | AiWriterSup
   return parsePatchResult(data);
 }
 
+/** `apply_structured_draft_patch` result of a deliverable chat (DM 2.5.0 shape). */
+export type DeliverablePatchResult = { structuredDraft: DeliverableDraft; rejected: { index: number; op: string; reason: string; fact_index?: number }[] };
+
+export function parseDeliverablePatchResult(data: unknown): DeliverablePatchResult {
+  const obj = (data ?? {}) as { structured_draft?: unknown; rejected?: unknown };
+  try {
+    const rejected = Array.isArray(obj.rejected) ? (obj.rejected as DeliverablePatchResult["rejected"]) : [];
+    return { structuredDraft: parseDeliverableDraft(obj.structured_draft), rejected };
+  } catch (cause) {
+    throw internal(cause);
+  }
+}
+
+/** Deliverable chat patch (AI ops as app_ai_writer; fact / block review ops as the user). */
+export async function applyDeliverableDraftPatch(supabase: UserSupabaseClient | AiWriterSupabaseClient, chatId: string, patch: unknown): Promise<DeliverablePatchResult> {
+  const { data, error } = await supabase.rpc("apply_structured_draft_patch", { p_writing_chat_id: chatId, p_patch: patch as Json });
+  if (error) throw mapDbError(error);
+  return parseDeliverablePatchResult(data);
+}
+
 export function createTurnChatDb(user: UserSupabaseClient, writer: AiWriterSupabaseClient, log?: (event: string, fields: Record<string, string | number | boolean | null>) => void): TurnChatDb {
   return {
     load: (chatId) => loadChatSnapshot(user, chatId),
@@ -90,6 +110,20 @@ export function createTurnChatDb(user: UserSupabaseClient, writer: AiWriterSupab
         });
       }
       return result.structuredDraft;
+    },
+
+    async applyDeliverablePatch(chatId, patch) {
+      const result = await applyDeliverableDraftPatch(writer, chatId, patch);
+      if (result.rejected.length > 0) {
+        // Ops / facts the RPC refused: op names and reasons only (C-7).
+        log?.("writing_chat.patch_rejected", {
+          chatId,
+          count: result.rejected.length,
+          ops: [...new Set(result.rejected.map((r) => r.op))].join(","),
+          reasons: [...new Set(result.rejected.map((r) => r.reason))].join(","),
+        });
+      }
+      return { draft: result.structuredDraft, rejected: result.rejected };
     },
 
     async markExtracted(chatId, sequence) {

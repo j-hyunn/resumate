@@ -1,41 +1,60 @@
 "use server";
 
+import type { z } from "zod";
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import {
   ApplyDraftEditInput,
-  ApplyProposalInput,
+  DeliverableDraftEditInput,
+  DeliverableWritingChatsInput,
   ProjectWritingChatsInput,
   ReviewDraftFieldInput,
+  StartDeliverableWritingChatInput,
   StartWritingChatInput,
   WritingChatIdInput,
-  type ApplyProposalResult,
+  type AnyWritingChatDto,
+  type DeliverableDraftEditResult,
   type DraftEditResult,
   type ProjectWritingChatSummary,
   type StartWritingChatResult,
-  type WritingChatDto,
 } from "@/lib/contracts/writing-chat";
 import { requireConsentedUser } from "@/server/auth/session";
 import * as chats from "@/server/services/writing-chat/chat";
 
 /**
- * AI writing chat Server Actions v4.4 (DM §7 대화 rows, UX S-10 Resumate AI 패널).
+ * AI writing chat Server Actions v4.5 (DM §7 대화 rows, UX S-10 · S-44 Resumate AI 패널).
  * Thin: consent-gated user session → zod → service. Every write is the user's own RPC (RLS);
  * none of these call an AI provider, so none needs a key (PRD 3.3 — only sending a message
- * does, through the turn route). Removed in R4: save / hand-off / affiliation / abandon / resume.
+ * does, through the turn route). Removed in R5: [반영] (`apply_writing_chat_proposal`) — [반영]
+ * fills the form on the screen and "저장하기" records it (actions/career.ts saveProjectPage /
+ * saveProjectDeliverable, DM 3.3 v4.5).
+ *
+ * 새 페이지의 첫 메시지 (DM §7, 화면이 순서대로 부름): ① 이름·제목이 비면 보내지 않음 ②
+ * `getDataReadiness().ai_connection` ③ saveProjectPage / saveProjectDeliverable (행 생성) ④
+ * startWritingChat / startDeliverableWritingChat ⑤ 턴 (`formSnapshot` 포함).
  */
 
 /** 패널 "+ 새 대화" / C-09 게이트 진입: chat on an affiliated project + fixed greeting. */
 export async function startWritingChat(input: unknown): Promise<ActionResult<StartWritingChatResult>> {
   const parsed = StartWritingChatInput.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error);
+  if (!parsed.success) return invalidSnapshotOr(parsed.error);
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return chats.startWritingChat(supabase, parsed.data);
   });
 }
 
-/** Open one chat: messages, proposal card, chips, provider badge / lock. */
-export async function getWritingChat(input: unknown): Promise<ActionResult<WritingChatDto>> {
+/** S-44 패널 "+ 새 대화": chat on a deliverable + fixed greeting (DM §3.3 v4.5). */
+export async function startDeliverableWritingChat(input: unknown): Promise<ActionResult<StartWritingChatResult>> {
+  const parsed = StartDeliverableWritingChatInput.safeParse(input);
+  if (!parsed.success) return invalidSnapshotOr(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.startDeliverableWritingChat(supabase, parsed.data);
+  });
+}
+
+/** Open one chat: messages, proposal card, provider badge / lock (DTO by the chat's target). */
+export async function getWritingChat(input: unknown): Promise<ActionResult<AnyWritingChatDto>> {
   const parsed = WritingChatIdInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
@@ -51,6 +70,26 @@ export async function listProjectWritingChats(input: unknown): Promise<ActionRes
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return chats.listProjectWritingChats(supabase, parsed.data.projectId);
+  });
+}
+
+/** S-44 대화 기록 목록 of one deliverable (latest activity first). */
+export async function listDeliverableWritingChats(input: unknown): Promise<ActionResult<ProjectWritingChatSummary[]>> {
+  const parsed = DeliverableWritingChatsInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.listDeliverableWritingChats(supabase, parsed.data.projectDeliverableId);
+  });
+}
+
+/** S-44 card: fact [수락] / [거절], draft block [수락] / [빼기]. */
+export async function editDeliverableDraft(input: unknown): Promise<ActionResult<DeliverableDraftEditResult>> {
+  const parsed = DeliverableDraftEditInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.editDeliverableDraft(supabase, parsed.data);
   });
 }
 
@@ -84,16 +123,6 @@ export async function rejectDraftField(input: unknown): Promise<ActionResult<Dra
   });
 }
 
-/** [반영] (fields) / [모두 반영] (no fields) → apply_writing_chat_proposal (DM §3.3, no key needed). */
-export async function applyWritingChatProposal(input: unknown): Promise<ActionResult<ApplyProposalResult>> {
-  const parsed = ApplyProposalInput.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error);
-  return runAction(async () => {
-    const { supabase } = await requireConsentedUser();
-    return chats.applyWritingChatProposal(supabase, parsed.data);
-  });
-}
-
 /** C-10 복귀 후 return_target 비우기. */
 export async function clearWritingChatReturnTarget(input: unknown): Promise<ActionResult<{ writingChatId: string }>> {
   const parsed = WritingChatIdInput.safeParse(input);
@@ -113,4 +142,12 @@ export async function deleteWritingChat(input: unknown): Promise<ActionResult<{ 
     const { supabase } = await requireConsentedUser();
     return chats.deleteWritingChat(supabase, parsed.data.writingChatId);
   });
+}
+
+/** A bad `formSnapshot` is its own code (DM 2.5.1 `invalid_form_snapshot`); the rest is `invalid_input`. */
+function invalidSnapshotOr(error: z.ZodError) {
+  if (error.issues.some((i) => i.path[0] === "formSnapshot")) {
+    return { error: { code: "invalid_form_snapshot", message: "작성 중인 내용이 너무 길거나 형식이 맞지 않아요. 글자 수를 확인해 주세요." } } as const;
+  }
+  return invalid(error);
 }

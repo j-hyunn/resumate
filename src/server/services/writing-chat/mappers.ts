@@ -1,18 +1,19 @@
 import { AI_PROVIDERS, CONNECTION_TIERS, MODEL_TIERS, WRITING_CHAT_STATUSES, type AiProvider, type ConnectionTier, type ModelTier, type WritingChatMessageRole, type WritingChatMessageStatus, type WritingChatStatus } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
-import { parseStructuredDraft, ReturnTarget, type WritingChatMessageDto } from "@/lib/contracts/writing-chat";
+import { parseDeliverableDraft, parseStructuredDraft, ReturnTarget, type WritingChatMessageDto } from "@/lib/contracts/writing-chat";
 import type { ChatMessage, ChatSnapshot } from "./types";
 
-/** writing_chats / writing_chat_messages rows ↔ service types (DM §2.5 v4.4). */
+/** writing_chats / writing_chat_messages rows ↔ service types (DM §2.5 v4.5). */
 
 export const CHAT_COLUMNS =
-  "id, user_id, project_id, title, status, structured_draft, message_count, last_extracted_sequence, return_target, last_activity_at, last_applied_at, created_at";
+  "id, user_id, project_id, project_deliverable_id, title, status, structured_draft, message_count, last_extracted_sequence, return_target, last_activity_at, last_applied_at, created_at";
 export const MESSAGE_COLUMNS = "id, sequence, role, content, status, ai_job_id, provider, model, model_tier, connection_tier, created_at";
 
 export type ChatRow = {
   id: string;
   user_id: string;
   project_id: string;
+  project_deliverable_id: string | null;
   title: string | null;
   status: string;
   structured_draft: unknown;
@@ -65,9 +66,13 @@ export function toChatMessage(row: MessageRow): ChatMessage {
 }
 
 export function toChatSnapshot(row: ChatRow, messages: MessageRow[]): ChatSnapshot {
+  // DM 2.5.0: the draft's shape follows the chat's target (deliverable chats: AI-13 shape).
+  const isDeliverable = row.project_deliverable_id !== null && row.project_deliverable_id !== undefined;
   let draft;
+  let deliverableDraft = null;
   try {
-    draft = parseStructuredDraft(row.structured_draft);
+    draft = parseStructuredDraft(isDeliverable ? {} : row.structured_draft);
+    if (isDeliverable) deliverableDraft = parseDeliverableDraft(row.structured_draft);
   } catch (cause) {
     throw new AppError("internal_error", undefined, { status: 500, cause });
   }
@@ -76,9 +81,11 @@ export function toChatSnapshot(row: ChatRow, messages: MessageRow[]): ChatSnapsh
     id: row.id,
     userId: row.user_id,
     projectId: row.project_id,
+    projectDeliverableId: isDeliverable ? row.project_deliverable_id : null,
     title: row.title,
     status: required<WritingChatStatus>(WRITING_CHAT_STATUSES, row.status),
     structuredDraft: draft,
+    deliverableDraft,
     messageCount: row.message_count,
     lastExtractedSequence: row.last_extracted_sequence,
     // soft reference (DM §2.5): an unreadable value is ignored rather than failing the chat.

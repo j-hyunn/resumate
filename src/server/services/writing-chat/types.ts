@@ -1,5 +1,15 @@
 import type { AiErrorCode, AiProvider, ConnectionTier, ModelTier, WritingChatMessageRole, WritingChatMessageStatus, WritingChatStatus } from "@/lib/contracts/enums";
-import type { RequestedSlot, ReturnTarget, StructuredDraft } from "@/lib/contracts/writing-chat";
+import type {
+  DeliverableDraft,
+  DeliverableFormSnapshot,
+  ProjectFormSnapshot,
+  RequestedSlot,
+  ReturnTarget,
+  StructuredDraft,
+} from "@/lib/contracts/writing-chat";
+import type { ComposeStyle, DeliverableRequestedAction } from "@/server/ai/context-pack/deliverable-slots";
+import type { ComposeEvent } from "@/server/ai/pipelines/AI-13";
+import type { ComposeValidation } from "@/server/ai/validation/v10";
 import type { ProjectSlotState } from "@/server/ai/context-pack/focus-slots";
 import type { V9Flags } from "@/server/ai/validation/v9";
 import type { ProviderError } from "@/server/ai/errors";
@@ -29,15 +39,24 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-/** One chat as the turn sees it (read through the user session, RLS). DM 2.5 v4.4: always bound to one affiliated project. */
+/**
+ * One chat as the turn sees it (read through the user session, RLS). DM 2.5 v4.5: bound to one
+ * affiliated project (STAR chat, AI-12) or to one deliverable of a standalone project
+ * (`projectDeliverableId`, AI-13; `projectId` = the parent).
+ */
 export type ChatSnapshot = {
   id: string;
   userId: string;
   projectId: string;
+  /** null = STAR chat. */
+  projectDeliverableId: string | null;
   /** First user message's first 30 chars (DB); null → "새 대화". */
   title: string | null;
   status: WritingChatStatus;
+  /** STAR draft v3 (an empty one for deliverable chats). */
   structuredDraft: StructuredDraft;
+  /** DM 2.5.0 deliverable draft; null for STAR chats. */
+  deliverableDraft: DeliverableDraft | null;
   messageCount: number;
   /** spec-gaps 2026-10-30 ①: user messages with a higher sequence are not extracted yet. */
   lastExtractedSequence: number;
@@ -76,6 +95,11 @@ export interface TurnChatDb {
   finishAssistant(messageId: string, status: "done" | "failed", content: string): Promise<void>;
   /** app_ai_writer RPC `apply_structured_draft_patch` (AI actor). Returns the new structured_draft. */
   applyAiPatch(chatId: string, patch: unknown): Promise<StructuredDraft>;
+  /**
+   * Same RPC for a deliverable chat (DM 2.5.0 ops). Returns the stored draft and the ops the RPC
+   * refused (`rejected`, logged without text). Throws `writing_chat_draft_limit_reached` (409).
+   */
+  applyDeliverablePatch(chatId: string, patch: unknown): Promise<{ draft: DeliverableDraft; rejected: { index: number; op: string; reason: string }[] }>;
   /** app_ai_writer RPC `mark_writing_chat_extracted` (only raises the mark). */
   markExtracted(chatId: string, sequence: number): Promise<void>;
 }
@@ -90,6 +114,14 @@ export type TurnSnapshot = {
   /** Messages the model may see: `status = 'done'` only (failed replies are excluded, AI-12). */
   history: ChatMessage[];
   requestedSlot: RequestedSlot | null;
+  /** Deliverable chats: chip action / draft style (AI-13). Always null on STAR chats. */
+  requestedAction: DeliverableRequestedAction | null;
+  style: ComposeStyle | null;
+  /**
+   * The request's validated form snapshot (S-10 shape on STAR chats, S-44 on deliverable chats).
+   * Lives only in memory for this turn: never stored, never logged (DM 2.5.1).
+   */
+  formSnapshot: ProjectFormSnapshot | DeliverableFormSnapshot | null;
   /** message_count including this reply (begin_assistant_message). */
   messageCountAfterReply: number;
   /** True when this turn's reply is the last that fits the 40-message limit (AI-12: summarize + 저장 안내). */
@@ -143,6 +175,49 @@ export interface WritingChatPipelines {
   turnState(snapshot: TurnSnapshot): Promise<TurnState | null>;
 }
 
+// ---------- AI-13 deliverable chat (ai notes §3.2–3.3) ----------
+
+/** What the AI-13 extract gave the runner (`patch` null = nothing to store). */
+export type DeliverableExtractOutcome = {
+  skipped: boolean;
+  patch: unknown | null;
+  processedThroughSequence: number | null;
+  intent: "compose_draft" | null;
+  style: ComposeStyle | null;
+  /** Sensitive items left out this turn (SSE draft_flags). */
+  sensitiveAdded: number;
+};
+
+/** planDeliverableTurn (the draft-limit refusal happens in prepareTurn, before the message is saved). */
+export type DeliverablePlan = { kind: "question" } | { kind: "compose"; source: "requested_action" | "text" };
+
+/** composeDecision after the facts are stored. `notices` go to the reply (ai `ReplyNotice`). */
+export type DeliverableDecision = { action: "compose"; style: ComposeStyle | null } | { action: "reply"; notices: string[] };
+
+export type DeliverableComposeOutcome = {
+  outcome: "draft" | "empty";
+  patch: unknown;
+  validation: Pick<ComposeValidation, "needsReviewBlockIds">;
+  /** Fixed assistant message (stored as the reply; no reply call on a draft turn). */
+  assistantMessage: string;
+};
+
+export interface DeliverablePipelines {
+  /** Builds this turn's AI-13 context (parent project, skills, sibling titles; snapshot first) and plans it. */
+  plan(snapshot: TurnSnapshot): Promise<DeliverablePlan>;
+  /** AI-13 extract (light tier). Throws AiError / ProviderError. */
+  extract(call: PipelineCall): Promise<DeliverableExtractOutcome>;
+  /**
+   * Rebuilds the context from the stored draft after the facts patch (`stored` null = the extract
+   * failed / was skipped: keep the first context) and decides compose vs reply.
+   */
+  decide(snapshot: TurnSnapshot, after: { stored: DeliverableDraft | null; processedThroughSequence: number | null; extracted: DeliverableExtractOutcome | null }, plan: DeliverablePlan): Promise<DeliverableDecision>;
+  /** AI-13 reply (default tier) on the latest context, with the decision's notices. */
+  reply(call: PipelineCall, notices: readonly string[]): AsyncIterable<TurnReplyEvent>;
+  /** AI-13 compose (default tier): draft_started / draft_block events, then the RPC patch. Throws on failure. */
+  compose(call: PipelineCall, style: ComposeStyle | null): AsyncGenerator<ComposeEvent, DeliverableComposeOutcome, void>;
+}
+
 export type Log = (event: string, fields: Record<string, string | number | boolean | null>) => void;
 
 export type TurnDeps = {
@@ -159,6 +234,8 @@ export type TurnDeps = {
   runGate: ((jobId: string) => Promise<AiErrorCode | null>) | null;
   createLlm: (input: LlmFactoryInput) => Llm;
   pipelines: WritingChatPipelines;
+  /** AI-13 (deliverable chats). */
+  deliverablePipelines: DeliverablePipelines;
   now?: () => Date;
   newId?: () => string;
   /** Waits (C-12 free-tier call spacing). Resolves early when the signal aborts. */
@@ -174,6 +251,8 @@ export type TurnTiming = {
   settleReserveMs: number;
   replyTimeoutMs: Record<ConnectionTier, number>;
   extractTimeoutMs: Record<ConnectionTier, number>;
+  /** AI-13 draft (compose) call. */
+  composeTimeoutMs: Record<ConnectionTier, number>;
   /** A call (or immediate retry) starts only with at least this much time left. */
   minCallMs: number;
   heartbeatMs: number;

@@ -77,6 +77,19 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   project_not_found: { message: "대상 프로젝트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   invalid_return_target: { message: "입력값을 확인해 주세요." },
   invalid_period: { message: "기간을 확인해 주세요. 종료 월이 시작 월보다 빠를 수 없어요." },
+  // R5 (DM v4.5 2.5.1): page save RPCs save_project_page / save_project_deliverable.
+  // detail = field name (→ details.field) / current updated_at (stale_write → details.current_updated_at).
+  not_found: { message: "요청한 항목을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  stale_write: { message: "다른 곳에서 먼저 저장된 내용이 있어요. 새로 불러오거나 내 내용으로 저장해 주세요.", status: 409 },
+  project_name_required: { message: "프로젝트 이름을 입력해 주세요." },
+  project_affiliation_required: { message: "프로젝트를 넣을 경력이나 교육을 하나 골라 주세요." },
+  project_not_affiliated: { message: "독립 프로젝트는 이 화면에서 저장할 수 없어요. 새로고침 후 다시 시도해 주세요." },
+  deliverable_title_required: { message: "산출물 제목을 입력해 주세요." },
+  invalid_classification: { message: "프로젝트 종류·경험 유형·역량을 확인해 주세요. 역량은 3개까지 고를 수 있어요." },
+  // R5 start RPCs / turn request (DM 2.5.1 form_snapshot, 2.5.0 draft limit)
+  invalid_form_snapshot: { message: "작성 중인 내용이 너무 길거나 형식이 맞지 않아요. 글자 수를 확인해 주세요." },
+  project_deliverable_not_found: { message: "산출물을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
+  writing_chat_draft_limit_reached: { message: "이 대화에서는 초안을 6번까지 만들 수 있어요. 새 대화에서 이어 해 주세요.", status: 409 },
   // S5 application projects / JD (db notes "RPC 시그니처")
   application_project_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   job_description_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
@@ -125,17 +138,15 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // apply_structured_draft_patch: user-session rule violations (db notes "거부 사유")
   invalid_patch: { message: "입력값을 확인해 주세요." },
   invalid_value: { message: "입력값을 확인해 주세요." },
-  field_already_filled: { message: "프로젝트에 이미 값이 있는 기간은 제안으로 바꿀 수 없어요.", status: 409 },
   protected_field: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
   invalid_source: { message: "입력값을 확인해 주세요." },
   invalid_review_transition: { message: "이미 검토한 항목이에요. 새로고침 후 확인해 주세요.", status: 409 },
-  classification_already_set: { message: "이미 고른 분류가 있어 추천을 쓸 수 없어요. 프로젝트 머리에서 직접 바꿔 주세요.", status: 409 },
-  field_already_applied: { message: "이미 반영한 항목이에요. 고치려면 왼쪽 섹션에서 수정해 주세요.", status: 409 },
+  field_already_applied: { message: "이미 반영한 항목이에요. 고치려면 폼에서 직접 수정해 주세요.", status: 409 },
   field_not_patchable: { message: "입력값을 확인해 주세요." },
   actor_mismatch: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  // apply_writing_chat_proposal (DM §3.3): detail = comma-separated field names
+  // Page save RPCs (DM 2.5.1): detail = field name(s), comma-separated.
   invalid_fields: { message: "입력값을 확인해 주세요." },
-  field_too_long: { message: "반영하면 2,000자를 넘는 항목이 있어 반영하지 않았어요. 제안이나 왼쪽 내용을 줄인 뒤 다시 반영해 주세요.", status: 409 },
+  field_too_long: { message: "글자 수 상한을 넘는 항목이 있어 저장하지 않았어요. 내용을 줄인 뒤 다시 저장해 주세요." },
   // Server-built arguments (AI turn path): our bug, not the user's input.
   invalid_ai_metadata: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_ai_job: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
@@ -211,12 +222,11 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_deliverable_order: "conflict",
   field_not_patchable: "invalid_input",
   actor_mismatch: "internal_error",
-  invalid_fields: "invalid_input",
   no_pending_user_message: "nothing_to_retry",
   invalid_content: "invalid_input",
   project_not_found: "not_found",
+  project_deliverable_not_found: "not_found",
   invalid_return_target: "invalid_input",
-  invalid_period: "invalid_input",
   invalid_patch: "invalid_input",
   invalid_value: "invalid_input",
   invalid_source: "invalid_input",
@@ -266,6 +276,23 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   answer_not_evaluable: "internal_error",
 };
 
+/** Raises whose `detail` names the offending field(s) (DM 2.5.1 R5-DB-8: comma-separated). */
+const FIELD_DETAIL_RAISES = new Set(["field_too_long", "invalid_period", "invalid_classification", "invalid_fields", "not_found"]);
+
+/** RPC `detail` → response `details` (machine data the screen uses to focus a field / show a conflict). */
+function raiseDetails(message: string, detail: string | null): Record<string, unknown> | undefined {
+  if (!detail) return undefined;
+  // DM 2.7.1: the cause travels in the raise's detail.
+  if (message === "interview_evaluation_input_only") return { cause: detail };
+  // DM 2.5.1: the row's current updated_at (ISO, UTC) — the screen offers "새로 불러오기 / 내 내용으로 저장".
+  if (message === "stale_write") return { current_updated_at: detail };
+  if (FIELD_DETAIL_RAISES.has(message)) {
+    const fields = detail.split(",").map((f) => f.trim()).filter(Boolean);
+    return fields.length > 0 ? { field: fields[0], fields } : undefined;
+  }
+  return undefined;
+}
+
 export function mapDbError(error: DbError): AppError {
   const code = error.code ?? "";
   const message = error.message ?? "";
@@ -274,12 +301,7 @@ export function mapDbError(error: DbError): AppError {
     const known = RAISE_MESSAGES[message]!;
     const appCode = RAISE_CODE_ALIASES[message] ?? message;
     // DM 2.7.1: the cause travels in the raise's detail, and in the response's details.
-    const details =
-      message === "interview_evaluation_input_only" && error.details
-        ? { cause: error.details }
-        : message === "field_too_long" && error.details
-          ? { fields: error.details.split(",").filter(Boolean) }
-          : undefined;
+    const details = raiseDetails(message, error.details ?? null);
     return new AppError(appCode, known.message, { status: known.status, cause: error, details });
   }
   if (code === "42501" && message === "not_authenticated") return new AppError("unauthenticated", undefined, { cause: error });

@@ -49,10 +49,16 @@ import {
  * | V-9e | ≤ 40% of the value's content words are missing from the quotes | needs_review |
  * | V-9f | `action` whose subject is the team | actor_ambiguous (+ situation candidate) |
  * | V-9g | sensitive information | reject + sensitive count |
- * | V-9h | STAR field filled on the project → `append` only; period only when the project column is empty | reject (RPC enforces too) |
+ * | V-9h | STAR field filled on the project → `append` only; period only when the project column is empty | reject (RPC only downgrades set → append, v4.5) |
  * | V-9i | classification: key list, ≤ 3 distinct competencies, target empty, user sources, situation + action present | drop (classification is not a claim) |
  *
  * Plus C-14: ≤ 10 patches per turn, merged STAR value ≤ 2,000 chars.
+ *
+ * v4.6 (PA-3): "the project" is the form as the user sees it (`form_snapshot`
+ * applied by buildWritingChatContext, else DB values). A pending proposal whose
+ * text is already in the form (filled, not saved) is treated as part of the
+ * current value: the next STAR patch for that field is an `append` with
+ * `new_object: true` (DM 2.5 DA-10), and it no longer counts toward C-14 twice.
  * Pure functions only. Results carry counts and field paths, never text (C-7).
  */
 
@@ -121,7 +127,7 @@ export type V9Message = {
   content: string;
 };
 
-/** The chat's project as it is now (re-read every turn; the user may edit or apply in between). */
+/** The chat's project as it is now: v4.6 = the form snapshot over DB values (re-read every turn). */
 export type V9Project = {
   star: Readonly<Record<StarField, string | null>>;
   startMonth: string | null;
@@ -452,13 +458,31 @@ function clarKey(c: Clarification): string {
   return `${c.kind}|${c.field ?? ""}`;
 }
 
+/** Normalized containment (V-9b normalization): `needle` is inside `haystack`. */
+export function containsNormalized(haystack: string | null | undefined, needle: string | null | undefined): boolean {
+  if (!haystack || !needle) return false;
+  const n = norm(needle);
+  return n.length > 0 && norm(haystack).includes(n);
+}
+
+/**
+ * v4.6 (PA-3, DM 2.5 DA-10): the pending (unsaved-as-applied) proposal of this
+ * STAR field is already in the form value — the user filled it ([반영]) but has
+ * not saved. Then the form value already carries it.
+ */
+export function pendingInForm(field: StarField, project: V9Project, draft: StructuredDraft): boolean {
+  const d = draft.star[field];
+  return isPending(d) && containsNormalized(project.star[field], d!.value);
+}
+
 /**
  * Length the STAR field would have if the project's current value and the
- * pending proposal were both applied (DM 3.3 merge: current + separator + proposal).
+ * pending proposal were both filled (AI-12 채우기 규칙: current + separator + proposal).
+ * A proposal already in the form is not counted twice.
  */
 export function mergedStarLength(field: StarField, project: V9Project, draft: StructuredDraft): number {
   const current = (project.star[field] ?? "").trim().length;
-  const pending = isPending(draft.star[field]) ? (draft.star[field]!.value ?? "").length : 0;
+  const pending = isPending(draft.star[field]) && !pendingInForm(field, project, draft) ? (draft.star[field]!.value ?? "").length : 0;
   return current + (current > 0 && pending > 0 ? APPEND_SEPARATOR_LENGTH : 0) + pending;
 }
 
@@ -535,14 +559,26 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
   const projectedOf = (field: StarField) => projected.get(field) ?? mergedStarLength(field, ctx.project, ctx.draft);
   const putStar = (field: StarField, op: StarOp, value: string, claim: ClaimOk, path: string): boolean => {
     const draftField = ctx.draft.star[field];
-    // V-9h: a filled project field takes appends only.
+    // V-9h: a filled project (form) field takes appends only.
     if (projectHas(field) && op === "set") {
       reject("V-9h", path);
       return false;
     }
+    // v4.6: the pending object is already in the form → this patch starts a new object (DA-10).
+    const newObject = !touched.has(field) && pendingInForm(field, ctx.project, ctx.draft);
     // Append onto nothing = set (RPC does the same).
     const effective: StarOp = op === "append" && !projectHas(field) && !isPending(draftField) && !touched.has(field) ? "set" : op;
     if (effective === "set" && !touched.has(field) && isPending(draftField) && draftField!.value === value) {
+      report.unchanged++;
+      return false;
+    }
+    // The sentence is already in the form value (or in the pending proposal being appended to): nothing new.
+    if (
+      effective === "append" &&
+      (containsNormalized(ctx.project.star[field], value) ||
+        (!newObject && isPending(draftField) && containsNormalized(draftField!.value, value)) ||
+        containsNormalized(touched.get(field)?.value, value))
+    ) {
       report.unchanged++;
       return false;
     }
@@ -554,7 +590,15 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       return false;
     }
     projected.set(field, after);
-    const change: StarChange = { field, op: effective, value, source_message_ids: claim.sourceIds, source_quotes: claim.quotes, review: claim.review };
+    const change: StarChange = {
+      field,
+      op: effective,
+      value,
+      source_message_ids: claim.sourceIds,
+      source_quotes: claim.quotes,
+      review: claim.review,
+      ...(newObject ? { new_object: true } : {}),
+    };
     changes.star.push(change);
     touched.set(field, change);
     return true;
@@ -567,7 +611,8 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       reject("limit", path);
       continue;
     }
-    if (isProtected(ctx.draft.star[s.field])) {
+    // A user-owned proposal is protected until it is in the form (then the form value carries it).
+    if (isProtected(ctx.draft.star[s.field]) && !pendingInForm(s.field, ctx.project, ctx.draft)) {
       reject("protected", path);
       continue;
     }

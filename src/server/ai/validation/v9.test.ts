@@ -313,7 +313,7 @@ describe("validateExtractOutput — period and STAR", () => {
   });
 
   it("append onto an empty project and an empty proposal becomes set; a second append stays append", () => {
-    const r = run(output({ star_patches: [star("situation", SITUATION.value, SITUATION.source_quotes, "append"), star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }));
+    const r = run(output({ star_patches: [star("situation", SITUATION.value, SITUATION.source_quotes, "append"), star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }));
     expect(r.changes.star.map((s) => s.op)).toEqual(["set", "append"]);
   });
 
@@ -322,8 +322,13 @@ describe("validateExtractOutput — period and STAR", () => {
     const r = run(output({ star_patches: [SITUATION, star("action", ACTION.value, ACTION.source_quotes, "append")] }), ctxFor({ structuredDraft: draft }));
     expect(r.report.unchanged).toBe(1);
     expect(r.changes.star.map((s) => `${s.field}:${s.op}`)).toEqual(["action:set"]);
-    const appended = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctxFor({ structuredDraft: draft }));
+    const appended = run(output({ star_patches: [star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctxFor({ structuredDraft: draft }));
     expect(appended.changes.star.map((s) => s.op)).toEqual(["append"]);
+    expect(appended.changes.star[0].new_object).toBeUndefined();
+    // v4.6: an append whose sentence is already in the pending proposal adds nothing.
+    const repeated = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctxFor({ structuredDraft: draft }));
+    expect(repeated.changes.star).toEqual([]);
+    expect(repeated.report.unchanged).toBe(1);
   });
 
   it.each([
@@ -360,7 +365,10 @@ describe("validateExtractOutput — period and STAR", () => {
   });
 
   it("C-14 limit: patches beyond 10 per turn are rejected", () => {
-    const many = Array.from({ length: MAX_PATCHES_PER_TURN + 2 }, () => star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append"));
+    // Alternating sentences: a sentence already in the previous patch would be a no-op (v4.6 dedupe).
+    const many = Array.from({ length: MAX_PATCHES_PER_TURN + 2 }, (_, i) =>
+      i % 2 === 0 ? star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append") : star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append"),
+    );
     const r = run(output({ star_patches: many }));
     expect(r.rejections.filter((x) => x.check === "limit")).toHaveLength(2);
     expect(r.changes.star).toHaveLength(MAX_PATCHES_PER_TURN);

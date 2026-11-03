@@ -1,19 +1,20 @@
 /**
- * Resumate AI 패널 data layer v4.4 (S-10, DM §2.5 / §3.3 / §7; AI-12 v4.5). Server only.
+ * Resumate AI 패널 data layer v4.4 → v4.5 (S-10, DM §2.5 / §3.3 / §7; AI-12 v4.6). Server only.
+ * R5: [반영] no longer calls the server (`applyProposal` removed with `apply_writing_chat_proposal`);
+ * "저장하기" records it — see `./page-save-v45` (연결 대기).
  * 연결 대기: the reworked S-10 panel imports these; the current S-36 screen still uses `./writing-chats`
  * (v4.3b shims). The turn itself streams from `POST /api/writing-chats/{id}/turns` (SSE events in
  * `src/lib/contracts/writing-chat.ts`); `turnRequest` gives the screen that endpoint and body.
  */
 import "server-only"
 import type { z } from "zod"
-import { invalid } from "@/lib/contracts/errors"
+import { AppError, invalid as invalidResult } from "@/lib/contracts/errors"
 import {
   ApplyDraftEditInput,
-  ApplyProposalInput,
   ReviewDraftFieldInput,
   StartWritingChatInput,
   WritingChatTurnInput,
-  type ApplyProposalResult,
+  type AnyWritingChatDto,
   type DraftEditResult,
   type ProjectWritingChatSummary,
   type WritingChatDto,
@@ -24,7 +25,7 @@ import { unwrap } from "./source"
 
 function parseInput<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
   const parsed = schema.safeParse(input)
-  if (!parsed.success) unwrap(invalid(parsed.error))
+  if (!parsed.success) unwrap(invalidResult(parsed.error))
   return parsed.data as z.output<S>
 }
 
@@ -34,17 +35,22 @@ export async function listProjectChats(projectId: string): Promise<ProjectWritin
   return chats.listProjectWritingChats(supabase, projectId)
 }
 
-/** Open one chat (messages, proposal card, chips, lock). */
+/** Open one STAR chat (messages, proposal card, lock). A deliverable chat id → not_found (S-44 uses `./page-save-v45`). */
 export async function getProjectChat(chatId: string): Promise<WritingChatDto> {
   const { supabase, user } = await requireConsentedUser()
-  return chats.getWritingChat(supabase, user.id, chatId)
+  return asProjectChat(await chats.getWritingChat(supabase, user.id, chatId))
+}
+
+function asProjectChat(dto: AnyWritingChatDto): WritingChatDto {
+  if (dto.target !== "project") throw new AppError("not_found", "요청한 대화를 찾을 수 없습니다.")
+  return dto
 }
 
 /** "+ 새 대화" / C-09 gate entry. Returns the opened chat. */
 export async function startProjectChat(input: z.input<typeof StartWritingChatInput>): Promise<WritingChatDto> {
   const { supabase, user } = await requireConsentedUser()
   const { writingChatId } = await chats.startWritingChat(supabase, parseInput(StartWritingChatInput, input))
-  return chats.getWritingChat(supabase, user.id, writingChatId)
+  return asProjectChat(await chats.getWritingChat(supabase, user.id, writingChatId))
 }
 
 /** Proposal card direct edit. */
@@ -57,12 +63,6 @@ export async function editProposalField(input: z.input<typeof ApplyDraftEditInpu
 export async function reviewProposalField(input: z.input<typeof ReviewDraftFieldInput>, decision: "accept" | "reject"): Promise<DraftEditResult> {
   const { supabase } = await requireConsentedUser()
   return chats.reviewDraftField(supabase, parseInput(ReviewDraftFieldInput, input), decision === "reject" ? "reject" : "accept")
-}
-
-/** [반영] / [모두 반영] (no key needed). */
-export async function applyProposal(input: z.input<typeof ApplyProposalInput>): Promise<ApplyProposalResult> {
-  const { supabase } = await requireConsentedUser()
-  return chats.applyWritingChatProposal(supabase, parseInput(ApplyProposalInput, input))
 }
 
 /** 패널 ⋯ "이 대화 삭제". */

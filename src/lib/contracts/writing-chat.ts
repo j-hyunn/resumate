@@ -5,11 +5,18 @@ import {
   parseStructuredDraft as parseStoredDraft,
   type StructuredDraft as StructuredDraftType,
 } from "@/server/ai/schemas/structured-draft";
+import {
+  DeliverableClarificationSchema,
+  DeliverableDraftSchema,
+  StoredBlockSchema,
+  StoredDraftBodySchema,
+  parseDeliverableDraft as parseStoredDeliverableDraft,
+  type DeliverableDraft as DeliverableDraftType,
+} from "@/server/ai/schemas/deliverable-draft";
+import { COMPOSE_STYLES, DELIVERABLE_REQUESTED_ACTIONS, DELIVERABLE_SLOTS, WRITING_KINDS } from "@/server/ai/context-pack/deliverable-slots";
 import { AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
 import {
   APPLY_PROPOSAL_FIELDS,
-  APPLY_PROPOSAL_SKIP_REASONS,
-  CAREER_STATUSES,
   CLASSIFICATION_FIELDS,
   COMPETENCIES,
   DRAFT_PERIOD_FIELDS,
@@ -26,16 +33,22 @@ import {
 } from "./enums";
 
 /**
- * AI writing chat contracts v4.4 (F-P1-13, AI-12 v4.5, DM §2.5 / §3.3 / §7, UX S-10 Resumate AI 패널).
+ * AI writing chat contracts v4.5 (F-P1-13·F-P1-18, AI-12 v4.6 / AI-13, DM §2.5 / 2.5.0 / 2.5.1 / §3.3 / §7,
+ * UX S-10 · S-44 Resumate AI 패널).
  *
- * - Every chat belongs to one affiliated project; a project has many chats (CR-5·CR-6).
+ * - A chat belongs to one affiliated project (STAR chat, AI-12) or to one deliverable of a standalone
+ *   project (deliverable chat, AI-13, `projectDeliverableId`). [반영] only fills the form; the page
+ *   save RPC records "반영됨" (DM 3.3 v4.5 — `apply_writing_chat_proposal` is gone).
+ * - `form_snapshot` (turn / start request): the form's unsaved values. Validated here, passed to the
+ *   AI input, never stored or logged (DM 2.5.1).
  * - Action inputs / DTOs are camelCase. `structuredDraft` keeps the DB jsonb v3 shape
  *   (snake_case, DM §2.5) — the documented storage format the panel renders field by field.
  *   The schema is the one the AI pipeline parses (`src/server/ai/schemas/structured-draft.ts`).
  * - SSE turn events (`POST /api/writing-chats/{id}/turns`, DM §7): `turn_started` →
  *   `reply_delta`* → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`, or `error`
  *   (exactly one terminal). `draft_patch` / `draft_flags` are skipped when the extract call
- *   failed or changed nothing.
+ *   failed or changed nothing. Deliverable chats stream `DeliverableTurnEvent`s instead (AI-13).
+ * - Quick chips are computed by the screen (R-PA-5): no `chips` in DTOs or `turn_done`.
  */
 
 /** DM §2.5 (R1 A5): user + assistant messages per chat, the greeting excluded. */
@@ -61,6 +74,73 @@ export type DraftClarification = z.infer<typeof ClarificationSchema>;
 export function parseStructuredDraft(value: unknown): StructuredDraft {
   return parseStoredDraft(value);
 }
+
+// ---------- deliverable chat structured_draft (DM 2.5.0, AI-13) ----------
+
+export const DeliverableDraft = DeliverableDraftSchema;
+export type DeliverableDraft = DeliverableDraftType;
+export const DeliverableDraftBody = StoredDraftBodySchema;
+export const DeliverableDraftBlock = StoredBlockSchema;
+
+/** Parses the stored jsonb of a deliverable chat. Throws on a malformed value (server bug). */
+export function parseDeliverableDraft(value: unknown): DeliverableDraft {
+  return parseStoredDeliverableDraft(value);
+}
+
+/** AI-13 slot keys (`requested_slot` of a deliverable chat). */
+export const DeliverableSlotSchema = z.enum(DELIVERABLE_SLOTS);
+export const WritingKindSchema = z.enum(WRITING_KINDS);
+/** AI-13 chips: "지금까지 내용으로 초안 만들기" / "프로젝트 내용을 바탕으로" (R5-AI-2). */
+export const DeliverableRequestedActionSchema = z.enum(DELIVERABLE_REQUESTED_ACTIONS);
+export const ComposeStyleSchema = z.enum(COMPOSE_STYLES);
+
+// ---------- form snapshot (DM 2.5.1, AI DA-15 — never stored, never logged) ----------
+
+/** Characters counted like the DB (`char_length` = code points), not UTF-16 units (QA-R5-07). */
+export function codePointLength(s: string): number {
+  return Array.from(s).length;
+}
+const maxChars = (max: number) => z.string().refine((s) => codePointLength(s) <= max, { message: `max_${max}_chars` });
+
+const YEAR_MONTH_OR_DATE_RE = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])(-\d{2})?$/;
+const snapshotStar = maxChars(2000).nullable();
+
+/**
+ * S-10 form snapshot: `{name, start_month, end_month, is_current, project_type, experience_type,
+ * competencies, star: {situation, task, action, result, learnings}}`. A missing key = use the DB value;
+ * null / "" = cleared in the form. Lengths = DB limits (name 100, STAR 2,000), else `invalid_form_snapshot`.
+ * Unknown keys are dropped (only these reach the AI input).
+ */
+export const ProjectFormSnapshotSchema = z.object({
+  name: maxChars(100).optional(),
+  start_month: z.string().regex(YEAR_MONTH_OR_DATE_RE).nullable().optional(),
+  end_month: z.string().regex(YEAR_MONTH_OR_DATE_RE).nullable().optional(),
+  is_current: z.boolean().optional(),
+  project_type: z.enum(PROJECT_TYPES).nullable().optional(),
+  experience_type: z.enum(EXPERIENCE_TYPES).nullable().optional(),
+  competencies: z
+    .array(z.enum(COMPETENCIES))
+    .max(MAX_COMPETENCIES)
+    .refine((v) => new Set(v).size === v.length, { message: "duplicate_competency" })
+    .optional(),
+  star: z
+    .object({
+      situation: snapshotStar.optional(),
+      task: snapshotStar.optional(),
+      action: snapshotStar.optional(),
+      result: snapshotStar.optional(),
+      learnings: snapshotStar.optional(),
+    })
+    .optional(),
+});
+export type ProjectFormSnapshot = z.output<typeof ProjectFormSnapshotSchema>;
+
+/** S-44 form snapshot `{title, body}` (title 100, body 20,000). */
+export const DeliverableFormSnapshotSchema = z.object({
+  title: maxChars(100).optional(),
+  body: maxChars(20000).optional(),
+});
+export type DeliverableFormSnapshot = z.output<typeof DeliverableFormSnapshotSchema>;
 
 /** Address of one field object in structured_draft (also the SSE `FieldRef`). */
 export const DraftFieldPath = z.discriminatedUnion("section", [
@@ -93,12 +173,26 @@ export const ReturnTargetInput = z.object({
 
 // ---------- action inputs ----------
 
-/** 패널 "+ 새 대화" / C-09 게이트 진입 (DM §3.3): affiliated projects only (DB refuses standalone). */
+/**
+ * 패널 "+ 새 대화" / C-09 게이트 진입 (DM §3.3): affiliated projects only (DB refuses standalone).
+ * `formSnapshot` only picks the greeting (DB never stores it).
+ */
 export const StartWritingChatInput = z.object({
   projectId: uuid,
   returnTarget: ReturnTargetInput.optional(),
+  formSnapshot: ProjectFormSnapshotSchema.optional(),
 });
 export type StartWritingChatInput = z.input<typeof StartWritingChatInput>;
+
+/** S-44 패널 "+ 새 대화" → `start_deliverable_writing_chat` (DM §3.3 v4.5). */
+export const StartDeliverableWritingChatInput = z.object({
+  projectDeliverableId: uuid,
+  formSnapshot: DeliverableFormSnapshotSchema.optional(),
+});
+export type StartDeliverableWritingChatInput = z.input<typeof StartDeliverableWritingChatInput>;
+
+export const DeliverableWritingChatsInput = z.object({ projectDeliverableId: uuid });
+export type DeliverableWritingChatsInput = z.input<typeof DeliverableWritingChatsInput>;
 
 export const WritingChatIdInput = z.object({ writingChatId: uuid });
 export type WritingChatIdInput = z.input<typeof WritingChatIdInput>;
@@ -135,46 +229,55 @@ export const ApplyDraftEditInput = z
   });
 export type ApplyDraftEditInput = z.input<typeof ApplyDraftEditInput>;
 
+/**
+ * Deliverable card edit (DM 2.5.0 user ops): fact [수락] / [거절], draft block [수락] / [빼기].
+ * Ids are the stored fact / block ids (`facts[].id`, `deliverable.body.blocks[].block_id`).
+ */
+export const DeliverableDraftEditInput = z.discriminatedUnion("op", [
+  z.object({ writingChatId: uuid, op: z.literal("accept_fact"), factId: z.string().min(1).max(64) }),
+  z.object({ writingChatId: uuid, op: z.literal("reject_fact"), factId: z.string().min(1).max(64) }),
+  z.object({ writingChatId: uuid, op: z.literal("accept_block"), blockId: z.string().min(1).max(50) }),
+  z.object({ writingChatId: uuid, op: z.literal("remove_block"), blockId: z.string().min(1).max(50) }),
+]);
+export type DeliverableDraftEditInput = z.input<typeof DeliverableDraftEditInput>;
+
 /** `needs_review` → accepted / rejected (value null, review ok, reviewed_at). */
 export const ReviewDraftFieldInput = z.object({ writingChatId: uuid, path: DraftFieldPath });
 export type ReviewDraftFieldInput = z.input<typeof ReviewDraftFieldInput>;
 
-/** [반영] (one field) / [모두 반영] (`fields` omitted) → apply_writing_chat_proposal (DM §3.3). */
-export const ApplyProposalInput = z.object({
-  writingChatId: uuid,
-  fields: z
-    .array(z.enum(APPLY_PROPOSAL_FIELDS))
-    .min(1)
-    .refine((v) => new Set(v).size === v.length, { message: "duplicate_field" })
-    .optional(),
-});
-export type ApplyProposalInput = z.input<typeof ApplyProposalInput>;
-
-/** RPC `apply_writing_chat_proposal` jsonb (DM §3.3). */
-export const ApplyProposalRpcResult = z.object({
-  applied: z.array(z.enum(APPLY_PROPOSAL_FIELDS)),
-  skipped: z.array(z.object({ field: z.enum(APPLY_PROPOSAL_FIELDS), reason: z.enum(APPLY_PROPOSAL_SKIP_REASONS) })),
-  project_status: z.enum(CAREER_STATUSES),
-});
-export type ApplyProposalRpcResult = z.infer<typeof ApplyProposalRpcResult>;
-
 // ---------- turn request ----------
 
-/** Quick chip / "AI에게 물어보기": this slot goes first in focus_slots (AI-12 v4.5). */
-export const RequestedSlot = z.object({ slot: z.enum(WRITING_CHAT_SLOTS) });
+/**
+ * Quick chip / "AI에게 물어보기": this slot goes first in focus_slots. STAR chats take AI-12 slots
+ * (`period` … `learnings`), deliverable chats AI-13 slots; the turn service checks the slot against
+ * the chat's target (`invalid_input`).
+ */
+export const RequestedSlot = z.object({ slot: z.union([z.enum(WRITING_CHAT_SLOTS), DeliverableSlotSchema]) });
 export type RequestedSlot = z.infer<typeof RequestedSlot>;
+
+/** Fields shared by a new message and "다시 보내기" (AI-13 options are refused on STAR chats). */
+const turnOptions = {
+  requestedSlot: RequestedSlot.nullable().default(null),
+  /** Deliverable chats only: chip action (`compose_draft` at draft_count 6 → 409 before the message is saved). */
+  requestedAction: DeliverableRequestedActionSchema.nullable().default(null),
+  /** Deliverable chats only: draft style chip. */
+  style: ComposeStyleSchema.nullable().default(null),
+  /**
+   * The page form's unsaved values (S-10 / S-44 shape by the chat's target). Validated by the turn
+   * service once the target is known → `invalid_form_snapshot` (400). Never stored or logged.
+   */
+  formSnapshot: z.unknown().optional(),
+};
 
 /** `POST /api/writing-chats/{id}/turns` body (JSON). `?retry=1` = "다시 보내기" (no body content). */
 export const WritingChatTurnInput = z.object({
   content: z.string().trim().min(1).max(WRITING_CHAT_MESSAGE_MAX_CHARS),
-  requestedSlot: RequestedSlot.nullable().default(null),
+  ...turnOptions,
 });
 export type WritingChatTurnInput = z.input<typeof WritingChatTurnInput>;
 
 /** `?retry=1` body (optional). */
-export const WritingChatRetryInput = z.object({
-  requestedSlot: RequestedSlot.nullable().default(null),
-});
+export const WritingChatRetryInput = z.object({ ...turnOptions });
 
 // ---------- DTOs ----------
 
@@ -214,6 +317,8 @@ export type QuickChip = z.infer<typeof QuickChip>;
 export const WritingChatDto = z.object({
   id: uuid,
   projectId: uuid,
+  /** Always `project` here: a deliverable chat opens as `DeliverableWritingChatDto`. */
+  target: z.literal("project"),
   /** First user message's first 30 chars (DB); null → "새 대화". */
   title: z.string().nullable(),
   status: z.enum(WRITING_CHAT_STATUSES),
@@ -230,16 +335,48 @@ export const WritingChatDto = z.object({
   createdAt: isoDateTime,
   messages: z.array(WritingChatMessageDto),
   connection: WritingChatConnection,
-  /** Quick chips for the current state (hidden from QUICK_CHIPS_HIDE_FROM messages on). */
-  chips: z.array(QuickChip),
   /** "검토가 필요한 항목 N개" (pending needs_review fields). */
   needsReviewCount: z.number().int().nonnegative(),
-  /** Pending proposal fields [모두 반영] would write now (review ok / accepted, not applied). */
+  /** Pending proposal fields [모두 반영] would fill now (review ok / accepted, not applied). */
   applicableFields: z.array(z.enum(APPLY_PROPOSAL_FIELDS)),
   /** True when the chat accepts new messages (active, under the limit, no lock, no reply running). */
   canSend: z.boolean(),
 });
 export type WritingChatDto = z.infer<typeof WritingChatDto>;
+
+/** AI-13 drafts per chat (DM 2.5.0 `draft_count` ≤ 6 [가정]). */
+export const DELIVERABLE_DRAFT_LIMIT = 6;
+
+/** One deliverable chat for the S-44 panel. Chips are the screen's (`deliverableChips`, R-PA-5). */
+export const DeliverableWritingChatDto = z.object({
+  id: uuid,
+  target: z.literal("project_deliverable"),
+  /** The deliverable's parent standalone project. */
+  projectId: uuid,
+  projectDeliverableId: uuid,
+  title: z.string().nullable(),
+  status: z.enum(WRITING_CHAT_STATUSES),
+  structuredDraft: DeliverableDraftSchema,
+  /** structured_draft.draft_count; the screen shows 6 − draftCount. */
+  draftCount: z.number().int().nonnegative(),
+  draftLimit: z.literal(DELIVERABLE_DRAFT_LIMIT),
+  messageCount: z.number().int(),
+  messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
+  remainingMessages: z.number().int().nonnegative(),
+  limitReached: z.boolean(),
+  lastActivityAt: isoDateTime,
+  lastAppliedAt: isoDateTime.nullable(),
+  createdAt: isoDateTime,
+  messages: z.array(WritingChatMessageDto),
+  connection: WritingChatConnection,
+  /** Facts still needs_review ("검토가 필요한 항목 N개"). */
+  needsReviewCount: z.number().int().nonnegative(),
+  canSend: z.boolean(),
+});
+export type DeliverableWritingChatDto = z.infer<typeof DeliverableWritingChatDto>;
+
+/** Either panel's opened chat (`getWritingChat` answers by the chat's target). */
+export type AnyWritingChatDto = WritingChatDto | DeliverableWritingChatDto;
 
 /** S-10 패널 대화 기록 목록 (DM §7: id, title, status, message_count, last_activity_at, last_applied_at). */
 export const ProjectWritingChatSummary = z.object({
@@ -263,13 +400,8 @@ export type StartWritingChatResult = z.infer<typeof StartWritingChatResult>;
 /** Preview edit / review result: the new draft and what changed for the panel. */
 export type DraftEditResult = { structuredDraft: StructuredDraft; needsReviewCount: number; applicableFields: (typeof APPLY_PROPOSAL_FIELDS)[number][] };
 
-/** [반영] result: the RPC's answer + the project's new STAR / period / classification for the left side. */
-export type ApplyProposalResult = {
-  applied: ApplyProposalRpcResult["applied"];
-  skipped: ApplyProposalRpcResult["skipped"];
-  projectStatus: ApplyProposalRpcResult["project_status"];
-  structuredDraft: StructuredDraft;
-};
+/** Deliverable card edit (fact accept / reject, block accept / remove) result. */
+export type DeliverableDraftEditResult = { structuredDraft: DeliverableDraft; needsReviewCount: number };
 
 // ---------- SSE turn events (DM §7 대화 턴, AI-12 응답 모드) ----------
 
@@ -323,8 +455,6 @@ export const TurnDoneEvent = z.object({
   closed: z.boolean(),
   /** `updated` (draft_patch sent), `unchanged`, `failed` (extract failed; retried next turn, AI-12). */
   draftStatus: z.enum(["updated", "unchanged", "failed"]),
-  /** Quick chips from the RPC's new draft (AI-12). Empty from QUICK_CHIPS_HIDE_FROM messages on. */
-  chips: z.array(QuickChip),
   /** Gate chat whose feature is ready now (D-01 met) → C-10 "돌아가기". */
   readyToReturn: z.boolean(),
   needsReviewCount: z.number().int().nonnegative(),
@@ -352,3 +482,97 @@ export const WRITING_CHAT_TURN_EVENT_TYPES = [
   "error",
 ] as const satisfies readonly WritingChatTurnEventType[];
 export const WRITING_CHAT_TURN_TERMINAL_EVENTS = ["turn_done", "error"] as const satisfies readonly WritingChatTurnEventType[];
+
+// ---------- SSE turn events of a deliverable chat (AI-13, DM §7 v4.5) ----------
+//
+// Question turn: turn_started → reply_delta* → reply_done → facts_patch → draft_flags → turn_done.
+// Draft turn:    turn_started → facts_patch → draft_flags → draft_started → draft_block* → draft_done →
+//                reply_done (fixed message) → turn_done. No content block left: no draft_done.
+//                Not possible (too few facts / limit / unconfirmed request): reply_delta* → reply_done.
+// Exactly one terminal: turn_done or error.
+
+/** The facts patch the RPC stored (authoritative deliverable draft, fact ids are UUIDs). */
+export const FactsPatchEvent = z.object({
+  type: z.literal("facts_patch"),
+  structuredDraft: DeliverableDraftSchema,
+  /** Fact ids added this turn (card highlight). */
+  added: z.array(z.string()),
+});
+/** AI-13 flags (ids / booleans / counts only — `deliverableDraftFlags`). */
+export const DeliverableDraftFlagsEvent = z.object({
+  type: z.literal("draft_flags"),
+  /** Fact ids still needs_review. */
+  needsReview: z.array(z.string()),
+  actorAmbiguous: z.boolean(),
+  numberVague: z.boolean(),
+  sensitiveAdded: z.number().int().nonnegative(),
+  sensitiveFlagsCount: z.number().int().nonnegative(),
+  clarifications: z.array(DeliverableClarificationSchema),
+});
+/** A compose call starts. attempt 2 = schema retry / V-10 regeneration: drop the blocks of attempt 1. */
+export const DraftStartedEvent = z.object({
+  type: z.literal("draft_started"),
+  attempt: z.number().int().positive(),
+  reason: z.enum(["initial", "schema_retry", "regenerate"]),
+});
+/** One block that passed V-10a–g (provisional — `draft_done.body` is authoritative). */
+export const DraftBlockEvent = z.object({
+  type: z.literal("draft_block"),
+  attempt: z.number().int().positive(),
+  block: StoredBlockSchema,
+});
+/** The stored draft (RPC answer) + the full V-10 result. */
+export const DraftDoneEvent = z.object({
+  type: z.literal("draft_done"),
+  body: StoredDraftBodySchema,
+  rev: z.number().int().positive(),
+  draftCount: z.number().int().nonnegative(),
+  droppedBlockCount: z.number().int().nonnegative(),
+  needsReviewBlockIds: z.array(z.string()),
+  missingSlots: z.array(z.string()),
+  replaceAllowed: z.boolean(),
+});
+export const DeliverableTurnDoneEvent = z.object({
+  type: z.literal("turn_done"),
+  jobId: uuid,
+  messageCount: z.number().int(),
+  remainingMessages: z.number().int().nonnegative(),
+  limitReached: z.boolean(),
+  closed: z.boolean(),
+  /** `updated` (facts or draft stored), `unchanged`, `failed` (extract / draft failed). */
+  draftStatus: z.enum(["updated", "unchanged", "failed"]),
+  /** structured_draft.draft_count after this turn (R-PA-15). */
+  draftCount: z.number().int().nonnegative(),
+  /** Deliverable chats have no return target. */
+  readyToReturn: z.literal(false),
+  needsReviewCount: z.number().int().nonnegative(),
+});
+
+export const DeliverableTurnEventSchema = z.discriminatedUnion("type", [
+  TurnStartedEvent,
+  ReplyDeltaEvent,
+  ReplyDoneEvent,
+  FactsPatchEvent,
+  DeliverableDraftFlagsEvent,
+  DraftStartedEvent,
+  DraftBlockEvent,
+  DraftDoneEvent,
+  DeliverableTurnDoneEvent,
+  ErrorEvent,
+]);
+export type DeliverableTurnEvent = z.infer<typeof DeliverableTurnEventSchema>;
+export const DELIVERABLE_TURN_EVENT_TYPES = [
+  "turn_started",
+  "reply_delta",
+  "reply_done",
+  "facts_patch",
+  "draft_flags",
+  "draft_started",
+  "draft_block",
+  "draft_done",
+  "turn_done",
+  "error",
+] as const satisfies readonly DeliverableTurnEvent["type"][];
+
+/** Any event of the turn route (the chat's target picks the set). */
+export type AnyWritingChatTurnEvent = WritingChatTurnEvent | DeliverableTurnEvent;

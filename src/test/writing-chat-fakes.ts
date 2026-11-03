@@ -1,6 +1,7 @@
 import { AppError } from "@/lib/contracts/errors";
-import { parseStructuredDraft, WRITING_CHAT_MESSAGE_LIMIT, type StructuredDraft } from "@/lib/contracts/writing-chat";
-import type { ChatMessage, ChatSnapshot, TurnChatDb, WritingChatPipelines } from "@/server/services/writing-chat/types";
+import { parseDeliverableDraft, parseStructuredDraft, WRITING_CHAT_MESSAGE_LIMIT, type DeliverableDraft, type StructuredDraft } from "@/lib/contracts/writing-chat";
+import { StoredBlockSchema } from "@/server/ai/schemas/deliverable-draft";
+import type { ChatMessage, ChatSnapshot, DeliverablePipelines, TurnChatDb, WritingChatPipelines } from "@/server/services/writing-chat/types";
 
 /**
  * Test-only in-memory writing chat with the RPC semantics the turn relies on
@@ -30,6 +31,8 @@ export class MemoryChatDb implements TurnChatDb {
     };
     this.chat = {
       projectId: "00000000-0000-4000-8000-00000000a001",
+      projectDeliverableId: null,
+      deliverableDraft: null,
       title: null,
       status: "active",
       structuredDraft: parseStructuredDraft({}),
@@ -42,7 +45,7 @@ export class MemoryChatDb implements TurnChatDb {
       createdAt: clock().toISOString(),
       messages: [greeting],
       ...init,
-    };
+    } as ChatSnapshot;
   }
 
   private fail(method: keyof TurnChatDb) {
@@ -146,6 +149,19 @@ export class MemoryChatDb implements TurnChatDb {
     return structuredClone(this.chat.structuredDraft);
   }
 
+  /** Deliverable chats: the scripted patch is a whole deliverable draft here. `draftLimit` mimics the RPC raise. */
+  async applyDeliverablePatch(chatId: string, patch: unknown): Promise<{ draft: DeliverableDraft; rejected: { index: number; op: string; reason: string }[] }> {
+    this.calls.push("applyDeliverablePatch");
+    this.fail("applyDeliverablePatch");
+    void chatId;
+    const next = parseDeliverableDraft(patch);
+    if ((this.chat.deliverableDraft?.draft_count ?? 0) >= 6 && next.draft_count > 6) {
+      throw new AppError("writing_chat_draft_limit_reached", undefined, { status: 409 });
+    }
+    this.chat.deliverableDraft = next;
+    return { draft: structuredClone(next), rejected: [] };
+  }
+
   async markExtracted(chatId: string, sequence: number) {
     this.calls.push(`markExtracted:${sequence}`);
     this.fail("markExtracted");
@@ -213,5 +229,84 @@ function flagsOf(draft: unknown) {
     actorAmbiguous: [],
     sensitiveAdded: d.sensitive_flags_count ?? 0,
     lengthFull: [],
+  };
+}
+
+/**
+ * Fake AI-13 pipelines over the real Llm. extract: the scripted JSON is `{ patch, intent? }` (patch = a
+ * whole deliverable draft or null). compose: the scripted JSON is `{ blocks, patch }` — each block is
+ * streamed as draft_block, the patch (whole draft) is stored. decide: compose when the plan asks for it
+ * and the draft is under the limit, else a reply with the limit notice.
+ */
+export function fakeDeliverablePipelines(seen: { reply: number; extract: number; compose: number; notices: string[][]; snapshots: unknown[] } = { reply: 0, extract: 0, compose: 0, notices: [], snapshots: [] }): DeliverablePipelines & { seen: typeof seen } {
+  return {
+    seen,
+    async plan(snapshot) {
+      seen.snapshots.push(snapshot.formSnapshot);
+      return snapshot.requestedAction === "compose_draft" ? { kind: "compose", source: "requested_action" } : { kind: "question" };
+    },
+    async extract(call) {
+      const pending = call.snapshot.pendingUserMessages;
+      seen.extract += 1;
+      const result = await call.llm.complete({
+        feature: "AI-13.extract",
+        promptVersion: "AI-13.extract.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: { type: "object" },
+        signal: call.signal,
+      });
+      const parsed = JSON.parse(result.text) as { patch?: unknown; intent?: "compose_draft" | null };
+      return {
+        skipped: false,
+        patch: parsed.patch ?? null,
+        processedThroughSequence: Math.max(...pending.map((m) => m.sequence)),
+        intent: parsed.intent ?? null,
+        style: null,
+        sensitiveAdded: 0,
+      };
+    },
+    async decide(snapshot, after, plan) {
+      const draft = after.stored ?? snapshot.chat.deliverableDraft;
+      if (plan.kind !== "compose") return { action: "reply", notices: [] };
+      if ((draft?.draft_count ?? 0) >= 6) return { action: "reply", notices: ["draft_limit"] };
+      return { action: "compose", style: snapshot.style };
+    },
+    reply(call, notices) {
+      seen.reply += 1;
+      seen.notices.push([...notices]);
+      return call.llm.stream({
+        feature: "AI-13.reply",
+        promptVersion: "AI-13.reply.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: null,
+        signal: call.signal,
+      });
+    },
+    async *compose(call) {
+      seen.compose += 1;
+      yield { type: "draft_started", attempt: 1, reason: "initial" };
+      const result = await call.llm.complete({
+        feature: "AI-13.compose",
+        promptVersion: "AI-13.compose.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: { type: "object" },
+        signal: call.signal,
+      });
+      const parsed = JSON.parse(result.text) as { blocks?: unknown[]; patch: unknown };
+      const blocks = (parsed.blocks ?? []).map((b) => StoredBlockSchema.parse(b));
+      for (const block of blocks) yield { type: "draft_block", attempt: 1, block };
+      return {
+        outcome: blocks.length > 0 ? "draft" : "empty",
+        patch: parsed.patch,
+        validation: { needsReviewBlockIds: blocks.filter((b) => b.review === "needs_review").map((b) => b.block_id) },
+        assistantMessage: blocks.length > 0 ? "초안을 만들었어요. 확인하고 반영 방식을 골라 주세요." : "초안을 만들 내용이 아직 부족해요.",
+      };
+    },
   };
 }

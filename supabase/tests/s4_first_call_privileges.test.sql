@@ -59,8 +59,13 @@ select lives_ok($$select public.apply_structured_draft_patch(current_setting('te
                    '{"ops":[{"op":"accept","target":{"section":"star","field":"situation"}},
                             {"op":"set","target":{"section":"star","field":"action"},"value":"A"}]}')$$,
                 'authenticated: apply_structured_draft_patch');
-select lives_ok($$select set_config('test.apply', public.apply_writing_chat_proposal(current_setting('test.chat')::uuid)::text, true)$$,
-                'authenticated: apply_writing_chat_proposal');
+-- R5: [반영] is a form fill; "저장하기" = save_project_page records the filled proposals (DM v4.5 §2.5.1).
+select lives_ok($$select set_config('test.apply', public.save_project_page('aaaaaaaa-3333-0000-0000-000000000001',
+                   '{"situation":"결제 프로젝트","action":"A"}'::jsonb, null,
+                   jsonb_build_array(jsonb_build_object('writing_chat_id', current_setting('test.chat'), 'field', 'situation', 'rev', 1),
+                                     jsonb_build_object('writing_chat_id', current_setting('test.chat'), 'field', 'action', 'rev', 1)))::text, true)$$,
+                'authenticated: save_project_page (+ wc_mark_proposal_applied)');
+select is(current_setting('test.apply')::jsonb -> 'skipped', '[]'::jsonb, 'both filled proposals recorded');
 select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000001'), 'complete',
           'applied STAR completes the project');
 select lives_ok($$update public.writing_chats set return_target = null where id = current_setting('test.chat')::uuid$$,

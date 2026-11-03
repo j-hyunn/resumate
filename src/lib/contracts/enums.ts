@@ -196,6 +196,8 @@ export const AI_PROGRESS_STAGES = [
   "adjust_length",
   "extract",
   "reply",
+  // R5 (AI-13 draft turn, C-6): extract → compose (draft stream) → validate (V-10 + RPC).
+  "compose",
   "evaluate",
   "summarize",
   "score",
@@ -290,13 +292,24 @@ export type DraftPeriodField = (typeof DRAFT_PERIOD_FIELDS)[number];
 /** structured_draft v3 STAR field `op` (DM 2.5 v4.4). */
 export const DRAFT_STAR_OPS = ["set", "append"] as const;
 
-/** `apply_writing_chat_proposal` p_fields (DM 3.3 v4.4). */
+/**
+ * Proposal fields a page save can record as applied: `save_project_page` p_applied_proposals[].field
+ * (DM 2.5.1 v4.5 — same keys as the v4.4 `apply_writing_chat_proposal` p_fields, no `is_current`).
+ */
 export const APPLY_PROPOSAL_FIELDS = [...STAR_FIELDS, ...DRAFT_PERIOD_FIELDS, ...CLASSIFICATION_FIELDS] as const;
 export type ApplyProposalField = (typeof APPLY_PROPOSAL_FIELDS)[number];
 
-/** `apply_writing_chat_proposal` skipped[].reason (DM 3.3 v4.4). */
-export const APPLY_PROPOSAL_SKIP_REASONS = ["needs_review", "already_applied", "empty", "period_already_set", "classification_already_set"] as const;
-export type ApplyProposalSkipReason = (typeof APPLY_PROPOSAL_SKIP_REASONS)[number];
+/**
+ * `save_project_page` / `save_project_deliverable` skipped[].reason (DM 2.5.1 v4.5, in the RPC's
+ * judgment order). v4.4's `empty` / `period_already_set` / `classification_already_set` are now the
+ * screen's fill-rule names only (DM 3.3) — the RPC never returns them.
+ */
+export const PAGE_SAVE_SKIP_REASONS = ["not_found", "already_applied", "proposal_changed", "needs_review", "invalid_entry", "mark_failed"] as const;
+export type PageSaveSkipReason = (typeof PAGE_SAVE_SKIP_REASONS)[number];
+
+/** `save_project_deliverable` p_applied_proposals[].mode = structured_draft.deliverable.body.applied_mode (DM 2.5.0). */
+export const DELIVERABLE_APPLIED_MODES = ["replace", "append"] as const;
+export type DeliverableAppliedMode = (typeof DELIVERABLE_APPLIED_MODES)[number];
 
 /** AI-12 v4.5 slot ids (`requested_slot`; = ai-pipeline `SLOT_IDS`). */
 export const WRITING_CHAT_SLOTS = ["period", "situation", "task", "action", "result", "learnings"] as const;

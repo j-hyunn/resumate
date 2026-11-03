@@ -1,5 +1,7 @@
 -- R4 apply_structured_draft_patch v3 (DM v4.4 §2.5, AI-12 v4.5 mapping, V-9a, V-9h v4.4, V-9i DB defense, CR-20,
 -- R-CR-14, R-CR-15). Contract: _workspace/backend/R4/02_db_notes.md.
+-- R5 (DM v4.5): field rev, V-9h lowered to set -> append, no period / classification "empty only" checks in the DB.
+-- rev / new_object / deliverable-chat ops: r5_structured_draft_patch.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
@@ -96,23 +98,24 @@ select is(current_setting('t.r')::jsonb -> 'rejected',
 select is(pg_temp.draft('t.chat') -> 'schema_version', '3'::jsonb, 'draft stays schema_version 3');
 select is(pg_temp.draft('t.chat') #> '{project,start_month}',
           jsonb_build_object('value', '2023-03', 'origin', 'ai', 'source_message_ids', pg_temp.src('t.m2'),
-                             'source_quotes', '["23년 3월부터"]'::jsonb, 'review', 'ok', 'reviewed_at', null, 'applied_at', null),
-          'period field object (no op key)');
+                             'source_quotes', '["23년 3월부터"]'::jsonb, 'review', 'ok', 'reviewed_at', null, 'applied_at', null,
+                             'rev', 1),
+          'period field object (no op key, rev 1)');
 select is(pg_temp.draft('t.chat') #> '{star,action}',
           jsonb_build_object('value', '결제 API 병목을 APM으로 찾아 인덱스를 재설계했다', 'op', 'set', 'origin', 'ai',
                              'source_message_ids', pg_temp.src('t.m2'), 'source_quotes', '["APM으로 찾아 인덱스를 재설계"]'::jsonb,
-                             'review', 'ok', 'reviewed_at', null, 'applied_at', null),
-          'STAR field object: value trimmed, op set, applied_at null');
+                             'review', 'ok', 'reviewed_at', null, 'applied_at', null, 'rev', 1),
+          'STAR field object: value trimmed, op set, applied_at null, rev 1');
 select is(pg_temp.draft('t.chat') #>> '{star,situation,op}', 'set', 'append on an empty column is stored as set (V-9h)');
 select is(pg_temp.draft('t.chat') #>> '{star,situation,review}', 'needs_review', 'needs_review kept');
 select is(pg_temp.draft('t.chat') #> '{classification,competencies}',
           jsonb_build_object('value', '["analysis", "execution", "planning"]'::jsonb, 'origin', 'ai',
                              'source_message_ids', pg_temp.src('t.m2'), 'reason', 'APM으로 원인을 분석하고 해결',
-                             'review', 'ok', 'reviewed_at', null, 'applied_at', null),
+                             'review', 'ok', 'reviewed_at', null, 'applied_at', null, 'rev', 1),
           'competencies: invalid keys dropped, distinct, first 3; non-user source ids dropped; reason kept');
 select is(pg_temp.draft('t.chat') #> '{classification,project_type}',
           '{"value": "improvement", "origin": "ai", "source_message_ids": [], "reason": null, "review": "ok",
-            "reviewed_at": null, "applied_at": null}'::jsonb,
+            "reviewed_at": null, "applied_at": null, "rev": 1}'::jsonb,
           'classification without sources / reason is fine');
 select is(pg_temp.draft('t.chat') -> 'clarifications', '[{"kind": "actor_ambiguous", "field": "action"}]'::jsonb,
           'clarifications replaced');
@@ -158,8 +161,8 @@ select throws_ok($$select public.apply_structured_draft_patch(current_setting('t
                    '{"ops":[{"op":"add_sensitive_flags","count":1}]}')$$,
                  'P0001', 'writing_chat_not_found', 'AI token of A cannot patch B''s chat');
 
--- V-9h on a project with values (P2): set on a filled STAR column refused, append accepted (op append);
--- period / classification already set refused; end_month refused while is_current.
+-- V-9h v4.5 on a project with values (P2): set on a filled STAR column is lowered to append (not refused);
+-- period / classification are stored even when the saved project has a value (the app judges on the form snapshot).
 select is(public.apply_structured_draft_patch(current_setting('t.c2')::uuid, jsonb_build_object('ops', jsonb_build_array(
   jsonb_build_object('op', 'set', 'target', '{"section":"star","field":"situation"}'::jsonb, 'value', '새 상황',
                      'source_message_ids', pg_temp.src('t.c2m')),
@@ -173,12 +176,14 @@ select is(public.apply_structured_draft_patch(current_setting('t.c2')::uuid, jso
                      'value', 'problem_solving'),
   jsonb_build_object('op', 'set', 'target', '{"section":"star","field":"result"}'::jsonb, 'value', '장애 알림이 줄었다',
                      'source_message_ids', pg_temp.src('t.c2m'), 'review', 'needs_review')))) -> 'rejected',
-          '[{"index": 0, "op": "set", "reason": "field_already_filled"},
-            {"index": 2, "op": "set", "reason": "field_already_filled"},
-            {"index": 3, "op": "set", "reason": "field_already_filled"},
-            {"index": 4, "op": "set", "reason": "classification_already_set"}]'::jsonb,
-          'V-9h / CR-20 / CR-22 guards on a filled project');
+          '[]'::jsonb, 'R5: no DB refusal for filled STAR / period / classification');
 select is(pg_temp.draft('t.c2') #>> '{star,situation,op}', 'append', 'append on a filled column keeps op append');
+select is(pg_temp.draft('t.c2') #>> '{star,situation,value}', E'새 상황\n장애 알림이 많았다',
+          'set lowered to append on the filled column, then the append adds a line');
+select is(pg_temp.draft('t.c2') #>> '{star,situation,rev}', '2', 'rev 1 (set) -> 2 (append onto it)');
+select is(pg_temp.draft('t.c2') #>> '{project,start_month,value}', '2023-01', 'start_month stored though the project has one');
+select is(pg_temp.draft('t.c2') #>> '{classification,experience_type,value}', 'problem_solving',
+          'classification stored though the project has one (classification_already_set retired)');
 
 reset role;
 
@@ -200,7 +205,7 @@ select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.
                 'user edits an empty slot');
 select is(pg_temp.draft('t.chat') #> '{star,task}',
           '{"value": "결제 리드", "op": "set", "origin": "user_edit", "source_message_ids": [], "source_quotes": [],
-            "review": "ok", "reviewed_at": null, "applied_at": null}'::jsonb, 'user_edit field object');
+            "review": "ok", "reviewed_at": null, "applied_at": null, "rev": 1}'::jsonb, 'user_edit field object');
 select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"classification","field":"project_type"},"value":"migration"}]}')$$,
                 'user changes the suggested classification before applying');
@@ -211,9 +216,9 @@ select throws_ok($$select public.apply_structured_draft_patch(current_setting('t
 select throws_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"project","field":"is_current"},"value":true}]}')$$,
                  'P0001', 'field_not_patchable', 'user cannot propose is_current either');
-select throws_ok($$select public.apply_structured_draft_patch(current_setting('t.c2')::uuid,
+select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.c2')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"classification","field":"experience_type"},"value":"impact"}]}')$$,
-                 'P0001', 'classification_already_set', 'user patch on a chosen classification');
+                 'R5: user patch on a classification the project already has is fine');
 select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"star","field":"learnings"},"value":null}]}')$$,
                 'clearing a missing field is a no-op');
@@ -224,7 +229,7 @@ select lives_ok($$select public.apply_structured_draft_patch(current_setting('t.
                    '{"ops":[{"op":"reject","target":{"section":"star","field":"result"}}]}')$$, 'reject needs_review');
 select is((pg_temp.draft('t.c2') #> '{star,result}') - 'reviewed_at',
           '{"value": null, "op": "set", "origin": "ai", "source_message_ids": [], "source_quotes": [], "review": "ok",
-            "applied_at": null}'::jsonb, 'rejected: value cleared, ok');
+            "applied_at": null, "rev": 2}'::jsonb, 'rejected: value cleared, ok, rev + 1');
 reset role;
 
 -- AI cannot overwrite user_edit / accepted fields
@@ -245,8 +250,12 @@ reset role;
 -- applied fields: users can't edit them; AI patches start a new field object
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
-select is(public.apply_writing_chat_proposal(current_setting('t.chat')::uuid, array['action']) -> 'applied', '["action"]'::jsonb,
-          'apply action');
+select is(public.save_project_page('aaaaaaaa-3333-0000-0000-000000000001',
+            jsonb_build_object('action', pg_temp.draft('t.chat') #>> '{star,action,value}'), null,
+            jsonb_build_array(jsonb_build_object('writing_chat_id', current_setting('t.chat'), 'field', 'action',
+                                                 'rev', (pg_temp.draft('t.chat') #>> '{star,action,rev}')::int))) -> 'applied',
+          jsonb_build_array(jsonb_build_object('writing_chat_id', current_setting('t.chat'), 'field', 'action')),
+          'R5: fill + save records action as applied');
 select throws_ok($$select public.apply_structured_draft_patch(current_setting('t.chat')::uuid,
                    '{"ops":[{"op":"set","target":{"section":"star","field":"action"},"value":"고침"}]}')$$,
                  'P0001', 'field_already_applied', 'user cannot edit an applied field');
@@ -256,14 +265,14 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is(public.apply_structured_draft_patch(current_setting('t.chat')::uuid, jsonb_build_object('ops', jsonb_build_array(
   jsonb_build_object('op', 'set', 'target', '{"section":"star","field":"action"}'::jsonb, 'value', 'x',
                      'source_message_ids', pg_temp.src('t.m2'))))) -> 'rejected',
-          '[{"index": 0, "op": "set", "reason": "field_already_filled"}]'::jsonb,
-          'after apply the column is filled: set refused (V-9h)');
+          '[]'::jsonb, 'R5: after apply the column is filled: set is accepted (lowered to append)');
+select is(pg_temp.draft('t.chat') #>> '{star,action,op}', 'append', 'lowered to op append (V-9h v4.5)');
 select is((public.apply_structured_draft_patch(current_setting('t.chat')::uuid, jsonb_build_object('ops', jsonb_build_array(
   jsonb_build_object('op', 'append', 'target', '{"section":"star","field":"action"}'::jsonb, 'value', '모니터링도 붙였다',
                      'source_message_ids', pg_temp.src('t.m2'))))) #> '{structured_draft,star,action}') - 'source_quotes',
-          jsonb_build_object('value', '모니터링도 붙였다', 'op', 'append', 'origin', 'ai', 'source_message_ids', pg_temp.src('t.m2'),
-                             'review', 'ok', 'reviewed_at', null, 'applied_at', null),
-          'an AI append after apply is a new field object (not concatenated with the applied text)');
+          jsonb_build_object('value', E'x\n모니터링도 붙였다', 'op', 'append', 'origin', 'ai', 'source_message_ids', pg_temp.src('t.m2'),
+                             'review', 'ok', 'reviewed_at', null, 'applied_at', null, 'rev', 5),
+          'the post-apply object takes the next append (never the applied text)');
 reset role;
 
 -- closed chat: AI refused, user allowed

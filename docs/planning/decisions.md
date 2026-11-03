@@ -2,17 +2,21 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: 2026-11-06 (커리어 재설계 CR 반영 추가)
+- 최종 갱신: 2026-11-03 (프로젝트 추가·산출물 상세 Figma 결정 PA-1~PA-4 반영 추가)
 - 근거 문서: [01-prd.md](01-prd.md) 9장, `_workspace/03_spec-reviewer_review.md` (라운드 2 + 확인 패스, 백엔드 구현 반영 리뷰 2026-11-05 라운드 1·2)
 - 2026-11-05 입력: `_workspace/00_input/planning-decisions-2026-11-05.md`(사용자 확정 A1~A24), `spec-gaps-summary.md`(B·C·D), `brief-2026-11-05.md`(리더 판단)
 - 2026-11-02 입력(커리어 재설계): `_workspace/00_input/planning-decisions-career-redesign.md`(사용자 확정 CR-1~CR-14, 피그마 `GagTxDayknEFEa6qdSqQCc` 커리어 프레임 대조), 리뷰 `_workspace/03_spec-reviewer_review_career-redesign.md`(라운드 1~3 — 사용자 결정 10건 → 후속 결정 CR-15~CR-24, 대체·폐기 표기 목록, 이슈 R-CR-1~17 모두 해결). 반영 문서: PRD v4.5, UX v5.5, AI v4.5, DM v4.4
+- 2026-11-03 입력(프로젝트 추가·산출물 상세): `_workspace/00_input/planning-decisions-project-add-figma.md`(사용자 확정 PA-1~PA-4, 피그마 `1034:8565`·`1041:8783`·`1041:8904` 대조), 요청·회신 `_workspace/project-add-figma/`, 리뷰 `_workspace/03_spec-reviewer_review_project-add-figma.md`(라운드 2 + 리더 후속, 이슈 R-PA-1~15 모두 해결). 반영 문서: PRD v4.6, UX v5.6, AI v4.6, DM v4.5
 
-## 1. 결정 대기 (2건 + 출시 전 확정 2건)
+## 1. 결정 대기 (5건 + 출시 전 확정 2건)
 
 | # | 질문 | 담당 | 현재 처리 |
 |---|------|------|-----------|
 | D-14 | 모의 면접 점수 산정 방식(산식) | 사용자 (추후 정의) | 점수 저장 구조와 "점수 산정 방식 준비 중" 화면은 준비됨 |
 | D-39 | BYOK에서 공급자로 데이터를 보내는 것이 국외 이전에 해당하는지, 고지 문구 | 법무 | 확인 전까지 국외 이전으로 보고 공급자별 고지·동의 (2026-10-28 사용자 확정) |
+| **D-DM-12** (신규 2026-11-03) | 저장하지 않은 폼 값(`form_snapshot`)을 AI 공급자로 보내는 것이 지금 고지·동의 범위에 드는가 | 사용자 + 법무(D-39·D-10과 함께) | 권고 (a) 지금 범위로 보고 다음 고지 버전에 "작성 중인 내용 포함" 한 구절(재동의 없음) / (b) 새 고지 + 재동의 / (c) 저장 전 값은 보내지 않음. 확정 전 구현은 (a) `[가정]` |
+| **D-AI-16** (신규 2026-11-03) | 독립 프로젝트 정보·내용(S-43, `projects.description`)에도 AI 작성 대화를 둘까 | 사용자 | 권고 (a) MVP에 없음 유지(산출물 AI로 긴 서술을 쓸 수 있음). 남는 점: 독립 프로젝트만 있는 사용자가 게이트에서 내용을 AI 없이 채워야 함 |
+| **D-UX-28** (신규 2026-11-03) | 독립 프로젝트 만들기도 이름 다이얼로그(C-23) 없이 S-43 새 패널 + 첫 저장 때 생성으로 바꿀까 | 사용자 | UX 권고 (b) 바꾸기(생성 규칙 하나로 통일). 현재 명세는 (a) 유지 |
 | 출시 전 | D-10 정책·AI 고지 문서의 실제 버전과 문구. AI 작성 대화 시작 인사의 무료 등급 문장과 배지 툴팁도 함께 | 운영·법무 | 지금 시드 값(정책 3종 `2026-10-01`, AI 고지 6행 `v2026-10-29`)은 구현용 `[가정]` |
 | 출시 전 | 키 봉투 암호화용 외부 KMS 공급사 (데이터 모델 B-2) | 운영 | 미정 |
 
@@ -255,6 +259,35 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 | D-DM-11 (a) 진행 중 컬럼 없음 `[가정]` | **대체**: `projects.is_current` 추가 | CR-22 |
 | D-AI-14 (a) 분류는 AI가 채우지 않음 `[가정]` | **대체**: 빈 값만 추천 후 사용자 확인 | CR-20 |
 
+### 3.10 사용자 확정 (2026-11-03, 프로젝트 추가·산출물 상세 Figma)
+
+피그마 `GagTxDayknEFEa6qdSqQCc`의 프레임 3개(`1034:8565` 근무 › 프로젝트 추가, `1041:8783` 교육,연수 › 프로젝트 상세, `1041:8904` 프로젝트 › 산출물 상세)를 기획 문서와 대조한 뒤 사용자가 정했다. 원문 `_workspace/00_input/planning-decisions-project-add-figma.md`. 반영 위치는 PRD 9.5, UX 5.1f.
+
+| # | 결정 | 근거·영향 |
+|---|------|-----------|
+| PA-1 | 산출물 상세(S-44)에 Resumate AI 패널. AI가 대화로 **본문 전체 초안**을 제안하고 사용자가 교체 / 뒤에 덧붙이기를 고름. 반영·저장 전에는 커리어 데이터가 바뀌지 않음(UX-4) — **권고안과 다른 선택**(권고: 덧붙임 제안) | PRD F-P1-18 (6)~(8)(새 기능 ID 없음), AI **AI-13 신설**(V-10, 초안 8,000자·대화당 6회 `[가정]`), DM `writing_chats.project_deliverable_id`·`start_deliverable_writing_chat`·산출물 `structured_draft`, UX S-44 재정의·FL-22 |
+| PA-2 | 산출물에는 경험 유형·역량 분류를 두지 않음(권고안) | 스키마 변경 없음. 피그마 수정 요청 |
+| PA-3 | S-10·S-44는 **페이지 단위 "저장하기"**. 이름 다이얼로그 없이 빈 페이지로 진입, 행은 첫 저장 또는 첫 AI 메시지 때 생성. AI [반영]은 폼 채우기만, "저장하기"로 확정(권고안) | DM `save_project_page`·`save_project_deliverable`(`p_expected_updated_at` → `stale_write`, `p_applied_proposals`), `apply_writing_chat_proposal` 폐기. UX L-02 전체 페이지 셸, C-23 범위 축소, C-24는 S-09·S-34·S-43 전용 |
+| PA-4 | S-10 머리 = 프로젝트 종류 · 경험 유형 · 역량(최대 3) · 진행 기간 · 진행 중, 근무·교육 공통, 늘 입력 상태(권고안) | 필드 변경 없음. 피그마 근무 프레임에 경험 유형·진행 중 추가 요청 |
+
+리더 정렬 (세 문서가 갈린 곳, 2026-11-03):
+- **이름 없이 첫 AI 메시지**: 이름·제목이 비면 보내지 않고 그 칸에 포커스. 임시·기본 이름 없음(PRD의 "기본 이름으로 생성" 가정 폐기).
+- **AI가 읽는 값**: 턴마다 저장 전 폼 값 `form_snapshot`을 보내 DB 값보다 우선(D-UX-26 "저장된 값만 읽음 + 안내 줄" 폐기). 첫 메시지는 이름 확인 → AI 사용 가능 확인 → 페이지 저장(행 생성) → 대화 시작 → 턴. 고지 범위는 D-DM-12.
+- **반영 기록**: "반영됨"은 "저장하기"와 같은 트랜잭션에서 기록, 기록 실패는 저장을 막지 않음(`skipped` 사유 6종).
+- **검토 필요 블록(R-PA-3)**: 산출물 초안의 수락하지 않은 `needs_review` 블록은 채우기 결과에서 뺀다. 블록별 [수락]/[빼기], 초안 전체 거절 없음.
+- **빠른 버튼 칩(R-PA-5)**: 화면이 AI-12·AI-13 칩 표로 계산(`quickChips`), 서버 `turn_done`은 칩을 싣지 않음. 산출물 대화의 `turn_done`·`draft_done`은 `draft_count`를 실음(R-PA-15).
+
+대체·폐기된 기존 결정 (각 자리에 표기):
+
+| 기존 결정 | 처리 | 근거 |
+|-----------|------|------|
+| CR-6 "프로젝트 추가는 이름만 받아 먼저 만든다" | **부분 대체**: 경력·교육 소속 프로젝트는 빈 S-10 + 첫 저장·첫 AI 메시지 때 생성. C-23은 독립 프로젝트 생성·소속 선택 경우에만 남음(D-UX-28 대기) | PA-3 |
+| CR-3·C-24 섹션별 "수정" (S-10 부분) | **대체**: S-10·S-44는 페이지 단위 저장. 섹션 수정은 S-09·S-34·S-43 패널에만 | PA-3 |
+| CR-7·CR-19(= D-AI-15) 독립 프로젝트 AI 대화 없음 | **부분 대체**: 산출물에는 AI 대화 있음. 독립 프로젝트 정보·내용은 여전히 없음(D-AI-16 대기) | PA-1 |
+| CR-8 산출물 = 직접 작성 | **확장**: 직접 작성 + AI 초안 제안(반영은 사용자) | PA-1 |
+| `apply_writing_chat_proposal`(DB 즉시 반영) | **폐기**: [반영] = 폼 채우기, 확정 = 저장 RPC | PA-3 |
+| D-UX-26 AI는 저장된 값만 읽음 | **폐기** (리더 정렬) | form_snapshot |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -323,3 +356,19 @@ CR-1~CR-14 반영으로 이미 구현된 백엔드(v4.3b 모델 기준)와 UI를
 | 기본 이름 | 지원 건 기본 이름 "새 기업 JD (YYYY-MM-DD)" → "새 자기소개서 (YYYY-MM-DD)" `[가정]`(생성·추출 실패 시 채움 규칙 포함) |
 
 4.1의 ★ 변경: **A6 취소**(재개 전이 대신 위 `writing_chats` 개정), **A18 내용 변경**(`project_fields` = 내용 빈 독립 프로젝트 → S-43, AI 불가 시 STAR 미완 소속 프로젝트는 `project_star` → S-10).
+
+### 4.4 프로젝트 추가·산출물 상세 백엔드·UI 후속 (2026-11-03)
+
+PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고쳐야 한다. 상세는 [04-data-model.md](04-data-model.md) 11.3. 백엔드는 `resumate-backend`, 화면은 `resumate-ui`로 처리한다.
+
+| 구분 | 할 일 |
+|------|-------|
+| `writing_chats` | `project_deliverable_id` 열·복합 FK(cascade)·CHECK(`return_target` null)·인덱스, 트리거 `writing_chats_check_target`, 대상 열 불변 가드. `project_deliverables`에 `unique (id, project_id, user_id)` |
+| 대화 시작 | `start_writing_chat`에 `p_form_snapshot`, `start_deliverable_writing_chat` 신설, 산출물 시작 인사 3종 |
+| `structured_draft` | `rev`, `new_object` 패치, V-9h·분류·기간 DB 거부 → 낮춤, 산출물 모양(`target`, `writing_kind`, `facts[]`, `deliverable.body`, `draft_count` ≤ 6 → `writing_chat_draft_limit_reached`) |
+| 저장 RPC | `save_project_page`·`save_project_deliverable` 신설(`stale_write`, `p_applied_proposals`, `skipped` 6종), `apply_writing_chat_proposal` 삭제·헬퍼 `private.wc_mark_proposal_applied` |
+| 기타 DB | `projects.updated_at` 트리거 예외(`source_writing_chat_id`만 바뀔 때), `get_deletion_impact` 산출물 대화 집계, pgTAP, 타입 재생성 |
+| AI 앱 코드 | 턴 라우트 `form_snapshot` 계약, `turn_done` 칩 제거·`draft_count`, AI-13 파이프라인(정리 → 초안, V-10a~h, `draft_*` 이벤트), 미터 `call_key …compose` |
+| UI 화면 | L-02 전체 페이지 셸(로고·[Resumate AI]·저장하기·계정), S-10 재구현(빈 새 페이지, 머리 5필드 상시 입력, STAR 입력란, 페이지 저장·이탈 확인·입력 보존, 반영 = 폼 채우기), S-44 산출물 상세 신규(본문 + AI 패널 블록 단위 초안 카드), C-23 범위 축소, 칩 `quickChips` |
+| 피그마 수정 요청 | 산출물 분류 드롭다운 삭제(PA-2), 근무 프레임에 경험 유형·진행 중 / 교육 프레임에 프로젝트 종류(PA-4), 이동 경로·제목 자리표시자, ⋯ 메뉴, [Resumate AI] 다시 열기 버튼, 저장하기 상태 등 — 목록은 `_workspace/project-add-figma/ux_requests.md` FG-1~13 |
+

@@ -11,7 +11,7 @@ import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import type { LlmFactoryInput } from "@/server/jobs/types";
 import { createTurnChatDb } from "@/server/services/writing-chat/db";
-import { createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
+import { createDeliverablePipelines, createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
 import type { TurnDeps } from "@/server/services/writing-chat/types";
 import { connectTestProvider, markTestKeyInvalid } from "@/test/ai-connection-db";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
@@ -86,6 +86,7 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
       createLlm: (input: LlmFactoryInput) =>
         input.tier === "light" ? scriptedLlmFactory(extractAdapter.adapter, Date.now)(input) : scriptedLlmFactory(replyAdapter.adapter, Date.now)(input),
       pipelines: createWritingChatPipelines({ logger: () => {}, log }),
+      deliverablePipelines: createDeliverablePipelines({ logger: () => {}, log }),
       log,
     };
   }
@@ -403,12 +404,14 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
     expect(after?.messages.at(-1)?.status).toBe("done");
   });
 
-  it("v4.4 panel (연결 대기): [모두 반영] writes the STAR as the user; removed v4.3b chat paths answer not_supported", async () => {
+  it("v4.5 page save (연결 대기): [반영] fills the form, 저장하기 records it; removed v4.3b chat paths answer not_supported", async () => {
     const v44 = await import("./writing-chats-v44");
+    const v45 = await import("./page-save-v45");
     const w = await chats();
-    const applied = await v44.applyProposal({ writingChatId: chatId });
-    // situation was already on the project, so V-9h kept the AI's `set` out; task was empty.
-    expect(applied.applied).toEqual(["task"]);
+    const draft = (await v44.getProjectChat(chatId)).structuredDraft;
+    const task = draft.star.task!;
+    const saved = await v45.saveProjectPage({ projectId, values: { task: task.value }, appliedProposals: [{ writingChatId: chatId, field: "task", rev: task.rev }] });
+    expect(saved.applied).toEqual([{ writingChatId: chatId, field: "task" }]);
     const row = await admin.from("projects").select("situation, task, source_writing_chat_id").eq("id", projectId).single();
     expect(row.data).toMatchObject({ task: "백엔드 개발을 맡았다", source_writing_chat_id: chatId });
     expect((await v44.listProjectChats(projectId)).map((c) => c.id)).toEqual([chatId]);

@@ -12,7 +12,7 @@ import type {
 import type { CareerStatus } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
-import { listProjectWritingChats } from "@/server/services/writing-chat/chat";
+import { listDeliverableWritingChats, listProjectWritingChats } from "@/server/services/writing-chat/chat";
 import {
   DELIVERABLE_COLUMNS,
   DELIVERABLE_SUMMARY_COLUMNS,
@@ -135,5 +135,7 @@ export async function getDeliverable(supabase: UserSupabaseClient, id: string): 
   if (!d) return null;
   const project = row(await supabase.from("projects").select("id, name").eq("id", d.project_id).maybeSingle());
   if (!project) throw new AppError("not_found");
-  return { deliverable: toDeliverableDto(d), project: { id: project.id, name: project.name } };
+  // v4.5 (DM §7 산출물 상세): the deliverable's AI chats, latest activity first.
+  const writingChats = await listDeliverableWritingChats(supabase, d.id);
+  return { deliverable: toDeliverableDto(d), project: { id: project.id, name: project.name }, writingChats };
 }

@@ -25,7 +25,7 @@ import { V9_CHECKS, validateExtractOutput, type V9Check, type V9Flags, type V9Re
  *   classification suggestions) → V-9 (incl. V-9i) → DraftPatch (aliases → UUIDs)
  *   for `apply_structured_draft_patch`. Failure never blocks the reply; the
  *   runner leaves last_extracted_sequence alone so the next turn re-covers it.
- *   Nothing here writes `projects`: "반영" is the user's apply_writing_chat_proposal.
+ *   Nothing here writes `projects`: "반영" fills the form and "저장하기" (save_project_page) saves (v4.6, PA-3).
  * - `reply`: default tier, plain text stream (no structured output).
  *
  * Plain async functions: no request, cookies, DB, or after() (api-engineer's

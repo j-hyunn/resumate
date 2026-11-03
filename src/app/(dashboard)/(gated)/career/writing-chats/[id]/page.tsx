@@ -1,56 +1,26 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
-import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
-import { getPreviewState } from "@/lib/preview-state"
-import { getApplicationProject } from "@/lib/data/applications"
-import { applicationDisplayName } from "@/lib/data/labels"
+import { getWritingChat } from "@/lib/data/career-v45"
 import { routes } from "@/lib/routes"
-import { loadChatView } from "@/components/career/actions"
-import { ChatScreen } from "@/components/career/writing-chat/chat-screen"
-import { careerPreviewView } from "@/components/career/screen-state"
 
-// S-36 AI 작성 대화 (진행 / 이어 하기 / 저장 완료 / 폼 전환 완료).
-// ?state= loading | error | not-found | ai-failed | ai-failed-input | ai-failed-timeout
-//         | save-failed | message-limit | ai-locked | key-invalid | key-check | key-missing | ai-failed-*(C-20 7 causes)
-//         | v5.3: request-wait (A14 바로 실패 + 카운트다운; ai-waiting = 같은 값의 별칭) | consent-required (보내기 → C-21)
-//         그만둔 대화 = fixture wc 4 (status abandoned)
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
+/**
+ * Retired S-36 AI 작성 대화 (v5.5 CR-5): a chat now lives in its project's S-10 panel. Old links go to
+ * S-10 `?chat={id}`; a chat that is gone (or has no project) goes to S-08.
+ */
+type Props = { params: Promise<{ id: string }> }
 
-export default function Page({ params, searchParams }: Props) {
-  return (
-    <ScreenSuspense>
-      <Screen params={params} searchParams={searchParams} />
-    </ScreenSuspense>
-  )
+async function Redirect({ params }: Props): Promise<null> {
+  const { id } = await params
+  const chat = await getWritingChat(id).catch(() => null)
+  if (chat?.project_id && !chat.project_deliverable_id) redirect(routes.projectPage(chat.project_id, { chat: chat.id }))
+  if (chat?.project_deliverable_id) redirect(routes.deliverable(chat.project_deliverable_id, { chat: chat.id }))
+  redirect(routes.career())
 }
 
-async function Screen({ params, searchParams }: Props) {
-  const { id } = await params
-  const state = getPreviewState(await searchParams)
-  const preview = careerPreviewView(state, "chat")
-  const crumbs = <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: "AI 작성 대화" }]} />
-  if (preview)
-    return (
-      <>
-        {crumbs}
-        {preview}
-      </>
-    )
-  const [view] = await Promise.all([loadChatView(id)])
-  if (!view) notFound()
-  // `?state=multi-detail`: a second card, as AI-12 can make (W2-⑨)
-  const firstCard = view.chat.structured_draft.details?.[0]
-  if (state === "multi-detail" && firstCard) view.chat.structured_draft.details = [firstCard, { ...firstCard, detail_key: "D2", existing_detail_id: null }]
-  const target = view.chat.return_target
-  const ap = target ? await getApplicationProject(target.application_project_id) : null
+export default function Page({ params }: Props) {
   return (
-    <>
-      {crumbs}
-      <ChatScreen
-        key={`${view.chat.id}-${view.chat.updated_at}-${view.chat.message_count}`}
-        initialView={view}
-        applicationName={ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : null}
-      />
-    </>
+    <ScreenSuspense>
+      <Redirect params={params} />
+    </ScreenSuspense>
   )
 }

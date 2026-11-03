@@ -10,7 +10,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Briefcase, FileText, KanbanSquare, Layers, MessagesSquare, Settings, Sparkles, type LucideIcon } from "lucide-react"
+import { Briefcase, FileText, KanbanSquare, Layers, MessagesSquare, Settings, type LucideIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -30,6 +30,7 @@ import { clearNavOrigin } from "../return-target"
 import { NavMain } from "./nav-main"
 import { NavSecondary, type NavSecondaryItem } from "./nav-secondary"
 import { NavUser } from "./nav-user"
+import { LogoMark } from "./logo-mark"
 import { useSettingsDialog } from "./settings-dialog"
 import { NavAiStatus } from "./nav-ai-status"
 import { useAiConnection } from "../ai-connection-context"
@@ -171,10 +172,8 @@ function AppSidebarView({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="Resumate">
               <Link href={routes.career()} onClick={onMenu}>
-                {/* [UI-가정] 로고 자리: 브랜드 마크가 정해지기 전까지 lucide 아이콘 */}
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Sparkles className="size-4" aria-hidden />
-                </div>
+                {/* [UI-가정] 로고 자리: 브랜드 마크가 정해지기 전까지 lucide 아이콘 (LogoMark, shared with L-02) */}
+                <LogoMark />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">Resumate</span>
                   {/* [UI-가정] 부제 문구 */}

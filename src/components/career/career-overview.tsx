@@ -5,14 +5,17 @@
  * Experiences, educations and independent projects show once under their start year; the
  * selected item lives in the URL (`?item={kind}:{id}`) and the panel is S-09 / S-34 / S-43.
  *
- * // [UI-가정] 커리어 추가는 모달(add-career-dialog.tsx)로 만든다. C-24 섹션 인라인 편집·C-23 이름 입력·S-44
- * 산출물은 아직 없어서 "수정"·"+ 프로젝트 추가"는 기존 편집 화면으로 보내고 종류 태그·Link·산출물은 그리지 않는다.
+ * v5.6 (PA-3): 경력·교육의 "+ 프로젝트 추가"는 다이얼로그 없이 S-10 새 페이지(`/career/projects/new?experience=|education=`)로.
+ * C-22 "프로젝트"는 C-23 ① 이름 다이얼로그(D-UX-28 (a)) → draft 행 → S-43(프로젝트 정보 편집 중 = 수정 모달).
+ * S-43 산출물 섹션(행 → S-44, "+ 산출물 추가" → S-44 새 산출물, 50개 상한, 빈 상태).
+ *
+ * // [UI-가정] 경력·교육·독립 프로젝트 추가·수정은 모달(add-career-dialog.tsx, 피그마 1009:2). C-24 섹션 인라인 편집·종류 태그는 아직 없다.
  */
 import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Briefcase, CirclePlus, FolderKanban, GraduationCap, Layers, MoreHorizontal, Pencil, Plus } from "lucide-react"
+import { ArrowLeft, Briefcase, ChevronRight, CirclePlus, FileText, FolderKanban, GraduationCap, Info, Layers, MoreHorizontal, Pencil, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,6 +41,10 @@ import { routes } from "@/lib/routes"
 import { deleteCareerItemAction } from "./actions"
 import { AddCareerDialog, type AddCareerKind, type CareerEditTarget } from "./add-career-dialog"
 import { Item } from "@/components/ui/item"
+import { AddProjectDialog } from "./add-project-dialog"
+
+/** S-43 산출물 섹션 data per standalone project (`listProjectDeliverables`); null = not standalone / not found */
+export type DeliverableLists = Record<string, { deliverables: Array<{ id: string; title: string; sort_order: number }>; limit_reached: boolean } | null>
 
 type ItemKind = "experience" | "education" | "project"
 
@@ -115,7 +122,7 @@ function parseItemParam(value: string | null): { kind: ItemKind; id: string } | 
   return id && (kind === "experience" || kind === "education" || kind === "project") ? { kind, id } : null
 }
 
-export function CareerOverview({ tree }: { tree: CareerTree }) {
+export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; deliverables?: DeliverableLists }) {
   const groups = React.useMemo(() => groupItems(tree), [tree])
   const items = React.useMemo(() => groups.flatMap((g) => g.items), [groups])
   const searchParams = useSearchParams()
@@ -139,9 +146,34 @@ export function CareerOverview({ tree }: { tree: CareerTree }) {
     else url.searchParams.delete("item")
     window.history.pushState(null, "", url)
   }, [])
-  const onAdded = (item: Pick<CareerItem, "kind" | "id">) => {
+  // C-23 ① 만든 독립 프로젝트: S-43 "프로젝트 정보 편집 중" = the edit modal, once the refreshed list has the row
+  const [pendingEdit, setPendingEdit] = React.useState<string | null>(null)
+  const onAdded = (item: Pick<CareerItem, "kind" | "id">, opts?: { edit?: boolean }) => {
     setJustAdded(itemKey(item))
     select(item)
+    if (opts?.edit) setPendingEdit(item.id)
+  }
+  // `?edit=info|content` (C-23 ② "만들기" → 정보, C-09 project_fields → 내용, routes.careerItem): open the same S-43
+  // section edit once, then drop `edit` from the URL. // [UI-가정] both sections edit in the one 수정 모달 (no C-24 inline yet)
+  const editParam = searchParams.get("edit")
+  const editKey = editParam && requested?.kind === "project" ? `${itemKey(requested)}:${editParam}` : null
+  const [handledEdit, setHandledEdit] = React.useState<string | null>(null)
+  if (editKey && requested && editKey !== handledEdit) {
+    setHandledEdit(editKey)
+    setPendingEdit(requested.id)
+  }
+  React.useEffect(() => {
+    if (!editParam) return
+    const url = new URL(window.location.href)
+    url.searchParams.delete("edit")
+    window.history.replaceState(window.history.state, "", url)
+  }, [editParam])
+  if (pendingEdit) {
+    const found = items.find((i) => i.kind === "project" && i.id === pendingEdit)
+    if (found?.kind === "project") {
+      setPendingEdit(null)
+      setEditing({ kind: "project", row: found.project, skills: found.project.skills.map((s) => s.name) })
+    }
   }
 
   const confirmDelete = async (opts: { result_mode?: "keep_results" | "delete_results"; affiliation_mode?: "keep_projects" | "delete_projects" }) => {
@@ -174,7 +206,7 @@ export function CareerOverview({ tree }: { tree: CareerTree }) {
         ) : null}
         <h2 className="hidden text-sm font-semibold text-muted-foreground lg:block">커리어 상세</h2>
         {selected ? (
-          <DetailPanel key={itemKey(selected)} item={selected} onDelete={setDeleting} onEdit={setEditing} />
+          <DetailPanel key={itemKey(selected)} item={selected} deliverables={deliverables[selected.id] ?? null} onDelete={setDeleting} onEdit={setEditing} />
         ) : (
           <EmptyState
             icon={Layers}
@@ -202,10 +234,12 @@ function AddCareerMenu({
    * empty state, secondary so the screen never shows two primary buttons (UQ-718). "start": the only
    * button when there are no careers yet (primary, list button hidden — UQ-723) */
   placement?: "list" | "empty" | "start"
-  onCreated: (item: { kind: AddCareerKind; id: string }) => void
+  onCreated: (item: { kind: AddCareerKind; id: string }, opts?: { edit?: boolean }) => void
 }) {
   const inList = placement === "list"
   const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
+  // C-22 "프로젝트" → C-23 ① 이름 다이얼로그 (D-UX-28 (a))
+  const [addingProject, setAddingProject] = React.useState(false)
   const options: Array<{ kind: AddCareerKind; label: string; hint: string }> = [
     { kind: "experience", label: "경력", hint: "회사에서 일한 기간" },
     { kind: "education", label: "교육", hint: "학위 과정, 부트캠프·교육 과정" },
@@ -223,13 +257,26 @@ function AddCareerMenu({
         <DropdownMenuContent align={inList ? "start" : "center"} className="w-72">
           <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
           {options.map((o) => (
-            <DropdownMenuItem key={o.kind} onSelect={() => setAdding(o.kind)} className="flex flex-col items-start gap-0.5">
+            <DropdownMenuItem key={o.kind} onSelect={() => (o.kind === "project" ? setAddingProject(true) : setAdding(o.kind))} className="flex flex-col items-start gap-0.5">
               <span className="font-medium">{o.label}</span>
               <span className="text-xs text-muted-foreground">{o.hint}</span>
+              {o.kind === "project" ? (
+                // C-22 프로젝트 행 한 줄 안내 [가정] — inside the menu item so arrow keys / screen readers reach it (UQ-S44-15)
+                <span className="text-xs text-muted-foreground">회사·학교 안 프로젝트는 경력·교육 상세의 “+ 프로젝트 추가”로 만들어요</span>
+              ) : null}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      <AddProjectDialog
+        mode="standalone"
+        open={addingProject}
+        onOpenChange={setAddingProject}
+        onCreated={(id) => {
+          setAddingProject(false)
+          onCreated({ kind: "project", id }, { edit: true })
+        }}
+      />
       <AddCareerDialog
         kind={adding}
         onOpenChange={(open) => !open && setAdding(null)}
@@ -292,7 +339,17 @@ function CareerList({
   )
 }
 
-function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (t: DeleteTarget) => void; onEdit: (t: CareerEditTarget) => void }) {
+function DetailPanel({
+  item,
+  deliverables,
+  onDelete,
+  onEdit,
+}: {
+  item: CareerItem
+  deliverables: DeliverableLists[string]
+  onDelete: (t: DeleteTarget) => void
+  onEdit: (t: CareerEditTarget) => void
+}) {
   const name = itemName(item)
   const head = (
     <div className="flex items-start gap-2">
@@ -307,7 +364,9 @@ function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => onDelete({ kind: "career", entity_type: item.kind, entity_id: item.id, label: name })}
+            onSelect={() =>
+              onDelete({ kind: "career", entity_type: item.kind, entity_id: item.id, label: name, ...(item.kind === "project" ? { scope: "standalone" as const } : {}) })
+            }
           >
             {KIND_LABELS[item.kind]} 삭제
           </DropdownMenuItem>
@@ -339,7 +398,7 @@ function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (
         <ProjectsSection
           title="프로젝트"
           projects={item.projects}
-          addHref={routes.projectNew({ experience_id: e.id })}
+          addHref={routes.projectPageNew({ experience: e.id })}
           empty="이 회사에서 한 프로젝트를 추가해 보세요"
         />
       </div>
@@ -373,14 +432,14 @@ function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (
         <ProjectsSection
           title="진행 프로젝트"
           projects={item.projects}
-          addHref={routes.projectNew({ education_id: e.id })}
+          addHref={routes.projectPageNew({ education: e.id })}
           empty="이 과정에서 한 프로젝트를 추가해 보세요"
         />
       </div>
     )
   }
 
-  // S-43 독립 프로젝트 — STAR·AI 패널 없음 (CR-7). // [UI-가정] 산출물(S-44)은 아직 그리지 않는다
+  // S-43 독립 프로젝트 — STAR·AI 패널 없음 (CR-7, CR-19). 산출물 본문의 AI는 S-44 패널(PA-1)
   const p = item.project
   const edit = () => onEdit({ kind: "project", row: p, skills: p.skills.map((s) => s.name) })
   const span = formatMonthSpan(p.start_month, p.end_month)
@@ -417,9 +476,70 @@ function DetailPanel({ item, onDelete, onEdit }: { item: CareerItem; onDelete: (
       </PanelSection>
       <Separator />
       <PanelSection title="프로젝트 내용" action={<EditButton onClick={edit} label="프로젝트 내용 수정" />}>
-        <LongText text={p.summary} onEdit={edit} />
+        {/* 프로젝트 내용 = projects.description (DM v4.4) */}
+        <LongText text={p.description ?? null} onEdit={edit} />
       </PanelSection>
+      <Separator />
+      <DeliverablesSection projectId={p.id} data={deliverables} />
     </div>
+  )
+}
+
+/**
+ * S-43 산출물 섹션 (UX v5.6 S-43, design-system 6장 A2 "(v4) 커리어 v5.6", G-61): 행 = 아이콘 + 제목 + ChevronRight,
+ * `sort_order` 순 → S-44. "+ 산출물 추가" → S-44 새 산출물(행은 첫 저장·첫 AI 메시지 때). 50개면 비활성 + 이유 줄.
+ */
+function DeliverablesSection({ projectId, data }: { projectId: string; data: DeliverableLists[string] }) {
+  const rows = [...(data?.deliverables ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+  const limit = data?.limit_reached ?? false
+  return (
+    <PanelSection
+      title="산출물"
+      action={
+        limit ? (
+          <Button variant="ghost" size="sm" disabled aria-describedby={`dlv-limit-${projectId}`}>
+            <Plus aria-hidden />
+            산출물 추가
+          </Button>
+        ) : (
+          <Button asChild variant="ghost" size="sm">
+            <Link href={routes.deliverableNew(projectId)}>
+              <Plus aria-hidden />
+              산출물 추가
+            </Link>
+          </Button>
+        )
+      }
+    >
+      {limit ? (
+        // [UI-가정] spec marks the copy [가정]
+        <p id={`dlv-limit-${projectId}`} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Info className="size-4 shrink-0" aria-hidden />
+          산출물은 프로젝트당 50개까지 쓸 수 있어요
+        </p>
+      ) : null}
+      {rows.length ? (
+        <ul className="flex flex-col gap-0.5">
+          {rows.map((d) => (
+            <li key={d.id}>
+              {/* UQ-BR-3: the shared clickable row (same hover / radius as the C-25 project cards) */}
+              <Item asChild className="gap-3">
+                <Link href={routes.deliverable(d.id)}>
+                  <FileText aria-hidden />
+                  <span className="min-w-0 flex-1 truncate" title={d.title}>
+                    {d.title}
+                  </span>
+                  <ChevronRight aria-hidden />
+                </Link>
+              </Item>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        // [UI-가정] spec marks the copy [가정]
+        <p className="py-2.5 text-sm text-muted-foreground">프로젝트에서 만든 결과물(기획서 요약, 설계 문서, 회고, 발표 내용 등)을 글로 남겨 두면 AI가 근거로 써요</p>
+      )}
+    </PanelSection>
   )
 }
 
@@ -505,7 +625,7 @@ function ProjectCard({ project: p }: { project: ProjectWithChildren }) {
   const period = [formatRange(p.start_month, p.end_month, p.is_current), span ? `(${span})` : null].filter(Boolean).join(" ")
   return (
     <Item asChild className="h-full flex-col items-start justify-center">
-      <Link href={routes.project(p.id)}>
+      <Link href={routes.projectPage(p.id)}>
       {/* [UI-가정] 종류 태그(projects.project_type)는 컬럼이 생기면 여기에 Badge로 */}
       <span className="truncate text-base" title={name}>
         {name}

@@ -1,0 +1,99 @@
+# ui-designer 메모 — 프로젝트 상세 · 산출물 상세 (디자인 시스템 v4)
+
+- 작성: ui-designer / 2026-11-03
+- 산출물: `docs/ui/design-system.md` v4 (추가분은 본문에 `(v4)` 표시)
+- 기준: 브리프 `_workspace/ui/21_brief_project-add.md`, 플로우 v5.6(1.3a L-02, S-10, S-43, S-44, C-15, C-23, FL-14, FL-22), AI v4.6(AI-12, AI-13)
+
+## 1. Figma
+
+- 파일 `GagTxDayknEFEa6qdSqQCc`, 노드 `1034:8565` · `1041:8783` · `1041:8904`.
+- `create_session`은 됐지만 `get_screenshot`(1041:8783)이 **Starter 플랜 호출 한도**로 실패했다. 지시대로 더 시도하지 않았다.
+- 그래서 크기·반경·색 인상은 브리프의 리더 관찰값을 따랐다: 상단 바 민트 회색 바탕, 저장하기 녹색 채움(높이 약 36·반경 약 8), 흰 본문 카드(반경 약 16, 가장자리 8px), 둥근 회색 ← 버튼 + 이동 경로 14px, 제목 20px bold, 머리 라벨 13px 회색(폭 약 100), 회색 칩 드롭다운, 테두리 연·월 셀렉트 + 진행 중 체크, STAR 제목 16px medium + 자리 표시 15px(섹션 간격 약 90px), 회색 막대 손잡이, 패널 폭 약 420·연회색·반경 12, 입력창 위 회색 알약 칩 3개, 흰 알약 입력창 + 녹색 원형 보내기.
+- 관찰값을 숫자로 옮기면서 문서 규칙과 부딪힌 곳은 문서 규칙을 우선했다: 머리 라벨 13→14px, 자리 표시 15→16px(A-8), 버튼 반경 8→6px 유지(G-45, Q-7).
+- 다음 Figma 호출이 가능해지면 확인할 것: 상단 바 높이(지금 56px로 둠), 셸 바탕 실제 색값, 패널 바탕과 칩 바탕 색 차이, 보내기 버튼 크기, 손잡이 막대 크기, 섹션 간격.
+
+## 2. 새 부분의 시각 방향 (요약)
+
+- **L-02 셸**: 민트 회색 바탕(`--shell`) 위에 흰 본문 카드(`rounded-2xl shadow-sm`)가 떠 있다. 상단 바는 로고 · [Resumate AI](패널 닫힘일 때만, outline) · 저장 상태 글자 · "저장하기"(화면의 유일한 주 버튼) · 계정 아이콘 순서다. 저장하기는 6상태(변경 없음·변경 있음(경고색 점)·저장 중·저장됨 HH:MM·실패·충돌)를 버튼 + 옆 글자로 구분한다. 충돌은 AlertDialog, 이탈은 3버튼 AlertDialog, 입력 보존 복원은 배너다.
+- **문서형 페이지**: 제목·STAR·본문은 테두리 없는 입력(hover 바탕 + 포커스 링, 마크다운 원문)이라 문서처럼 읽힌다. 머리 분류는 회색 알약 셀렉트, 역량은 primary-subtle 칩(최대 3) + 체크 메뉴, 기간은 기존 MonthField + 진행 중 체크 + 개월 수. 구분선 아래 2단(왼쪽 글 폭 42rem 고정 | 손잡이 | 패널 420px, 360~640)이고, 1024 미만은 한 단 + 떠 있는 "Resumate AI" 버튼 → 시트.
+- **AI 패널**: 연회색(`--panel`) 둥근 상자. 머리(Sparkles + 이름 + 공급자 배지 + 기록·새 대화·⋯·×) → 메시지(AI는 말풍선 없음, 사용자는 흰 말풍선) → 입력창 바로 위 **제안 독**(카드 1장, 접기 가능) → 회색 알약 칩 → 흰 알약 입력창 + 녹색 원형 보내기. 패널 안 버튼은 모두 outline/ghost이고 보내기만 초록 채움이다(R-C8).
+- **제안 카드 상태는 글자로 구분**: 제안(반영 버튼) → "폼에 채움"(info 배지 + "저장하기를 눌러야 저장돼요") → "반영됨"(success 배지, 접힘). 덧붙임은 "현재 내용 뒤에 붙어요" + 현재 끝줄(흐림) + 덧붙일 문장(ai-subtle 상자). 검토 필요는 기존 warning 상자.
+- **S-44 초안 카드**: 블록 단위 렌더링(14px 축약 문서), "새 내용" 블록은 보라 왼쪽 선 + 배지, [뒤에 덧붙이기]에 hover/focus하면 붙을 블록만 강조·나머지 흐림. 출처 칩 3종(라벨로만 구분), 확인이 필요한 사실은 접힌 묶음, 빈 슬롯은 점선 알약(누르면 묻기), 남은 초안 횟수는 머리 오른쪽. 교체 확인은 기본형 / 본문 바뀜형(경고 아이콘 + 다른 제목)으로 나눈다. 채운 뒤 카드 잠금 + 되돌리기 토스트.
+- **S-43 산출물 섹션**: 기존 PanelSection 모양. 행 = 문서 아이콘 + 제목 + 화살표(프로젝트 카드와 같은 반경·hover), 빈 상태는 한 줄 회색 글자, 50개면 추가 버튼 비활성 + 이유 한 줄.
+
+## 3. `[가정]` 목록 (design-system.md 8.2 G-42 ~ G-61과 같음)
+
+| # | 가정 |
+|---|------|
+| G-42 | L-02 바탕 `--shell`을 민트 회색(165°)으로 따로 둠. L-01과 다름(Q-10) |
+| G-43 | AI 패널 바탕 `--panel`(카드와 칩 사이 밝기, 다크는 카드보다 밝게) |
+| G-44 | 카드 `rounded-2xl` + `shadow-sm`, 패널 `rounded-xl`, 상단 바 56px, 패널 420/360/640(카드 50% 이하), 왼쪽 최소 448 |
+| G-45 | 버튼 반경 6px 유지(Figma 8px) |
+| G-46 | 제목 20px, 라벨 14px, 자리 표시 16px |
+| G-47 | 미저장 표식 = 경고색 점, 버튼 폭 고정, ⌘S 툴팁, 좁은 화면 저장 상태는 아이콘·토스트 |
+| G-48 | 충돌 = AlertDialog, 입력 보존 = 배너, 이탈 확인 버튼 순서 |
+| G-49 | 창 높이 760 미만이면 머리도 스크롤, STAR 간격 40px, 글자 수는 포커스·90% 이상일 때만(S-44는 항상) |
+| G-50 | 마크다운 원문 입력, 목록 Enter 이어쓰기·Tab 들여쓰기 |
+| G-51 | 본문 구간 강조 = textarea 선택 + 칸 링, 못 찾으면 토스트 |
+| G-52 | 패널 안 버튼 outline/ghost, 보내기만 default, 패널 안 C-18 영역형도 outline |
+| G-53 | Sparkles(AI 보라)를 패널 식별 아이콘으로 허용 |
+| G-54 | 제안 독은 입력창 위 고정, 펼침 최대 55%, 새 제안이 오면 펼침, 칩은 칩 줄 한 곳 |
+| G-55 | 빠른 응답은 ghost 버튼, 패널 G-2 줄 12px |
+| G-56 | 카드 값 14px, 덧붙임 ai-subtle 상자, 폼에 채움 = info 배지, 반영됨 접기, 반영 뒤 왼쪽으로 자동 스크롤 안 함, 되돌리기 토스트 8초 |
+| G-57 | 블록 "새 내용" 표식·덧붙이기 미리보기·[빼기] ghost·블록 목록 28rem 접기·교체 확인 버튼 default |
+| G-58 | 직접 고치기 완료 "저장", "반영됨 · 교체/덧붙임", 사실 칩 "#n" |
+| G-59 | 좁은 화면 = 떠 있는 버튼 → 시트(768 미만 전체 화면) |
+| G-60 | L-02 토스트 왼쪽 아래, 로고 "Resumate" |
+| G-61 | S-43 산출물 행 모양, 50개 안내 위치 |
+
+## 4. 리더에게 (결정·기획 확인)
+
+- 결정 요청(8.3): **Q-7** 버튼 반경 8px로 맞출지 / **Q-8** L-02 라우트를 사이드바 레이아웃 밖 그룹으로 둘 수 있는지 / **Q-9** 로고 표기 ResuMate vs Resumate / **Q-10** L-01 셸 바탕도 민트 회색으로 맞출지.
+- 기획 확인 필요(8.4): **P-15** v5.5 커리어 화면(S-08 목록·S-09·S-34·C-22·C-24·C-25) 시각 규칙이 디자인 시스템에 없음(구현이 앞섬) / **P-16** "대화 목록 아래 고정"의 뜻 / **P-17** 직접 고치기 완료 버튼 글자 / **P-18** 블록 [빼기] 되돌리기 없음 / **P-19** 새로 불러오기 경고 문구 / **P-20** 반영됨에 방식 표시 여부.
+- 화면 구조·문구는 바꾸지 않았다. 명세에 있는 문구는 그대로 쓰도록 했고, 없는 글자만 `[가정]`으로 두었다.
+
+## 5. 파운데이션 엔지니어 요청 (새 토큰·컴포넌트)
+
+1. **`globals.css`**: 1.1.2 블록의 `:root`·`.dark`에 `--shell`·`--shell-foreground`·`--panel`·`--panel-foreground`, `@theme inline`에 `--color-shell`·`--color-shell-foreground`·`--color-panel`·`--color-panel-foreground` 추가. `rounded-2xl`(16px)·`rounded-3xl`(24px)은 Tailwind 기본값을 그대로 쓰므로 `@theme`에서 덮어쓰지 말 것.
+2. **`components/ui/button.tsx`**: variant `chip`, `chip-dashed` 추가(2장 표의 클래스, `max-md:h-11` 포함).
+3. **`components/ui/select.tsx`**: `SelectTrigger`에 `variant: "default" | "chip"` 추가(2장 표). 기존 `size="sm"` 유지.
+4. **`components/common/shell/page-shell.tsx`** (신규, 파운데이션 소유): `PageShell`, `ShellBar`(로고는 L-01 사이드바 머리와 같은 마크 컴포넌트 재사용), `SaveButton`(5.8 상태 표, ⌘/Ctrl+S, `min-w-[6.5rem]`, 표식 점), `CrumbRow`, `LeaveGuard`(AlertDialog 3버튼 + `beforeunload` + 앱 안 링크 가로채기), 입력 보존 배너. 계정 메뉴는 `NavUser` 메뉴 항목을 공유 상수로 빼서 두 셸이 같은 목록을 쓰게.
+5. **L-02 라우트 레이아웃**: 사이드바 없이 `PageShell`을 쓰는 레이아웃(Q-8 결정에 따라 라우트 그룹 분리 또는 경로 조건). 이 레이아웃의 Sonner는 `position="bottom-left"`.
+6. **`DocTitleInput` · `DocTextarea` · `ResizeHandle`**: 5.9 클래스·키보드 규칙대로. `DocTextarea`의 목록 줄 Enter/Tab 처리와 "구간 선택 + 링 강조" 함수(`highlightRange(textarea, start, end)`)를 함께 두면 S-10·S-44·C-02가 같은 것을 쓴다. 폭 기억은 `localStorage`(try/catch).
+7. **`ChipSelect` · `CompetencyChips` · `FieldRows`**: S-10만 쓰지만 모양이 공통 셀렉트 변형이라 `components/common/`에 두기를 권한다(리더 판단). `MonthField`에 `size="sm"`(h-8) 전달 지원.
+8. **`SourceChip`**: 기존 C-15 칩을 4종 라벨(3.14 v4 표)로 받는 공통 컴포넌트로. "프로젝트 내용에서"는 `button`이 아닌 `span tabIndex=0` + Tooltip.
+9. A2 영역(커리어)에 둘 것으로 보는 것: `components/career/ai-panel/`(`AiPanel` 틀·기록 목록·메시지·제안 독·칩 줄·입력), `StarProposalCard`, `DraftProposalCard`. 둘 다 S-10·S-44(같은 A2)만 쓰므로 영역 소유로 봤다. 다른 영역이 쓰게 되면 공통으로 옮긴다.
+10. QA 참고: 지금 `career-overview.tsx`의 카드·행은 `focus-visible:ring-[3px] ring-ring/50`을 쓰는데, A-3은 `ring-2 ring-ring`(불투명)이다. 새 S-43 산출물 행은 A-3대로 적었다. 기존 행을 맞출지는 QA 판단.
+
+## 6. v4 정합 수정 (2026-11-03, QA `27_ui-qa_v5-brand-conformance.md`)
+
+main의 v4 브랜드 토큰과 머지한 뒤, v5 문장이 v4 규칙(색 덧씌우기 금지, 초록 hover, 클릭 항목은 공통 컴포넌트)과 부딪힌 곳을 `docs/ui/design-system.md`에서 고쳤다. 표시는 `(v5, UQ-BR-n)`, 9장 v5 행에 후속으로 적었다. 토큰·패턴 이름은 바꾸지 않았다.
+
+| 이슈 | 결정 |
+|------|------|
+| UQ-BR-5 | 리더 판정대로 `chip`·`chip-dashed`·`SelectTrigger chip`도 v4 hover(`bg-primary/10` + `text-primary-text`)를 따른다. 회색 hover 예외 없음. 바탕(회색 채움 / 점선 투명)은 그대로 |
+| UQ-BR-9 | `warning-ghost` variant 신설. `warning-outline`은 카드 안 가벼운 접기 트리거에 너무 무겁고, 기본 ghost는 hover 때 초록이 되어 경고 의미가 사라진다 |
+| UQ-BR-12 | 2장·3.25·5.8·5.9·5.10·6장의 v5 클래스 문자열을 v4 variant로 바꿨다(`destructive-ghost`, `DropdownMenuItem variant="destructive"`, `Item`/`Item active`, 덧씌우기 없는 ghost, `Badge muted`, ghost `aria-pressed`). 3.25 표 머리 행 바탕(UQ-BR-10), 이전 초안 트리거(UQ-BR-11), 떠 있는 버튼 `bg-card`(UQ-BR-11)도 문서에서 같이 지웠다 |
+| UQ-BR-7 | 기록 아이콘 버튼은 `Toggle`이 아니라 ghost + `aria-pressed`로 정했다. 같은 머리의 다른 아이콘 버튼(`Button icon-sm`, `rounded-control`)과 크기·반경을 맞추기 위해서다(Toggle은 `rounded-lg`·크기 다름) |
+| UQ-BR-13 | 1.1 표 `--shell` 라이트 값 → `#F3FBF8`(= `--sidebar`) |
+| UQ-BR-14 | 1.3에 v5 예외 표 추가: L-02 원형 아이콘 버튼(반경만 `rounded-full`, 색은 variant), 문서형 입력 `rounded-md` + 회색 hover(입력은 선택 대상이 아님), 패널 사용자 말풍선(S-36 예외 이전), 제안 카드 머리 hover 없음 + 포커스 링 |
+| UQ-BR-15 | 리더 판정대로 카드형 라디오의 `primary-subtle` 선택을 예외로 등록(main `education-form`·`interview-prep` 포함). "카드형 선택지 → Item"은 누르면 바로 이동·선택되는 카드에만 해당한다고 범위를 적었다. 통일은 다음 개정 |
+| UQ-BR-16 | 6장 S-43 산출물 행 = `Item asChild`(C-25와 같은 컴포넌트)로 고치고, P-15에 S-08 패널 클릭 요소의 v4 기준을 적었다 |
+| UQ-BR-17 | 5.8 로고 = 공용 `LogoMark`(`bg-sidebar-primary text-sidebar-primary-foreground`). 코드 변경 없음 |
+
+### 엔지니어 적용 필요
+
+foundation (`components/ui/*`, 셸):
+
+1. `button.tsx` — `chip`: `hover:bg-accent` → `hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text` (나머지 클래스 유지). `chip-dashed`: 같게 바꾼다 (UQ-BR-5)
+2. `select.tsx` — `SELECT_TRIGGER_CHIP`: `hover:bg-accent`·`dark:hover:bg-accent` 제거 → `hover:bg-primary/10 hover:text-primary-text data-[state=open]:bg-primary/10 data-[state=open]:text-primary-text` (UQ-BR-5)
+3. `button.tsx` — variant 신설 `"warning-ghost": "text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground aria-expanded:bg-warning-subtle aria-expanded:text-warning-subtle-foreground"` (UQ-BR-9)
+4. `button.tsx` — `ghost`에 `aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text` 추가 (UQ-BR-7)
+5. `page-shell.tsx` "저장하지 않고 나가기" → `variant="destructive-ghost"`, className 색 제거 (UQ-BR-1)
+6. `doc-body.tsx` 떠 있는 Resumate AI 버튼의 `bg-card` 제거(`rounded-full`·`shadow-md` 유지) (UQ-BR-11)
+
+A2 (커리어):
+
+7. `deliverable-draft-card.tsx:679` "확인이 필요한 내용" 트리거 → `variant="warning-ghost" size="sm" className="-ml-2"`, `text-warning-subtle-foreground` 제거, 아이콘 `text-warning`은 유지 (UQ-BR-9, 3번 다음)
+8. `ai-panel.tsx:117` 기록 버튼 → `className={cn(pressed && "bg-accent")}` 제거, `aria-pressed`만 (UQ-BR-7, 4번 다음)
+9. 그 밖에 QA 27의 UQ-BR-2·3·4·6·8·10·11(draft card)은 QA 기대값 그대로이고 문서도 그 모양으로 맞췄다

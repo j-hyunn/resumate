@@ -41,6 +41,7 @@ import type { EvidenceView } from "@/lib/data/evidence"
 import type { AiFeatureStatusView } from "@/lib/data/ai-feature-status"
 import { MATCH_STATUS_LABELS, formatDate } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
+import { useChooseProjectAffiliation } from "@/components/common/choose-project-affiliation"
 import { GAP_ACTION_LABELS, IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS } from "./labels"
 import { useRestoreReturnParams } from "./shared"
 import { refusalOf } from "./extract-first"
@@ -312,7 +313,6 @@ const STATUS_BADGE: Record<RequirementMatchStatus, React.ReactNode> = {
 }
 
 function InsightResultView({
-  applicationProjectId: apId,
   latest,
   requirements,
   evidence,
@@ -323,9 +323,12 @@ function InsightResultView({
 }: InsightViewProps & { latest: Insight; regenerate: React.ReactNode; returnTarget: ReturnTargetInput }) {
   const r = latest.result!
   const reqLabel = (id: string) => requirements[id]?.content ?? "삭제된 요건"
+  // F-P2-09 보완점 "관련 경험 추가하기" (UX v5.6 C-23 ②): 소속을 고른 뒤 S-10 새 페이지 / 독립 프로젝트
+  const choose = useChooseProjectAffiliation()
 
   return (
     <div className="space-y-8">
+      {choose.dialog}
       {/* 머리: 기준 안내 + 데이터 변경됨(F-P2-07) + 다시 생성 */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
@@ -402,23 +405,29 @@ function InsightResultView({
                         {/* F-P2-09: "관련 경험이 있다면 추가하기" → 두 선택지 + C-10 */}
                         <p className="text-sm">관련 경험이 있다면 추가하기</p>
                         <div className="flex flex-wrap items-center gap-2">
+                          {/* v5.6: both go through C-23 소속 선택 (the chat is S-10's panel; the return target stays in the session) */}
                           <AiRunButton
                             lock={{ entry: "writing_chat" }}
                             variant="outline"
                             size="sm"
-                            href={routes.writingChatNew({ mode: "new_project", application_project_id: apId, feature: "insight" })}
-                            onRun={() => markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })}
+                            onRun={() => {
+                              markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })
+                              choose.open({ requirementId: g.requirement_ids[0] ?? null })
+                            }}
                           >
                             <Sparkles aria-hidden />
                             AI와 대화하며 추가
                           </AiRunButton>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link
-                              href={routes.projectNew({ requirement_id: g.requirement_ids[0] })}
-                              onClick={() => markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })}
-                            >
-                              직접 입력
-                            </Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={choose.loading}
+                            onClick={() => {
+                              markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })
+                              choose.open({ requirementId: g.requirement_ids[0] ?? null })
+                            }}
+                          >
+                            직접 입력
                           </Button>
                         </div>
                       </div>
@@ -452,7 +461,7 @@ function InsightResultView({
                       <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium tabular-nums">{p.rank}</span>
                       <div className="min-w-0 space-y-1">
                         {projectNames[p.project_id] ? (
-                          <Link href={routes.project(p.project_id)} onClick={() => markCareerReturn(returnTarget)} className="font-medium text-primary-text hover:underline">
+                          <Link href={routes.projectPage(p.project_id)} onClick={() => markCareerReturn(returnTarget)} className="font-medium text-primary-text hover:underline">
                             {projectNames[p.project_id]}
                           </Link>
                         ) : (

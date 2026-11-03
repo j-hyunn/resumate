@@ -50,8 +50,32 @@ export function TopBarFallback() {
   return <header className="sticky top-0 z-20 h-16 shrink-0 bg-background" aria-hidden />
 }
 
+type ToastPosition = "bottom-left" | "bottom-right"
+let toasterOverride: ToastPosition | null = null
+const toasterListeners = new Set<() => void>()
+const subscribeToaster = (fn: () => void) => {
+  toasterListeners.add(fn)
+  return () => void toasterListeners.delete(fn)
+}
+
+/**
+ * (v4) L-02 puts wide-screen toasts at bottom-left (the Resumate AI input sits bottom-right, design-system 2 / 5.8).
+ * A page shell calls this while mounted; the root toaster follows it.
+ */
+export function useToasterPosition(position: ToastPosition): void {
+  React.useEffect(() => {
+    toasterOverride = position
+    toasterListeners.forEach((fn) => fn())
+    return () => {
+      toasterOverride = null
+      toasterListeners.forEach((fn) => fn())
+    }
+  }, [position])
+}
+
 /** Global toast region: bottom-right on wide screens, top-center on narrow (design-system 2). */
 export function ResponsiveToaster() {
+  const override = React.useSyncExternalStore(subscribeToaster, () => toasterOverride, () => null)
   const [narrow, setNarrow] = React.useState(false)
   React.useEffect(() => {
     const mql = window.matchMedia("(max-width: 1023px)")
@@ -60,7 +84,7 @@ export function ResponsiveToaster() {
     mql.addEventListener("change", update)
     return () => mql.removeEventListener("change", update)
   }, [])
-  return <Toaster position={narrow ? "top-center" : "bottom-right"} />
+  return <Toaster position={narrow ? "top-center" : (override ?? "bottom-right")} />
 }
 
 const WATCH_MS = 4_000

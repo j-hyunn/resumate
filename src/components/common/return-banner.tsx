@@ -47,21 +47,25 @@ export function notifyCareerSaved(): void {
 }
 
 /**
- * Next step of the FL-13 loop after a career save (UQ-4). Re-judged readiness says
- * `next_action = 'writing_chat'` → S-36 (new_project with the just-saved experience
- * pre-selected, or augment the suggested project). Null when ready or still `form`.
+ * Next step of the FL-13 loop after a career save (UQ-4), v5.6 routes. Re-judged readiness says
+ * `next_action = 'writing_chat'` → the suggested project's S-10 (its Resumate AI 패널 starts the chat; the return
+ * target stays in the session), or — a new project — S-10 새 페이지 under the just-saved experience. No suggestion
+ * and no experience → null (C-09 offers C-23 소속 선택 instead). Null when ready or still `form`.
  */
 export function gateContinuationHref(target: StoredReturnTarget, readiness: DataReadiness | null): string | null {
   const f = readiness?.features[RETURN_FEATURE_READINESS[target.feature]]
-  if (!f || f.ready || f.next_action !== "writing_chat") return null
-  const augment = f.suggested_mode === "augment_project" && f.suggested_project_id
-  return routes.writingChatNew({
-    mode: augment ? "augment_project" : "new_project",
-    project_id: augment ? f.suggested_project_id : undefined,
-    experience_id: augment ? undefined : target.experience_id,
-    application_project_id: target.application_project_id,
-    feature: target.feature,
-  })
+  if (!f || f.ready) return null
+  // DM §6 v4.4: writing_chat + suggested_project_id → that S-10; create_project → S-10 새 페이지 under the
+  // just-saved experience (none known → null, C-09 offers C-23)
+  if (f.next_action === "writing_chat" && f.suggested_project_id) return routes.projectPage(f.suggested_project_id, { focus: "star" })
+  if (f.next_action === "create_project" || f.next_action === "writing_chat")
+    return target.experience_id ? routes.projectPageNew({ experience: target.experience_id }) : null
+  return null
+}
+
+/** S-10 (`/career/projects/{id}` or `/new`): the page's own panel is the next step — no second link (UQ-24). */
+function onProjectPage(pathname: string): boolean {
+  return /^\/career\/projects\/[^/]+$/.test(pathname)
 }
 
 /**
@@ -96,7 +100,7 @@ export function useGateContinuation() {
     ready,
     /** "{기능}으로 돌아가기" target when ready */
     returnHref: target?.href ?? null,
-    /** S-36 next step when not ready and next_action = writing_chat */
+    /** S-10 next step when not ready and next_action = writing_chat */
     continueHref: target ? gateContinuationHref(target, readiness) : null,
     recheck,
   }
@@ -110,8 +114,10 @@ const PREVIEW_TARGET: StoredReturnTarget = {
   created_at: new Date(0).toISOString(),
 }
 
-export function ReturnBanner({ target: targetProp }: { target?: StoredReturnTarget | null }) {
+export function ReturnBanner({ target: targetProp, placement }: { target?: StoredReturnTarget | null; placement?: "shell" | "page" }) {
   const pathname = usePathname()
+  // L-02 pages (S-10 · S-44, /dev/page-shell) draw the banner in their ShellBanners slot
+  const inPageShell = placement ? placement === "page" : /^\/career\/(projects|deliverables)\//.test(pathname) || pathname.startsWith("/dev/page-shell")
   const preview = usePreviewState()
   const [target, setTarget] = React.useState<StoredReturnTarget | null>(null)
   const [readiness, setReadiness] = React.useState<DataReadiness | null>(null)
@@ -149,12 +155,17 @@ export function ReturnBanner({ target: targetProp }: { target?: StoredReturnTarg
   const feature = readiness?.features[RETURN_FEATURE_READINESS[target.feature]]
   const ready = feature?.ready ?? false
   const remaining = feature?.missing?.length ?? 0
-  // UQ-24: inside S-36 the chat itself is the next step — never offer a second chat
-  const continueHref = pathname.startsWith("/career/writing-chats") ? null : gateContinuationHref(target, readiness)
+  // UQ-24: on S-10 the panel itself is the next step — never offer "AI와 대화하며 채우기" there
+  const continueHref = onProjectPage(pathname) ? null : gateContinuationHref(target, readiness)
 
   return (
     <div
-      className="sticky top-16 z-10 flex flex-wrap items-center gap-3 border-b border-info/20 bg-info-subtle px-4 py-2.5 text-sm text-info-subtle-foreground lg:px-6"
+      className={
+        inPageShell
+          ? // L-02 (UQ-S10-12): a plain banner inside ShellBanners (the card doesn't scroll, no sticky offset)
+            "flex flex-wrap items-center gap-3 rounded-lg border border-info/20 bg-info-subtle px-3 py-2 text-sm text-info-subtle-foreground"
+          : "sticky top-16 z-10 flex flex-wrap items-center gap-3 border-b border-info/20 bg-info-subtle px-4 py-2.5 text-sm text-info-subtle-foreground lg:px-6"
+      }
       role="region"
       aria-label="원래 화면으로 돌아가기"
     >

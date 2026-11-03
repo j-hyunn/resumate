@@ -37,7 +37,16 @@ import { ExternalProviderLink } from "./ai-error-notice"
 import type { ApplicationDeletionImpact } from "@/lib/data/deletion"
 
 export type DeleteTarget =
-  | { kind: "career"; entity_type: Exclude<DeletionEntityType, "writing_chat">; entity_id: string; label: string }
+  | {
+      kind: "career"
+      entity_type: Exclude<DeletionEntityType, "writing_chat">
+      entity_id: string
+      label: string
+      /** project only (C-05 v5.6 lines): affiliated = STAR + chats, standalone = deliverables + their chats */
+      scope?: "affiliated" | "standalone"
+      /** S-10 / S-44 with unsaved edits → "저장하지 않은 수정도 함께 사라져요" */
+      unsavedChanges?: boolean
+    }
   | { kind: "writing_chat"; entity_id: string; label?: string }
   | { kind: "application_project"; entity_id: string; label: string }
   | { kind: "draft"; entity_id: string; label: string }
@@ -54,6 +63,7 @@ const ENTITY_NAMES: Record<Exclude<DeletionEntityType, "writing_chat">, string> 
   experience: "경력",
   education: "교육",
   project: "프로젝트",
+  project_deliverable: "산출물",
   project_detail: "상세 내용",
   achievement: "정량 성과",
   skill: "스킬",
@@ -188,6 +198,8 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
               ? "이 기업 JD를 삭제할까요?"
               : target.kind === "api_key"
                 ? `${AI_PROVIDER_LABELS[target.entity_id]} 키를 삭제할까요? 즉시 영구 삭제되고 되돌릴 수 없어요.`
+              : target.kind === "career" && target.entity_type === "project_deliverable"
+                ? `'${target.label}'을 삭제할까요?` // C-05 산출물 삭제 (spec copy)
               : // [UI-가정] first-line copy is not in the spec
                 `${target.label ? `'${target.label}' ` : ""}${name}을(를) 삭제할까요?`}
           </AlertDialogDescription>
@@ -212,7 +224,10 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
             </p>
           ) : null}
 
-          {target.kind === "career" ? (
+          {/* C-05: a deliverable offers the result choice only when results cite it */}
+          {/* UQ-S44-16: a deliverable shows the choice only after the impact says results cite it (no jump) */}
+          {target.kind === "career" &&
+          (target.entity_type !== "project_deliverable" || (impact?.kind === "career" && impact.data.affected_results.by_application_project.length > 0)) ? (
             <fieldset className="space-y-2">
               <legend className="text-sm leading-5 font-medium">결과 처리</legend>
               <RadioGroup value={resultMode} onValueChange={(v) => setResultMode(v as ResultMode)} className="gap-2">
@@ -264,8 +279,14 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
 
   if (impact.kind === "career" && target.kind === "career") {
     const c = impact.data.cascade
-    // F-COM-04 v4.5 (CR-11·CR-15): no 상세 내용·정량 성과 any more; a project takes its AI 작성 대화 with it
-    if (target.entity_type === "project" && c.writing_chats > 0) lines.push(`이 프로젝트의 AI 작성 대화 ${c.writing_chats}개도 함께 삭제돼요`)
+    // C-05 v5.6 프로젝트 삭제: affiliated → STAR + its chats / standalone → deliverables + their chats (PA-1)
+    if (target.entity_type === "project") {
+      const standalone = target.scope ? target.scope === "standalone" : (c.project_deliverables ?? 0) > 0
+      lines.push(standalone ? `산출물 ${c.project_deliverables ?? 0}개와 산출물의 AI 대화 ${c.writing_chats}개가 함께 삭제돼요` : `STAR 내용과 이 프로젝트의 AI 대화 ${c.writing_chats}개가 함께 삭제돼요`)
+    }
+    // C-05 산출물 삭제: "(대화가 있으면) 이 산출물의 AI 대화 {N}개도 함께 삭제돼요"
+    if (target.entity_type === "project_deliverable" && c.writing_chats > 0) lines.push(`이 산출물의 AI 대화 ${c.writing_chats}개도 함께 삭제돼요`)
+    if (target.unsavedChanges) lines.push("저장하지 않은 수정도 함께 사라져요")
     if (target.entity_type === "experience" || target.entity_type === "education") {
       // [UI-가정] cascade line copy for 경력·교육 is not in the spec
       if (c.projects > 0)
@@ -274,9 +295,8 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
     byAp = impact.data.affected_results.by_application_project
   }
   if (impact.kind === "writing_chat") {
-    lines.push(
-      `대화 메시지 ${impact.data.writing_chat?.message_count ?? 0}개와 저장 전 정리 결과가 삭제돼요. 저장한 프로젝트는 그대로예요(출처 대화 연결만 끊겨요)`,
-    )
+    // C-05 v5.6 AI 대화만 삭제 (S-10: STAR, S-44: 본문)
+    lines.push(`대화 메시지 ${impact.data.writing_chat?.message_count ?? 0}개가 삭제돼요. 이미 반영해 저장한 내용은 그대로예요`)
   }
   if (impact.kind === "application_project") {
     const d = impact.data

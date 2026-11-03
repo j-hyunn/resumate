@@ -25,6 +25,7 @@ import { markAiConnectReturn } from "./ai-connect-return"
 import { AiErrorNotice } from "./ai-error-notice"
 import { ProviderBadge } from "./provider-badge"
 import { markCareerReturn } from "./return-target"
+import { useChooseProjectAffiliation } from "./choose-project-affiliation"
 
 export function DataInsufficientGate({
   feature,
@@ -66,63 +67,89 @@ export function DataInsufficientGate({
   const titleId = React.useId()
   const connection = useAiConnection(readiness.ai_connection)
   const f = readiness.features[feature]
-  // v5.3 A18: name / role missing on a project that otherwise counts
-  const fieldsProjectId =
-    !f.ready && f.next_action === "form" && f.hints?.includes("project_fields") ? (f.suggested_project_id ?? null) : null
-  const [fieldsName, setFieldsName] = React.useState<{ id: string; name: string | null; role: string | null } | null>(null)
+  // C-09 v5.6 "form + suggested_project_id" (AI can't be used, DM §6 v4.4 ②·③): hints pick the target —
+  // project_fields → S-43 프로젝트 내용 편집, project_star → S-10 빈 STAR 칸. Never a chat.
+  const fillProjectId = !f.ready && f.next_action === "form" ? (f.suggested_project_id ?? null) : null
+  const fillKind: "fields" | "star" | null = fillProjectId ? (f.hints?.includes("project_fields") ? "fields" : "star") : null
+  const [fillName, setFillName] = React.useState<{ id: string; name: string | null } | null>(null)
   React.useEffect(() => {
-    if (!fieldsProjectId) return
+    if (!fillProjectId) return
     let alive = true
-    void getProjectFieldsAction(fieldsProjectId).then((p) => {
-      if (alive) setFieldsName({ id: fieldsProjectId, ...p })
+    void getProjectFieldsAction(fillProjectId).then((p) => {
+      if (alive) setFillName({ id: fillProjectId, name: p.name })
     })
     return () => {
       alive = false
     }
-  }, [fieldsProjectId])
+  }, [fillProjectId])
+  // C-23 소속 선택 (before the early return: hooks keep their order)
+  const choose = useChooseProjectAffiliation()
   if (f.ready) return null
   const missing = f.missing ?? []
   const hints = f.hints ?? []
   // v5: key invalid (server already gives next_action = 'form') or the chat start failed
   const keyInvalid = connection?.key_status === "invalid"
   const noKey = connection != null && !connection.active_provider
-  const showCause = !fieldsProjectId && (keyInvalid || Boolean(chatFailure))
-  const blocked = !fieldsProjectId && (showCause || noKey)
-  const nameLoaded = fieldsName && fieldsName.id === fieldsProjectId
-  const projectName = nameLoaded ? (fieldsName.name ?? "이름 없는 프로젝트") : null
-  // Q53-8 제목: 빈 칸 수는 projects.name·role로 계산, 읽기 전에는 기본 문구 [가정 명세]
-  const fieldsTitle = !nameLoaded
-    ? "빈 칸만 채우면 바로 쓸 수 있어요"
-    : !fieldsName.name && !fieldsName.role
-      ? "두 칸만 채우면 바로 쓸 수 있어요"
-      : !fieldsName.name || !fieldsName.role
-        ? "한 칸만 채우면 바로 쓸 수 있어요"
-        : "빈 칸만 채우면 바로 쓸 수 있어요" // 이미 채워짐 (판정 뒤 저장): 칸 수를 말하지 않는다 [UI-가정]
+  // the C-20 cause line also sits above "'{이름}' 마저 채우기" when the key is the reason (C-09 키 행)
+  const showCause = keyInvalid || Boolean(chatFailure)
+  const blocked = !fillProjectId && (showCause || noKey)
+  const nameLoaded = fillName && fillName.id === fillProjectId
+  const projectName = nameLoaded ? (fillName.name ?? "이름 없는 프로젝트") : null
   const blockedCode: AiErrorCode = chatFailure ?? "key_invalid"
   const target = { application_project_id: applicationProjectId, feature: returnFeature, params: returnParams, application_name: applicationName, href: returnHref }
   const remember = () => markCareerReturn(target)
 
-  // [UI-가정] "직접 입력": first draft item edit, else a new form
+  // 보조 링크 "직접 입력" (C-09): a draft item → that item (경력·교육 → S-08, 프로젝트 → S-10, which sends a standalone
+  // id on to S-43), none → C-23 소속 선택 (`null`) [UI-가정: C-22 대신 C-23 — 이 게이트는 프로젝트가 부족한 경우]
   const draftIds = readiness.draft_item_ids
-  const direct =
+  const direct: string | null =
     directInputHref ??
     (draftIds.projects[0]
-      ? routes.project(draftIds.projects[0])
+      ? routes.projectPage(draftIds.projects[0], { focus: "star" })
       : draftIds.experiences[0]
-        ? routes.experience(draftIds.experiences[0])
-        : missing.includes("complete_experience")
-          ? routes.experienceNew()
-          : routes.projectNew())
+        ? routes.careerItem("experience", draftIds.experiences[0])
+        : draftIds.educations[0]
+          ? routes.careerItem("education", draftIds.educations[0])
+          : missing.includes("complete_experience")
+            ? routes.experienceNew()
+            : null)
 
-  const chatHref =
-    f.next_action === "form"
-      ? routes.experienceNew()
-      : routes.writingChatNew({
-          mode: f.suggested_mode ?? "new_project",
-          project_id: f.suggested_mode === "augment_project" ? f.suggested_project_id : undefined,
-          application_project_id: applicationProjectId,
-          feature: returnFeature,
-        })
+  // 주 버튼 (C-09 v5.6): writing_chat + suggested → S-10 (패널이 새 대화), create_project → C-23 (`null`),
+  // form without a suggestion → "경력 먼저 입력하기" (S-09 새 경력) when the experience is missing, else 직접 입력
+  const chatHref: string | null =
+    f.next_action === "writing_chat" && f.suggested_project_id
+      ? routes.projectPage(f.suggested_project_id, { focus: "star" })
+      : f.next_action === "form"
+        ? missing.includes("complete_experience")
+          ? routes.experienceNew()
+          : direct
+        : null
+  const chatLabel =
+    f.next_action === "form" ? (missing.includes("complete_experience") ? "경력 먼저 입력하기" : "직접 입력하기") : "AI와 대화하며 채우기"
+  const go = (href: string | null, label: React.ReactNode, variant?: "outline" | "link") =>
+    href ? (
+      <Button asChild variant={variant}>
+        <Link href={href} onClick={remember}>
+          {label}
+        </Link>
+      </Button>
+    ) : (
+      <Button
+        variant={variant}
+        disabled={choose.loading}
+        onClick={() => {
+          remember()
+          choose.open()
+        }}
+      >
+        {label}
+      </Button>
+    )
+  const fillHref = fillProjectId
+    ? fillKind === "fields"
+      ? routes.careerItem("project", fillProjectId, { edit: "content" })
+      : routes.projectPage(fillProjectId, { focus: "star" })
+    : null
 
   return (
     <Card className={cn("max-w-xl gap-4 p-6", className)} role="region" aria-labelledby={titleId}>
@@ -130,8 +157,9 @@ export function DataInsufficientGate({
         <ClipboardList className="size-5 text-primary-text" aria-hidden />
       </div>
       <h2 id={titleId} className="text-lg leading-7 font-semibold">
-        {fieldsProjectId ? (
-          fieldsTitle
+        {fillKind === "fields" ? (
+          // C-09 project_fields 제목 (Q53-8 1칸 문구)
+          "한 칸만 채우면 바로 쓸 수 있어요"
         ) : (
           <>
             {featureLabel}
@@ -153,17 +181,17 @@ export function DataInsufficientGate({
         />
       </ul>
 
-      {hints.includes("complete_project_detail") ? (
+      {hints.includes("project_star") ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            프로젝트는 있지만 완료된 상세 내용이 없어요(제목·상황·행동)
-            <span className="ml-1 text-xs tabular-nums">현재 {readiness.counts.projects_without_complete_detail}건</span>
+            프로젝트는 있지만 STAR의 상황·행동이 비어 있어요
+            <span className="ml-1 text-xs tabular-nums">현재 {readiness.counts.projects_without_complete_star}건</span>
           </span>
         </p>
       ) : null}
 
-      {fieldsProjectId ? (
+      {fillKind === "fields" ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
@@ -174,7 +202,7 @@ export function DataInsufficientGate({
             ) : (
               <Skeleton className="inline-block h-4 w-24 align-middle" />
             )}
-            에 이름이나 역할이 비어 있어요. 채우면 바로 쓸 수 있어요
+            의 프로젝트 내용이 비어 있어요
           </span>
         </p>
       ) : null}
@@ -196,11 +224,11 @@ export function DataInsufficientGate({
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          {fieldsProjectId ? (
+          {fillProjectId ? (
             <>
               <Button asChild>
                 <Link
-                  href={routes.project(fieldsProjectId, { focus: "fields", application_project_id: applicationProjectId })}
+                  href={fillHref ?? routes.career()}
                   onClick={remember}
                   aria-label={`'${projectName ?? "이름 없는 프로젝트"}' 마저 채우기`}
                 >
@@ -211,24 +239,14 @@ export function DataInsufficientGate({
                   </span>
                 </Link>
               </Button>
-              {direct !== routes.project(fieldsProjectId) ? (
-                <Button asChild variant="link">
-                  <Link href={direct} onClick={remember}>
-                    직접 입력
-                  </Link>
-                </Button>
-              ) : null}
+              {direct !== fillHref ? go(direct, "직접 입력", "link") : null}
             </>
           ) : blocked ? (
             <>
-              <Button asChild>
-                <Link href={direct} onClick={remember}>
-                  직접 입력하기
-                </Link>
-              </Button>
+              {go(direct, "직접 입력하기")}
               {activeChatId ? (
                 <Button asChild variant="outline">
-                  <Link href={routes.writingChat(activeChatId)} onClick={remember}>
+                  <Link href={routes.writingChatRedirect(activeChatId)} onClick={remember}>
                     이어서 대화하기
                   </Link>
                 </Button>
@@ -236,20 +254,10 @@ export function DataInsufficientGate({
             </>
           ) : (
             <>
-              <Button asChild>
-                <Link href={chatHref} onClick={remember}>
-                  {f.next_action === "form" ? "경력 먼저 입력하기" : "AI와 대화하며 채우기"}
-                </Link>
-              </Button>
-              {f.next_action === "writing_chat" ? <ProviderBadge connection={connection} /> : null}
+              {go(chatHref, chatLabel)}
+              {f.next_action === "writing_chat" || f.next_action === "create_project" ? <ProviderBadge connection={connection} /> : null}
               {/* UQ-16: hide the secondary link when it would go where the primary goes */}
-              {direct !== chatHref ? (
-                <Button asChild variant="link">
-                  <Link href={direct} onClick={remember}>
-                    직접 입력
-                  </Link>
-                </Button>
-              ) : null}
+              {direct !== chatHref ? go(direct, "직접 입력", "link") : null}
             </>
           )}
         </div>
@@ -267,6 +275,7 @@ export function DataInsufficientGate({
         </>
       ) : null}
 
+      {choose.dialog}
       <p className="text-sm text-muted-foreground">
         AI 분석은 실행하지 않았어요(토큰을 쓰지 않았어요). 커리어를 채우면 이 화면으로 다시 돌아와요
       </p>

@@ -236,7 +236,7 @@ export function ExperienceForm({
         actions={
           id ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={routes.projectNew({ experience_id: id })}>
+              <Link href={routes.projectPageNew({ experience: id })}>
                 <Plus aria-hidden />
                 프로젝트 추가
               </Link>
@@ -249,7 +249,7 @@ export function ExperienceForm({
             {experience.projects.map((p) => (
               <li key={p.id}>
                 <Item asChild variant="row">
-                  <Link href={routes.project(p.id)}>
+                  <Link href={routes.projectPage(p.id)}>
                   <span className="min-w-0 flex-1 truncate font-medium">{p.name ?? "이름 없는 프로젝트"}</span>
                   {p.status === "draft" ? <DraftBadge label="작성 중 — AI 미반영" /> : null}
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">상세 내용 {p.details.length}</span>
@@ -314,7 +314,7 @@ function GateCompletion({
         ready={ready}
         returnHref={returnHref}
         continueHref={continueHref}
-        directHref={routes.projectNew(experienceId ? { experience_id: experienceId } : undefined)}
+        directHref={experienceId ? routes.projectPageNew({ experience: experienceId }) : routes.career()}
         loading={loading}
       />
     </Card>

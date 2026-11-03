@@ -95,6 +95,12 @@
   --sidebar-accent-foreground: var(--primary-text);
   --sidebar-border: #E2E2E2;
   --sidebar-ring: #15A76E;
+
+  /* (v4) L-02 전체 페이지 셸 · Resumate AI 패널 — 셸 바탕은 L-01 앱 바탕(#F3FBF8)과 같다 */
+  --shell: #F3FBF8;
+  --shell-foreground: oklch(0.21 0.01 260);
+  --panel: oklch(0.972 0.003 260);
+  --panel-foreground: oklch(0.21 0.01 260);
 }
 
 :root {
@@ -178,6 +184,12 @@
   --sidebar-accent-foreground: var(--primary-text);
   --sidebar-border: oklch(0.33 0.008 260);
   --sidebar-ring: oklch(0.66 0.12 158);
+
+  /* (v4) L-02 전체 페이지 셸 · Resumate AI 패널 (다크: 셸은 카드보다 어둡게, 패널은 카드보다 밝게) */
+  --shell: oklch(0.165 0.006 165);
+  --shell-foreground: oklch(0.95 0.004 260);
+  --panel: oklch(0.235 0.007 260);
+  --panel-foreground: oklch(0.95 0.004 260);
 }
 
 @theme inline {
@@ -257,6 +269,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-shell: var(--shell);                       /* (v4) */
+  --color-shell-foreground: var(--shell-foreground); /* (v4) */
+  --color-panel: var(--panel);                       /* (v4) */
+  --color-panel-foreground: var(--panel-foreground); /* (v4) */
 
   --animate-field-flash: field-flash 1.2s ease-out;
   --animate-caret-blink: caret-blink 1s steps(2, start) infinite;

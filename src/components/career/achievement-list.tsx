@@ -69,7 +69,7 @@ export function AchievementList({
               {a.status === "draft" ? <DraftBadge /> : null}
               {a.source_writing_chat_id ? (
                 <Button asChild variant="link" size="sm" className="h-auto px-0">
-                  <Link href={routes.writingChat(a.source_writing_chat_id)}>
+                  <Link href={routes.writingChatRedirect(a.source_writing_chat_id)}>
                     <MessagesSquare aria-hidden />
                     출처 대화 보기
                   </Link>

@@ -194,6 +194,22 @@ export async function deleteCareerItemAction(
   refresh()
 }
 
+/**
+ * S-44 ⋯ 산출물 삭제 (C-05 `project_deliverable`): no `refresh()` — refreshing the S-44 route would flash its
+ * ST-NOTFOUND before the page moves to S-43 (UQ-S44-13). The client navigates; S-08 reads fresh data.
+ */
+export async function deleteDeliverableAction(deliverableId: string, resultMode?: ResultMode) {
+  await deleteCareerItem("project_deliverable", deliverableId, undefined, resultMode)
+}
+
+/**
+ * S-10 ⋯ 프로젝트 삭제 (C-05 `project`, 경력·교육 안 프로젝트): no `refresh()` — refreshing the S-10 route would
+ * flash its ST-NOTFOUND before the page moves to S-08 (UQ-INT-1). The client navigates; S-08 reads fresh data.
+ */
+export async function deleteAffiliatedProjectAction(projectId: string, resultMode?: ResultMode) {
+  await deleteCareerItem("project", projectId, undefined, resultMode)
+}
+
 // ---------------------------------------------------------------------------
 // S-36 AI 작성 대화
 // ---------------------------------------------------------------------------

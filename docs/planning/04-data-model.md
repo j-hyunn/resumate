@@ -1,7 +1,7 @@
-# Resumate 데이터 모델 v4.4
+# Resumate 데이터 모델 v4.5
 
-> 작성: data-architect / 기준 입력: **v4.4: `docs/planning/01-prd.md` PRD v4.5, `docs/planning/02-user-flows.md` 화면 명세 v5.5, `docs/planning/03-ai-features.md` AI 명세 v4.5, `_workspace/00_input/planning-decisions-career-redesign.md`(CR-1~CR-14)** / 이전: `_workspace/01_product-planner_prd.md` (PRD v4.3, BYOK), `_workspace/02_ux-planner_flows.md` (화면 명세 v5.3), `_workspace/02_ai-feature-designer_ai-spec.md` (AI 명세 v4.3), `_workspace/00_input/brief-2026-11-05.md` (백엔드 구현 반영 부분 재실행), `planning-decisions-2026-11-05.md` (사용자 확정 A1~A24), `spec-gaps-summary.md`, `product-context.md`
-> 상태: **v4.4 — 커리어 화면 재설계 반영(`_workspace/00_input/planning-decisions-career-redesign.md`, CR-1~CR-14, 확정 2026-11-02 (사용자))**: 기준 입력 PRD v4.5·UX v5.5·AI v4.5와 요청 `_workspace/career-redesign/{prd,ux,ai}_requests.md`. STAR를 `projects` 컬럼으로 합치고 `project_details`·`achievements` 폐기(DM-19), 소속 / 독립 프로젝트 구성 CHECK(DM-20), 분류 3종·`description`·`link_url`·`project_deliverables` 신설, `writing_chats`를 프로젝트 필수·`active`/`closed`·반영 RPC `apply_writing_chat_proposal`로 개정, 미연결 대화 90일 정리 폐기, 근거 `project_deliverable`, readiness `create_project`. 회신은 `_workspace/career-redesign/dm_replies.md`, 백엔드 후속은 11장. / **v4.3b — 가입 필수 동의에서 `cross_border_transfer` 제외(spec-gaps ⑲, A.2)** / **v4.3a — 요건 0개로 성공한 JD의 공고 원문 수정(Q53-11, 2.6.1)** / **v4.3 — UI v5.3 QA 사용자 결정 반영(`_workspace/00_input/planning-decisions-v53-qa.md`, Q53-1~9)**: 입력 원인으로 요건 추출에 실패한 JD의 공고 원문 수정(Q53-2, 2.6.1), 생성 RPC 게이트(Q53-1), 답변별 실패 원인·종합만 다시 정리(Q53-3·5), 경력기술서 중단(Q53-7), 실패 세션과 새 면접, 입력 원인 실패 세션의 새 결과 표식(Q53-10)(2.7.1). UX v5.4와 맞췄다. ★ 표시는 이미 구현된 백엔드도 고쳐야 한다. / **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
+> 작성: data-architect / 기준 입력: **v4.5: `docs/planning/01-prd.md` PRD v4.6, `docs/planning/02-user-flows.md` 화면 명세 v5.6, `docs/planning/03-ai-features.md` AI 명세 v4.6, `_workspace/00_input/planning-decisions-project-add-figma.md`(PA-1~PA-4, 확정 2026-11-03 (사용자)), 요청 `_workspace/project-add-figma/{prd,ux,ai}_requests.md`, 리더 정렬 3건(2026-11-03)** / v4.4: `docs/planning/01-prd.md` PRD v4.5, `docs/planning/02-user-flows.md` 화면 명세 v5.5, `docs/planning/03-ai-features.md` AI 명세 v4.5, `_workspace/00_input/planning-decisions-career-redesign.md`(CR-1~CR-14)** / 이전: `_workspace/01_product-planner_prd.md` (PRD v4.3, BYOK), `_workspace/02_ux-planner_flows.md` (화면 명세 v5.3), `_workspace/02_ai-feature-designer_ai-spec.md` (AI 명세 v4.3), `_workspace/00_input/brief-2026-11-05.md` (백엔드 구현 반영 부분 재실행), `planning-decisions-2026-11-05.md` (사용자 확정 A1~A24), `spec-gaps-summary.md`, `product-context.md`
+> 상태: **v4.5 — 프로젝트 추가·산출물 상세 Figma 결정 반영(PA-1~PA-4)**: `writing_chats.project_deliverable_id`(산출물 대화, PA-1), S-10·S-44 **페이지 저장 RPC** `save_project_page`·`save_project_deliverable`(만들기·고치기 한 번에, 기대 버전 `p_expected_updated_at` → `stale_write`, 반영됨 기록 `p_applied_proposals`를 같은 트랜잭션에서, 기록 실패는 저장을 막지 않음 — PA-3), **`apply_writing_chat_proposal` 폐기**(반영 = 화면 폼 채우기), 산출물 대화 시작 `start_deliverable_writing_chat`, `structured_draft` 필드 `rev`·산출물 대화 모양(`target = project_deliverable`), V-9h·분류·기간의 DB 거부를 낮춤으로 완화, 초안 6회 `writing_chat_draft_limit_reached`, 삭제 영향에 산출물 대화. PA-2·PA-4는 스키마 변경 없음. 회신은 `_workspace/project-add-figma/dm_replies.md`, 백엔드 후속 ★는 11.3. / **v4.4 — 커리어 화면 재설계 반영(`_workspace/00_input/planning-decisions-career-redesign.md`, CR-1~CR-14, 확정 2026-11-02 (사용자))**: 기준 입력 PRD v4.5·UX v5.5·AI v4.5와 요청 `_workspace/career-redesign/{prd,ux,ai}_requests.md`. STAR를 `projects` 컬럼으로 합치고 `project_details`·`achievements` 폐기(DM-19), 소속 / 독립 프로젝트 구성 CHECK(DM-20), 분류 3종·`description`·`link_url`·`project_deliverables` 신설, `writing_chats`를 프로젝트 필수·`active`/`closed`·반영 RPC `apply_writing_chat_proposal`로 개정, 미연결 대화 90일 정리 폐기, 근거 `project_deliverable`, readiness `create_project`. 회신은 `_workspace/career-redesign/dm_replies.md`, 백엔드 후속은 11장. / **v4.3b — 가입 필수 동의에서 `cross_border_transfer` 제외(spec-gaps ⑲, A.2)** / **v4.3a — 요건 0개로 성공한 JD의 공고 원문 수정(Q53-11, 2.6.1)** / **v4.3 — UI v5.3 QA 사용자 결정 반영(`_workspace/00_input/planning-decisions-v53-qa.md`, Q53-1~9)**: 입력 원인으로 요건 추출에 실패한 JD의 공고 원문 수정(Q53-2, 2.6.1), 생성 RPC 게이트(Q53-1), 답변별 실패 원인·종합만 다시 정리(Q53-3·5), 경력기술서 중단(Q53-7), 실패 세션과 새 면접, 입력 원인 실패 세션의 새 결과 표식(Q53-10)(2.7.1). UX v5.4와 맞췄다. ★ 표시는 이미 구현된 백엔드도 고쳐야 한다. / **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
 > 이 문서의 테이블·컬럼명이 **확정명**이다. v4.2에서 새로 생긴 이름은 11.5절에 정리했다. UX v5·AI v4 문서와 다른 이름은 11장 `요청 회신`에 old → new로 정리했다. 버전별 변경은 10장.
 > 표기: "프로젝트"(`projects`)는 커리어의 업무 단위로, 경력·교육 아래 **소속 프로젝트**(STAR 1개 = `projects`의 컬럼)와 소속 없는 **독립 프로젝트**(프로젝트 정보·내용·산출물)가 있다. "산출물"은 `project_deliverables`. 지원 건 단위는 문서·데이터에서 **"지원 프로젝트"**(`application_projects`), 메뉴 라벨 **"자기소개서 관리"**(v4.4, CR-12. 이전 "기업 JD 관리"), 화면 표기 **"자기소개서"**(v4.4 후속 CR-23 확정 — 이전 화면 표기 "기업 JD". 내부 이름 `application_projects`·`job_descriptions`·"지원 프로젝트"는 그대로), JD 원문(`job_descriptions.raw_text`)은 화면에서 **"공고 원문"**(PRD D-20, UX D-UX-10). v3의 "상세 내용"(`project_details`)은 v4.4에서 폐기했다. "AI 작성 대화"(`writing_chats`)는 커리어 채팅(`chat_threads`, Should)과 다르다.
 
@@ -25,7 +25,8 @@
 | DM-10 | RAG·pgvector 미사용 | |
 | DM-11 | 커리어 테이블과 지원 프로젝트 테이블 분리, 둘 사이는 soft reference뿐 | |
 | DM-12 | 지원 프로젝트 하위 결과의 소유 키는 `application_project_id` 하나 | D-19 (a) 전제 |
-| DM-13 (v4.4 개정) | **커리어 데이터 쓰기는 사용자 세션에서만.** AI 작업용 DB 역할 `app_ai_writer`는 커리어 테이블을 읽기만 한다. AI 작성 대화의 제안을 STAR에 옮기는 **"반영"**(`apply_writing_chat_proposal`)은 AI 호출이 없는 **사용자 확정 동작**이며 사용자 세션 RPC로 실행한다(3.3절). v3의 저장·폼 전환은 폐기 | NFR-AI-05, CR-5 |
+| DM-13 (v4.5 개정) | **커리어 데이터 쓰기는 사용자 세션에서만.** AI 작업용 DB 역할 `app_ai_writer`는 커리어 테이블을 읽기만 한다. **v4.5 (PA-3)**: AI 제안의 **[반영]은 화면이 폼을 채우는 동작**이라 DB를 쓰지 않고, 커리어 값은 사용자의 **"저장하기"**(사용자 세션 RPC `save_project_page` / `save_project_deliverable`, 2.5.1)만 바꾼다. "반영됨" 기록(`applied_at`)도 같은 저장 트랜잭션에서 남긴다. v4.4 `apply_writing_chat_proposal`(누르면 바로 DB 저장)은 폐기 | NFR-AI-05, CR-5, PA-3 |
+| **DM-21 (v4.5)** | **전체 페이지(S-10·S-44)는 페이지 단위 저장 RPC 하나로 만들기·고치기를 함께 한다.** 행이 없으면 만들고(첫 "저장하기" 또는 첫 AI 메시지 직전의 자동 저장), 있으면 고친다. 기대 버전(`updated_at`)이 다르면 `stale_write`로 거부한다 | PA-3, UX DM-1·2·6·8. 섹션 단위 update로는 "반영됨 기록과 저장을 한 트랜잭션"·"다른 곳에서 바뀜" 판정을 만들 수 없다 |
 | **DM-14 (v4.4 개정)** | **커리어 계층: 경력 / 교육 > 소속 프로젝트(STAR 1개), 그리고 독립 프로젝트 > 산출물.** 정량 성과·상세 내용 단계는 없다. 연도는 저장하지 않는 보기(시작 연도에 한 번, 2.4) | PRD v4.5 F-P1-03·09·15·17·18, CR-1·CR-2·CR-4·CR-11 |
 | **DM-19 (v4.4)** | **STAR는 `projects`의 컬럼이다(`project_details` 1:1 테이블로 남기지 않는다)** | ① 프로젝트당 STAR 1개(CR-2)라 별도 행의 이점(여러 개·순서)이 없다. ② 1:1로 남기면 완료 판정이 두 단계(자식 트리거로 부모 재계산), 근거 `source_type` 2종, 삭제 트리거·readiness 카운트·RLS·복합 FK가 그대로 남아 복잡도만 는다. 합치면 완료 판정이 행 하나의 CHECK가 된다. ③ AI 명세 v4.5는 이미 STAR를 `PRJ-n`의 필드로 다루고 `DET-n`을 폐기했다. ④ 대가: 소속·독립 프로젝트 한쪽에서 쓰지 않는 컬럼이 생긴다 → DM-20 CHECK로 막는다. 필드 단위 "변경됨"은 `content_updated_at`(2.3)으로 보완 |
 | **DM-20 (v4.4)** | **소속 프로젝트와 독립 프로젝트는 한 테이블. 구분은 소속 컬럼(`num_nonnulls(experience_id, education_id)`), 구성은 CHECK로 강제하고 둘 사이 전환은 막는다** | 두 종류는 이름·기간·근거 경로·삭제 규칙을 공유하고, 지원 프로젝트 쪽 참조(`draft_section_sources.project_id`, 근거 `project`, `drafts.options.included_project_ids`)가 하나라 테이블을 나누면 참조가 갈라진다. 구성이 다르므로(CR-7·CR-10) 쓰지 않는 컬럼은 CHECK로 비워 두고, 소속 ↔ 독립 전환은 거부(PRD F-P1-03 (7) `[가정]`) |
@@ -72,7 +73,8 @@ erDiagram
   projects ||--o{ project_skills : "사용 기술 (독립 프로젝트만)"
   skills ||--o{ project_skills : tags
 
-  projects ||--o{ writing_chats : "대화 여러 개 (소속 프로젝트만, cascade)"
+  projects ||--o{ writing_chats : "대화 여러 개 (소속 프로젝트 = STAR 대화 / 독립 프로젝트 = 산출물 대화의 부모, cascade)"
+  project_deliverables |o--o{ writing_chats : "산출물 대화 (v4.5, project_deliverable_id, cascade)"
   writing_chats ||--o{ writing_chat_messages : has
   writing_chats |o..o{ projects : "source_writing_chat_id = 마지막 반영 대화 (set null)"
 
@@ -100,6 +102,7 @@ erDiagram
 ```
 
 - 실선 = FK, 점선 = soft reference 또는 set null 참조. 커리어 → 지원 프로젝트 방향 FK 없음(v2와 같음).
+- **v4.5 (PA-1)**: 산출물 대화는 `project_id`(부모 독립 프로젝트) + `project_deliverable_id`(대상 산출물)를 함께 가진다. 대상은 `project_deliverable_id`가 있으면 산출물, 없으면 프로젝트(2.5).
 - **v4.4 (CR-2·CR-8·CR-11)**: `project_details`·`achievements`는 없다. STAR는 `projects`의 컬럼이다(DM-19). 산출물 `project_deliverables` 신설.
 - 비사용자 테이블(`policy_versions`, `ai_price_tables`, `ai_disclosures`, `ai_providers`, `account_deletion_logs`)과 Should 테이블(`chat_threads`, `chat_messages`, `result_ratings`, `ai_suggestions`)은 생략.
 
@@ -163,7 +166,7 @@ erDiagram
 | `experience_id` | uuid | null, 복합 FK → `experiences on delete cascade` (**v4.4: set null → cascade**, 아래) | 소속 | |
 | `education_id` | uuid | null, 복합 FK → `educations on delete cascade` (v4.4) | 소속 | |
 | — | — | `CHECK (num_nonnulls(experience_id, education_id) <= 1)` | | 경력 / 교육 / 없음(독립) 중 하나 |
-| `name` | text | **v4.4: not null**, 공백 아님, ≤ 100자(서버) | 공통 | "+ 프로젝트 추가"·"커리어 추가 > 프로젝트" 모두 이름을 받고 만든다(CR-6, F-P1-03 (1)) |
+| `name` | text | **v4.4: not null**, 공백 아님, ≤ 100자(서버) | 공통 | 독립 프로젝트는 "커리어 추가 > 프로젝트"(C-23)에서 이름을 받고 만든다(CR-6). **v4.5 (PA-3)**: 소속 프로젝트는 이름 다이얼로그 없이 빈 S-10에서 첫 "저장하기"(또는 첫 AI 메시지 직전 자동 저장) 때 `save_project_page`가 만든다. 이름이 비면 화면이 저장·첫 메시지를 막는다 — **임시 이름 없음**(리더 정렬 1, UX D-UX-25) |
 | `start_month`, `end_month` | date | null, 1일 고정, `end_month >= start_month` | 공통 | |
 | **`is_current`** | boolean | **v4.4 후속 신설(CR-22)**, not null default false, **`CHECK (NOT is_current OR end_month IS NULL)`** | 공통(소속·독립) | 화면 "진행 중" 체크. 체크하면 종료월 입력 비활성(경력 `is_current`와 같은 방식). 근거 필드(`content_updated_at` 갱신 대상, 기간 근거 `period`에 포함) |
 | **`project_type`** | text | **v4.4 신설**, null, CHECK in (값 목록 아래) | 소속 | 화면 "프로젝트 종류"(카드 태그). 단일 선택 |
@@ -177,7 +180,7 @@ erDiagram
 | `role` | text | null, ≤ 100자(서버). **v4.4: 필수 해제, 독립 프로젝트 전용** | 독립 | 화면 "담당 업무"(CR-7). 소속 프로젝트에서는 쓰지 않는다(CR-10, 역할은 STAR `task`) |
 | **`description`** | text | **v4.4 신설**, null, ≤ 5,000자 | 독립 | 화면 **"프로젝트 내용"**(긴 본문, 마크다운). v3 `summary`(≤ 200자 한 줄 요약)와 다른 컬럼 |
 | **`link_url`** | text | **v4.4 신설**, null, ≤ 2,048자, `CHECK (link_url ~* '^https?://')` | 독립 | 화면 "Link". URL 1개 `[가정]`(F-P1-17 (2)). AI 팩·해시에 넣지 않는다(AI C-1) |
-| `source_writing_chat_id` | uuid | null, FK → `writing_chats on delete set null` | 소속 | **v4.4 의미 변경**: 이 프로젝트에 **마지막으로 반영한** AI 작성 대화(`apply_writing_chat_proposal`이 기록). v3 "이 행을 만든 대화"에서 바뀜 |
+| `source_writing_chat_id` | uuid | null, FK → `writing_chats on delete set null` | 소속 | 이 프로젝트에 **마지막으로 반영한** AI 작성 대화. **v4.5**: `save_project_page`가 반영됨 기록에 성공한 대화로 쓴다(v4.4 `apply_writing_chat_proposal` 폐기). 이 컬럼만 바뀌는 update는 `updated_at`을 올리지 않는다(아래) |
 | **`content_updated_at`** | timestamptz | **v4.4 신설**, not null default now() | 공통 | 근거가 될 수 있는 필드(`name`, 기간·`is_current`, STAR 5필드, `role`, `description`)가 바뀔 때만 트리거가 갱신. 근거 "변경됨" 판정용(2.8). 분류·`link_url`·`source_writing_chat_id`만 바뀌면 그대로 `[가정]` |
 
 - **v4.4 삭제**: `summary`(한 줄 요약 — 소속 프로젝트에는 화면이 없고 독립 프로젝트는 `description`이 대신함, PRD F-P1-03 (5)), `team_size`(피그마에 없음, PRD `[가정]`). 팀·배경은 STAR `situation`에 쓴다.
@@ -216,6 +219,8 @@ erDiagram
   - AI 팩의 기간 표기도 같은 규칙이다(진행 중이면 "~ 현재", 서버가 이번 달까지 계산한 개월 수는 V-5 허용 값 목록에 넣는다). 연도 묶음은 `start_month`만 쓰므로 `is_current`의 영향이 없다(2.4).
 - `unique (id, user_id)`. RLS 4개 동작 본인(사용자 세션). 인덱스 `(user_id, experience_id)`, `(user_id, education_id)`, `(user_id, start_month desc)`, **`(user_id) where experience_id is null and education_id is null`**(v4.4, 커리어 목록의 독립 프로젝트), `(user_id) where status = 'draft'`.
 - 트리거: `projects_set_status`(완료 재계산, v4.4 위 조건), 범위 변경 거부, `content_updated_at` 갱신, `updated_at`, `profiles.career_data_updated_at` 갱신, 근거 원본 삭제 표시(2.8).
+- **`updated_at` 규칙 (v4.5 ★, UX DM-8)**: `updated_at`은 S-10 "다른 곳에서 바뀜" 판정의 기대 버전으로 쓰인다(`save_project_page`의 `p_expected_updated_at`, 2.5.1). 그래서 **`source_writing_chat_id`만 바뀌는 update에서는 올리지 않는다** — 패널에서 대화를 지우면 FK `set null`이 프로젝트 행을 update하는데, 이것으로 열린 페이지의 저장이 `stale_write`가 되면 안 된다. 그 밖의 컬럼(분류·`is_current`·`link_url` 포함)이 바뀌면 올린다. 근거 "변경됨" 기준은 여전히 `content_updated_at`(2.8)이다.
+- **쓰기 경로 (v4.5)**: 소속 프로젝트의 만들기·고치기(머리·STAR·소속 변경)는 S-10 페이지 저장 RPC `save_project_page`(2.5.1)로 한다. 독립 프로젝트(S-43)는 v4.4 그대로 사용자 세션 insert(C-23)·섹션 update(C-24). RLS 직접 쓰기는 막지 않는다(같은 CHECK·트리거가 지킨다).
 
 #### ~~project_details~~ (v4.4 폐기, CR-2)
 - 프로젝트당 STAR 1개가 되어(D-23 폐기) 컬럼을 `projects`로 옮겼다(DM-19). `title`(프로젝트명이 제목), `sort_order`, 행 단위 `status`·`source_writing_chat_id`는 없어졌다. 별칭 `DET-n`, 근거 `source_type = 'project_detail'`, `draft_section_sources.project_detail_ids`, 트리거 `project_details_sync_project_status`, RPC `reorder_project_details`도 폐기.
@@ -238,6 +243,12 @@ erDiagram
 - RLS 4개 동작 본인(사용자 세션). `app_ai_writer` select. 인덱스 `(project_id, sort_order)`, `(user_id)`.
 - 트리거: `updated_at`, `profiles.career_data_updated_at` 갱신, 근거 원본 삭제 표시(2.8). 부모 프로젝트의 `status`·`content_updated_at`은 건드리지 않는다(산출물은 완료 조건이 아님).
 - 순서 변경: RPC `reorder_project_deliverables(project_id, ordered_ids uuid[])`(security invoker, 지연 unique로 한 트랜잭션) `[가정]` — 화면에 순서 변경 UI가 없으면 쓰지 않는다.
+- **v4.5 (PA-1·PA-2·PA-3)**
+  - **분류 컬럼 없음 (PA-2, 확정 2026-11-03 (사용자))**: 산출물에는 `project_type`·`experience_type`·`competencies`를 두지 않는다. 분류는 부모가 아니라 **소속 프로젝트**에만 있다(독립 프로젝트에도 없음, DM-20). 변경 없음.
+  - **만들기·고치기 = `save_project_deliverable`** (S-44 "저장하기", 2.5.1): 제목 + 본문을 한 번에. 새 행은 `sort_order` 맨 뒤(기존 insert 트리거), 50개 상한(`deliverable_limit_reached`)도 같은 트리거.
+  - **`unique (id, project_id, user_id)` 추가 ★**: 산출물 대화의 복합 FK `(project_deliverable_id, project_id, user_id)`가 참조한다(2.5). 이 FK 때문에 대화가 있는 산출물의 `project_id`는 바꿀 수 없다(화면에 이동 기능도 없음).
+  - **AI 작성 대화**: 산출물마다 대화 여러 개(`writing_chats.project_deliverable_id`, 2.5). 산출물을 지우면 대화도 함께 지워진다(FK cascade, F-COM-04).
+  - **`source_writing_chat_id`는 두지 않는다** (AI DA-13 선택 요청 거절): 읽는 화면이 없고(카드의 "반영됨"은 `structured_draft`에, 마지막 반영 시각은 `writing_chats.last_applied_at`에 있음), 두면 산출물 ↔ 대화 사이 FK가 양방향이 되어 대화 삭제의 `set null`이 산출물 행을 update한다. 산출물 `updated_at`은 이미 `title`·`body`가 바뀔 때만 오르므로(구현 그대로) 기대 버전으로 쓸 수 있다.
 
 #### skills / project_skills (v4.4 범위 축소, CR-10)
 - 컬럼은 v2와 같다(부록 A.4).
@@ -255,23 +266,28 @@ erDiagram
 - 지원 장치: 기존 `(user_id, start_month desc)` 인덱스 + 독립 프로젝트 부분 인덱스(2.3). 사용자당 수십 행이라 한 번에 읽어 메모리에서 묶는다.
 - 접힘 상태·선택 항목은 URL·브라우저 저장(UX), DB 없음.
 
-### 2.5 AI 작성 대화 (v4.4 개정, F-P1-13, CR-5·CR-6)
+### 2.5 AI 작성 대화 (v4.5 개정 — 산출물 대화·페이지 저장, F-P1-13, F-P1-18, CR-5·CR-6, PA-1·PA-3)
 
 #### writing_chats
-- 설명: **소속 프로젝트 1건**의 STAR를 AI와 대화하며 채우는 세션. 프로젝트 상세(S-10) 오른쪽 "Resumate AI" 패널에서 연다. **모든 대화는 프로젝트에 묶이고, 프로젝트마다 여러 개**다. 관련 기능: F-P1-13, F-P1-06, F-AP-06 / 요청: ux D-8~D-11, ai 9, prd 7
+- 설명: AI와 대화하며 커리어 항목을 채우는 세션. **대상은 두 가지**(v4.5, PA-1): ① **소속 프로젝트 1건의 STAR**(프로젝트 상세 S-10 패널, AI 명세 AI-12) ② **산출물 1건의 본문**(산출물 상세 S-44 패널, AI-13). 모든 대화는 대상에 묶이고, 대상마다 여러 개다. 관련 기능: F-P1-13, F-P1-18, F-P1-06, F-AP-06 / 요청: ux D-8~D-11·DM-3~DM-9, ai 9·DA-1~DA-17, prd 7·(v4.6) 1~3
 
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
-| `project_id` | uuid | **v4.4: not null**, 복합 FK → `projects on delete cascade` | 대화 대상. **소속 프로젝트만**(insert 트리거 `writing_chat_requires_affiliated_project`, D-AI-15 (a) — 확정 2026-11-02 (사용자), CR-19). 프로젝트를 지우면 대화도 삭제(NFR-PRV-06) |
+| `project_id` | uuid | **v4.4: not null**, 복합 FK → `projects on delete cascade` | **v4.5**: 대화가 속한 프로젝트. STAR 대화 = 대상 소속 프로젝트, 산출물 대화 = **그 산출물의 부모 독립 프로젝트**(목록·연쇄 삭제·소유 검사용). 프로젝트를 지우면 대화도 삭제(NFR-PRV-06) |
+| **`project_deliverable_id`** | uuid | **v4.5 신설**, null, 복합 FK `(project_deliverable_id, project_id, user_id)` → `project_deliverables(id, project_id, user_id) on delete cascade` | 산출물 대화의 대상 산출물(PA-1). null이면 STAR 대화. FK가 "산출물은 같은 프로젝트·같은 사용자"를 보장하고, 산출물을 지우면 대화도 지워진다(F-COM-04) |
 | **`title`** | text | **v4.4 신설**, null, ≤ 100자 | 대화 기록 목록 제목. **첫 사용자 메시지가 들어올 때 `append_writing_chat_message`가 앞 30자(연속 공백 1칸)로 채운다**(AI 호출 없음) `[가정]`. null이면 화면이 "새 대화"로 보인다. 사용자 이름 바꾸기는 없다 |
 | `status` | text | **v4.4**: not null default `active`, **CHECK in (`active`, `closed`)** | 진행 중 / **상한 도달로 끝남**(열람·반영만). 아래 전이 |
 | `structured_draft` | jsonb | not null default `'{}'` | 대화별 **제안**(아래 v3 형식). 반영 전에는 커리어 데이터가 아니며 팩에 들어가지 않는다 |
 | `message_count` | smallint | not null default 0, `CHECK (message_count BETWEEN 0 AND 40)` | 사용자 + AI 메시지 합계, 시작 인사 제외(A5, 변경 없음) |
 | `last_extracted_sequence` | smallint | not null default 0 | 변경 없음(v4.2) |
 | `last_activity_at` | timestamptz | not null default now() | 대화 기록 목록 정렬(최근 활동순) |
-| **`last_applied_at`** | timestamptz | **v4.4 신설**, null | 이 대화의 제안을 마지막으로 반영한 시각 |
-| `return_target` | jsonb | null | v3.2 그대로(U-5). 게이트에서 패널 새 대화를 열 때 저장, 복귀하면 비움 |
+| **`last_applied_at`** | timestamptz | **v4.4 신설**, null | 이 대화의 제안을 마지막으로 반영한 시각. **v4.5: 반영이 저장된 시각**(페이지 저장 RPC가 기록, 폼에 채운 시각이 아님) |
+| `return_target` | jsonb | null, **v4.5: `CHECK (project_deliverable_id IS NULL OR return_target IS NULL)`** | v3.2 그대로(U-5). 게이트에서 패널 새 대화를 열 때 저장, 복귀하면 비움. 산출물 대화는 게이트 진입이 없어 항상 null(AI-13) |
 
+- **대상 규칙 (v4.5, PA-1 — AI DA-1·UX DM-5)**:
+  - **대상은 정확히 하나**: `project_deliverable_id`가 있으면 산출물, 없으면 프로젝트. 둘 다 없는 대화는 `project_id` not null로 생기지 않는다. 리더가 제안한 "프로젝트 / 산출물 중 하나만 채우는 배타 CHECK" 대신 **`project_id`를 늘 채우고 산출물 열을 더하는 모양**을 골랐다. 이유: ① 기존 `project_id` not null·인덱스·턴 파이프라인·삭제 집계를 그대로 쓴다(산출물 대화도 프로젝트 단위로 연쇄 삭제된다). ② 복합 FK 하나로 "산출물이 그 프로젝트의 것"을 DB가 보장한다(배타 모양이면 산출물 → 프로젝트를 트리거로 따라가야 함). ③ 독립 프로젝트에는 STAR 대화가 없으므로 한 프로젝트의 대화는 모두 STAR 대화이거나 모두 산출물 대화다 — S-10 목록 `where project_id = ?`가 그대로 맞다.
+  - **트리거 `writing_chats_check_target`** (v4.4 `writing_chat_requires_affiliated_project` 대체, insert 시 ★): `project_deliverable_id`가 null이면 `project_id`가 **소속 프로젝트**여야 한다(아니면 `writing_chat_requires_affiliated_project`, v4.4 코드 유지). null이 아니면 FK가 같은 프로젝트를 보장하고, 산출물은 독립 프로젝트에만 있으므로(`deliverable_requires_standalone_project`) 부모는 자동으로 독립 프로젝트다. 대상 열(`project_id`·`project_deliverable_id`)은 update로 바꿀 수 없다(가드 트리거, 사용자 세션 grant 없음).
+  - 독립 프로젝트 정보·내용(S-43, `projects.description`)의 대화는 여전히 없다(CR-19 남는 부분, AI D-AI-16 **확정 2026-11-03 (사용자): (a) MVP에 없음 유지** — 권고 (a) 유지). 생기면 대상 키가 하나 더 필요하다.
 - **v4.4 삭제**: `mode`(`new_project` / `augment_project` — 모드는 하나), `experience_id`·`education_id`(소속은 프로젝트에 있음), `saved_at`, `status`의 `saved`·`handed_off`·`abandoned`, `structured_draft.affiliation_suggestion`. 프로젝트에 묶이지 않은 대화가 없어져 **90일 자동 삭제(D-DM-08)와 크론도 폐기**(3.4).
 - **상태 전이 (v4.4)**:
 
@@ -302,13 +318,15 @@ erDiagram
   "sensitive_flags_count": 0
 }
 ```
-  - 키: `project`는 `start_month`·`end_month`만(**`is_current`는 AI가 제안하지 않는다** — 사용자가 기간 섹션 편집에서만 정한다, R-CR-15), `star`는 `situation`·`task`·`action`·`result`·`learnings`, **`classification`은 `project_type`·`experience_type`·`competencies`**(v4.4 후속 CR-20). **필드 키 = 저장 대상 `projects` 컬럼명.** 이름·소속·`role`·스킬은 제안하지 않는다(UX A-3).
+  - 키: `project`는 `start_month`·`end_month`만(**`is_current`는 AI가 제안하지 않는다** — 사용자가 S-10 기간 입력(페이지 저장)에서만 정한다, R-CR-15. v4.5 R-PA-9: 섹션 편집 → 페이지 저장), `star`는 `situation`·`task`·`action`·`result`·`learnings`, **`classification`은 `project_type`·`experience_type`·`competencies`**(v4.4 후속 CR-20). **필드 키 = 저장 대상 `projects` 컬럼명.** 이름·소속·`role`·스킬은 제안하지 않는다(UX A-3).
   - **분류 추천 (CR-20, 확정 2026-11-02 (사용자))**: AI가 대화 내용을 바탕으로 분류를 **추천**하고, 사용자가 반영해야 저장된다. 분류는 사실 근거가 아니다(AI C-1.2).
     - 필드 객체: `value`(`project_type`·`experience_type` = 키 문자열 1개, `competencies` = 키 배열 1~3개, 중복 없음), `origin`(`ai` / `user_edit`), `source_message_ids`(선택 — 판단의 실마리가 된 사용자 발화, 비어도 됨), **`reason`**(text null, ≤ 200자 `[가정]` — 추천 이유 한 줄, 카드에 표시, R-CR-14), `review` = `ok`(V-9e 대상 아님, `needs_review` 없음), `reviewed_at`, `applied_at`. **`op`는 두지 않는다**(채우기 하나뿐). `source_quotes`는 두지 않는다. AI 출력 키는 `classification_suggestions`(AI 명세), 저장 경로는 `structured_draft.classification.{…}`.
     - **값 검증**(AI V-9i의 DB 방어): `apply_structured_draft_patch`가 CHECK 값 목록 밖의 키를 **버린다**(`competencies`는 원소 단위로 걸러 내고 앞 3개까지). 남는 값이 없으면 그 필드 패치를 거부한다.
-    - **빈 값만 추천 (리더 결정, AI 명세 `[가정]` 채택)**: AI는 프로젝트 값이 비어 있는 분류만 추천한다 — `project_type`/`experience_type`은 null일 때, `competencies`는 **사용자가 하나도 고르지 않았을 때**(`'{}'`)만. 값이 있는 분류에 대한 패치는 거부한다(`classification_already_set`). 바꾸기 제안은 없다. 사용자가 카드에서 직접 고친 값(`origin = 'user_edit'`)은 AI가 덮어쓰지 않는다(STAR와 같음).
-  - 필드 객체: `value`, **`op`**(STAR만, `set` = 빈 필드에 넣을 값 / `append` = 현재 값 뒤에 붙일 **새 문장만**), `origin`(`ai` / `user_edit`), `source_message_ids`(uuid[], `role = 'user'` 메시지만, V-9a), `source_quotes`, `review`(`ok` / `needs_review` / `accepted`, v3.2와 같은 의미), `reviewed_at`, **`applied_at`**(v4.4, 반영 시각. null = 아직 반영 안 됨).
+    - **빈 값만 추천 (리더 결정, AI 명세 `[가정]` 채택)**: AI는 프로젝트 값이 비어 있는 분류만 추천한다 — `project_type`/`experience_type`은 null일 때, `competencies`는 **사용자가 하나도 고르지 않았을 때**(`'{}'`)만. 바꾸기 제안은 없다. **v4.5 (PA-3)**: "비어 있음"은 **`form_snapshot` 기준으로 서버 앱 계층이 판정**한다. DB는 저장 전 폼을 모르므로 `apply_structured_draft_patch`는 DB 값이 있다는 이유로 분류 패치를 **거부하지 않는다**(v4.4 `classification_already_set` 거부 삭제 ★). 채우기 단계(화면)가 "이미 고른 값이 있어요"로 한 번 더 막는다. 사용자가 카드에서 직접 고친 값(`origin = 'user_edit'`)은 AI가 덮어쓰지 않는다(STAR와 같음).
+  - 필드 객체: `value`, **`op`**(STAR만, `set` = 빈 필드에 넣을 값 / `append` = 현재 값 뒤에 붙일 **새 문장만**), `origin`(`ai` / `user_edit`), `source_message_ids`(uuid[], `role = 'user'` 메시지만, V-9a), `source_quotes`, `review`(`ok` / `needs_review` / `accepted`, v3.2와 같은 의미), `reviewed_at`, **`applied_at`**(v4.4, 반영 시각. null = 아직 반영 안 됨. **v4.5: "저장하기" 성공 때 `save_project_page`가 기록** — 폼에 채우기만 한 상태는 DB에 없다), **`rev`**(v4.5 신설 ★, 아래).
+  - **`rev` (v4.5, AI DA-8)**: 정수, 1부터. **필드 키(슬롯) 단위로 단조 증가**한다 — `apply_structured_draft_patch`가 그 슬롯의 `value`를 바꿀 때마다(AI 패치, 사용자 직접 수정, 거절로 값 비움) +1, 슬롯을 **새 필드 객체로 바꿀 때도 이전 `rev` + 1**(1로 되돌리지 않는다 — 되돌리면 저장 때 보낸 옛 `rev`가 새 객체와 우연히 같아질 수 있음). `review`만 바뀌는 수락(`needs_review → accepted`)은 `rev`를 올리지 않는다. 화면은 [반영]으로 폼에 채운 시점의 `rev`를 기억해 저장 때 보낸다(2.5.1). `schema_version`은 3 그대로 두고, `rev`가 없는 기존 필드 객체는 1로 읽는다(마이그레이션이 채워도 됨).
   - 화면이 "기존 값 + 덧붙일 문장 강조"를 그릴 때: `op = 'append'`면 `value` 전체가 강조 부분이다. 현재 값은 `projects`에서 읽는다(UX A-3 회신).
+  - **채운 뒤 들어온 AI 패치 (v4.5, AI DA-10)**: 서버 앱 계층이 "미반영 필드 객체의 `value`가 이번 턴 `form_snapshot`의 같은 필드에 (정규화 부분 문자열로) 이미 있다"고 판단하면 패치에 **`new_object: true`**를 단다. RPC는 그 슬롯을 **새 필드 객체로 바꾸고**(이전 객체는 버림, `rev` + 1) 이어 붙이지 않는다 — 이미 폼에 채운 문장이 카드에 다시 나와 두 번 채워지는 경로를 막는다. **같은 슬롯에 미반영 객체를 여러 개 두는 모양(배열·`star_prev`)은 두지 않는다**: 이전 객체의 내용은 이미 폼에 있고, 저장하면 그 반영 기록만 `proposal_changed`로 건너뛴다(저장은 성공, 데이터 손실 없음). `new_object`는 `app_ai_writer` 패치에서만 받는다.
   - `schema_version = 1`(v3) 행은 마이그레이션 때 비운다(`'{}'`) `[가정]` — 11장.
   - 민감정보로 걸러진 내용은 저장하지 않는다(개수만, NFR-PRV-05).
 - **메시지 상한 규칙**: v4.2 A5 그대로(시작 인사 제외 40, 사용자 메시지는 `message_count ≤ 38`일 때만). 상한에 닿으면 위 전이로 `closed`.
@@ -316,15 +334,23 @@ erDiagram
   - 호출 주체: AI 턴 = `app_ai_writer`, 사용자 수정·수락·거절 = 사용자 세션(행위자는 호출 역할로 판정, v3.2와 같음).
   - 공통: 행 잠금. **AI 패치는 `status = 'active'`만**, 사용자 패치는 `active`·`closed` 모두 `[가정]`(닫힌 대화도 검토·반영은 되므로).
   - AI 패치 규칙: `origin = 'user_edit'`이거나 `review = 'accepted'`이고 아직 반영 안 된 필드는 덮어쓰지 않는다. **`applied_at`이 있는 필드에 들어온 패치는 새 필드 객체로 바꾼다**(반영된 내용은 이미 프로젝트에 있으므로). 같은 필드의 미반영 제안이 있으면 `set`은 교체, `append`는 이어 붙인다(AI-12 매핑).
-  - **V-9h (v4.4 개정, AI·사용자 공통)**: 대상 `projects` 행에 **값이 있는 STAR 필드는 `op = 'append'`만** 받는다(`set` 거부). 빈 필드에 `append`가 오면 `set`으로 본다. 기간은 프로젝트의 그 컬럼이 비어 있을 때만 받는다. `project.is_current` 패치는 받지 않는다(R-CR-15). 분류는 위 "분류 추천" 규칙(프로젝트 값이 비어 있을 때만 받음).
-  - 사용자 패치 규칙: 값 수정(→ `origin = 'user_edit'`, `review = 'ok'`, `op` 유지), `needs_review` → `accepted` / 거절(값 비움 + `ok`). **반영된 필드(`applied_at` 있음)는 사용자 패치도 거부**(`field_already_applied`) `[가정]` — 반영 뒤 고치기는 왼쪽 STAR 섹션 편집에서.
-- **반영 RPC `apply_writing_chat_proposal(p_writing_chat_id uuid, p_fields text[] default null)`** (v4.4 신설, ux D-10, ai 9) — 3.3에 전체 규칙.
+  - **V-9h (v4.5 완화 ★, AI DA-9)**: "이미 값이 있음"의 정본 판정은 **서버 앱 계층이 이번 턴 `form_snapshot`(없으면 DB 값)으로** 한다(AI 명세 AI-12 V-9h). DB RPC는 저장 전 편집을 모르므로 **거부하지 않고 낮추기만** 한다: DB `projects` 값이 있는 STAR 필드에 `op = 'set'`이 오면 `append`로 바꿔 저장한다(빈 필드의 `append`는 `set`으로 보는 규칙은 그대로). 기간·분류의 "비어 있을 때만"도 DB에서는 검사하지 않는다(v4.4 기간 거부·`classification_already_set` 거부 삭제). 최종 안전장치는 채우기 규칙(폼 값이 있으면 항상 덧붙임, 기간·분류는 빈 칸만 — 화면)이다. `project.is_current` 패치는 계속 거부한다(R-CR-15). 값 검증(STAR ≤ 2,000자, 기간 `YYYY-MM`, 분류 CHECK 목록 밖 키 버림)은 그대로.
+  - 사용자 패치 규칙: 값 수정(→ `origin = 'user_edit'`, `review = 'ok'`, `op` 유지), `needs_review` → `accepted` / 거절(값 비움 + `ok`). **반영된 필드(`applied_at` 있음)는 사용자 패치도 거부**(`field_already_applied`) `[가정]` — 반영 뒤 고치기는 왼쪽 STAR 입력란에서(페이지 저장, PA-3. v4.5 R-PA-9).
+- **대상별 패치 범위 (v4.5)**: STAR 대화에는 `project`·`star`·`classification`·`clarifications`·`sensitive_flags_count`만, 산출물 대화에는 아래 산출물 모양의 키만 받는다. 다른 대상의 키가 오면 `invalid_patch`(400).
+- ~~**반영 RPC `apply_writing_chat_proposal`**~~ — **v4.5 폐기 ★** (PA-3, AI DA-7, UX DM-3). [반영]은 화면 폼 채우기(DB 호출 없음)이고, "반영됨" 기록은 페이지 저장 RPC 안의 내부 헬퍼가 한다(2.5.1, 3.3).
+
 - v4: `usage_event_id` 없음(D-34). 대화의 토큰 사용은 `ai_usage_records.ai_job_id` → `ai_jobs`(`writing_chat_turn`, `target_id` = 대화)로 찾는다.
-- **쓰기 주체 요약 (v4.4)**: 대화 시작(`start_writing_chat(p_project_id, p_return_target)` — `mode` 인자 삭제), 사용자 메시지 추가(+ `title` 채움), assistant 메시지 시작·완료(+ `closed` 전이), 정리 완료 표시, `message_count`·`last_activity_at`은 **소유 검사 security definer RPC**로만. 사용자 세션 직접 update는 **`return_target`만**. `structured_draft`는 `apply_structured_draft_patch`·`apply_writing_chat_proposal`(내부 definer 헬퍼)만. **폐기 RPC**: `save_writing_chat`, `hand_off_writing_chat`, `set_writing_chat_affiliation`, `purge_unlinked_writing_chats`.
+- **대화 시작 RPC (v4.5 ★, AI DA-2·UX DM-4·DM-9)**
+  - **STAR 대화 `start_writing_chat(p_project_id uuid, p_return_target jsonb default null, p_form_snapshot jsonb default null)`**: v4.4 그대로 + `p_form_snapshot`(선택). 대상은 **이미 있는** 소속 프로젝트뿐이다. 시작 인사 4종(STAR 비어 있음 / 일부 / 다 채워짐 / 게이트 진입) 분기를 `p_form_snapshot.star`가 있으면 그 값으로, 없으면 DB 값으로 고른다. 스냅숏은 **저장하지 않는다**.
+  - **산출물 대화 `start_deliverable_writing_chat(p_project_deliverable_id uuid, p_form_snapshot jsonb default null)`** (신설): 산출물 소유 확인 → `writing_chats` insert(`project_id` = 산출물의 부모, `project_deliverable_id`, `return_target` null, 빈 산출물 모양 `{schema_version: 1, target: 'project_deliverable', writing_kind: null, facts: [], deliverable: {}, clarifications: [], sensitive_flags_count: 0, draft_count: 0}`) + 고정 시작 인사 3종(본문 비고 종류 모름 / 제목으로 종류 짐작 / 본문 있음 — 본문 유무는 `p_form_snapshot.body` 우선, AI-13) + 민감정보 안내 줄(+ 무료 등급 안내). 제목 키워드로 짐작한 `writing_kind`를 빈 초안에 미리 넣는다 `[가정]`.
+  - 둘 다 security definer + 소유 검사, `authenticated`만 execute, 활성 키 확인만(v4.4와 같음). 반환 `{ writing_chat_id, greeting_message }`(v4.4 반환 모양 유지).
+  - **"새 대상"을 받아 행까지 만드는 모양(AI 제안 `p_target = {kind: 'new_project' | 'new_project_deliverable', …}`)은 두지 않는다.** 리더 정렬 2(UX D-UX-25 (a))에 따라 첫 AI 메시지는 **먼저 페이지를 저장해 행을 만든다** — 행 생성은 페이지 저장 RPC 하나로만 일어나고, 시작 RPC는 있는 행에 대화만 붙인다. 첫 메시지 순서는 7장.
+- **쓰기 주체 요약 (v4.5)**: 대화 시작(`start_writing_chat` / `start_deliverable_writing_chat`), 사용자 메시지 추가(+ `title` 채움), assistant 메시지 시작·완료(+ `closed` 전이), 정리 완료 표시, `message_count`·`last_activity_at`은 **소유 검사 security definer RPC**로만. 사용자 세션 직접 update는 **`return_target`만**. `structured_draft`는 `apply_structured_draft_patch`와 **페이지 저장 RPC의 내부 헬퍼 `private.wc_mark_proposal_applied`**(`applied_at`·`applied_mode`·`applied_rev`, 2.5.1)만. **폐기 RPC**: `save_writing_chat`, `hand_off_writing_chat`, `set_writing_chat_affiliation`, `purge_unlinked_writing_chats`, **`apply_writing_chat_proposal`(v4.5)**.
 - RLS: select/delete 본인. insert·update는 위 RPC와 `return_target`만. `service_role`은 select·delete(탈퇴).
 - 죽은 스트리밍 턴: v4.2와 같다.
-- 인덱스 (v4.4): **`(project_id, last_activity_at desc)`**(패널 대화 기록 목록), `(user_id) where status = 'active'`. v3 `(user_id, project_id)`와 미연결 정리용 `writing_chats_unlinked_last_activity_idx`는 삭제.
-- 프로젝트당 대화 개수 상한은 두지 않는다 `[가정]`.
+- 인덱스 (v4.4): **`(project_id, last_activity_at desc)`**(S-10 패널 대화 기록 목록), `(user_id) where status = 'active'`. v3 `(user_id, project_id)`와 미연결 정리용 `writing_chats_unlinked_last_activity_idx`는 삭제. **v4.5 ★**: `(project_deliverable_id, last_activity_at desc) where project_deliverable_id is not null`(S-44 대화 기록 목록, FK cascade 삭제도 이 인덱스를 쓴다).
+- 프로젝트·산출물당 대화 개수 상한은 두지 않는다 `[가정]`.
+- **메시지 상한·상태 (v4.5)**: 산출물 대화도 같은 규칙이다 — 시작 인사 제외 40(`message_count`, A5), 초안 턴의 고정 문구 AI 메시지도 센다(AI DA-17), `active → closed`만. `closed` 산출물 대화는 열람·초안 [빼기]·반영(폼 채우기)·저장 때 반영됨 기록이 된다.
 
 #### writing_chat_messages
 
@@ -340,6 +366,87 @@ erDiagram
 - 공통 컬럼 중 `updated_at`은 streaming → done 전환에만 쓰인다.
 - RLS: select 본인. user 메시지 insert는 RPC `append_writing_chat_message`(security definer + 소유 검사, 상한 검사 + `message_count` 증가 + **첫 사용자 메시지면 `title` 채움**을 한 트랜잭션). **`closed` 대화에는 `writing_chat_closed`로 거부**(v4.4). assistant 메시지 insert/update는 `app_ai_writer`가 부르는 definer RPC(`begin_assistant_message` / `finish_assistant_message`). 직접 insert/update·개별 delete 없음(대화 삭제로만).
 - 시작 인사 문구: 모드별 2종 → **STAR 상태별 4종(비어 있음 / 일부 / 다 채워짐 / 게이트 진입) + 무료 등급이면 서비스 개선 사용 안내 1문장**(AI 명세 AI-12 초안, 최종 문구 UX) `[가정]`. 고정 상수이며 `ai_job_id` null.
+
+### 2.5.0 산출물 대화의 `structured_draft` (v4.5 신설, AI-13 — AI DA-11·DA-12·DA-14)
+
+AI 명세 v4.6 AI-13 "저장" 모양을 채택한다. STAR 대화 모양(`schema_version 3`)과는 **`target` 키와 대화의 `project_deliverable_id`로 구분**한다(둘이 어긋나면 RPC가 거부 — 빈 초안은 시작 RPC가 대상에 맞게 만든다).
+
+```json
+{
+  "schema_version": 1,
+  "target": "project_deliverable",
+  "writing_kind": "retrospective",
+  "facts": [
+    { "id": "uuid", "slot": "contribution", "text": "결제 모듈의 장애 대응 런북을 직접 작성했다", "actor": "self",
+      "source_message_ids": ["uuid"], "source_quotes": ["장애 대응 런북은 제가 직접 썼어요"],
+      "review": "ok", "reviewed_at": null, "origin": "ai" }
+  ],
+  "deliverable": {
+    "body": {
+      "value": "## 내가 맡은 일\n\n결제 모듈의 …",
+      "blocks": [ { "block_id": "b2", "type": "paragraph", "text": "…", "basis": "new",
+                    "source_fact_ids": ["uuid"], "source_body_quotes": [], "source_project_fields": [], "review": "ok" } ],
+      "rev": 2, "generated_at": "2026-11-03T10:00:00Z", "base_body_hash": "sha256:…", "replace_allowed": true,
+      "missing_slots": ["went_wrong"], "dropped_block_count": 1,
+      "applied_at": null, "applied_mode": null, "applied_rev": null
+    }
+  },
+  "clarifications": [ { "kind": "number_vague", "slot": "went_well", "note": "…" } ],
+  "sensitive_flags_count": 0,
+  "draft_count": 2
+}
+```
+
+- **키 (모두 AI 명세 이름 그대로)**
+  - `writing_kind` ∈ `planning_summary` / `design_doc` / `retrospective` / `presentation` / `other`, null 허용(아직 모름). **`structured_draft` 안에만** 둔다 — `project_deliverables`에 컬럼을 두지 않는다(PA-2, DA-12). 질문·초안 구성을 고르는 대화 안 설정이지 분류가 아니다.
+  - `facts[]`: `id`(uuid, 서버가 매김), `slot`(AI 명세 슬롯 키), `text`(≤ 500자 `[가정]`), `actor` ∈ `self`/`team`/`unknown`, `source_message_ids`(uuid[], `role = 'user'`만), `source_quotes`, `review` ∈ `ok`/`needs_review`/`accepted`, `reviewed_at`, `origin` ∈ `ai`/`user_edit`. 개수 ≤ 80 `[가정]`.
+  - `deliverable.body`: 초안 **하나만** 둔다(이력 없음, AI 명세 "초안 이력은 남기지 않는다"). `value` = 서버가 `blocks`로 조립한 마크다운(≤ 8,000자, 초안 출력 상한), `blocks[]`(≤ 200 `[가정]`, `type` ∈ `heading`/`paragraph`/`bullet_list`/`numbered_list`/`table`/`quote`/`code`, `basis` ∈ `new`/`current_body`, 출처 3종, `review` ∈ `ok`/`needs_review`/`accepted`), `rev`(STAR와 같은 슬롯 단조 규칙), `generated_at`, `base_body_hash`, `replace_allowed`, `missing_slots`, `dropped_block_count`, **반영됨 기록** `applied_at`·`applied_mode`(`replace`/`append`)·`applied_rev`(저장 RPC만 씀). 초안이 아직 없으면 `deliverable = {}`.
+  - `draft_count`: 이 대화에서 만든 초안 수(0~6). **6에 닿으면 `apply_structured_draft_patch`가 새 초안 패치를 `writing_chat_draft_limit_reached`(409)로 거부**한다(서버도 초안 턴 시작 전에 같은 값으로 미리 막는다, AI 7.4). 컬럼이 아니라 jsonb에 두는 이유: 이 값으로 조회·필터하는 화면이 없고, 초안 교체와 같은 행 잠금 안에서 함께 바뀌어야 한다.
+- **패치 규칙 (`apply_structured_draft_patch`, 산출물 대화)**
+  - AI(`app_ai_writer`): `facts` 추가(서버 검증 통과분), 초안 교체(`deliverable.body` 전체를 새 객체로 — `rev` + 1, `applied_*` null, `draft_count` + 1), **초안 없이 횟수만 세기**(V-10으로 내용 블록이 하나도 안 남은 경우 — AI 명세 "초안 횟수는 셈"), `writing_kind`·`clarifications`·`sensitive_flags_count` 갱신. `status = 'active'`만.
+  - 사용자 세션: 사실 수락/거절(`needs_review → accepted` / 값 비움), 블록 [빼기](블록 삭제 + `value` 다시 조립 → `rev` + 1), 블록 `needs_review` 수락(`rev` 그대로). **초안 전체 거절(비우기)은 패치 경로에 없다** — 검토는 블록마다 수락 / [빼기]로만 한다(리더 판정 2026-11-03, AI-13·S-44). **블록 문장 직접 수정은 받지 않는다**(UX-12 확인 — 반영 후 본문 폼에서 고침). `active`·`closed` 모두.
+  - 반영된 초안(`applied_at` 있음)에 대한 사용자 패치는 `field_already_applied`로 거부(STAR와 같음). 새 AI 초안은 반영 여부와 관계없이 교체한다(반영된 내용은 이미 산출물에 있음).
+  - 출처는 `evidence_links`에 넣지 않는다(DM-15, AI-13). 저장된 본문은 다른 기능에서 `project_deliverable` 근거 원본이 된다(2.8, 변경 없음).
+
+### 2.5.1 페이지 저장 RPC (v4.5 신설 ★, PA-3, DM-21)
+
+> S-10 프로젝트 상세·S-44 산출물 상세의 상단 바 **"저장하기"** 한 번 = RPC 한 번. 만들기와 고치기를 같은 RPC로 하고, 화면이 이번 방문에서 [반영]으로 폼에 채운 제안의 **"반영됨" 기록을 같은 트랜잭션에서** 남긴다. 요청: AI DA-3~DA-7, UX DM-1~DM-3·DM-6·DM-8, PRD 요청 2·3.
+
+**공통 규칙**
+
+| 항목 | 규칙 |
+|------|------|
+| 실행 주체 | **security invoker**(커리어 쓰기는 사용자 RLS), `authenticated`만 execute. 반영됨 기록은 내부 definer 헬퍼 `private.wc_mark_proposal_applied`(외부 execute 없음). **키·동의·활성 공급자를 보지 않는다**(AI 호출 없음 — 키가 없거나 무효여도 저장·반영됨 기록 가능) |
+| 만들기 / 고치기 | 대상 id 인자가 null이면 만들기, 있으면 고치기. 고치기 대상이 없거나 남의 행이면 `not_found`(404) |
+| 기대 버전 (UX DM-8) | `p_expected_updated_at timestamptz default null`. 고치기에서 값이 있고 행의 `updated_at`과 다르면 **아무것도 쓰지 않고** `stale_write`(409, details `{current_updated_at}`). null이면 덮어쓴다(화면 "내 내용으로 저장"은 이 인자 없이 다시 보낸다). 만들기에서는 무시. 기준 컬럼은 `updated_at`(프로젝트는 `source_writing_chat_id`만 바뀌면 오르지 않음, 산출물은 제목·본문이 바뀔 때만 오름 — 2.3) |
+| 반영됨 기록 | `p_applied_proposals jsonb default null` — 배열, 최대 50개 `[가정]`. **커리어 값을 쓴 뒤** 원소마다 하위 트랜잭션(PL/pgSQL 예외 블록)에서 기록한다. **기록 실패는 저장을 막지 않는다**(리더 정렬 3): 실패한 원소는 `skipped`에 사유와 함께 돌려주고 커리어 저장은 커밋된다. 모양이 틀린 원소도 거부하지 않고 `skipped`(`invalid_entry`) |
+| `skipped[].reason` (AI DA-6) | `not_found`(대화·필드 없음, 대화가 이 대상의 것이 아님) / `already_applied`(이미 `applied_at` 있음 — 다른 탭 등) / `proposal_changed`(보낸 `rev` ≠ 현재 `rev` — 채운 뒤 AI 턴·직접 수정·새 초안) / `needs_review`(필드 `review = 'needs_review'`. 산출물은 **채울 수 있는 내용 블록(`ok`·`accepted`)이 하나도 없음** — 수락하지 않은 `needs_review` 블록이 남아 있는 것만으로는 건너뛰지 않는다. 그 블록은 채우기 결과에서 이미 빠졌기 때문이다(3.3, 리더 판정 2026-11-03). 반영 뒤 남은 블록 수락은 `field_already_applied`로 거부) / `invalid_entry`(모양 오류) / `mark_failed`(그 밖의 예외). 판정 순서도 이 순서. v4.4의 `empty`·`period_already_set`·`classification_already_set`·`field_too_long`은 **화면 채우기 단계의 판정 이름**으로만 남는다(RPC는 돌려주지 않음) |
+| 기록 내용 | 필드 객체 `applied_at = now()`(산출물은 + `applied_mode`·`applied_rev`), 대화 `last_applied_at`·`last_activity_at = now()`. 대화 `status`는 `active`·`closed` 모두 허용. "반영됨"은 "제안을 폼에 받아 저장했다"는 기록이며, 채운 뒤 사용자가 폼에서 값을 고쳐 저장해도 기록한다(값 일치를 검사하지 않음 — AI-12) |
+| 잠금 순서 `[가정]` | 대상 행(`projects` 또는 `project_deliverables`, `for update`) → 대화 행(`writing_chats`, id 순). 턴 처리(`apply_structured_draft_patch`)는 대화 행만 잠그고 커리어 행을 잠그지 않으므로 교착이 없다. v4.4 "대화 → 프로젝트" 순서는 반영 RPC와 함께 폐기 |
+| 반환 | 성공 200. `applied: [...]`, `skipped: [...]`는 기록 대상이 없으면 빈 배열 |
+| 로그 | 입력 값·대화 원문을 로그에 남기지 않는다(NFR-PRV-09). 거부 코드·필드 이름만 |
+
+**`save_project_page(p_project_id uuid, p_values jsonb, p_expected_updated_at timestamptz default null, p_applied_proposals jsonb default null)`** — S-10
+
+- `p_values` 허용 키(이 밖의 키는 `invalid_fields` 400): `name`, `experience_id`, `education_id`, `start_month`, `end_month`(`'YYYY-MM'` 또는 null), `is_current`, `project_type`, `experience_type`, `competencies`(키 배열), `situation`, `task`, `action`, `result`, `learnings`. **키가 없으면 기존 값 유지**(만들기면 null·기본값), 값이 null이면 비운다. 화면은 페이지 전체를 보낸다.
+- **만들기** (`p_project_id` null, UX DM-1): `name`과 소속(`experience_id` 또는 `education_id` 중 정확히 하나, 같은 사용자 행)이 필수. 소속이 없거나 둘 다면 `project_affiliation_required`(400). `status`는 트리거가 계산(대부분 `draft`). 독립 프로젝트는 이 RPC로 만들지 않는다(S-43 경로).
+- **고치기** (UX DM-2): 대상이 **소속 프로젝트**여야 한다(독립 프로젝트면 `project_not_affiliated` 400 — S-43은 섹션 저장). **소속 변경**(D-UX-30)은 `experience_id`/`education_id`를 함께 보내 경력 ↔ 교육 사이로만(둘 다 null이면 v4.4 트리거가 `project_scope_change_not_allowed`).
+- 값 검사(거부 코드, 모두 400, 아무것도 쓰지 않음): 이름 공백 → `project_name_required`, 이름 100자·STAR 2,000자 초과 → `field_too_long`(details `{field}`), 월 형식 오류·`end_month < start_month`·`is_current = true`인데 `end_month` 있음 → `invalid_period`(details `{field}`), 분류 키가 목록 밖·역량 3개 초과·중복 → `invalid_classification`(details `{field}`). DB CHECK가 같은 것을 다시 지킨다.
+- `p_applied_proposals` 원소: `{writing_chat_id, field, rev}`. `field` ∈ `situation`·`task`·`action`·`result`·`learnings`·`start_month`·`end_month`·`project_type`·`experience_type`·`competencies`(v4.4 `p_fields` 허용 값과 같음, `is_current` 없음 — AI DA-5). 대화는 `project_id` = 이 프로젝트이고 `project_deliverable_id`가 null이어야 한다(아니면 `not_found`). 만들기 요청에도 올 수 있다(첫 메시지 뒤 대화가 생긴 다음 저장 — 이미 만든 행을 고치는 요청이 됨).
+- 기록에 성공한 원소가 있으면 마지막 원소의 대화로 `projects.source_writing_chat_id`를 쓴다(`updated_at`은 그대로).
+- 반환: `{ project_id, status, updated_at, applied: [{writing_chat_id, field}], skipped: [{writing_chat_id, field, reason}] }`. 화면은 `updated_at`을 다음 저장의 기대 버전으로 쓰고, 복귀 대상이 있으면 `get_data_readiness()`를 다시 부른다(6장).
+
+**`save_project_deliverable(p_project_deliverable_id uuid, p_project_id uuid, p_title text, p_body text, p_expected_updated_at timestamptz default null, p_applied_proposals jsonb default null)`** — S-44
+
+- **만들기** (`p_project_deliverable_id` null, UX DM-6): `p_project_id` 필수(독립 프로젝트만 — `deliverable_requires_standalone_project`, 50개 — `deliverable_limit_reached`, 기존 insert 트리거). `sort_order`는 맨 뒤.
+- **고치기**: `p_project_id`는 null이거나 그 산출물의 부모와 같아야 한다(다르면 `not_found`). 산출물을 다른 프로젝트로 옮기는 경로는 없다.
+- 값 검사: 제목 공백 → `deliverable_title_required`(400), 제목 100자·본문 20,000자 초과 → `field_too_long`(details `{field}`).
+- `p_applied_proposals` 원소: `{writing_chat_id, rev, mode}`, `mode` ∈ `replace`/`append`(대상은 `deliverable.body` 하나라 `field`는 없다). 대화는 `project_deliverable_id` = 이 산출물이어야 한다. 한 저장에 여러 대화의 초안을 차례로 채웠으면 원소가 여러 개다.
+- 반환: `{ project_deliverable_id, project_id, sort_order, updated_at, applied: [{writing_chat_id}], skipped: [{writing_chat_id, reason}] }`.
+
+**거부 코드 (v4.5 신설)**: `stale_write`(409), `project_name_required`, `project_affiliation_required`, `project_not_affiliated`, `deliverable_title_required`, `invalid_period`, `invalid_classification`, `invalid_fields`, `invalid_patch`, `invalid_form_snapshot`(턴 요청, 이상 400), `writing_chat_draft_limit_reached`(409, 2.5.0). 기존 코드 재사용: `not_found`, `field_too_long`, `project_scope_change_not_allowed`, `deliverable_limit_reached`, `deliverable_requires_standalone_project`, `writing_chat_requires_affiliated_project`, `field_already_applied`.
+
+**`form_snapshot` (AI DA-15·UX UX-6, 저장하지 않음)**: 대화 턴 요청 본문의 일시 입력이다(7장). **DB 컬럼·테이블이 없고 로그에도 남기지 않는다.** S-10 = `{name, start_month, end_month, is_current, project_type, experience_type, competencies, star: {situation, task, action, result, learnings}}`, S-44 = `{title, body}`. 서버는 DB 상한과 같은 길이(이름·제목 100자, STAR 2,000자, 본문 20,000자)와 형식만 검사하고 넘으면 턴을 `invalid_form_snapshot`(400)으로 거부한다 `[가정]`. AI는 스냅숏 값을 저장된 값보다 우선해 읽는다(리더 정렬 2). 스냅숏이 없으면 DB 값.
 
 ### 2.6 지원 프로젝트 (AP + ST)
 
@@ -583,6 +690,7 @@ update_failed_jd_raw_text(
 
 - 삭제 트리거(원본 삭제 표시) 대상 테이블: `profiles`(해당 없음), `experiences`, `educations`, `projects`, **`project_deliverables`**(v4.4), `skills`. `project_details`·`achievements`는 테이블과 함께 빠진다.
 - 칩 라벨(UX C-01): `project` = "프로젝트 · {필드 표시명}", `project_deliverable` = "산출물 › {제목}".
+- **v4.5: 근거 규칙 변경 없음.** 산출물 대화(AI-13)의 출처(사실·블록 출처)는 `structured_draft` 안에만 두고 `evidence_links`에 넣지 않는다(DM-15). 저장된 산출물 본문은 지금처럼 `project_deliverable` 근거 원본이며, 저장 RPC가 본문을 바꾸면 `updated_at`이 올라 기존 근거가 "변경됨"이 된다.
 
 **v4.2 (구현 반영)** — v4.4에서 바뀐 부분 반영
 
@@ -665,10 +773,10 @@ update_failed_jd_raw_text(
 |------|------|------|------|
 | `occurred_at` | timestamptz | not null | 호출 완료 시각 |
 | `period_month` | date | not null | 달력 월 KST 1일 (`date_trunc('month', occurred_at at time zone 'Asia/Seoul')`) |
-| `feature` | text | not null, CHECK in (`jd_extraction`, `insight`, `career_description`, `cover_letter`, `interview_questions`, `interview_evaluation`, `writing_chat`, `key_verification`, `writing_assist`, `chat_reply`) | 미터 표시 기능. AI-11 기본 선택은 `career_description`, 자소서 글자 수 보정은 `cover_letter`에 포함 |
+| `feature` | text | not null, CHECK in (`jd_extraction`, `insight`, `career_description`, `cover_letter`, `interview_questions`, `interview_evaluation`, `writing_chat`, `key_verification`, `writing_assist`, `chat_reply`) | 미터 표시 기능. AI-11 기본 선택은 `career_description`, 자소서 글자 수 보정은 `cover_letter`에 포함. **v4.5**: 산출물 작성 대화(AI-13)도 **`writing_chat`**(미터 "AI 작성 대화", STAR·산출물 합산 — AI DA-16·PRD PP-5). 새 값 없음, CHECK 변경 없음. 작업은 같은 `ai_jobs.job_type = 'writing_chat_turn'`·`target_type = 'writing_chat'`, `progress.stage`에 `compose`·`validate` 추가(jsonb 앱 상수, DB CHECK 없음) |
 | `job_type` | text | not null | `ai_jobs.job_type`과 같은 값 |
 | `ai_job_id` | uuid | null (soft) | 작업은 90일 뒤 정리되지만 기록은 남는다 |
-| `call_key` | text | null | 작업 안 단계(예: `insight.match.2`, `writing_chat.turn.7.extract`) |
+| `call_key` | text | null | 작업 안 단계(예: `insight.match.2`, `writing_chat.turn.7.extract`, **v4.5** 산출물 초안 `writing_chat.turn.7.compose`) |
 | `application_project_id` | uuid | null, 복합 FK → `application_projects on delete set null (application_project_id)` | 지원 프로젝트를 지워도 기록은 남는다(PRD 요청 2) |
 | `provider` | text | not null, CHECK in (`openai`, `gemini`, `anthropic`) | |
 | `model` | text | not null | 실제 호출 모델 ID |
@@ -720,6 +828,7 @@ update_failed_jd_raw_text(
 
 | 제한 | 데이터 표현 |
 |------|-------------|
+| **산출물 대화 초안 생성 횟수 (v4.5)** | 대화당 6회 `[가정]`(AI 7.4, PRD 품질 목적 제한) — `structured_draft.draft_count`, `apply_structured_draft_patch`가 6에서 `writing_chat_draft_limit_reached`(409)로 거부, 서버가 초안 턴 시작 전에도 검사 |
 | AI 작성 대화 메시지 상한 40(사용자 + AI 합계, **시작 인사 제외** — A5) | **`writing_chats.message_count` `CHECK (message_count <= 40)`**(D-34 확정, PRD 요청 7) + RPC `append_writing_chat_message` 사전 검사(`message_count ≤ 38`일 때만 사용자 메시지 접수, 2.5). v4.4: 상한에 닿으면 `status = 'closed'`(열람·반영만), 이어 하려면 같은 프로젝트의 새 대화 |
 | 입력 길이 상한 | 각 컬럼 길이 CHECK(공고 원문 50,000자, 문항 메모 300자, 답변 5,000자, 메시지 4,000자) |
 | 지원 프로젝트당 작성 중 면접 세션 1개 | `interview_sessions` partial unique(v2와 같음) |
@@ -882,41 +991,34 @@ update_failed_jd_raw_text(
 - 정량 성과·경력 단위 성과가 없어졌다(`achievements` 폐기, 2.3). 결과·성과는 `projects.result` 서술만이다.
 - 수치 가드(AI V-5)의 원천은 이번 호출에 넣은 사용자 서술 텍스트(소속 `situation`·`task`·`action`·`result`, 경력 `summary`, 교육 `description`, 독립 `role`·`description`, 팩에 들어간 산출물 본문)다. `learnings`에만 있는 숫자는 사실로 인정하지 않는다(AI 규칙, 스키마 영향 없음).
 
-### 3.3 AI 작성 대화의 "반영" 경로 (v4.4 개정, NFR-AI-05, DM-13, CR-5)
+### 3.3 AI 작성 대화의 "반영" 경로 (v4.5 개정 — 반영 = 폼 채우기, 확정 = 저장하기, NFR-AI-05, DM-13, CR-5, PA-3)
 
 | 동작 | AI 호출 | 실행 주체 | 쓰는 테이블 |
 |------|---------|-----------|-------------|
-| 대화 시작 (패널 "+ 새 대화", 게이트 진입) | 없음 | 사용자 세션 → definer RPC `start_writing_chat(p_project_id, p_return_target default null)` | `writing_chats` insert + 고정 시작 인사 메시지. 소속 프로젝트가 아니면 거부 |
-| 대화 턴 (사용자 발화 → 응답 + 정리 패치) | 있음 | 사용자 메시지 insert = definer RPC / 응답·패치 = `app_ai_writer` | `writing_chat_messages`, `writing_chats.structured_draft`·`title`·`status` 등, `ai_jobs`, `ai_usage_records` — **커리어 테이블 없음** |
-| 제안 카드의 필드 직접 수정·`needs_review` 수락/거절 | 없음 | 사용자 세션 RPC `apply_structured_draft_patch` | `writing_chats.structured_draft` |
-| **반영** ([반영] / [모두 반영]) | 없음 | **사용자 세션 RPC `apply_writing_chat_proposal(p_writing_chat_id, p_fields default null)`** | `projects`(STAR 5필드·비어 있던 기간, `source_writing_chat_id`) + `writing_chats.structured_draft`(`applied_at`)·`last_applied_at`·`last_activity_at` |
-| 대화만 삭제 (패널 … 메뉴) | 없음 | 사용자 세션 delete(RLS) 또는 `delete_career_item('writing_chat', …)` | `writing_chats` → 메시지 연쇄. 프로젝트 `source_writing_chat_id` set null. 반영된 STAR는 남는다 |
+| 대화 시작 (패널 "+ 새 대화", 게이트 진입) | 없음 | 사용자 세션 → definer RPC `start_writing_chat(p_project_id, p_return_target, p_form_snapshot)` / **`start_deliverable_writing_chat(p_project_deliverable_id, p_form_snapshot)`**(v4.5) | `writing_chats` insert + 고정 시작 인사 메시지. 대상 행이 있어야 한다 |
+| **새 페이지에서 첫 AI 메시지 (v4.5)** | 턴부터 있음 | 화면 순서: AI 사용 가능 확인 → **페이지 저장 RPC로 행 생성** → 대화 시작 RPC → 턴 (7장) | `projects` 또는 `project_deliverables` insert → `writing_chats` → 메시지 |
+| 대화 턴 (사용자 발화 → 응답 + 정리 패치 / 산출물 초안) | 있음 | 사용자 메시지 insert = definer RPC / 응답·패치 = `app_ai_writer` | `writing_chat_messages`, `writing_chats.structured_draft`·`title`·`status` 등, `ai_jobs`, `ai_usage_records` — **커리어 테이블 없음**. 입력에 `form_snapshot`(저장 안 함) |
+| 제안 카드의 필드 직접 수정·`needs_review` 수락/거절(STAR 필드·사실)·초안 블록 수락/[빼기](산출물 — 초안 전체 거절 없음) | 없음 | 사용자 세션 RPC `apply_structured_draft_patch` | `writing_chats.structured_draft` |
+| **반영** ([반영] / [모두 반영] / [본문 교체]·[뒤에 덧붙이기]) | 없음 | **화면만** — 폼에 채움. 서버 호출 없음 | 없음. 카드 상태 "폼에 채움"은 화면 로컬 상태 |
+| **저장하기** (v4.5) | 없음 | 사용자 세션 RPC **`save_project_page`** / **`save_project_deliverable`**(2.5.1) | `projects` 또는 `project_deliverables` + 같은 트랜잭션에서 `writing_chats.structured_draft`(`applied_at` 등)·`last_applied_at`·`last_activity_at`, `projects.source_writing_chat_id` |
+| 대화만 삭제 (패널 … 메뉴) | 없음 | 사용자 세션 delete(RLS) 또는 `delete_career_item('writing_chat', …)` | `writing_chats` → 메시지 연쇄. 프로젝트 `source_writing_chat_id` set null(`updated_at` 그대로). 저장된 STAR·본문은 남는다 |
 
-- **`apply_writing_chat_proposal` 규칙 (v4.4 신설)**:
-  - 실행 주체: **security invoker**(프로젝트 쓰기는 사용자 RLS). `structured_draft`·`last_applied_at` 갱신은 내부 definer 헬퍼(v4.2 `save_writing_chat`과 같은 구조). `authenticated`만 execute. **키·동의·활성 공급자를 보지 않는다**(AI 호출 없음, 키가 없거나 무효여도 반영 가능).
-  - 잠금 순서: `writing_chats` 행 → `projects` 행(턴 처리와 같은 순서로 교착을 피함) `[가정]`.
-  - 대화 `status`는 `active`·`closed` 모두 허용.
-  - `p_fields`: null이면 반영 대상 전체. 허용 값 `situation`, `task`, `action`, `result`, `learnings`, `start_month`, `end_month`, **`project_type`, `experience_type`, `competencies`**(v4.4 후속 CR-20). `is_current`는 반영 대상이 아니다(사용자가 기간 섹션에서만 정함, R-CR-15). 그 밖 값은 `invalid_fields`(400).
-  - 반영 대상 필드 = `value`가 있고, `applied_at`이 null이고, `review in ('ok','accepted')`. **남은 `needs_review`는 건너뛴다**(T-18).
-  - STAR 필드: 프로젝트 값이 비어 있으면(공백만 포함) 제안 값을 넣고, 값이 있으면 **현재 값 + 줄바꿈 1개 + 제안 값**으로 덧붙인다(`op`와 무관하게 반영 시점의 현재 값 기준 — 대화 중 왼쪽 섹션을 직접 고친 경우 포함). 대화가 사용자 글을 지우거나 바꾸는 경로는 없다.
-  - 결과가 2,000자를 넘는 필드가 하나라도 있으면 **전체를 반영하지 않고** `field_too_long`(409, details에 필드)로 거부 `[가정]` — 부분 반영으로 카드와 STAR가 어긋나지 않게.
-  - 기간: 프로젝트의 그 컬럼이 비어 있을 때만 쓴다. 이미 있으면 건너뛰고 `skipped`에 `period_already_set`. 사용자가 `is_current = true`로 둔 프로젝트에 `end_month` 제안이 오면 CHECK와 충돌하므로 건너뛴다(`period_already_set`).
-  - **분류 (CR-20)**: 프로젝트 값이 **반영 시점에도** 비어 있을 때만 쓴다(`competencies`는 `'{}'`일 때만). 추천 뒤에 사용자가 직접 골랐으면 건너뛴다(`classification_already_set`). 덮어쓰는 경로는 없다. 값은 CHECK가 다시 검사한다. 분류만 바뀌면 `content_updated_at`은 그대로다(2.3).
-  - 반영된 필드 객체에 `applied_at = now()`, 대화 `last_applied_at`·`last_activity_at` 갱신, `projects.source_writing_chat_id = 이 대화`. 완료 판정·`content_updated_at`·`career_data_updated_at`은 `projects` 트리거가 다시 계산한다.
-  - 반환: `{ applied: [필드], skipped: [{field, reason}], project_status }`. `reason` ∈ `needs_review`, `already_applied`, `empty`, `period_already_set`, **`classification_already_set`**(v4.4 후속).
-  - 반영할 필드가 하나도 없으면 오류 없이 `applied: []`.
-  - 섹션 편집 중 반영 충돌은 화면이 막는다(UX D-10). 서버는 마지막 쓰기 기준이다.
-- 근거: "반영"은 사용자가 카드에서 확정하는 동작이고 모델 출력이 아니라 사용자가 검토한 `structured_draft`를 옮긴다. 그래서 AI 역할에 커리어 쓰기 권한을 주지 않고도 반영할 수 있다(v3 저장과 같은 원리). AI 작업 코드 경로에는 커리어 쓰기 권한이 끝까지 없다.
-- **v4.4 폐기**: `save_writing_chat`(일괄 저장), `hand_off_writing_chat`(폼으로 전환, T-6·D-UX-11), `set_writing_chat_affiliation`(소속 확정, T-19·A15). 왼쪽 STAR 섹션이 곧 입력 폼이고 소속은 프로젝트에 이미 있다.
+- **카드 상태 3단계 (AI-12·AI-13, UX-4)**: ① 제안(DB `applied_at` null) ② "폼에 채움 — 저장하면 반영돼요"(**화면 로컬만**, DB에 없음) ③ "반영됨"(저장 성공 뒤 DB `applied_at`). ②에서 저장하지 않고 떠나면 다시 열 때 ①이다. 저장되지 않은 것을 "반영됨"으로 보이는 경로가 없다.
+- **채우기 규칙은 화면 판정**(v4.4 `apply_writing_chat_proposal` 규칙을 폼으로 옮김, AI-12·UX S-10 "반영 규칙"): 대상 = `value` 있음 + `applied_at` null + `review in ('ok','accepted')`. STAR는 폼 값이 비면 넣고 있으면 "현재 값 + 줄바꿈 1개 + 제안", 합쳐 2,000자 초과면 채우지 않음. 기간·분류는 폼 칸이 빌 때만(`is_current`면 종료월 건너뜀). 산출물은 교체 / `basis = new` 블록만 덧붙이기, 결과 20,000자 초과면 막음. **산출물의 수락하지 않은 `needs_review` 블록은 교체·덧붙이기 결과에서 뺀다**(블록 `review in ('ok','accepted')`만 채움, 빠진 블록을 따라 자식이 없어진 제목 블록도 뺌). 채울 내용 블록이 하나도 없으면 채우기를 막는다(리더 판정 2026-11-03, AI-13·S-44, T-18). 서버는 이 판정을 다시 하지 않는다 — 저장되는 값은 사용자가 폼에서 확정한 값이고, DB CHECK가 형식·길이를 지킨다.
+- 근거: 반영과 확정이 모두 사용자 동작이고, 저장 RPC는 사용자 세션에서 돈다. AI 작업 코드 경로에는 커리어 쓰기 권한이 끝까지 없다(NFR-AI-05).
+- **v4.5 폐기**: `apply_writing_chat_proposal`(v4.4 "누르면 바로 DB 저장") — 이름을 남겨 "기록만" 하는 RPC로 바꾸지 않았다. 저장과 분리된 기록 경로가 있으면 저장하지 않은 제안이 "반영됨"이 될 수 있어서다(UX DM-3 선택지 중 "폐기하고 저장 RPC 안으로 합침"). 반영됨 기록 로직(`private.wc_proposal_mark_applied`, 구현됨)은 내부 헬퍼 `private.wc_mark_proposal_applied`로 이름·인자를 고쳐 재사용한다.
+- **v4.4 폐기 (유지)**: `save_writing_chat`(일괄 저장), `hand_off_writing_chat`(폼으로 전환, T-6·D-UX-11), `set_writing_chat_affiliation`(소속 확정, T-19·A15).
 
 ### 3.4 AI 작성 대화 보관 (v4.4 개정, D-27, PIPA)
 
+- **v4.5**: 산출물 대화도 같은 규칙이다(산출물에 묶여 보관, 대화만 삭제 가능, 자동 삭제 없음). 보관 기간을 따로 정할 이유가 없어 새 결정은 없다.
 - **확정 (사용자 결정 U-9, 2026-10-24)**: 프로젝트에 묶인 대화는 계속 보관하고 대화만 따로 삭제할 수 있다(D-27 (a)). **v4.4 (CR-6, 확정 2026-11-02 (사용자))**: 모든 대화가 프로젝트에 묶이므로 "묶이지 않은 대화 90일 자동 삭제"(D-DM-08)와 크론 `purge_unlinked_writing_chats`를 폐기한다.
 
 | 경우 | 처리 |
 |------|------|
 | 사용자가 "대화만 삭제" | `writing_chats` 행 삭제 → 메시지 연쇄 삭제, 프로젝트 `source_writing_chat_id`는 null. 반영된 STAR는 그대로 |
-| 프로젝트 삭제 | `writing_chats.project_id` FK cascade로 그 프로젝트의 대화 전부 삭제(F-COM-04) |
+| 프로젝트 삭제 | `writing_chats.project_id` FK cascade로 그 프로젝트의 대화 전부 삭제(F-COM-04). **v4.5**: 독립 프로젝트면 산출물과 그 산출물 대화가 함께 지워진다 |
+| **산출물 삭제 (v4.5)** | `writing_chats.project_deliverable_id` FK cascade로 그 산출물의 대화 전부 삭제(F-COM-04, PRD F-P1-18 (5)) |
 | 경력·교육 삭제 | 소속 프로젝트가 함께 지워지므로(2.3, 4.2) 그 대화도 연쇄 삭제 |
 | 상한 도달(`closed`) | 보관. 열람·반영만 |
 | 탈퇴 | DM-1 연쇄 + `delete_account` 명시 삭제 |
@@ -967,6 +1069,28 @@ update_failed_jd_raw_text(
 | **분류 추천 경로 (후속 CR-20)** | — | — | **`structured_draft.classification.{project_type,experience_type,competencies}`**, 채우기만(`op` 없음), AI 출력 키 `classification_suggestions` | STAR(`star`)와 나란히. 반영 RPC `p_fields`에 같은 키 |
 | **진행 중 (후속 CR-22)** | — | — | **`projects.is_current`**(사용자 입력만, AI 제안 경로 없음) | `experiences.is_current`와 같은 이름 |
 
+### 3.7 이름 확정 (v4.5, 프로젝트 추가·산출물 상세 — PRD v4.6 vs UX v5.6 vs AI v4.6)
+
+| 대상 | PRD v4.6 | UX v5.6 | AI v4.6 | 확정 | 근거 |
+|------|----------|---------|---------|------|------|
+| 산출물 대화 대상 열 | — | `writing_chats.project_deliverable_id` `[가정]` | `writing_chats.project_deliverable_id` | **`writing_chats.project_deliverable_id`** (+ `project_id` = 부모 늘 채움) | FK 명명 규칙. 배타 CHECK 대신 복합 FK(2.5) |
+| S-10 저장 RPC | — | 이름 미정 | `save_project_page(p_project_id, p_values, p_applied_proposals)` | **`save_project_page(p_project_id, p_values, p_expected_updated_at, p_applied_proposals)`** | AI 이름 + 기대 버전 인자(UX DM-8) |
+| S-44 저장 RPC | — | 이름 미정 | `save_project_deliverable(p_deliverable_id, p_project_id, p_title, p_body, p_applied_proposal)` | **`save_project_deliverable(p_project_deliverable_id, p_project_id, p_title, p_body, p_expected_updated_at, p_applied_proposals)`** | 인자는 컬럼명(`project_deliverable_id`), 반영 기록은 두 RPC 모두 배열 `p_applied_proposals` |
+| 반영 기록 인자 | — | `applied: [{writing_chat_id, fields: [...]}]` | `p_applied_proposals = [{writing_chat_id, field, rev}]` / 산출물 `p_applied_proposal = {writing_chat_id, rev, mode}` | **`p_applied_proposals`** — S-10 `[{writing_chat_id, field, rev}]`, S-44 `[{writing_chat_id, rev, mode}]` | `rev`가 필드마다 있어 평평한 배열이 맞다(`proposal_changed` 판정) |
+| 기대 버전 인자 / 거부 코드 | — | 예: 페이지를 연 시점의 `updated_at` / `stale_write` | — | **`p_expected_updated_at`** / **`stale_write`**(409) | UX 제안 그대로 |
+| 저장 반환의 상태 키 | — | `id`, `status`, `updated_at` | `project_id`, `project_status` | **`project_id`, `status`, `updated_at`** | 컬럼명 그대로(`projects.status`) |
+| 저장 RPC `skipped[].reason` | — | `needs_review`·`already_applied`·`empty`·`period_already_set`·`classification_already_set` | `already_applied`·`proposal_changed`·`needs_review`·`not_found` | RPC: **`not_found`·`already_applied`·`proposal_changed`·`needs_review`·`invalid_entry`·`mark_failed`**. `empty`·`period_already_set`·`classification_already_set`는 **화면 채우기 판정 이름**으로만 | 채우기 판정이 화면으로 옮겼다(AI DA-6) |
+| 반영 RPC | — | 폐기 또는 "기록만" | 폐기, 내부 헬퍼 `mark_writing_chat_proposal_applied` | **`apply_writing_chat_proposal` 폐기**, 내부 헬퍼 **`private.wc_mark_proposal_applied`** | 구현된 `private.wc_proposal_mark_applied`와 같은 `wc_` 접두어 |
+| 대화 시작 | — | `start_writing_chat(p_project_id, p_return_target)` | `start_writing_chat(p_target jsonb, p_return_target)` (`new_project` 등 kind) | STAR = **`start_writing_chat(p_project_id, p_return_target, p_form_snapshot)`**, 산출물 = **`start_deliverable_writing_chat(p_project_deliverable_id, p_form_snapshot)`**. "새 대상" kind 없음 | 리더 정렬 2: 행은 페이지 저장이 먼저 만든다 |
+| 필드 판 번호 | — | — | `rev` | **`rev`**(슬롯 단위 단조 증가) | 같음 |
+| 채운 뒤 패치 표시 | — | — | `new_object` | **`new_object`**(패치 인자, 저장 안 함). 미반영 객체 여러 개 모양은 두지 않음 | 2.5 |
+| 산출물 대화 정리 결과 | — | `structured_draft.deliverable.body` | 같음 + `target`·`facts[]`·`draft_count` | **AI 모양 그대로**(2.5.0) | 같음 |
+| 산출물 종류 | — | — | `writing_kind` (`structured_draft` 안) | **`structured_draft.writing_kind`**, 컬럼 없음 | PA-2 |
+| 초안 상한 | 6회 `[가정]` | — | `draft_count`, `writing_chat_draft_limit_reached` | **`structured_draft.draft_count`**, **`writing_chat_draft_limit_reached`** | 같음 |
+| 폼 스냅숏 | — | (D-UX-26 저장된 값만 — 리더 정렬 2로 폐기) | `form_snapshot` | **`form_snapshot`**(턴 요청 본문, 저장 안 함) | 리더 정렬 2 |
+| 산출물 "마지막 반영 대화" | — | — | `project_deliverables.source_writing_chat_id`(선택) | **두지 않음** | 2.3 |
+| 첫 메시지 때 이름이 빈 경우 | 기본 이름으로 행 생성 `[가정]` | 보내지 않음(D-UX-25) | 보내지 않음 | **보내지 않음, 임시 이름 없음** | 리더 정렬 1 |
+
 ---
 
 ## 4. 삭제·보유 정책
@@ -978,10 +1102,10 @@ update_failed_jd_raw_text(
 | 경력 | **소속 프로젝트 전부**(→ 그 프로젝트의 AI 작성 대화 → 메시지). v4.4: 경력 단위 성과 없음 | — (v4.4: "독립으로 남기기" 없음, 4.2) | 트리거 |
 | **교육** | 소속 프로젝트 전부(→ 대화 → 메시지) | — | 트리거 |
 | 소속 프로젝트 | STAR(같은 행), **그 프로젝트의 `writing_chats` → 메시지** | — | 트리거 |
-| 독립 프로젝트 | **`project_deliverables`**, `project_skills`(고아 태그 스킬 정리) | — | 트리거(프로젝트 + 산출물) |
-| **산출물** (v4.4) | — | 부모 프로젝트 `status` 영향 없음(완료 조건 아님) | 트리거 |
+| 독립 프로젝트 | **`project_deliverables`**(→ **v4.5: 그 산출물의 AI 작성 대화 → 메시지**), `project_skills`(고아 태그 스킬 정리) | — | 트리거(프로젝트 + 산출물) |
+| **산출물** (v4.4) | **v4.5: 그 산출물의 `writing_chats` → 메시지**(FK cascade, 진행 중 턴은 취소 요청) | 부모 프로젝트 `status` 영향 없음(완료 조건 아님) | 트리거 |
 | 스킬 | `project_skills` | v2와 같음 | 트리거 |
-| **AI 작성 대화** | 메시지 | 프로젝트 `source_writing_chat_id` null, 반영된 STAR 유지 | 없음(근거 원본 아님) |
+| **AI 작성 대화** | 메시지 | 프로젝트 `source_writing_chat_id` null(`updated_at` 그대로), 저장된 STAR·산출물 본문 유지 | 없음(근거 원본 아님) |
 | 지원 프로젝트 | v2 목록 + **`application_stage_events`** | `ai_usage_records`(`application_project_id`만 null) | owner와 함께 |
 | **API 키** (v4) | — (행 hard delete, 복구 불가) | `profiles.active_ai_provider` null(FK), 그 공급자 현재 동의에 `withdrawn_at`. **기존 AI 결과·사용 기록은 유지**(D-36). 진행 중 작업은 `key_missing`으로 종료, 입력 보존 | — |
 
@@ -993,7 +1117,7 @@ update_failed_jd_raw_text(
 - **`get_deletion_impact(entity_type, entity_id, affiliation_mode)`**
   - `entity_type` (v4.4): `experience`, `education`, `project`, **`project_deliverable`**, `skill`, `writing_chat`. **삭제**: `project_detail`, `achievement`.
   - 반환: `cascade`(하위 종류별 개수: **`projects`, `project_deliverables`, `project_skills`, `writing_chats`**), `affected_results.by_application_project[]`(`{application_project_id, name, insights, drafts, draft_sections, interview_sessions}`), `writing_chat`이면 **`{ message_count, last_applied_at }`**만(결과 영향 없음. v4.2 `linked_saved_rows` 대체 — 반영한 적이 있으면 화면이 "반영된 STAR는 남아요"를 보인다).
-  - **`cascade` 집계 (v4.2)**: 삭제 대상 자신은 세지 않는다(하위만). 고아 태그 스킬 자동 삭제분도 세지 않는다(키 목록에 skills 없음). 경력·교육은 `projects`·`writing_chats`(소속 프로젝트의 대화), 독립 프로젝트는 `project_deliverables`·`project_skills`, 소속 프로젝트는 `writing_chats`.
+  - **`cascade` 집계 (v4.2, v4.5 개정 ★)**: 삭제 대상 자신은 세지 않는다(하위만). 고아 태그 스킬 자동 삭제분도 세지 않는다(키 목록에 skills 없음). 경력·교육은 `projects`·`writing_chats`(소속 프로젝트의 대화), 독립 프로젝트는 `project_deliverables`·`project_skills`·**`writing_chats`(v4.5: 그 프로젝트 산출물들의 대화 수 = `project_id`가 그 프로젝트인 대화 수 — UX DM-7 가정 확정, 화면 "산출물 {N}개와 산출물의 AI 대화 {M}개")**, 소속 프로젝트는 `writing_chats`, **산출물(v4.5)은 `writing_chats`(그 산출물의 대화 수)**. `writing_chat`(대화만 삭제) 반환은 그대로 `{ message_count, last_applied_at }` — 산출물 대화도 같다(화면은 반영한 적이 있으면 "저장한 본문은 남아요").
   - 집계 대상: 삭제될 행 전체(연쇄분 포함)를 가리키는 `evidence_links`(`source_type` in experience/education/project/**project_deliverable**/skill) + `draft_section_sources`(experience_id/education_id/project_id).
   - **결과 영향 집계 (v4.2, 구현 반영)** — 한 값이라도 0보다 큰 지원 프로젝트만, 이름순:
 
@@ -1013,14 +1137,14 @@ update_failed_jd_raw_text(
 - v4.4: 프로젝트의 STAR 섹션을 비워 `draft`가 되면 그 프로젝트를 근거로 한 결과의 근거 칩은 "변경됨"이 된다(`content_updated_at` 갱신). 행을 지우지 않으므로 "원본 삭제됨"은 아니다.
 
 ### 4.3 탈퇴 전 삭제 범위 집계 (UX 요청 9)
-- **별도 함수 `get_account_deletion_summary()`**: 커리어(**v4.4**: 경력, 교육, 프로젝트, **산출물**, 스킬, AI 작성 대화 — 상세 내용·정량 성과 삭제) / 자기소개서(화면 표기, CR-23 — 지원 프로젝트 수, 인사이트, 초안, 면접 세션, 전형 이력) / **AI 연결(v4: 등록 키 수, 데이터 사용 동의 수, 토큰 사용 기록 수)** 개수. `get_deletion_impact`와 반환 모양·목적(결과 영향 vs 전체 개수)이 달라 분리.
+- **별도 함수 `get_account_deletion_summary()`**: 커리어(**v4.4**: 경력, 교육, 프로젝트, **산출물**, 스킬, AI 작성 대화 — 상세 내용·정량 성과 삭제. **v4.5**: AI 작성 대화 수는 STAR 대화 + 산출물 대화 합계 한 값 `[가정]`(화면 S-25는 "AI 작성 대화 N개" 한 줄). 반환 키 변경 없음. `delete_account`는 이미 `writing_chats` 전체를 먼저 지우므로 변경 없음 — 삭제 순서 대화 → 산출물 → 프로젝트는 FK가 어느 순서든 막지 않는다) / 자기소개서(화면 표기, CR-23 — 지원 프로젝트 수, 인사이트, 초안, 면접 세션, 전형 이력) / **AI 연결(v4: 등록 키 수, 데이터 사용 동의 수, 토큰 사용 기록 수)** 개수. `get_deletion_impact`와 반환 모양·목적(결과 영향 vs 전체 개수)이 달라 분리.
 
 ### 4.4 보유 기간
 
 | 데이터 | 보유 |
 |--------|------|
 | 커리어(교육·프로젝트 STAR·산출물 포함), 지원 프로젝트·결과·전형 이력, 근거, 동의 이력 | 탈퇴 또는 개별 삭제까지 |
-| AI 작성 대화 (v4.4: 모두 프로젝트에 묶임) | 프로젝트 삭제(경력·교육 삭제로 인한 연쇄 포함)·대화 삭제·탈퇴까지 (D-27 (a), **U-9 확정**). **자동 삭제 없음**(v4.4, CR-6 — D-DM-08 90일 폐기) |
+| AI 작성 대화 (v4.4: 모두 프로젝트에 묶임, v4.5: 산출물 대화는 산출물에도 묶임) | 프로젝트 삭제(경력·교육 삭제로 인한 연쇄 포함)·**산출물 삭제(v4.5)**·대화 삭제·탈퇴까지 (D-27 (a), **U-9 확정**). **자동 삭제 없음**(v4.4, CR-6 — D-DM-08 90일 폐기) |
 | `ai_jobs` | 90일 / `ai_usage_records` **13개월** `[가정]`(D-DM-09) / `account_deletion_logs` 3년 비식별 / 백업 ≤ 30일 |
 | **API 키** (v4) | 키 삭제 또는 탈퇴 즉시 hard delete. 백업 안의 암호문은 백업 보관(≤ 30일) 뒤 소멸하며, KMS 없이는 복원 불가(NFR-KEY-02·06) |
 | **AI 데이터 사용 동의** (v4) | `consents`와 같음(탈퇴 시 삭제, 비식별 파기 증빙만) |
@@ -1055,7 +1179,7 @@ update_failed_jd_raw_text(
 |------|----|
 | 정책 버전 (A.2) | `policy_versions` 3종 `version = '2026-10-01'`, `document_path = '/policies/{type}/{version}'`. 선택 동의는 `privacy` 버전을 따른다. 실제 문서·시행일은 출시 전 확정(D-10) |
 | AI 고지 (2.11.6) | 6행 `v2026-10-29`, 배포 즉시 유효 |
-| AI 작성 대화 패치 | **v4.4**: STAR 필드 값 ≤ 2,000자(덧붙임은 반영 시 합계로 다시 검사, 3.3), 기간 `YYYY-MM`. 이름·역할·지표명·단위·스킬 패치는 없어짐 |
+| AI 작성 대화 패치 | **v4.4**: STAR 필드 값 ≤ 2,000자, 기간 `YYYY-MM`. 이름·역할·지표명·단위·스킬 패치는 없어짐. **v4.5**: 덧붙임 합계 검사는 화면 채우기 단계 + 저장 RPC 값 검사(`field_too_long`). 산출물 대화: 사실 ≤ 80개·각 ≤ 500자, 초안 `value` ≤ 8,000자·블록 ≤ 200개, `draft_count` ≤ 6, 저장 RPC `p_applied_proposals` ≤ 50개 `[가정]` |
 | 커리어 (v4.4) | `projects.name`·`role` 100자(서버), STAR 각 2,000자·`description` 5,000자·`link_url` 2,048자(DB CHECK), 산출물 제목 100자·본문 20,000자·프로젝트당 50개, 대화 `title` 100자(서버가 30자로 채움) `[가정]` |
 | JD | 회사명·포지션명 200자, 요건 500자·200개, 요건 키워드 1~100자, `detected_language` 1~16자, 해시 ≤ 128자 |
 | 인사이트·근거 | 근거 원소 ≤ 2,000개, `item_key` ≤ 200자, `quote` ≤ 2,000자, `source_label` ≤ 300자, `prompt_version`·`model` ≤ 200자 |
@@ -1071,9 +1195,9 @@ update_failed_jd_raw_text(
 |--------|--------|--------|--------|--------|
 | experiences / **educations** / projects / **project_deliverables**(v4.4) / skills / project_skills | 본인 | 사용자 세션 | 사용자 세션 | 사용자 세션 (`delete_career_item` 권장) |
 
-- v4.4: `project_details`·`achievements` 정책·grant 삭제. `project_deliverables`·`project_skills`의 "독립 프로젝트만", `projects`의 소속 ↔ 독립 전환 금지는 RLS가 아니라 트리거·CHECK가 강제한다(2.3). `projects`의 STAR 컬럼 쓰기는 사용자 세션(섹션 편집)과 `apply_writing_chat_proposal`(invoker)뿐이다.
+- v4.4: `project_details`·`achievements` 정책·grant 삭제. `project_deliverables`·`project_skills`의 "독립 프로젝트만", `projects`의 소속 ↔ 독립 전환 금지는 RLS가 아니라 트리거·CHECK가 강제한다(2.3). `projects`의 STAR 컬럼 쓰기는 사용자 세션뿐이다 — **v4.5: S-10 페이지 저장 `save_project_page`(invoker)**. `apply_writing_chat_proposal`은 폐기. 산출물 쓰기는 S-44 `save_project_deliverable`(invoker).
 
-| **writing_chats** | 본인 | definer RPC(`start_writing_chat`) | `structured_draft`는 **RPC `apply_structured_draft_patch`**(AI 턴 = `app_ai_writer`, 사용자 수정·수락 = 사용자 세션)와 **`apply_writing_chat_proposal`의 내부 헬퍼**(`applied_at`)만. **v4.4: 사용자 세션 직접 update는 `return_target`만**(`status` 직접 update 회수 — `closed` 전이는 definer RPC, 재개 전이 없음. `set_writing_chat_affiliation` 폐기). `message_count`·`last_activity_at`·`last_extracted_sequence`·`title`·`last_applied_at`은 definer RPC만 | 본인 |
+| **writing_chats** | 본인 | definer RPC(`start_writing_chat`, **v4.5 `start_deliverable_writing_chat`**) | `structured_draft`는 **RPC `apply_structured_draft_patch`**(AI 턴 = `app_ai_writer`, 사용자 수정·수락 = 사용자 세션)와 **v4.5: 페이지 저장 RPC의 내부 헬퍼 `private.wc_mark_proposal_applied`**(`applied_at`·`applied_mode`·`applied_rev`)만. `project_id`·`project_deliverable_id`는 insert 뒤 바뀌지 않는다. **v4.4: 사용자 세션 직접 update는 `return_target`만**(`status` 직접 update 회수 — `closed` 전이는 definer RPC, 재개 전이 없음. `set_writing_chat_affiliation` 폐기). `message_count`·`last_activity_at`·`last_extracted_sequence`·`title`·`last_applied_at`은 definer RPC만 | 본인 |
 | **writing_chat_messages** | 본인 | **v4.2: definer RPC만** — user = `append_writing_chat_message`(사용자 세션), assistant = `begin_assistant_message`(`app_ai_writer`) | definer RPC만(`finish_assistant_message`, `app_ai_writer`) | 연쇄만 |
 | application_projects | 본인 | RPC | 본인(`name`, `deadline`, `memo`). **`stage`·`stage_outcome`·`stage_changed_at`은 RPC만**. v4.2: AI 쪽 `name`·`name_source`·`last_activity_at`은 `apply_jd_extraction` / `fail_jd_extraction`만 | 본인 |
 | **application_stage_events** | 본인 | RPC만 | 없음 | 연쇄만 |
@@ -1095,7 +1219,7 @@ update_failed_jd_raw_text(
 - **서버 전용 역할 (v4.2, A19 ★)**: `save_provider_key`·`record_provider_key_check` 실행 권한. 서버가 세션 확인 뒤 `p_user_id`를 넘긴다. `authenticated`·`anon` execute 없음.
 - **`app_key_reader` (v4 신설 역할)**: `get_provider_key_secret(ai_job_id)` 실행 권한만. 테이블 권한 없음. 작업 실행 서버만 이 역할로 연결한다.
 - 운영자 SQL 역할·`pg_read_all_data` 구성원도 KEK 없이는 `ai_provider_keys` 암호문만 본다(KMS 권한이 서버 실행 계정에만 있음, NFR-KEY-07, 2.11.1 v4.2 문구). `application_stage_events`·`application_projects.stage*` 쓰기 없음(보드는 AI와 무관).
-- RPC 실행 주체: **v4.4: `apply_writing_chat_proposal`**, `delete_career_item`, `reorder_project_deliverables`는 security invoker(사용자 RLS). `save_writing_chat`·`hand_off_writing_chat`·`set_writing_chat_affiliation`은 폐기. **v4.2: `append_writing_chat_message`는 security definer + 소유 검사**(invoker면 사용자에게 메시지 직접 insert·`message_count` update를 열어야 해서 상한을 우회할 수 있음). `move_application_stage`, `set_application_outcome`은 security definer + 소유 검사(이벤트 insert를 사용자에게 직접 열지 않기 위해). **v4.3: `update_failed_jd_raw_text`도 security definer + 소유 검사**(`job_descriptions` update를 사용자에게 열지 않기 위해, `authenticated`만 execute, 2.6.1).
+- RPC 실행 주체: **v4.5: `save_project_page`·`save_project_deliverable`**, `delete_career_item`, `reorder_project_deliverables`는 security invoker(사용자 RLS). 반영됨 기록 헬퍼 `private.wc_mark_proposal_applied`는 security definer + 소유 검사(대화 행 `user_id = auth.uid()`), 외부 execute 없음. `start_deliverable_writing_chat`은 security definer + 소유 검사. `apply_writing_chat_proposal`(v4.4)은 폐기. `save_writing_chat`·`hand_off_writing_chat`·`set_writing_chat_affiliation`은 폐기. **v4.2: `append_writing_chat_message`는 security definer + 소유 검사**(invoker면 사용자에게 메시지 직접 insert·`message_count` update를 열어야 해서 상한을 우회할 수 있음). `move_application_stage`, `set_application_outcome`은 security definer + 소유 검사(이벤트 insert를 사용자에게 직접 열지 않기 위해). **v4.3: `update_failed_jd_raw_text`도 security definer + 소유 검사**(`job_descriptions` update를 사용자에게 열지 않기 위해, `authenticated`만 execute, 2.6.1).
 - `service_role`: 보관 정리·탈퇴 RPC, 서버 전용 키 RPC. 대화 테이블은 select·delete만(v4.4: 대화 보관 정리 크론은 없고 탈퇴에만 쓴다).
 - Storage: v2와 같음(MVP 버킷 없음).
 
@@ -1148,26 +1272,26 @@ v4.4 다른 예:
 - **`project_fields` (A18 ★ → v4.4 의미 변경)**: v4.2의 "이름·역할이 빠진 프로젝트"는 생기지 않는다(이름은 만들 때 필수, 소속 프로젝트에 `role` 없음). v4.4에서는 **프로젝트 내용이 비어 `draft`인 독립 프로젝트**가 판정 4단계에서 대상이 될 때 `hints`에 넣고 `next_action = "form"` + `suggested_project_id`(그 독립 프로젝트, 최근 수정순 1건)를 준다. 화면은 S-43 "프로젝트 내용" 섹션 편집을 연다(독립 프로젝트에는 AI 패널이 없음, D-AI-15 (a)).
 - **`next_action` 판정 순서 (v4.4)** — "AI 사용 가능" = 활성 공급자 있음 + `key_status <> 'invalid'`(`needs_check`는 사용 가능, `consent_required`는 판정에 쓰지 않음 — v4.2와 같음):
   1. `missing`에 `complete_experience` → `form`, `suggested_project_id` 없음.
-  2. `projects_without_complete_star > 0` → **AI 사용 가능이면 `writing_chat`, 아니면 `form`**, 둘 다 `suggested_project_id` = 그 소속 프로젝트(최근 수정순 1건), `hints`에 `project_star`. 화면: `writing_chat`이면 S-10 + 패널 새 대화, `form`이면 S-10 STAR 섹션 편집 `[가정]`(v4.2는 AI 없으면 제안 없이 `form` — 이번에 대상 프로젝트를 함께 주도록 바꿈).
+  2. `projects_without_complete_star > 0` → **AI 사용 가능이면 `writing_chat`, 아니면 `form`**, 둘 다 `suggested_project_id` = 그 소속 프로젝트(최근 수정순 1건), `hints`에 `project_star`. 화면: `writing_chat`이면 S-10 + 패널 새 대화, `form`이면 S-10 STAR 입력(페이지 저장, PA-3 — v4.5 R-PA-9) `[가정]`(v4.2는 AI 없으면 제안 없이 `form` — 이번에 대상 프로젝트를 함께 주도록 바꿈).
   3. `standalone_projects_without_description > 0` → `form` + `suggested_project_id` + `hints`에 `project_fields`.
-  4. 그 밖(채울 프로젝트가 없음) → **AI 사용 가능이면 `create_project`**(화면 C-23: 소속 고르기 + 이름 → 작성 중 프로젝트 → S-10 + 패널, CR-6), **아니면 `form`**(제안 없음, 화면이 프로젝트 추가로 안내).
+  4. 그 밖(채울 프로젝트가 없음) → **AI 사용 가능이면 `create_project`**, **아니면 `form`**(제안 없음, 화면이 프로젝트 추가로 안내). **v4.5 (PA-3)**: `create_project`의 화면 경로는 "소속 고르기 → 빈 S-10(행 없음) + 패널"이다(이름 다이얼로그 없음, 경로는 UX). 행은 첫 저장 또는 첫 AI 메시지 직전 자동 저장 때 생기고, 게이트에서 왔으면 `start_writing_chat`의 `p_return_target`으로 복귀 대상이 들어간다(UX DM-9). 값·판정은 변경 없음.
 - **세부 규칙 (v4.2 유지분)**
   - `missing`·`hints`는 항상 둔다(ready면 `missing: []`). `hints: ["profile"]`은 ready여도 붙인다(참고용). 세 기능(insight / draft / job_interview)은 같은 객체.
   - 카운트·`suggested_project_id`는 포함 규칙(소속 경력·교육이 draft면 제외)을 적용해 센다.
   - **`profile_filled`** = `desired_job_title`(공백 아님) / `total_years_of_experience` / `interested_industries`(비지 않음) 중 하나라도 있음(v4.2 그대로).
 - `data_sufficiency` (AI C-1 정의): `ok` = D-01 충족 / `thin` = 미충족이지만 프로필 또는 complete 경력·교육·프로젝트 존재 / `none` = 없음.
 - `draft_item_ids`는 경력·교육·프로젝트 ID만(v4.4).
-- 같은 판정을 AI Route Handler가 다시 확인(v2와 같음). AI-12·AI-08은 판정 대상 아님.
+- 같은 판정을 AI Route Handler가 다시 확인(v2와 같음). AI-12·**AI-13(v4.5)**·AI-08은 판정 대상 아님. 산출물은 완료 조건이 아니라 readiness 값에 변경 없음.
 - **v4 AI 연결 상태**: 반환 최상위에 `"ai_connection": {"active_provider": "gemini" | null, "key_status": "valid" | "invalid" | "needs_check" | null, "connection_tier": "free" | "paid" | null}`를 더한다. 활성 공급자가 없거나 `key_status = 'invalid'`이면 AI 사용 불가로 보고 `writing_chat`·`create_project` 대신 **`form`**을 준다(키 없으면 섹션 직접 입력 안내, PRD 3.3, v4.4 판정 순서 2·4). AI 기능 자체의 잠금(F-AI-06)은 화면이 `ai_connection`으로 판단한다.
 - **`ai_connection.consent_required`** boolean | null (2026-11-06 재검토 R-67, 사용자 확정 2026-11-06 (a), 백엔드 후속 ★): 활성 공급자의 `(provider, 활성 키 connection_tier)`에 2.11.5 재동의 규칙으로 동의가 필요하면 `true`(동의 행 없음, 또는 동의 뒤에 시행된 `requires_reconsent = true` 고지 있음). 판정은 `check_ai_run_allowed`·`retry_ai_job`과 같은 함수를 쓴다(구현 `private.ai_consent_allows_run`). 활성 공급자가 없으면 `null`. `key_status`와 따로 계산한다.
   - 예: `"ai_connection": {"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": true}`
   - 화면: true면 AI 실행 버튼(요건 추출·서류 3종·인사이트·면접·AI 작성 대화·다시 시도)이 실행 전에 활성 공급자·등급으로 C-21을 연다. 경로 ③·④·⑤의 `key_missing`이 동의 필요 때문인지 화면이 구분하는 근거도 이 값이다(2.11.7).
   - `next_action` 판정 순서(위)는 바꾸지 않는다 `[가정]` — 동의는 C-21 한 번으로 풀리므로 폼으로 돌리지 않는다.
 - **데이터 부족 → AI 작성 대화 → 복귀 (사용자 결정 U-5, 2026-10-24)**:
-  1. 기능(인사이트·경력기술서·자소서·직무 면접)에서 `ready = false`이면 화면은 단순 차단 대신 **"AI와 대화하며 채우기"**로 이끈다. **v4.4**: `next_action: "writing_chat"` + `suggested_project_id`(STAR가 덜 찬 소속 프로젝트 → S-10 + 패널 새 대화) 또는 `next_action: "create_project"`(채울 프로젝트가 없음 → 이름만 넣어 작성 중 프로젝트를 먼저 만들고 그 패널에서 대화, CR-6). `missing`에 `complete_experience`가 있으면 경력은 폼 입력이 필요하므로 `next_action: "form"`(F-P1-16 경력 대화 작성은 Could). `suggested_mode`는 폐기.
+  1. 기능(인사이트·경력기술서·자소서·직무 면접)에서 `ready = false`이면 화면은 단순 차단 대신 **"AI와 대화하며 채우기"**로 이끈다. **v4.4**: `next_action: "writing_chat"` + `suggested_project_id`(STAR가 덜 찬 소속 프로젝트 → S-10 + 패널 새 대화) 또는 `next_action: "create_project"`(채울 프로젝트가 없음 → C-23 소속 선택 → 빈 S-10, 첫 저장하기 또는 첫 AI 메시지 때 `projects` 행 생성 후 그 패널에서 대화 — PA-3이 CR-6의 "이름만 넣어 먼저 만들기"를 대체, v4.5 R-PA-9). `missing`에 `complete_experience`가 있으면 경력은 폼 입력이 필요하므로 `next_action: "form"`(F-P1-16 경력 대화 작성은 Could). `suggested_mode`는 폐기.
   2. 패널에서 게이트 진입 새 대화를 시작할 때 `writing_chats.return_target`에 `{application_project_id, feature, params}`를 저장한다(v3.2 신설 컬럼). **DB에 두는 이유**: 대화는 여러 번에 나눠 이어 할 수 있어(F-P1-06) 브라우저 세션만으로는 복귀 대상이 사라진다. 일반 폼 경유 복귀(C-10)는 기존처럼 브라우저 저장.
-  3. **v4.4: 반영(`apply_writing_chat_proposal`) 후** 화면이 `get_data_readiness()`를 다시 불러 `ready = true`면 `return_target`으로 돌아가고 컬럼을 비운다. 아직 미달이면 C-10 배너에 남은 항목을 보여 준다.
-  4. AI 결과는 여전히 complete 데이터가 있어야 생성된다(게이트 기준 D-01 v4.4). 정리 결과(`structured_draft`)는 반영 전에는 기준에 세지 않는다. 반영으로 충족되면 패널에 "{기능}으로 돌아가기"(UX A-6, 자동 실행 없음).
+  3. **v4.5: "저장하기"(`save_project_page`) 성공 후**(v4.4 반영 직후에서 바뀜 — 폼 채우기만으로는 커리어 데이터가 아님, AI UX-10) 화면이 `get_data_readiness()`를 다시 불러 `ready = true`면 `return_target`으로 돌아가고 컬럼을 비운다. 아직 미달이면 C-10 배너에 남은 항목을 보여 준다.
+  4. AI 결과는 여전히 complete 데이터가 있어야 생성된다(게이트 기준 D-01 v4.4). 정리 결과(`structured_draft`)와 폼에 채운 저장 전 값은 기준에 세지 않는다. 저장으로 충족되면 패널에 "{기능}으로 돌아가기"(UX A-6, 자동 실행 없음).
   5. 컬처핏 면접 예외(데이터 없이 허용)는 `[가정]` 유지(U-5 리더 해석).
 
 ---
@@ -1180,22 +1304,22 @@ v4.4 다른 예:
 |---------|----------------|----------|
 | F-P1-01 기본 프로필 | R/W `profiles` | — |
 | F-P1-02 경력 | R/W `experiences` | `delete_career_item` |
-| F-P1-03 프로젝트 (v4.4) | R/W `projects`(이름·기간·분류 3종 `project_type`·`experience_type`·`competencies`; 이름만으로 `draft` 생성, CR-6) | `delete_career_item` |
+| F-P1-03 프로젝트 (v4.5) | R/W `projects`(이름·기간·분류 3종 `project_type`·`experience_type`·`competencies`·STAR). **소속 프로젝트는 S-10 페이지 저장으로 만들기·고치기**(PA-3), 독립 프로젝트는 이름만으로 `draft` 생성(CR-6) | **`save_project_page`**, `delete_career_item` |
 | ~~F-P1-04 정량 성과~~ | v4.4 폐기(CR-11) — `achievements` 없음 | — |
 | F-P1-05 스킬 (v4.4 범위 축소) | R/W `skills`, `project_skills`(독립 프로젝트만) | — |
-| F-P1-06 자동 저장·이어하기 | W 커리어 테이블 `status = 'draft'`(섹션 편집 중 입력 보존은 화면, UX), R `writing_chats`(프로젝트별 대화 기록 — v4.4: 재개 전이 없음, `active`면 이어 씀) | — (트리거: 상태 재계산, `career_data_updated_at`) |
+| F-P1-06 자동 저장·이어하기 | W 커리어 테이블 `status = 'draft'`(섹션 편집 중 입력 보존은 화면, UX. **v4.5**: S-10·S-44는 페이지 단위 저장 + 이탈 확인·입력 보존(화면), 다른 곳에서 바뀜 = `stale_write`), R `writing_chats`(프로젝트별 대화 기록 — v4.4: 재개 전이 없음, `active`면 이어 씀) | — (트리거: 상태 재계산, `career_data_updated_at`) |
 | F-P1-09 커리어 목록 + 상세 (v4.4) | R `experiences`, `educations`, `projects`(독립 = 목록 항목, 소속 = 카드), `project_deliverables`(제목), `project_skills`→`skills` | 없음(앱에서 시작 연도 계산, 2.4) |
-| F-P1-13 AI 작성 대화 (v4.4 패널) | W `writing_chats`(+`return_target`, `title`, `status`), `writing_chat_messages`, `ai_jobs`(`writing_chat_turn`), `ai_usage_records`; 반영 시 W `projects`(STAR·기간·`source_writing_chat_id`) | `start_writing_chat`, `append_writing_chat_message`, `apply_structured_draft_patch`, **`apply_writing_chat_proposal`** |
+| F-P1-13 AI 작성 대화 (v4.5) | W `writing_chats`(+`return_target`, `title`, `status`), `writing_chat_messages`, `ai_jobs`(`writing_chat_turn`), `ai_usage_records`; **저장하기 때** W `projects`(STAR·기간·분류·`source_writing_chat_id`) + `writing_chats`(`applied_at`, `last_applied_at`) | `start_writing_chat`, `append_writing_chat_message`, `apply_structured_draft_patch`, **`save_project_page`**(v4.4 `apply_writing_chat_proposal` 폐기) |
 | F-P1-14 교육 | R/W `educations` | `delete_career_item`(`affiliation_mode = delete_projects`) |
 | F-P1-15 STAR (v4.4) | R/W `projects.situation`·`task`·`action`·`result`·`learnings`(소속 프로젝트) | — |
 | **F-P1-17 독립 프로젝트** (v4.4) | R/W `projects`(`role`, `description`, `link_url`, 기간), `project_skills` | `delete_career_item` |
-| **F-P1-18 산출물** (v4.4) | R/W `project_deliverables` | `delete_career_item`(`project_deliverable`), `reorder_project_deliverables` `[가정]` |
+| **F-P1-18 산출물** (v4.5) | R/W `project_deliverables`(페이지 저장). **산출물 AI 작성 대화(PA-1, F-P1-18 (6)~(8))**: W `writing_chats`(`project_deliverable_id`), `writing_chat_messages`, `ai_jobs`, `ai_usage_records`(`writing_chat`); 저장하기 때 W `writing_chats.structured_draft.deliverable.body.applied_*` | **`save_project_deliverable`**, **`start_deliverable_writing_chat`**, `append_writing_chat_message`, `apply_structured_draft_patch`, `delete_career_item`(`project_deliverable`), `reorder_project_deliverables` `[가정]` |
 | **F-P1-19 분류 3종** (v4.4) | R/W `projects.project_type`·`experience_type`·`competencies` | — |
 | F-AP-01 지원 프로젝트 만들기 | W `application_projects`(`stage = before_apply`), `job_descriptions`, `application_stage_events`(`created`); AI-01 W `jd_requirements`, `ai_jobs` | `create_application_project`(v4.3 게이트, 2.7.1) |
 | F-AP-02 목록 | R `application_projects`, `job_descriptions`, `insights`, `drafts`, `interview_sessions` | — |
 | F-AP-03 허브 | R 위 + `profiles.career_data_updated_at`, `ai_jobs` | — |
 | F-AP-05 삭제 | W `application_projects` delete(하위 전체 + `application_stage_events` 연쇄) | — |
-| F-AP-06 데이터 부족 안내 → AI 작성 대화 → 복귀 (U-5) | R 커리어 테이블(집계); W `projects`(C-23 이름만 생성), `writing_chats.return_target` | `get_data_readiness`(`next_action` ∈ writing_chat/create_project/form, `suggested_project_id`) |
+| F-AP-06 데이터 부족 안내 → AI 작성 대화 → 복귀 (U-5) | R 커리어 테이블(집계); W `projects`(v4.5: 빈 S-10 첫 저장·첫 메시지 직전 자동 저장 — `save_project_page`), `writing_chats.return_target` | `get_data_readiness`(`next_action` ∈ writing_chat/create_project/form, `suggested_project_id`) |
 | F-ST-01 보드 | R `application_projects`(`stage`, `stage_outcome`, `stage_changed_at`, `deadline`), `job_descriptions`, `insights`, `drafts`, `interview_sessions` | — |
 | F-ST-02 단계 이동 | W `application_projects`, `application_stage_events` | `move_application_stage` |
 | F-ST-03 전형 결과 | W `application_projects.stage_outcome`, `application_stage_events` | `move_application_stage`(outcome 인자), `set_application_outcome` |
@@ -1223,7 +1347,7 @@ v4.4 다른 예:
 | F-COM-01 가입·로그인 | W `auth.users`, `profiles`(가입 트리거) | — |
 | F-COM-02 동의 | R `policy_versions`; W `consents` | — |
 | F-COM-03 AI 학습 미사용 고지 | R `policy_versions` | 없음(보기) |
-| F-COM-04 개별 삭제 | 커리어 테이블(+`project_deliverables`), `evidence_links`, `draft_section_sources`, 결과 테이블, `writing_chats` | `get_deletion_impact`, `delete_career_item` |
+| F-COM-04 개별 삭제 | 커리어 테이블(+`project_deliverables`), `evidence_links`, `draft_section_sources`, 결과 테이블, `writing_chats`(v4.5: 산출물 대화 포함) | `get_deletion_impact`, `delete_career_item` |
 | F-COM-05 탈퇴 | **v4.2**: RPC가 public 데이터(사용자 테이블 전체 + `profiles`)를 명시적으로 삭제하고 `account_deletion_logs` insert → 서버가 `auth.users` 삭제(연쇄는 안전망, 4.5). 약관 동의 게이트 없이 로그인만 확인. **탈퇴 미완료 판정**은 표 아래 | `get_account_deletion_summary`, `delete_account`, **`get_account_deletion_state`**(v4.2 `[가정]` ★) |
 | F-COM-10 왼쪽 메뉴 | 없음(보기) | — |
 | **F-AI-01 키 등록** (v4) | R `ai_providers`, `ai_disclosures`; W `ai_provider_keys`, `ai_jobs`(`key_verification`), `ai_usage_records`(`key_verification`), `profiles.active_ai_provider`(첫 키) | `save_provider_key`(v4.2 서버 전용 역할), `get_provider_key_secret` |
@@ -1245,21 +1369,25 @@ v4.4 다른 예:
   - RPC: **`get_account_deletion_state(p_user_id)`** → `active`(`profiles` 있음) / `deletion_incomplete`(`profiles` 없음 + 로그 있음) / `profile_missing`(둘 다 없음). 실행 주체는 **서버 전용 역할**(security definer, A19와 같은 방식으로 서버가 세션의 user id를 넘김) — 사용자는 `account_deletion_logs`를 select할 수 없고 HMAC 서버 비밀값을 브라우저에 두지 않는다. hash 계산은 `delete_account`와 같은 함수·같은 비밀값을 쓴다.
   - 호출 시점: 로그인 직후·대시보드 레이아웃의 세션 확인에서 **`profiles` 행이 없을 때만** 부른다(정상 사용자는 매 요청 HMAC 계산 없음). `deletion_incomplete`면 동의 게이트보다 먼저 S-25 "탈퇴 마무리"(UX FL-07·S-25, A7)로 보낸다. 거기서 `delete_account`를 다시 부르면 멱등으로 통과하고 auth 삭제만 다시 한다(4.5).
 
-## 7. API 경계 초안 (v3 변경분, v4.4 커리어 재설계 반영)
+## 7. API 경계 초안 (v3 변경분, v4.4 커리어 재설계, v4.5 페이지 저장·산출물 대화 반영)
 
 | 작업 | 방식 | 읽기/쓰기 | 화면 |
 |------|------|-----------|------|
 | **커리어 목록 (v4.4)** | Server Component. 앱에서 시작 연도로 묶음(2.4) | R: `experiences`(id, company_name, start_month, status), `educations`(id, institution_name, start_month, status), `projects` **독립만**(`experience_id is null and education_id is null`: id, name, start_month, status) → 화면 타입 `{entity_type, id, name, start_month}` | S-08 왼쪽 |
 | **경력·교육 상세 (v4.4)** | Server Component | R: 경력 또는 교육 1행 전체 + 소속 프로젝트 카드 `projects`(id, name, project_type, start_month, end_month, is_current) `where experience_id = ?`(또는 `education_id`) 정렬 `start_month desc nulls last, created_at desc` `[가정]` | S-08 오른쪽(S-09·S-34 패널) |
 | **독립 프로젝트 상세 (v4.4)** | Server Component | R: `projects` 1행(name, start_month, end_month, is_current, role, description, link_url, status) + `project_skills`→`skills.name` + `project_deliverables`(id, title, sort_order, updated_at; 본문 제외) | S-43 |
-| **산출물 보기·편집 (v4.4)** | Server Component / Server Action(insert·update·delete, 사용자 세션) | R/W: `project_deliverables`(title, body). 신규는 `sort_order` = 최댓값 + 1. 부모가 소속 프로젝트면 트리거 거부 | S-44 |
+| **산출물 상세 (v4.5)** | Server Component | R: `project_deliverables` 1행(id, project_id, title, body, updated_at) + 부모 `projects.name`(이동 경로) + `writing_chats`(id, title, status, message_count, last_activity_at, last_applied_at) `where project_deliverable_id = ?` `order by last_activity_at desc` + 연 대화의 메시지·`structured_draft`. 새 산출물은 행 없음(`/career/projects/{project_id}/deliverables/new`, UX S-44 — v4.5 R-PA-8) | S-44 |
+| **산출물 저장하기 (v4.5 ★)** | Server Action → RPC `save_project_deliverable(p_project_deliverable_id, p_project_id, p_title, p_body, p_expected_updated_at, p_applied_proposals)` (사용자 세션, 동기, AI·키 불필요) | W: `project_deliverables`, `writing_chats`(반영됨 기록). 응답 `{project_deliverable_id, project_id, sort_order, updated_at, applied, skipped}`. 오류 `stale_write`·`deliverable_title_required`·`field_too_long`·`deliverable_limit_reached` | S-44 상단 바 "저장하기" |
+| 산출물 삭제 | v4.4 그대로 `get_deletion_impact` / `delete_career_item('project_deliverable', …)` — `cascade.writing_chats` 포함(v4.5) | W: `project_deliverables`, `writing_chats`(연쇄) | S-44 ⋯ 메뉴, C-05 |
 | **프로젝트 상세 (v4.4)** | Server Component | R: `projects` 1행(이름·기간·`is_current`·분류 3종·STAR 5필드·status) + 부모 경력/교육 이름(이동 경로) + `writing_chats`(id, title, status, message_count, last_activity_at, last_applied_at) `where project_id = ?` `order by last_activity_at desc` + 연 대화의 `writing_chat_messages`·`structured_draft` | S-10 |
-| **섹션 저장 (v4.4)** | Server Action(사용자 세션, 섹션 단위 update. 상태·`content_updated_at`은 트리거) | W: experiences / educations / projects(섹션별 컬럼만: 정보·내용·STAR 한 필드·분류) / project_skills | S-08 패널, S-10, S-43 (C-24) |
-| **프로젝트 추가 (v4.4, CR-6)** | Server Action(사용자 세션 insert: `name` + `experience_id` 또는 `education_id`, 또는 소속 없음) → 만들어진 id로 이동 | W: projects(`status = 'draft'`) | C-23, C-22 |
-| **AI 작성 대화 시작** (v4.4) | Server Action → definer RPC `start_writing_chat(p_project_id, p_return_target)`: 소속 프로젝트 확인 → `writing_chats` insert + 고정 시작 인사(STAR 상태별, AI 없음). 활성 키 확인만 | W: writing_chats, writing_chat_messages | S-10 패널 "+ 새 대화", C-09 |
+| **섹션 저장 (v4.4, v4.5 범위 축소)** | Server Action(사용자 세션, 섹션 단위 update. 상태·`content_updated_at`은 트리거) | W: experiences / educations / projects(**독립 프로젝트 섹션만**: 정보·내용) / project_skills. v4.5: S-10은 섹션 저장을 쓰지 않는다 | S-08 패널(S-09·S-34·S-43, C-24) |
+| **프로젝트 페이지 저장하기 (v4.5 ★)** | Server Action → RPC `save_project_page(p_project_id, p_values, p_expected_updated_at, p_applied_proposals)` (사용자 세션, 동기, AI·키 불필요). 행이 없으면 만들기(소속 + 머리 + STAR 전체) → 화면이 URL을 새 id로 바꿈 | W: `projects`, `writing_chats`(반영됨 기록). 응답 `{project_id, status, updated_at, applied, skipped}`. 오류 `stale_write`·`project_name_required`·`project_affiliation_required`·`field_too_long`·`invalid_period`·`invalid_classification`·`project_scope_change_not_allowed`. 복귀 대상이 있으면 이어서 `get_data_readiness` | S-10 상단 바 "저장하기" |
+| **프로젝트 추가 (v4.4 CR-6 → v4.5 독립 프로젝트만)** | Server Action(사용자 세션 insert: `name`, 소속 없음) → 만들어진 id로 이동. **소속 프로젝트는 v4.5부터 이 경로를 쓰지 않는다**(빈 S-10 → `save_project_page`, PA-3) | W: projects(`status = 'draft'`) | C-23(독립 프로젝트), C-22 |
+| **AI 작성 대화 시작** (v4.5) | Server Action → definer RPC `start_writing_chat(p_project_id, p_return_target, p_form_snapshot)` / **`start_deliverable_writing_chat(p_project_deliverable_id, p_form_snapshot)`**: 대상 확인 → `writing_chats` insert + 고정 시작 인사(STAR 상태별 4종 / 산출물 3종, 스냅숏 우선, AI 없음). 활성 키 확인만 | W: writing_chats, writing_chat_messages | S-10·S-44 패널 "+ 새 대화", C-09 |
+| **새 페이지의 첫 AI 메시지 (v4.5, 리더 정렬 1·2, UX D-UX-25 (a))** | 화면(Server Action 순차 호출, 한 트랜잭션 아님): ① 이름(S-10)·제목(S-44)이 비면 **보내지 않음**(화면이 칸에 포커스, 임시 이름 없음) ② AI 사용 가능 확인(`get_data_readiness().ai_connection` — 키 없음·무효·동의 필요면 여기서 멈추고 행도 만들지 않음) ③ **페이지 저장 RPC로 폼 전체 첫 저장**(행 생성, 실패 = 아무것도 안 생김) ④ 대화 시작 RPC(실패 = 행은 남음, URL 교체됨) ⑤ 대화 턴(이번 턴부터 `form_snapshot`) | W: projects 또는 project_deliverables → writing_chats → writing_chat_messages | S-10·S-44 패널 |
 | 제안 카드 수정·검토 수락/거절 | Server Action → RPC `apply_structured_draft_patch` (사용자 세션) | W: writing_chats.structured_draft | S-10 패널 (C-15) |
-| **대화 턴** | Route Handler `POST /api/writing-chats/{id}/turns` (SSE: `turn_started` → `reply_delta` → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`(+ 빠른 버튼 3개, `ready_to_return`) / `error`). ① definer RPC `append_writing_chat_message`(상한·`closed` 검사, 첫 메시지면 `title`) ② `app_ai_writer`로 extract·reply(프로젝트 현재 STAR를 매 턴 다시 읽음) ③ V-9 검증 후 `apply_structured_draft_patch` ④ 호출마다 `ai_usage_records` insert ⑤ 상한이면 `closed` | W: writing_chat_messages, writing_chats, ai_jobs(`writing_chat_turn`), ai_usage_records | S-10 패널 |
-| **반영 (v4.4)** | Server Action → RPC `apply_writing_chat_proposal(p_writing_chat_id, p_fields)` (사용자 세션, 동기, AI·키 불필요). 응답 `{applied, skipped, project_status}`로 왼쪽 STAR를 갱신 | W: projects, writing_chats | S-10 패널 [반영]·[모두 반영] |
+| **대화 턴** (v4.5: 요청 본문 `{content, requested_slot?, requested_action?, style?, form_snapshot}` — `form_snapshot`은 2.5.1 모양, 저장·로그 없음, 서버가 AI 입력에서 DB 값보다 우선. 산출물 대화는 AI-13 이벤트 `facts_patch`·`draft_started`·`draft_block`·`draft_done` 추가, 초안 턴 전 `draft_count < 6` 검사) | Route Handler `POST /api/writing-chats/{id}/turns` (SSE: `turn_started` → `reply_delta` → `reply_done` → `draft_patch` → `draft_flags` → `turn_done`(`ready_to_return`, 산출물 대화는 + `draft_count`(R-PA-15). v4.5 R-PA-5: 빠른 버튼 3개는 화면이 AI-12·AI-13 칩 표로 계산하므로 내려 주지 않음) / `error`). ① definer RPC `append_writing_chat_message`(상한·`closed` 검사, 첫 메시지면 `title`) ② `app_ai_writer`로 extract·reply(입력은 요청의 `form_snapshot` 우선, 없으면 DB 값 — 리더 정렬 2, v4.5 R-PA-9) ③ V-9 검증 후 `apply_structured_draft_patch` ④ 호출마다 `ai_usage_records` insert ⑤ 상한이면 `closed` | W: writing_chat_messages, writing_chats, ai_jobs(`writing_chat_turn`), ai_usage_records | S-10·S-44 패널 |
+| ~~반영 (v4.4)~~ | **v4.5 폐기 ★**: [반영]·[모두 반영]·[본문 교체]·[뒤에 덧붙이기]는 화면 폼 채우기(요청 없음). 확정은 위 "저장하기" 행 | — | S-10·S-44 패널 |
 | 대화만 삭제 | Server Action → `delete_career_item('writing_chat', id)` 또는 직접 delete | W: writing_chats | S-10 패널 … 메뉴 |
 | 데이터 최소 기준 | RPC `get_data_readiness` | | C-09, C-10 |
 | 커리어 삭제 영향 / 삭제 | RPC `get_deletion_impact` / `delete_career_item` (`affiliation_mode`, `result_mode`) | | C-05 |
@@ -1287,10 +1415,13 @@ v4.4 다른 예:
 
 | ID | 질문 | 권고 | 담당 / 상태 |
 |----|------|------|-------------|
+| **D-DM-12** **확정 2026-11-03 (사용자): (a) 지금 범위 + 다음 고지 버전에 한 구절** (v4.5 신규) | 저장하지 않은 폼 값(`form_snapshot`)을 AI 공급자로 보내는 것을 지금 데이터 사용 고지·동의 범위로 볼까 (리더 정렬 2로 AI가 스냅숏을 읽게 됨. UX D-UX-26이 걱정한 점) | (a) **지금 범위로 본다** — 스냅숏은 사용자가 커리어 화면에 직접 쓴 값이고 저장 뒤 보내던 같은 필드다. 새 동의·`requires_reconsent` 없음, 고지 문구에 "작성 중인 내용 포함" 한 구절만 다음 고지 버전에 넣는다 (b) 새 고지 버전 + 재동의(`requires_reconsent = true`) — 모든 사용자가 AI 기능 전에 C-21을 다시 거친다 (c) 스냅숏을 보내지 않고 저장된 값만 읽는다(정렬 2 되돌림) | **권고 (a)**. 데이터 저장 모델은 어느 쪽이든 같다(스냅숏은 저장하지 않음, 2.5.1). (b)는 사용자 전원에게 재동의 부담이 생기고, (c)는 리더 정렬과 PA-3 흐름("채우고 바로 다음 질문")을 깬다. 법무 확인(D-39)과 함께 | **사용자 확인 대기** (product-planner·법무) |
+| **PA-1~PA-4** (v4.5) | 산출물 AI 패널 / 산출물 분류 없음 / 페이지 단위 저장 / 머리 필드 통일 | PA-1 `writing_chats.project_deliverable_id`·산출물 모양·시작 RPC, PA-2 변경 없음, PA-3 `save_project_page`·`save_project_deliverable`·`apply_writing_chat_proposal` 폐기, PA-4 변경 없음(필드 그대로) | **확정 2026-11-03 (사용자)** |
+| 리더 정렬 1~3 (v4.5) | 이름 없는 첫 메시지 / AI가 읽는 값 / 반영됨 기록 시점 | 1 = 보내지 않음(임시 이름 없음), 2 = `form_snapshot` 우선 + 첫 메시지는 폼 전체를 먼저 저장해 행 생성, 3 = 저장 트랜잭션 안에서 기록, 기록 실패는 저장을 막지 않음 | 리더 결정(2026-11-03), 2.5·2.5.1·7장 반영 |
 | ~~D-DM-08~~ | 프로젝트와 연결되지 않은 AI 작성 대화의 보관 | — | **폐기 (v4.4, CR-6 확정 2026-11-02 (사용자))**: 묶이지 않은 대화가 없다 |
 | **D-DM-11** (v4.4 신규) | 프로젝트 "진행 중" 표시(PRD F-P1-03 (3), UX D-15·P-2) | **(b) `projects.is_current` 추가** — 소속·독립 모두, `CHECK (NOT is_current OR end_month IS NULL)`, 표시 "YYYY.MM - 현재 (N년 N개월)"(2.3) | **확정 2026-11-02 (사용자), CR-22** (권고 (a)가 아님) |
 | **D-UX-22** (v4.4 데이터 측) | 경력·교육 삭제 시 소속 프로젝트 | **(a) 함께 삭제** — FK cascade, `affiliation_mode = delete_projects`만(4.2). 확인 창에 프로젝트 수·대화 표시 | **확정 2026-11-02 (사용자), CR-15** |
-| **Q-CR-1~4** (PRD v4.5 9.0) → CR-17·18·19·21 | 분류 값 목록 / 소속 프로젝트 기술 정보 / 독립 프로젝트 완료·대화 / 작성 중 배지 | 분류 값 목록·선택 방식 그대로(CR-17), 소속 프로젝트에 기술 정보 없음(CR-18, `project_skills` 독립 한정 유지), 독립 프로젝트 AI 대화 없음(CR-19, 트리거 유지), 배지 대신 빈 STAR 도움말(CR-21, 스키마 영향 없음) | **확정 2026-11-02 (사용자)** |
+| **Q-CR-1~4** (PRD v4.5 9.0) → CR-17·18·19·21 | 분류 값 목록 / 소속 프로젝트 기술 정보 / 독립 프로젝트 완료·대화 / 작성 중 배지 | 분류 값 목록·선택 방식 그대로(CR-17), 소속 프로젝트에 기술 정보 없음(CR-18, `project_skills` 독립 한정 유지), 독립 프로젝트 AI 대화 없음(CR-19, 트리거 유지 — **v4.5: 산출물 대화만 예외(PA-1), 정보·내용 대화는 AI D-AI-16 **확정 2026-11-03 (사용자): (a) MVP에 없음 유지****), 배지 대신 빈 STAR 도움말(CR-21, 스키마 영향 없음) | **확정 2026-11-02 (사용자)** |
 | **D-AI-14 → CR-20** | AI 작성 대화가 분류 3종을 채우는가 | **추천 후 확인** — `structured_draft.classification` + 반영 RPC(2.5, 3.3). 빈 값만 추천, 덮어쓰기 없음(리더 결정, AI V-9i) | **확정 2026-11-02 (사용자)** (권고 (a)가 아님). 리더 결정으로 빈 값만 추천(AI 명세 `[가정]` 채택) |
 | CR-16·CR-23·CR-24 | 스킬 목록 보류 / 화면 "기업 JD" → "자기소개서" / AI 연결 상태 줄 | 스키마 영향 없음. CR-23은 화면 문구만(내부 이름 그대로, 머리말 표기) | **확정 2026-11-02 (사용자)** |
 | D-27 | 대화 기록 보관 | (a) 프로젝트에 묶어 보관, 대화만 삭제 가능 | **확정** (U-9). v4.4: 모든 대화가 프로젝트에 묶임 |
@@ -1299,7 +1430,7 @@ v4.4 다른 예:
 | 보강 대화 차감 | — | **v4 폐기**: 차감 개념 없음(D-34). 대화 월 한도(U-8 10회)도 BYOK 결정으로 대체 | 폐기 |
 | 연도 미정 묶음 | 소속·기간 모두 없는 프로젝트 | 스키마 영향 없음(앱 계산) | **확정** (T-2) |
 | `message_count` 상한 CHECK | 40 | **v4: CHECK 추가**(D-34에서 상한 확정). v4.2: 시작 인사 제외(A5) | **확정** |
-| D-UX-21 (v4.4) | AI 제안을 커리어 데이터로 옮기는 방식 | (a) 대화당 제안 카드, 섹션별 반영, 있는 섹션은 덧붙임 | 데이터 측 수용: `apply_writing_chat_proposal`(3.3) |
+| D-UX-21 (v4.4) | AI 제안을 커리어 데이터로 옮기는 방식 | (a) 대화당 제안 카드, 섹션별 반영, 있는 섹션은 덧붙임 | 데이터 측 수용. **v4.5 (PA-3)**: 반영 = 폼 채우기, 확정 = `save_project_page`(3.3). `apply_writing_chat_proposal` 폐기 |
 | **D-DM-09** (v4 신규) | `ai_usage_records` 보관 | 13개월 | product-planner `[가정]` |
 | **D-DM-10** (v4 신규) | 키 암호화 방식 | 앱 수준 봉투 암호화 + 외부 KMS(Vault 비권고, 2.11.2) | product-planner·구현 단계 |
 | D-28, D-29, D-30, D-33, D-34, D-36, D-37 (v4) | 활성 공급자 1개 / 서버 암호화 저장 / 키 없는 JD pending / 미터 계산 / 운영비 개념 폐기·품질 제한 유지 / 키 삭제 시 결과 유지 / 무료 등급 재시도 | 스키마 반영(2.9, 2.11) | **확정** (PRD v4) |
@@ -1315,7 +1446,7 @@ v4.4 다른 예:
 
 | 리뷰 # | 질문 | 데이터 모델 답 |
 |--------|------|----------------|
-| **T-18** (v3.2, v4.4 개정) | 검토 필요 필드 수락 상태 저장과 반영 규칙 | `structured_draft` 필드 `review = 'accepted'`(+ `reviewed_at`)로 저장, 거절은 값 비움. **v4.4: 저장·전환 RPC 폐기 — 반영(`apply_writing_chat_proposal`) 시 `needs_review`는 건너뜀** (2.5, 3.3) |
+| **T-18** (v3.2, v4.4 개정) | 검토 필요 필드 수락 상태 저장과 반영 규칙 | `structured_draft` 필드 `review = 'accepted'`(+ `reviewed_at`)로 저장, 거절은 값 비움. **v4.4: 저장·전환 RPC 폐기 — 반영(`apply_writing_chat_proposal`) 시 `needs_review`는 건너뜀** (2.5, 3.3). **v4.5**: 반영 = 화면 폼 채우기라 `needs_review`는 채우지 않고, 저장 RPC도 남은 `needs_review`는 반영됨으로 기록하지 않는다(`skipped` `needs_review`, 2.5.1) |
 | **T-19** (v3.2) | 확정 소속의 위치 | **v4.4 폐기**(CR-6): 대화는 항상 프로젝트에 묶이고 소속은 `projects.experience_id`/`education_id`에 있다. `writing_chats.experience_id`/`education_id`·`set_writing_chat_affiliation` 삭제 |
 
 
@@ -1358,6 +1489,7 @@ v4.4 다른 예:
 | v4.1 | 2026-10-26 | BYOK 리뷰 라운드 1. **R-40**: `interview_sessions.question_provider`·`question_model`·`evaluation_provider`·`evaluation_model` 신설, 세션 목록 "실행 공급자" 표시 규칙. **R-38**: 검증 중 429·일일 한도·장애면 `needs_check`로 저장(`save_provider_key` 인자 `verification_result`), `record_provider_key_check` 상태 규칙. **R-43**: 3.3 "(1회 차감)" 삭제, T-10 행 "v4 폐기" 주석. **UB-2 (b) `[가정]`**: `get_ai_usage_summary` 기본 응답 = 요청 월 기능별 + 공급자별, 지난달 비교는 `include_previous` 인자로 선택. **이름 변경 없음**(신규 컬럼 4개, RPC 인자 2개 추가) |
 | v4.1a | 2026-10-27 | BYOK 리뷰 라운드 2. R-38 잔여: 2.11.2 등록 저장 문구를 2.11.3 `valid`/`limited` 규칙으로 정렬. R-45: `ai_jobs.retry_wait_total_ms` 신설(재시도 대기 누적, 120초 상한), `save_provider_key` 시그니처에 `verification_result` 추가, `ai_provider_keys_public` 뷰를 5장·9장에 명시. **이름 변경 없음** |
 | **v4.2** | 2026-11-05 | **백엔드 구현 반영(2026-11-05)** (PRD v4.3·UX v5.3·AI v4.3). **사용자 확정**: A3(A.2 재동의 판정), A5(시작 인사 제외 40, 2.5·2.9.4), A6(`abandoned → active` 재개, 2.5·3.4·7장), A8(A.13 그만둔 세션 답변 편집 불가), A15(소속 제안 거절 미저장), A17(`options.tone` `concise`/`detailed`), A18(hint `project_fields` + `form` + `suggested_project_id`, 판정 순서, 6장), A19(`save_provider_key`·`record_provider_key_check` 서버 전용 역할 + `p_user_id`), A20(재동의 규칙 통일, 2.11.5), A21(서류 안내 미저장), A22(`interview_sessions.question_validation_report`·`question_usage`), A23(대체 선택 없음 → `user`), A24(`app_ai_writer` `evidence_links` 직접 INSERT 제거). **구현 반영(B)**: 쓰기 경로를 definer RPC로 좁힘(대화·지원 프로젝트·JD·결과·근거, 5장), `app_ai_writer`의 `ai_usage_records` 본인 select, `ai_jobs.step_outputs`·`run_generation`·`target_type` 값·상태 전이·경력기술서 프로젝트당 1개 인덱스, `check_ai_run_allowed`, 가격표 `long_context_cached_input_usd_per_mtok`·`long_context_cache_write_usd_per_mtok`, `save_provider_key` 인자 `p_key_id`·`p_failure_cause`·`p_encryption_version`, `record_provider_key_success`, `get_provider_key_secret`의 `key_id`·`key_not_available`, 뷰 `ai_provider_keys_public` 사용 이유, 2.11.1 암호 컬럼 문구 정정, 결과 테이블 내부 컬럼(`run_generation`, `completed_at`, 세션 작업 컬럼, `ai_job_id` 복합 FK), `writing_chats.last_extracted_sequence`, `interview_prompt.in_progress_session`, 근거 규칙(`user_note`·`interview_answer`, 저장 직전 원본 삭제, 소유자별 허용 출처), 4.2 모드 값·집계·초기화 범위, S2 규칙(`kind`, `normalized_name`, `profile_filled`, readiness 세부), 6.1 탈퇴 표현. **구현 값(C)**: 4.5 신설 `[가정]`. **이름 변경 없음**(신규 이름은 11.5). **리뷰 R-48·R-49·R-50·R-53·R-54 반영**: 2.9.1 다시 시도 경우 구분(같은 행 / 새 작업), 2.11.7 연결 게이트 거부 코드 경로별 표(`ai_consent_required`는 HTTP 409 경로만), 6.1 탈퇴 미완료 판정 `get_account_deletion_state` `[가정]` ★, 2.5 재개 진입점 UX 기준, `tone` null = `concise`. **A1 변경(사용자, 2026-11-05 후속) 반영**: 모든 다시 시도·재실행 = 활성 공급자(R-48 리더 해석 "같은 행 = 처음 공급자" 폐기). 같은 행 다시 시도 때 `ai_jobs.provider`·`model`·`model_tier`·`connection_tier` 활성 값으로 갱신, 다르면 `step_outputs` 비움(0장 DM-17, 2.9.1 `provider`·상태 전이·다시 시도 표, 2.11.7 경로 ②, 7장, 11.1 표, 11.5). **리뷰 R-63·R-65 반영**: R-63 공급자·등급이 다른 같은 행 다시 시도는 그 작업이 저장한 결과 행도 모두 다시 열어 덮어씀(같으면 실패 행만) — 0장 결과 테이블 내부 컬럼, 2.9.1 상태 전이·표·RPC 동작·★, 7장, 11.5 ★. R-65 인사이트 "다시 생성"을 2.9.1 (2)·7장 새 작업 목록에 추가. R-62 DM 몫: 11.5 해소 항목 표시. **2026-11-06 추가(사용자가 판단 위임 → 리더 판단)**: 2.11.7 경로 ② `ai_connection_changed`(409)·판정 순서, 경로 ⑤ 요청 범위 작업 시작(동의 필요 = `key_missing`). **2026-11-06 재검토 반영**(리뷰 재검토 라운드 1, 버전 유지): R-67 리더 판단 (a) → **사용자 확정 2026-11-06** ★ — readiness `ai_connection.consent_required` 추가(6장, 2.11.7, 11.5). R-69 `ai_job_not_retryable` 대상을 구현에 맞춤(요청 범위 작업 유형·입력 원인 실패·`failed` 아닌 행) + 경로 ② 전체 판정 순서(not-retryable이 게이트보다 먼저, 2.9.1·2.11.7·7장). R-70 결과 행 다시 열기 주체 `begin_*` → `retry_ai_job`(같은 트랜잭션), 끝난 결과 묶음 제외 `[가정]`·질문 삭제 후 재생성 `[가정]`·`input_hash` 비움(2.9.1). R-71 2.9.1·11.5·2.11.7 ① ★를 "구현됨 (42f7611)"으로. R-72 7장 retry 행·11.5 표에 `ai_connection_changed`·경로 ⑤ 추가. 이름 변경 없음 |
+| **v4.5** | 2026-11-03 | **프로젝트 추가·산출물 상세 Figma 결정 반영(PA-1~PA-4, 확정 2026-11-03 (사용자))**, PRD v4.6·UX v5.6·AI v4.6, 리더 정렬 3건. (1) **`writing_chats.project_deliverable_id`** 신설(복합 FK `(project_deliverable_id, project_id, user_id)` → `project_deliverables on delete cascade`, `project_id`는 부모 독립 프로젝트로 늘 채움, 대상 = 산출물 있으면 산출물), 트리거 `writing_chat_requires_affiliated_project` → `writing_chats_check_target`, `return_target` 산출물 대화 null CHECK, 인덱스 `(project_deliverable_id, last_activity_at desc)`, `project_deliverables` `unique (id, project_id, user_id)`. (2) **DM-21 페이지 저장 RPC** `save_project_page`·`save_project_deliverable`(만들기·고치기, `p_expected_updated_at` → `stale_write`, `p_applied_proposals`로 반영됨 기록을 같은 트랜잭션 하위 블록에서, 기록 실패는 `skipped`), 거부 코드 신설. (3) **`apply_writing_chat_proposal` 폐기**, 내부 헬퍼 `private.wc_mark_proposal_applied`, DM-13 개정, 3.3 표 재작성(반영 = 폼 채우기). (4) `start_writing_chat`에 `p_form_snapshot`(시작 인사 분기용), **`start_deliverable_writing_chat` 신설**, "새 대상" kind 없음 — 첫 메시지는 페이지 저장 → 대화 시작 → 턴(7장). (5) `structured_draft`: 필드 `rev`(슬롯 단조), `new_object` 패치, V-9h·기간·분류의 DB 거부 → 낮춤(`classification_already_set` 거부 삭제), 대상별 패치 범위, **산출물 모양 2.5.0**(`target`, `writing_kind`, `facts[]`, `deliverable.body`, `draft_count` ≤ 6 → `writing_chat_draft_limit_reached`). (6) `projects.updated_at`은 `source_writing_chat_id`만 바뀌면 오르지 않음, `projects.source_writing_chat_id` 기록 주체 = `save_project_page`. (7) 산출물 분류 컬럼·`source_writing_chat_id` 두지 않음(PA-2, DA-13). (8) 삭제: `cascade.writing_chats`에 산출물·독립 프로젝트의 산출물 대화, 탈퇴 집계 대화 합계. (9) 미터 `writing_chat` 공유, `call_key` `…compose`, `progress.stage` `compose`·`validate`. (10) readiness 값 변경 없음(복귀 재판정 시점 = 저장하기 뒤), 6.1·7장(`form_snapshot` 턴 계약, 첫 메시지 순서). (11) D-DM-12 **확정 2026-11-03 (사용자): (a) 지금 범위 + 다음 고지 버전에 한 구절**(스냅숏 고지 범위). (12) 3.7 이름 확정, 11.3 백엔드 후속. **이름 변경**: AI `p_deliverable_id` → `p_project_deliverable_id`, `p_applied_proposal`(객체) → `p_applied_proposals`(배열), `project_status` → `status`, `mark_writing_chat_proposal_applied` → `private.wc_mark_proposal_applied`, `start_writing_chat(p_target jsonb)` → `start_writing_chat(p_project_id, …)` + `start_deliverable_writing_chat`, `value_too_long` → `field_too_long` / UX `applied: [{writing_chat_id, fields}]` → `p_applied_proposals: [{writing_chat_id, field, rev}]`. 회신 `_workspace/project-add-figma/dm_replies.md`. **리뷰 라운드 1 수정(2026-11-03, `_workspace/03_spec-reviewer_review_project-add-figma.md`)**: R-PA-8 7장 산출물 상세 행의 새 산출물 URL을 UX `/career/projects/{project_id}/deliverables/new`로. R-PA-9 대체된 규칙 정리 — 2.5 사용자 패치(반영 뒤 고치기 = STAR 입력란·페이지 저장)·2.5 `is_current`(S-10 기간 입력), 6장 `next_action` ② `form`(S-10 STAR 입력), 6장 게이트 `create_project`(C-23 소속 선택 → 빈 S-10, 첫 저장·첫 AI 메시지 때 생성, PA-3), 7장 대화 턴 ②(`form_snapshot` 우선, 없으면 DB 값). 리더 판정(AI-13·S-44): 산출물의 수락하지 않은 `needs_review` 블록은 채우기 결과에서 뺌, 블록별 수락 / [빼기], 패치 경로에 초안 전체 거절 없음 — 2.5.0 사용자 패치·3.3 표·채우기 규칙에 명시, 2.5.1 `skipped` `needs_review`의 산출물 뜻을 "채울 내용 블록 없음"으로 좁힘. 테이블·컬럼 이름 변경 없음 |
 | **v4.4** | 2026-11-02 | **커리어 화면 재설계 반영(CR-1~CR-14, 확정 2026-11-02 (사용자))**, PRD v4.5·UX v5.5·AI v4.5. (1) **DM-19**: STAR를 `projects` 컬럼(`situation`·`task`·`action`·`result`·`learnings`)으로 합치고 **`project_details` 폐기**(근거 기록 0장). (2) **`achievements` 폐기**(CR-11) — 관련 FK·`source_writing_chat_id`·근거 `achievement`·삭제 연쇄 제거. (3) **DM-20**: 소속 / 독립 프로젝트 구성 CHECK, 소속 ↔ 독립 전환 금지, 경력·교육 FK `set null → cascade`. (4) `projects`: `project_type`·`experience_type`·`competencies`(값 목록 키 확정, 역량 최대 3) / `description`(≤ 5,000)·`link_url` 신설 / `role` 독립 전용·필수 해제 / `name` not null / `summary`·`team_size` 삭제 / `content_updated_at` 신설 / `source_writing_chat_id` = 마지막 반영 대화. 완료 판정: 소속 = 이름 + 상황 + 행동, 독립 = 이름 + 내용(CHECK 하나, 자식 트리거 폐기). (5) **`project_deliverables` 신설**(독립 프로젝트만, 제목 ≤ 100·본문 ≤ 20,000, 50개 `[가정]`), `project_skills` 독립 프로젝트 한정. (6) **`writing_chats`**: `project_id` not null·소속 프로젝트만·프로젝트당 여러 개, `mode`·`experience_id`·`education_id`·`saved_at` 삭제, `status` `active`/`closed`, `title`·`last_applied_at` 신설, `structured_draft` v3(`project`·`star`, `op`, `applied_at`), V-9h 개정, **`apply_writing_chat_proposal` 신설**, `save_writing_chat`·`hand_off_writing_chat`·`set_writing_chat_affiliation` 폐기, A6 재개 전이 폐기, 사용자 `status` 직접 update 회수. (7) 미연결 대화 90일 정리(D-DM-08)·크론 폐기. (8) 근거: `source_type` `project_deliverable` 추가·`project_detail`·`achievement` 삭제, `project` 필드 재정의, 산출물 `source_locator`, `source_snapshot_at` = `content_updated_at`, V-8 조건 변경. (9) `draft_section_sources.project_detail_ids` 삭제, `ai_suggestions.target_field`. (10) readiness: `project_star`·`projects_without_complete_star`·`standalone_projects_without_description`, `create_project`, `project_fields` 재정의, `suggested_mode` 삭제, 판정 순서. (11) 삭제: `entity_type` `project_deliverable`, `cascade.project_deliverables`, `affiliation_mode = delete_projects`만(D-UX-22 `[결정 필요]`). (12) 연도 보기 = 시작 연도에 한 번(D-22 개정), 기간 계산 앱, `is_current` 미추가(D-DM-11 `[가정]`). (13) 3.6 이름 확정, 11장 백엔드 후속. **이름 변경**: AI 쪽 `project_kind` → `project_type`, `content` → `description`, `project_artifacts` → `project_deliverables`, `project_artifact` → `project_deliverable`(별칭 `DLV-n` 권고) / UX 쪽 `deliverable(s)` → `project_deliverable(s)`, `structured_draft.fields.{star}` → `structured_draft.star.{field}`. 회신 `_workspace/career-redesign/dm_replies.md`. **후속 결정 CR-15~24 (확정 2026-11-02 (사용자))** (CR-20은 리더 정렬로 `replace` 제거 — 빈 값만 추천. 라운드 3: R-CR-14 분류 추천 `reason` 추가, R-CR-15 `is_current` AI 제안 경로 삭제, R-CR-17 CR-18·CR-19 확정 표기): CR-15 경력·교육 삭제 시 함께 삭제 확정(`[결정 필요]` 해제), CR-17 분류 값 목록 확정(`[가정]` 해제), CR-20 `structured_draft.classification`(빈 값만 추천·덮어쓰기 없음, CHECK 밖 값 버림) + `apply_writing_chat_proposal` `p_fields`에 분류 3종·`is_current`, 사유 `classification_already_set`, CR-22 **`projects.is_current`**(소속·독립, CHECK, 기간 표시 "현재", 사용자 입력만, 데이터 접근 표·11장), CR-23 머리말 화면 표기 "자기소개서"(내부 이름 그대로), CR-16·18·19·21·24 스키마 영향 없음(8장). **리뷰 반영 R-CR-11**: 2.3 기간 표시의 "PRD와 다름" 문장 삭제, D-DM-11 상태 "PRD v4.5 반영됨, 사용자 확인 대기", 8장 A6·A15 "v4.4 대상 없음"·A18 "의미 변경", 8.1 T-18(반영 시 `needs_review` 건너뜀)·T-19(폐기) 표기, 머리말 기준 입력 버전 갱신 |
 | **v4.3b** | 2026-11-02 | **spec-gaps ⑲ 해소**: A.2 필수 동의에서 `cross_border_transfer`를 뺐다(F-COM-02, UX S-03, D-39). `consent_type`·`policy_type` 값은 기존 행과 S-30 고지를 위해 유지. 구현 `20261108000100_w1_signup_consent_required_set.sql`. 이름 변경 없음 |
 | **v4.3a** | 2026-11-01 | **Q53-11**: `succeeded` + 요건 0개 JD도 공고 원문 수정 허용. 2.6.1 조건 2·4, 조건 5 설명, 가드 트리거 후속 수정 |
@@ -1418,6 +1550,27 @@ v4.4 다른 예:
 | `draft_section_sources.project_detail_ids` | 컬럼 삭제(값 버림) |
 
 ---
+
+### 11.3 v4.5 백엔드 후속 — 페이지 저장·산출물 대화 (★)
+
+> DM v4.4는 `20261109*_r4_*` 마이그레이션으로 구현돼 있다. 아래는 v4.5로 **새 마이그레이션을 더해** 고칠 대상이다(기존 파일 수정 금지, 순서는 db-engineer). SQL은 쓰지 않았다.
+
+| 기존 마이그레이션 / 코드 | 대상 객체 | v4.5 변경 ★ |
+|--------------------------|-----------|-------------|
+| `20261109100500_r4_project_deliverables` | `project_deliverables` 제약 | `unique (id, project_id, user_id)` 추가(대화 복합 FK 대상). 분류·`source_writing_chat_id` 컬럼은 추가하지 않음 |
+| `20261109100800_r4_writing_chats_v44` | `writing_chats` 컬럼·제약·인덱스, `private.writing_chats_require_affiliated_project`, `private.writing_chats_guard`, `private.writing_chat_empty_draft`, `private.writing_chat_greeting`, `start_writing_chat` | `project_deliverable_id` + 복합 FK cascade, `CHECK (project_deliverable_id IS NULL OR return_target IS NULL)`, 부분 인덱스 `(project_deliverable_id, last_activity_at desc)`, 트리거 → `writing_chats_check_target`(산출물 대화면 통과), 가드에 대상 열 불변 추가, 빈 초안을 대상별로, 산출물 시작 인사 3종, `start_writing_chat`에 `p_form_snapshot`(인사 분기, 저장 안 함), **`start_deliverable_writing_chat` 신설**. `writing_chats_cancel_jobs`(삭제 시 턴 취소)는 산출물 연쇄 삭제에도 그대로 돈다 — pgTAP로 확인 |
+| `20261109101000_r4_structured_draft_patch_v3` | `apply_structured_draft_patch`, `private.wc_normalize_draft`, `private.wc_value_ok` 등 | 필드 `rev`(슬롯 단조, 없으면 1로 읽기), `new_object`(`app_ai_writer`만), V-9h `set → append` 낮춤만·기간/분류 DB 거부 삭제(`classification_already_set` 제거), 대상별 패치 범위(`invalid_patch`), **산출물 모양**(사실·초안 교체·블록 빼기·횟수만 세기·`draft_count` ≤ 6 → `writing_chat_draft_limit_reached`) |
+| `20261109101100_r4_apply_writing_chat_proposal` | `apply_writing_chat_proposal`, `private.wc_proposal_lock`, `private.wc_proposal_mark_applied` | **`apply_writing_chat_proposal` 삭제**(execute grant 함께). 헬퍼는 `private.wc_mark_proposal_applied(p_writing_chat_id, p_target_kind, p_target_id, p_field, p_rev, p_mode)`로 바꿔 판정(`not_found`·`already_applied`·`proposal_changed`·`needs_review`)과 기록(`applied_at`·`applied_mode`·`applied_rev`, `last_applied_at`·`last_activity_at`)을 맡긴다 |
+| (신규) | **`save_project_page`**, **`save_project_deliverable`** | 2.5.1 전체(invoker, 만들기·고치기, 값 검사 거부 코드, `p_expected_updated_at` → `stale_write`, 원소별 예외 블록으로 반영됨 기록, `projects.source_writing_chat_id`, 반환 모양). `authenticated`만 execute |
+| `20261109100300_r4_projects_v44` | `projects` `updated_at` 트리거 | `source_writing_chat_id`만 바뀐 update에서는 `updated_at` 유지(FK `set null` 포함) |
+| `20261109101300_r4_career_deletion_rpcs` | `get_deletion_impact`, `delete_career_item` | `project_deliverable`의 `cascade.writing_chats`, 독립 프로젝트의 `cascade.writing_chats`(= 그 프로젝트 대화 수). 결과 영향 집계는 변경 없음(대화는 근거 원본 아님) |
+| `20261109101500_r4_account_deletion` | `get_account_deletion_summary`, `delete_account` | 대화 수가 산출물 대화를 포함하는지 확인만(행 기준 count면 그대로). 삭제 순서 변경 없음 |
+| pgTAP | `writing_chats`·`structured_draft`·삭제·탈퇴·grants 테스트 | 산출물 대화 FK·CHECK·불변·cascade, 저장 RPC(만들기·고치기·`stale_write`·기록 실패가 저장을 막지 않음·`proposal_changed`), `rev` 단조, `new_object`, 초안 6회, `apply_writing_chat_proposal` 부재 |
+| `src/server/services/writing-chat/*`, `src/server/services/career/save.ts`·`rpc.ts`, `src/server/actions/career.ts`·`writing-chat.ts` | 서비스·액션·턴 라우트 | 반영 액션 제거, 페이지 저장 액션 2개, 첫 메시지 순차 호출(7장), 턴 요청 `form_snapshot` zod 계약·길이 검사·로그 제외, AI-12 V-9h·분류·기간 판정을 스냅숏 기준으로, `new_object` 판정, AI-13 파이프라인(정리·초안·V-10·SSE `facts_patch`/`draft_*`), `call_key` `…compose` |
+| `src/server/db/database.types.ts`, `src/types/db.ts` | 생성 타입 | 재생성 |
+
+- 데이터 이관: 산출물 대화는 아직 없고 기존 STAR 대화는 `project_deliverable_id = null`로 그대로 맞다. 기존 필드 객체의 `rev`는 1로 채우거나 읽을 때 1로 본다. 이관할 행 없음.
+- UI(resumate-ui)는 S-10·S-44 페이지 저장, [반영] = 폼 채우기, 카드 3단계, S-44 패널을 맡는다.
 
 ## 부록 A. v2에서 바뀌지 않은 테이블의 전체 정의
 

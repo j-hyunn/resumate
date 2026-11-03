@@ -15,9 +15,14 @@ const badgeVariants = cva(
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+        // design-system 3.x v4 (UQ-711): inactive / absent status (없음, 근거 없음, 중단, 해당 없음)
+        muted: "border-border text-muted-foreground",
+        // design-system v4 (UQ-717): neutral count pill (kanban column header next to stage colors)
+        "count-neutral":
+          "h-5 min-w-5 rounded-full bg-background px-1.5 text-xs text-muted-foreground tabular-nums",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-primary-text underline-offset-4 hover:underline",
         // design-system 2: semantic subtle variants
         success: "bg-success-subtle text-success-subtle-foreground",
         warning: "bg-warning-subtle text-warning-subtle-foreground",

@@ -277,7 +277,7 @@ function FeatureTable({ summary }: { summary: AiUsageSummary }) {
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
-              <TableRow key={r.feature} className={r.calls === 0 ? "text-muted-foreground" : undefined}>
+              <TableRow key={r.feature} muted={r.calls === 0}>
                 <TableCell className="text-sm">{AI_USAGE_FEATURE_LABELS[r.feature]}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatTokens(r.input_tokens)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatTokens(r.output_tokens)}</TableCell>
@@ -339,7 +339,7 @@ function ProviderTable({ summary }: { summary: AiUsageSummary }) {
                       <TableCell className="text-right tabular-nums">{formatUsd(r.estimated_cost_usd)}</TableCell>
                     </TableRow>
                     {r.connection_tier === "free" ? (
-                      <TableRow className="hover:bg-transparent">
+                      <TableRow>
                         <TableCell colSpan={4} className="pt-0 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Info className="size-3.5 shrink-0" aria-hidden />

@@ -104,9 +104,8 @@ export function DraftPreview({
         <h2 className="text-lg leading-7 font-semibold">정리 결과</h2>
         {review > 0 ? (
           <Button
-            variant="outline"
+            variant="warning-outline"
             size="sm"
-            className="border-warning text-warning-subtle-foreground"
             onClick={() => {
               const el = document.querySelector<HTMLElement>("[data-needs-review]")
               el?.scrollIntoView({ block: "center" })

@@ -9,11 +9,12 @@ const alertVariants = cva(
       variant: {
         default: "bg-card text-card-foreground",
         // design-system 2/4: subtle semantic alerts
+        // design-system 3.20 (v4, UQ-712): the variant owns the icon color — usage sites don't recolor svgs
         destructive:
-          "border-destructive/30 bg-destructive-subtle text-destructive-subtle-foreground *:data-[slot=alert-description]:text-destructive-subtle-foreground",
+          "border-destructive/30 bg-destructive-subtle text-destructive-subtle-foreground *:data-[slot=alert-description]:text-destructive-subtle-foreground *:[svg]:text-destructive",
         info: "border-info/20 bg-info-subtle text-info-subtle-foreground *:data-[slot=alert-description]:text-info-subtle-foreground",
         warning:
-          "border-warning/40 bg-warning-subtle text-warning-subtle-foreground *:data-[slot=alert-description]:text-warning-subtle-foreground",
+          "border-warning/40 bg-warning-subtle text-warning-subtle-foreground *:data-[slot=alert-description]:text-warning-subtle-foreground *:[svg]:text-warning",
         ai: "border-ai/30 bg-ai-subtle text-ai-subtle-foreground *:data-[slot=alert-description]:text-ai-subtle-foreground",
       },
     },

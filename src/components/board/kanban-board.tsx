@@ -361,7 +361,7 @@ function BoardColumn({
         <h2 id={headingId} className="text-sm leading-5 font-medium">
           {STAGE_LABELS[stage]}
         </h2>
-        <Badge variant="count" className="bg-background text-muted-foreground">
+        <Badge variant="count-neutral">
           {count}
         </Badge>
         {stage === "before_apply" ? (

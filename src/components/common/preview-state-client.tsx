@@ -44,7 +44,7 @@ export function PreviewStateSwitcher() {
     <div className="fixed right-16 bottom-4 z-40">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="bg-card shadow-md" aria-label="상태 미리보기 (개발용)">
+          <Button variant="outline" size="sm" className="shadow-md" aria-label="상태 미리보기 (개발용)">
             <FlaskConical aria-hidden />
             {current || "state"}
           </Button>

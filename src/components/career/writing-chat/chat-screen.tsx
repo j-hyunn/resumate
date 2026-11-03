@@ -483,7 +483,7 @@ export function ChatScreen({
               <DropdownMenuSeparator />
             </>
           ) : null}
-          <DropdownMenuItem className="text-destructive" onSelect={() => setDialog("delete")}>
+          <DropdownMenuItem variant="destructive" onSelect={() => setDialog("delete")}>
             대화 삭제
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -512,10 +512,7 @@ export function ChatScreen({
                   disabled={busy || atLimit || locked}
                   aria-current={s.current ? "step" : undefined}
                   title="이 부분부터 다시 물어봐 줘"
-                  className={cn(
-                    s.current && "bg-primary-subtle font-medium text-primary-subtle-foreground",
-                    !s.current && !s.filled && "text-muted-foreground",
-                  )}
+                  data-pending={!s.current && !s.filled ? "" : undefined}
                   onClick={() => send(requestSlotMessage(s.slots[0], true), s.slots[0])}
                 >
                   {s.filled ? <Check className="size-3.5 text-success" aria-hidden /> : null}
@@ -1054,7 +1051,7 @@ function CompletionCard({
   const ready = target ? view.readiness.features[RETURN_FEATURE_READINESS[target.feature]].ready : false
   const returnHref = target ? (gate.returnHref ?? featureHref(target.feature, target.application_project_id, target.params)) : null
   return (
-    <Card className="gap-3 border-success/30 p-5" role="status">
+    <Card tone="success" className="gap-3 p-5" role="status">
       <p className="flex items-center gap-2 font-semibold">
         <Check className="size-5 text-success" aria-hidden />
         {chat.status === "saved" ? "커리어에 저장했어요" : "폼으로 옮겼어요"}

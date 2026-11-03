@@ -633,7 +633,7 @@ export function AnswerSheet({
 function InsufficientDataNotice({ hasQuestions, href }: { hasQuestions: boolean; href: string }) {
   const title = "커리어 데이터가 부족해 질문을 만들지 못했어요"
   return (
-    <Alert variant="warning" className="gap-x-3 p-4 *:[svg]:text-warning">
+    <Alert variant="warning" className="gap-x-3 p-4">
       <DatabaseZap className="size-5" aria-hidden />
       <AlertTitle className="text-base leading-6 font-semibold">{title}</AlertTitle>
       <AlertDescription className="space-y-2 text-sm">

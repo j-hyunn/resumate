@@ -50,12 +50,12 @@ const CRITERION_LABELS: Record<CriterionKey, string> = {
 }
 const CULTURE_FIT_RELEVANCE = "직무·조직 연결"
 
-const GRADE_VARIANT: Record<CriterionGrade, "success" | "info" | "warning" | "destructive-subtle" | "outline"> = {
+const GRADE_VARIANT: Record<CriterionGrade, "success" | "info" | "warning" | "destructive-subtle" | "muted"> = {
   excellent: "success",
   good: "info",
   fair: "warning",
   poor: "destructive-subtle",
-  not_applicable: "outline",
+  not_applicable: "muted",
 }
 
 export interface ResultPreview {
@@ -517,7 +517,7 @@ function InputCausedGradingNotice({ cause, newInterviewHref }: { cause: AiErrorC
   const { icon: Icon, tone } = copyIconFor(cause ?? "input_too_long")
   const { title, body } = gradingInputCauseCopy(cause)
   return (
-    <Alert variant={tone} className={cn("gap-x-3 p-4", tone === "warning" ? "*:[svg]:text-warning" : "*:[svg]:text-destructive")}>
+    <Alert variant={tone} className="gap-x-3 p-4">
       <Icon className="size-5" aria-hidden />
       <AlertTitle className="text-base leading-6 font-semibold">{title}</AlertTitle>
       <AlertDescription className="space-y-2 text-sm">
@@ -693,7 +693,7 @@ function AnswerCard({
                     <span className="text-sm font-medium">
                       {c.key === "job_relevance" && interviewType === "culture_fit" ? CULTURE_FIT_RELEVANCE : CRITERION_LABELS[c.key]}
                     </span>
-                    <Badge variant={GRADE_VARIANT[c.grade]} className={cn(c.grade === "not_applicable" && "text-muted-foreground")}>
+                    <Badge variant={GRADE_VARIANT[c.grade]}>
                       {GRADE_LABELS[c.grade]}
                     </Badge>
                   </p>

@@ -15,6 +15,7 @@ import { useAiConnectionBase } from "@/components/common/ai-connection-context"
 import { useSettingsDialog } from "@/components/common/shell/settings-dialog"
 import { connectionStatusText } from "@/components/common/provider-badge"
 import { KeyMask, StaticConnectionBadge } from "./provider-card"
+import { Item } from "@/components/ui/item"
 
 export function AiStatusLine({ inDialog }: { inDialog: boolean }) {
   const { openSettings } = useSettingsDialog()
@@ -67,21 +68,21 @@ export function AiStatusLine({ inDialog }: { inDialog: boolean }) {
         : "연결 안 됨"
   const label = `AI 연결: ${statusText}. AI 연결 설정 열기`
 
-  const cls =
-    "-mx-2 flex min-h-10 items-center justify-between gap-2 rounded-md px-2 text-left text-base hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none max-md:min-h-11"
   return (
     <div className="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center sm:gap-3">
       <span className="text-sm leading-5 font-medium text-muted-foreground">AI 연결</span>
       {inDialog ? (
-        <button type="button" className={cls} onClick={() => openSettings("ai-connection")} aria-label={label}>
+        <Item size="sm" className="-mx-2 w-auto justify-between" onClick={() => openSettings("ai-connection")} aria-label={label}>
           {content}
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </button>
+          <ChevronRight aria-hidden />
+        </Item>
       ) : (
-        <Link href={routes.aiConnection()} className={cls} aria-label={label}>
-          {content}
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </Link>
+        <Item asChild size="sm" className="-mx-2 w-auto justify-between">
+          <Link href={routes.aiConnection()} aria-label={label}>
+            {content}
+            <ChevronRight aria-hidden />
+          </Link>
+        </Item>
       )}
     </div>
   )

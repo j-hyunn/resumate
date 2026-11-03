@@ -327,7 +327,7 @@ function OutcomeInline({ outcome }: { outcome: StageOutcome | null }) {
       </Badge>
     )
   return (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="muted">
       {OUTCOME_LABELS.none}
     </Badge>
   )

@@ -242,7 +242,7 @@ async function Screen({ params, searchParams }: Props) {
  */
 function LockMarker({ hasResult }: { hasResult: boolean }) {
   return (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="muted">
       <Lock aria-hidden />
       {hasResult ? "새로 만들려면 AI 연결" : "AI 연결 필요"}
     </Badge>

@@ -191,7 +191,7 @@ export function DraftList({
                         <RotateCcw aria-hidden />
                         다시 시도
                       </AiRunButton>
-                      <Button variant="ghost" size="sm" className="text-destructive" aria-label={`${label} 삭제`} onClick={() => setTarget(d)}>
+                      <Button variant="destructive-ghost" size="sm" aria-label={`${label} 삭제`} onClick={() => setTarget(d)}>
                         삭제
                       </Button>
                     </div>
@@ -202,7 +202,7 @@ export function DraftList({
             )
           return (
             <li key={d.id}>
-              <Card size="sm" className="relative flex-row items-center gap-3 px-4 transition-colors hover:bg-accent">
+              <Card size="sm" interactive className="relative flex-row items-center gap-3 px-4">
                 <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <Link href={href} onClick={composingCd ? () => window.dispatchEvent(new Event(OPEN_COMPOSING_EVENT)) : undefined} className="font-medium after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -571,7 +571,7 @@ export function NewDraftPanel({
                     <ToggleGroupItem
                       key={t}
                       value={t}
-                      className="h-9 px-4 text-sm data-[state=on]:bg-primary-subtle data-[state=on]:text-primary-subtle-foreground"
+                      className="h-9 px-4 text-sm"
                     >
                       {TONE_LABELS[t]}
                     </ToggleGroupItem>

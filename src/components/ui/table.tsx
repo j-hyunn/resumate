@@ -51,12 +51,24 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   )
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({
+  className,
+  interactive = false,
+  muted = false,
+  ...props
+}: React.ComponentProps<"tr"> & {
+  /** row opens a detail page on click: pointer + green hover like Item. Only interactive rows react to hover (v4, UQ-719). */
+  interactive?: boolean
+  /** inactive row (e.g. 0 calls): muted text without a usage-site color override (UQ-712) */
+  muted?: boolean
+}) {
   return (
     <tr
       data-slot="table-row"
+      data-interactive={interactive || undefined}
+      data-muted={muted || undefined}
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors data-[state=selected]:bg-primary/10 data-interactive:cursor-pointer data-interactive:hover:bg-primary/10 data-interactive:has-aria-expanded:bg-primary/10 data-muted:text-muted-foreground",
         className
       )}
       {...props}

@@ -1,6 +1,6 @@
 # 화면 구현 현황
 - 기준 기획: PRD v4.4a / 플로우 v5.4a / AI v4.4a / 데이터 모델 v4.3a (결정 Q53-1~11 반영)
-- 디자인 시스템: v3 (기획 v5.3 반영, Q53 시각 메모는 `_workspace/ui/16_frontend-engineer_q53_report.md`) · 최종 갱신: 2026-10-30 (Q53 QA 후 수정 완료. 그 수정은 QA 재검토 없이 lint·typecheck·build와 데이터 계층 검사 스크립트로만 확인, 브라우저 클릭 미확인)
+- 디자인 시스템: v4 (기획 v5.3 반영, Q53 시각 메모는 `_workspace/ui/16_frontend-engineer_q53_report.md`) · 최종 갱신: 2026-10-30 (Q53 QA 후 수정 완료. 그 수정은 QA 재검토 없이 lint·typecheck·build와 데이터 계층 검사 스크립트로만 확인, 브라우저 클릭 미확인)
 - 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
 
 > W5 QA 수정 (2026-11-02): `_workspace/ui/19_ui-qa_w5_review.md`·`_workspace/backend/W5/03_backend-qa_report.md`의 UI 이슈를 고쳤다(UQ-701~703·705~707, QA-W5-01·06 앞부분·08). lint·typecheck·test까지 확인, 브라우저 미확인. 상세: `_workspace/ui/20_frontend-engineer_w5_fixes.md`

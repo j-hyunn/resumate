@@ -459,8 +459,7 @@ export function ProjectForm({
                   {WRITING_CHAT_MODE_LABELS[c.mode]}
                 </Link>
                 <Badge
-                  variant={c.status === "active" ? "ai" : "outline"}
-                  className={c.status === "abandoned" ? "text-muted-foreground" : undefined}
+                  variant={c.status === "active" ? "ai" : c.status === "abandoned" ? "muted" : "outline"}
                 >
                   {WRITING_CHAT_STATUS_LABELS[c.status]}
                 </Badge>
@@ -489,7 +488,7 @@ export function ProjectForm({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="text-destructive" onSelect={() => setDeletingChat(c)}>
+                    <DropdownMenuItem variant="destructive" onSelect={() => setDeletingChat(c)}>
                       대화만 삭제
                     </DropdownMenuItem>
                   </DropdownMenuContent>

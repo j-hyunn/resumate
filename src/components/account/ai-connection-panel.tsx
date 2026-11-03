@@ -75,6 +75,7 @@ import {
   StaticConnectionBadge,
   providerCardState,
 } from "./provider-card"
+import { Item } from "@/components/ui/item"
 
 export const S40_INTRO =
   "AI 기능은 선택이에요. 본인 AI 키를 연결하면 인사이트·서류 초안·모의 면접·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
@@ -439,20 +440,15 @@ export function AiConnectionPanel({
 
       {/* 사용량 입구 — 다이얼로그에서는 섹션만 바꾼다 (5.7) */}
       {variant === "section" ? (
-        <button
-          type="button"
-          onClick={() => openSettings("ai-usage")}
-          className="flex w-full items-center justify-between gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-        >
+        <Item variant="outline" size="lg" className="justify-between gap-3" onClick={() => openSettings("ai-usage")}>
           <UsageEntryText cost={data.month_estimated_cost_usd} />
-        </button>
+        </Item>
       ) : (
-        <Link
-          href={routes.aiUsage()}
-          className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-        >
-          <UsageEntryText cost={data.month_estimated_cost_usd} />
-        </Link>
+        <Item asChild variant="outline" size="lg" className="justify-between gap-3">
+          <Link href={routes.aiUsage()}>
+            <UsageEntryText cost={data.month_estimated_cost_usd} />
+          </Link>
+        </Item>
       )}
 
       <p className="flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
@@ -648,7 +644,7 @@ function CardActions({
           ) : null}
           <DropdownMenuItem onSelect={onDisclosure}>데이터 사용 고지 다시 보기</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
+          <DropdownMenuItem onSelect={onDelete} variant="destructive">
             키 삭제
           </DropdownMenuItem>
         </DropdownMenuContent>

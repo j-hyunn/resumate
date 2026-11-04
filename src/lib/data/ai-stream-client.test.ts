@@ -65,8 +65,14 @@ describe("realBlockStream", () => {
         blocks: [{ block_id: "x1", text: "확정", flags: ["number_check_needed"], evidence_count: 2 }],
         notes: { omitted: undefined, notes_for_user: ["확인"], char_adjust_needed: undefined },
       },
-      { type: "done" },
+      { type: "done", draft_id: "d" },
     ])
+  })
+
+  it("passes `done.draftId` and `reused` on (C-6 재사용 → S-19 opens that draft)", async () => {
+    withFetch(sse([{ type: "done", draftId: "ready-draft", reused: true, sectionId: null, meta: {} }]))
+    const out = await collect(realBlockStream({ endpoint: "/api/x" }, signal))
+    expect(out).toEqual([{ type: "done", draft_id: "ready-draft", reused: true }])
   })
 
   it("keeps AI-03 `omitted` as project id + reason for the editor to name (QA-W5-01)", async () => {

@@ -75,6 +75,8 @@ export interface UseAiStreamResult {
   notes: Record<string, GenerationNotesPayload>
   /** sections already confirmed by `validated` ("" = career description) */
   validatedSections: string[]
+  /** real AI-03 `done`: the draft holding the result — another draft when `reused` (C-6 동일 입력 재사용) */
+  doneInfo: { draft_id: string; reused: boolean } | null
   error: AiErrorCode | null
   /** v4: full C-20 info of the failure → <AiErrorNotice {...stream.errorInfo} /> */
   errorInfo: AiErrorInfo | null
@@ -97,6 +99,7 @@ export function useAiStream(): UseAiStreamResult {
   const [adjusting, setAdjusting] = React.useState<UseAiStreamResult["adjusting"]>(null)
   const [notes, setNotes] = React.useState<Record<string, GenerationNotesPayload>>({})
   const [validatedSections, setValidatedSections] = React.useState<string[]>([])
+  const [doneInfo, setDoneInfo] = React.useState<UseAiStreamResult["doneInfo"]>(null)
   const error = errorInfo?.code ?? null
   const controller = React.useRef<AbortController | null>(null)
 
@@ -119,6 +122,7 @@ export function useAiStream(): UseAiStreamResult {
     setAdjusting(null)
     setNotes({})
     setValidatedSections([])
+    setDoneInfo(null)
     setStatus("streaming")
     void (async () => {
       try {
@@ -163,6 +167,7 @@ export function useAiStream(): UseAiStreamResult {
               break
             }
             case "done":
+              setDoneInfo(ev.draft_id ? { draft_id: ev.draft_id, reused: ev.reused === true } : null)
               setPhase("done")
               setStatus("done")
               break
@@ -197,10 +202,11 @@ export function useAiStream(): UseAiStreamResult {
     setAdjusting(null)
     setNotes({})
     setValidatedSections([])
+    setDoneInfo(null)
     setStatus("idle")
   }, [])
 
-  return { blocks, sources, status, phase, adjusting, notes, validatedSections, error, errorInfo, start, cancel, reset }
+  return { blocks, sources, status, phase, adjusting, notes, validatedSections, doneInfo, error, errorInfo, start, cancel, reset }
 }
 
 export interface UseChatTurnResult {

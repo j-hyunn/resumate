@@ -82,7 +82,7 @@ async function writePending(pending: PendingCareerDescription | null): Promise<v
   })
 }
 
-function standInDraft(p: PendingCareerDescription, userId: string): DraftWithSections {
+function standInDraft(p: PendingCareerDescription, userId: string, aiJobId: string | null = null): DraftWithSections {
   const at = new Date().toISOString()
   return {
     id: p.id,
@@ -97,7 +97,7 @@ function standInDraft(p: PendingCareerDescription, userId: string): DraftWithSec
     edited_at: null,
     first_copied_at: null,
     completed_at: null,
-    ai_job_id: null,
+    ai_job_id: aiJobId,
     provider: null,
     model: null,
     model_tier: null,
@@ -303,13 +303,22 @@ async function loadSectionRows(supabase: UserSupabaseClient, view: DraftView): P
   })
 }
 
+async function activeCareerDescriptionJob(supabase: UserSupabaseClient, draftId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("ai_jobs").select("id").eq("target_id", draftId).eq("job_type", "career_description").in("status", ["queued", "running"]).limit(1).maybeSingle()
+  if (error) throw mapDbError(error)
+  return data?.id ?? null
+}
+
 export async function realGetDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
   if (!isUuid(draftId)) return null
   const { supabase, user } = await requireConsentedUser()
   const result = await draftActions.getDraft({ draftId })
   if ("error" in result && result.error.code === "not_found") {
     const pending = await readPending(user.id, draftId)
-    return pending?.application_project_id === applicationProjectId ? standInDraft(pending, user.id) : null
+    if (pending?.application_project_id !== applicationProjectId) return null
+    // Reconnect (reload right after the start): the route opens the job a moment before it writes the row. A job
+    // that is already running lets the screen follow it instead of offering a second start.
+    return standInDraft(pending, user.id, pending.ended ? null : await activeCareerDescriptionJob(supabase, draftId))
   }
   const view = unwrap(result)
   if (view.applicationProjectId !== applicationProjectId) return null

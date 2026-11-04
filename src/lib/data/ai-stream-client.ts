@@ -171,7 +171,7 @@ export async function* realBlockStream(request: RealStreamRequest, signal: Abort
         yield { type: "validated", section_id: sectionId, blocks: validatedBlocks(ev.result), notes: notesOf(ev.result) }
         break
       case "done":
-        yield { type: "done" }
+        yield { type: "done", ...(typeof ev.draftId === "string" ? { draft_id: ev.draftId } : {}), ...(ev.reused === true ? { reused: true } : {}) }
         return
       case "error":
         yield errorEventOf(ev, provider)

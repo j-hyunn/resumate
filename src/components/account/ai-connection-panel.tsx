@@ -450,10 +450,10 @@ export function AiConnectionPanel({
       {/* 활성 전환 확인 (F-AI-03) */}
       <AlertDialog open={!!switchTo} onOpenChange={(o) => !switching && !o && setSwitchTo(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
+          <AlertDialogHeader>
             {/* [UI-가정] 제목 */}
             <AlertDialogTitle>활성 공급자를 바꿀까요?</AlertDialogTitle>
-            <AlertDialogDescription className="text-base text-foreground">
+            <AlertDialogDescription>
               {switchTo?.key
                 ? switchConfirmText(switchTo.info.provider, switchTo.key.connection_tier)
                 : null}

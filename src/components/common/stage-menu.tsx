@@ -211,8 +211,8 @@ export function useStageMove({
       </p>
       <AlertDialog open={confirmTo !== null} onOpenChange={(o) => !o && setConfirmTo(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-lg font-semibold">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
               기록한 결과({outcome ? OUTCOME_LABELS[outcome] : ""})를 지울까요?
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -220,7 +220,7 @@ export function useStageMove({
               전형 종료가 아닌 단계로 옮기면 결과 배지가 사라져요. 이전 기록은 전형 이력에 남아요.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <Button
               onClick={() => {

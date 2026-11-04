@@ -25,6 +25,9 @@ const buttonVariants = cva(
         // design-system 3.5 v4 (UQ-708): ghost button that starts a destructive action (삭제, 그래도 닫기)
         "destructive-ghost":
           "text-destructive hover:bg-destructive/10 hover:text-destructive aria-expanded:bg-destructive/10 aria-expanded:text-destructive dark:hover:bg-destructive/20",
+        // 알림·경고 모달 보조 버튼 (2026-11 모달 개편): grey text, no fill at rest
+        "muted-ghost":
+          "text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         link: "text-primary-text underline-offset-4 hover:underline",
         // design-system 3.5 v4 (UQ-708): inline link inside a red error sentence (저장 실패 — 다시 시도)
         "destructive-link": "text-destructive underline-offset-4 hover:underline",

@@ -1,6 +1,6 @@
-# Resumate 디자인 시스템 v5.3
+# Resumate 디자인 시스템 v5.4
 
-> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용)
+> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양)
 > 기준 기획: **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
@@ -1443,6 +1443,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 | 다른 화면으로 가는 일 | 페이지 이동(모달로 화면을 대신하지 않음) |
 
 - 모달 안 주 버튼은 오른쪽 끝, 좁은 화면에서 `flex-col-reverse` 전체 폭.
+- (v5.4) **알림·경고 모달 공통 모양**(`AlertDialog`, `components/ui/alert-dialog.tsx` 기본값 — 사용처에서 덮어쓰지 않는다): `rounded-2xl p-6 shadow-lg`, 테두리 없음, 기본 폭 `sm:max-w-md`. 제목 `text-xl font-bold`(왼쪽 정렬) + 오른쪽 위 X 닫기(`size-8`, `text-muted-foreground`, 누르면 취소와 같다). **X는 바닥 줄에 취소 버튼(`AlertDialogCancel`)이 없을 때만 보인다** — 취소가 있으면 자동으로 숨는다(`showCloseButton={false}`로 항상 끌 수도 있음). 본문 `text-base text-foreground`. 아래 버튼 줄은 구분선·바탕 없이 오른쪽 정렬, 버튼 높이 `h-11 px-5`. 보조 버튼 = `Button variant="muted-ghost"`(회색 글자, 채움 없음 — `AlertDialogCancel` 기본값), 주 버튼 = `default`(초록 채움), 경고 모달의 주 버튼 = `destructive`(빨강 채움).
 - 다이얼로그 위에 다이얼로그 금지(C-11 다시 생성 확인은 패널 위 AlertDialog — 패널은 Sheet라 허용).
 
 ### 5.7 AI 연결 화면 (S-40 · S-41 · S-42, v2 신설)
@@ -1614,10 +1615,10 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 | 다른 곳에서 바뀜(`stale_write`) | 활성 유지 | 비움. 아래 **변경 충돌 확인**을 연다 |
 
 - 표식 점의 `warning`은 "아직 저장 안 됨"이라는 상태라서 쓴다(R-C4: 점 = 아이콘 자리, 글자는 `sr-only`와 버튼 활성 상태가 함께 알린다).
-- **변경 충돌 확인**(`stale_write`): `AlertDialog sm:max-w-md`. 제목 "다른 곳에서 이 {프로젝트/산출물}이(가) 바뀌었어요", 설명 `body text-muted-foreground` — "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요"(명세 "버린다고 함께 알림"의 글자, `[가정]`). 버튼 `새로 불러오기`(outline) · `내 내용으로 저장`(default). Esc·바깥 누름은 닫기만 하고 편집 상태를 그대로 둔다 `[가정]`.
+- **변경 충돌 확인**(`stale_write`): `AlertDialog sm:max-w-md`. 제목 "다른 곳에서 이 {프로젝트/산출물}이(가) 바뀌었어요", 설명 `body text-muted-foreground` — "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요"(명세 "버린다고 함께 알림"의 글자, `[가정]`). 버튼 `새로 불러오기`(`muted-ghost`, v5.4) · `내 내용으로 저장`(default). Esc·바깥 누름은 닫기만 하고 편집 상태를 그대로 둔다 `[가정]`.
 - **CrumbRow**: 카드 맨 위 `flex h-12 shrink-0 items-center gap-2 px-6`. "←" = `Button variant="secondary" size="icon-sm" className="rounded-full"` + `ArrowLeft size-4`(`aria-label="뒤로"`, Figma 둥근 버튼. 색은 v4 `secondary` 그대로 — 원형 반경은 1.3 v5 예외, UQ-BR-14). 이동 경로 = `Breadcrumb`(14px). 누를 수 있는 마디(S-10 회사명/기관명, S-44 프로젝트명)는 `text-muted-foreground hover:text-foreground hover:underline`, 누를 수 없는 이름 마디는 `text-muted-foreground`, 마지막 마디("프로젝트 상세"/"산출물 상세")는 `font-medium text-foreground` + `aria-current="page"`. 이름 마디는 `max-w-[16rem] truncate` + `title`. 입력 중인 이름을 따라가며, 비면 "새 프로젝트"·"새 산출물"을 `text-muted-foreground`로.
 - **배너 자리**: CrumbRow 바로 아래 `ShellBanners` = `OverflowScroller`(5.9 "머리·배너가 넘칠 때") `shrink px-6 pb-2` + 안쪽 `space-y-2`, 넘칠 때 이름 "알림". 낮은 창에서 배너가 여럿이면 본문 2단 최소 높이(카드 50%)를 지키도록 줄어들고 그 안에서 스크롤한다(UQ-SC-1). C-10 복귀 배너(3.9)와 **입력 보존 배너**: `Alert variant="info"` 작은 형 + `History size-4` "저장하지 않은 수정이 있어요" + 오른쪽 `Button variant="outline" size="sm"` "이어서 편집" · `Button variant="ghost" size="sm"` "버리기" `[가정: 배너형 — 다이얼로그로 막지 않음]`. 고르기 전에는 저장된 값을 보인다. 둘 다 있으면 C-10이 위.
-- **이탈 확인**(`LeaveGuard`): `AlertDialog sm:max-w-md`. 제목 "저장하지 않은 변경이 있어요". 버튼 3개를 오른쪽 정렬 `계속 편집`(outline) · `저장하지 않고 나가기`(`Button variant="destructive-ghost"`, v5 UQ-BR-1·12) · `저장하고 나가기`(default, 요청 중 `Loader2`). 좁은 화면은 `flex-col-reverse` 전체 폭(저장하고 나가기가 맨 위). "저장하고 나가기"가 실패·검증 오류로 끝나면 다이얼로그를 닫고 SaveButton 실패·오류 모양으로 남는다. 브라우저 닫기·새로 고침은 `beforeunload` 기본 확인(문구 지정 불가).
+- **이탈 확인**(`LeaveGuard`): `AlertDialog sm:max-w-md`. 제목 "저장하지 않은 변경이 있어요". (v5.4) "계속 편집"은 오른쪽 위 X가 맡고, 버튼 2개를 오른쪽 정렬 `저장하지 않고 나가기`(`Button variant="muted-ghost"`) · `저장하고 나가기`(default, 요청 중 `Loader2`). 좁은 화면은 `flex-col-reverse` 전체 폭(저장하고 나가기가 맨 위). "저장하고 나가기"가 실패·검증 오류로 끝나면 다이얼로그를 닫고 SaveButton 실패·오류 모양으로 남는다. 브라우저 닫기·새로 고침은 `beforeunload` 기본 확인(문구 지정 불가).
 - 토스트 위치: L-02에서는 `bottom-left`(2장 sonner).
 
 **좁은 화면(<1024)**
@@ -2107,3 +2108,4 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | v5.1 | 2026-11-04 | **로그인 Google 단일화**(플로우 v5.7 S-02, decisions 3.11 — 매직 링크 제거). 6장 A1 S-02 메모를 새로 썼다: 이메일 `Input`·"로그인 링크 받기"·구분선 "또는"·재발송 `Alert variant="info"` 삭제(사용처: S-02 로그인 화면 코드), "Google로 계속하기"는 그대로 `outline` 전체 폭(`size="lg"`) + 다색 로고 예외, 콜백 실패 = 상단 `Alert variant="destructive"`, 시작 실패 = 버튼 아래 A-10 오류 한 줄, 약관 안내 링크. 토큰·variant·패턴 이름 변경 없음 |
 | v5.2 | 2026-11-04 | **처리방침·이용약관**(플로우 v5.8, decisions 3.12 PT-5·PT-6). 6장 A1: S-01·S-02 약관 링크 두 개, S-03 연령 확인 행, S-30 문서 페이지 구성(탭 없음) |
 | v5.3 | 2026-11-04 | **C-23 소속 선택 전용**(플로우 v5.9, decisions 3.13 D-UX-28 변경). 3.23을 새로 썼다: ① C-22 "프로젝트" 진입·"새 독립 프로젝트" 제목·프로젝트명 칸·"만들기"와 그 로딩·실패 규칙 제거, 주 버튼 "계속" 하나, "소속 없음" → 독립 프로젝트 추가 모달. 4장 A2 C-23 메모. 새 토큰·variant 없음 |
+| v5.4 | 2026-11-04 | **알림·경고 모달 공통 모양**(사용자 지정 시안). 5.6에 공통 모양 규칙 추가. **variant 추가**: `button` `muted-ghost`. **바뀐 것**: `AlertDialog` 기본 모양(제목 `text-xl font-bold`, X 닫기 — 취소 버튼이 없을 때만, 본문 `text-foreground`, 바닥 줄 구분선·바탕 제거, `AlertDialogCancel` 기본 `outline` → `muted-ghost`, 기본 폭 `lg` → `md`, 사용처: AlertDialog 쓰는 12개 파일의 제목·바닥 줄 덮어쓰기 제거) / 이탈 확인 "계속 편집" 버튼 제거(X로 대체), "저장하지 않고 나가기" `destructive-ghost` → `muted-ghost` / 변경 충돌 "새로 불러오기" `outline` → `muted-ghost`(`page-shell.tsx`). 토큰 추가 없음 |

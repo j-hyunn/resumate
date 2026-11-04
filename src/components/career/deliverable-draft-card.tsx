@@ -463,7 +463,7 @@ function ProposalView({
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent className="sm:max-w-md">
-          <AlertDialogHeader className="text-left">
+          <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               {confirm?.changed ? <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden /> : null}
               {confirm?.changed ? "초안을 만든 뒤 본문이 바뀌었어요" : "지금 본문을 AI 초안으로 바꿀까요?"}

@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
 import { FormSkeleton } from "@/components/common/state-views"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { LogoMark, LogoWordmark } from "@/components/common/shell/logo-mark"
 import { SignInForm, type SignInPreview } from "@/components/account/sign-in-form"
 import { safeNextPath } from "@/lib/routes"
 import { getPreviewState } from "@/lib/preview-state"
@@ -15,6 +15,7 @@ import { routes } from "@/lib/routes"
  * v5.3 A7: 탈퇴 미완료 계정은 S-03·원래 URL·S-08보다 먼저 S-25 탈퇴 마무리(/settings/withdraw/finalize).
  * v5.7 (D-09 변경 2026-11-04): Google 로그인만. `?error=auth_callback`(Google 취소·로그인 처리 실패)은
  * 상단 경고 "로그인을 마치지 못했어요"를 보여 준다 (운영 포함).
+ * (2026-11-04 사용자 요청) 상단 헤더·카드 없이 화면 가운데에 심볼 + 워드마크, 그 아래 문구와 Google 버튼.
  * ?state= : loading · error(Google 로그인 시작 실패) · login-error(콜백 실패 경고) · new-user ·
  *           deletion-incomplete(로그인하면 탈퇴 마무리 상태로)
  */
@@ -35,8 +36,8 @@ export default function Page({ searchParams }: Props) {
 
 function Fallback() {
   return (
-    <div className="px-4">
-      <FormSkeleton fields={1} className="mx-auto mt-16 max-w-md" />
+    <div className="flex min-h-dvh items-center justify-center px-4">
+      <FormSkeleton fields={1} className="w-full max-w-sm" />
     </div>
   )
 }
@@ -54,18 +55,23 @@ async function Screen({ searchParams }: Props) {
   const next = safeNextPath(sp.next)
 
   return (
-    <div className="px-4 pb-16">
-      <Card className="mx-auto mt-16 max-w-md gap-0 p-8">
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-16">
+      <div className="w-full max-w-sm">
+        <Link
+          href={routes.landing()}
+          aria-label="Resumate 처음 화면으로 가기"
+          className="mx-auto mb-10 flex w-fit items-center gap-3 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <LogoMark className="size-10" />
+          <LogoWordmark className="h-6" />
+        </Link>
         <SignInForm
           next={next}
           preview={preview}
           intro={
-            <header>
-              <h1 className="text-2xl leading-8 font-bold">가입/로그인</h1>
-              {/* [UI-가정] sub copy (02 S-02 v5.7: 처음이면 바로 가입되고, Google 계정으로 들어온다는 한 줄) */}
-              <p className="mt-2 text-base leading-[1.6] text-muted-foreground">
-                처음이면 바로 가입돼요. Google 계정으로 들어와요.
-              </p>
+            <header className="text-center">
+              {/* [UI-가정] 2026-11-04 사용자 요청: 서비스 전용 제목, 부제 없음 (02 S-02의 "처음이면 바로 가입" 안내 생략) */}
+              <h1 className="text-xl leading-7 font-bold">Resumate에서 커리어 준비를 시작해요</h1>
             </header>
           }
           footnote={
@@ -82,7 +88,7 @@ async function Screen({ searchParams }: Props) {
             </p>
           }
         />
-      </Card>
+      </div>
     </div>
   )
 }

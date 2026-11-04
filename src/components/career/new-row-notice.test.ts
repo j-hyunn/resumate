@@ -1,0 +1,57 @@
+/**
+ * 33 런 가드 (UQ-334). S-10 새 프로젝트 · S-44 새 산출물의 "추가 중" 표시는 **행 ID 상태**를 따라야 한다.
+ *
+ * 왜 소스를 읽는 테스트인가: `replaceUrl`은 `window.history.replaceState`로 URL만 바꾸므로(Next 내비게이션이
+ * 아니다) 첫 저장 뒤에도 컴포넌트는 마운트된 채이고 `data.project_id` / `data.project_deliverable_id`는 계속
+ * `null`이다. 분기를 서버 prop이나 URL 기준으로 "정리"하면 행이 생긴 뒤에도 "아직 추가되지 않았어요"가 영구히
+ * 남는다. 이 저장소에는 컴포넌트 렌더 테스트 설비가 없어(vitest `environment: "node"`, `*.test.ts`만) 같은
+ * 저장소의 소스 가드 관례(`src/lib/data/mock-isolation.test.ts`)를 따른다.
+ */
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+import { CRUMB_CURRENT } from "./new-row-notice"
+
+const read = (p: string) => readFileSync(join(process.cwd(), "src/components/career", p), "utf8")
+const PROJECT = read("project-page/project-page.tsx")
+const DELIVERABLE = read("deliverable/deliverable-page.tsx")
+
+const PAGES = [
+  { name: "S-10 project-page", src: PROJECT, flag: "const isNew = !projectId", serverProp: "data.project_id", kind: "project" as const },
+  { name: "S-44 deliverable-page", src: DELIVERABLE, flag: "const isNew = !id", serverProp: "data.project_deliverable_id", kind: "deliverable" as const },
+]
+
+describe("새 행 표시", () => {
+  it.each(PAGES)("$name: 분기는 행 ID 상태에서 나온다", ({ src, flag }) => {
+    expect(src).toContain(flag)
+  })
+
+  it.each(PAGES)("$name: 분기를 서버 prop이나 URL로 되돌리지 않았다", ({ src, serverProp }) => {
+    const decl = src.match(/const isNew = [^\n]*/g) ?? []
+    expect(decl).toHaveLength(1)
+    expect(decl[0]).not.toContain(serverProp)
+    expect(decl[0]).not.toMatch(/location|pathname|searchParams|usePathname/)
+  })
+
+  it.each(PAGES)("$name: 안내는 isNew일 때만 그린다", ({ src, kind }) => {
+    expect(src).toContain(`{isNew ? <NewRowNotice kind="${kind}" /> : null}`)
+  })
+
+  it.each(PAGES)("$name: 안내는 ShellBanners가 아니라 머리에 있다", ({ src }) => {
+    // C-10·관련 요건·입력 보존 배너와 자리를 공유하면 겹침·순서 문제가 생긴다
+    expect(src.indexOf("<NewRowNotice")).toBeGreaterThan(src.indexOf("</ShellBanners>"))
+  })
+
+  it.each(PAGES)("$name: 이동 줄 현재 위치도 isNew로 갈린다", ({ src, kind }) => {
+    expect(src).toContain(`current={isNew ? CRUMB_CURRENT.${kind}.new : CRUMB_CURRENT.${kind}.existing}`)
+  })
+
+  it("이동 줄 문구: 새 행은 '추가', 기존 행은 '상세'이고 서로 다르다", () => {
+    for (const kind of ["project", "deliverable"] as const) {
+      const { new: added, existing } = CRUMB_CURRENT[kind]
+      expect(added).toContain("추가")
+      expect(existing).toContain("상세")
+      expect(added).not.toBe(existing)
+    }
+  })
+})

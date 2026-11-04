@@ -4,6 +4,7 @@
  * S-10 프로젝트 상세 (UX v5.6 S-10 · L-02 1.3a · FL-05 · FL-14, AI v4.6 AI-12, DM v4.5 2.5.1).
  *
  * L-02 PageShell → CrumbRow "{회사명/기관명} › {프로젝트명} › 프로젝트 상세" → banners (C-10, 관련 요건, 입력 보존)
+ * 새 프로젝트(행 없음)는 이동 줄 현재 위치가 "새 프로젝트 추가"이고 머리 맨 위에 새 행 안내(new-row-notice)가 붙는다(33 런).
  * → 머리 (제목 = 프로젝트명 입력 · ⋯ 소속 변경 / 프로젝트 삭제 · 종류 · 경험 유형 · 역량 · 진행 기간 · 진행 중)
  * → Separator → DocBody: STAR 5칸 | ResizeHandle | Resumate AI 패널 (+ StarProposalCard).
  *
@@ -44,6 +45,7 @@ import {
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
+import { CRUMB_CURRENT, NewRowNotice } from "@/components/career/new-row-notice"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
 import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
 import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillEntry, type FillPlan } from "@/components/career/star-proposal-fill"
@@ -462,6 +464,8 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   }
 
   // ---------- derived ----------
+  // 아직 행이 없는 "새 프로젝트" 상태 — URL이 아니라 `projectId`를 따르므로 첫 저장 성공 직후 바로 기존 행 표시로 바뀐다
+  const isNew = !projectId
   const uiState: SaveUiState = saveState === "saving" || saveState === "failed" || saveState === "invalid" || saveState === "stale" ? saveState : dirty ? "dirty" : savedAt ? "saved" : "idle"
   // the open chat's skips are drawn inside its card; the rest (or every skip when no card shows) here
   const cardShown = Boolean(chatId && draft && hasProposals(draft))
@@ -485,9 +489,10 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
         back={{ href: parentHref, label: parentName }}
         items={[
           { label: parentName, href: parentHref },
-          { label: values.name, placeholder: "새 프로젝트" },
+          // 행이 없고 이름도 비었으면 자리 표시 칸을 빼서 "{경력명} › 새 프로젝트 추가"로 읽히게 한다 (33 런)
+          ...(isNew && isBlank(values.name) ? [] : [{ label: values.name, placeholder: "새 프로젝트" }]),
         ]}
-        current="프로젝트 상세"
+        current={isNew ? CRUMB_CURRENT.project.new : CRUMB_CURRENT.project.existing}
       />
       <ShellBanners>
         <ReturnBanner />
@@ -519,6 +524,8 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
 
       {/* 머리 */}
       <DocHead className="space-y-3" label="프로젝트 정보">
+        {/* 새 프로젝트: 행이 아직 없고 "저장하기"가 추가 동작임을 머리 맨 위에서 알린다 (33 런) */}
+        {isNew ? <NewRowNotice kind="project" /> : null}
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}

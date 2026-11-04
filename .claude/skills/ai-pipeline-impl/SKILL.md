@@ -54,7 +54,7 @@ Run in this order, after parsing and before anything is stored or streamed as fi
 | V-4 | items with 0 evidence: drop / downgrade to `no_evidence` / mark `evidence_check_needed` per item kind | item kind decides the action |
 | V-5 | every number in generated text exists in pack/JD/answers or the server-computed allowed list | one regeneration request per block, then replace with `[수치 확인 필요]`; numbers only in `learnings` don't count |
 
-- Feature cards can add their own rules (e.g. AI-12 defines V-9 for writing-chat field sources). Read the card and implement those next to the common ones.
+- Feature cards add their own rules, implemented next to the common ones in `src/server/ai/validation/`: **V-9** (AI-12 project writing chat — patch values traced to user utterances, sub-rules V-9a … V-9i — e.g. V-9a sources are user messages, V-9b quote substring, V-9c numbers, V-9d proper nouns / tech names, V-9i classification suggestions) and **V-10** (AI-13 deliverable chat — per draft block, V-10a …: every non-heading block has verified sources (facts `F-n`, current-body quotes, parent project fields), V-10b numbers, and so on). Read the current card for the full sub-rule list; it changes with planning revisions.
 - Each validator returns `{ value, stats }`; combine stats into `validation_report` (counts only, no text).
 - Placeholders (C-5) are produced by the prompt and preserved by validators — test that a placeholder isn't stripped as an unsupported claim.
 
@@ -80,7 +80,7 @@ Run in this order, after parsing and before anything is stored or streamed as fi
 # {slice} AI 파이프라인 구현 노트
 ## 기능별 모델 등급·prompt_version (공급자별 변형이 있으면 접미사)
 ## 출력 스키마 ↔ 저장 매핑
-## 검증 규칙 적용 범위 (V-1~V-8, 기능별)
+## 검증 규칙 적용 범위 (V-1~V-8 공통, V-9·V-10 기능 카드 규칙, 기능별)
 ## 이벤트·진행 단계·오류 코드 (api-engineer와 합의한 내용)
 ## 테스트·픽스처
 ## 스펙 차이·가정 (임계값 등 상수)

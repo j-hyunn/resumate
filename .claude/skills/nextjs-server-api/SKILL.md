@@ -21,14 +21,16 @@ The UI harness may already have scaffolded the app (its foundation A0 does the s
 
 ## Wiring the UI's mock data layer
 
-When a slice's services exist and the UI has screens for that area, the slice ends with a wiring step (backend-context.md "Coexisting with the UI harness"):
+The initial wiring (W0–W5) is done, so most of `src/lib/data/` already calls real services. Later, the UI builds screens against a newer contract with mock-backed functions marked `// 연결 대기` (e.g. `page-save-v45.ts` bridges); the slice that ships that contract ends with a wiring step (backend-context.md "Coexisting with the UI harness"):
 
 1. Confirm no UI run is in progress on that area (`_workspace/ui/`, `docs/ui/screen-status.md`). If one is, stop and tell the leader.
-2. For each `src/lib/data/<entity>.ts` function in the slice's area, keep the exported name, parameters, and return type, and replace the body with a call to the real service / action / RPC. If the real data can't produce the declared return type, that's a contract mismatch: log it in `spec-gaps.md` and leave that function on the mock.
-3. Point `useAiJob` / `useAiStream` at the real job status endpoint and SSE route, keeping their return shapes.
-4. Rewrite `src/types/db.ts` as re-exports of the generated types under the names screens already import (once per table, the first time that table is wired).
-5. Leave `src/lib/mock/` in place — the UI's `?state=` previews still use it.
-6. Run the UI's `pnpm lint`, `pnpm typecheck`, `pnpm build`.
+2. Find the targets: `grep -rn "연결 대기" src/lib/data` plus the functions the slice plan lists. For each, keep the exported name, parameters, and return type, and replace the body with a call to the real service / action / RPC. If the real data can't produce the declared return type, that's a contract mismatch: log it in `spec-gaps.md` and leave that function on the mock.
+3. When a slice changes a service that an already-wired function calls, update that function in the same slice so the screen keeps working.
+4. Keep the stream / job clients (`src/lib/data/ai-stream-client.ts`, `ai-jobs.ts`) pointed at the real routes, keeping their return shapes; new SSE events go into both the contract and the client parser.
+5. Add re-exports to `src/types/db.ts` for new tables under the names screens import.
+6. Leave `src/lib/mock/` in place — the UI's `?state=` previews still use it. Remove a version bridge (`*-v44.ts`, `*-v45-bridge.ts`) only when no screen imports it any more.
+7. UI-owned files: only "Minimal UI edits" (backend-context.md); everything else goes to the notes as "UI 요청".
+8. Run the UI's `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 
 ## Choosing the mechanism
 
@@ -90,9 +92,16 @@ Every exit path — success, each failure cause, cancel, stall, thrown exception
 
 ## SSE (streaming mode)
 
-- Event names come from the spec (C-6 block events; AI-12 turn: `reply_delta`, `reply_done`, `draft_patch`, `draft_flags`, `turn_done`; plus `error`). Define them once as a zod discriminated union in `src/lib/contracts/`.
+- Event names come from the spec (C-6 block events; AI-12 turn: `reply_delta`, `reply_done`, `draft_patch`, `draft_flags`, `turn_done`; AI-13 draft turn adds `draft_started`, `draft_block`, `draft_done`; plus `error`) — check the current AI card, these change with revisions. Define them once as a zod discriminated union in `src/lib/contracts/`.
 - Format: `event: <name>\ndata: <json>\n\n`. Set `Content-Type: text/event-stream`, `Cache-Control: no-cache`.
 - Decide success or failure from the last terminal event actually sent, not only from thrown exceptions. On client abort, stop the provider stream and record the usage it reported.
+
+## Production dependency factories
+
+Services take a `deps` object so tests can inject fakes; the real one is built in `src/server/jobs/*.ts` (and some route handlers). A wrong binding there passes every unit test and breaks production (`332ec0c`).
+- Build keys and LLM clients the same way everywhere: `createLlm({ provider: job.provider, keySource: { forJob: (id) => deps.keySource.forJob(id, job.provider) }, … })` — copy from `runner.ts`, don't hand-roll.
+- When adding a job type or pipeline, add one test that builds the **real** deps factory (with the local stack or a fake transport underneath) and runs one step, so an unbound or missing dependency fails a test.
+- New env vars: `.env.example` + the env loader + the notes ("새 환경 변수") so the user can set them on Vercel production and preview before the merge (backend-context.md "Remote environments").
 
 ## Tests
 
@@ -108,6 +117,8 @@ Every exit path — success, each failure cause, cancel, stall, thrown exception
 ## 엔드포인트 (DM §7 행 ↔ 파일)
 ## 계약 (요청·응답·SSE 이벤트, contracts 파일)
 ## 작업 흐름 (재시도 예약, 실패 원인, 사용 기록)
+## 연결 (`src/lib/data/` 바꾼 함수, UI 소유 파일 수정, UI 요청)
+## 새 환경 변수 (없으면 "없음")
 ## 테스트
 ## 스펙 차이·가정
 ```

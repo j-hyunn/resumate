@@ -10,7 +10,7 @@ import { ArrowUp, Loader2, Lock, Plus, ShieldAlert, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
 import { AiLock } from "@/components/common/ai-lock"
 import { GUIDE_COPY } from "@/components/common/input-guide"
@@ -180,46 +180,50 @@ function InputPill({ panel }: { panel: AiPanelController }) {
   const canSend = panel.input.trim().length > 0 && !panel.responding
   return (
     <form
-      className="flex items-end gap-2 rounded-3xl border border-input bg-card py-1.5 pr-1.5 pl-4 focus-within:ring-2 focus-within:ring-ring"
       onSubmit={(e) => {
         e.preventDefault()
         panel.send()
       }}
     >
-      <Textarea
-        ref={bindInput}
-        value={panel.input}
-        onChange={(e) => {
-          panel.setInput(e.target.value)
-          if (panel.block && panel.block.kind !== "draft_limit" && panel.block.kind !== "writing_chat_closed") panel.clearBlock()
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            panel.send()
-          }
-        }}
-        disabled={starting}
-        maxLength={PAGE_LIMITS.messageMaxChars}
-        placeholder={PANEL_COPY.inputPlaceholder}
-        aria-label={PANEL_COPY.inputPlaceholder}
-        rows={1}
-        className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent p-0 py-1.5 text-base leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent"
-      />
-      {starting ? (
-        <span className="grid size-8 shrink-0 place-items-center" role="status">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
-          <span className="sr-only">대화를 시작하는 중</span>
-        </span>
-      ) : streaming ? (
-        <Button type="button" variant="outline" size="icon-sm" className="size-8 shrink-0 rounded-full" aria-label="중단" onClick={panel.stop}>
-          <Square className="size-3.5" aria-hidden />
-        </Button>
-      ) : (
-        <Button type="submit" size="icon-sm" className="size-8 shrink-0 rounded-full" aria-label="보내기" disabled={!canSend}>
-          <ArrowUp aria-hidden />
-        </Button>
-      )}
+      {/* shadcn Chat field: Input Group (textarea + inline-end send / stop) */}
+      <InputGroup className="items-end rounded-3xl bg-card py-1.5 pr-1.5 pl-4 has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-offset-0 dark:bg-card">
+        <InputGroupTextarea
+          ref={bindInput}
+          value={panel.input}
+          onChange={(e) => {
+            panel.setInput(e.target.value)
+            if (panel.block && panel.block.kind !== "draft_limit" && panel.block.kind !== "writing_chat_closed") panel.clearBlock()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              panel.send()
+            }
+          }}
+          disabled={starting}
+          maxLength={PAGE_LIMITS.messageMaxChars}
+          placeholder={PANEL_COPY.inputPlaceholder}
+          aria-label={PANEL_COPY.inputPlaceholder}
+          rows={1}
+          className="field-sizing-content max-h-40 min-h-9 p-0 py-1.5 text-base leading-6"
+        />
+        <InputGroupAddon align="inline-end" className="py-0 pr-0">
+          {starting ? (
+            <span className="grid size-8 shrink-0 place-items-center" role="status">
+              <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+              <span className="sr-only">대화를 시작하는 중</span>
+            </span>
+          ) : streaming ? (
+            <InputGroupButton variant="outline" size="icon-sm" className="rounded-full" aria-label="중단" onClick={panel.stop}>
+              <Square className="size-3.5" aria-hidden />
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton type="submit" variant="default" size="icon-sm" className="rounded-full" aria-label="보내기" disabled={!canSend}>
+              <ArrowUp aria-hidden />
+            </InputGroupButton>
+          )}
+        </InputGroupAddon>
+      </InputGroup>
     </form>
   )
 }

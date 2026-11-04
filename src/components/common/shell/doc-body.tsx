@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { PANEL_WIDTH, ResizeHandle } from "../doc-inputs"
+import { OverflowScroller } from "./overflow-scroller"
 
 /** Where the panel is and how big — owned by the panel controller (`useAiPanel().placement`). */
 export interface DocPanelPlacement {
@@ -33,6 +34,20 @@ export function useDocBodyMode(): { mode: "wide" | "narrow"; closeSheet: () => v
 }
 
 const NARROW_CARD = 820
+
+/**
+ * L-02 머리 (5.9 세로 구성 2): title / fields above the Separator. It never scrolls with the body. It is capped at
+ * 40% of the card and may shrink further so DocBody keeps its 50% minimum (UQ-SC-1); when its content is taller it
+ * scrolls by itself, fades its bottom edge and becomes a focusable named region (OverflowScroller, UQ-SC-2).
+ * `className` styles the content wrapper (spacing between rows); `label` names the region ("프로젝트 정보").
+ */
+export function DocHead({ children, className, label = "페이지 정보" }: { children: React.ReactNode; className?: string; label?: string }) {
+  return (
+    <OverflowScroller label={label} className="max-h-[40%] shrink px-6 pt-2 pb-4 max-md:px-4" innerClassName={className}>
+      {children}
+    </OverflowScroller>
+  )
+}
 
 export function DocBody({
   left,
@@ -82,17 +97,22 @@ export function DocBody({
 
   return (
     <DocBodyContext.Provider value={ctx}>
-      <div ref={ref} className={cn("flex min-h-0 flex-1", className)}>
+      {/* min-h-[50%] of the card: CrumbRow + banners + DocHead never squash the body below half the card on a
+          short window — the banners and the head shrink and scroll instead (5.9, UQ-SC-1) */}
+      <div ref={ref} className={cn("flex min-h-[50%] flex-1", className)}>
         {/* narrow: bottom room so the floating button never covers the last field / counter (UQ-PA-15) */}
-        <div className={cn("min-w-0 flex-1 overflow-y-auto px-6 py-6 max-md:px-4", wideOpen && "lg:min-w-[28rem]", mode === "narrow" && "pb-24")}>
+        {/* relative: the scroller is the containing block of its absolutely positioned content (sr-only live
+            regions), so that content scrolls / clips here instead of growing the document (28 run) */}
+        <div className={cn("relative min-w-0 flex-1 overflow-y-auto px-6 py-6 max-md:px-4", wideOpen && "lg:min-w-[28rem]", mode === "narrow" && "pb-24")}>
           {/* max-w-doc = max-w-prose-edit (42rem, design-system 1.4) */}
           <div className="max-w-[42rem]">{left}</div>
         </div>
         {wideOpen ? (
           // first paint is "wide" before the measurement: below lg the CSS already hides the panel (UQ-PA-15)
-          <div className="flex shrink-0 max-lg:hidden">
+          <div className="flex min-h-0 shrink-0 max-lg:hidden">
             <ResizeHandle width={width} min={PANEL_WIDTH.min} max={max} onWidthChange={placement.setWidth} />
-            <div className="my-3 mr-3 flex shrink-0" style={{ width }}>
+            {/* the panel fills the card height (row-flex stretch); only its message list scrolls (5.10) */}
+            <div className="my-3 mr-3 flex min-h-0 shrink-0" style={{ width }}>
               {aside}
             </div>
           </div>

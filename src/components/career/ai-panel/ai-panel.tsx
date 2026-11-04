@@ -73,7 +73,7 @@ export function AiPanel({ panel, renderProposal, renderClosedActions, renderAbov
   const [deleting, setDeleting] = React.useState<string | null>(null)
   const areaLock = panel.locked && !panel.chat && panel.chats.length === 0
   return (
-    <aside aria-label="Resumate AI" className={cn("flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground", className)}>
+    <aside aria-label="Resumate AI" className={cn("relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground", className)}>
       <PanelHeader panel={panel} onDelete={() => panel.chat && setDeleting(panel.chat.id)} />
       {areaLock ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -102,7 +102,7 @@ export function AiPanel({ panel, renderProposal, renderClosedActions, renderAbov
             )}
           />
           {renderProposal ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
-          {renderAboveInput ? <div className="shrink-0 px-3 pt-2">{renderAboveInput(panel)}</div> : null}
+          {renderAboveInput ? <div className="shrink-0 px-3 pt-2 empty:hidden">{renderAboveInput(panel)}</div> : null}
           <PanelInputArea panel={panel} renderClosedActions={renderClosedActions} onDirectInput={onDirectInput} />
         </>
       )}
@@ -426,6 +426,7 @@ function MessageList({
 /** 제안 독 (5.10): a card right above the chip row; the card handles fold / max height (≤ 55%). */
 function ProposalDock({ children }: { children: React.ReactNode }) {
   if (children === null || children === undefined || children === false) return null
-  return <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-border/60 px-3 pt-3">{children}</div>
+  // empty:hidden — the card component may render nothing (no proposal yet): no stray divider / gap above the chips
+  return <div className="relative max-h-[55%] shrink-0 overflow-y-auto border-t border-border/60 px-3 pt-3 empty:hidden">{children}</div>
 }
 

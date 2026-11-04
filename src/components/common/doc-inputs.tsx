@@ -181,6 +181,31 @@ export function FieldRow({ label, labelId, children, error }: { label: string; l
   )
 }
 
+/** 짧은 머리 항목 여러 개를 한 줄에 가로로 (라벨 + 값). 좁으면 다음 줄로 넘어간다. */
+export function InlineFields({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <dl className={cn("flex flex-wrap items-start gap-x-8 gap-y-2", className)}>{children}</dl>
+}
+
+/**
+ * One term–value group of `InlineFields`: exactly one `div` wrapping `dt` + `dd` (HTML dl rule), the error inside
+ * `dd` (UQ-SC-6). The look is the same as before — label and value side by side, the error on its own line under
+ * both, starting at the label: a 2-column grid on the group with `dd` spanning both columns as a subgrid, so the
+ * value sits in column 2 next to the label and the error spans the full width on the next row.
+ */
+export function InlineField({ label, labelId, children, error }: { label: string; labelId?: string; children: React.ReactNode; error?: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+      <dt id={labelId} className="col-start-1 row-start-1 flex min-h-9 items-center self-start text-sm text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="col-span-2 col-start-1 row-start-1 grid grid-cols-subgrid gap-y-1">
+        <div className="col-start-2 flex min-h-9 flex-wrap items-center gap-2">{children}</div>
+        {error ? <div className="col-span-2 col-start-1">{error}</div> : null}
+      </dd>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // ChipSelect — 회색 알약 단일 선택 (프로젝트 종류 · 경험 유형)
 // ---------------------------------------------------------------------------

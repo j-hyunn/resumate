@@ -41,8 +41,8 @@ export const routes = {
   skills: () => "/career/skills", // S-12
   // --- v5.6 L-02 (S-10 · S-44, PA-1·PA-3). A2 moves the S-10 / S-44 pages into `(page)`; ids only in queries ---
   /** S-08 with one item selected in the right panel (`?item={kind}:{id}`, S-09 / S-34 / S-43) */
-  careerItem: (kind: "experience" | "education" | "project", id: Id, query?: { edit?: "info" | "content" }) =>
-    // `edit` [UI-가정] = open that S-43 section edit on arrival (C-23 "만들기" → 정보, C-09 project_fields → 내용)
+  careerItem: (kind: "experience" | "education" | "project", id: Id, query?: { edit?: "content" }) =>
+    // `edit` [UI-가정] = open the S-43 edit on arrival (C-09 project_fields → 내용)
     `/career?item=${kind}:${id}${query?.edit ? `&edit=${query.edit}` : ""}`, // S-08
   /**
    * S-10 새 프로젝트 (UX v5.6 URL [가정]): `?experience={id}` or `?education={id}`; `requirement_id` = S-16 관련 요건

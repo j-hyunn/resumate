@@ -2,21 +2,20 @@
  * 프로젝트 상세(S-10) · 산출물 상세(S-44) data layer v4.5 — server only (Server Components / actions).
  * Contracts and copy: `./career-v45-shared` (client-safe). Names follow DM v4.5 2.5.1 / 2.5 / 7.
  *
- * Real vs mock per function (DM v4.5 is not migrated yet — 연결 대기 (DM v4.5 11.3)):
- * - reads: S-10 real (v4.4 `getProjectPage` + chats), S-44 deliverable real (v4.4 `getDeliverable`), S-44 chats mock-only
- * - saveProjectPage: real bridge = v4.4 `createProject` + `saveProjectSection` (all fields, one update);
- *   `p_applied_proposals` is not recorded (no v4.5 RPC) → every entry comes back in `applied`
- * - saveProjectDeliverable: real bridge = v4.4 `saveDeliverable`; applied proposals: same as above
- * - startWritingChat: real = v4.4 `startProjectChat` (no `p_form_snapshot`: greeting from DB values)
- * - startDeliverableWritingChat, deliverable chat turns / patches: mock only (`backend_pending` on the real path)
- * - turns: real = v4.4 SSE route (AI-12 events; `form_snapshot` sent, ignored by v4.4)
+ * Real path (DM v4.5, R5 wired 2026-11-04):
+ * - reads: S-10 `getProjectDetail` + STAR chats, S-44 `getDeliverable` + its deliverable chats
+ * - saveProjectPage / saveProjectDeliverable: `save_project_page` / `save_project_deliverable` (records
+ *   `p_applied_proposals`; mapping in `./career-v45-save`)
+ * - startWritingChat (`p_form_snapshot`) / startDeliverableWritingChat: `start_writing_chat` /
+ *   `start_deliverable_writing_chat`; card patches: `apply_structured_draft_patch` (STAR and deliverable ops)
+ * - turns: `POST /api/writing-chats/{id}/turns` (AI-12 or AI-13 by the chat's target, `formSnapshot` on every turn)
  * Previews (`?state=` / `/dev/`) always take the mock branch (`previewOr`).
  */
 import "server-only"
 import type { AiConnection, AiErrorCode, DeliverableStructuredDraft, ProjectStructuredDraft, ReturnTarget } from "@/types/db"
 import { isAppError } from "@/lib/contracts/errors"
 import type { ProjectDto } from "@/lib/contracts/career"
-import type { ProjectWritingChatSummary, WritingChatDto } from "@/lib/contracts/writing-chat"
+import type { DeliverableWritingChatDto, ProjectWritingChatSummary, WritingChatDto, WritingChatMessageDto } from "@/lib/contracts/writing-chat"
 import { previewErrorCode } from "@/lib/preview-state"
 import * as mock from "@/lib/mock/career-v45"
 import { mockDeliverableDraft } from "@/lib/mock/writing-chat-turn-v45"
@@ -26,7 +25,14 @@ import * as chats44 from "./writing-chats-v44"
 import { previewOr } from "./source"
 import { educationDisplayName } from "@/server/services/career/education-name"
 import { formatRange } from "./labels"
-import { bridgeSaveProjectDeliverable, bridgeSaveProjectPage } from "./career-v45-bridge"
+import * as v45 from "./page-save-v45"
+import {
+  fromSaveProjectDeliverableResult,
+  fromSaveProjectPageResult,
+  saveErrorOf,
+  toSaveProjectDeliverableInput,
+  toSaveProjectPageInput,
+} from "./career-v45-save"
 import {
   blankProjectValues,
   bodyHash,
@@ -52,7 +58,7 @@ import {
   type WritingChatSummary,
   type WritingChatView,
 } from "./career-v45-shared"
-import { normalizeProjectDraft } from "./writing-chat-turn-v45"
+import { normalizeDeliverableDraft, normalizeProjectDraft } from "./writing-chat-turn-v45"
 
 // ---------------------------------------------------------------------------
 // preview hints
@@ -101,7 +107,7 @@ export function pagePreviewHints(state: string | null): PagePreviewHints | null 
 }
 
 // ---------------------------------------------------------------------------
-// v4.4 DTO → v4.5 view (real bridge)
+// service DTO → v4.5 view
 // ---------------------------------------------------------------------------
 
 const toDate = (ym: string | null) => (ym ? `${ym}-01` : null)
@@ -129,8 +135,8 @@ function summaryOf(c: ProjectWritingChatSummary): WritingChatSummary {
   return { id: c.id, title: c.title, status: c.status === "closed" ? "closed" : "active", message_count: c.messageCount, last_activity_at: c.lastActivityAt, last_applied_at: c.lastAppliedAt }
 }
 
-function chatOf(c: WritingChatDto): ProjectChatView {
-  const messages: WritingChatMessageView[] = c.messages.map((m) => ({
+function messagesOf(list: WritingChatMessageDto[]): WritingChatMessageView[] {
+  return list.map((m) => ({
     id: m.id,
     sequence: m.sequence,
     role: m.role,
@@ -141,6 +147,26 @@ function chatOf(c: WritingChatDto): ProjectChatView {
     user_number: m.userNumber,
     is_greeting: m.role === "assistant" && m.aiJobId === null && m.sequence === 0,
   }))
+}
+
+function deliverableChatOf(c: DeliverableWritingChatDto): DeliverableChatView {
+  return {
+    id: c.id,
+    project_id: c.projectId,
+    project_deliverable_id: c.projectDeliverableId,
+    title: c.title,
+    status: c.status === "closed" ? "closed" : "active",
+    message_count: c.messageCount,
+    last_activity_at: c.lastActivityAt,
+    last_applied_at: c.lastAppliedAt,
+    return_target: null,
+    structured_draft: normalizeDeliverableDraft(c.structuredDraft),
+    messages: messagesOf(c.messages),
+  }
+}
+
+function chatOf(c: WritingChatDto): ProjectChatView {
+  const messages = messagesOf(c.messages)
   return {
     id: c.id,
     project_id: c.projectId,
@@ -312,7 +338,9 @@ export async function getDeliverablePage(id: string, opts: ReadOpts = {}): Promi
     async () => {
       const detail = await v44.getDeliverable(id)
       if (!detail) return { kind: "not_found" } as const
-      // 연결 대기 (DM v4.5 11.3): writing_chats.project_deliverable_id doesn't exist yet → no chats
+      const summaries = detail.writingChats.map(summaryOf)
+      const openId = opts.chatId ?? summaries.find((c) => c.status === "active")?.id ?? summaries[0]?.id ?? null
+      const open = openId ? await openDeliverableChat(openId) : null
       return {
         kind: "ok",
         data: {
@@ -323,8 +351,8 @@ export async function getDeliverablePage(id: string, opts: ReadOpts = {}): Promi
           body: detail.deliverable.body,
           project: detail.project,
           limit_reached: false,
-          chats: [],
-          open_chat: null,
+          chats: summaries,
+          open_chat: open,
           preview: null,
         },
       } as const
@@ -392,13 +420,24 @@ export async function listProjectDeliverables(
   )
 }
 
-/** Open one chat (대화 기록 → 열기). null = gone. Deliverable chats: mock only. */
+/** A deliverable chat of `?chat=` / the latest one; a gone or STAR id → null (the page opens without a chat). */
+async function openDeliverableChat(chatId: string): Promise<DeliverableChatView | null> {
+  try {
+    return deliverableChatOf(await v45.getDeliverableChat(chatId))
+  } catch (err) {
+    if (isAppError(err) && err.code === "not_found") return null
+    throw err
+  }
+}
+
+/** Open one chat of either target (대화 기록 → 열기). null = gone. */
 export async function getWritingChat(chatId: string): Promise<WritingChatView | null> {
   return previewOr<WritingChatView | null>(
     async () => mock.mockChat(chatId),
     async () => {
       try {
-        return chatOf(await chats44.getProjectChat(chatId))
+        const dto = await v45.getAnyChat(chatId)
+        return dto.target === "project_deliverable" ? deliverableChatOf(dto) : chatOf(dto)
       } catch (err) {
         if (isAppError(err) && err.code === "not_found") return null
         throw err
@@ -432,8 +471,13 @@ export async function saveProjectPage(input: SaveProjectPageInput, previewState?
       }
       return { ok: true, ...r } as const
     },
-    // 연결 대기 (DM v4.5 11.3): v4.4 createProject + saveProjectSection (career-v45-bridge.ts)
-    async () => bridgeSaveProjectPage(input, { createProject: v44.createProject, saveProjectSection: (x) => v44.saveProjectSection(x as Parameters<typeof v44.saveProjectSection>[0]) }),
+    async () => {
+      try {
+        return fromSaveProjectPageResult(await v45.saveProjectPage(toSaveProjectPageInput(input)))
+      } catch (err) {
+        return { ok: false, error: saveErrorOf(err) } as const
+      }
+    },
   )
 }
 
@@ -458,8 +502,13 @@ export async function saveProjectDeliverable(input: SaveProjectDeliverableInput,
       if (!("project_deliverable_id" in r) || !r.project_deliverable_id) return { ok: false, error: { code: "save_failed" } } as const
       return { ok: true, project_deliverable_id: r.project_deliverable_id, project_id: r.project_id, sort_order: r.sort_order, updated_at: r.updated_at, applied: r.applied, skipped: r.skipped } as const
     },
-    // 연결 대기 (DM v4.5 11.3): v4.4 saveDeliverable (career-v45-bridge.ts)
-    async () => bridgeSaveProjectDeliverable(input, { saveDeliverable: v44.saveDeliverable }),
+    async () => {
+      try {
+        return fromSaveProjectDeliverableResult(await v45.saveDeliverablePage(toSaveProjectDeliverableInput(input)))
+      } catch (err) {
+        return { ok: false, error: saveErrorOf(err) } as const
+      }
+    },
   )
 }
 
@@ -487,10 +536,11 @@ export async function startWritingChat(
     },
     async () => {
       try {
-        // 연결 대기 (DM v4.5 11.3): v4.4 has no p_form_snapshot — the greeting branch reads the DB values
-        const dto = await chats44.startProjectChat({
+        // p_form_snapshot only picks the greeting (never stored, DM 2.5.1)
+        const dto = await v45.startProjectChatWithSnapshot({
           projectId,
           returnTarget: returnTarget ? { applicationProjectId: returnTarget.application_project_id, feature: returnTarget.feature, params: returnTarget.params ?? {} } : undefined,
+          ...(formSnapshot ? { formSnapshot } : {}),
         })
         return { ok: true, chat: chatOf(dto) } as const
       } catch (err) {
@@ -500,7 +550,7 @@ export async function startWritingChat(
   )
 }
 
-/** `start_deliverable_writing_chat(p_project_deliverable_id, p_form_snapshot)` — mock only. */
+/** `start_deliverable_writing_chat(p_project_deliverable_id, p_form_snapshot)` → the opened chat. */
 export async function startDeliverableWritingChat(deliverableId: string, formSnapshot: DeliverableFormSnapshot | null, previewState?: string | null): Promise<StartChatResult<DeliverableChatView>> {
   return previewOr<StartChatResult<DeliverableChatView>>(
     async () => {
@@ -508,8 +558,14 @@ export async function startDeliverableWritingChat(deliverableId: string, formSna
       const chat = await mock.mockStartChat({ project_deliverable_id: deliverableId, snapshot: formSnapshot ?? { title: "", body: "" } })
       return chat ? ({ ok: true, chat: chat as DeliverableChatView } as const) : ({ ok: false, error: { code: "not_found" } } as const)
     },
-    // 연결 대기 (DM v4.5 11.3)
-    async () => ({ ok: false, error: { code: "backend_pending" } }) as const,
+    async () => {
+      try {
+        const dto = await v45.startDeliverableChat({ projectDeliverableId: deliverableId, ...(formSnapshot ? { formSnapshot } : {}) })
+        return { ok: true, chat: deliverableChatOf(dto) } as const
+      } catch (err) {
+        return { ok: false, error: { code: panelErrorCode(err) } } as const
+      }
+    },
   )
 }
 
@@ -525,8 +581,8 @@ export async function deleteWritingChat(chatId: string): Promise<{ ok: boolean }
 }
 
 /**
- * `apply_structured_draft_patch` (사용자 세션): card edits and reviews. STAR chats bridge to v4.4; deliverable
- * patches (facts / blocks) are mock only. A patch on an applied field → `field_already_applied`.
+ * `apply_structured_draft_patch` (사용자 세션): card edits and reviews — STAR field edit / review, deliverable
+ * fact accept · reject and block accept · drop. A patch on an applied field / draft → `field_already_applied`.
  */
 export async function applyStructuredDraftPatch<D extends ProjectStructuredDraft | DeliverableStructuredDraft>(chatId: string, patch: StructuredDraftUserPatch): Promise<PatchDraftResult<D>> {
   return previewOr<PatchDraftResult<D>>(
@@ -535,8 +591,15 @@ export async function applyStructuredDraftPatch<D extends ProjectStructuredDraft
       return "error" in r ? ({ ok: false, error: { code: r.error as "not_found" } } as const) : ({ ok: true, structured_draft: r.draft as D } as const)
     },
     async () => {
-      if (patch.kind === "fact_review" || patch.kind === "block_review") return { ok: false, error: { code: "backend_pending" } } as const
       try {
+        if (patch.kind === "fact_review" || patch.kind === "block_review") {
+          const r = await v45.editDeliverableDraft(
+            patch.kind === "fact_review"
+              ? { writingChatId: chatId, op: patch.decision === "accept" ? "accept_fact" : "reject_fact", factId: patch.fact_id }
+              : { writingChatId: chatId, op: patch.decision === "accept" ? "accept_block" : "remove_block", blockId: patch.block_id },
+          )
+          return { ok: true, structured_draft: normalizeDeliverableDraft(r.structuredDraft) as D } as const
+        }
         const path = { section: patch.section, field: patch.field } as Parameters<typeof chats44.editProposalField>[0]["path"]
         const r =
           patch.kind === "edit"
@@ -579,16 +642,19 @@ export async function prepareWritingChatTurn(input: {
       preview_state: input.preview_state,
     }) as const,
     async () => {
-      // 연결 대기 (DM v4.5 11.3): deliverable chats have no route yet
-      if (input.target === "deliverable") return { kind: "refused", error: { code: "backend_pending" } } as const
       const base = `/api/writing-chats/${input.chat_id}/turns`
       const slot = input.body.requested_slot
+      // route body (contracts WritingChatTurnInput / WritingChatRetryInput): AI-13 options only on deliverable chats
+      const options = {
+        requestedSlot: slot ? { slot } : null,
+        ...(input.target === "deliverable" ? { requestedAction: input.body.requested_action, style: input.body.style } : {}),
+        formSnapshot: input.body.form_snapshot,
+      }
       return {
         kind: "real",
-        target: "project",
+        target: input.target,
         endpoint: input.retry ? `${base}?retry=1` : base,
-        // v4.4 route: { content, requestedSlot: { slot } }. form_snapshot rides along (stripped by v4.4 zod).
-        body: input.retry ? { requestedSlot: slot ? { slot } : null } : { content: input.body.content, requestedSlot: slot ? { slot } : null, form_snapshot: input.body.form_snapshot },
+        body: input.retry ? options : { content: input.body.content, ...options },
       } as const
     },
   )
@@ -613,9 +679,11 @@ function emptyProjectSnapshot(): ProjectFormSnapshot {
   return { name: "", start_month: null, end_month: null, is_current: false, project_type: null, experience_type: null, competencies: [], star: { situation: null, task: null, action: null, result: null, learnings: null } }
 }
 
-function panelErrorCode(err: unknown): "not_found" | "writing_chat_closed" | "ai_not_connected" | "ai_consent_required" | "key_invalid" | "field_already_applied" | "failed" {
+function panelErrorCode(
+  err: unknown,
+): "not_found" | "writing_chat_closed" | "ai_not_connected" | "ai_consent_required" | "key_invalid" | "field_already_applied" | "invalid_form_snapshot" | "failed" {
   if (!isAppError(err)) return "failed"
-  const known = ["not_found", "writing_chat_closed", "ai_not_connected", "ai_consent_required", "key_invalid", "field_already_applied"] as const
+  const known = ["not_found", "writing_chat_closed", "ai_not_connected", "ai_consent_required", "key_invalid", "field_already_applied", "invalid_form_snapshot"] as const
   return (known as readonly string[]).includes(err.code) ? (err.code as (typeof known)[number]) : "failed"
 }
 

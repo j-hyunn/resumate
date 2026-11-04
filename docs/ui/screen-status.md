@@ -11,7 +11,7 @@
 
 > 브랜드 토큰 정합 (2026-11-03): main의 v4 브랜드 토큰 머지 뒤 v5 화면을 맞췄다(`_workspace/ui/27_ui-qa_v5-brand-conformance.md`, 17건 — 코드 11·문서 8 반영, 재검토는 grep·lint·typecheck·test·build로만, 브라우저 hover 미확인).
 
-> 프로젝트 추가·산출물 상세 런 (2026-11-03): L-02·S-10·S-43 산출물·S-44·C-23 구현. 파운데이션 QA 2라운드 + 영역 QA 2라운드 + 통합 QA, 이슈 Critical 1·Major 12 모두 해결(통합 QA 뒤 마지막 수정 UQ-INT-1~5·UQ-S44-4는 리뷰어 재검토 없이 lint·typecheck·테스트로만 확인). **모두 mock·SSR 렌더 기준이며 브라우저에서 눌러 본 확인은 없다.** DM v4.5 계약(페이지 저장 RPC 반영 기록, 산출물 AI 대화 AI-13)은 백엔드에 없어 데이터 계층이 v4.4 백엔드 + mock으로 잇는다(`// 연결 대기 (DM v4.5 11.3)`). 기록: `_workspace/ui/21_brief_project-add.md` ~ `26_ui-qa_project-add_round2-integration.md`
+> 프로젝트 추가·산출물 상세 런 (2026-11-03): L-02·S-10·S-43 산출물·S-44·C-23 구현. 파운데이션 QA 2라운드 + 영역 QA 2라운드 + 통합 QA, 이슈 Critical 1·Major 12 모두 해결(통합 QA 뒤 마지막 수정 UQ-INT-1~5·UQ-S44-4는 리뷰어 재검토 없이 lint·typecheck·테스트로만 확인). **모두 mock·SSR 렌더 기준이며 브라우저에서 눌러 본 확인은 없다.** DM v4.5 계약(페이지 저장 RPC 반영 기록, 산출물 AI 대화 AI-13)은 2026-11-04 백엔드 R5 연결로 실제 경로가 됐다(브리지와 연결 대기 표시 제거, 브라우저 미확인). 기록: `_workspace/ui/21_brief_project-add.md` ~ `26_ui-qa_project-add_round2-integration.md`
 > W5 QA 수정 (2026-11-02): `_workspace/ui/19_ui-qa_w5_review.md`·`_workspace/backend/W5/03_backend-qa_report.md`의 UI 이슈를 고쳤다(UQ-701~703·705~707, QA-W5-01·06 앞부분·08). lint·typecheck·test까지 확인, 브라우저 미확인. 상세: `_workspace/ui/20_frontend-engineer_w5_fixes.md`
 
 > W5 (2026-11-02): "QA 통과"는 모두 mock 기준이다. 실제 백엔드 연결 뒤 UI QA는 아직 하지 않았다. W5에서 고친 화면은 lint·typecheck·test·build와 HTTP 확인까지이고 클릭은 해 보지 않았다. 상세: `_workspace/backend/W5/02_ui_notes.md`
@@ -31,9 +31,9 @@
 | S-08 | 커리어 (2026-11-03: S-43 산출물 섹션·C-23 범위 축소·`?edit=` 추가, QA 통과 mock 기준) | A2 | `/career?item={kind}:{id}` | 32 런(2026-11-04): 빈 상태 레이아웃(목록 머리 "커리어 추가" 상시·칸별 가운데 안내)·교육 이름 = 교육 명. QA 통과 (mock·브라우저 미확인) | UQ-734 Major(백엔드: S-10·C-23 실제 경로 교육 이름), UQ-735~738 Minor. 2단 목록+상세(S-09·S-34·S-43 보기). 커리어 추가 → 경력/교육 이수/개인 프로젝트 모달에서 한 번에 생성(자동 저장·작성 중 표시 없음, 소속 프로젝트·경력 단위 성과 제외). 상세 패널 “수정”은 같은 모달을 채운 채로 열어 저장. 교육 정보에서 구분 숨김, 독립 프로젝트에 링크 표시. [UI-가정] 교육 직무 필드 제외(컬럼 없음), 교육 이수 = 구분 course. 아직 없음: C-23·C-24 인라인 편집, 소속 프로젝트 추가·상세는 기존 화면, 종류 태그·산출물 표시, 셸 메뉴 이름(CR-12) | 2026-11-04 32 런 QA(lint·typecheck·test·build) |
 | S-09 | 경력 편집 | A2 | `/career/experiences/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌·기간 안내. W5 QA 수정: 재직 중 토글·첫 저장 두 번 유실의 거짓 충돌(UQ-702·QA-W5-06), 충돌 버튼 44px(UQ-705), 선택 뒤 포커스(UQ-706) — 브라우저 미확인 | 2026-11-02 W5 QA |
 | S-34 | 교육 편집 | A2 | `/career/educations/new\|[id]` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌·기간 안내. W5 QA 수정: 재학 중·첫 저장 유실 거짓 충돌, 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
-| S-10 | 프로젝트 상세 (전체 페이지, v5.6) | A2 | `/career/projects/new?experience=\|education=`, `/career/projects/[id]` (`(page)` 그룹) | 33 런(2026-11-04): 새 프로젝트일 때 이동 줄 "새 프로젝트 추가" + 머리 새 행 안내. QA 통과 (mock·브라우저 미확인) | 반영 기록·STAR 대화 v4.5 계약은 연결 대기. UQ-331·332 Minor(디자인 시스템 문서·점선 가시성), UQ-333 Minor(낮은 창에서 초기 포커스가 안내를 머리 밖으로 밀 수 있음) | 2026-11-04 33 런 QA |
+| S-10 | 프로젝트 상세 (전체 페이지, v5.6) | A2 | `/career/projects/new?experience=\|education=`, `/career/projects/[id]` (`(page)` 그룹) | 33 런(2026-11-04): 새 프로젝트일 때 이동 줄 "새 프로젝트 추가" + 머리 새 행 안내. QA 통과 (mock·브라우저 미확인) | 백엔드 연결됨(2026-11-04 R5 연결: 페이지 저장 `save_project_page`가 반영 기록을 남김, 대화 시작 `p_form_snapshot`, 턴 `formSnapshot`) — **브라우저 미확인**. 새 페이지 저장의 `client_id`는 실제 경로에서 쓰지 않음(응답 유실 뒤 재시도면 행이 둘 생길 수 있음, spec-gaps R5-W-1). UQ-331·332 Minor(디자인 시스템 문서·점선 가시성), UQ-333 Minor(낮은 창에서 초기 포커스가 안내를 머리 밖으로 밀 수 있음) | 2026-11-04 33 런 QA |
 | L-02 | 전체 페이지 셸 (로고·[Resumate AI]·저장하기·계정, 이동 줄, 이탈 확인·입력 보존, 장애 배너, 오류 경계) | A0 | `(page)/layout` | QA 통과 (2026-11-03 PA, 브라우저 미확인) | — | 2026-11-03 PA 통합 |
-| S-44 | 산출물 상세 (전체 페이지 + AI 패널 본문 초안 카드) | A2 | `/career/projects/[id]/deliverables/new`, `/career/deliverables/[id]?range=` | 33 런(2026-11-04): 새 산출물일 때 이동 줄 "새 산출물 추가" + 머리 새 행 안내. QA 통과 (mock·브라우저 미확인) | 산출물 AI 대화(AI-13) 전체 mock — 백엔드 연결 대기. UQ-331·332·333 Minor(S-10과 같은 건) | 2026-11-04 33 런 QA |
+| S-44 | 산출물 상세 (전체 페이지 + AI 패널 본문 초안 카드) | A2 | `/career/projects/[id]/deliverables/new`, `/career/deliverables/[id]?range=` | 33 런(2026-11-04): 새 산출물일 때 이동 줄 "새 산출물 추가" + 머리 새 행 안내. QA 통과 (mock·브라우저 미확인) | 백엔드 연결됨(2026-11-04 R5 연결: 저장 `save_project_deliverable`·반영 기록, 산출물 대화 시작·턴(AI-13 SSE)·사실/블록 수락·거절, 대화 기록 목록) — **브라우저 미확인**. `backend_pending` 안내 경로 제거. UQ-331·332·333 Minor(S-10과 같은 건) | 2026-11-04 33 런 QA |
 | ~~S-35~~ | ~~상세 내용 편집~~ — 폐기(CR-2). 옛 URL은 S-10으로 redirect | A2 | `/career/projects/[id]/details/**` → S-10 | 폐기 | — | 2026-11-03 PA 통합 |
 | S-11 | 정량 성과 (모달) | A2 | `?achievement=` | W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과) | W5: client_id·충돌. W5 QA 수정: 거짓 충돌("1,000" 쉼표·첫 저장 유실), 충돌 버튼 44px, 선택 뒤 포커스 — 브라우저 미확인 | 2026-11-02 W5 QA |
 | S-12 | 스킬 목록 | A2 | `/career/skills` | QA 통과 | — | 2026-10-25 R2 |
@@ -80,7 +80,7 @@
 - S-44·AI-13: 회고 슬롯 1의 `scope` 재사용, `base_body_hash` 정규화, 초안 6회 때 칩 구성, "초안 작성 중" 문구 원천, 자유 입력 초안 턴 판정
 - L-01 ↔ L-02 계정 메뉴 2항목 vs 5항목, 이탈 확인 설명 문구
 - 디자인 P-15~P-20 (`_workspace/ui/21_ui-designer_project-add_notes.md`)
-- 백엔드 전달: 칩 표가 서버 `focus-slots.ts`에도 있음(UQ-S10-14), DM v4.5 11.3 연결
+- 백엔드 전달: 칩 표가 서버 `focus-slots.ts`에도 있음(UQ-S10-14). (DM v4.5 11.3 연결은 2026-11-04 R5 연결로 완료)
 
 
 - **Q53 후 남은 것**: 혼합 세션의 같은 행 다시 시도(R-63), S-17 "새 경력기술서" 버튼 대상 등. `_workspace/ui/17_ui-qa_q53_review.md`, `18_frontend-engineer_q53_fixes.md`

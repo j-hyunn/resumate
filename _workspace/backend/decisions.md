@@ -72,3 +72,4 @@
 - 한도: 실행당 안내 30·파기 30·Auth 정리 20, 연속 3회 발송 실패 시 중단. Gmail 개인 계정 일 500통 한도 아래.
 - 원격 반영 시 필요: 마이그레이션 `20261112000100_inactive_account_deletion`(파괴적 아님, `last_active_at` 백필), Vercel 환경 변수 `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`(production·preview, Sensitive). 미설정 시 안내가 나가지 않으므로 파기도 일어나지 않는다(크론은 실패로 표시).
 - (PT-7, 2026-11-04 사용자 결정) Gmail 보낸편지함의 안내 메일 사본은 파기·탈퇴한 계정 것만 운영자가 매월 한 번 직접 삭제한다. 유지된 계정의 메일은 계정이 있는 동안 보관한다. 자동 삭제 없음.
+- 2026-11-04 원격 반영: `supabase db push`로 `20261111000100_policy_versions_2026_11_04`·`20261112000100_inactive_account_deletion` 적용. 확인: profiles 1행 백필 완료(`last_active_at` null 0), 크론 RPC 5개 service_role 전용, `touch_last_active` authenticated. 보안 advisor 새 항목은 `touch_last_active` SECURITY DEFINER(의도, 본인 행만 갱신) 1건. Vercel `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`는 Production에만 등록(크론은 운영에서만 실행).

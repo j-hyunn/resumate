@@ -323,7 +323,7 @@ function InsightResultView({
 }: InsightViewProps & { latest: Insight; regenerate: React.ReactNode; returnTarget: ReturnTargetInput }) {
   const r = latest.result!
   const reqLabel = (id: string) => requirements[id]?.content ?? "삭제된 요건"
-  // F-P2-09 보완점 "관련 경험 추가하기" (UX v5.6 C-23 ②): 소속을 고른 뒤 S-10 새 페이지 / 독립 프로젝트
+  // F-P2-09 보완점 "관련 경험 추가하기" (UX v5.9 C-23): 소속을 고른 뒤 S-10 새 페이지 / 독립 프로젝트 추가 모달
   const choose = useChooseProjectAffiliation()
 
   return (

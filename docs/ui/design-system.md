@@ -1,7 +1,7 @@
-# Resumate 디자인 시스템 v5.2
+# Resumate 디자인 시스템 v5.3
 
-> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지)
-> 기준 기획: **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
+> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용)
+> 기준 기획: **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
 
@@ -1104,23 +1104,22 @@ div.flex flex-wrap items-center gap-2
 - 횟수, 남은 사용량, "N회 사용" 같은 글자는 어디에도 두지 않는다(D-34).
 - 품질 제한은 "한도"라는 말 없이 보인다. AI 작성 대화 `n / 40`(5.4), 입력 길이 상한(C-07 글자 수), 작성 중 면접 1개(S-20 배너)가 여기에 해당한다. 서버 남용 방지에 걸리면 C-20 `broken` inline "잠시 후 다시 시도해 주세요"로 보인다.
 
-### 3.23 C-23 프로젝트 추가 — 소속 선택 · 독립 이름 입력 (v5 신설)
+### 3.23 C-23 프로젝트 추가 — 소속 선택 (v5 신설 · v5.3 소속 선택 전용)
 
-플로우 v5.6에서 범위가 줄었다. 경력·교육의 "+ 프로젝트 추가"는 이 다이얼로그 없이 S-10 새 페이지로 바로 간다. 남은 두 경우(① C-22 "프로젝트" → 독립 프로젝트 이름, ② C-09·S-16에서 소속 고르기)는 한 컴포넌트(`AddProjectDialog`)로 그린다.
+플로우 v5.6에서 범위가 줄었고, v5.9(D-UX-28 변경)에서 한 번 더 줄었다. 경력·교육의 "+ 프로젝트 추가"는 이 다이얼로그 없이 S-10 새 페이지로 바로 가고, C-22 "프로젝트"는 경력·교육과 같은 추가 모달(`AddCareerDialog` kind="project", "개인 프로젝트 추가", "추가하기" 때 생성)을 연다. C-23(`AddProjectDialog`)은 **C-09·S-16에서 소속을 고를 때만** 쓰고, 행을 만들지 않는다.
 
 ```
 Dialog sm:max-w-md (좁은 화면은 Sheet side="bottom", C-22와 같게)
-  DialogTitle section-title: ① "새 독립 프로젝트" / ② "어디에 프로젝트를 추가할까요?"
-  ② 소속 목록: RadioGroup 카드형(2장 radio-group 규칙), 묶음 머리 label "경력" / "교육" (text-sm text-muted-foreground),
+  DialogTitle section-title: "어디에 프로젝트를 추가할까요?"
+  소속 목록: RadioGroup 카드형(2장 radio-group 규칙), 묶음 머리 label "경력" / "교육" (text-sm text-muted-foreground),
      항목 = 이름(font-medium) + meta 기간. 맨 아래 "소속 없음(독립 프로젝트)" 항목은 Separator 아래에 따로.
      목록이 6개를 넘으면 목록 영역만 max-h-72 overflow-y-auto
-  독립을 골랐을 때(②)만: 안내 meta text-muted-foreground + Info size-4 (명세 문구)
-  프로젝트명 * (①, ②-독립만): Label + Input (≤100자, C-07 글자 수). 경력·교육을 고르면 이 칸을 숨긴다(motion-layout)
-  DialogFooter: 취소(outline) · 주 버튼(default) "만들기"(① · ②-독립) / "계속"(②-경력·교육)
+  독립을 골랐을 때만: 안내 meta text-muted-foreground + Info size-4 (명세 문구)
+  DialogFooter: 취소(outline) · 주 버튼(default) "계속"
 ```
 
-- "만들기"는 이름이 비면 `disabled`. 요청 중 `Loader2` 로딩. 실패는 버튼 위 ST-SAVE-FAILED 제출형 한 줄(명세 문구), 입력 유지.
-- "계속"은 요청이 없으므로 로딩 표시가 없다. 누르면 다이얼로그를 닫고 S-10 새 페이지로 간다.
+- "계속"은 요청이 없으므로 로딩·실패 표시가 없다. 누르면 다이얼로그를 닫고, 경력·교육이면 S-10 새 페이지로, "소속 없음"이면 C-22와 같은 독립 프로젝트 추가 모달로 간다(그 모달이 "추가하기" 때 행을 만들고 S-43으로 이동).
+- v5의 ① "새 독립 프로젝트" 제목, 프로젝트명 입력 칸, "만들기" 버튼과 그 로딩·실패 규칙은 없어졌다(v5.3).
 - 시각 규칙은 v3까지의 다이얼로그 규칙(5.6)과 같다. 새 토큰·variant는 없다.
 
 ### 3.24 S-10 STAR 제안 카드 (`StarProposalCard`, v5 신설)
@@ -1850,7 +1849,7 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
     - 목록: `ul.flex flex-col gap-0.5`. 행 = `Item asChild`(기본 `variant="ghost"`·`size="default"` = `min-h-11 rounded-xl`, 프로젝트 카드 C-25와 **같은 컴포넌트**) 안에 `Link` — `FileText size-4 shrink-0` + 제목 `min-w-0 flex-1 truncate text-base`(+ `title`) + `ChevronRight size-4`. 아이콘 색은 `Item`이 정한다(기본 muted, hover 초록 — 아이콘에 `text-muted-foreground`를 붙이지 않는다). hover·포커스·반경을 사용처에서 지정하지 않는다(v5 UQ-BR-3·12·16). 분류·날짜·글자 수는 보이지 않는다(PA-2, 명세에 없음). 제목이 빈 행은 없다(제목 필수).
     - 빈 상태: 프로젝트 섹션의 빈 문구와 같은 모양 `p.py-2.5 text-sm text-muted-foreground` 명세 문구. 버튼·일러스트를 더하지 않는다(동작은 제목 줄의 "산출물 추가").
     - 로딩: 행 모양 `Skeleton h-11` 2개.
-  - **C-23**: 3.23. C-22에서 "프로젝트"를 고른 뒤, C-09·S-16의 소속 선택에서만 연다.
+  - **C-23**: 3.23. C-09·S-16의 소속 선택에서만 연다. C-22 "프로젝트"는 C-23 없이 추가 모달(`AddCareerDialog` kind="project")로 간다(v5.3, 플로우 v5.9).
   - **폐기 경로 정리**: `projects/[id]/details/*`, `writing-chats/*`(S-36)의 화면 규칙은 이 문서에서 더 쓰지 않는다. 남은 링크는 S-10으로 옮긴다(브리프 범위).
 
 ### A3 기업 JD (S-13, S-14, S-31, S-15~S-19)
@@ -2107,3 +2106,4 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | v5 | 2026-11-03 | **프로젝트 상세·산출물 상세 반영**(PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5, Figma `1034:8565`·`1041:8783`·`1041:8904` — MCP 한도로 리더 관찰값 사용). **토큰 추가**: `--shell`·`--shell-foreground`·`--panel`·`--panel-foreground`(+ `@theme` `--color-*`), 타입 `doc-title`·`star-heading`, 폭 `h-shellbar`·`w-ai-panel`·`min-w-doc-left`·`max-w-doc`, 반경 사용처 `rounded-2xl`·`rounded-3xl`. **variant 추가**: `button` `chip`·`chip-dashed`, `SelectTrigger variant="chip"`. **규칙 추가**: R-C8(보내기만 default), R-C9(AI 패널 식별 아이콘), A-13(문서형 입력 테두리 예외), A-14(손잡이), A-15(반영 알림). **신설 패턴**: 5.8 L-02 셸(`PageShell`·`ShellBar`·`SaveButton`·`CrumbRow`·`LeaveGuard`), 5.9 문서형 페이지(`DocTitleInput`·`DocTextarea`·`FieldRows`·`ChipSelect`·`CompetencyChips`·`ResizeHandle`), 5.10 `AiPanel`, 3.23 C-23, 3.24 `StarProposalCard`, 3.25 `DraftProposalCard`, 3.14 C-15 패널 칩 4종(`SourceChip`), 6장 A2 S-43 산출물 섹션. **이름 변경 없음**. **폐기 표시(코드 이전 대상)**: 5.4 S-36 대화 배치(→ 5.10. 사용처: `components/career/writing-chat/*`, `career/writing-chats/*` 화면), 5.3 "폼 화면"의 S-10과 "긴 글 편집"의 S-35(→ 5.9. 사용처: `project-form.tsx`, `detail-form.tsx`, `projects/[id]/details/*`), 6장 A2 v3 이하 S-08 트리·S-35·S-36·S-11·S-10 메모(→ "(v5) 커리어 v5.6"). **바뀐 규칙**: 패널 제안 카드 안의 C-15 [수락]은 `default` → `outline`(3.14 v4, 사용처: 새 카드만 — 기존 S-36 코드는 폐기 대상이라 고치지 않는다), 사용자 말풍선 바탕 `bg-secondary` → 패널 안에서는 `bg-card` + 테두리(5.10). **v4 정합 후속(UQ-BR-5·9·12~17, 2026-11-03)**: main의 v4 브랜드 토큰과 머지한 뒤 v5 문장을 v4 variant로 고쳤다. 신설 Button `warning-ghost`(경고 묶음 트리거), ghost `aria-pressed` 선택 모양(= `aria-current`). 바뀐 클래스: `chip`·`chip-dashed`·`SelectTrigger chip` hover·열림 `bg-accent` → `bg-primary/10` + `text-primary-text`(사용처: `button.tsx`, `select.tsx` — AI 패널 칩·슬롯 칩, S-10 `ChipSelect`, `CompetencyChips` 추가 트리거) / 이탈 확인 "저장하지 않고 나가기" → `destructive-ghost`(`page-shell.tsx`) / 삭제 메뉴 3곳 → `DropdownMenuItem variant="destructive"`(`project-page.tsx`, `ai-panel.tsx`, `deliverable-page.tsx`) / AI 패널 기록 행 → `Item active`, 끝난 대화 배지 `outline` → `muted`, 기록 아이콘 버튼 `bg-accent` 제거(`ai-panel.tsx`) / S-43 산출물 행 → `Item asChild`, "산출물 추가"·"AI에게 물어보기"·본문 AI 버튼의 `text-muted-foreground` 제거(`career-overview.tsx`, `project-page.tsx`, `deliverable-page.tsx`) / "확인이 필요한 내용" 트리거 → `warning-ghost`, 이전 초안 트리거 → `ghost xs`, 초안 표 머리 행 바탕 제거(`deliverable-draft-card.tsx`) / 떠 있는 Resumate AI 버튼 `bg-card` 제거(`doc-body.tsx`). 1.3에 v5 예외 표(L-02 원형 버튼, 문서형 입력 `rounded-md` + 회색 hover, 패널 말풍선, 제안 카드 머리 hover 없음, 카드형 라디오 `primary-subtle` 선택 — 리더 판정 UQ-BR-15) 추가. 1.1 `--shell` 표 값 #F3FBF8로 정정, 5.8 로고 = 공용 `LogoMark`(`sidebar-primary`), P-15에 S-08 패널 클릭 요소 기준 추가. 3.24·3.25·5.10 제목의 "v4 신설" → "v5 신설"(이 행도 v4 → v5). 토큰·패턴 이름 변경 없음 |
 | v5.1 | 2026-11-04 | **로그인 Google 단일화**(플로우 v5.7 S-02, decisions 3.11 — 매직 링크 제거). 6장 A1 S-02 메모를 새로 썼다: 이메일 `Input`·"로그인 링크 받기"·구분선 "또는"·재발송 `Alert variant="info"` 삭제(사용처: S-02 로그인 화면 코드), "Google로 계속하기"는 그대로 `outline` 전체 폭(`size="lg"`) + 다색 로고 예외, 콜백 실패 = 상단 `Alert variant="destructive"`, 시작 실패 = 버튼 아래 A-10 오류 한 줄, 약관 안내 링크. 토큰·variant·패턴 이름 변경 없음 |
 | v5.2 | 2026-11-04 | **처리방침·이용약관**(플로우 v5.8, decisions 3.12 PT-5·PT-6). 6장 A1: S-01·S-02 약관 링크 두 개, S-03 연령 확인 행, S-30 문서 페이지 구성(탭 없음) |
+| v5.3 | 2026-11-04 | **C-23 소속 선택 전용**(플로우 v5.9, decisions 3.13 D-UX-28 변경). 3.23을 새로 썼다: ① C-22 "프로젝트" 진입·"새 독립 프로젝트" 제목·프로젝트명 칸·"만들기"와 그 로딩·실패 규칙 제거, 주 버튼 "계속" 하나, "소속 없음" → 독립 프로젝트 추가 모달. 4장 A2 C-23 메모. 새 토큰·variant 없음 |

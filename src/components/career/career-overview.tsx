@@ -6,7 +6,7 @@
  * selected item lives in the URL (`?item={kind}:{id}`) and the panel is S-09 / S-34 / S-43.
  *
  * v5.6 (PA-3): 경력·교육의 "+ 프로젝트 추가"는 다이얼로그 없이 S-10 새 페이지(`/career/projects/new?experience=|education=`)로.
- * C-22 "프로젝트"는 C-23 ① 이름 다이얼로그(D-UX-28 (a)) → draft 행 → S-43(프로젝트 정보 편집 중 = 수정 모달).
+ * v5.9 (D-UX-28 변경): C-22 "프로젝트"도 경력·교육과 같은 추가 모달 → "추가하기" 때 draft 행 → S-43 선택(이름 다이얼로그 없음).
  * S-43 산출물 섹션(행 → S-44, "+ 산출물 추가" → S-44 새 산출물, 50개 상한, 빈 상태).
  *
  * // [UI-가정] 경력·교육·독립 프로젝트 추가·수정은 모달(add-career-dialog.tsx, 피그마 1009:2). C-24 섹션 인라인 편집·종류 태그는 아직 없다.
@@ -41,7 +41,6 @@ import { routes } from "@/lib/routes"
 import { deleteCareerItemAction } from "./actions"
 import { AddCareerDialog, type AddCareerKind, type CareerEditTarget } from "./add-career-dialog"
 import { Item } from "@/components/ui/item"
-import { AddProjectDialog } from "./add-project-dialog"
 import { educationName } from "./education-name"
 
 /** S-43 산출물 섹션 data per standalone project (`listProjectDeliverables`); null = not standalone / not found */
@@ -147,14 +146,13 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
     else url.searchParams.delete("item")
     window.history.pushState(null, "", url)
   }, [])
-  // C-23 ① 만든 독립 프로젝트: S-43 "프로젝트 정보 편집 중" = the edit modal, once the refreshed list has the row
+  // `?edit=` below: open S-43's edit modal once the refreshed list has the row
   const [pendingEdit, setPendingEdit] = React.useState<string | null>(null)
-  const onAdded = (item: Pick<CareerItem, "kind" | "id">, opts?: { edit?: boolean }) => {
+  const onAdded = (item: Pick<CareerItem, "kind" | "id">) => {
     setJustAdded(itemKey(item))
     select(item)
-    if (opts?.edit) setPendingEdit(item.id)
   }
-  // `?edit=info|content` (C-23 ② "만들기" → 정보, C-09 project_fields → 내용, routes.careerItem): open the same S-43
+  // `?edit=content` (C-09 project_fields → 내용, routes.careerItem): open the same S-43
   // section edit once, then drop `edit` from the URL. // [UI-가정] both sections edit in the one 수정 모달 (no C-24 inline yet)
   const editParam = searchParams.get("edit")
   const editKey = editParam && requested?.kind === "project" ? `${itemKey(requested)}:${editParam}` : null
@@ -238,16 +236,15 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
 }
 
 /**
- * C-22 커리어 추가 — 유형 선택 → 피그마 1009:2 추가 모달(AddCareerDialog). 만든 항목을 바로 선택한다.
+ * C-22 커리어 추가 — 유형 선택 → 피그마 1009:2 추가 모달(AddCareerDialog). 경력·교육·독립 프로젝트 모두 "추가하기" 때
+ * 행을 만들고(UX v5.9, D-UX-28 — 프로젝트도 이름 다이얼로그 없음) 만든 항목을 바로 선택한다.
  */
 function AddCareerMenu({
   onCreated,
 }: {
-  onCreated: (item: { kind: AddCareerKind; id: string }, opts?: { edit?: boolean }) => void
+  onCreated: (item: { kind: AddCareerKind; id: string }) => void
 }) {
   const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
-  // C-22 "프로젝트" → C-23 ① 이름 다이얼로그 (D-UX-28 (a))
-  const [addingProject, setAddingProject] = React.useState(false)
   const options: Array<{ kind: AddCareerKind; label: string; hint: string }> = [
     { kind: "experience", label: "경력", hint: "회사에서 일한 기간" },
     { kind: "education", label: "교육", hint: "학위 과정, 부트캠프·교육 과정" },
@@ -265,7 +262,7 @@ function AddCareerMenu({
         <DropdownMenuContent align="start" className="w-72">
           <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
           {options.map((o) => (
-            <DropdownMenuItem key={o.kind} onSelect={() => (o.kind === "project" ? setAddingProject(true) : setAdding(o.kind))} className="flex flex-col items-start gap-0.5">
+            <DropdownMenuItem key={o.kind} onSelect={() => setAdding(o.kind)} className="flex flex-col items-start gap-0.5">
               <span className="font-medium">{o.label}</span>
               <span className="text-xs text-muted-foreground">{o.hint}</span>
               {o.kind === "project" ? (
@@ -276,15 +273,6 @@ function AddCareerMenu({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <AddProjectDialog
-        mode="standalone"
-        open={addingProject}
-        onOpenChange={setAddingProject}
-        onCreated={(id) => {
-          setAddingProject(false)
-          onCreated({ kind: "project", id }, { edit: true })
-        }}
-      />
       <AddCareerDialog
         kind={adding}
         onOpenChange={(open) => !open && setAdding(null)}

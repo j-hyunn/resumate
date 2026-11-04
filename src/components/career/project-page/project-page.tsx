@@ -24,13 +24,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, FieldRow, FieldRows, flashElement } from "@/components/common/doc-inputs"
+import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, FieldRow, FieldRows, InlineField, InlineFields, flashElement } from "@/components/common/doc-inputs"
 import { CharCount, InputGuide, MonthField } from "@/components/common/input-guide"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
 import { ErrorState } from "@/components/common/state-views"
 import { RETURN_FEATURE_LABELS, ReturnBanner, notifyCareerSaved, useGateContinuation } from "@/components/common/return-banner"
 import { readCareerReturn } from "@/components/common/return-target"
-import { DocBody } from "@/components/common/shell/doc-body"
+import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
   InputRestoreBanner,
@@ -100,7 +100,7 @@ const askCopy = (f: ProjectStarField) => `${STAR_FIELD_LABELS[f].ko} 부분을 �
 type ErrorKey = "name" | "period" | "project_type" | "experience_type" | "competencies" | ProjectStarField
 type Errors = Partial<Record<ErrorKey, string>>
 
-const FOCUS_ORDER: ErrorKey[] = ["name", "project_type", "experience_type", "competencies", "period", ...STAR_FIELDS_ORDER]
+const FOCUS_ORDER: ErrorKey[] = ["name", "project_type", "experience_type", "period", "competencies", ...STAR_FIELDS_ORDER]
 
 function focusTargetId(k: ErrorKey): string {
   if (k === "name") return "project-title"
@@ -518,7 +518,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
       </ShellBanners>
 
       {/* 머리 */}
-      <div className="shrink-0 space-y-3 px-6 pt-2 pb-4 max-md:px-4">
+      <DocHead className="space-y-3" label="프로젝트 정보">
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}
@@ -567,44 +567,48 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
             대화를 시작하려면 프로젝트명을 먼저 입력해 주세요
           </p>
         ) : null}
-        <FieldRows>
-          <FieldRow label="프로젝트 종류" labelId="f-type" error={errors.project_type ? <FieldError id="err-project_type" text={errors.project_type} /> : null}>
-            <span id="head-project_type" tabIndex={-1} className="rounded-md">
-              <ChipSelect value={values.project_type} onChange={(v) => set("project_type", v)} options={PROJECT_TYPE_LABELS} labelledBy="f-type" describedBy={errors.project_type ? "err-project_type" : undefined} invalid={Boolean(errors.project_type)} />
-            </span>
-          </FieldRow>
-          <FieldRow label="경험 유형" labelId="f-exp" error={errors.experience_type ? <FieldError id="err-experience_type" text={errors.experience_type} /> : null}>
-            <span id="head-experience_type" tabIndex={-1} className="rounded-md">
-              <ChipSelect value={values.experience_type} onChange={(v) => set("experience_type", v)} options={EXPERIENCE_TYPE_LABELS} labelledBy="f-exp" describedBy={errors.experience_type ? "err-experience_type" : undefined} invalid={Boolean(errors.experience_type)} />
-            </span>
-          </FieldRow>
-          <FieldRow label="역량" labelId="f-comp" error={errors.competencies ? <FieldError id="err-competencies" text={errors.competencies} /> : null}>
-            <span id="head-competencies" tabIndex={-1} className="rounded-md">
-              <CompetencyChips value={values.competencies} onChange={(v) => set("competencies", v)} options={COMPETENCY_LABELS} labelledBy="f-comp" describedBy={errors.competencies ? "err-competencies" : undefined} invalid={Boolean(errors.competencies)} />
-            </span>
-          </FieldRow>
-          <FieldRow label="진행 기간" labelId="f-period" error={errors.period ? <FieldError id="err-period" text={errors.period} /> : null}>
-            <span id="head-period" tabIndex={-1} className="flex flex-wrap items-center gap-2 rounded-md">
-              <MonthField id="p-start" label="시작" size="sm" labelHidden invalid={Boolean(errors.period)} value={values.start_month} onChange={(v) => set("start_month", v)} />
-              <span aria-hidden>~</span>
-              <MonthField
-                id="p-end"
-                label="종료"
-                size="sm"
-                labelHidden
-                invalid={Boolean(errors.period)}
-                value={values.is_current ? null : values.end_month}
-                disabled={values.is_current}
-                onChange={(v) => set("end_month", v)}
-              />
-              <Label className="flex items-center gap-2 text-sm font-normal">
-                <Checkbox checked={values.is_current} onCheckedChange={(c) => set("is_current", c === true)} />
-                진행 중
-              </Label>
-              {spanLabel ? <span className="text-sm text-muted-foreground tabular-nums">{spanLabel}</span> : null}
-            </span>
-          </FieldRow>
-        </FieldRows>
+        <div className="space-y-2">
+          <InlineFields>
+            <InlineField label="프로젝트 종류" labelId="f-type" error={errors.project_type ? <FieldError id="err-project_type" text={errors.project_type} /> : null}>
+              <span id="head-project_type" tabIndex={-1} className="rounded-md">
+                <ChipSelect value={values.project_type} onChange={(v) => set("project_type", v)} options={PROJECT_TYPE_LABELS} labelledBy="f-type" describedBy={errors.project_type ? "err-project_type" : undefined} invalid={Boolean(errors.project_type)} />
+              </span>
+            </InlineField>
+            <InlineField label="경험 유형" labelId="f-exp" error={errors.experience_type ? <FieldError id="err-experience_type" text={errors.experience_type} /> : null}>
+              <span id="head-experience_type" tabIndex={-1} className="rounded-md">
+                <ChipSelect value={values.experience_type} onChange={(v) => set("experience_type", v)} options={EXPERIENCE_TYPE_LABELS} labelledBy="f-exp" describedBy={errors.experience_type ? "err-experience_type" : undefined} invalid={Boolean(errors.experience_type)} />
+              </span>
+            </InlineField>
+            <InlineField label="진행 기간" labelId="f-period" error={errors.period ? <FieldError id="err-period" text={errors.period} /> : null}>
+              <span id="head-period" tabIndex={-1} className="flex flex-wrap items-center gap-2 rounded-md">
+                <MonthField id="p-start" label="시작" size="sm" labelHidden invalid={Boolean(errors.period)} value={values.start_month} onChange={(v) => set("start_month", v)} />
+                <span aria-hidden>~</span>
+                <MonthField
+                  id="p-end"
+                  label="종료"
+                  size="sm"
+                  labelHidden
+                  invalid={Boolean(errors.period)}
+                  value={values.is_current ? null : values.end_month}
+                  disabled={values.is_current}
+                  onChange={(v) => set("end_month", v)}
+                />
+                <Label className="flex items-center gap-2 text-sm font-normal">
+                  <Checkbox checked={values.is_current} onCheckedChange={(c) => set("is_current", c === true)} />
+                  진행 중
+                </Label>
+                {spanLabel ? <span className="text-sm text-muted-foreground tabular-nums">{spanLabel}</span> : null}
+              </span>
+            </InlineField>
+          </InlineFields>
+          <FieldRows>
+            <FieldRow label="역량" labelId="f-comp" error={errors.competencies ? <FieldError id="err-competencies" text={errors.competencies} /> : null}>
+              <span id="head-competencies" tabIndex={-1} className="rounded-md">
+                <CompetencyChips value={values.competencies} onChange={(v) => set("competencies", v)} options={COMPETENCY_LABELS} labelledBy="f-comp" describedBy={errors.competencies ? "err-competencies" : undefined} invalid={Boolean(errors.competencies)} />
+              </span>
+            </FieldRow>
+          </FieldRows>
+        </div>
         {/* 저장 응답 건너뜀 for chats whose card isn't open (deleted = not_found, another chat) — QA UQ-S10-2 */}
         {outsideSkipLines.length ? (
           <ul className="space-y-0.5" aria-live="polite">
@@ -616,7 +620,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
             ))}
           </ul>
         ) : null}
-      </div>
+      </DocHead>
       <Separator />
 
       <DocBody

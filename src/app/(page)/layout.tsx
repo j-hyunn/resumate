@@ -3,7 +3,7 @@ import { AiConnectionProvider } from "@/components/common/ai-connection-context"
 import { PreviewStateSwitcher } from "@/components/common/preview-state-client"
 import { AiJobWatcher } from "@/components/common/shell/shell-parts"
 import { DeletionIncompleteGuard } from "@/components/common/shell/deletion-guard"
-import { PageShellOutageSlot } from "@/components/common/shell/server-slots"
+import { PageShellOutageSlot, PageShellUserSlot } from "@/components/common/shell/server-slots"
 import { SettingsDialogProvider } from "@/components/common/shell/settings-dialog"
 
 /**
@@ -20,6 +20,10 @@ export default function PageGroupLayout({ children }: { children: React.ReactNod
       {/* S-28 장애 배너 → portalled under the page's ShellBar (UQ-PA-17) */}
       <Suspense fallback={null}>
         <PageShellOutageSlot />
+      </Suspense>
+      {/* 계정 버튼 아바타 (Google 프로필 사진) → ShellBar */}
+      <Suspense fallback={null}>
+        <PageShellUserSlot />
       </Suspense>
       <AiJobWatcher />
       <Suspense fallback={null}>

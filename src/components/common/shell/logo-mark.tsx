@@ -1,14 +1,37 @@
 /**
- * Resumate 로고 마크 — the same mark in the L-01 sidebar head and the L-02 ShellBar (leader Q-9: no new
- * spelling, the wordmark is "Resumate"). // [UI-가정] 브랜드 마크가 정해지기 전까지 lucide 아이콘
+ * Resumate 로고 — 심볼(`LogoMark`)과 워드마크(`LogoWordmark`). L-01 사이드바 머리, L-02 ShellBar,
+ * 셸 밖 화면(S-01~S-03, S-30) 상단에서 같은 파일을 쓴다. 원본: public/brand/logo-{symbol,wordmark}.svg
+ * (leader Q-9: 서비스 표기는 "Resumate" — 워드마크 이미지의 alt도 같다).
  */
-import { Sparkles } from "lucide-react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 
-export function LogoMark({ className }: { className?: string }) {
+/** 심볼 (정사각형). 워드마크와 함께 쓰면 장식이라 alt를 비운다. */
+export function LogoMark({ className, label }: { className?: string; label?: string }) {
   return (
-    <div className={cn("flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground", className)}>
-      <Sparkles className="size-4" aria-hidden />
-    </div>
+    <Image
+      src="/brand/logo-symbol.svg"
+      alt={label ?? ""}
+      width={592}
+      height={592}
+      unoptimized
+      priority
+      className={cn("size-8 shrink-0", className)}
+    />
+  )
+}
+
+/** 워드마크 (2088 × 324). 높이만 정하면 너비는 비율대로. */
+export function LogoWordmark({ className }: { className?: string }) {
+  return (
+    <Image
+      src="/brand/logo-wordmark.svg"
+      alt="Resumate"
+      width={2088}
+      height={324}
+      unoptimized
+      priority
+      className={cn("h-4 w-auto shrink-0", className)}
+    />
   )
 }

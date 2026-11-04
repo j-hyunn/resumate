@@ -1330,7 +1330,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 ```
 
 - 구조: `SidebarProvider` > `AppSidebar`(`variant="inset" collapsible="icon"`) + `SidebarInset`(넓은 화면(≥1024, 서랍 기준과 같게 `lg:`로 바꿈)에서 `m-2 ml-0 rounded-xl shadow-sm`, 바탕 `bg-sidebar` 위에 뜬 패널) > 상단 바 + 콘텐츠.
-- 사이드바 머리(`SidebarHeader`): `SidebarMenuButton size="lg"` 안에 로고 사각형(`size-8 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground`, 아이콘 `Sparkles size-4` `[UI-가정]`) + 두 줄 글자("Resumate" `font-medium` / "AI 커리어 관리" `text-xs` `[UI-가정]`).
+- 사이드바 머리(`SidebarHeader`): 링크·호버 없는 표시 전용 `div`(`h-12 px-2.5`) 안에 심볼 `LogoMark`(`size-8`, `public/brand/logo-symbol.svg`) + 워드마크 `LogoWordmark h-4`(`public/brand/logo-wordmark.svg`, alt "Resumate"). 부제 없음. 접힌 레일에서는 심볼만(`size-10 p-1`).
 - 주 메뉴(`NavMain`): `SidebarGroupLabel` "메뉴" `[UI-가정]` + `SidebarMenuButton`(아래 "메뉴 크기", 툴팁): 커리어 `Layers`, 기업 JD 관리 `Briefcase`, 모의 면접 `MessagesSquare`, 지원 현황 `KanbanSquare` `[가정]`. 현재 메뉴는 기본 `data-active`(`bg-sidebar-accent font-medium`). v4부터 `--sidebar-accent`는 primary 10%, 글자는 `--primary-text`라 hover·선택이 ghost 버튼과 같은 초록이다. 블록의 하위 메뉴(접이식 `SidebarMenuSub`)는 지원하지만 지금 쓰는 메뉴는 없다. 블록의 Projects 묶음은 쓰지 않는다.
 - **메뉴 크기**(사용자 결정 2026-10-26: shadcn 기본 h-8 / `text-sm`이 작아서 primitive `components/ui/sidebar.tsx` 자체를 키움 — 메인 사이드바·설정 다이얼로그·서랍에 모두 적용):
   | 요소 | 값 |
@@ -1354,9 +1354,9 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
   | `invalid` | `TriangleAlert text-warning` + "{공급자} · 키를 확인해 주세요" | `TriangleAlert` + 점 `bg-warning` |
   - 점 모양은 메뉴 배지 점과 같다(`size-2 ring-2 ring-sidebar`). 점에 색만 쓰지 않도록 아이콘이 상태마다 바뀌고, 툴팁(레일)과 `sr-only`(펼침)가 전체 글자를 준다(R-C6).
   - 누르면 **설정 다이얼로그를 "AI 연결" 섹션으로 연다**. 설정 버튼과 동작을 맞춘 것이다. 서랍(<1024)에서도 같고, 터치 대상은 `h-11`이다 `[가정]`.
-- 하단(`NavUser`): `SidebarMenuButton size="lg"`에 `Avatar`(`h-8 w-8 rounded-lg`, 이니셜) + 이메일 앞부분 / 이메일 두 줄 + `ChevronsUpDown`. 누르면 `DropdownMenu`(넓은 화면 오른쪽, 서랍에서는 아래, 트리거 폭): 계정 표시 · 설정(설정 다이얼로그) · 로그아웃(S-24와 같은 동작).
+- 하단(`NavUser`): `SidebarMenuButton size="lg"`에 `Avatar`(`h-8 w-8 rounded-lg`, Google 프로필 사진 `user_metadata.avatar_url`·`picture` — 없거나 못 불러오면 이니셜) + Google 이름(`full_name`·`name`, 없으면 이메일 앞부분) / 이메일 두 줄 + `ChevronsUpDown`. 누르면 `DropdownMenu`(넓은 화면 오른쪽, 서랍에서는 아래, 트리거 폭): 계정 표시 · 설정(설정 다이얼로그) · 로그아웃(S-24와 같은 동작).
 - **설정 다이얼로그**(S-24, shadcn **sidebar-13** 기반, 사용자 결정 2026-10-26, `shell/settings-dialog.tsx`): `DialogContent overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]` 안에 별도 `SidebarProvider` → 왼쪽 `Sidebar collapsible="none"`(md 이상) 섹션 목록(계정 `UserRound` · **(v2) AI 연결 `PlugZap` · AI 사용량 `Gauge`** · 동의 관리 `ShieldCheck` · AI 데이터 처리 `Sparkles` · 처리방침·약관 `FileText` · 회원 탈퇴 `UserX`. 새 두 섹션은 계정 바로 아래에 둔다 `[가정]`. "AI 연결" 항목은 `invalid`·`needs_check`일 때 이름 오른쪽에 `size-2 bg-warning` 점과 `sr-only` 상태를 단다), 오른쪽 `h-16` 머리에 이동 경로 "설정 › {섹션}"(md 미만은 섹션만), 본문은 `overflow-y-auto p-4 pt-0`, 높이 `h-[480px]`. 열 때마다 계정·동의 데이터를 다시 읽고(로딩 `Skeleton`, 실패 시 "설정을 불러오지 못했어요" + 다시 시도 `[UI-가정]`), 다이얼로그 밖으로 가는 링크(기본 프로필 편집, 약관, 회원 탈퇴)는 다이얼로그를 닫고 이동한다. 블록은 md 미만에서 섹션 목록을 숨기므로, 좁은 화면에서는 머리 아래 가로 섹션 버튼 줄(`Button size="sm"`, 현재 `secondary`)로 대신한다 `[UI-가정]`. 섹션 내용은 `account/settings-sections.tsx`. (2026-11-04) `/settings` 페이지는 없다. 셸 밖 화면은 `/career?settings={section}`으로 다이얼로그를 연다(5.7). L-02 셸에도 같은 다이얼로그가 있다(계정 메뉴의 설정·AI 연결).
-- 접기: 상단 바 `SidebarTrigger`(`aria-label` 펼침 "메뉴 접기" / 접힘 "메뉴 펼치기" / 서랍 "메뉴 열기"), `SidebarRail`, `⌘/Ctrl+B`. 접으면 **완전히 숨기지 않고** 아이콘 레일로 남는다: 로고 사각형·메뉴 아이콘·보조 메뉴 아이콘·아바타만, 이름은 툴팁, 배지 숫자 대신 아이콘 오른쪽 위 점(`size-2 bg-primary ring-2 ring-sidebar`). 펼침 상태는 `sidebar_state` 쿠키에 쓰인다(첫 렌더 복원은 아직 하지 않음 `[UI-가정]`).
+- 접기: 상단 바 `SidebarTrigger`(`aria-label` 펼침 "메뉴 접기" / 접힘 "메뉴 펼치기" / 서랍 "메뉴 열기"), `SidebarRail`, `⌘/Ctrl+B`. 접으면 **완전히 숨기지 않고** 아이콘 레일로 남는다: 로고 심볼·메뉴 아이콘·보조 메뉴 아이콘·아바타만, 이름은 툴팁, 배지 숫자 대신 아이콘 오른쪽 위 점(`size-2 bg-primary ring-2 ring-sidebar`). 펼침 상태는 `sidebar_state` 쿠키에 쓰인다(첫 렌더 복원은 아직 하지 않음 `[UI-가정]`).
 - 상단 바: 블록과 같이 `flex h-16 shrink-0 items-center gap-2` · `SidebarTrigger -ml-1` · `Separator orientation="vertical" mr-2 h-4` · `Breadcrumb`. **상단 고정**(사용자 결정 2026-10-26): `SidebarInset`이 스크롤 영역(`h-dvh overflow-y-auto`, lg `h-[calc(100dvh-1rem)]` — inset 여백만큼 뺌)이고 상단 바는 그 안에서 `sticky top-0 z-20 bg-background`. 창(body)은 스크롤하지 않는다. 오른쪽에 화면 동작(`PageTopActions`). 상단 바 아래에 붙는 sticky 요소(C-10 배너, 커리어 연도 머리)는 `top-16`. 화면 높이를 쓰는 레이아웃(S-36 대화)은 `100dvh - 4rem`(lg는 inset 여백 1rem 더 뺌).
 - 이동 경로: 마지막 마디 `font-medium text-foreground`, 앞 마디 `text-muted-foreground hover:text-foreground`, 긴 이름 `max-w-[16rem] truncate`. 화면이 경로를 선언하지 않으면 현재 메뉴 이름을 보인다.
 
@@ -1579,7 +1579,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 **넓은 화면(≥1024)**
 
 ```
- bg-shell (창 전체, h-dvh overflow-hidden)
+ bg-shell (창 전체, h-dvh overflow-clip)
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ [◆] Resumate                     [✦ Resumate AI]  저장됨 14:02 [● 저장하기] (👤) │  ShellBar h-14 px-4
 │ ╭──────────────────────────────────────────────────────────────────────────╮ │
@@ -1595,11 +1595,13 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- 바탕: `div.flex h-dvh flex-col overflow-hidden bg-shell text-shell-foreground`. 창(body)은 스크롤하지 않는다(L-01과 같은 원칙).
-- **본문 카드**: `mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card shadow-sm`(L-01 inset 패널처럼 테두리 없이 `shadow-sm`) `[가정]`. 카드 안 스크롤은 5.9 규칙(왼쪽 영역과 패널이 따로 스크롤).
+- 바탕: `div.relative flex h-dvh flex-col overflow-clip bg-shell text-shell-foreground`. 창(body)은 스크롤하지 않는다(L-01과 같은 원칙).
+- (2026-11-04, 28 런) **창이 스크롤되지 않게 하는 규칙**: ① 바탕·본문 카드는 `relative` + `overflow-clip`(`hidden` 아님). `relative`가 없으면 `sr-only` 낭독 영역 같은 `absolute` 자손의 기준이 화면(viewport)이 되어, 스크롤 영역 안에 있어도 잘리지 않고 문서 높이를 늘린다 → 창이 스크롤되고 카드 아래 빈 영역이 보인다. `overflow-clip`은 스크롤 상자가 아니라서 `focus()`·`scrollIntoView()`가 바탕·카드를 밀어 올리지 못한다. ② 카드 안에서 스크롤되는 상자(왼쪽 입력 영역, 머리, 패널 `aside`·메시지 목록·제안 독)도 `relative`를 둔다. ③ 스크롤은 머리·배너 자리·S-28 장애 배너 자리(넘칠 때만)·왼쪽 입력 영역·패널 메시지 목록·제안 독 안에서만 일어난다. (2026-11-04, 30 런) ④ 로딩 스켈레톤(`PageShellSkeleton`)도 같은 상자 규칙(바탕·카드 `relative overflow-clip`, 머리 자리 `max-h-[40%]`, 본문 자리 `min-h-[50%]`)을 따라 로딩 → 본문 전환 때 머리 높이가 튀지 않는다(UQ-SC-4).
+- (2026-11-04, 30 런) **S-28 장애 배너 자리**(ShellBar 바로 아래, 카드 밖): `relative max-h-[25%] shrink-0 overflow-y-auto empty:hidden`(창 높이 기준). 낮은 창에서도 카드를 25% 넘게 밀어내지 않는다(UQ-SC-1) `[UI-가정]`.
+- **본문 카드**: `relative mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-clip rounded-2xl bg-card shadow-sm`(L-01 inset 패널처럼 테두리 없이 `shadow-sm`) `[가정]`. 카드 안 스크롤은 5.9 규칙(왼쪽 영역과 패널이 따로 스크롤).
 - **ShellBar**: `flex h-14 shrink-0 items-center gap-2 px-4`(바탕은 셸과 같은 `bg-shell`, 테두리 없음).
-  - 왼쪽 로고: `Link`(`aria-label="Resumate 커리어로 가기"`) 안에 L-01 사이드바 머리와 **같은 공용 `LogoMark`**(`components/common/shell/logo-mark.tsx`, `size-7 rounded-lg bg-sidebar-primary text-sidebar-primary-foreground` + 아이콘 — v4에서 `--sidebar-primary` = `--primary`, v5 UQ-BR-17) + `text-base font-semibold` "Resumate". Figma 워드마크 "ResuMate"의 대소문자는 서비스 표기 "Resumate"로 맞춘다 `[가정]`(8.3 Q-9). 누르면 S-08(이탈 확인 대상).
-  - 오른쪽 묶음 `ml-auto flex items-center gap-2` — 순서 고정: ① **[Resumate AI]**(패널이 닫혔을 때만) `Button variant="outline" size="sm"` + `Sparkles size-4 text-ai`(R-C9) + "Resumate AI". 다시 열면 패널 입력창에 포커스 ② **C-06 저장 상태 글자**(`SaveButton` 바로 왼쪽, `meta`, `aria-live="polite"`) ③ **`SaveButton`** ④ 계정: `Button variant="ghost" size="icon"` + `CircleUserRound size-5`(`aria-label="계정 메뉴"`) → `DropdownMenu align="end"`, 항목은 L-01 `NavUser` 메뉴와 같은 목록·순서(명세: 기본 프로필 · 설정 · AI 연결 · 처리방침 · 로그아웃). 앱 안으로 가는 항목은 이탈 확인 대상.
+  - 왼쪽 로고: `Link`(`aria-label="Resumate 커리어로 가기"`) 안에 L-01 사이드바 머리와 **같은 공용 `LogoMark`**(`components/common/shell/logo-mark.tsx`, 심볼 SVG `size-7`) + `LogoWordmark`(`h-4`, alt "Resumate"). 누르면 S-08(이탈 확인 대상).
+  - 오른쪽 묶음 `ml-auto flex items-center gap-2` — 순서 고정: ① **[Resumate AI]**(패널이 닫혔을 때만) `Button variant="outline" size="sm"` + `Sparkles size-4 text-ai`(R-C9) + "Resumate AI". 다시 열면 패널 입력창에 포커스 ② **C-06 저장 상태 글자**(`SaveButton` 바로 왼쪽, `meta`, `aria-live="polite"`) ③ **`SaveButton`** ④ 계정: `Button variant="ghost" size="icon" rounded-lg` + `UserAvatar size-7`(L-01 NavUser와 같은 아바타: Google 프로필 사진, 없으면 이니셜. `aria-label="계정 메뉴"`) → `DropdownMenu align="end"`, 항목은 L-01 `NavUser` 메뉴와 같은 목록·순서(명세: 기본 프로필 · 설정 · AI 연결 · 처리방침 · 로그아웃). 앱 안으로 가는 항목은 이탈 확인 대상.
 - **`SaveButton`** = `Button size="default"`(primary, L-02의 유일한 주 버튼 — R-C8) `min-w-[6.5rem]`(글자가 바뀌어도 폭 고정). 단축키 Ctrl/⌘+S, 툴팁 "저장하기 (⌘S)"(Windows는 Ctrl+S) `[가정]`.
 
 | 상태 | 버튼 | 왼쪽 C-06 글자 |
@@ -1615,7 +1617,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 - 표식 점의 `warning`은 "아직 저장 안 됨"이라는 상태라서 쓴다(R-C4: 점 = 아이콘 자리, 글자는 `sr-only`와 버튼 활성 상태가 함께 알린다).
 - **변경 충돌 확인**(`stale_write`): `AlertDialog sm:max-w-md`. 제목 "다른 곳에서 이 {프로젝트/산출물}이(가) 바뀌었어요", 설명 `body text-muted-foreground` — "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요"(명세 "버린다고 함께 알림"의 글자, `[가정]`). 버튼 `새로 불러오기`(outline) · `내 내용으로 저장`(default). Esc·바깥 누름은 닫기만 하고 편집 상태를 그대로 둔다 `[가정]`.
 - **CrumbRow**: 카드 맨 위 `flex h-12 shrink-0 items-center gap-2 px-6`. "←" = `Button variant="secondary" size="icon-sm" className="rounded-full"` + `ArrowLeft size-4`(`aria-label="뒤로"`, Figma 둥근 버튼. 색은 v4 `secondary` 그대로 — 원형 반경은 1.3 v5 예외, UQ-BR-14). 이동 경로 = `Breadcrumb`(14px). 누를 수 있는 마디(S-10 회사명/기관명, S-44 프로젝트명)는 `text-muted-foreground hover:text-foreground hover:underline`, 누를 수 없는 이름 마디는 `text-muted-foreground`, 마지막 마디("프로젝트 상세"/"산출물 상세")는 `font-medium text-foreground` + `aria-current="page"`. 이름 마디는 `max-w-[16rem] truncate` + `title`. 입력 중인 이름을 따라가며, 비면 "새 프로젝트"·"새 산출물"을 `text-muted-foreground`로.
-- **배너 자리**: CrumbRow 바로 아래 `px-6 pb-2 space-y-2`. C-10 복귀 배너(3.9)와 **입력 보존 배너**: `Alert variant="info"` 작은 형 + `History size-4` "저장하지 않은 수정이 있어요" + 오른쪽 `Button variant="outline" size="sm"` "이어서 편집" · `Button variant="ghost" size="sm"` "버리기" `[가정: 배너형 — 다이얼로그로 막지 않음]`. 고르기 전에는 저장된 값을 보인다. 둘 다 있으면 C-10이 위.
+- **배너 자리**: CrumbRow 바로 아래 `ShellBanners` = `OverflowScroller`(5.9 "머리·배너가 넘칠 때") `shrink px-6 pb-2` + 안쪽 `space-y-2`, 넘칠 때 이름 "알림". 낮은 창에서 배너가 여럿이면 본문 2단 최소 높이(카드 50%)를 지키도록 줄어들고 그 안에서 스크롤한다(UQ-SC-1). C-10 복귀 배너(3.9)와 **입력 보존 배너**: `Alert variant="info"` 작은 형 + `History size-4` "저장하지 않은 수정이 있어요" + 오른쪽 `Button variant="outline" size="sm"` "이어서 편집" · `Button variant="ghost" size="sm"` "버리기" `[가정: 배너형 — 다이얼로그로 막지 않음]`. 고르기 전에는 저장된 값을 보인다. 둘 다 있으면 C-10이 위.
 - **이탈 확인**(`LeaveGuard`): `AlertDialog sm:max-w-md`. 제목 "저장하지 않은 변경이 있어요". 버튼 3개를 오른쪽 정렬 `계속 편집`(outline) · `저장하지 않고 나가기`(`Button variant="destructive-ghost"`, v5 UQ-BR-1·12) · `저장하고 나가기`(default, 요청 중 `Loader2`). 좁은 화면은 `flex-col-reverse` 전체 폭(저장하고 나가기가 맨 위). "저장하고 나가기"가 실패·검증 오류로 끝나면 다이얼로그를 닫고 SaveButton 실패·오류 모양으로 남는다. 브라우저 닫기·새로 고침은 `beforeunload` 기본 확인(문구 지정 불가).
 - 토스트 위치: L-02에서는 `bottom-left`(2장 sonner).
 
@@ -1633,12 +1635,14 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 
 | 순서 | 영역 | 클래스 |
 |------|------|--------|
-| 1 | CrumbRow + 배너 | 5.8. `shrink-0` |
-| 2 | 머리 | `shrink-0 px-6 pt-2 pb-4 space-y-3` |
+| 1 | CrumbRow + 배너 | 5.8. CrumbRow `shrink-0`, 배너 자리 `ShellBanners` = `OverflowScroller` `shrink`(줄어들 수 있음) |
+| 2 | 머리 | `DocHead`(`shell/doc-body.tsx`) = `OverflowScroller` `max-h-[40%] shrink px-6 pt-2 pb-4` + 안쪽 S-10 `space-y-3` / S-44 `space-y-2`. 넘칠 때 이름 S-10 "프로젝트 정보" / S-44 "산출물 정보" |
 | 3 | 구분선 | `Separator` (카드 전체 폭, `shrink-0`) |
-| 4 | 본문 2단 | `flex min-h-0 flex-1` — 왼쪽 입력 영역 · 손잡이 · 패널 |
+| 4 | 본문 2단 | `flex min-h-[50%] flex-1` — 왼쪽 입력 영역 · 손잡이 · 패널 |
 
-- 머리는 스크롤되지 않고 2단만 각자 스크롤한다(Figma: 구분선 위 머리, 아래 2단). 창 높이가 `760px` 미만이면 머리를 왼쪽 입력 영역 스크롤 안으로 옮겨 2단 높이를 확보한다(`[@media(max-height:759px)]` 분기) `[가정]`.
+- 머리는 2단과 함께 스크롤되지 않고 2단만 각자 스크롤한다(Figma: 구분선 위 머리, 아래 2단). (2026-11-04, 28 런) 창 높이가 낮아 머리가 카드 높이의 40%를 넘으면 머리만 그 안에서 스크롤한다(`max-h-[40%] overflow-y-auto`). 창은 어떤 높이에서도 스크롤되지 않는다. 이전의 "760px 미만이면 머리를 왼쪽 스크롤 안으로 옮김" 규칙은 구현된 적이 없어 이것으로 바꾼다 `[UI-가정]`.
+- (2026-11-04, 30 런 — UQ-SC-1) **본문 2단 최소 높이**: 2단은 `min-h-[50%]`로 **카드 높이의 50% 이상**을 늘 지킨다. CrumbRow(48px)는 고정이고, 배너 자리와 머리는 남은 높이(카드 50% − 크럼 − 구분선)를 자기 높이 비율대로 나눠 줄어들며 각자 스크롤한다(둘 다 `shrink min-h-0`). 머리의 40% 상한은 그대로라 높은 창에서는 아무것도 줄지 않는다. 예: 창 600px(카드 ~536px)에 배너 4개(~250px) + 머리 상한(214px)이 겹쳐도 2단은 268px를 지키고, 배너 ~100px · 머리 ~119px로 줄어 각자 스크롤한다(WebKit 재현값). 이전 문구 "카드의 약 60%"는 크럼·배너를 빼고 계산한 것이라 실제 보장값(50%)으로 고친다 `[UI-가정]`.
+- (2026-11-04, 30 런 — UQ-SC-2) **머리·배너가 넘칠 때** (`OverflowScroller`, `shell/overflow-scroller.tsx`): 내용이 상자보다 길 때만(ResizeObserver로 안쪽 내용 높이를 잼) ① 아래 가장자리를 흐리게(shadcn `scroll-fade-b` — 패널 `MessageScroller`와 같은 `mask-image` 알파 마스크라 색 토큰이 필요 없음. 끝까지 스크롤하면 사라짐: 스크롤 연동 애니메이션이 없는 브라우저를 위해 JS가 끝에서 클래스를 뗀다) ② `role="region"` + `aria-label` + `tabIndex=0`으로 키보드 포커스를 받아 화살표·Page Down으로 마지막 입력 칸 뒤의 글(S-44 G-2 안내, S-10 저장 건너뜀 목록)까지 스크롤할 수 있다. 포커스 표시는 `focus-visible:ring-2 ring-ring ring-inset`(카드 `overflow-clip`에 잘리지 않게 안쪽). 넘치지 않으면 평범한 div라 탭 정지·랜드마크가 늘지 않는다 `[UI-가정]`.
 
 **머리 — 제목 줄**
 
@@ -1647,7 +1651,9 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 - 제목 아래 메시지 줄(있을 때만, `pl-0 text-sm`): 저장 검증 오류는 A-10(`text-destructive` + `CircleAlert`). **대화 시작 전 이름 필요**("대화를 시작하려면 … 먼저 입력해 주세요")는 오류가 아니라 남은 할 일이라 `text-warning-subtle-foreground` + `TriangleAlert size-4 text-warning`이고, 동시에 입력 칸에 `ring-2 ring-primary ring-offset-2 ring-offset-card`를 이름이 들어갈 때까지 둔다(3.8 v3 `project_fields`와 같은 원칙) `[가정]`.
 - S-44만: 제목 아래 G-2 안내 1줄(C-07 모양, `ShieldAlert`, 명세 문구).
 
-**머리 — 필드 행** (S-10만, `FieldRows`)
+**머리 — 필드 행** (S-10만, `InlineFields` + `FieldRows`)
+
+- (2026-11-04) 프로젝트 종류 · 경험 유형 · 진행 기간은 **한 줄 가로 배치** `InlineFields`(`dl.flex flex-wrap items-start gap-x-8 gap-y-2`, 항목마다 `dt` 라벨 + `dd` 값을 `gap-x-3`로 나란히, 오류는 항목 아래). 좁으면 다음 줄로 넘어간다. (2026-11-04, 30 런 — UQ-SC-6) 마크업: 항목마다 `div` 하나가 `dt` + `dd` 한 쌍만 감싼다(HTML `dl` 규칙). 오류는 `dd` 안. 같은 모양을 지키려고 항목 `div` = `grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1`, `dt` = 1열 1행 `flex min-h-9 items-center`, `dd` = 1행에서 두 열을 걸친 `grid-cols-subgrid` — 값은 2열(`flex min-h-9 flex-wrap items-center gap-2`), 오류는 다음 행 두 열 전체(라벨 시작점에서). 좁은 폭에서는 값 전체가 라벨 아래로 내려가던 이전 동작 대신 값이 라벨 오른쪽에서 줄을 바꾼다. 역량은 그 아래 `FieldRows` 한 행.
 
 ```
 dl.grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2
@@ -1661,13 +1667,13 @@ dl.grid grid-cols-[6.25rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2
 | 역량 (최대 3) | `CompetencyChips`: 고른 역량 칩 `inline-flex h-8 items-center gap-1 rounded-full bg-primary-subtle pl-3 pr-1 text-sm text-primary-subtle-foreground` + 빼기 `button.size-6 rounded-full grid place-items-center hover:bg-primary/10` `X size-3.5`(`aria-label="{역량} 빼기"`). 뒤에 추가 트리거 = `chip` 모양 `Button variant="chip"` + `Plus size-3.5` "역량 추가"(아무것도 없으면 글자 "미선택" `text-muted-foreground`) → `DropdownMenu`의 `DropdownMenuCheckboxItem` 10개. 3개를 고르면 안 고른 항목 `disabled` + 목록 맨 위 `DropdownMenuLabel` `caption text-muted-foreground` "최대 3개까지 고를 수 있어요". 메뉴는 고를 때마다 닫지 않는다(`onSelect` preventDefault) |
 | 진행 기간 · 진행 중 | 기존 `MonthField` 두 개 + `~` + `Checkbox` "진행 중" + 개월 수. 배치 `flex flex-wrap items-center gap-2`: `[연도 ⌄][월 ⌄]` `~` `[연도 ⌄][월 ⌄]` · `label.flex items-center gap-2 text-sm` 체크 · `meta tabular-nums text-muted-foreground` "(1년 11개월)". 셀렉트는 테두리형 `SelectTrigger size="sm"`(h-8) 연 `w-[6.5rem]` / 월 `w-[5rem]`(Figma 테두리 셀렉트). 진행 중이면 종료 두 칸 `disabled`. 기간 오류는 행 아래 A-10 |
 
-- 명세 행 순서: 프로젝트 종류 → 경험 유형 → 역량 → 진행 기간(+ 진행 중). 행 라벨은 명세 라벨 그대로.
+- 화면 순서: (한 줄) 프로젝트 종류 · 경험 유형 · 진행 기간(+ 진행 중) → 역량. 명세 행 순서(종류 → 경험 유형 → 역량 → 기간)와 달리 역량을 아래로 내렸다 `[UI-가정]`. 행 라벨은 명세 라벨 그대로.
 - AI [반영]으로 채운 칸은 `animate-field-flash` 1회(3.24).
 - 좁은 화면(<768): `grid-cols-1 gap-y-1`, 행 사이 `pb-2`. 라벨이 값 위로 간다.
 
 **왼쪽 입력 영역**
 
-- 컨테이너 `min-w-doc-left flex-1 overflow-y-auto px-6 py-6`, 내용 `max-w-doc`(왼쪽 정렬). 패널이 닫히면 왼쪽이 카드 전체 폭을 쓰되 글 폭은 그대로 42rem.
+- 컨테이너 `relative min-w-doc-left flex-1 overflow-y-auto px-6 py-6`(`relative`는 5.8 창 스크롤 규칙), 내용 `max-w-doc`(왼쪽 정렬). 패널이 닫히면 왼쪽이 카드 전체 폭을 쓰되 글 폭은 그대로 42rem.
 - **S-10 STAR 다섯 칸**: `space-y-10`(Figma 섹션 간격 약 90px = 제목 24 + 입력 최소 높이 + 여백) `[가정]`. 맨 위 AI 근거 도움말(명세 CR-21)은 `meta text-muted-foreground` + `Lightbulb size-4` 한 줄(Alert 아님).
   - 칸 = `section.space-y-1.5` (`aria-labelledby` 칸 제목)
     - 제목 줄 `flex items-center gap-2`: `star-heading` "상황" + `span.font-normal.text-muted-foreground` "Situation" · (반영 안 한 제안이 있으면) `Badge variant="ai"` 단추형 `h-5 gap-1 px-1.5` + `Sparkles size-3` "AI 제안 있음"(누르면 패널 카드의 그 섹션으로, R-C3 "AI 결과 출처 표시")
@@ -1698,7 +1704,8 @@ S-36 대화 화면(5.4, 폐기)의 메시지·입력 규칙을 좁은 패널에 
 **틀**
 
 ```
-aside(aria-label="Resumate AI") — 넓은 화면: my-3 mr-3 flex w-[var(--ai-panel-w)] shrink-0 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground
+aside(aria-label="Resumate AI") — 넓은 화면: 래퍼 my-3 mr-3 flex min-h-0 w-[var(--ai-panel-w)] shrink-0 > aside.relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground
+  (높이: 2단 행의 stretch로 카드 높이 − my-3를 그대로 채운다. 머리·칩 줄·입력 영역은 shrink-0, 메시지 목록만 flex-1 min-h-0 스크롤 → 입력창은 늘 패널 바닥)
 ├ 머리 h-12 shrink-0 flex items-center gap-1 px-3
 ├ 본문 (보기 둘 중 하나)
 │   ├ 대화 보기: 메시지 목록(flex-1 overflow-y-auto) → 제안 독 → 칩 줄 → 입력 영역
@@ -1730,7 +1737,7 @@ aside(aria-label="Resumate AI") — 넓은 화면: my-3 mr-3 flex w-[var(--ai-pa
 
 **제안 독** (메시지 목록과 칩 줄 사이)
 
-- `shrink-0 border-t border-border/60 px-3 pt-3` 안에 카드 하나(3.24 / 3.25). 펼친 카드는 `max-h-[55%]`(패널 높이 기준)까지 크고 그 안에서 스크롤한다. 접으면 카드 머리 한 줄만 남는다. 접힘 상태는 대화마다 기억하지 않고, 새 제안이 오면 펼친다 `[가정]`.
+- `relative shrink-0 border-t border-border/60 px-3 pt-3 empty:hidden` 안에 카드 하나(3.24 / 3.25). 보일 제안이 없어 카드가 아무것도 그리지 않으면 독 자체(구분선·여백)도 숨는다(28 런). 펼친 카드는 `max-h-[55%]`(패널 높이 기준)까지 크고 그 안에서 스크롤한다. 접으면 카드 머리 한 줄만 남는다. 접힘 상태는 대화마다 기억하지 않고, 새 제안이 오면 펼친다 `[가정]`.
 - 명세 "대화 목록 아래 고정"을 이렇게 읽었다: 메시지가 길어져도 카드는 입력창 바로 위에 붙어 있고, 메시지 목록만 스크롤된다 `[가정]`(8.4 P-16).
 - 왼쪽의 "AI 제안 있음"·"AI 초안 있음"을 누르면 패널을 열고 독을 펼친 뒤 해당 섹션으로 `scrollIntoView` + `animate-field-flash`.
 
@@ -1783,7 +1790,7 @@ form.flex items-end gap-2 rounded-3xl border border-input bg-card py-1.5 pl-4 pr
 
 ### A1 계정 (S-01, S-02, S-03, S-24, S-25, S-30)
 
-- 셸 밖 화면(S-01~S-03, S-30): 상단 `h-14 border-b` 로고만, 본문 가운데 정렬. S-02·S-03은 `Card max-w-md mx-auto mt-16 p-8`.
+- 셸 밖 화면(S-01~S-03, S-30): 상단 `h-14 border-b` 로고만(심볼 `size-7` + 워드마크 `h-4`, 누르면 S-01), 본문 가운데 정렬. S-02·S-03은 `Card max-w-md mx-auto mt-16 p-8`.
 - S-01 랜딩: `display` 제목 + `body` 가치 제안 3줄(아이콘 `Layers`/`Briefcase`/`KanbanSquare` + 문구, `grid md:grid-cols-3`) + 주 버튼 "시작하기". 일러스트·스크린샷 없음 `[가정]`.
 - (v5.1, 플로우 v5.7) S-02 **Google 로그인만**. 이메일 `Input`·"로그인 링크 받기"·구분선 "또는"·링크 보냄/재발송 `Alert variant="info"`·링크 만료 안내는 모두 없앤다. `Card` 안 위에서 아래로:
   - 콜백 실패(`?error=`로 돌아옴)일 때만 맨 위 `Alert variant="destructive"` + `CircleAlert`: `AlertTitle` "로그인을 마치지 못했어요" / `AlertDescription` "다시 시도해 주세요". 취소·실패를 나누지 않는다. 카드 안 첫 요소(`mb-6`)로 두고, 사용자가 다시 버튼을 누르면 지운다 `[가정]`.
@@ -2015,7 +2022,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-46 | (v5) `doc-title` 20px, 머리 라벨 14px(Figma 13px), STAR·본문 자리 표시 16px(Figma 15px) — 12px·16px 하한 규칙(A-8) 우선 | 1.2, 5.9 |
 | G-47 | (v5) 저장하지 않은 변경 표식 = 버튼 오른쪽 위 `warning` 점, `SaveButton` 폭 고정, ⌘S 툴팁 글자, 좁은 화면에서 저장 상태 글자 대신 아이콘·토스트 | 5.8 |
 | G-48 | (v5) 변경 충돌(`stale_write`)은 AlertDialog, 입력 보존 복원은 배너형, 이탈 확인 버튼 순서·모양 | 5.8 |
-| G-49 | (v5) 창 높이 760 미만이면 머리를 왼쪽 스크롤 안으로, STAR 칸 간격 `space-y-10`, 글자 수는 포커스·90% 이상일 때만(S-44 본문은 항상) | 5.9 |
+| G-49 | (v5 → 2026-11-04) 머리(`DocHead`)는 카드 높이 40%까지, 넘치면 머리만 스크롤(760px 규칙 대체). 본문 2단은 카드 50% 이상, 배너·머리는 줄어들며 각자 스크롤, 넘칠 때 아래 페이드 + 키보드 포커스 영역(30 런), STAR 칸 간격 `space-y-10`, 글자 수는 포커스·90% 이상일 때만(S-44 본문은 항상) | 5.9 |
 | G-50 | (v5) 마크다운은 원문 그대로 입력(서식 미리보기 없음), 목록 줄 Enter 이어쓰기·Tab 들여쓰기 | 5.9 |
 | G-51 | (v5) "지금 본문에서" 칩·C-02 근거 구간 강조는 textarea 선택 상태 + 칸 링으로 대신, 못 찾으면 토스트 | 3.14, 5.9 |
 | G-52 | (v5) 패널 안 버튼은 모두 outline/ghost/secondary, 보내기만 default(R-C8). C-18 영역형도 패널 안에서는 outline | 1.1.3, 5.10 |

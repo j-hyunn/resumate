@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DocTextarea, DocTitleInput, flashElement, highlightRange } from "@/components/common/doc-inputs"
-import { DocBody } from "@/components/common/shell/doc-body"
+import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
   InputRestoreBanner,
@@ -361,7 +361,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
         ) : null}
       </ShellBanners>
 
-      <div className="shrink-0 space-y-2 px-6 pt-2 pb-4 max-md:px-4">
+      <DocHead className="space-y-2" label="산출물 정보">
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}
@@ -419,7 +419,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
           </p>
         ))}
         <p className="text-sm text-muted-foreground">{NOTICE}</p>
-      </div>
+      </DocHead>
       <Separator />
 
       <DocBody

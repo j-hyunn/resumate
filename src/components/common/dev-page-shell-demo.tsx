@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { MonthField } from "@/components/common/input-guide"
 import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, FieldRow, FieldRows, flashElement } from "@/components/common/doc-inputs"
-import { DocBody } from "@/components/common/shell/doc-body"
+import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
   InputRestoreBanner,
@@ -177,7 +177,7 @@ function ProjectDemo({ data }: { data: ProjectPageData }) {
           />
         ) : null}
       </ShellBanners>
-      <div className="shrink-0 space-y-3 px-6 pt-2 pb-4 max-md:px-4">
+      <DocHead className="space-y-3">
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}
@@ -225,7 +225,7 @@ function ProjectDemo({ data }: { data: ProjectPageData }) {
           </FieldRow>
         </FieldRows>
         {skippedLine ? <p className="text-sm text-muted-foreground">{skippedLine}</p> : null}
-      </div>
+      </DocHead>
       <Separator />
       <DocBody
         placement={panel.placement}
@@ -396,7 +396,7 @@ function DeliverableDemo({ data }: { data: DeliverablePageData }) {
           />
         ) : null}
       </ShellBanners>
-      <div className="shrink-0 space-y-3 px-6 pt-2 pb-4 max-md:px-4">
+      <DocHead className="space-y-3">
         <DocTitleInput
           ref={titleRef}
           label="산출물 제목"
@@ -414,7 +414,7 @@ function DeliverableDemo({ data }: { data: DeliverablePageData }) {
             대화를 시작하려면 산출물 제목을 먼저 입력해 주세요
           </p>
         ) : null}
-      </div>
+      </DocHead>
       <Separator />
       <DocBody
         placement={panel.placement}

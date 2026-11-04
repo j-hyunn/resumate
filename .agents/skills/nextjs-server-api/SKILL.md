@@ -1,6 +1,6 @@
 ---
 name: nextjs-server-api
-description: "Guide for implementing the Resumate Next.js (App Router) server side: project bootstrap, Supabase SSR auth (magic link + Google) and clients, proxy.ts session refresh, Server Actions, Route Handlers with SSE streaming, zod contracts, domain services, the ai_jobs lifecycle with after() step runner, heartbeat, cause-based retries scheduled via next_run_at and free-tier sequential runs, BYOK key handling (envelope encryption, app_key_reader decryption at run time, key verification jobs, provider consent checks), usage records for the usage meter, Vercel Cron routes, and Vitest tests. Use whenever writing or fixing API endpoints, server actions, route handlers, auth flow, job runner, AI key settings, usage meter, or bootstrapping the backend project. Korean triggers: API 구현, 서버 액션, 라우트 핸들러, 엔드포인트 추가, 인증 구현, 로그인 콜백, 비동기 작업, 재시도, 키 등록, 키 암호화, 사용량 미터, 크론, 프로젝트 셋업. Not for UI pages/components, or for prompt, adapter, and validator code (use ai-pipeline-impl)."
+description: "Guide for implementing the Resumate Next.js (App Router) server side: project bootstrap, Supabase SSR auth (Google only) and clients, proxy.ts session refresh, Server Actions, Route Handlers with SSE streaming, zod contracts, domain services, the ai_jobs lifecycle with after() step runner, heartbeat, cause-based retries scheduled via next_run_at and free-tier sequential runs, BYOK key handling (envelope encryption, app_key_reader decryption at run time, key verification jobs, provider consent checks), usage records for the usage meter, Vercel Cron routes, and Vitest tests. Use whenever writing or fixing API endpoints, server actions, route handlers, auth flow, job runner, AI key settings, usage meter, or bootstrapping the backend project. Korean triggers: API 구현, 서버 액션, 라우트 핸들러, 엔드포인트 추가, 인증 구현, 로그인 콜백, 비동기 작업, 재시도, 키 등록, 키 암호화, 사용량 미터, 크론, 프로젝트 셋업. Not for UI pages/components, or for prompt, adapter, and validator code (use ai-pipeline-impl)."
 ---
 
 # Next.js Server API
@@ -61,7 +61,7 @@ export async function saveProjectDetail(input: unknown): Promise<ActionResult<Pr
 ## Auth
 
 - `@supabase/ssr` server client in `src/server/db/server.ts`; refresh the session in `src/proxy.ts` (Next.js 16 renamed the `middleware.ts` convention to `proxy.ts` — check the bundled docs in `node_modules/next/dist/docs/`).
-- Magic link + Google OAuth callback at `src/app/auth/callback/route.ts` (exchange code, redirect to the career screen — PRD: the default screen after login).
+- Google OAuth callback (Google is the only sign-in method, D-09 change 2026-11-04) at `src/app/auth/callback/route.ts` (exchange code, redirect to the career screen — PRD: the default screen after login).
 - `requireUser()` uses `supabase.auth.getUser()` (verifies with the auth server), not `getSession()`.
 
 ## AI job runner (`src/server/jobs/`)

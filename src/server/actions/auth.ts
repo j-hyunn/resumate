@@ -1,9 +1,7 @@
 "use server";
 
 import {
-  SendMagicLinkInput,
   SignInWithGoogleInput,
-  type SendMagicLinkResult,
   type SignInWithGoogleResult,
   type SignOutResult,
 } from "@/lib/contracts/auth";
@@ -13,17 +11,7 @@ import { clearUserScopedCookies } from "@/server/auth/user-cookies";
 import { createSupabaseServerClient } from "@/server/db/server";
 import * as auth from "@/server/services/auth";
 
-/** S-02 (F-COM-01). Also used for "재발송" — same call, Supabase rate limit maps to auth_rate_limited. */
-export async function sendMagicLink(input: unknown): Promise<ActionResult<SendMagicLinkResult>> {
-  const parsed = SendMagicLinkInput.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error);
-  return runAction(async () => {
-    const supabase = await createSupabaseServerClient();
-    return auth.sendMagicLink(supabase, parsed.data, await getSiteOrigin());
-  });
-}
-
-/** S-02 Google button. The client navigates to `data.url`. */
+/** S-02 Google button — the only sign-in method (F-COM-01, D-09 변경). The client navigates to `data.url`. */
 export async function signInWithGoogle(input: unknown): Promise<ActionResult<SignInWithGoogleResult>> {
   const parsed = SignInWithGoogleInput.safeParse(input ?? {});
   if (!parsed.success) return invalid(parsed.error);

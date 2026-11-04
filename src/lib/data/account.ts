@@ -1,5 +1,5 @@
 /**
- * 계정 data layer (server only): Supabase Auth (magic link / Google), consents, policy versions,
+ * 계정 data layer (server only): Supabase Auth (Google), consents, policy versions,
  * account deletion. Signatures kept from the mock; `?state=` previews still run the mock bodies
  * (`previewOr`, lib/data/source.ts). Names follow 04-data-model.md.
  */
@@ -78,7 +78,7 @@ function maybeFail(opts?: FailOption) {
 }
 
 // ---------------------------------------------------------------------------
-// Auth (F-COM-01, D-09: 매직 링크 + Google). Supabase Auth replaces this.
+// Auth (F-COM-01, D-09 변경: Google 로그인만 — decisions.md 3.11 / 4.5).
 // ---------------------------------------------------------------------------
 
 /**
@@ -99,50 +99,21 @@ async function nextFromSignInUrl(): Promise<string | undefined> {
   return next ? safeNextPath(next) : undefined
 }
 
-/** Supabase signInWithOtp equivalent. The mock only waits; nothing is sent. */
-export async function sendMagicLink(email: string, opts?: FailOption): Promise<{ sent_at: string }> {
-  return previewOr(
-    async () => {
-      await mockRequest(600)
-      maybeFail(opts)
-      void email
-      return { sent_at: nowIso() }
-    },
-    async () => {
-      unwrap(await authActions.sendMagicLink({ email, next: await nextFromSignInUrl() }))
-      return { sent_at: nowIso() }
-    },
-  )
-}
-
 /**
- * Where to go after the auth callback: a new user (no active required consents) goes to
- * S-03, an existing user to S-08 or the original URL (the page resolves `next`).
- * Mock rule: the fixture user's email is "existing"; any other email is a new sign-up.
+ * Google OAuth start. The `?state=` preview skips the provider page and resolves the destination
+ * the callback would pick: `forceNewUser` → S-03, the fixture user → S-25 when deletion is
+ * incomplete, else S-08 (or S-03 when required consents are missing). A real request returns the
+ * provider URL; /auth/callback decides the destination.
  */
-export async function completeSignIn(input: {
-  method: "magic_link" | "google"
-  email?: string
-  forceNewUser?: boolean
-}): Promise<SignInResult> {
-  // Preview only: S-02's dev "open the link" stand-in. A real link goes through /auth/callback.
-  if (!(await isPreviewRequest())) throw new AccountRequestError("magic link stand-in is preview only")
-  const db = await mockRequest(400)
-  const isExisting =
-    !input.forceNewUser && (input.method === "google" || input.email?.trim().toLowerCase() === db.user.email)
-  if (isExisting && db.mock_controls.account_deletion_state === "deletion_incomplete")
-    return { destination: "consent", deletion_incomplete: true }
-  if (!isExisting) return { destination: "consent" }
-  return { destination: hasActiveRequiredConsents(db.consents) ? "career" : "consent" }
-}
-
-/** Google OAuth start. The mock skips the provider page and completes immediately. */
 export async function signInWithGoogle(opts?: FailOption & { forceNewUser?: boolean }): Promise<SignInResult> {
   return previewOr(
     async () => {
-      await mockRequest(500)
+      const db = await mockRequest(500)
       maybeFail(opts)
-      return completeSignIn({ method: "google", forceNewUser: opts?.forceNewUser })
+      if (opts?.forceNewUser) return { destination: "consent" as const }
+      if (db.mock_controls.account_deletion_state === "deletion_incomplete")
+        return { destination: "consent" as const, deletion_incomplete: true }
+      return { destination: hasActiveRequiredConsents(db.consents) ? ("career" as const) : ("consent" as const) }
     },
     async () => {
       const { url } = unwrap(await authActions.signInWithGoogle({ next: await nextFromSignInUrl() }))

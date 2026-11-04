@@ -20,7 +20,7 @@ Bugs in this codebase hide at seams between layers that were written by differen
 
 Unit tests inject fakes, so a dependency that is wired wrong in the real factory passes them (`332ec0c`: the writing-chat turn passed an unbound key source, every turn ended `stalled`, all tests green). Once per slice that touches a request path:
 1. Local Supabase running (`supabase status`), `pnpm dev` in the background.
-2. Sign in as a seed user (local magic link via the local mail inbox), or call the service through its real dependency factory (`src/server/jobs/*` deps, not test fakes) from a Vitest integration test against the local stack.
+2. Sign in as a seed user (local: `admin.createUser` + `signInWithPassword`, as the integration tests do; the app UI signs in with Google only since R6), or call the service through its real dependency factory (`src/server/jobs/*` deps, not test fakes) from a Vitest integration test against the local stack.
 3. Hit each changed endpoint or action once on the happy path and once on a failure path that doesn't need a provider (no key → lock state, `insufficient_data`, validation error). For AI paths without a real key, assert the job reaches the expected terminal code — not `stalled`.
 4. Record what ran in the report. If the stack or dev server can't start, it's `SKIP` with the reason. Never use a preview or production URL for this — they share the production DB.
 

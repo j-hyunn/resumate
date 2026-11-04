@@ -1344,7 +1344,7 @@ v4.4 다른 예:
 | F-P3-07 세션 기록 | R 위 테이블; W `interview_sessions.result_viewed_at`(v4.3 Q53-10, 2.7.1) | `mark_interview_result_viewed` |
 | F-P3-13 컬처핏 데이터 부족 허용 | R `interview_sessions.data_sufficiency` | `get_data_readiness`(`culture_fit_interview`) |
 | F-P3-15 모의 면접 메뉴 | R `interview_sessions` + `application_projects.name` (필터 `application_project_id`, `interview_type`, `status`) | — |
-| F-COM-01 가입·로그인 | W `auth.users`, `profiles`(가입 트리거) | — |
+| F-COM-01 가입·로그인 | W `auth.users`, `profiles`(가입 트리거). (2026-11-04, D-09 변경) Auth 공급자는 **Google만** — 이메일(매직 링크) 공급자는 끈다. 테이블·컬럼 변경 없음 | — |
 | F-COM-02 동의 | R `policy_versions`; W `consents` | — |
 | F-COM-03 AI 학습 미사용 고지 | R `policy_versions` | 없음(보기) |
 | F-COM-04 개별 삭제 | 커리어 테이블(+`project_deliverables`), `evidence_links`, `draft_section_sources`, 결과 테이블, `writing_chats`(v4.5: 산출물 대화 포함) | `get_deletion_impact`, `delete_career_item` |

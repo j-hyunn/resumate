@@ -45,7 +45,7 @@ export function resolveSiteOrigin(input: OriginInput): string {
   return `${proto}://${host}`;
 }
 
-/** Public origin for auth redirect URLs (magic link emailRedirectTo, OAuth redirectTo). */
+/** Public origin for auth redirect URLs (Google OAuth redirectTo). */
 export async function getSiteOrigin(): Promise<string> {
   const configured = getPublicEnv().NEXT_PUBLIC_SITE_URL;
   if (configured) return new URL(configured).origin;

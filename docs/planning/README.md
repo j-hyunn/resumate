@@ -2,7 +2,8 @@
 
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
-- 최종 정리: 2026-11-03(프로젝트 추가·산출물 상세 Figma 결정 PA-1~PA-4 반영 추가)
+- 최종 정리: 2026-11-04(로그인 Google 단일화 반영 추가)
+- **2026-11-04 개정: 로그인 Google 단일화** (D-09 변경, 사용자 확정): 가입·로그인을 Google 계정으로만 한다. 매직 링크·재발송 제거. PRD v4.7 F-COM-01, UX v5.7 S-02, DM F-COM-01 행(스키마 변경 없음), [decisions.md](decisions.md) 3.11·4.5. 작은 변경이라 팀·리뷰 사이클 없이 리더가 직접 고쳤다
 - **2026-11-03 개정: 프로젝트 추가·산출물 상세 피그마 결정 PA-1~PA-4** (`_workspace/00_input/planning-decisions-project-add-figma.md`): 산출물 상세에 Resumate AI 패널(본문 전체 초안 제안 → 교체/덧붙이기, AI-13 신설), 산출물 분류 없음, 프로젝트 상세·산출물 상세는 페이지 단위 "저장하기"(빈 페이지로 진입, 첫 저장·첫 AI 메시지 때 생성, [반영]은 폼 채우기), 프로젝트 머리 5필드 통일. PRD v4.6, UX v5.6, AI v4.6, DM v4.5. 결정 기록 [decisions.md](decisions.md) 3.10·4.4
 - 반영한 사용자 피드백: 초기 인터뷰 + 수정 피드백 1·2차 + 결정 10건(2026-10-24) + BYOK 전환(2026-10-26) + BYOK 결정(2026-10-28) (`_workspace/00_input/brief.md`) + **백엔드 구현 차이 결정 24건(2026-11-05)** (`_workspace/00_input/planning-decisions-2026-11-05.md`) + **커리어 화면 재설계 결정 24건(2026-11-02, CR-1~CR-24)** (`_workspace/00_input/planning-decisions-career-redesign.md`)
 - **2026-11-02 개정: 커리어 화면 피그마 재설계 결정 CR-1~14** (+ 후속 결정 CR-15~24): 피그마 커리어 프레임 5개를 대조해 사용자가 정한 결정을 네 문서에 반영했다(PRD v4.5, UX v5.5, AI v4.5, DM v4.4). 커리어 = 왼쪽 시작 연도 목록 + 오른쪽 상세, 프로젝트당 STAR 1개, 프로젝트 상세 페이지의 Resumate AI 패널, 독립 프로젝트·산출물 신설, 상세 내용·정량 성과·별도 대화 화면 폐기, 두 번째 메뉴 이름 "자기소개서 관리", 그 안 지원 건의 화면 용어 "자기소개서"(CR-23), 프로젝트 "진행 중" 체크(CR-22), AI 분류 추천 후 확인(CR-20). 기록: [decisions.md](decisions.md) 3.9·4.3, 리뷰 `_workspace/03_spec-reviewer_review_career-redesign.md`
@@ -14,8 +15,8 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
-| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.6 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.6 | ux-planner |
+| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.7 | product-planner |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.7 | ux-planner |
 | [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.6 | ai-feature-designer |
 | [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.5 | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |
@@ -61,6 +62,8 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 내용은 [decisions.md](decisions.md)에 있다.
 
 ## 남은 일
+
+- **로그인 Google 단일화 후속 ★ (2026-11-04)**: 매직 링크 서버 코드·콜백 분기·Supabase 이메일 공급자·S-02 화면 정리. 목록은 [decisions.md](decisions.md) 4.5
 
 - **프로젝트 추가·산출물 상세 후속 ★ (2026-11-03)**: 백엔드는 DM 11.3(`writing_chats.project_deliverable_id`, 페이지 저장 RPC 2개, `apply_writing_chat_proposal` 폐기, `structured_draft` `rev`·산출물 모양, AI-13 파이프라인), UI는 L-02 셸·S-10 재구현·S-44 신규. 피그마 수정 요청 FG-1~13. 목록은 [decisions.md](decisions.md) 4.4
 - **백엔드 후속 수정 ★ 14건**(A2·A5·A6·A7·A10·A11·A13·A18·A19·A20·A22·A23·A24 + R-67 readiness `consent_required`)과 확인 항목 5건(2건 해소, 남은 3건). A1은 구현됨(42f7611). A6은 2026-11-02 커리어 재설계(CR-5·CR-6)로 취소되어 실제 남은 것은 13건, A18은 내용 변경. 목록은 [decisions.md](decisions.md) 4장. `resumate-backend`로 처리한다

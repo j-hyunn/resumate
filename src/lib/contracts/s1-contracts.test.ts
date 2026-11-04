@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SendMagicLinkInput, SignInWithGoogleInput } from "./auth";
+import { SignInWithGoogleInput } from "./auth";
 import { SubmitConsentsInput, WithdrawConsentInput } from "./consent";
 import { CONSENT_TYPES, OPTIONAL_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from "./enums";
 import { UpdateProfileInput } from "./profile";
@@ -13,17 +13,8 @@ describe("enums", () => {
   });
 });
 
-describe("SendMagicLinkInput", () => {
-  it("trims and lowercases the email", () => {
-    expect(SendMagicLinkInput.parse({ email: "  User@Example.COM " })).toEqual({ email: "user@example.com" });
-  });
-  it("rejects a non-email", () => {
-    expect(SendMagicLinkInput.safeParse({ email: "nope" }).success).toBe(false);
-  });
-  it("accepts next", () => {
-    expect(SendMagicLinkInput.parse({ email: "a@b.co", next: "/board" }).next).toBe("/board");
-  });
-  it("Google input allows an empty object", () => {
+describe("SignInWithGoogleInput", () => {
+  it("allows an empty object", () => {
     expect(SignInWithGoogleInput.parse({})).toEqual({});
   });
 });

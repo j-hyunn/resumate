@@ -62,3 +62,14 @@
 - KEK(`AI_KEY_KEK_BASE64`, id env-v1)는 원격용으로 새로 생성했고 백업은 사용자 로컬 `~/.resumate/prod-kek.txt` → 비밀번호 관리자로 옮길 것. preview 배포도 같은 DB·같은 KEK를 쓴다.
 - 원격 Auth: site_url = 운영 URL, 리디렉션 허용 = 운영·preview(`resumate-*-jehyuns-projects-85b35a5d.vercel.app`)·localhost의 `/auth/callback`. 메일 재전송 간격 60초(로컬 1초와 다름). 원격 반영은 로컬 `config.toml`을 고치지 않고 복사본으로 `supabase config push`(auth만) 했다.
 - ~~출시 전 필수~~ (R6 이후 불필요 — 로그인 메일을 보내지 않음): 무료 플랜 기본 메일 발송기는 템플릿 변경 불가 + 조직 멤버 주소로만 발송 + 시간당 발송 한도가 낮다. 커스텀 SMTP(예: Resend)를 연결한 뒤 한국어 템플릿(`supabase/templates/`)을 올린다. 그전까지 원격 메일은 Supabase 기본(영문) 템플릿이며, 콜백은 `code`·`token_hash` 둘 다 처리하므로 로그인은 된다.
+
+## 2026-11-04 장기 미접속 계정 파기 (처리방침 2026-11-04 §3)
+- 안내 메일: Gmail SMTP(운영자 Gmail + 앱 비밀번호, nodemailer) — 사용자 결정. Supabase Auth SMTP는 인증 템플릿 메일만 보낼 수 있어 제외. 처리방침 처리 위탁에 Google LLC(Gmail)와 국외 처리 내용을 추가했다.
+- 기준: 마지막 접속 = `coalesce(last_active_at, created_at)`. 1년 − 30일이 지나면 안내, 안내 30일 뒤 + 마지막 접속 1년이 지나면 파기. 메일 서버가 받은 뒤에만 `inactivity_notice_sent_at`을 기록해, 안내 없이 파기되는 일은 없게 했다(실패 시 다음 날 재발송).
+- `last_active_at`은 proxy가 `touch_last_active`로 갱신한다(브라우저·사용자별 6시간 쿠키 `rm_last_active`로 제한, RPC도 1시간 안의 재기록은 건너뜀). 갱신하면 대기 중인 안내가 취소된다. `profiles.updated_at`도 함께 바뀐다.
+- 파기 범위는 `delete_account`와 같다: 본문을 `private.delete_account_data(uid, hash, reason)`로 옮기고 `delete_account`·`purge_inactive_account`가 함께 쓴다.
+- Auth 사용자 삭제 실패분은 크론의 auth cleanup 단계가 `get_account_deletion_state = deletion_incomplete`일 때만 지운다(사용자 탈퇴 미완료분 포함).
+- 한도: 실행당 안내 30·파기 30·Auth 정리 20, 연속 3회 발송 실패 시 중단. Gmail 개인 계정 일 500통 한도 아래.
+- 원격 반영 시 필요: 마이그레이션 `20261112000100_inactive_account_deletion`(파괴적 아님, `last_active_at` 백필), Vercel 환경 변수 `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`(production·preview, Sensitive). 미설정 시 안내가 나가지 않으므로 파기도 일어나지 않는다(크론은 실패로 표시).
+- (PT-7, 2026-11-04 사용자 결정) Gmail 보낸편지함의 안내 메일 사본은 파기·탈퇴한 계정 것만 운영자가 매월 한 번 직접 삭제한다. 유지된 계정의 메일은 계정이 있는 동안 보관한다. 자동 삭제 없음.
+- 2026-11-04 원격 반영: `supabase db push`로 `20261111000100_policy_versions_2026_11_04`·`20261112000100_inactive_account_deletion` 적용. 확인: profiles 1행 백필 완료(`last_active_at` null 0), 크론 RPC 5개 service_role 전용, `touch_last_active` authenticated. 보안 advisor 새 항목은 `touch_last_active` SECURITY DEFINER(의도, 본인 행만 갱신) 1건. Vercel `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`는 Production에만 등록(크론은 운영에서만 실행).

@@ -330,8 +330,13 @@ select set_eq(
         'purge_old_account_deletion_logs(timestamp with time zone,integer)',
         'save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)',
         'record_provider_key_check(uuid,text,text,text)',
-        'get_account_deletion_state(uuid,text)'],
-  'service_role-only public functions = sweep / claim_due (S3a) + the 3 S9 retention purges (R4: unlinked chat purge retired) + R1 server-only RPCs (A19 key save / check, A7 deletion state)');
+        'get_account_deletion_state(uuid,text)',
+        'list_inactivity_notice_targets(timestamp with time zone,integer)',
+        'mark_inactivity_notice_sent(uuid,timestamp with time zone)',
+        'list_inactive_accounts_due(timestamp with time zone,integer)',
+        'purge_inactive_account(uuid,text,timestamp with time zone)',
+        'list_incomplete_account_deletions(integer)'],
+  'service_role-only public functions = sweep / claim_due (S3a) + the 3 S9 retention purges (R4: unlinked chat purge retired) + R1 server-only RPCs (A19 key save / check, A7 deletion state) + inactive account deletion cron RPCs');
 
 -- QA-S9-04 (b): public functions the user session can execute, catalog-wide. Grows only with a user-session RPC
 -- in DM §5 / §7.
@@ -349,8 +354,8 @@ select set_eq(
         'reorder_cover_letter_questions', 'reorder_project_deliverables', 'request_ai_job_cancel',
         'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
         'start_writing_chat', 'submit_interview_session',
-        'get_interview_grading_decisions', 'update_failed_jd_raw_text'],
-  'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role)');
+        'get_interview_grading_decisions', 'update_failed_jd_raw_text', 'touch_last_active'],
+  'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role; touch_last_active for inactive account deletion)');
 
 -- QA-S9-04 (a): every table in public has RLS enabled (a new table without RLS fails here).
 select is_empty(

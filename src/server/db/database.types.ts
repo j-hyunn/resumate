@@ -906,6 +906,24 @@ isOneToOne: false
               "encryption_version": number,"kek_id": string,"key_ciphertext": string,"key_id": string,"key_nonce": string,"wrapped_dek": string
             }[]
                            },
+"list_inactive_accounts_due":
+{ Args: { "p_limit"?: number,"p_now": string }; Returns: {
+              "user_id": string
+            }[]
+                           },
+"list_inactivity_notice_targets":
+{ Args: { "p_limit"?: number,"p_now": string }; Returns: {
+              "email": string,"last_active_at": string,"user_id": string
+            }[]
+                           },
+"list_incomplete_account_deletions":
+{ Args: { "p_limit"?: number }; Returns: {
+              "user_id": string
+            }[]
+                           },
+"mark_inactivity_notice_sent":
+{ Args: { "p_sent_at": string,"p_user_id": string }; Returns: boolean
+                           },
 "mark_interview_result_viewed":
 { Args: { "p_session_id": string }; Returns: Json
                            },
@@ -917,6 +935,9 @@ isOneToOne: false
                            },
 "move_application_stage":
 { Args: { "p_application_project_id": string,"p_outcome"?: string,"p_to_stage": string }; Returns: Json
+                           },
+"purge_inactive_account":
+{ Args: { "p_now": string,"p_subject_hash": string,"p_user_id": string }; Returns: Json
                            },
 "purge_old_account_deletion_logs":
 { Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
@@ -988,6 +1009,9 @@ isOneToOne: false
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number
+                           },
+"touch_last_active":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "update_failed_jd_raw_text":
 { Args: { "p_application_project_id": string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json }; Returns: Json

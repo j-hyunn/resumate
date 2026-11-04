@@ -75,6 +75,11 @@ export const ServerEnvSchema = PublicEnvSchema.extend({
     .min(32)
     .refine((v) => new Set(v).size >= 16, "must be randomly generated (low-entropy value)")
     .optional(),
+  // Gmail SMTP for the inactive account notice (privacy policy 2026-11-04 §4, retention cron): the operator's
+  // Gmail address and a Google app password (16 letters; spaces are ignored). Optional so pages don't depend on
+  // them; without them the cron sends no notice and therefore deletes no inactive account (fail closed).
+  GMAIL_SMTP_USER: z.email().optional(),
+  GMAIL_SMTP_APP_PASSWORD: z.string().min(16).optional(),
 });
 
 const DEV_ONLY_KEYS = ["AI_DEV_PROVIDER", "AI_DEV_API_KEY", "AI_DEV_CONNECTION_TIER"] as const;

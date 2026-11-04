@@ -397,10 +397,10 @@ export function SaveProblemNotice<R>({
         <div className="flex flex-wrap gap-2">
           {/* UQ-705: 44px touch targets on narrow screens (UX-9) */}
           {/* [UI-가정] 선택 뒤 한 줄 문구 */}
-          <Button variant="outline" size="sm" className="max-md:min-h-11" onClick={choose(onTakeLatest, "최신 내용으로 바꿨어요")}>
+          <Button variant="outline" size="sm" className="max-md:min-h-8" onClick={choose(onTakeLatest, "최신 내용으로 바꿨어요")}>
             최신 내용으로 바꾸기
           </Button>
-          <Button size="sm" className="max-md:min-h-11" onClick={choose(onKeepMine, "내 입력으로 저장하고 있어요")}>
+          <Button size="sm" className="max-md:min-h-8" onClick={choose(onKeepMine, "내 입력으로 저장하고 있어요")}>
             내 입력으로 저장
           </Button>
         </div>

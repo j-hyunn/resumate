@@ -1,12 +1,14 @@
 import { educationDisplayName } from "@/server/services/career/education-name";
 import { classificationLine } from "../classification";
 import { hashCanonical } from "../hash";
+import { STAR_FIELDS } from "../schemas/structured-draft";
 import { AliasMap, type AliasEntry } from "./aliases";
 import type { CareerRows, DeliverableRow, EducationRow, ExperienceRow, ProjectRow, SkillRow } from "./career-rows";
 import {
   DELIVERABLE_PACK_MAX_CHARS,
   DELIVERABLE_PACK_TOTAL_CHARS,
   normalizeDeliverableMarkdown,
+  plainForValidation,
   rawSpan,
   truncateNormalized,
 } from "./deliverable-text";
@@ -190,6 +192,10 @@ export function buildCareerPack(rows: CareerRows, options: BuildCareerPackOption
         result: p.result,
         learnings: p.learnings,
       }, p.content_updated_at, p.name, [parent]),
+      // v4.10 (UP-14): the pack shows STAR as stored (markdown); V-3 matches its plain text.
+      matchFields: Object.fromEntries(
+        STAR_FIELDS.map((f) => [f, p[f] === null || p[f] === undefined ? null : plainForValidation(p[f]!)]),
+      ),
       scope: "affiliated",
     });
     out.push(`<project ref="${alias}">`);

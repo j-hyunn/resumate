@@ -186,9 +186,10 @@ export function quickChips(state: QuickChipsState): QuickChip[] {
 }
 
 /**
- * The chip row is hidden (UX S-10 [가정] / AI-12): `message_count` ≥ 36, a `closed` chat, or no key
- * (the input area is C-18). While a reply streams the chips stay but are disabled (no layout jump).
+ * The chip row is a start-area helper only: it is hidden from the moment the user sends their first message
+ * (`sent` — a user message exists or a send is in flight), and also at `message_count` ≥ 36, a `closed` chat,
+ * or no key (the input area is C-18).
  */
-export function quickChipsVisible(opts: { message_count: number; closed: boolean; locked: boolean }): boolean {
-  return !opts.locked && !opts.closed && opts.message_count < PAGE_LIMITS.chipsHideFrom
+export function quickChipsVisible(opts: { message_count: number; closed: boolean; locked: boolean; sent?: boolean }): boolean {
+  return !opts.sent && !opts.locked && !opts.closed && opts.message_count < PAGE_LIMITS.chipsHideFrom
 }

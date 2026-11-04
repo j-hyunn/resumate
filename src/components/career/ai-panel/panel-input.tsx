@@ -2,18 +2,19 @@
 
 /**
  * 패널 아래쪽 (design-system v4 5.10 "칩 줄" · "입력 영역" · "잠금 · 끝난 대화"): before-send blocks →
- * quick answers + chip row → the input pill (Enter 보내기, Shift+Enter 줄바꿈, no send while composing Hangul)
- * → G-2 line + "{n} / 40". Replaced by C-18 inline (no key) or the closed-chat box (40 / `closed`).
+ * chip row (start area only) → the input pill (Enter 보내기, Shift+Enter 줄바꿈, no send while composing Hangul)
+ * (block-end row: "{n}/40" · send). Replaced by C-18 inline (no key) or the closed-chat box (40 / `closed`).
  */
 import * as React from "react"
-import { ArrowUp, Loader2, Lock, Plus, ShieldAlert, Square } from "lucide-react"
+import { ArrowUp, Loader2, Lock, Plus, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
 import { AiLock } from "@/components/common/ai-lock"
-import { GUIDE_COPY } from "@/components/common/input-guide"
+import { ProviderBadge } from "@/components/common/provider-badge"
 import { PAGE_LIMITS, PANEL_COPY } from "@/lib/data/career-v45-shared"
 import type { AiPanelController, PanelBlock } from "./use-ai-panel"
 
@@ -62,9 +63,8 @@ export function PanelInputArea({
         </div>
       ) : null}
       <ChipRow panel={panel} />
-      <div className="space-y-1.5 px-3 pt-2 pb-3">
+      <div className="px-3 pt-2 pb-3">
         <InputPill panel={panel} />
-        <Footer panel={panel} />
       </div>
     </div>
   )
@@ -139,24 +139,10 @@ function BlockNotice({ panel, block }: { panel: AiPanelController; block: PanelB
   }
 }
 
-/** "AI가 질문 중일 때" = the last message is the AI's and asks something [UI-가정: a "?" in it]. */
-function asking(panel: AiPanelController): boolean {
-  const last = panel.chat?.messages[panel.chat.messages.length - 1]
-  return Boolean(last && last.role === "assistant" && !last.is_greeting && /\?/.test(last.content))
-}
-
 function ChipRow({ panel }: { panel: AiPanelController }) {
   if (!panel.chipsVisible) return null
-  const quick = asking(panel) && panel.phase === "idle"
   return (
     <div className="flex flex-wrap gap-1.5 px-3 pt-3" role="group" aria-label="빠른 버튼">
-      {quick
-        ? PANEL_COPY.quickAnswers.map((q) => (
-            <Button key={q} variant="ghost" size="sm" disabled={panel.responding} onClick={() => panel.send(q)}>
-              {q}
-            </Button>
-          ))
-        : null}
       {panel.chips.map((chip) => (
         <Button key={chip.label} variant="chip" className="max-w-full" title={chip.label} disabled={panel.responding} onClick={() => panel.sendChip(chip)}>
           <span className="truncate">{chip.label}</span>
@@ -179,8 +165,9 @@ function InputPill({ panel }: { panel: AiPanelController }) {
         panel.send()
       }}
     >
-      {/* shadcn Chat field: Input Group (textarea + inline-end send / stop) */}
-      <InputGroup className="items-end rounded-3xl bg-card py-1.5 pr-1.5 pl-4 has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-offset-0 dark:bg-card">
+      {/* shadcn AI Elements Prompt Input: Input Group with the textarea on top and a block-end row —
+          [+] 첨부 (disabled) on the left · "{n}/40" · C-19 model badge · send / stop on the right */}
+      <InputGroup className="rounded-3xl bg-white has-disabled:bg-white has-disabled:opacity-100 dark:bg-card">
         <InputGroupTextarea
           ref={bindInput}
           value={panel.input}
@@ -199,9 +186,24 @@ function InputPill({ panel }: { panel: AiPanelController }) {
           placeholder={PANEL_COPY.inputPlaceholder}
           aria-label={PANEL_COPY.inputPlaceholder}
           rows={1}
-          className="field-sizing-content max-h-40 min-h-9 p-0 py-1.5 text-base leading-6"
+          className="field-sizing-content max-h-40 min-h-12 px-4 pt-3 pb-1 text-base leading-6"
         />
-        <InputGroupAddon align="inline-end" className="py-0 pr-0">
+        <InputGroupAddon align="block-end" className="gap-2 px-3 pb-2.5">
+          {/* 파일 첨부: not built yet — shown disabled (the tooltip says so); a hidden file input comes with it */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* span: a disabled button gets no pointer events, the wrapper keeps the tooltip */}
+              <span tabIndex={0} className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <InputGroupButton variant="outline" size="icon-sm" className="rounded-full" aria-label="파일 첨부 (준비 중)" disabled>
+                  <Plus aria-hidden />
+                </InputGroupButton>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>파일 첨부는 준비 중이에요</TooltipContent>
+          </Tooltip>
+          {/* 대화 수 · C-19 연결 배지 (moved from the panel header) · send */}
+          <MessageCount panel={panel} className="ml-auto" />
+          <ProviderBadge className="max-w-[10rem] min-w-0 truncate" />
           {starting ? (
             <span className="grid size-8 shrink-0 place-items-center" role="status">
               <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
@@ -222,18 +224,24 @@ function InputPill({ panel }: { panel: AiPanelController }) {
   )
 }
 
-function Footer({ panel }: { panel: AiPanelController }) {
+/** 현재 대화 수 "{n}/40" — next to the send button; warning colour from 36 */
+function MessageCount({ panel, className }: { panel: AiPanelController; className?: string }) {
   const count = panel.messageCount
   return (
-    <div className="flex items-start justify-between gap-3 px-2">
-      {/* G-2 (C-07 shape), 12px in the narrow panel [가정 G-55] */}
-      <p className="flex items-start gap-1 text-xs leading-4 text-muted-foreground">
-        <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-        {GUIDE_COPY["G-2"]}
-      </p>
-      <span className={cn("shrink-0 text-xs text-muted-foreground tabular-nums", count >= PAGE_LIMITS.chipsHideFrom && "text-warning-subtle-foreground")}>
-        {count} / {PAGE_LIMITS.messageLimit}
-      </span>
+    <span
+      aria-label={`대화 ${count} / ${PAGE_LIMITS.messageLimit}`}
+      className={cn("shrink-0 text-xs text-muted-foreground tabular-nums", count >= PAGE_LIMITS.chipsHideFrom && "text-warning-subtle-foreground", className)}
+    >
+      {count}/{PAGE_LIMITS.messageLimit}
+    </span>
+  )
+}
+
+/** closed chat: the count alone under the closed box */
+function Footer({ panel }: { panel: AiPanelController }) {
+  return (
+    <div className="flex justify-end px-2">
+      <MessageCount panel={panel} />
     </div>
   )
 }

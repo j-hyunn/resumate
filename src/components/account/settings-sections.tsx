@@ -96,7 +96,7 @@ export function SettingsSectionBody({
               <Link
                 href={routes.policies(t)}
                 onClick={onNavigate}
-                className="text-base underline underline-offset-4 hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center"
+                className="text-base underline underline-offset-4 hover:text-foreground max-md:inline-flex max-md:min-h-8 max-md:items-center"
               >
                 {POLICY_TYPE_LABELS[t]}
               </Link>

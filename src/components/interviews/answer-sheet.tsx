@@ -388,7 +388,7 @@ export function AnswerSheet({
           <CirclePause aria-hidden />
           <AlertTitle>{questions.length === 0 ? "질문을 만들지 못한 면접이에요" : "그만둔 면접이에요. 답변은 볼 수만 있어요"}</AlertTitle>
           <AlertDescription>
-            <Button asChild size="sm" className="mt-1 max-md:h-11">
+            <Button asChild size="sm" className="mt-1 max-md:h-8">
               <Link href={routes.interviewPrep(applicationProjectId)}>이 기업 JD로 새 면접 시작</Link>
             </Button>
           </AlertDescription>
@@ -401,7 +401,7 @@ export function AnswerSheet({
           <Info aria-hidden />
           <AlertTitle>{staleFailure === "edited" ? "공고를 고쳤어요. 이 면접은 질문을 만들지 못했어요" : "질문을 만들지 못했어요"}</AlertTitle>
           <AlertDescription>
-            <Button asChild size="sm" variant="outline" className="mt-1 max-md:h-11">
+            <Button asChild size="sm" variant="outline" className="mt-1 max-md:h-8">
               <Link href={routes.interviewPrep(applicationProjectId)}>면접 준비로</Link>
             </Button>
           </AlertDescription>
@@ -580,7 +580,7 @@ export function AnswerSheet({
               lock={{ entry: "interview_submit" }}
               onRun={askSubmit}
               pending={submitting}
-              buttonClassName="max-md:h-11"
+              buttonClassName="max-md:h-8"
             >
               제출
             </AiRunButton>
@@ -613,7 +613,7 @@ export function AnswerSheet({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={submitting}>계속 쓰기</AlertDialogCancel>
-            <Button onClick={submit} disabled={submitting} className="max-md:h-11">
+            <Button onClick={submit} disabled={submitting} className="max-md:h-8">
               {submitting ? <Loader2 className="animate-spin" aria-hidden /> : null}
               제출하기
             </Button>
@@ -643,7 +643,7 @@ function InsufficientDataNotice({ hasQuestions, href }: { hasQuestions: boolean;
         {hasQuestions ? <p>만든 질문과 답변은 그대로 있어요</p> : null}
         <p>면접 준비에서 부족한 커리어를 확인할 수 있어요</p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button asChild variant="outline" size="sm" className="max-md:h-11">
+          <Button asChild variant="outline" size="sm" className="max-md:h-8">
             <Link href={href}>면접 준비로</Link>
           </Button>
         </div>

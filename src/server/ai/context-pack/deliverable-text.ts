@@ -5,12 +5,27 @@
  * (DM 2.8, JS UTF-16 offsets).
  *
  * Deterministic rules (same body → same text):
- * - heading `#`, blockquote `>`, list markers (`-`, `*`, `+`, `1.`, task boxes) removed;
+ * - heading `#`, blockquote `>`, list markers (`-`, `*`, `+`, task boxes) removed;
+ * - ordered list markers (`1.`, `2)`) removed only when they form a list
+ *   (R9 QA-02, `isOrderedListMarker`): 1–2 digits, and the number is 1 or
+ *   continues / is continued by a sibling item (n-1 before, n+1 after).
+ *   Other line-leading numbers ("2024. 출시", "300) 명", a lone "7. …") are
+ *   body text, so the number guard (V-9c / V-9j) still sees them;
  * - emphasis (`**`, `__`, `*`, `~~`, edge `_`) and inline-code backticks removed;
  * - `[text](url)` → text; images `![alt](url)` removed; HTML tags removed;
  * - table rows → cells joined with " / " (separator rows dropped);
  * - fenced code blocks: fences dropped, first CODE_BLOCK_MAX_LINES lines kept [가정];
  * - paragraphs (blank lines) and line structure kept; trailing spaces trimmed.
+ * - (v4.10, UP-9) editor escapes undone: `\x` (x = ASCII punctuation) → `x`
+ *   mapped to x's raw index; `&lt;` → `<` (no other entity is decoded);
+ *   inline code spans keep their content literally (no escapes inside code);
+ *   table cells split on unescaped `|` only (`\|` is a pipe inside a cell);
+ *   `<br>` (multi-line table cell) → one space; a line that is only `&nbsp;`
+ *   (the editor's empty paragraph) is a blank line [가정].
+ *
+ * The same rules give the plain text the AI-12 validators compare STAR
+ * markdown on (`plainForValidation`, v4.10 UP-14) — validation only, never
+ * what is stored or sent to the model.
  *
  * Pure; never logs text.
  */
@@ -28,7 +43,20 @@ export type NormalizedText = {
   map: number[];
 };
 
-export function normalizeDeliverableMarkdown(raw: string): NormalizedText {
+export type NormalizeOptions = {
+  /** Lines kept per fenced code block (default CODE_BLOCK_MAX_LINES; validation keeps all). */
+  codeBlockMaxLines?: number;
+  /**
+   * R9 QA-02: "list" (default) — `N.` / `N)` is a marker only when it forms a
+   * list (`findOrderedListMarkers`). "fragment" — every 1–2 digit line-leading
+   * number is a marker: for a quote / needle cut out of a list, which lost its
+   * siblings. 3+ digit numbers stay body text in both.
+   */
+  orderedLists?: "list" | "fragment";
+};
+
+export function normalizeDeliverableMarkdown(raw: string, options: NormalizeOptions = {}): NormalizedText {
+  const maxCodeLines = options.codeBlockMaxLines ?? CODE_BLOCK_MAX_LINES;
   const out = new Builder();
   const lines = splitLines(raw);
   let inFence = false;
@@ -40,7 +68,9 @@ export function normalizeDeliverableMarkdown(raw: string): NormalizedText {
     first = false;
   };
 
-  for (const line of lines) {
+  const orderedMarkers = findOrderedListMarkers(lines, options.orderedLists === "fragment");
+
+  for (const [lineIndex, line] of lines.entries()) {
     const fence = /^\s{0,3}(`{3,}|~{3,})/.exec(line.text);
     if (fence && (!inFence || line.text.trim().startsWith(fenceMarker))) {
       if (!inFence) {
@@ -53,7 +83,7 @@ export function normalizeDeliverableMarkdown(raw: string): NormalizedText {
       continue;
     }
     if (inFence) {
-      if (codeLines++ < CODE_BLOCK_MAX_LINES) {
+      if (codeLines++ < maxCodeLines) {
         newline(line.breakIndex);
         out.pushRange(line.text.replace(/\s+$/, ""), line.start);
       }
@@ -61,6 +91,8 @@ export function normalizeDeliverableMarkdown(raw: string): NormalizedText {
     }
     if (TABLE_SEPARATOR.test(line.text)) continue;
     newline(line.breakIndex);
+    // The editor writes an empty paragraph after another one as `&nbsp;` (TipTap paragraph renderMarkdown).
+    if (EMPTY_PARAGRAPH.test(line.text)) continue;
     if (TABLE_ROW.test(line.text)) {
       renderTableRow(line.text, line.start, out);
       out.trimTrailingSpaces();
@@ -70,6 +102,7 @@ export function normalizeDeliverableMarkdown(raw: string): NormalizedText {
     let offset = 0;
     let rest = line.text;
     for (const re of BLOCK_PREFIXES) {
+      if (re === ORDERED_ITEM && !orderedMarkers.has(lineIndex)) continue;
       const m = re.exec(rest);
       if (m) {
         offset += m[0].length;
@@ -95,6 +128,17 @@ export function truncateNormalized(n: NormalizedText, max: number): NormalizedTe
   const cut = para > 0 ? para : line > 0 ? line : max;
   const text = n.text.slice(0, cut).replace(/\s+$/, "");
   return { text, map: n.map.slice(0, text.length), truncated: true };
+}
+
+/**
+ * v4.10 (UP-14, AI spec 0.v410): STAR markdown → plain text for the AI-12
+ * validators (V-3 quotes on STAR, V-9c/d/e, V-9j, no-op checks). Same rules
+ * as C-1.1 with no code-block cut, so list numbers / markers, emphasis and
+ * escapes never count as numbers, names or content words. Stored values and
+ * model input stay the raw markdown.
+ */
+export function plainForValidation(markdown: string, orderedLists: "list" | "fragment" = "list"): string {
+  return normalizeDeliverableMarkdown(markdown, { codeBlockMaxLines: Number.POSITIVE_INFINITY, orderedLists }).text;
 }
 
 /** Raw markdown span of normalized [start, end) — `source_locator` for a deliverable body quote. */
@@ -126,13 +170,94 @@ function splitLines(raw: string): Line[] {
 
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const EMPTY_PARAGRAPH = /^\s*&nbsp;\s*$/;
+const BLOCKQUOTE = /^\s*(?:>\s?)+/;
+/** Ordered list item marker; stripped only on lines `findOrderedListMarkers` accepts. */
+const ORDERED_ITEM = /^\s*\d{1,9}[.)]\s+/;
 const BLOCK_PREFIXES: readonly RegExp[] = [
-  /^\s*(?:>\s?)+/, // blockquote
+  BLOCKQUOTE,
   /^\s{0,3}#{1,6}\s+/, // heading
-  /^\s*(?:[-*+]|\d{1,9}[.)])\s+/, // list item
+  /^\s*[-*+]\s+/, // bullet list item
+  ORDERED_ITEM,
   /^\[[ xX]\]\s+/, // task box
   /^\s+/, // indentation
 ];
+
+/**
+ * [가정] R9 QA-02 (spec-gaps R9-AI-3): most digits an ordered list number may
+ * have. 3+ digit line-leading numbers (years, counts) are always body text.
+ */
+export const ORDERED_LIST_MAX_DIGITS = 2;
+
+type OrderedItem = { line: number; quote: string; indent: number; num: number; digits: number };
+
+/**
+ * R9 QA-02: line indexes whose leading `N.` / `N)` is a real ordered list
+ * marker (the editor's markdown list form), not a body number. Siblings =
+ * items with the same blockquote prefix, indentation and delimiter, with only
+ * blank lines, deeper-indented lines (continuations, nested lists) between.
+ * An item is a marker when it has ≤ ORDERED_LIST_MAX_DIGITS digits and its
+ * number is 1, or the previous sibling is n-1, or the next sibling is n+1.
+ * Fences and table rows break a list. `fragment`: every ≤ 2 digit item.
+ */
+function findOrderedListMarkers(lines: readonly Line[], fragment: boolean): Set<number> {
+  type Row = { kind: "blank" | "break" | "text"; quote: string; indent: number; item?: OrderedItem };
+  const rows: Row[] = [];
+  let inFence = false;
+  let fenceMarker = "";
+  for (const [i, line] of lines.entries()) {
+    const fence = /^\s{0,3}(`{3,}|~{3,})/.exec(line.text);
+    if (fence && (!inFence || line.text.trim().startsWith(fenceMarker))) {
+      if (!inFence) fenceMarker = fence[1];
+      inFence = !inFence;
+      rows.push({ kind: "break", quote: "", indent: 0 });
+      continue;
+    }
+    if (inFence || TABLE_ROW.test(line.text) || TABLE_SEPARATOR.test(line.text)) {
+      rows.push({ kind: "break", quote: "", indent: 0 });
+      continue;
+    }
+    const q = BLOCKQUOTE.exec(line.text);
+    const quote = q ? q[0].replace(/\s/g, "") : "";
+    const rest = q ? line.text.slice(q[0].length) : line.text;
+    if (rest.trim() === "" || EMPTY_PARAGRAPH.test(rest)) {
+      rows.push({ kind: "blank", quote, indent: 0 });
+      continue;
+    }
+    const indent = rest.length - rest.trimStart().length;
+    const m = /^\s*(\d{1,9})[.)]\s+/.exec(rest);
+    const item = m ? { line: i, quote, indent, num: Number(m[1]), digits: m[1].length } : undefined;
+    rows.push({ kind: "text", quote, indent, item });
+  }
+
+  const sibling = (from: number, step: 1 | -1): OrderedItem | undefined => {
+    const self = rows[from].item!;
+    for (let j = from + step; j >= 0 && j < rows.length; j += step) {
+      const r = rows[j];
+      if (r.kind === "break") return undefined;
+      if (r.kind === "blank") continue;
+      if (r.quote !== self.quote) return undefined;
+      if (r.item && r.item.indent === self.indent) return r.item;
+      if (r.indent > self.indent) continue;
+      return undefined;
+    }
+    return undefined;
+  };
+
+  const markers = new Set<number>();
+  for (const [i, r] of rows.entries()) {
+    const item = r.item;
+    if (!item || item.digits > ORDERED_LIST_MAX_DIGITS) continue;
+    if (fragment) {
+      markers.add(item.line);
+      continue;
+    }
+    const prev = sibling(i, -1);
+    const next = sibling(i, 1);
+    if (item.num === 1 || prev?.num === item.num - 1 || next?.num === item.num + 1) markers.add(item.line);
+  }
+  return markers;
+}
 
 class Builder {
   private readonly chars: string[] = [];
@@ -161,33 +286,69 @@ class Builder {
 }
 
 function renderTableRow(text: string, start: number, out: Builder): void {
-  const body = text.replace(/^\s*\|/, "");
-  let cellStart = start + (text.length - text.replace(/^\s*\|/, "").length);
-  const cells = body.replace(/\|\s*$/, "").split("|");
+  const lead = text.length - text.replace(/^\s*\|/, "").length;
+  const body = text.slice(lead).replace(/\|\s*$/, "");
+  // Cells split on unescaped pipes only: the editor writes a pipe inside a cell as `\|`.
+  const cells: { text: string; start: number }[] = [];
+  let cellStart = 0;
+  for (let i = 0; i <= body.length; i++) {
+    if (i === body.length || (body[i] === "|" && body[i - 1] !== "\\")) {
+      cells.push({ text: body.slice(cellStart, i), start: start + lead + cellStart });
+      cellStart = i + 1;
+    }
+  }
   let firstCell = true;
   for (const cell of cells) {
-    const lead = cell.length - cell.trimStart().length;
-    const trimmed = cell.trim();
+    const pad = cell.text.length - cell.text.trimStart().length;
+    const trimmed = cell.text.trim();
     if (trimmed !== "") {
       if (!firstCell) {
         // " / " maps to the pipe before this cell.
-        for (const ch of " / ") out.push(ch, cellStart - 1);
+        for (const ch of " / ") out.push(ch, cell.start - 1);
       }
-      renderInline(trimmed, cellStart + lead, out);
+      renderInline(trimmed, cell.start + pad, out, true);
       firstCell = false;
     }
-    cellStart += cell.length + 1;
   }
 }
 
 const IMAGE = /^!\[[^\]]*\]\([^)]*\)/;
-const LINK = /^\[([^\]]*)\]\([^)]*\)/;
+const LINK = /^\[((?:\\.|[^\]\\])*)\]\([^)]*\)/;
+const LINE_BREAK_TAG = /^<br\s*\/?>/i;
 const HTML_TAG = /^<\/?[A-Za-z][^>]*>/;
+/** CommonMark autolinks `<scheme:…>` / `<a@b.c>` keep their text (R9 QA-03); checked before HTML_TAG. */
+const AUTOLINK = /^<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)>/;
+/** CommonMark: any ASCII punctuation can be backslash-escaped. */
+const ESCAPABLE = /[!-\/:-@\[-`{-~]/;
+const LT_ENTITY = "&lt;";
 
 /** Inline markdown of one line segment starting at raw `start`. */
-function renderInline(text: string, start: number, out: Builder): void {
+function renderInline(text: string, start: number, out: Builder, inTable = false): void {
   let i = 0;
   while (i < text.length) {
+    const ch = text[i];
+    // v4.10 (UP-9): editor escapes → the character itself, mapped to its raw position.
+    if (ch === "\\" && i + 1 < text.length && ESCAPABLE.test(text[i + 1])) {
+      out.push(text[i + 1], start + i + 1);
+      i += 2;
+      continue;
+    }
+    if (ch === "&" && text.startsWith(LT_ENTITY, i)) {
+      out.push("<", start + i);
+      i += LT_ENTITY.length;
+      continue;
+    }
+    if (ch === "`") {
+      const span = codeSpan(text, i);
+      if (span) {
+        renderCode(text, span, start, out, inTable);
+        i = span.end;
+        continue;
+      }
+      // An unmatched backtick run is dropped (as before).
+      while (text[i] === "`") i++;
+      continue;
+    }
     const rest = text.slice(i);
     const image = IMAGE.exec(rest);
     if (image) {
@@ -196,8 +357,20 @@ function renderInline(text: string, start: number, out: Builder): void {
     }
     const link = LINK.exec(rest);
     if (link) {
-      renderInline(link[1], start + i + 1, out);
+      renderInline(link[1], start + i + 1, out, inTable);
       i += link[0].length;
+      continue;
+    }
+    const br = LINE_BREAK_TAG.exec(rest);
+    if (br) {
+      out.push(" ", start + i);
+      i += br[0].length;
+      continue;
+    }
+    const autolink = AUTOLINK.exec(rest);
+    if (autolink) {
+      out.pushRange(autolink[1], start + i + 1);
+      i += autolink[0].length;
       continue;
     }
     const tag = HTML_TAG.exec(rest);
@@ -209,8 +382,7 @@ function renderInline(text: string, start: number, out: Builder): void {
       i += 2;
       continue;
     }
-    const ch = text[i];
-    if (ch === "`" || ch === "*") {
+    if (ch === "*") {
       i++;
       continue;
     }
@@ -226,5 +398,42 @@ function renderInline(text: string, start: number, out: Builder): void {
     }
     out.push(ch, start + i);
     i++;
+  }
+}
+
+type CodeSpan = { contentStart: number; contentEnd: number; end: number };
+
+/** CommonMark code span opened by the backtick run at `at`: the next run of the same length closes it. */
+function codeSpan(text: string, at: number): CodeSpan | null {
+  let open = at;
+  while (text[open] === "`") open++;
+  const fence = open - at;
+  let i = open;
+  while (i < text.length) {
+    if (text[i] !== "`") {
+      i++;
+      continue;
+    }
+    let close = i;
+    while (text[close] === "`") close++;
+    if (close - i === fence) return { contentStart: open, contentEnd: i, end: close };
+    i = close;
+  }
+  return null;
+}
+
+/** Code span content is literal (no escapes, no emphasis); one padding space on both sides is dropped. */
+function renderCode(text: string, span: CodeSpan, start: number, out: Builder, inTable: boolean): void {
+  let from = span.contentStart;
+  let to = span.contentEnd;
+  const content = text.slice(from, to);
+  if (content.length >= 2 && content.startsWith(" ") && content.endsWith(" ") && content.trim() !== "") {
+    from++;
+    to--;
+  }
+  for (let i = from; i < to; i++) {
+    // Inside a table cell the editor still writes a pipe as `\|` (GFM table-level escape).
+    if (inTable && text[i] === "\\" && text[i + 1] === "|") continue;
+    out.push(text[i], start + i);
   }
 }

@@ -97,6 +97,8 @@ export function planFill(input: {
   applied: AppliedProjectProposal[]
   fields: readonly ProjectProposalField[]
   competencyPick?: Competency[] | null
+  /** 분류 추천 row [반영]: replace a classification the user already chose (no classification_already_set skip) */
+  overwriteClassification?: boolean
 }): FillPlan {
   const { draft, chatId, values, applied, fields } = input
   const plan: FillPlan = { fills: [], skips: [] }
@@ -136,7 +138,7 @@ export function planFill(input: {
       continue
     }
     if (field === "competencies") {
-      if (values.competencies.length > 0) {
+      if (values.competencies.length > 0 && !input.overwriteClassification) {
         plan.skips.push({ field, reason: "classification_already_set" })
         continue
       }
@@ -147,7 +149,7 @@ export function planFill(input: {
       plan.fills.push({ field, prev: values.competencies, next: pick, rev })
       continue
     }
-    if (values[field]) {
+    if (values[field] && !input.overwriteClassification) {
       plan.skips.push({ field, reason: "classification_already_set" })
       continue
     }

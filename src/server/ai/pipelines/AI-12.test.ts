@@ -125,7 +125,7 @@ describe("extract — calls and errors", () => {
     expect(req.outputSchema).toMatchObject({ type: "object" });
     expect(llm.calls[0].model).toBe(llm.modelFor("light"));
     expect(r.promptVersion).toBe(AI12_EXTRACT_PROMPT_VERSION);
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v6\+common\.v2$/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v7\+common\.v2$/);
     expect(llm.records).toHaveLength(1);
     expect(llm.records[0]).toMatchObject({ modelTier: "light", outcome: "succeeded" });
   });
@@ -313,6 +313,12 @@ describe("reply", () => {
     expect(AI12_REPLY_SYSTEM).toContain("합쳐서 다시 정리한 제안을 드릴 수 있고");
     expect(AI12_REPLY_SYSTEM).not.toContain("덧붙이는 것만");
     expect(AI12_REPLY_SYSTEM).toContain("존댓말");
+    // R9 (v4.10 UP-14·UP-6): merged set keeps block formatting, no inline emphasis; dismissed classification.
+    expect(AI12_EXTRACT_SYSTEM).toContain("합친 value는 그 필드의 블록 서식을 그대로 유지합니다");
+    expect(AI12_EXTRACT_SYSTEM).toContain("번호 목록에 항목을 더하면 번호를 이어서 매깁니다");
+    expect(AI12_EXTRACT_SYSTEM).toMatch(/인라인 강조\(굵게 `\*\*`, 기울임 `\*`·`_`, 취소선 `~~`, 인라인 코드 백틱 `\)는 어떤 value에도 넣지 않습니다/);
+    expect(AI12_EXTRACT_SYSTEM).toContain('value "1. 결제 실패 문의가 줄었음\\n2. 정산 오류가 사라졌음\\n3. 배치 시간이 30분에서 5분으로 줄었음"');
+    expect(AI12_EXTRACT_SYSTEM).toContain("사용자가 이 대화에서 추천을 무시한 분류");
   });
 
   it("delegation request → notice for the reply", async () => {

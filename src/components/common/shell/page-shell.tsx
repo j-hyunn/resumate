@@ -12,15 +12,15 @@
  *
  * Everything that leaves the page in-app goes through `guard.navigate(href)` (logo, account menu, ←, 이동 경로)
  * or is caught by the document click capture (any other `<a>`: C-10 "돌아가기", C-02 …). Browser close /
- * reload → `beforeunload`. // [UI-가정] browser back / forward is not intercepted (no reliable SPA hook).
+ * reload → `beforeunload`. Browser back / forward → the same dialog (popstate caught before Next's router, the
+ * entry restored with history.forward(), then 나가기 = history.back()).
  */
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, History, Loader2, Sparkles } from "lucide-react"
+import { ArrowLeft, Check, CircleAlert, Loader2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -142,6 +142,35 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
     window.addEventListener("beforeunload", onBeforeUnload)
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [dirty])
+
+  // browser back / forward: a capture listener on window runs before the router's own popstate listener. With
+  // unsaved edits it stops the router, steps forward again to this page's entry and asks; 나가기 = history.back().
+  React.useEffect(() => {
+    // direction from the Navigation API entry index where available (Chromium); otherwise assume 뒤로
+    const entryIndex = () => (window as Window & { navigation?: { currentEntry?: { index: number } | null } }).navigation?.currentEntry?.index
+    let index = entryIndex()
+    let restoring = false
+    const onPopState = (e: PopStateEvent) => {
+      if (restoring) {
+        restoring = false
+        e.stopImmediatePropagation()
+        return
+      }
+      const now = entryIndex()
+      const forward = index !== undefined && now !== undefined && now > index
+      if (!dirtyRef.current || bypass.current) {
+        index = now
+        return
+      }
+      e.stopImmediatePropagation()
+      restoring = true
+      if (forward) window.history.back()
+      else window.history.forward()
+      setPending(() => () => (forward ? window.history.forward() : window.history.back()))
+    }
+    window.addEventListener("popstate", onPopState, true)
+    return () => window.removeEventListener("popstate", onPopState, true)
+  }, [])
 
   // any other in-app <a> (C-10 돌아가기, C-02, links in the panel …)
   React.useEffect(() => {
@@ -608,26 +637,8 @@ export function useInputPreservation<T>(key: string, opts?: { enabled?: boolean;
   return { stored, write, clear, resolve, dismiss: resolve }
 }
 
-/** 입력 보존 배너 (5.8 배너 자리): "저장하지 않은 수정이 있어요 · 이어서 편집 / 버리기" [가정: 배너형]. */
-export function InputRestoreBanner({ onContinue, onDiscard }: { onContinue: () => void; onDiscard: () => void }) {
-  return (
-    <Alert variant="info" className="flex items-center gap-2 py-2">
-      <History className="size-4 shrink-0" aria-hidden />
-      <AlertDescription className="flex-1 text-sm">저장하지 않은 수정이 있어요</AlertDescription>
-      <div className="flex shrink-0 gap-1">
-        <Button variant="outline" size="sm" onClick={onContinue}>
-          이어서 편집
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onDiscard}>
-          버리기
-        </Button>
-      </div>
-    </Alert>
-  )
-}
-
 /**
- * 배너 자리: CrumbRow 바로 아래 (C-10 first, then the restore banner). On a short window with several banners it
+ * 배너 자리: CrumbRow 바로 아래 (C-10; the input restore banner is gone — UP-11 auto-restores). On a short window with several banners it
  * shrinks (DocBody keeps 50% of the card) and scrolls by itself with the same overflow cue / keyboard region as
  * DocHead (5.9, UQ-SC-1 · UQ-SC-2).
  */

@@ -123,10 +123,10 @@ export function JdPickerDialog({
               </span>
             </p>
             <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="ghost" className="max-md:h-11" onClick={() => setConfirming(true)}>
+              <Button variant="ghost" className="max-md:h-8" onClick={() => setConfirming(true)}>
                 그만두고 새로
               </Button>
-              <Button asChild className="max-md:h-11">
+              <Button asChild className="max-md:h-8">
                 <Link
                   ref={stepFocus}
                   href={routes.interviewSession(picked.id, inProgress.id)}
@@ -153,7 +153,7 @@ export function JdPickerDialog({
                 className="py-6"
                 title="기업 JD를 먼저 추가해 주세요"
                 actions={
-                  <Button asChild className="max-md:h-11">
+                  <Button asChild className="max-md:h-8">
                     <Link href={routes.applicationNew()} onClick={() => close(false)}>
                       기업 JD 추가
                     </Link>

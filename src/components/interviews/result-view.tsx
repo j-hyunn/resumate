@@ -207,7 +207,7 @@ export function ResultView({
   const total = session.question_count
   const thin = session.data_sufficiency === "thin" || session.data_sufficiency === "none"
   const startNew = (
-    <Button asChild variant="link" size="sm" className="h-auto px-0 max-md:min-h-11">
+    <Button asChild variant="link" size="sm" className="h-auto px-0 max-md:min-h-8">
       <Link href={routes.interviewPrep(applicationProjectId, session.interview_type)}>새 면접 시작하기</Link>
     </Button>
   )
@@ -454,7 +454,7 @@ function RegradeRow({
         onRun={onRun}
         pending={pending}
         disabled={sec > 0}
-        buttonClassName="max-md:h-11 tabular-nums"
+        buttonClassName="max-md:h-8 tabular-nums"
         rerun
         rerunNote={summaryOnly ? RESUMMARIZE_TOKEN_NOTE : REGRADE_TOKEN_NOTE}
       >
@@ -528,7 +528,7 @@ function InputCausedGradingNotice({ cause, newInterviewHref }: { cause: AiErrorC
         <p>{AI_ERROR_PRESERVED}</p>
         {newInterviewHref ? (
           <div className="pt-1">
-            <Button asChild variant="outline" size="sm" className="max-md:h-11">
+            <Button asChild variant="outline" size="sm" className="max-md:h-8">
               <Link href={newInterviewHref}>이 기업 JD로 새 면접 시작</Link>
             </Button>
           </div>
@@ -545,7 +545,7 @@ function ScoreBlock({ session, startNew }: { session: InterviewSessionDetail; st
       {session.score_status === "scored" && session.score_rationale ? (
         <Collapsible>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="group px-0 max-md:h-11">
+            <Button variant="ghost" size="sm" className="group px-0 max-md:h-8">
               산정 근거 보기
               <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" aria-hidden />
             </Button>
@@ -559,7 +559,7 @@ function ScoreBlock({ session, startNew }: { session: InterviewSessionDetail; st
 
 function NextLink({ href, label }: { href: string; label: string }) {
   return (
-    <Button asChild variant="outline" size="sm" className="shrink-0 max-md:h-11">
+    <Button asChild variant="outline" size="sm" className="shrink-0 max-md:h-8">
       <Link href={href}>{label}</Link>
     </Button>
   )
@@ -619,7 +619,7 @@ function AnswerCard({
             <Button
               variant="link"
               size="sm"
-              className="h-auto px-0 max-md:min-h-11"
+              className="h-auto px-0 max-md:min-h-8"
               onClick={onRescore}
               disabled={rescoring}
               aria-label={`질문 ${q.sequence} 다시 채점 (실패한 답변 모두)`}
@@ -637,7 +637,7 @@ function AnswerCard({
       ) : (
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="group px-0 max-md:h-11">
+            <Button variant="ghost" size="sm" className="group px-0 max-md:h-8">
               내 답변
               <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" aria-hidden />
             </Button>

@@ -25,7 +25,7 @@ const itemVariants = cva(
       },
       size: {
         default: "min-h-11 px-3 py-2.5",
-        sm: "min-h-10 px-2 max-md:min-h-11",
+        sm: "min-h-10 px-2 max-md:min-h-8",
         lg: "p-4",
         none: "",
       },

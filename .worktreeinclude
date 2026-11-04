@@ -1,0 +1,3 @@
+# Gitignored files copied from the main checkout into each new worktree (gitignore syntax).
+# One shared .env.local keeps the local AI key KEK the same across worktrees.
+.env.local

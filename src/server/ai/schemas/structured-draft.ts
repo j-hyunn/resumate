@@ -152,7 +152,8 @@ export function isProtected(field: AnyDraftField | undefined | null): boolean {
  * classification value (the RPC rejects it as `invalid_value`; reject/accept
  * never apply — classification is never needs_review), and a slot's first
  * object has rev 1, so "exists, value null, rev ≥ 2" is only ever [무시].
- * An empty competencies array reads the same as null.
+ * An empty competencies array reads the same as null. R10: `private.wc_patch_star` applies the same judgment
+ * and rejects AI classification patches on such a slot (`classification_dismissed`, 20261113000400).
  */
 export function isDismissedClassification(field: ClassificationDraftField | undefined | null): boolean {
   if (!field || hasValue(field)) return false;

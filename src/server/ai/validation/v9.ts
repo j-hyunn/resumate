@@ -838,7 +838,8 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
     if (!suggestion) continue;
     report.proposed++;
     // v4.10 (UP-6, DM 11.5 #1 (b)): the user dismissed this field's suggestion in this chat → drop silently
-    // (log count only; not a rejection — the model was told not to recommend it).
+    // (log count only; not a rejection — the model was told not to recommend it). R10: the RPC also refuses an AI
+    // patch on a dismissed slot ('classification_dismissed'), which covers a [무시] made while this turn runs.
     if (isDismissedClassification(ctx.draft.classification[field])) {
       report.classification_dismissed++;
       continue;

@@ -342,6 +342,56 @@ describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
     }
   });
 
+  it("R10 (R9 QA-05): [무시] during a running turn — that turn's classification suggestion is refused by the RPC, the turn succeeds", async () => {
+    const project = await createProject(user, CreateProjectInput.parse({ name: "배포 자동화", affiliation: { type: "experience", id: experienceId } }));
+    // V-9i only suggests classifications once situation and action are known.
+    const seeded = await admin.from("projects").update({ situation: "배포가 수동이라 오래 걸렸다", action: "배포 스크립트를 자동화했다" }).eq("id", project.id);
+    if (seeded.error) throw new Error(`seed failed: ${seeded.error.code}`);
+    const { writingChatId } = await startWritingChat(user, { projectId: project.id });
+    const suggest = (value: "problem_solving" | "leadership") =>
+      output({ classification_suggestions: { project_type: null, experience_type: { value, source_message_ids: ["M2"], reason: "문제를 찾아 해결한 경험" }, competencies: null } });
+    const slot = async () => (await openChat(writingChatId)).structuredDraft.classification.experience_type;
+
+    // Turn N: a pending experience_type proposal (rev 1).
+    await turn(writingChatId, "배포 스크립트를 제가 직접 만들었어요.", [{ json: "어떤 결과가 있었나요?" }], [{ json: suggest("problem_solving") }]);
+    expect(await slot()).toMatchObject({ value: "problem_solving", origin: "ai", rev: 1 });
+
+    // Turn N+1: the user clicks [무시] after the turn read the draft (the extract call is the window).
+    replies.push({ json: "다른 사람과 함께 한 부분도 있나요?" });
+    extracts.push({ json: suggest("leadership") }); // a different value (the same one would be "unchanged" in V-9)
+    const d = deps(); // takes the scripted queues
+    const extract = d.pipelines.extract.bind(d.pipelines);
+    d.pipelines = {
+      ...d.pipelines,
+      extract: async (call) => {
+        await applyDraftEdit(user, { writingChatId, path: { section: "classification", field: "experience_type" }, value: null });
+        return extract(call);
+      },
+    };
+    const prepared = await prepareTurn(d, { chatId: writingChatId, content: "배포 시간이 절반으로 줄었어요.", requestedSlot: null });
+    if (prepared.kind !== "ready") throw new Error(`blocked: ${prepared.code}`);
+    const events: WritingChatTurnEvent[] = [];
+    const logStart = logs.length;
+    await runTurn(d, prepared, (e) => events.push(e as WritingChatTurnEvent), new AbortController().signal);
+
+    // Normal path: no error event, job succeeded, the extract mark moved on.
+    expect(events.map((e) => e.type)).not.toContain("error");
+    expect(events.at(-1)).toMatchObject({ type: "turn_done" });
+    const { data: job } = await admin.from("ai_jobs").select("status").eq("id", prepared.job.id).single();
+    expect(job?.status).toBe("succeeded");
+    const { data: row } = await admin.from("writing_chats").select("last_extracted_sequence").eq("id", writingChatId).single();
+    expect(row?.last_extracted_sequence).toBe(4);
+    // V-9i still saw the pre-[무시] draft, so the op reached the RPC — which refused it.
+    const turnLogs = logs.slice(logStart).join("\n");
+    expect(turnLogs).toContain('"event":"writing_chat.patch_rejected"');
+    expect(turnLogs).toContain("classification_dismissed");
+    // The slot stays dismissed (value null, rev 2) and the client got that state.
+    expect(await slot()).toMatchObject({ value: null, origin: "ai", rev: 2 });
+    const patch = events.find((e) => e.type === "draft_patch") as Extract<WritingChatTurnEvent, { type: "draft_patch" }> | undefined;
+    if (patch) expect(patch.structuredDraft.classification.experience_type).toMatchObject({ value: null, rev: 2 });
+    await deleteWritingChat(user, writingChatId);
+  });
+
   it("no conversation text in logs (NFR-PRV-09)", () => {
     const all = logs.join("\n");
     expect(all).not.toContain("결제 승인");

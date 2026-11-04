@@ -27,7 +27,7 @@ Read only the sections the current slice needs (use `grep -n "^#"` to find them)
 | App | Next.js (App Router) + TypeScript (strict) on Vercel |
 | Package manager | pnpm |
 | DB / Auth / Storage | Supabase (Postgres, Auth, RLS). Local stack via Supabase CLI |
-| Auth methods | Magic link + Google (D-09) |
+| Auth methods | Google only (D-09, changed 2026-11-04 — magic link removed in R6). Local `[auth.email]` stays on only for integration tests' password sign-in |
 | Validation | zod (request bodies, AI outputs, env) |
 | LLM | **BYOK**: the user's own API key for one active provider — OpenAI, Google Gemini, or Anthropic Claude (D-28). Feature code is provider-neutral; adapters in `src/server/ai/providers/` map tier (`light` / `default` / `heavy`) → model per AI spec C-10.1, with no automatic fallback (D-31). There is no service-wide LLM key and no service-side usage quota (D-34) |
 | Key storage | App-level envelope encryption (AES-256-GCM, per-key DEK wrapped by an external KMS key), decrypted only at run time via the `app_key_reader` role (DM-16, NFR-KEY-01…09) |

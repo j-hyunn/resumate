@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@/server/db/server";
 import { completeAuthCallback } from "@/server/services/auth";
 
 /**
- * OAuth (Google) and magic-link callback (F-COM-01). Exchanges the code for a
+ * Google OAuth callback (F-COM-01, D-09 변경: Google only). Exchanges the code for a
  * session cookie, then redirects to S-25 (unfinished deletion, R1 A7), S-03
  * (consent needed), `next`, or S-08.
  */
@@ -14,8 +14,6 @@ export async function GET(request: NextRequest) {
 
   const target = await completeAuthCallback(supabase, {
     code: searchParams.get("code"),
-    tokenHash: searchParams.get("token_hash"),
-    type: searchParams.get("type"),
     next: searchParams.get("next"),
     providerError: searchParams.get("error"),
   }, async () => {

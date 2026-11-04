@@ -4,9 +4,9 @@ import { AppError } from "@/lib/contracts/errors";
 import {
   LOGIN_CALLBACK_ERROR,
   buildCallbackUrl,
+  loginCallbackErrorUrl,
   completeAuthCallback,
   mapAuthError,
-  sendMagicLink,
   signOut,
   startGoogleSignIn,
   type CallbackParams,
@@ -19,11 +19,9 @@ const consentRows = (needs: boolean) => [
 
 function fakeClient(overrides: Partial<Record<string, unknown>> = {}) {
   const auth = {
-    signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null }),
     signInWithOAuth: vi.fn().mockResolvedValue({ data: { url: "https://auth.example/google" }, error: null }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
     exchangeCodeForSession: vi.fn().mockResolvedValue({ data: {}, error: null }),
-    verifyOtp: vi.fn().mockResolvedValue({ data: {}, error: null }),
     ...overrides,
   };
   const rpc = vi.fn().mockResolvedValue({ data: consentRows(false), error: null });
@@ -32,8 +30,6 @@ function fakeClient(overrides: Partial<Record<string, unknown>> = {}) {
 
 const params = (p: Partial<CallbackParams>): CallbackParams => ({
   code: null,
-  tokenHash: null,
-  type: null,
   next: null,
   providerError: null,
   ...p,
@@ -49,35 +45,13 @@ describe("buildCallbackUrl", () => {
 });
 
 describe("mapAuthError", () => {
-  it("maps rate limits to auth_rate_limited (429)", () => {
-    const err = mapAuthError(new AuthError("too many", 429, "over_email_send_rate_limit"));
-    expect(err.code).toBe("auth_rate_limited");
-    expect(err.status).toBe(429);
-  });
-  it("maps invalid email to invalid_input", () => {
-    expect(mapAuthError(new AuthError("bad", 400, "email_address_invalid")).code).toBe("invalid_input");
-  });
-  it("hides other errors behind auth_failed with a Korean message", () => {
-    const err = mapAuthError(new AuthError("Internal details", 500, "unexpected_failure"));
-    expect(err.code).toBe("auth_failed");
-    expect(err.message).not.toContain("Internal");
-  });
-});
-
-describe("sendMagicLink", () => {
-  it("calls signInWithOtp with the callback URL and creates new users", async () => {
-    const c = fakeClient();
-    await expect(sendMagicLink(c, { email: "a@b.co", next: "/board" }, "http://localhost:3000")).resolves.toEqual({ sent: true });
-    expect(c.auth.signInWithOtp).toHaveBeenCalledWith({
-      email: "a@b.co",
-      options: { emailRedirectTo: "http://localhost:3000/auth/callback?next=%2Fboard", shouldCreateUser: true },
-    });
-  });
-  it("throws the mapped error", async () => {
-    const c = fakeClient({
-      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: new AuthError("x", 429, "over_email_send_rate_limit") }),
-    });
-    await expect(sendMagicLink(c, { email: "a@b.co" }, "http://x")).rejects.toMatchObject({ code: "auth_rate_limited" });
+  it("hides any Auth error behind auth_failed with a Korean message", () => {
+    for (const e of [new AuthError("Internal details", 500, "unexpected_failure"), new AuthError("too many", 429, "over_request_rate_limit")]) {
+      const err = mapAuthError(e);
+      expect(err.code).toBe("auth_failed");
+      expect(err.status).toBe(502);
+      expect(err.message).not.toContain("Internal");
+    }
   });
 });
 
@@ -123,6 +97,10 @@ describe("completeAuthCallback", () => {
   it("R1 A7 [가정]: profile_missing → signed out, login error; active → the usual flow", async () => {
     const c = fakeClient();
     await expect(completeAuthCallback(c, params({ code: "abc" }), async () => "profile_missing")).resolves.toBe("/sign-in?error=auth_callback");
+    // UQ-732: next survives here too (harmless — the user is signed out and retries from S-02).
+    await expect(
+      completeAuthCallback(fakeClient(), params({ code: "abc", next: "/board" }), async () => "profile_missing"),
+    ).resolves.toBe("/sign-in?error=auth_callback&next=%2Fboard");
     expect(c.auth.signOut).toHaveBeenCalled();
     await expect(completeAuthCallback(fakeClient(), params({ code: "abc", next: "/board" }), async () => "active")).resolves.toBe("/board");
     // A state lookup failure doesn't block sign-in (gated pages re-check).
@@ -158,15 +136,13 @@ describe("completeAuthCallback", () => {
     await expect(completeAuthCallback(c, params({ code: "abc" }))).resolves.toBe(LOGIN_CALLBACK_ERROR);
     expect(c.rpc).not.toHaveBeenCalled();
   });
-  it("token_hash path verifies the OTP", async () => {
+  it("D-09 변경: a magic-link style callback (token_hash/type, no code) → login error, no session", async () => {
     const c = fakeClient();
-    await expect(completeAuthCallback(c, params({ tokenHash: "th", type: "magiclink" }))).resolves.toBe("/career");
-    expect(c.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "th", type: "magiclink" });
-  });
-  it("token_hash with an unknown type → login error", async () => {
-    const c = fakeClient();
-    await expect(completeAuthCallback(c, params({ tokenHash: "th", type: "sms" }))).resolves.toBe(LOGIN_CALLBACK_ERROR);
-    expect(c.auth.verifyOtp).not.toHaveBeenCalled();
+    // Extra query params beyond CallbackParams are ignored by the route; simulate one arriving anyway.
+    const legacy = { ...params({ next: "/board" }), tokenHash: "th", type: "magiclink" } as CallbackParams;
+    await expect(completeAuthCallback(c, legacy)).resolves.toBe("/sign-in?error=auth_callback&next=%2Fboard");
+    expect(c.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(c.rpc).not.toHaveBeenCalled();
   });
   it("provider error or no params → login error", async () => {
     await expect(completeAuthCallback(fakeClient(), params({ providerError: "access_denied", code: "x" }))).resolves.toBe(
@@ -174,5 +150,28 @@ describe("completeAuthCallback", () => {
     );
     await expect(completeAuthCallback(fakeClient(), params({}))).resolves.toBe(LOGIN_CALLBACK_ERROR);
     expect(LOGIN_CALLBACK_ERROR).toBe("/sign-in?error=auth_callback");
+  });
+  it("UQ-732: Google cancel (provider error) keeps next for the retry", async () => {
+    const c = fakeClient();
+    await expect(
+      completeAuthCallback(c, params({ providerError: "access_denied", next: "/applications/42?tab=insight" })),
+    ).resolves.toBe("/sign-in?error=auth_callback&next=%2Fapplications%2F42%3Ftab%3Dinsight");
+    expect(c.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+  it("UQ-732: exchange failure keeps next", async () => {
+    const c = fakeClient({
+      exchangeCodeForSession: vi.fn().mockResolvedValue({ data: {}, error: new AuthError("bad", 400, "bad_code_verifier") }),
+    });
+    await expect(completeAuthCallback(c, params({ code: "abc", next: "/board" }))).resolves.toBe(
+      "/sign-in?error=auth_callback&next=%2Fboard",
+    );
+  });
+  it("UQ-732: unsafe, auth-page, or default next is dropped from the failure URL", async () => {
+    for (const next of ["//evil.example", "https://evil.example/x", "/\\evil", "/sign-in?next=/board", "/auth/callback", "/career"]) {
+      await expect(completeAuthCallback(fakeClient(), params({ providerError: "access_denied", next }))).resolves.toBe(
+        LOGIN_CALLBACK_ERROR,
+      );
+    }
+    expect(loginCallbackErrorUrl("/career")).toBe(LOGIN_CALLBACK_ERROR);
   });
 });

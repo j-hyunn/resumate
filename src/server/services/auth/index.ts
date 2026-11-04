@@ -1,12 +1,12 @@
-import type { AuthError, EmailOtpType } from "@supabase/supabase-js";
+import type { AuthError } from "@supabase/supabase-js";
 import type { AccountState } from "@/lib/contracts/account";
-import type { SendMagicLinkResult, SignInWithGoogleResult } from "@/lib/contracts/auth";
+import type { SignInWithGoogleResult } from "@/lib/contracts/auth";
 import { AppError } from "@/lib/contracts/errors";
 import { LOGIN_ERRORS, ROUTES, safeNextPath, withNext } from "@/lib/contracts/routes";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { getConsentStatus } from "@/server/services/consent";
 
-/** F-COM-01 auth flows (D-09). No Next.js imports: callers pass the client and origin. */
+/** F-COM-01 auth flows (D-09 변경: Google only). No Next.js imports: callers pass the client and origin. */
 
 type AuthClient = Pick<UserSupabaseClient, "auth" | "rpc">;
 
@@ -17,35 +17,15 @@ export function buildCallbackUrl(origin: string, next: string | undefined): stri
   return url.toString();
 }
 
-/** Maps Supabase Auth errors to stable codes. Never forwards Auth's English message. */
+/**
+ * Maps Supabase Auth errors (Google OAuth start) to a stable code. Never
+ * forwards Auth's English message.
+ */
 export function mapAuthError(error: AuthError): AppError {
-  if (error.status === 429 || error.code === "over_email_send_rate_limit" || error.code === "over_request_rate_limit") {
-    return new AppError("auth_rate_limited", "잠시 후 다시 시도해 주세요. 메일 발송 요청이 너무 잦습니다.", {
-      status: 429,
-      cause: error,
-    });
-  }
-  if (error.code === "email_address_invalid" || error.code === "validation_failed") {
-    return new AppError("invalid_input", "이메일 주소를 확인해 주세요.", { cause: error });
-  }
   return new AppError("auth_failed", "로그인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.", {
     status: 502,
     cause: error,
   });
-}
-
-/** Sends (or resends — same call) the magic link. New emails sign up (S-02 covers both). */
-export async function sendMagicLink(
-  supabase: AuthClient,
-  input: { email: string; next?: string },
-  origin: string,
-): Promise<SendMagicLinkResult> {
-  const { error } = await supabase.auth.signInWithOtp({
-    email: input.email,
-    options: { emailRedirectTo: buildCallbackUrl(origin, input.next), shouldCreateUser: true },
-  });
-  if (error) throw mapAuthError(error);
-  return { sent: true };
 }
 
 /**
@@ -71,31 +51,40 @@ export async function signOut(supabase: AuthClient): Promise<void> {
   await supabase.auth.signOut({ scope: "local" });
 }
 
-const EMAIL_OTP_TYPES: readonly EmailOtpType[] = ["magiclink", "signup", "email", "invite", "recovery", "email_change"];
-
 export type CallbackParams = {
   code: string | null;
-  tokenHash: string | null;
-  type: string | null;
   next: string | null;
   /** Set by the provider when the user cancels or OAuth fails. */
   providerError: string | null;
 };
 
-export const LOGIN_CALLBACK_ERROR = withLoginError(LOGIN_ERRORS[0]);
+/** S-02 with the callback-failure Alert and no `next` (the default destination). */
+export const LOGIN_CALLBACK_ERROR = withLoginError(LOGIN_ERRORS[0], ROUTES.home);
 
-function withLoginError(code: (typeof LOGIN_ERRORS)[number]): string {
-  return `${ROUTES.login}?error=${code}`;
+/**
+ * `/sign-in?error=<code>[&next=<encoded>]` — UQ-732: a callback failure (Google
+ * cancel, exchange failure) keeps the original `next` so a retry from S-02 still
+ * lands there (02 S-02 "원래 URL"). `next` must already be `safeNextPath`-checked;
+ * the default destination is left out, like `routes.signIn` / `withNext`.
+ */
+export function loginCallbackErrorUrl(next: string): string {
+  return withLoginError(LOGIN_ERRORS[0], next);
+}
+
+function withLoginError(code: (typeof LOGIN_ERRORS)[number], next: string): string {
+  const base = `${ROUTES.login}?error=${code}`;
+  return next === ROUTES.home ? base : `${base}&next=${encodeURIComponent(next)}`;
 }
 
 /**
- * /auth/callback: exchanges the PKCE code (OAuth and magic link) or verifies a
- * token_hash link, then picks where to go (UX S-02/S-03, L-01 첫 화면):
+ * /auth/callback: exchanges the Google OAuth PKCE code (the only sign-in
+ * method, D-09 변경 — token_hash / email OTP links are not accepted), then
+ * picks where to go (UX S-02/S-03, L-01 첫 화면):
  * - R1 A7: unfinished account deletion → S-25 "탈퇴 마무리", before the consent
- *   gate and `next`; `profile_missing` [가정] → signed out, S-02 `?error=auth_callback`
+ *   gate and `next`; `profile_missing` [가정] → signed out, S-02 `?error=auth_callback` (+ `next`)
  * - required consent missing/outdated → S-03 with `next`
  * - otherwise → `next` (same-origin path) or S-08
- * - any failure → S-02 with `?error=auth_callback`
+ * - any failure → S-02 with `?error=auth_callback`, keeping a non-default safe `next` (UQ-732)
  * Returns a same-origin path.
  */
 export async function completeAuthCallback(
@@ -105,17 +94,12 @@ export async function completeAuthCallback(
   accountState?: () => Promise<AccountState>,
 ): Promise<string> {
   const next = safeNextPath(params.next);
-  if (params.providerError) return LOGIN_CALLBACK_ERROR;
+  const failed = loginCallbackErrorUrl(next);
+  if (params.providerError) return failed;
 
-  if (params.code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-    if (error) return LOGIN_CALLBACK_ERROR;
-  } else if (params.tokenHash && params.type && (EMAIL_OTP_TYPES as readonly string[]).includes(params.type)) {
-    const { error } = await supabase.auth.verifyOtp({ token_hash: params.tokenHash, type: params.type as EmailOtpType });
-    if (error) return LOGIN_CALLBACK_ERROR;
-  } else {
-    return LOGIN_CALLBACK_ERROR;
-  }
+  if (!params.code) return failed;
+  const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+  if (error) return failed;
 
   if (accountState) {
     let state: AccountState;
@@ -128,7 +112,7 @@ export async function completeAuthCallback(
     if (state === "deletion_incomplete") return ROUTES.accountDeletionFinalize;
     if (state === "profile_missing") {
       await signOut(supabase);
-      return LOGIN_CALLBACK_ERROR;
+      return failed;
     }
   }
 

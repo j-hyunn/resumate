@@ -1,5 +1,5 @@
 # 화면 구현 현황
-- 기준 기획: PRD v4.6 / 플로우 v5.6 / AI v4.6 / 데이터 모델 v4.5 (PA-1~PA-4 반영, 2026-11-03 — 이번 런의 대상 화면만. 나머지 화면은 이전 기준 v5.4a 그대로)
+- 기준 기획: PRD v4.6 / 플로우 v5.6 / AI v4.6 / 데이터 모델 v4.5 (PA-1~PA-4 반영, 2026-11-03 — 이번 런의 대상 화면만. 나머지 화면은 이전 기준 v5.4a 그대로) · **S-02만 PRD v4.7 / 플로우 v5.7 (D-09 변경 2026-11-04: Google 로그인만)**
 - 디자인 시스템: v5 (v4 = 사용자 지정 브랜드 토큰 2026-11-03, v5 = L-02·S-10·S-44·AI 패널·제안 카드 2026-11-03) · 최종 갱신: 2026-11-03
 - 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
 
@@ -16,7 +16,7 @@
 | S-28 | 오류 | A0 | not-found / error | QA 통과 (BYOK) | — | 2026-10-28 BYOK 통합 |
 | C-01~C-10, C-12~C-14, C-17~C-21, ST-* | 공통 컴포넌트·상태 뷰 (v2: C-18 AiLock · C-19 ProviderBadge · C-20 AiErrorNotice · C-21 DataUseConsent · AiRunButton) | A0 | `/dev/states` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-01 | 랜딩 | A1 | `/` | QA 통과 | — | 2026-10-25 R2 |
-| S-02 | 가입/로그인 | A1 | `/sign-in` | W5 QA 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3)) | W5 QA 수정(QA-W5-08): `?next=` 검사를 서버 계약판과 통일(`/auth/callback` 거부) | 2026-11-02 W5 QA |
+| S-02 | 가입/로그인 | A1 | `/sign-in` | QA 통과 (v5.7, R6 라운드 2) · 브라우저 미확인 | 없음 (UQ-733은 design-system 6 A1에 `max-md:h-auto` 반영으로 해결). v5.7(D-09 변경 2026-11-04): Google 로그인만 남김. 이메일 매직 링크·재발송·링크 보냄·링크 만료 안내 삭제. 상태: 시작 실패 버튼 아래 한 줄, 콜백 실패(`?error=auth_callback`) 상단 경고 "로그인을 마치지 못했어요"(콜백 실패 때도 `?next=` 유지, UQ-732). `?state=` error · login-error · new-user · deletion-incomplete · loading (`sent`·`link-expired` 삭제). 보고: `_workspace/ui/R6_frontend-engineer-A1_report.md` · QA `_workspace/ui/R6_ui-qa_S-02_review.md`(UQ-725~732 해결) | 2026-11-04 (R6 QA 라운드 2: lint·typecheck·vitest·build 통과) |
 | S-03 | 동의 | A1 | `/consent` | W5 QA 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (BYOK)) | W5 QA 수정(QA-W5-08): 동의 뒤 이동 `next` 검사를 서버 계약판과 통일 | 2026-11-02 W5 QA |
 | S-24 | 설정 | A1 | 설정 다이얼로그(sidebar-13)만, `?settings=` 주소로도 열림 (2026-11-04 페이지 삭제) | QA 통과 (v5.3) | — | 2026-10-30 v5.3 통합 |
 | S-25 | 회원 탈퇴 | A1 | `/settings/withdraw` | QA 통과 (v5.3) | — (UQ-90 해결: NFR-PRV-06 v4.1) | 2026-10-30 v5.3 통합 |

@@ -179,6 +179,9 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
+# Resumate (R6): keep true. This maps to GOTRUE_DISABLE_SIGNUP and also gates first-time Google
+# sign-in (a new Google user is a signup). Email self-signup is NOT blocked locally: [auth.email] stays on
+# for the integration tests' password sign-in. On the hosted project, turn the Email provider off in the dashboard.
 enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
@@ -202,6 +205,7 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
+# Resumate (R6): the app sends no auth email any more (Google-only sign-in), so this limit is unused.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
@@ -223,8 +227,14 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Resumate (D-09): email magic link sign-in. Local emails are captured by the Mailpit/Inbucket UI
-# (http://127.0.0.1:54324). signInWithOtp + emailRedirectTo=/auth/callback creates the user on first use.
+# Resumate (R6, decisions 3.11/4.5): email sign-in is removed from the app; Google is the only
+# sign-in method. The email provider stays ON locally only because the integration tests create
+# users with auth.admin.createUser({ email, password, email_confirm: true }) and then call
+# signInWithPassword. In the CLI this key maps to GOTRUE_EXTERNAL_EMAIL_ENABLED (the whole email
+# provider, not just signups), so setting it to false would make signInWithPassword fail with
+# "Email logins are disabled" and break every *.integration.test.ts. The app exposes no email UI
+# or action, so leaving it on here opens no sign-in path in the product.
+# Hosted project: turn the Email provider OFF in Dashboard -> Authentication -> Providers.
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
@@ -250,19 +260,6 @@ otp_expiry = 3600
 # pass = "env(SENDGRID_API_KEY)"
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
-
-# Resumate (QA-05): token_hash links so a magic link opened on another device/browser works
-# (the PKCE code verifier cookie lives only in the requesting browser). The link base is
-# {{ .RedirectTo }} = <origin>/auth/callback?next=..., so it must be on the redirect allow-list.
-# Remote project: copy the same templates in Dashboard → Auth → Email Templates.
-[auth.email.template.magic_link]
-subject = "Resumate 로그인 링크"
-content_path = "./supabase/templates/magic_link.html"
-
-# First-time email when confirmations are enabled (hosted default) gets this instead of magic_link.
-[auth.email.template.confirmation]
-subject = "Resumate 가입 확인"
-content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -337,11 +334,19 @@ max_frequency = "5s"
 # enroll_enabled = true
 # verify_enabled = true
 
-# Resumate (D-09): Google sign-in. Disabled locally until real OAuth credentials exist.
-# To enable: set the two env vars below (e.g. in supabase/.env, gitignored) and flip enabled = true.
-# Google Cloud Console redirect URI for the local stack: http://127.0.0.1:54321/auth/v1/callback
+# Resumate (R6, decisions 3.11/4.5): Google is the ONLY sign-in method of the app.
+# enabled = true is committed. Credentials are NOT: they come from supabase/.env (gitignored, one per
+# checkout/worktree). Without them the config still loads; only the Google button fails. Tests do not
+# need it (they sign in with admin.createUser + password).
+# To sign in locally through the UI:
+#   1. Google Cloud Console -> OAuth client (Web). Authorized redirect URI for the local stack:
+#      http://127.0.0.1:54321/auth/v1/callback
+#   2. Put SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET in
+#      supabase/.env, then `supabase stop && supabase start` so the auth container picks them up.
+#   3. The app's redirectTo (<origin>/auth/callback?next=...) must match additional_redirect_urls
+#      above (localhost and 127.0.0.1 :3000 /auth/callback are listed).
 [auth.external.google]
-enabled = false
+enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"

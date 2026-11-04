@@ -8,10 +8,8 @@
 import { refresh } from "next/cache"
 import type { ConsentType } from "@/types/db"
 import {
-  completeSignIn,
   getConsentStatuses,
   recordConsents,
-  sendMagicLink,
   setOptionalConsent,
   signInWithGoogle,
   signOut,
@@ -38,29 +36,6 @@ function destinationHref(
   if (result.deletion_incomplete) return routes.withdrawFinalize()
   if (result.destination === "consent") return routes.consent(next)
   return next ?? routes.career()
-}
-
-export async function sendMagicLinkAction(email: string, opts?: { fail?: boolean }): Promise<Result<{ sent_at: string }>> {
-  try {
-    const { sent_at } = await sendMagicLink(email, opts)
-    return { ok: true, sent_at }
-  } catch {
-    return { ok: false }
-  }
-}
-
-/** Dev-only stand-in for opening the emailed link (auth callback). */
-export async function openMagicLinkAction(
-  email: string,
-  next: string | null,
-  opts?: { forceNewUser?: boolean; deletionIncomplete?: boolean },
-): Promise<Result<{ href: string }>> {
-  try {
-    const result = await completeSignIn({ method: "magic_link", email, forceNewUser: opts?.forceNewUser })
-    return { ok: true, href: destinationHref(result, safeNextPath(next), opts?.deletionIncomplete) }
-  } catch {
-    return { ok: false }
-  }
 }
 
 export async function signInWithGoogleAction(

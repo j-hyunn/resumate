@@ -9,7 +9,7 @@ export const ROUTES = {
   consent: "/consent",
   /** S-08 career — the default screen after sign-in (F-COM-02, UX S-02/S-03). */
   home: "/career",
-  /** OAuth / magic link callback (Route Handler). */
+  /** Google OAuth callback (Route Handler). */
   authCallback: "/auth/callback",
   /**
    * S-25 회원 탈퇴 — OUTSIDE the consent gate (R1 A7). The page must use

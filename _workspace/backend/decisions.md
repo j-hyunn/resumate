@@ -54,11 +54,11 @@
 ## 2026-11-04 원격 연동 (Supabase · Vercel)
 - Supabase 원격 프로젝트: `resumate` (ref `rxtnguarpotkcgdazkbw`, ap-northeast-2 서울, 조직 Jehyun, Free 플랜, 월 $0). 운영 겸용 단일 프로젝트로 시작한다(사용자 결정).
 - 원격 프로젝트에 레거시 anon 키(HS256)가 켜져 있어 레거시 JWT secret이 있다 → `app_ai_writer`·`app_key_reader` HS256 서명 방식을 그대로 쓴다. 레거시 키를 끄면 이 토큰이 거부되므로, 끄기 전에 `signRoleToken`을 비대칭 키(가져온 ES256 키) 서명으로 바꿀 것.
-- 로그인: 매직 링크만 켠다. Google OAuth는 자격 증명이 준비되면 추가(사용자 결정).
+- 로그인: 매직 링크만 켠다. Google OAuth는 자격 증명이 준비되면 추가(사용자 결정). → **대체 (2026-11-04, R6·D-09 변경)**: Google 로그인만. 원격에서 Google 공급자 켜기(실제 자격 증명) + Email 공급자 끄기가 필요하다.
 - 마이그레이션은 Supabase CLI `db push`로 적용한다(SQL 약 1MB라 MCP 개별 적용은 하지 않음). DB 비밀번호는 사용자가 `supabase link`에서 직접 입력한다.
 - Vercel: 팀 jhyunn에 `resumate` 프로젝트를 만들고 GitHub `j-hyunn/resumate`와 연결, main = 운영 배포(사용자 결정).
 - 2026-11-04 결과: 마이그레이션 108개 원격 적용(`supabase db push`). advisors 보안 WARN 21건은 설계된 authenticated용 SECURITY DEFINER RPC, `account_deletion_logs` 정책 없음은 service role 전용이라 의도대로. 성능은 INFO만.
 - Vercel 프로젝트 `resumate`(prj_gLbcM3p9mET5bbx4Jj3pEMFbC2cZ, 팀 jhyunn), 운영 URL `https://resumate-zeta-sepia.vercel.app`, 함수 리전 icn1(`vercel.json` regions). 환경 변수는 production·preview 둘 다, 비밀 값은 Sensitive. Vercel MCP는 프로젝트 생성 권한이 없어(403) CLI(`vercel@65.11.0`)를 썼다.
 - KEK(`AI_KEY_KEK_BASE64`, id env-v1)는 원격용으로 새로 생성했고 백업은 사용자 로컬 `~/.resumate/prod-kek.txt` → 비밀번호 관리자로 옮길 것. preview 배포도 같은 DB·같은 KEK를 쓴다.
 - 원격 Auth: site_url = 운영 URL, 리디렉션 허용 = 운영·preview(`resumate-*-jehyuns-projects-85b35a5d.vercel.app`)·localhost의 `/auth/callback`. 메일 재전송 간격 60초(로컬 1초와 다름). 원격 반영은 로컬 `config.toml`을 고치지 않고 복사본으로 `supabase config push`(auth만) 했다.
-- **출시 전 필수**: 무료 플랜 기본 메일 발송기는 템플릿 변경 불가 + 조직 멤버 주소로만 발송 + 시간당 발송 한도가 낮다. 커스텀 SMTP(예: Resend)를 연결한 뒤 한국어 템플릿(`supabase/templates/`)을 올린다. 그전까지 원격 메일은 Supabase 기본(영문) 템플릿이며, 콜백은 `code`·`token_hash` 둘 다 처리하므로 로그인은 된다.
+- ~~출시 전 필수~~ (R6 이후 불필요 — 로그인 메일을 보내지 않음): 무료 플랜 기본 메일 발송기는 템플릿 변경 불가 + 조직 멤버 주소로만 발송 + 시간당 발송 한도가 낮다. 커스텀 SMTP(예: Resend)를 연결한 뒤 한국어 템플릿(`supabase/templates/`)을 올린다. 그전까지 원격 메일은 Supabase 기본(영문) 템플릿이며, 콜백은 `code`·`token_hash` 둘 다 처리하므로 로그인은 된다.

@@ -38,12 +38,16 @@ export const CRUMB_CURRENT: Record<NewRowKind, { new: string; existing: string }
 
 /**
  * 머리 맨 위 안내. 점선 테두리 + `info` 톤으로 기존 행 화면과 눈에 띄게 구분된다(토큰만 사용).
+ * 테두리는 variant 기본 `border-info/20` 대신 `border-info`(UQ-332): 20% 알파 점선은 `bg-info-subtle` 위에서 거의
+ * 보이지 않는다. `bg-info-subtle` 대비 테두리 대비(토큰 oklch → 상대 휘도 근사): 20%는 라이트 ≈1.2:1·다크 ≈2.1:1,
+ * 불투명은 라이트 ≈4.3:1·다크 ≈6.3:1로 두 테마 모두 비텍스트 3:1을 넘는다.
+ * 첫 포커스는 제목이지만 `preventScroll`로 준다(UQ-333) — 머리 상자가 스크롤되는 낮은 창에서도 이 안내가 보인다.
  * `role="note"`: 화면을 열 때 바로 읽히는 정적 안내라 `alert`의 즉시 알림을 쓰지 않는다.
  */
 export function NewRowNotice({ kind }: { kind: NewRowKind }) {
   const copy = COPY[kind]
   return (
-    <Alert role="note" variant="info" className="border-dashed">
+    <Alert role="note" variant="info" className="border-dashed border-info">
       <FilePlus2 aria-hidden />
       <AlertTitle>{copy.title}</AlertTitle>
       <AlertDescription>{copy.body}</AlertDescription>

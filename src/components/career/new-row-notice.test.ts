@@ -46,6 +46,16 @@ describe("새 행 표시", () => {
     expect(src).toContain(`current={isNew ? CRUMB_CURRENT.${kind}.new : CRUMB_CURRENT.${kind}.existing}`)
   })
 
+  it.each(PAGES)("$name: 새 행 첫 포커스는 머리 상자를 스크롤하지 않는다 (UQ-333)", ({ src, serverProp }) => {
+    // autoFocus·plain focus()는 낮은 창에서 머리 상자를 내려 안내를 밀어낸다
+    expect(src).not.toMatch(/autoFocus=/)
+    expect(src).toMatch(new RegExp(`if \\(!${serverProp.replace(".", "\\.")}\\) (return )?titleRef\\.current\\?\\.focus\\(\\{ preventScroll: true \\}\\)`))
+  })
+
+  it("안내 테두리는 불투명 info 토큰이다 (UQ-332)", () => {
+    expect(read("new-row-notice.tsx")).toContain('className="border-dashed border-info"')
+  })
+
   it("이동 줄 문구: 새 행은 '추가', 기존 행은 '상세'이고 서로 다르다", () => {
     for (const kind of ["project", "deliverable"] as const) {
       const { new: added, existing } = CRUMB_CURRENT[kind]

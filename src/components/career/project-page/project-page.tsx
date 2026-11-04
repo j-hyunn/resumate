@@ -221,7 +221,8 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   // initial focus: 새 프로젝트 → 프로젝트명 / ?focus= → that STAR 칸
   React.useEffect(() => {
     const t = window.setTimeout(() => {
-      if (!data.project_id) return titleRef.current?.focus()
+      // preventScroll: on a short window the head box scrolls (UQ-SC-1) — keep the new-row notice in view (UQ-333)
+      if (!data.project_id) return titleRef.current?.focus({ preventScroll: true })
       if (!initialFocus) return
       const f =
         initialFocus === "star"

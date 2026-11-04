@@ -91,6 +91,11 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
   const [draftFailed, setDraftFailed] = React.useState(false)
   const titleRef = React.useRef<HTMLInputElement | null>(null)
   const bodyRef = React.useRef<HTMLElement | null>(null)
+  // initial focus: 새 산출물 → 제목. Not autoFocus: that scrolls the head box and can push the new-row notice
+  // out of view on a short window (UQ-333)
+  React.useEffect(() => {
+    if (!data.project_deliverable_id) titleRef.current?.focus({ preventScroll: true })
+  }, [data.project_deliverable_id])
   const previewState = data.preview?.state ?? null
 
   const dirty = form.title !== baseline.title || form.body !== baseline.body || applied.length > 0
@@ -379,7 +384,6 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
             placeholder="산출물 제목을 입력해 주세요"
             value={form.title}
             maxLength={PAGE_LIMITS.deliverableTitle}
-            autoFocus={!data.project_deliverable_id}
             attention={titleMissingForChat}
             invalid={Boolean(titleError)}
             aria-describedby={titleError ? "dlv-title-error" : undefined}

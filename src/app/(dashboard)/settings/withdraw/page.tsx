@@ -47,7 +47,7 @@ async function Screen({ params, searchParams }: Props) {
   // A7: 탈퇴 미완료 → 탈퇴 마무리 상태 (셸 밖)
   if (state === "deletion-incomplete") redirect(routes.withdrawFinalize("deletion-incomplete"))
   if (!state && (await getAccountDeletionState()) === "deletion_incomplete") redirect(routes.withdrawFinalize())
-  const crumbs = <PageCrumbs items={[{ label: "설정", href: routes.settings() }, { label: "회원 탈퇴" }]} />
+  const crumbs = <PageCrumbs items={[{ label: "설정", href: routes.settings("withdraw") }, { label: "회원 탈퇴" }]} />
 
   if (state === "loading")
     return (

@@ -197,7 +197,7 @@ export interface AiConnectionOverview {
   month_estimated_cost_usd: number
 }
 
-/** S-40 AI 연결 (section and /settings/ai page share this) */
+/** S-40 AI 연결 (settings dialog section) */
 export async function getAiConnectionOverview(): Promise<AiConnectionOverview> {
   if (!(await isPreviewRequest())) return realOverview()
   const db = await mockRequest()

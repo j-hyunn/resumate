@@ -919,7 +919,7 @@ div.flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed 
 
 - 인라인형의 "AI 연결하기"는 `outline`이다. 그 화면의 주 버튼(예: 자소서 문항 저장)과 다투지 않게 하려는 것이다. 영역형은 화면에 다른 주 동작이 없으므로 `default`를 쓴다 `[가정]`.
 - **팝업형**(C-14 키 없음 변형, 3.13): `Dialog sm:max-w-md`. 제목은 명세 문구("면접 연습은 AI 연결 후 사용할 수 있어요")이고, 그 아래 기능 설명 `body text-muted-foreground`와 위 추천 줄을 둔다. 버튼은 `닫기`(ghost)와 `AI 연결하기`(default). 닫아도 카드 이동은 유지된다.
-- **AI 연결하기의 목적지**: 연결된 공급자가 하나도 없으면 S-41 공급자 선택(`/settings/ai/connect`)으로, 있으면 S-40 페이지(`/settings/ai`)로 간다. 둘 다 복귀 대상을 기억한다. 설정 다이얼로그가 아니라 **라우트 페이지**로 간다. 복귀 흐름(FL-19)이 주소를 가져야 하기 때문이다(리더 결정).
+- **AI 연결하기의 목적지**: 연결된 공급자가 하나도 없으면 S-41 공급자 선택(`/settings/ai/connect`)으로, 있으면 **설정 다이얼로그의 "AI 연결" 섹션**을 지금 화면 위에 연다(`AiConnectLink`). 둘 다 복귀 대상을 기억한다. 복귀 주소는 다이얼로그를 연 원래 화면이고, S-41이 끝나면 그 화면으로 돌아온다(FL-19). (2026-11-04 사용자 결정: 설정은 전부 다이얼로그, S-40·S-42 페이지 삭제)
 - **복귀 후(D-UX-16, 자동 실행 없음)**: 원래 화면에서 잠금이 풀린 실행 버튼에 `ring-2 ring-primary ring-offset-2 ring-offset-background`를 4초 두고, `animate-field-flash` 바탕은 쓰지 않는다. 동시에 Sonner 토스트를 띄운다: `CircleCheck text-success` + "AI를 연결했어요" + C-19 배지 글자. `prefers-reduced-motion`이어도 링은 남긴다(애니메이션이 아니므로) `[가정]`.
 - 접근성: 영역형 카드는 `role="region"`에 `aria-label="{기능} 잠김"`을 단다. 인라인형은 버튼 자리를 차지하므로 원래 버튼의 이름을 `sr-only`로 앞에 둔다("인사이트 생성 — AI 연결하면 사용할 수 있어요").
 
@@ -1355,7 +1355,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
   - 점 모양은 메뉴 배지 점과 같다(`size-2 ring-2 ring-sidebar`). 점에 색만 쓰지 않도록 아이콘이 상태마다 바뀌고, 툴팁(레일)과 `sr-only`(펼침)가 전체 글자를 준다(R-C6).
   - 누르면 **설정 다이얼로그를 "AI 연결" 섹션으로 연다**. 설정 버튼과 동작을 맞춘 것이다. 서랍(<1024)에서도 같고, 터치 대상은 `h-11`이다 `[가정]`.
 - 하단(`NavUser`): `SidebarMenuButton size="lg"`에 `Avatar`(`h-8 w-8 rounded-lg`, 이니셜) + 이메일 앞부분 / 이메일 두 줄 + `ChevronsUpDown`. 누르면 `DropdownMenu`(넓은 화면 오른쪽, 서랍에서는 아래, 트리거 폭): 계정 표시 · 설정(설정 다이얼로그) · 로그아웃(S-24와 같은 동작).
-- **설정 다이얼로그**(S-24, shadcn **sidebar-13** 기반, 사용자 결정 2026-10-26, `shell/settings-dialog.tsx`): `DialogContent overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]` 안에 별도 `SidebarProvider` → 왼쪽 `Sidebar collapsible="none"`(md 이상) 섹션 목록(계정 `UserRound` · **(v2) AI 연결 `PlugZap` · AI 사용량 `Gauge`** · 동의 관리 `ShieldCheck` · AI 데이터 처리 `Sparkles` · 처리방침·약관 `FileText` · 회원 탈퇴 `UserX`. 새 두 섹션은 계정 바로 아래에 둔다 `[가정]`. "AI 연결" 항목은 `invalid`·`needs_check`일 때 이름 오른쪽에 `size-2 bg-warning` 점과 `sr-only` 상태를 단다), 오른쪽 `h-16` 머리에 이동 경로 "설정 › {섹션}"(md 미만은 섹션만), 본문은 `overflow-y-auto p-4 pt-0`, 높이 `h-[480px]`. 열 때마다 계정·동의 데이터를 다시 읽고(로딩 `Skeleton`, 실패 시 "설정을 불러오지 못했어요" + 다시 시도 `[UI-가정]`), 다이얼로그 밖으로 가는 링크(기본 프로필 편집, 약관, 회원 탈퇴)는 다이얼로그를 닫고 이동한다. 블록은 md 미만에서 섹션 목록을 숨기므로, 좁은 화면에서는 머리 아래 가로 섹션 버튼 줄(`Button size="sm"`, 현재 `secondary`)로 대신한다 `[UI-가정]`. 섹션 내용은 `/settings` 페이지와 같은 컴포넌트(`account/settings-sections.tsx`)를 쓴다.
+- **설정 다이얼로그**(S-24, shadcn **sidebar-13** 기반, 사용자 결정 2026-10-26, `shell/settings-dialog.tsx`): `DialogContent overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]` 안에 별도 `SidebarProvider` → 왼쪽 `Sidebar collapsible="none"`(md 이상) 섹션 목록(계정 `UserRound` · **(v2) AI 연결 `PlugZap` · AI 사용량 `Gauge`** · 동의 관리 `ShieldCheck` · AI 데이터 처리 `Sparkles` · 처리방침·약관 `FileText` · 회원 탈퇴 `UserX`. 새 두 섹션은 계정 바로 아래에 둔다 `[가정]`. "AI 연결" 항목은 `invalid`·`needs_check`일 때 이름 오른쪽에 `size-2 bg-warning` 점과 `sr-only` 상태를 단다), 오른쪽 `h-16` 머리에 이동 경로 "설정 › {섹션}"(md 미만은 섹션만), 본문은 `overflow-y-auto p-4 pt-0`, 높이 `h-[480px]`. 열 때마다 계정·동의 데이터를 다시 읽고(로딩 `Skeleton`, 실패 시 "설정을 불러오지 못했어요" + 다시 시도 `[UI-가정]`), 다이얼로그 밖으로 가는 링크(기본 프로필 편집, 약관, 회원 탈퇴)는 다이얼로그를 닫고 이동한다. 블록은 md 미만에서 섹션 목록을 숨기므로, 좁은 화면에서는 머리 아래 가로 섹션 버튼 줄(`Button size="sm"`, 현재 `secondary`)로 대신한다 `[UI-가정]`. 섹션 내용은 `account/settings-sections.tsx`. (2026-11-04) `/settings` 페이지는 없다. 셸 밖 화면은 `/career?settings={section}`으로 다이얼로그를 연다(5.7). L-02 셸에도 같은 다이얼로그가 있다(계정 메뉴의 설정·AI 연결).
 - 접기: 상단 바 `SidebarTrigger`(`aria-label` 펼침 "메뉴 접기" / 접힘 "메뉴 펼치기" / 서랍 "메뉴 열기"), `SidebarRail`, `⌘/Ctrl+B`. 접으면 **완전히 숨기지 않고** 아이콘 레일로 남는다: 로고 사각형·메뉴 아이콘·보조 메뉴 아이콘·아바타만, 이름은 툴팁, 배지 숫자 대신 아이콘 오른쪽 위 점(`size-2 bg-primary ring-2 ring-sidebar`). 펼침 상태는 `sidebar_state` 쿠키에 쓰인다(첫 렌더 복원은 아직 하지 않음 `[UI-가정]`).
 - 상단 바: 블록과 같이 `flex h-16 shrink-0 items-center gap-2` · `SidebarTrigger -ml-1` · `Separator orientation="vertical" mr-2 h-4` · `Breadcrumb`. **상단 고정**(사용자 결정 2026-10-26): `SidebarInset`이 스크롤 영역(`h-dvh overflow-y-auto`, lg `h-[calc(100dvh-1rem)]` — inset 여백만큼 뺌)이고 상단 바는 그 안에서 `sticky top-0 z-20 bg-background`. 창(body)은 스크롤하지 않는다. 오른쪽에 화면 동작(`PageTopActions`). 상단 바 아래에 붙는 sticky 요소(C-10 배너, 커리어 연도 머리)는 `top-16`. 화면 높이를 쓰는 레이아웃(S-36 대화)은 `100dvh - 4rem`(lg는 inset 여백 1rem 더 뺌).
 - 이동 경로: 마지막 마디 `font-medium text-foreground`, 앞 마디 `text-muted-foreground hover:text-foreground`, 긴 이름 `max-w-[16rem] truncate`. 화면이 경로를 선언하지 않으면 현재 메뉴 이름을 보인다.
@@ -1452,12 +1452,14 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 
 | 화면 | 설정 다이얼로그 안 | 라우트 페이지 |
 |------|-------------------|---------------|
-| S-40 AI 연결 | 섹션 "AI 연결" | `/settings/ai`. C-18 복귀 흐름, L-01 하단 줄을 직접 주소로 열 때 |
-| S-42 AI 사용량 | 섹션 "AI 사용량" | `/settings/ai/usage` |
+| S-40 AI 연결 | 섹션 "AI 연결" | 없음 (2026-11-04 삭제) |
+| S-42 AI 사용량 | 섹션 "AI 사용량" | 없음 (2026-11-04 삭제) |
 | S-41 키 연결 단계 | 없음. 다이얼로그에서 연결을 시작하면 다이얼로그를 닫고 이동한다 | `/settings/ai/connect?provider=` (복귀 대상 유지) |
 
-- 섹션과 페이지는 **같은 내용 컴포넌트**를 쓴다(`account/` 영역). 다이얼로그 안에서는 본문 폭이 약 560px이므로 카드를 세로 목록으로만 배치하고, 페이지도 같은 세로 목록(`max-w-form`)으로 맞춘다. 두 곳의 모양이 갈라지지 않게 하려는 것이다.
-- 다이얼로그 안에서 S-40의 "사용량 입구"를 누르면 섹션만 바꾼다(페이지 이동 없음). 페이지에서는 `/settings/ai/usage`로 이동한다.
+- (2026-11-04 사용자 결정) 설정은 **다이얼로그로만** 연다. `/settings`, `/settings/ai`, `/settings/ai/usage` 페이지는 없다. 셸 안의 링크(C-19 배지, C-20 "AI 연결 확인", 계정 메뉴 등)는 `SettingsLink` / `openSettings(section, { provider })`로 지금 화면 위에 다이얼로그를 연다. L-02의 이탈 확인은 이 링크를 이탈로 보지 않는다.
+- 다이얼로그가 없는 화면(S-41 집중 화면, S-25 취소·이동 경로)은 주소 `routes.settings(section, provider)` = `/career?settings={section}[&provider=]`로 간다. 셸이 다이얼로그를 그 섹션으로 열고 `settings`·`provider` 쿼리를 지운다. 개발용 `?state=`는 남기고 다이얼로그 섹션의 미리보기로도 넘긴다.
+- C-19 경고 배지 → "S-40 해당 카드"(UQ-208/267): `provider`를 받으면 카드를 불러온 뒤 그 카드로 스크롤한다.
+- 다이얼로그 안에서는 본문 폭이 약 560px이므로 카드를 세로 목록으로만 배치한다. S-40의 "사용량 입구"를 누르면 섹션만 바꾼다(페이지 이동 없음).
 
 **S-40 AI 연결**
 
@@ -1786,7 +1788,7 @@ form.flex items-end gap-2 rounded-3xl border border-input bg-card py-1.5 pl-4 pr
 - S-02: 이메일 `Input` + "로그인 링크 받기"(default, 전체 폭) / 구분선 "또는" / "Google로 계속하기"(outline, 전체 폭, Google 로고는 공식 가이드 아이콘 SVG — 브랜드 색 허용 예외). 재발송 후 `Alert variant="info"`.
 - S-03: 동의 항목 `Checkbox` 목록과 필수 표시. (v2) AI 공급자 동의는 여기서 받지 않는다(C-21로 옮김). AI 고지는 한 줄 `meta text-muted-foreground` + `Info`로 줄인다.
 - (v2) S-40·S-41·S-42: 5.7.
-- S-24 설정: 사이드바에서는 설정 다이얼로그(5.1)로 열린다. (v2) "AI 연결"·"AI 사용량" 섹션은 5.7. 계정 섹션의 "AI 연결" 한 줄은 "연결 안 됨" 또는 C-19 배지 + `font-mono` "••••1a2b"로 쓰고, 누르면 섹션을 바꾼다. "AI 데이터 처리" 섹션은 명세 v5 문구로 바꾸고 "고지 다시 보기" 링크(→ AI 연결 섹션)를 단다. `/settings` 페이지(직접 주소·S-25 취소/이동 경로용)는 `max-w-form`, 같은 섹션을 카드로. "화면" 섹션(AI 사용량 다음): `ToggleGroup variant="outline" spacing={0}` 시스템 설정 · 라이트 · 다크, 기본 시스템 설정, 이 브라우저(localStorage)에만 저장.
+- S-24 설정: 사이드바에서는 설정 다이얼로그(5.1)로 열린다. (v2) "AI 연결"·"AI 사용량" 섹션은 5.7. 계정 섹션의 "AI 연결" 한 줄은 "연결 안 됨" 또는 C-19 배지 + `font-mono` "••••1a2b"로 쓰고, 누르면 섹션을 바꾼다. "AI 데이터 처리" 섹션은 명세 v5 문구로 바꾸고 "고지 다시 보기" 링크(→ AI 연결 섹션)를 단다. (2026-11-04) `/settings` 페이지는 삭제했다. S-25 취소·이동 경로는 S-08 위 다이얼로그 "회원 탈퇴" 섹션으로 간다. "화면" 섹션(AI 사용량 다음): `ToggleGroup variant="outline" spacing={0}` 시스템 설정 · 라이트 · 다크, 기본 시스템 설정, 이 브라우저(localStorage)에만 저장.
 - S-25 탈퇴: (v2) 삭제 범위에 "AI 연결" 묶음(키 N개 · 토큰 사용 기록 · 동의 이력)을 더하고, 그 아래 `Alert variant="info"` "공급자 사이트에서도 키를 폐기하는 것을 권해요"와 공급자 대시보드 외부 링크를 둔다. 삭제 범위를 C-05의 영향 요약 스타일로, 확인 입력/체크 후 `destructive` 버튼. 위험 강조는 버튼에만(화면 전체를 빨갛게 하지 않음).
 - **(v3) S-25 탈퇴** (약관 동의 게이트 밖 경로):
   - 정상 상태는 `max-w-form` 한 열이다. 순서는 삭제 범위 요약(C-05 영향 요약 스타일) → AI 연결 묶음과 `Alert variant="info"`(위 v2) → **확인 체크** → 버튼이다. 확인 체크는 `rounded-md border border-input p-4 flex items-start gap-3` 안에 `Checkbox`와 `label text-base` 명세 문구를 둔다. 문구 입력란은 없다. "탈퇴하기"는 오른쪽 정렬 `destructive`이고, 체크 전에는 `disabled`, 요청 중에는 `Loader2` 로딩이다.
@@ -1953,7 +1955,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 
 | # | 결정 | 반영 |
 |---|------|------|
-| LD-1 | S-40·S-42는 설정 다이얼로그의 섹션이고, 같은 내용 컴포넌트로 라우트 페이지 `/settings/ai`, `/settings/ai/usage`도 둔다. S-41은 페이지 `/settings/ai/connect` | 5.7 |
+| LD-1 | S-40·S-42는 설정 다이얼로그의 섹션이다. ~~라우트 페이지 `/settings/ai`, `/settings/ai/usage`도 둔다~~ → 2026-11-04 사용자 결정으로 페이지 삭제, 다이얼로그만. S-41은 페이지 `/settings/ai/connect` | 5.7 |
 | LD-2 | L-01 하단 AI 연결 상태 줄의 위치는 디자이너가 정한다 → `NavSecondary` 첫 항목(설정 위)으로 정했다 | 5.1 |
 
 ### 8.2 [가정] (문서가 정하지 않은 시각 선택 — 바꿔도 이름은 유지)

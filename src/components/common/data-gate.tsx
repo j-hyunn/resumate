@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator"
 import type { AiErrorCode, DataReadiness, ReadinessFeatureKey, ReturnTargetFeature } from "@/types/db"
 import { objectParticle } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
+import { SettingsLink } from "@/components/common/shell/settings-dialog"
 import { useAiConnection } from "./ai-connection-context"
 import { markAiConnectReturn } from "./ai-connect-return"
 import { AiErrorNotice } from "./ai-error-notice"
@@ -214,9 +215,13 @@ export function DataInsufficientGate({
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             키를 확인하면 AI와 대화로 채울 수 있어요
             <Button variant="link" size="sm" asChild className="h-auto px-0">
-              <Link href={routes.aiConnection(connection?.active_provider ?? undefined)} onClick={() => markAiConnectReturn({ href: returnHref })}>
+              <SettingsLink
+                section="ai-connection"
+                provider={connection?.active_provider ?? null}
+                onClick={() => markAiConnectReturn({ href: returnHref })}
+              >
                 AI 연결 확인
-              </Link>
+              </SettingsLink>
             </Button>
           </p>
         </div>

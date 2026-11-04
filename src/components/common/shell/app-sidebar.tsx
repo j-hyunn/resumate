@@ -161,7 +161,7 @@ function AppSidebarView({
     openSettings()
   }
   const navSecondary: NavSecondaryItem[] = [
-    { title: "설정", icon: <Settings aria-hidden />, isActive: pathname.startsWith(routes.settings()), onSelect: openSettingsFromMenu },
+    { title: "설정", icon: <Settings aria-hidden />, isActive: pathname.startsWith(routes.withdraw()), onSelect: openSettingsFromMenu },
     { title: "개인정보 처리방침", url: routes.policies(), icon: <FileText aria-hidden />, onClick: close },
   ]
 

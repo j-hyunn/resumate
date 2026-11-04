@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog"
 import { routes } from "@/lib/routes"
 import { AI_FEATURE_NAMES, type AiFeatureKey } from "@/lib/data/labels"
-import { useAiConnectHref } from "./ai-connection-context"
+import { AiConnectLink } from "./ai-connect-link"
 import { markAiConnectReturn } from "./ai-connect-return"
 
 export type AiLockEntry =
@@ -103,9 +103,8 @@ export interface AiLockProps {
 export const AI_LOCK_RETRY_TITLE = "AI 연결이 필요해요. 작성한 내용은 저장돼 있어요"
 
 function useConnectLinks(returnHref: string | undefined, feature: AiFeatureKey, params?: Record<string, unknown>) {
-  const href = useAiConnectHref()
   const remember = () => markAiConnectReturn({ href: returnHref, feature_label: AI_FEATURE_NAMES[feature], params })
-  return { href, gemini: routes.aiConnect({ provider: "gemini" }), remember }
+  return { gemini: routes.aiConnect({ provider: "gemini" }), remember }
 }
 
 export function AiLock({
@@ -128,7 +127,7 @@ export function AiLock({
   const meta = AI_LOCK_ENTRIES[entry]
   const desc = description ?? meta.description
   const altLabel = alternativeLabel ?? meta.alternative
-  const { href, gemini, remember } = useConnectLinks(returnHref, featureKey, returnParams)
+  const { gemini, remember } = useConnectLinks(returnHref, featureKey, returnParams)
   const alt =
     altLabel && (alternativeHref || onAlternative) ? (
       alternativeHref ? (
@@ -159,9 +158,9 @@ export function AiLock({
           <p className="text-sm leading-5 text-muted-foreground max-md:line-clamp-2">{desc}</p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href={href} onClick={remember}>
+          <AiConnectLink onClick={remember}>
             AI 연결하기
-          </Link>
+          </AiConnectLink>
         </Button>
         {alt}
       </div>
@@ -183,9 +182,9 @@ export function AiLock({
       </div>
       <div>
         <Button asChild>
-          <Link href={href} onClick={remember}>
+          <AiConnectLink onClick={remember}>
             AI 연결하기
-          </Link>
+          </AiConnectLink>
         </Button>
       </div>
       <p className="flex items-center gap-1.5 text-sm leading-5 text-muted-foreground">
@@ -229,10 +228,12 @@ export function AiLockDialog({
   onConnect?: () => void
 }) {
   const links = useConnectLinks(returnHref, "interview_questions")
-  const { href, gemini } = links
+  const { gemini } = links
   const remember = () => {
     links.remember()
     onConnect?.()
+    // the settings dialog may open in place (saved key) — don't leave this dialog under it
+    onOpenChange(false)
   }
   const typeLabel = interviewType === "job" ? "직무 면접" : "컬처핏 면접"
   return (
@@ -257,9 +258,9 @@ export function AiLockDialog({
             닫기
           </Button>
           <Button asChild>
-            <Link href={href} onClick={remember}>
+            <AiConnectLink onClick={remember}>
               AI 연결하기
-            </Link>
+            </AiConnectLink>
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -302,6 +303,8 @@ export function AiLockPopup({
   const remember = () => {
     links.remember()
     onConnect?.()
+    // the settings dialog may open in place (saved key) — don't leave this dialog under it
+    onOpenChange(false)
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -324,9 +327,9 @@ export function AiLockPopup({
             닫기
           </Button>
           <Button asChild>
-            <Link href={links.href} onClick={remember}>
+            <AiConnectLink onClick={remember}>
               AI 연결하기
-            </Link>
+            </AiConnectLink>
           </Button>
         </DialogFooter>
       </DialogContent>

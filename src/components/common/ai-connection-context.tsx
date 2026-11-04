@@ -13,7 +13,6 @@
 import * as React from "react"
 import type { AiConnection } from "@/types/db"
 import { getAiConnectionStateAction } from "@/lib/data/actions"
-import { routes } from "@/lib/routes"
 import { usePreviewState } from "./preview-state-client"
 
 const EVENT = "resumate:ai-connection-changed"
@@ -149,12 +148,11 @@ export function useAiConnectionRefresh(startPending = false): [boolean, () => vo
 }
 
 /**
- * C-18 "AI 연결하기" destination (3.18): no saved key → S-41 공급자 선택, else S-40.
- * `?state=ai-locked` previews treat the account as having no keys.
+ * C-18 "AI 연결하기" destination (3.18): no saved key → S-41 공급자 선택, else the settings dialog's
+ * "AI 연결" section (<AiConnectLink>). `?state=ai-locked` previews treat the account as having no keys.
  */
-export function useAiConnectHref(): string {
+export function useHasAnyAiKey(): boolean {
   const ctx = useHydratedContext()
   const state = usePreviewState()
-  const hasKey = state === "ai-locked" ? false : (ctx?.hasAnyKey ?? false)
-  return hasKey ? routes.aiConnection() : routes.aiConnect()
+  return state === "ai-locked" ? false : (ctx?.hasAnyKey ?? false)
 }

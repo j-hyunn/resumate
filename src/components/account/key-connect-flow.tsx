@@ -153,14 +153,14 @@ export function KeyConnectFlow({
   }, [step, provider, outcome])
 
   function leave() {
-    // FL-19: 취소 → 원래 화면(잠금 상태), 없으면 S-40. 입력한 키는 버린다(동의 기록만 남음 [가정]).
+    // FL-19: 취소 → 원래 화면(잠금 상태), 없으면 설정 다이얼로그 "AI 연결". 입력한 키는 버린다(동의 기록만 남음 [가정]).
     const t = readAiConnectReturn()
     if (outcome) {
-      router.push(returnHref ?? routes.aiConnection())
+      router.push(returnHref ?? routes.settings("ai-connection"))
       return
     }
     clearAiConnectReturn()
-    router.push(t?.href ?? routes.aiConnection())
+    router.push(t?.href ?? routes.settings("ai-connection"))
   }
 
   function requestQuit() {

@@ -474,7 +474,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | 기타 DB | `projects.updated_at` 트리거 예외(`source_writing_chat_id`만 바뀔 때), `get_deletion_impact` 산출물 대화 집계, pgTAP, 타입 재생성 |
 | AI 앱 코드 | 턴 라우트 `form_snapshot` 계약, `turn_done` 칩 제거·`draft_count`, AI-13 파이프라인(정리 → 초안, V-10a~h, `draft_*` 이벤트), 미터 `call_key …compose` |
 | UI 화면 | L-02 전체 페이지 셸(로고·[Resumate AI]·저장하기·계정), S-10 재구현(빈 새 페이지, 머리 5필드 상시 입력, STAR 입력란, 페이지 저장·이탈 확인·입력 보존, 반영 = 폼 채우기), S-44 산출물 상세 신규(본문 + AI 패널 블록 단위 초안 카드), C-23 범위 축소, 칩 `quickChips` |
-| 피그마 수정 요청 | 산출물 분류 드롭다운 삭제(PA-2), 근무 프레임에 경험 유형·진행 중 / 교육 프레임에 프로젝트 종류(PA-4), 이동 경로·제목 자리표시자, ⋯ 메뉴, [Resumate AI] 다시 열기 버튼, 저장하기 상태 등 — 목록은 `_workspace/project-add-figma/ux_requests.md` FG-1~13 |
+| 피그마 수정 요청 (**닫힘 2026-11-04** — 사용자 판단: 코드가 최종본. FG-1~13 모두 main `158b861` 코드에 반영 확인, 피그마는 고치지 않음. 화면 클릭 확인은 없음) | 산출물 분류 드롭다운 삭제(PA-2), 근무 프레임에 경험 유형·진행 중 / 교육 프레임에 프로젝트 종류(PA-4), 이동 경로·제목 자리표시자, ⋯ 메뉴, [Resumate AI] 다시 열기 버튼, 저장하기 상태 등 — 목록은 `_workspace/project-add-figma/ux_requests.md` FG-1~13 |
 
 ### 4.5 로그인 Google 단일화 후속 (2026-11-04)
 
@@ -483,7 +483,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | 구분 | 할 일 |
 |------|-------|
 | 서버 (**R6 완료 2026-11-04**) | `sendMagicLink` 액션·서비스·계약(`SendMagicLinkInput`, `auth_rate_limited`) 제거, `/auth/callback`의 `token_hash`(이메일 OTP) 분기 제거, 관련 테스트·매직 링크 통합 테스트 정리 |
-| Supabase 설정 | **호스팅** 대시보드에서 Email 공급자 끄기("Allow new users to sign up"은 Google 첫 가입 때문에 켜 둠). 로컬 `[auth.email]`은 통합 테스트의 비밀번호 로그인 때문에 켠 채 둔다(R6, `[auth.email] enable_signup`이 이메일 공급자 전체 스위치). `supabase/templates/magic_link.html`과 `config.toml`의 이메일 템플릿 설정 제거, Google 공급자·리디렉트 허용 목록 확인(로컬·Vercel) |
+| Supabase 설정 (**호스팅 Email 공급자 끄기 완료 2026-11-04**, 사용자 조치) | **호스팅** 대시보드에서 Email 공급자 끄기("Allow new users to sign up"은 Google 첫 가입 때문에 켜 둠). 로컬 `[auth.email]`은 통합 테스트의 비밀번호 로그인 때문에 켠 채 둔다(R6, `[auth.email] enable_signup`이 이메일 공급자 전체 스위치). `supabase/templates/magic_link.html`과 `config.toml`의 이메일 템플릿 설정 제거, Google 공급자·리디렉트 허용 목록 확인(로컬·Vercel) |
 | UI (**완료 2026-11-04**) | S-02 `sign-in-form.tsx`를 "Google로 계속하기" 하나로, `?state=` 미리보기에서 `sent`·`link-expired` 제거하고 콜백 실패 문구 교체, mock 데이터 계층의 `sendMagicLink`·`openMagicLinkAction`(`method: "magic_link"`) 제거 |
 | 디자인 시스템 (**완료 2026-11-04, v5.1**) | `docs/ui/design-system.md` 6 A1의 이메일 입력·"또는" 구분선 패턴 정리 |
 
@@ -496,8 +496,8 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | UI (**완료 2026-11-04, #24**) | S-30 문서별 페이지(`src/app/(public)/policies/[doc]`), `next.config.ts` 리다이렉트, S-01·S-02 링크 두 개, S-03 연령 확인 체크, `policy-content.ts` 본문 |
 | 백엔드 (**완료 2026-11-04, #25**) | `touch_last_active` + proxy 호출, 장기 미접속 크론(안내·파기·Auth 정리), `private.delete_account_data` 공유, Gmail 발송 |
 | 머지 순서 (리뷰 R-PT-4) | #24와 #25를 **함께** 머지·배포한다. 같은 `2026-11-04` 처리방침에서 #24에는 Gmail 위탁·쿠키 문구가 없고 #25가 더한다(한쪽만 배포하면 본문이 실제와 달라짐). #25는 #24가 지운 `src/app/(public)/policies/page.tsx`를 고치므로, #25에 최신 #24를 합칠 때 그 파일 변경은 버린다 |
-| 운영 (매월, PT-7) | 운영자 Gmail 보낸편지함에서 그달까지 파기·탈퇴한 계정에 보낸 장기 미접속 안내 메일 삭제(보낸편지함 + 휴지통 비우기). 대상 계정은 `account_deletion_logs`가 비식별이라 메일 수신 주소로 판단(지금 Resumate 계정이 없는 주소) `[가정]` |
-| 원격 반영 (마이그레이션 **완료**, 4.7에서 확인 2026-11-04 / 나머지 미확인) | 마이그레이션 `20261111000100_policy_versions_2026_11_04`(#24), `20261112000100_inactive_account_deletion`(#25)을 `supabase db push`. Vercel 환경 변수 `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`(#25). 실제 Gmail 발송은 아직 확인하지 않았다 |
+| 운영 (매월, PT-7 — 운영자 인지 2026-11-04) | 운영자 Gmail 보낸편지함에서 그달까지 파기·탈퇴한 계정에 보낸 장기 미접속 안내 메일 삭제(보낸편지함 + 휴지통 비우기). 대상 계정은 `account_deletion_logs`가 비식별이라 메일 수신 주소로 판단(지금 Resumate 계정이 없는 주소) `[가정]` |
+| 원격 반영 (**완료** — 마이그레이션 4.7에서 확인 2026-11-04, Gmail 발송 테스트 성공 2026-11-04 사용자 확인) | 마이그레이션 `20261111000100_policy_versions_2026_11_04`(#24), `20261112000100_inactive_account_deletion`(#25)을 `supabase db push`. Vercel 환경 변수 `GMAIL_SMTP_USER`·`GMAIL_SMTP_APP_PASSWORD`(#25). 실제 Gmail 발송은 사용자가 테스트해 성공을 확인했다(2026-11-04) |
 | 문서 (**완료 2026-11-04**) | `docs/ui/screen-status.md` S-30 경로, `docs/ui/design-system.md` A1(S-02 링크·S-03 연령 체크·S-30 문서 페이지) |
 
 ### 4.7 독립 프로젝트 만들기 후속 (2026-11-04, D-UX-28 변경)
@@ -512,8 +512,8 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | 구분 | 할 일 |
 |------|-------|
 | UI·백엔드·DB (**완료 2026-11-04, PR #29**) | ED-1~ED-5, S-08 모달의 ED-6 라벨·ED-7 동작. 마이그레이션 `20261111000100`·`20261112000100`(4.6)·`20261113000100`·`20261113000200` 원격 적용 확인(2026-11-04) |
-| UI (남음, ED-6·ED-7, R-ED-1·R-ED-6) | 예전 `/career/educations/*` 폼 `src/components/career/education-form.tsx`: 입력 라벨(:126 "기관명", :152 "전공/과정명")·C-24 `conflictFields` 라벨(:52·:54) → "운영 기관 *"·"교육 명", 구분·상태 입력 제거(학위 과정 생성 가능 상태). 또는 경로 제거 — C-02 mock 근거 링크(`src/lib/data/evidence.ts:102`)도 이 경로를 씀 |
 | UI (**완료 2026-11-04**, UQ-734~738, 브라우저 미확인) | UQ-734(S-10·C-23 실제 경로 교육 이름)는 PR #29 `86edf30`에서 이미 해결 — 서버 `getCareerList`·`getProjectDetail`, 데이터 계층 `getNewProjectPage`가 `educationDisplayName` 사용, 로컬 통합 테스트(`career.integration.test.ts` 두 파일) 통과. UQ-735 교육 이름 규칙을 `src/server/services/career/education-name.ts` 하나로(컴포넌트 `educationName`·mock은 위임만), UQ-736 `src/components/career/career-overview.test.ts`(빈 상태·이름 규칙), UQ-737 넓은 화면 두 안내를 칸 전체 높이 기준 가운데로, UQ-738 `docs/ui/design-system.md` ST-EMPTY에 S-08 예외 기록 |
+| UI (**완료 2026-11-04**, ED-6·ED-7, R-ED-1·R-ED-6) | 경로는 유지하고 라벨·입력을 고쳤다 — "교육 명"·"운영 기관 *", C-24 충돌 라벨 같음, 구분·상태 입력 제거(새 교육 `course`·수정 땐 유지, 상태는 진행 중·종료월에서, 모달과 공용 `education-derive.ts`). 원래 할 일: 예전 `/career/educations/*` 폼 `src/components/career/education-form.tsx`: 입력 라벨(:126 "기관명", :152 "전공/과정명")·C-24 `conflictFields` 라벨(:52·:54) → "운영 기관 *"·"교육 명", 구분·상태 입력 제거(학위 과정 생성 가능 상태). 또는 경로 제거 — C-02 mock 근거 링크(`src/lib/data/evidence.ts:102`)도 이 경로를 씀 |
 | 기획 (열림) | R-ED-7 `[결정 필요]`: 커리어 모달은 닫으면 입력을 버리는데 PRD F-P1-06·용어집은 "섹션별 수정, 이탈해도 입력 보존". R-ED-10 `[결정 필요]`(범위 밖): 경력(S-09)·독립 프로젝트(S-43)도 코드는 모달인데 UX·PRD는 C-24 섹션 편집(독립 프로젝트 **만들기**는 3.13 D-UX-28로 정리됨 — 남은 것은 S-09 추가·수정과 S-43 수정 방식). R-ED-8 Minor: S-34의 "새 교육 패널" 시절 문구 잔여 |
 
 ### 4.9 AI 작성 대화 질문 품질 후속 (2026-11-04, RQ-1~RQ-3)

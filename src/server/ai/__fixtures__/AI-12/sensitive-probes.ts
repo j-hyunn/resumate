@@ -67,6 +67,30 @@ export const WORK_SENTENCES: readonly string[] = [
   "신사업 프로젝트를 이끎",
   "사이드 프로젝트를 만듦",
   "휴가 쓰는 규칙을 정리함",
+  // R8 QA round 2 work set (named in the report)
+  "병가 승인 워크플로를 만듦",
+  "휴직 신청서 결재 흐름을 개선함",
+  "입원 수속 간소화 기능을 개발함",
+  "수술 대기 시간을 20% 줄임",
+  "임신 주수 계산기를 만듦",
+  "노조 협상 캘린더를 만듦",
+  "교회 헌금 정산 기능을 개발함",
+  "선거 개표 그래픽을 제작함",
+  "우울증 자가진단 설문을 설계함",
+  "투병 수기 공모전을 기획함",
+  "서버 장애로 입원 예약이 막혀 복구함",
+  "제가 병원 EMR 연동을 맡았음",
+  // QA-07 follow-up: near misses of the new patterns
+  "수술 후 쉬는 기간 안내 기능을 만듦",
+  "출산 후 복직 지원 제도를 정리함",
+  "병가 중 급여 정산 로직을 구현함",
+  "입원 중에도 보호자에게 알림을 보냄",
+  "선거 캠프에서 쓰는 홍보 앱을 만듦",
+  "선거 캠프 홈페이지를 개발함",
+  "입원하면 알림이 발송되는 기능을 만듦",
+  "환자가 입원해서 일정이 밀린 경우를 처리함",
+  "우울증 때문에 이탈하는 사용자를 분석함",
+  "번아웃 때문에 퇴사하는 직원 비율을 집계함",
 ];
 
 /** The user's / family's own circumstances, contact details, names with a title. */
@@ -112,4 +136,11 @@ export const PERSONAL_SENTENCES: readonly (readonly [string, readonly SensitiveC
   ["제가 육아휴직을 씀", ["health"]],
   ["아내 출산으로 육아휴직을 씀", ["health"]],
   ["병가를 썼어요", ["health"]],
+  // R8 QA-07 leftovers (closed in the QA-07 follow-up)
+  ["허리 수술로 두 달 쉬었음", ["health"]],
+  ["출산 후 복직함", ["health"]],
+  ["병가 중에도 리뷰를 함", ["health"]],
+  ["선거 캠프에서 일함", ["politics"]],
+  ["디스크로 입원해서 일정이 밀렸음", ["health"]],
+  ["공황장애 때문에 프로젝트에서 빠짐", ["health"]],
 ];

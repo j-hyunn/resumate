@@ -1,4 +1,5 @@
 -- R3 (R-67): get_data_readiness().ai_connection.consent_required (DM 2.11.7, DM §6).
+-- QA-R3-01: each consent state also checks that the run gate (check_ai_run_allowed) agrees (gate_agrees).
 -- Same rule as check_ai_run_allowed / retry_ai_job (private.ai_consent_allows_run) for the active
 -- provider and the active key's connection_tier; null without an active provider / key.
 begin;
@@ -20,6 +21,34 @@ values ('aaaaaaaa-9999-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-0000000
 update public.profiles set active_ai_provider = 'gemini'
  where id in ('aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002');
 
+-- QA-R3-01: one running job on A's active provider, so the run gate (check_ai_run_allowed) can be asked in the
+-- same state as readiness. gate_agrees() reads both as app_ai_writer (the runner role) and asserts
+-- consent_required = true <=> check_ai_run_allowed(job) = 'consent_required'. If readiness or the gate stops using
+-- private.ai_consent_allows_run with the same arguments, a pair below diverges. Leaves the session as A/authenticated.
+insert into public.ai_jobs (id, user_id, job_type, status, run_generation, provider, model_tier, connection_tier)
+values ('aaaaaaaa-7777-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'key_verification', 'running',
+        1, 'gemini', 'light', 'free');
+create function pg_temp.gate_agrees(p_label text)
+returns text
+language plpgsql
+as $$
+declare
+  v_readiness boolean;
+  v_gate text;
+begin
+  perform set_config('role', 'app_ai_writer', true);
+  perform set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}', true);
+  v_readiness := (public.get_data_readiness() #>> '{ai_connection,consent_required}')::boolean;
+  v_gate := public.check_ai_run_allowed('aaaaaaaa-7777-0000-0000-000000000001');
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+  return extensions.is(v_gate is not distinct from 'consent_required', v_readiness,
+                       format('run gate agrees with readiness (%s): consent_required=%s, gate=%s',
+                              p_label, v_readiness, coalesce(v_gate, 'null')));
+end;
+$$;
+grant execute on function pg_temp.gate_agrees(text) to authenticated;
+
 -- B consents for gemini/free; that must not count for A.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
@@ -34,6 +63,7 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": true}'::jsonb,
           'no consent row → consent_required true (B''s consent does not count for A)');
+select pg_temp.gate_agrees('no consent row');
 
 -- 2. consent present for (gemini, free) → false.
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
@@ -41,6 +71,7 @@ values ('gemini', 'free', 'v2026-10-29', true);
 select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": false}'::jsonb,
           'consent present → consent_required false, other fields unchanged');
+select pg_temp.gate_agrees('consent present');
 
 -- key_status is independent: needs_check / invalid keep consent_required as computed.
 reset role;
@@ -68,11 +99,13 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'true'::jsonb,
           'requires_reconsent notice effective after the consent → true');
+select pg_temp.gate_agrees('reconsent notice');
 -- re-consent to the new version → false again.
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
 values ('gemini', 'free', 'v2026-10-30', true);
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           're-consent to the new version → false');
+select pg_temp.gate_agrees('re-consented');
 reset role;
 
 -- a future requires_reconsent notice is not effective yet → still false.
@@ -83,6 +116,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           'future requires_reconsent notice not effective → false');
+select pg_temp.gate_agrees('future notice');
 reset role;
 
 -- 4. consent only for the other tier → true (key tier is what counts).
@@ -92,15 +126,18 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "paid", "consent_required": true}'::jsonb,
           'consent only for the free tier, key is paid → true');
+select pg_temp.gate_agrees('tier mismatch');
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
 values ('gemini', 'paid', 'v2026-10-29');
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           'paid-tier consent → false');
+select pg_temp.gate_agrees('paid-tier consent');
 
 -- withdrawn consent → true.
 update public.ai_data_use_consents set withdrawn_at = now() where provider = 'gemini' and connection_tier = 'paid';
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'true'::jsonb,
           'withdrawn consent → true');
+select pg_temp.gate_agrees('withdrawn');
 
 -- 5. no active provider / key → null like the other fields.
 select ok(public.delete_provider_key('gemini'), 'A deletes the key (FK clears active provider)');

@@ -26,6 +26,7 @@ import { EMPLOYMENT_TYPE_LABELS } from "@/lib/data/labels"
 import { isPeriodReversed } from "@/lib/data/row-save"
 import { createCareerItemAction, updateCareerItemAction, type NewCareerItem } from "./actions"
 import { nn } from "./form-parts"
+import { educationTypeOnSave, enrollmentStatusOnSave } from "./education-derive"
 
 export type AddCareerKind = "experience" | "education" | "project"
 
@@ -166,16 +167,15 @@ function toItem(kind: AddCareerKind, v: Values, editing?: CareerEditTarget): New
   }
   if (kind === "education") {
     const prev = editing?.kind === "education" ? editing.row : null
-    const keptStatus = prev?.enrollment_status && prev.enrollment_status !== "enrolled" ? prev.enrollment_status : null
     return {
       kind,
       patch: {
         program_name: nn(v.name),
         institution_name: nn(v.org),
-        education_type: prev?.education_type ?? "course",
+        education_type: educationTypeOnSave(prev),
         start_month: start,
         end_month: end,
-        enrollment_status: ongoing ? "enrolled" : (keptStatus ?? (end ? "completed" : null)),
+        enrollment_status: enrollmentStatusOnSave(ongoing, end, prev),
         description: nn(v.body),
       },
     }

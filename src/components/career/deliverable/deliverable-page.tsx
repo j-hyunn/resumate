@@ -4,7 +4,8 @@
  * S-44 산출물 상세 (UX v5.6 S-44 · FL-22 · L-02 1.3a; AI-13; DM v4.5 2.5.1). L-02 전체 페이지: 상단 바 "저장하기",
  * 이동 줄 "← {프로젝트명} › {산출물 제목} › 산출물 상세", 머리(제목 입력 + ⋯ 삭제) + G-2 안내, 왼쪽 마크다운 본문,
  * 오른쪽 Resumate AI 패널(AI-13 본문 초안 제안 카드). 새 산출물(`project_deliverable_id = null`)은 첫 저장 또는 첫 AI
- * 메시지 때 `save_project_deliverable`로 행을 만들고 URL을 바꾼다(replace, `?state=` 유지).
+ * 메시지 때 `save_project_deliverable`로 행을 만들고 URL을 바꾼다(replace, `?state=` 유지). 행이 생기기 전에는 이동 줄
+ * 현재 위치가 "새 산출물 추가"이고 머리 맨 위에 새 행 안내(new-row-notice)가 붙는다(33 런).
  */
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -30,6 +31,7 @@ import {
 import { ReturnBanner } from "@/components/common/return-banner"
 import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
+import { CRUMB_CURRENT, NewRowNotice } from "@/components/career/new-row-notice"
 import { saveProjectDeliverableAction } from "@/lib/data/career-v45-actions"
 import {
   PAGE_LIMITS,
@@ -336,6 +338,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     window.setTimeout(() => document.getElementById(DRAFT_CARD_ID)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 80)
   }
 
+  // 아직 행이 없는 "새 산출물" 상태 — URL이 아니라 `id`를 따르므로 첫 저장 성공 직후 바로 기존 행 표시로 바뀐다
+  const isNew = !id
   const crumbHref = routes.careerItem("project", projectId)
   const pageSkipLines = uniqueLines(skips.filter((x) => x.chatId !== panel.chat?.id))
   const titleMissingForChat = titleAttention && isBlank(form.title)
@@ -344,8 +348,12 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     <PageShell guard={guard} aiReopen={panel.reopen} save={<SaveButton state={uiState} savedAt={savedAt} onSave={() => void doSave()} />}>
       <CrumbRow
         back={{ href: crumbHref, label: data.project.name }}
-        items={[{ label: data.project.name, href: crumbHref }, { label: form.title, placeholder: "새 산출물" }]}
-        current="산출물 상세"
+        items={[
+          { label: data.project.name, href: crumbHref },
+          // 행이 없고 제목도 비었으면 자리 표시 칸을 빼서 "{프로젝트명} › 새 산출물 추가"로 읽히게 한다 (33 런)
+          ...(isNew && isBlank(form.title) ? [] : [{ label: form.title, placeholder: "새 산출물" }]),
+        ]}
+        current={isNew ? CRUMB_CURRENT.deliverable.new : CRUMB_CURRENT.deliverable.existing}
       />
       <ShellBanners>
         <ReturnBanner />
@@ -362,6 +370,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       </ShellBanners>
 
       <DocHead className="space-y-2" label="산출물 정보">
+        {/* 새 산출물: 행이 아직 없고 "저장하기"가 추가 동작임을 머리 맨 위에서 알린다 (33 런) */}
+        {isNew ? <NewRowNotice kind="deliverable" /> : null}
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}

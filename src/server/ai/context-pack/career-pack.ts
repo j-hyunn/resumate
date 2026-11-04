@@ -1,3 +1,4 @@
+import { educationDisplayName } from "@/server/services/career/education-name";
 import { classificationLine } from "../classification";
 import { hashCanonical } from "../hash";
 import { AliasMap, type AliasEntry } from "./aliases";
@@ -299,7 +300,10 @@ export function buildCareerPack(rows: CareerRows, options: BuildCareerPackOption
         enrollment_status: e.enrollment_status,
         period: period.text,
         description: e.description,
-      }, e.updated_at, e.institution_name),
+        // label = the education's display name (UQ-734 / UI32-2): 교육 명, else 운영 기관, else null.
+        // It becomes evidence_links.source_label and the "부모 › 프로젝트" source labels; the model
+        // still sees both raw fields below.
+      }, e.updated_at, educationDisplayName(e.program_name, e.institution_name)),
     );
     out.push(`<education ref="${alias}">`);
     field("institution_name", e.institution_name);

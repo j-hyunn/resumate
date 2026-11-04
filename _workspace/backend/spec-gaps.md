@@ -687,3 +687,9 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 
 ## R5 (backend-qa, 2026-11-03)
 - **R5-QA-1 AI-13 초안 턴 SSE 순서** (AI 명세 AI-13 "응답 모드" 초안 턴: `turn_started → facts_patch → draft_started → … → draft_done → reply_done → turn_done` — `draft_flags` 없음 ↔ 구현 `turn.ts` `emitFacts`는 초안 턴에서도 `facts_patch` 바로 뒤 `draft_flags`를 보냄, `src/lib/contracts/writing-chat.ts` 주석도 같은 순서): 질문 턴과 같은 모양이라 화면에 해가 없어 구현을 그대로 두었다. 명세 초안 턴 순서에 `draft_flags`(사실 갱신이 있을 때만)를 넣을지 planning이 확인. `[가정]`
+
+## UI 32 (리더, 2026-11-04) — 교육 표시 이름 = 교육 명
+- **UI32-1 (UQ-734)** 사용자 요청: 교육의 표시 이름은 교육 명(`program_name`), 비면 운영 기관(`institution_name`). S-08·S-34는 UI에서 반영됨(`src/components/career/education-name.ts`). 실제 경로에서 아직 기관명을 이름으로 돌려주는 곳: `src/server/services/career/read.ts:59·64` `getCareerList`(C-23 소속 선택·S-10 소속 목록, select에 `program_name` 추가 필요), `read.ts:120·127` `getProjectDetail`(S-10 브레드크럼 부모 이름), `src/lib/data/career-v45.ts:268` 새 프로젝트 페이지 실제 분기. 근거 칩·서류·작성 대화(`evidence.ts`, `drafts.ts`, `writing-chat/pipelines.ts`)는 기획 확인(UQ-739) 뒤.
+- **UI32-1 처리 (2026-11-04)** `getCareerList`·`getProjectDetail`·새 프로젝트 페이지 실제 분기 반영(`src/server/services/career/education-name.ts`). 상세: `UI32/03_backend-qa_report.md`.
+- **UI32-2 (QA-01, UQ-739에 덧붙임)** `career-pack.ts:302` 별칭 `label`(= `institution_name`)이 `evidence_links.source_label`로 저장돼 근거 칩·서류 출처 라벨에 보인다. 저장 시점 스냅샷이라 규칙을 바꿔도 기존 행은 그대로이고, 기관명이 빈 교육은 라벨이 null. 근거 칩 교육 이름 규칙을 기획에서 정할 때 함께 결정.
+- **UI32-2 처리 (2026-11-04)** 사용자 결정으로 근거 칩·서류 출처 라벨도 교육 명 규칙 + 기존 행 백필(`20261113000200`). AI 모델 입력(AI-03 heading, AI-12 소속)은 기관명 유지. 기획 문서 반영은 UQ-739와 함께 resumate-planning에서.

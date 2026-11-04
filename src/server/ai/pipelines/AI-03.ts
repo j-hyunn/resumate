@@ -138,7 +138,8 @@ export function planCareerDescription(input: { careerRows: CareerRows; asOf?: Ye
   }
   for (const e of entries) {
     if (e.sourceType === "education" && educations.has(e.id)) {
-      const heading = [e.label, e.fields.program_name].filter(Boolean).join(" ");
+      // Raw fields, not e.label (= display name since UI32-2): heading stays "운영 기관 교육 명".
+      const heading = [e.fields.institution_name, e.fields.program_name].filter(Boolean).join(" ");
       sections.push({ sort_order: sections.length, section_kind: "education", experience_id: null, education_id: e.id, heading, project_ids: projectsUnder(e.id) });
     }
   }
@@ -555,7 +556,7 @@ function headerBlock(blockId: string, section: SectionPlan, entry: AliasEntry | 
     const status = entry?.fields.enrollment_status ?? null;
     header = {
       kind: "education",
-      institution_name: entry?.label ?? null,
+      institution_name: entry?.fields.institution_name ?? null,
       program_name: entry?.fields.program_name ?? null,
       period: entry?.fields.period ?? null,
       enrollment_status: status,

@@ -221,6 +221,17 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     });
   });
 
+  it("education display name (UI32-1): program_name, else institution_name — S-08/C-23 list and S-10 parent", async () => {
+    const carol = await signedInUser("career-c");
+    const named = await saveEducation(carol, SaveEducationInput.parse({ id: newId(), institutionName: "가상대학교", programName: "  데이터 분석 과정 " }));
+    const unnamed = await saveEducation(carol, SaveEducationInput.parse({ id: newId(), institutionName: "운영 기관만", programName: "   " }));
+    const p = await createProject(carol, CreateProjectInput.parse({ name: "교육 프로젝트", affiliation: { type: "education", id: named.id } }));
+    const items = (await getCareerList(carol)).years.flatMap((y) => y.items);
+    expect(items.find((i) => i.id === named.id)?.name).toBe("데이터 분석 과정");
+    expect(items.find((i) => i.id === unnamed.id)?.name).toBe("운영 기관만");
+    await expect(getProjectDetail(carol, p.id)).resolves.toMatchObject({ parent: { type: "education", id: named.id, name: "데이터 분석 과정" } });
+  });
+
   it("S-08 list (CR-4): experiences, educations, standalone projects once under their start year; S-09 cards; S-10 page", async () => {
     const list = await getCareerList(alice);
     const all = list.years.flatMap((y) => y.items);

@@ -30,6 +30,7 @@ import { consentRequired } from "@/lib/mock/consent"
 import { errorCategoryOf, failureCauseOf, failureTimestamps, type AiRejected } from "./ai-errors"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { formatPeriod } from "./labels"
+import { educationDisplayName } from "@/server/services/career/education-name"
 import { computeReadiness } from "./readiness"
 import { realRetryJdExtraction } from "./applications-real"
 import {
@@ -132,8 +133,9 @@ export function buildSourceTree(db: Pick<MockDb, "experiences" | "educations" | 
     ...edus.map((e) => ({
       kind: "education" as const,
       id: e.id,
-      name: e.institution_name ?? "",
-      meta: [e.program_name, formatPeriod(e.start_month, e.end_month, "재학 중")].filter(Boolean).join(" · "),
+      // UI32-2: name = trimmed program_name, else institution_name; meta then shows the institution when the name is the program
+      name: educationDisplayName(e.program_name, e.institution_name) ?? "",
+      meta: [e.program_name?.trim() ? e.institution_name?.trim() : null, formatPeriod(e.start_month, e.end_month, "재학 중")].filter(Boolean).join(" · "),
       start_month: e.start_month,
       projects: complete.filter((p) => p.education_id === e.id).map(toProject).sort(byStart),
     })),

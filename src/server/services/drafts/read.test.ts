@@ -149,6 +149,27 @@ describe("getDraft / listDrafts", () => {
     expect(view.activeJobs).toEqual([]);
   });
 
+  it("UI32-2: an education source's affiliation name is the trimmed program_name, else institution_name, else null", async () => {
+    const t = tables();
+    const EDU = (n: number) => `00000000-0000-4000-8000-0000000000f${n}`;
+    const src = (n: number) => ({ ...t.draft_section_sources[0]!, id: `src-e${n}`, experience_id: null, education_id: EDU(n), project_id: null, sort_order: n });
+    const db = fakeSupabase({
+      ...t,
+      draft_section_sources: [src(1), src(2), src(3)],
+      educations: [
+        { id: EDU(1), program_name: " 클라우드 백엔드 부트캠프 ", institution_name: "코드스쿨" },
+        { id: EDU(2), program_name: "  ", institution_name: " 코드스쿨 " },
+        { id: EDU(3), program_name: null, institution_name: "" },
+      ],
+    });
+    const view = await getDraft(db.client as UserSupabaseClient, D1);
+    expect(view.sections[0]!.sources.map((s) => [s.educationId, s.affiliationName])).toEqual([
+      [EDU(1), "클라우드 백엔드 부트캠프"],
+      [EDU(2), "코드스쿨"],
+      [EDU(3), null],
+    ]);
+  });
+
   it("list: newest first, counts, selection origin, generating flag from live jobs", async () => {
     const t = tables();
     t.ai_jobs[0]!.status = "running";

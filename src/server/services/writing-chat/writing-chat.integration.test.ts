@@ -74,6 +74,8 @@ describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
   const logs: string[] = [];
   const replies: ScriptedResponse[] = [];
   const extracts: ScriptedResponse[] = [];
+  let replyCalls: unknown[] = [];
+  let extractCalls: unknown[] = [];
 
   function deps(): TurnDeps {
     const writer = createAiWriterClient(userId);
@@ -81,6 +83,8 @@ describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
     const extractAdapter = createScriptedAdapter("anthropic", extracts, Date.now);
     replies.length = 0;
     extracts.length = 0;
+    replyCalls = replyAdapter.calls;
+    extractCalls = extractAdapter.calls;
     const log = (event: string, fields: Record<string, unknown>) => void logs.push(JSON.stringify({ event, ...fields }));
     return {
       userId,
@@ -314,6 +318,28 @@ describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
     expect(deleted.messageCount).toBe(0);
     // The saved STAR stays on the project.
     expect((await projectStar()).action).toBe("APM으로 병목 쿼리를 찾아 인덱스를 재설계했다");
+  });
+
+  it("UI32-2 QA-02: AI-12 model input keeps institution_name as the education affiliation (display name is UI-only)", async () => {
+    const insert = async (program_name: string | null, institution_name: string | null) => {
+      const r = await user.from("educations").insert({ user_id: userId, program_name, institution_name }).select("id").single();
+      if (r.error) throw new Error(`insert education failed: ${r.error.code}`);
+      return r.data.id;
+    };
+    // Same as before UI32-2: the pack line is `affiliation: 교육 '<institution_name>'`, never the program name.
+    for (const [program, institution] of [
+      ["클라우드 백엔드 부트캠프", "코드스쿨"],
+      ["  ", "가상대학교"],
+    ] as const) {
+      const educationId = await insert(program, institution);
+      const project = await createProject(user, CreateProjectInput.parse({ name: "교육 팀 프로젝트", affiliation: { type: "education", id: educationId } }));
+      const { writingChatId } = await startWritingChat(user, { projectId: project.id });
+      await turn(writingChatId, "팀 프로젝트에서 API를 만들었어요.", [{ json: "어떤 상황이었나요?" }], [{ json: output({}) }]);
+      const pack = JSON.stringify([...replyCalls, ...extractCalls]);
+      expect(pack).toContain(`affiliation: 교육 '${institution}'`);
+      if (program.trim()) expect(pack).not.toContain(program);
+      await deleteWritingChat(user, writingChatId);
+    }
   });
 
   it("no conversation text in logs (NFR-PRV-09)", () => {

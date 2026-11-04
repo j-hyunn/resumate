@@ -68,7 +68,7 @@ export function buildSummaryCareerPack(rows: CareerRows, options: { asOf?: YearM
         break;
       case "education":
         out.push(
-          line(e.alias, [e.label, f.program_name, f.period, f.description ? `요약: ${clip(f.description, SUMMARY_TEXT_MAX)}` : null]),
+          line(e.alias, [f.institution_name, f.program_name, f.period, f.description ? `요약: ${clip(f.description, SUMMARY_TEXT_MAX)}` : null]),
         );
         break;
       case "project": {

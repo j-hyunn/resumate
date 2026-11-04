@@ -13,7 +13,8 @@ import {
 import { buildDeliverableChatContext } from "../context-pack/deliverable-chat";
 import { AiError, ProviderError } from "../errors";
 import { createFakeLlm } from "../fake-llm";
-import { AI13_COMPOSE_PROMPT_VERSION, AI13_EXTRACT_PROMPT_VERSION, AI13_REPLY_PROMPT_VERSION } from "../prompts/AI-13";
+import { AI13_COMPOSE_PROMPT_VERSION, AI13_COMPOSE_SYSTEM, AI13_EXTRACT_PROMPT_VERSION, AI13_EXTRACT_SYSTEM, AI13_REPLY_PROMPT_VERSION, AI13_REPLY_SYSTEM } from "../prompts/AI-13";
+import { DELIVERABLE_SLOTS } from "../context-pack/deliverable-slots";
 import { ai13ComposeJsonSchema, ai13ExtractJsonSchema } from "../schemas/AI-13";
 import {
   AI13_COMPOSE_CALL_KEY,
@@ -75,7 +76,7 @@ describe("extract", () => {
     expect(llm.requests[0].outputSchema).not.toBeNull();
     expect(r.patch.ops[0]).toMatchObject({ op: "add_facts", facts: [{ source_message_ids: ["00000000-0000-4000-8000-000000000002"], review: "ok" }] });
     expect(r.processedThroughSequence).toBe(2);
-    expect(AI13_EXTRACT_PROMPT_VERSION).toMatch(/^ai-13\.extract\.v1\+common\.v2$/);
+    expect(AI13_EXTRACT_PROMPT_VERSION).toMatch(/^ai-13\.extract\.v3\+common\.v2$/);
   });
 
   it("nothing pending → no call", async () => {
@@ -96,6 +97,32 @@ describe("extract", () => {
 });
 
 describe("reply", () => {
+  it("R7 versions and question rules (quote, one element, categories, per-slot elements, follow-up cap)", () => {
+    expect(AI13_REPLY_PROMPT_VERSION).toMatch(/^ai-13\.reply\.v2\+common\.v2$/);
+    expect(AI13_COMPOSE_PROMPT_VERSION).toMatch(/^ai-13\.compose\.v2\+common\.v2$/);
+    expect(AI13_REPLY_SYSTEM).toContain("따옴표로, 고치지 않고 짧게 인용해");
+    expect(AI13_REPLY_SYSTEM).toContain("구체 요소 하나를 겨냥합니다");
+    expect(AI13_REPLY_SYSTEM).toContain("일반적인 범주 2~4개");
+    expect(AI13_REPLY_SYSTEM).toContain("최대 2번");
+    for (const slot of DELIVERABLE_SLOTS) {
+      expect(AI13_REPLY_SYSTEM).toMatch(new RegExp(`- (?:[a-z_]+, )*${slot}(?:, [a-z_]+)*:`));
+    }
+    for (const k of ["delegation", "sensitive", "compose_insufficient", "draft_limit", "other_sources", "compose_suggested", "replace_allowed", "last_message"]) expect(AI13_REPLY_SYSTEM).toContain(k);
+    // QA-01 order, QA-02 <project>, QA-04 quote sources
+    expect(AI13_REPLY_SYSTEM).toContain("(1) 사용자가 요청한 슬롯(focus_slots의 reason이 requested 또는 requested_reinforce)과 되묻기(actor_ambiguous, number_vague)를 먼저 묻습니다. (2) 그다음 꼬리 질문을 합니다. (3) 그다음 focus_slots 순서를 따릅니다.");
+    expect(AI13_REPLY_SYSTEM).toContain("<facts>, <current_body>, <project>, 대화에 이미 있는 요소는 다시 묻지 않습니다");
+    expect(AI13_REPLY_SYSTEM).toContain("인용은 사용자 본인의 발화(<message role=\"user\">), <current_body>, <project>만 할 수 있습니다");
+    expect(AI13_REPLY_SYSTEM).toContain("인용하지 않습니다");
+    expect(AI13_EXTRACT_SYSTEM).toContain("사용자가 말한 구체 요소(수치, 방법, 순서, 이유, 규모, 대안, 도구 이름)는 빠뜨리지 않습니다");
+    // R8 (v4.9 RQ-4): fact text and body blocks in -음 체 (headings exempt); examples rewritten.
+    expect(AI13_EXTRACT_SYSTEM).toContain('"-음" 체');
+    expect(AI13_EXTRACT_SYSTEM).not.toContain('"~했다"처럼 씁니다');
+    expect(AI13_EXTRACT_SYSTEM).not.toMatch(/text "[^"]*다"/);
+    expect(AI13_EXTRACT_SYSTEM).toContain("민감정보가 아닙니다");
+    expect(AI13_COMPOSE_SYSTEM).toContain("제목(heading)이 아닌 블록");
+    expect(AI13_COMPOSE_SYSTEM).not.toMatch(/"[^"]*(?:했|였|었)다\.?"/);
+  });
+
   it("default tier text stream with the project, body, facts, and notices", async () => {
     const ctx = buildDeliverableChatContext(factsInput({ formSnapshot: { body: "현재 본문" } }));
     const llm = createFakeLlm([{ text: "잘된 점을 더 알려 주세요." }]);

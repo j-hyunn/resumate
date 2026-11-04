@@ -118,8 +118,11 @@ export function planFill(input: {
     const rev = revOf(obj)
     if (isStarField(field)) {
       const current = values[field]
-      const add = String(obj.value)
-      const next = isBlank(current) ? add : `${current}\n${add}`
+      const proposed = String(obj.value)
+      // RQ-5 (2026-11-04): "set" = 기존 내용과 합친 전체 문장 → 폼 항목 교체(prev 보관 → 되돌리기).
+      // "append" = 과거 초안 호환 → 기존 값 뒤에 이어 붙임.
+      const op = (obj as { op?: "set" | "append" }).op ?? "set"
+      const next = op === "append" && !isBlank(current) ? `${current}\n${proposed}` : proposed
       if (next.length > PAGE_LIMITS.star) plan.skips.push({ field, reason: "too_long" })
       else plan.fills.push({ field, prev: current, next, rev })
       continue

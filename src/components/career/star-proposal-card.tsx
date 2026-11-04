@@ -5,7 +5,8 @@
  * ·"반영 규칙"·"분류 추천", AI v4.6 AI-12 "카드 상태 3단계". Plugged into `<AiPanel renderProposal>`.
  *
  * One card per chat. Sections: (기간) → 상황 / 역할 / 행동 / 결과·성과 / 배운 점 → 분류 추천. Per section:
- * 빈 칸 = 새 값 / 내용 있는 칸 = "현재 내용 뒤에 붙어요", C-15 칩, 검토 필요 [수락]/[거절(비우기)], 직접 고치기,
+ * 빈 칸 = 새 값 / 내용 있는 칸: op "set" = "기존 내용과 합친 제안"([반영] = 교체, [기존 내용과 비교] — RQ-5; V-9j = "기존 내용 일부가 빠졌을 수 있어요"),
+ * op "append"(과거 초안) = "현재 내용 뒤에 붙어요", C-15 칩, 검토 필요 [수락]/[거절(비우기)], 직접 고치기,
  * ④ "폼에 채움 · 저장 전" / ⑤ "반영됨" / "새 제안이 있어요". [반영] / [모두 반영] ask the page to fill the form
  * (`onFill` → planFill; no AI / DB call); the page remembers `{writing_chat_id, field, rev}`.
  */
@@ -15,6 +16,7 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  ChevronRight,
   CornerDownRight,
   Info,
   ListChecks,
@@ -29,6 +31,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { flashElement } from "@/components/common/doc-inputs"
@@ -84,11 +87,14 @@ export const FILL_SKIP_COPY: Record<Exclude<FillSkipReason, "too_long">, string>
   classification_already_set: "이미 직접 고른 분류는 바꾸지 않았어요",
 }
 
+/** UX v5.11 S-10 "2,000자 초과" (교체 = 제안 값, 과거 append = 덧붙인 결과) */
 export function tooLongCopy(field: ProjectProposalField): string {
-  return `'${PROPOSAL_FIELD_LABELS[field]}'에 붙이면 2,000자를 넘어 채우지 못했어요. 칸을 줄인 뒤 다시 [반영]해 주세요`
+  return `'${PROPOSAL_FIELD_LABELS[field]}'에 채우면 2,000자를 넘어 채우지 못했어요. 칸을 줄인 뒤 다시 [반영]해 주세요`
 }
 
 const NEEDS_REVIEW_COPY = "AI가 정리한 표현이 원래 말과 달라요. 확인해 주세요"
+/** UX v5.11 S-10 — V-9j (`review_reason = 'existing_missing'`) */
+const EXISTING_MISSING_COPY = "기존 내용 일부가 빠졌을 수 있어요"
 const ACTOR_COPY = "본인 역할 확인 중 — 팀이 한 일과 본인이 한 일을 AI가 묻고 있어요"
 const FILLED_NOTE = "저장하기를 눌러야 저장돼요"
 
@@ -326,7 +332,10 @@ export function StarProposalCard(props: StarProposalCardProps) {
               const o = draft.star[f]!
               const st = sectionState(f)
               const formValue = values[f]
-              const appendMode = !isBlank(formValue)
+              const hasFormValue = !isBlank(formValue)
+              // RQ-5: "set" on a filled field = 기존 내용과 합친 전체 문장 → [반영]이 교체. "append" = 과거 초안.
+              const appendMode = hasFormValue && o.op === "append"
+              const mergedMode = hasFormValue && o.op !== "append"
               const actor = draft.clarifications.some((c) => c.kind === "actor_ambiguous" && c.field === f)
               const tooLong = fillSkips.some((s) => s.field === f && s.reason === "too_long")
               const content = (
@@ -368,8 +377,10 @@ export function StarProposalCard(props: StarProposalCardProps) {
                               <Sparkles className="size-3" aria-hidden />
                               새 제안이 있어요
                             </Badge>
-                          ) : !appendMode ? (
+                          ) : !hasFormValue ? (
                             <span className="text-xs text-muted-foreground">새 값</span>
+                          ) : mergedMode ? (
+                            <span className="text-xs text-muted-foreground">기존 내용과 합친 제안</span>
                           ) : null}
                           <Button variant="outline" size="sm" disabled={busyAll} onClick={() => fill([f])}>
                             반영
@@ -384,7 +395,7 @@ export function StarProposalCard(props: StarProposalCardProps) {
                   {st === "review" ? (
                     <p className="flex items-start gap-1.5 text-sm text-warning-subtle-foreground">
                       <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-                      {NEEDS_REVIEW_COPY}
+                      {o.review_reason === "existing_missing" ? EXISTING_MISSING_COPY : NEEDS_REVIEW_COPY}
                     </p>
                   ) : null}
                   {editing === f ? (
@@ -408,6 +419,32 @@ export function StarProposalCard(props: StarProposalCardProps) {
                       </p>
                       <p className="line-clamp-2 text-sm text-muted-foreground">{(formValue ?? "").trim().split("\n").pop()}</p>
                       <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{o.value}</p>
+                    </div>
+                  ) : mergedMode && st !== "filled" ? (
+                    <div className="space-y-1">
+                      <p className="text-sm leading-6 whitespace-pre-wrap">{o.value}</p>
+                      <Collapsible>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="xs" className="group/prev -ml-2 text-muted-foreground">
+                            <ChevronRight className="size-3.5 transition-transform group-data-[state=open]/prev:rotate-90" aria-hidden />
+                            기존 내용과 비교
+                          </Button>
+                        </CollapsibleTrigger>
+                        {/* UX v5.11 S-10: 펼치면 지금 폼 값(저장 전 입력 포함)과 제안을 나란히 */}
+                        <CollapsibleContent className="mt-1 space-y-1">
+                          <p className="text-xs text-muted-foreground">[반영]하면 지금 폼 값이 제안으로 바뀌어요</p>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">지금 폼 값</p>
+                              <p className="rounded-md bg-muted px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">{formValue}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">제안</p>
+                              <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{o.value}</p>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
                   ) : (
                     <p className="text-sm leading-6 whitespace-pre-wrap">{o.value}</p>

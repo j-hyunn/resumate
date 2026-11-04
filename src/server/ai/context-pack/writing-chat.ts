@@ -274,8 +274,9 @@ function classificationValue(field: (typeof CLASSIFICATION_FIELDS)[number], proj
 }
 
 /**
- * Extract: the project's current values (STAR text so appends add only new
- * sentences; classification as reference, never a source), with the room
+ * Extract: the project's current values (STAR text so a merged `set` keeps
+ * every existing fact, v4.9 RQ-5; classification as reference, never a
+ * source), with the room
  * left per STAR field (C-14 "정리 프롬프트에는 필드별 남은 글자 수").
  */
 export function renderProjectForExtract(ctx: WritingChatContext): string {
@@ -283,7 +284,7 @@ export function renderProjectForExtract(ctx: WritingChatContext): string {
   const source = ctx.valueSource === "form_snapshot" ? "화면 폼의 현재 값(저장 전 편집 포함)" : "저장된 값";
   const out = ["<project_state>", `values: ${source}`, `period: ${renderPeriod(project)}`, "classification (참고, 출처 아님):"];
   for (const f of CLASSIFICATION_FIELDS) out.push(`  ${f}: ${classificationValue(f, project)}`);
-  out.push("star (프로젝트에 이미 있는 값 — 값이 있는 필드는 append만):");
+  out.push("star (프로젝트에 이미 있는 값 — 값이 있는 필드는 기존 텍스트와 새 내용을 합친 전체 문장으로 set):");
   for (const f of STAR_FIELDS) {
     const v = project.star[f];
     const room = `남은 글자 수 ${Math.max(0, ctx.remainingChars[f])}`;
@@ -324,23 +325,52 @@ export function renderDraftForExtract(ctx: WritingChatContext): string {
   return out.join("\n");
 }
 
-/** Reply: status only (no values), so questions don't carry facts (AI-12 "질문에 구체적 사실을 넣지 않는다"). */
-export function renderStatusForReply(ctx: WritingChatContext): string {
+/**
+ * Reply (R7, RQ-1): the project's current values so the coach can quote the
+ * user's own words and ask about the concrete element that is still missing.
+ * Form values (period, STAR; learnings in <reflection>), then the proposals not
+ * in the form yet (values, 합친 제안 / 새로 채움, review), then clarifications. No classification
+ * values (the reply never asks about classification — only which keys have a
+ * recommendation, for the one-time hint) and no remaining-char counts
+ * (full fields come in <turn>). No source aliases or ids.
+ */
+export function renderProjectForReply(ctx: WritingChatContext): string {
   const { draft } = ctx;
   const project = ctx.v9.project;
-  const state = (f: StarField) => {
-    const onProject = !!project.star[f] && project.star[f]!.trim() !== "";
+  const source = ctx.valueSource === "form_snapshot" ? "화면 폼의 현재 값(저장 전 편집 포함)" : "저장된 값";
+  const multiline = (t: string) => t.replace(/\n/g, "\n    ");
+  const starText = (f: StarField, v: string) => multiline(f === "learnings" ? `<reflection>${esc(v)}</reflection>` : esc(v));
+
+  const out = ["<project_state>", `values: ${source}`, `period: ${renderPeriod(project)}`, "star (폼에 있는 값):"];
+  for (const f of STAR_FIELDS) {
+    const v = project.star[f];
+    out.push(v && v.trim() !== "" ? `  ${f}: ${starText(f, v)}` : `  ${f}: (비어 있음)`);
+  }
+
+  const proposals: string[] = [];
+  if (!project.startMonth) {
+    const start = draft.project.start_month;
+    const end = draft.project.end_month;
+    if (isPending(start) || isPending(end)) {
+      const v = (d: typeof start) => (isPending(d) ? esc(String(d!.value ?? "")) : "(없음)");
+      proposals.push(`  period: ${v(start)} ~ ${v(end)}`);
+    }
+  }
+  for (const f of STAR_FIELDS) {
     const d = draft.star[f];
-    const proposal = isPending(d) && !pendingInForm(f, project, draft) ? (d!.review === "needs_review" ? "제안(검토 필요)" : "제안 있음") : null;
-    if (onProject) return proposal ? `값 있음 + 덧붙임 ${proposal}` : "값 있음";
-    return proposal ?? "비어 있음";
-  };
-  const out = ["<status>", `period: ${project.startMonth ? "값 있음" : isPending(draft.project.start_month) ? "제안 있음" : "비어 있음"}`];
-  for (const f of STAR_FIELDS) out.push(`${f}: ${state(f)}`);
+    if (!isPending(d) || pendingInForm(f, project, draft)) continue;
+    const review = d!.review === "needs_review" ? ", 검토 필요" : "";
+    // v4.9 (RQ-5): a proposal for a field that already has text is a merged proposal (old drafts: append).
+    const merged = d!.op === "append" || (project.star[f] ?? "").trim() !== "";
+    proposals.push(`  ${f} [${merged ? "합친 제안" : "새로 채움"}${review}]: ${starText(f, d!.value ?? "")}`);
+  }
+  out.push("proposals (정리했지만 아직 폼에 넣지 않은 제안 — 화면 제안 카드에 있음):");
+  out.push(...(proposals.length ? proposals : ["  (없음)"]));
+
   const recommended = CLASSIFICATION_FIELDS.filter((f) => isPending(draft.classification[f]));
   out.push(`classification_recommended: ${recommended.length ? recommended.join(", ") : "(없음)"}`);
   out.push(`clarifications: ${renderClarifications(ctx)}`);
-  out.push("</status>");
+  out.push("</project_state>");
   return out.join("\n");
 }
 

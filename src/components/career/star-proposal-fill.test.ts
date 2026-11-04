@@ -33,7 +33,7 @@ function draft(): ProjectStructuredDraft {
 const base = () => ({ ...blankProjectValues({ experience_id: "e1" }), name: "p", action: "기존 행동" })
 
 describe("planFill", () => {
-  it("fills empty STAR fields with the value and appends to filled ones", () => {
+  it("fills empty STAR fields with the value and appends legacy 'append' proposals to filled ones", () => {
     const plan = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["situation", "action"] })
     expect(plan.fills).toEqual([
       { field: "situation", prev: null, next: "새 상황", rev: 1 },
@@ -41,9 +41,32 @@ describe("planFill", () => {
     ])
   })
 
+  it("RQ-5: a 'set' proposal on a filled field replaces the form value and keeps prev for undo", () => {
+    const d = draft()
+    d.star.action = star("기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함", { rev: 4 })
+    const plan = planFill({ draft: d, chatId: "c", values: base(), applied: [], fields: ["action"] })
+    expect(plan.fills).toEqual([{ field: "action", prev: "기존 행동", next: "기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함", rev: 4 }])
+    expect(applyFills(base(), plan.fills).action).toBe("기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함")
+  })
+
+  it("2,000자 check uses the resulting length: 'set' replaces (fits), 'append' would overflow", () => {
+    const values = { ...base(), action: "x".repeat(1500) }
+    const set = draft()
+    set.star.action = star("y".repeat(1800))
+    expect(planFill({ draft: set, chatId: "c", values, applied: [], fields: ["action"] }).fills[0].next).toBe("y".repeat(1800))
+    const app = draft()
+    app.star.action = star("y".repeat(1800), { op: "append" })
+    expect(planFill({ draft: app, chatId: "c", values, applied: [], fields: ["action"] }).skips[0].reason).toBe("too_long")
+    const over = draft()
+    over.star.action = star("y".repeat(2001))
+    expect(planFill({ draft: over, chatId: "c", values, applied: [], fields: ["action"] }).skips[0].reason).toBe("too_long")
+  })
+
   it("skips needs_review, already filled and too long sections", () => {
     const values = { ...base(), situation: "x".repeat(1999) }
-    const plan = planFill({ draft: draft(), chatId: "c", values, applied: [{ writing_chat_id: "c", field: "action", rev: 3 }], fields: ["situation", "action", "result"] })
+    const d = draft()
+    d.star.situation = star("새 상황", { op: "append" })
+    const plan = planFill({ draft: d, chatId: "c", values, applied: [{ writing_chat_id: "c", field: "action", rev: 3 }], fields: ["situation", "action", "result"] })
     expect(plan.fills).toEqual([])
     expect(plan.skips.map((s) => s.reason)).toEqual(["too_long", "already_applied", "needs_review"])
   })

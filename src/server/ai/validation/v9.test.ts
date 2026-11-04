@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { baseInput, emptyProject, filledProject, GREETING, msgId, output, rows } from "../__fixtures__/AI-12/conversations";
 import { buildWritingChatContext, type WritingChatTurnInput } from "../context-pack/writing-chat";
 import type { Ai12ExtractOutput } from "../schemas/AI-12";
-import { toDraftPatch } from "../schemas/structured-draft";
+import { STAR_FIELD_MAX_LENGTH, toDraftPatch } from "../schemas/structured-draft";
+import { KOREAN_SUFFIXES, wordForm } from "./v9-lexicon";
+import { PERSONAL_SENTENCES, WORK_SENTENCES } from "../__fixtures__/AI-12/sensitive-probes";
 import {
   checkMonthValue,
   checkNumberValue,
@@ -16,8 +18,11 @@ import {
   isDelegationRequest,
   MAX_PATCHES_PER_TURN,
   mergedStarLength,
+  nominalStems,
   normalizeMessageAlias,
+  preservesExisting,
   remainingStarChars,
+  stripKoreanSuffix,
   uncoveredRatio,
   V9E_MAX_UNCOVERED_RATIO,
   validateExtractOutput,
@@ -194,31 +199,49 @@ describe("V-9f actor", () => {
   });
 });
 
-describe("V-9g sensitive", () => {
-  it.each([
-    ["우울증 치료를 받느라 쉬었어요", ["health"]],
-    ["병가를 냈어요", ["health"]],
-    ["주말엔 교회에 가요", ["religion"]],
-    ["노조 활동을 했어요", ["union"]],
-    ["지지 정당 얘기가 나왔어요", ["politics"]],
-    ["연락처는 010-1234-5678이에요", ["contact"]],
-    ["메일 test.user@example.com", ["contact"]],
-    ["김민수 팀장님이 리뷰를 했어요", ["third_party_name"]],
-    ["박지연님과 협업했어요", ["third_party_name"]],
-    ["장애 대응을 맡았어요", []],
-    ["성능 문제를 진단했어요", []],
-    ["이번 팀장님이 오셨어요", []],
-    ["정말 팀장님이 많이 도와주셨어요", []],
-    ["부장님께 보고했어요", []],
-    ["정산 팀장님이 요청했어요", []],
-    ["정산팀 팀장님이 요청했어요", []],
-    ["남궁민 대리가 도와줬어요", ["third_party_name"]],
-    ["이사님이 승인했어요", []],
-    ["고객님 문의가 많았어요", []],
-    ["전임 과장이 만든 코드", []],
-    ["결제 API 응답 시간을 줄였어요", []],
-  ])("%s → %j", (text, categories) => {
+describe("V-9g sensitive (v4.9 RQ-6, C-7 민감정보 판정 — R8 QA-02·QA-03)", () => {
+  it.each(WORK_SENTENCES)("work: %s → clean", (text) => {
+    expect(detectSensitive(text)).toEqual([]);
+  });
+
+  it.each(PERSONAL_SENTENCES)("personal: %s → %j", (text, categories) => {
     expect(detectSensitive(text)).toEqual(categories);
+  });
+
+  it("the whole work set in one message stays clean; one personal sentence among them is caught", () => {
+    expect(detectSensitive(WORK_SENTENCES.join(". "))).toEqual([]);
+    expect(detectSensitive(`${WORK_SENTENCES.slice(0, 5).join(". ")}. 입원함.`)).toEqual(["health"]);
+  });
+
+  it.each([
+    ["장애 대응을 맡았어요"],
+    ["성능 문제를 진단했어요"],
+    ["이번 팀장님이 오셨어요"],
+    ["정말 팀장님이 많이 도와주셨어요"],
+    ["부장님께 보고했어요"],
+    ["정산 팀장님이 요청했어요"],
+    ["정산팀 팀장님이 요청했어요"],
+    ["이사님이 승인했어요"],
+    ["고객님 문의가 많았어요"],
+    ["전임 과장이 만든 코드"],
+    ["결제 API 응답 시간을 줄였어요"],
+    ["환자가 입원함"],
+  ])("other clean: %s", (text) => {
+    expect(detectSensitive(text)).toEqual([]);
+  });
+
+  it.each([
+    ["받았음", "finite"],
+    ["냄", "finite"],
+    ["휴직했어요", "finite"],
+    ["조합원임", "finite"],
+    ["받는", "adnominal"],
+    ["가입한", "adnominal"],
+    ["받을", "adnominal"],
+    ["받아", "connective"],
+    ["하고", "connective"],
+  ] as const)("wordForm(%s) = %s", (word, form) => {
+    expect(wordForm(word)).toBe(form);
   });
 });
 
@@ -305,26 +328,42 @@ describe("validateExtractOutput — period and STAR", () => {
     expect(ongoing.rejections).toEqual([{ check: "V-9h", target: "project.end_month" }]);
   });
 
-  it("V-9h: a filled project field takes append only", () => {
-    const ctx = ctxFor({ project: filledProject() });
-    const r = run(output({ star_patches: [star("action", "병목 쿼리를 찾았다", ["병목 쿼리를 찾아"]), star("action", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctx);
-    expect(r.rejections).toEqual([{ check: "V-9h", target: "star.action" }]);
-    expect(r.changes.star.map((s) => `${s.field}:${s.op}`)).toEqual(["action:append"]);
+  it("V-9h (v4.9): a filled project field takes a merged set; a legacy append is still accepted", () => {
+    const ctx = ctxFor({ project: filledProject() }, [["assistant", GREETING], ["user", "실행 계획도 EXPLAIN으로 확인했어요"]]);
+    const merged = run(output({ star_patches: [star("action", "병목 쿼리를 찾아 인덱스를 재설계하고 실행 계획을 EXPLAIN으로 확인함", ["실행 계획도 EXPLAIN으로 확인했어요"])] }), ctx);
+    expect(merged.rejections).toEqual([]);
+    expect(merged.changes.star).toMatchObject([{ field: "action", op: "set", review: "ok", source_message_ids: [msgId(2)], source_quotes: ["실행 계획도 EXPLAIN으로 확인했어요"] }]);
+    expect(merged.report).toMatchObject({ merged: 1, preservation_review: 0 });
+    expect(toDraftPatch(merged.changes).ops[0]).toMatchObject({ op: "set", target: { section: "star", field: "action" } });
+    // R8 QA-01: a legacy append becomes a merged set = current value + "\n" + the new sentence.
+    const appended = run(output({ star_patches: [star("action", "실행 계획도 EXPLAIN으로 확인했다", ["실행 계획도 EXPLAIN으로 확인했어요"], "append")] }), ctx);
+    expect(appended.changes.star).toMatchObject([{ field: "action", op: "set", value: "병목 쿼리를 찾아 인덱스를 재설계했다\n실행 계획도 EXPLAIN으로 확인했다", review: "ok" }]);
+    expect(appended.report).toMatchObject({ merged: 1, append_merged: 1 });
   });
 
-  it("append onto an empty project and an empty proposal becomes set; a second append stays append", () => {
+  it("append onto an empty project and an empty proposal becomes set; a second append becomes a merged set (QA-01)", () => {
     const r = run(output({ star_patches: [star("situation", SITUATION.value, SITUATION.source_quotes, "append"), star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }));
-    expect(r.changes.star.map((s) => s.op)).toEqual(["set", "append"]);
+    expect(r.changes.star.map((s) => s.op)).toEqual(["set", "set"]);
+    expect(r.changes.star[1].value).toBe(`${SITUATION.value}\n인덱스를 다시 설계했다`);
+    expect(r.changes.star[1].source_message_ids).toEqual([msgId(2)]);
   });
 
-  it("append onto a pending proposal stays append; a set equal to the pending value is unchanged", () => {
+  it("append onto a pending proposal becomes a merged set (QA-01); a set equal to the pending value is unchanged", () => {
     const draft = { star: { situation: field(SITUATION.value) } };
     const r = run(output({ star_patches: [SITUATION, star("action", ACTION.value, ACTION.source_quotes, "append")] }), ctxFor({ structuredDraft: draft }));
     expect(r.report.unchanged).toBe(1);
     expect(r.changes.star.map((s) => `${s.field}:${s.op}`)).toEqual(["action:set"]);
     const appended = run(output({ star_patches: [star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctxFor({ structuredDraft: draft }));
-    expect(appended.changes.star.map((s) => s.op)).toEqual(["append"]);
+    expect(appended.changes.star.map((s) => s.op)).toEqual(["set"]);
+    expect(appended.changes.star[0].value).toBe(`${SITUATION.value}\n인덱스를 다시 설계했다`);
     expect(appended.changes.star[0].new_object).toBeUndefined();
+    // A pending merged set on a filled field: the append goes after the pending text, not after the form value.
+    const onMerged = run(
+      output({ star_patches: [star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }),
+      ctxFor({ project: filledProject({ situation: "결제가 느렸다" }), structuredDraft: { star: { situation: field("결제가 느렸고 피크 시간에 결제 승인 API가 느려졌음", { op: "set" }) } } }),
+    );
+    expect(onMerged.changes.star).toMatchObject([{ op: "set", value: "결제가 느렸고 피크 시간에 결제 승인 API가 느려졌음\n인덱스를 다시 설계했다" }]);
+    expect(toDraftPatch(onMerged.changes).ops.map((o) => o.op)).toEqual(["set"]);
     // v4.6: an append whose sentence is already in the pending proposal adds nothing.
     const repeated = run(output({ star_patches: [star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append")] }), ctxFor({ structuredDraft: draft }));
     expect(repeated.changes.star).toEqual([]);
@@ -367,7 +406,7 @@ describe("validateExtractOutput — period and STAR", () => {
   it("C-14 limit: patches beyond 10 per turn are rejected", () => {
     // Alternating sentences: a sentence already in the previous patch would be a no-op (v4.6 dedupe).
     const many = Array.from({ length: MAX_PATCHES_PER_TURN + 2 }, (_, i) =>
-      i % 2 === 0 ? star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"], "append") : star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append"),
+      i % 2 === 0 ? star("situation", "결제 승인 API가 느려졌다", ["결제 승인 API가 느려졌어요"]) : star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"]),
     );
     const r = run(output({ star_patches: many }));
     expect(r.rejections.filter((x) => x.check === "limit")).toHaveLength(2);
@@ -423,23 +462,264 @@ describe("validateExtractOutput — V-9g sensitive", () => {
       output({
         star_patches: [
           star("situation", "우울증 치료로 쉬었다가 복귀했다", ["우울증 치료로 쉬었다가 복귀했어요"]),
-          star("task", "치료 후 복귀했다", ["우울증 치료로 쉬었다가"]),
           star("action", "결제 모듈 리팩터링을 맡았다", ["결제 모듈 리팩터링을 맡았어요"]),
         ],
         sensitive_flags: [{ category: "health", message_id: "M2" }, { category: "religion", message_id: "M1" }],
       }),
       ctx,
     );
-    expect(r.rejections.map((x) => x.check)).toEqual(["V-9g", "V-9g"]);
+    expect(r.rejections.map((x) => x.check)).toEqual(["V-9g"]);
     expect(r.changes.sensitive_flags_add).toBe(1);
     expect(r.flags.sensitiveAdded).toBe(1);
     expect(r.changes.star.map((s) => s.field)).toEqual(["action"]);
+  });
+
+  it("v4.9: only the value is checked — a sensitive quote the value did not carry over passes", () => {
+    const text = "우울증 치료로 쉬었다가 복귀해서 결제 모듈 리팩터링을 맡았어요.";
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", text]]);
+    const r = run(output({ star_patches: [star("action", "결제 모듈 리팩터링을 맡음", ["우울증 치료로 쉬었다가 복귀해서 결제 모듈 리팩터링을 맡았어요"])] }), ctx);
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ field: "action", review: "ok" }]);
+    expect(r.changes.sensitive_flags_add).toBe(0);
+  });
+
+  it("v4.9: a work-domain value is kept (no V-9g)", () => {
+    const text = "제가 병원 예약 시스템의 출산 휴가 신청 기능을 개발했어요.";
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", text]]);
+    expect(ctx.sensitiveNotice).toEqual([]);
+    const r = run(output({ star_patches: [star("action", "병원 예약 시스템의 출산 휴가 신청 기능을 개발함", ["병원 예약 시스템의 출산 휴가 신청 기능을 개발했어요"])] }), ctx);
+    expect(r.rejections).toEqual([]);
   });
 
   it("does not count messages already extracted", () => {
     const ctx = ctxFor({ lastExtractedSequence: 2 }, [["assistant", GREETING], ["user", "우울증이 있었어요"], ["assistant", "네"], ["user", "결제 일을 했어요"]]);
     const r = run(output({ sensitive_flags: [{ category: "health", message_id: "M2" }] }), ctx);
     expect(r.changes.sensitive_flags_add).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v4.9 (RQ-5) merged proposals: existing text as a source, V-9j, unchanged, length
+// ---------------------------------------------------------------------------
+
+describe("validateExtractOutput — merged proposal (v4.9 RQ-5)", () => {
+  const RESULT = "응답 시간이 1.2초에서 0.7초로 줄었다";
+  const NEW = "에러율도 절반으로 줄었어요";
+  const turns = [["assistant", GREETING], ["user", NEW]] as const;
+  const filledResult = () => ctxFor({ project: filledProject({ result: RESULT }) }, turns);
+
+  it("V-9c / V-9e: the existing text is a source for the merged value", () => {
+    const value = "응답 시간이 1.2초에서 0.7초로 줄었고 에러율도 절반으로 줄었음";
+    const r = run(output({ star_patches: [star("result", value, [NEW])] }), filledResult());
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ field: "result", op: "set", value, review: "ok" }]);
+    // The same value on an empty field: 1.2초 / 0.7초 are not in the quote.
+    const empty = run(output({ star_patches: [star("result", value, [NEW])] }), ctxFor({}, turns));
+    expect(empty.rejections).toEqual([{ check: "V-9c", target: "star.result" }]);
+  });
+
+  it("V-9a / V-9b still need a user message and a real quote", () => {
+    expect(run(output({ star_patches: [star("result", `${RESULT}음`, [])] }), filledResult()).rejections).toEqual([{ check: "V-9b", target: "star.result" }]);
+    expect(run(output({ star_patches: [star("result", `${RESULT}음`, ["응답 시간이 1.2초에서"])] }), filledResult()).rejections).toEqual([{ check: "V-9b", target: "star.result" }]);
+  });
+
+  it("an append's sources stay the quotes only (legacy)", () => {
+    const r = run(output({ star_patches: [star("result", "응답 시간이 0.7초가 되었다", [NEW], "append")] }), filledResult());
+    expect(r.rejections).toEqual([{ check: "V-9c", target: "star.result" }]);
+  });
+
+  it("V-9j: a missing existing number → needs_review (counted, flagged)", () => {
+    const r = run(output({ star_patches: [star("result", "응답 시간이 줄었고 에러율도 절반으로 줄었음", [NEW])] }), filledResult());
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ field: "result", op: "set", review: "needs_review" }]);
+    expect(r.report).toMatchObject({ merged: 1, preservation_review: 1, needs_review: 1 });
+    expect(r.flags.needsReview).toEqual([{ section: "star", field: "result" }]);
+  });
+
+  it("V-9j: a missing existing name (English token, skill) → needs_review", () => {
+    const ctx = ctxFor({ project: filledProject({ action: "APM과 Redis로 병목 쿼리를 찾음" }) }, [["assistant", GREETING], ["user", "인덱스를 다시 설계했어요"]]);
+    const kept = run(output({ star_patches: [star("action", "APM과 Redis로 병목 쿼리를 찾고 인덱스를 다시 설계함", ["인덱스를 다시 설계했어요"])] }), ctx);
+    expect(kept.changes.star[0].review).toBe("ok");
+    const dropped = run(output({ star_patches: [star("action", "APM으로 병목 쿼리를 찾고 인덱스를 다시 설계함", ["인덱스를 다시 설계했어요"])] }), ctx);
+    expect(dropped.changes.star[0].review).toBe("needs_review");
+    expect(dropped.report.preservation_review).toBe(1);
+  });
+
+  it.each([
+    ["30%", "응답 시간이 30% 줄었다", "응답 시간이 30% 줄었음", true],
+    ["30% → 30명", "응답 시간이 30% 줄었다", "응답 시간이 줄고 30명이 썼음", false],
+    ["1,200명", "1,200명이 사용했다", "1200명이 사용함", true],
+    ["2년 6개월", "2년 6개월 운영했다", "2년 동안 운영함", false],
+    ["Kafka ↔ 카프카", "Kafka로 이벤트를 받았다", "카프카로 이벤트를 받음", true],
+    ["no facts", "결제가 느렸다", "결제 승인 지연을 해결함", true],
+  ])("preservesExisting %s", (_name, existing, value, ok) => {
+    expect(preservesExisting(value, [existing])).toBe(ok);
+  });
+
+  it("the merged value equal to the existing text (normalized) or part of it is unchanged", () => {
+    const same = run(output({ star_patches: [star("result", "응답 시간이 1.2초에서  0.7초로 줄었다.", [NEW])] }), filledResult());
+    expect(same.changes.star).toEqual([]);
+    expect(same.report.unchanged).toBe(1);
+    const part = run(output({ star_patches: [star("result", "0.7초로 줄었다", [NEW])] }), filledResult());
+    expect(part.changes.star).toEqual([]);
+    expect(part.report.unchanged).toBe(1);
+  });
+
+  it("existing text = form value + pending proposal: both are sources and both are kept; sources carried", () => {
+    const say = "배포도 주 1회에서 매일로 바뀌었어요";
+    const ctx = ctxFor(
+      { project: filledProject({ result: RESULT }), structuredDraft: { star: { result: field("에러율이 3%에서 1%로 줄었음", { op: "set", source_quotes: ["에러율이 3%에서 1%로"] }) } }, lastExtractedSequence: 3 },
+      [["assistant", GREETING], ["user", "에러율이 3%에서 1%로 줄었어요"], ["assistant", "네"], ["user", say]],
+    );
+    const value = "응답 시간이 1.2초에서 0.7초로 줄고 에러율이 3%에서 1%로 줄었으며 배포가 주 1회에서 매일로 바뀌었음";
+    const r = run(output({ star_patches: [star("result", value, [say], "set", ["M4"])] }), ctx);
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ op: "set", review: "ok", source_message_ids: [msgId(4), msgId(2)], source_quotes: [say, "에러율이 3%에서 1%로"] }]);
+    expect(r.changes.star[0].new_object).toBeUndefined();
+    // Dropping the pending proposal's numbers → V-9j.
+    const dropped = run(output({ star_patches: [star("result", "응답 시간이 1.2초에서 0.7초로 줄고 배포가 주 1회에서 매일로 바뀌었음", [say], "set", ["M4"])] }), ctx);
+    expect(dropped.changes.star[0].review).toBe("needs_review");
+  });
+
+  it("C-14 length: a merged set is checked by its own length (replacement), not current + value", () => {
+    const existing = "결제 승인 지연을 줄임. ".repeat(100).trim();
+    expect(existing.length).toBeGreaterThan(1000);
+    const ctx = ctxFor({ project: filledProject({ result: existing }) }, [["assistant", GREETING], ["user", "인덱스를 다시 설계했어요"]]);
+    const value = `${existing} 인덱스를 다시 설계함.`;
+    expect(existing.length + 1 + value.length).toBeGreaterThan(STAR_FIELD_MAX_LENGTH);
+    const r = run(output({ star_patches: [star("result", value, ["인덱스를 다시 설계했어요"])] }), ctx);
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star[0].op).toBe("set");
+    const over = run(output({ star_patches: [star("result", `${value}${"가".repeat(STAR_FIELD_MAX_LENGTH)}`, ["인덱스를 다시 설계했어요"])] }), ctx);
+    expect(over.rejections).toEqual([{ check: "length", target: "star.result" }]);
+  });
+
+  it("mergedStarLength: a pending set replaces the field; a pending append adds to it", () => {
+    const project = { ...ctxFor({ project: filledProject({ result: "가".repeat(100) }) }).v9.project };
+    const setDraft = ctxFor({ structuredDraft: { star: { result: field("나".repeat(300), { op: "set" }) } } }).v9.draft;
+    const appendDraft = ctxFor({ structuredDraft: { star: { result: field("나".repeat(300), { op: "append" }) } } }).v9.draft;
+    expect(mergedStarLength("result", project, setDraft)).toBe(300);
+    expect(mergedStarLength("result", project, appendDraft)).toBe(401);
+  });
+});
+
+describe("R8 QA round 1: review_reason, source cap, legacy append", () => {
+  const RESULT = "응답 시간이 1.2초에서 0.7초로 줄었다";
+  const NEW = "에러율도 절반으로 줄었어요";
+  const filledResult = () => ctxFor({ project: filledProject({ result: RESULT }) }, [["assistant", GREETING], ["user", NEW]]);
+
+  it("review_reason: V-9j → existing_missing, V-9e → content_unverified, ok → null; toDraftPatch sends it next to review", () => {
+    const missing = run(output({ star_patches: [star("result", "응답 시간이 줄었고 에러율도 절반으로 줄었음", [NEW])] }), filledResult());
+    expect(missing.changes.star[0]).toMatchObject({ review: "needs_review", review_reason: "existing_missing" });
+    expect(toDraftPatch(missing.changes).ops[0]).toMatchObject({ review: "needs_review", review_reason: "existing_missing" });
+
+    const loose = run(output({ star_patches: [star("action", "전사 결제 플랫폼 아키텍처를 주도적으로 설계하고 팀 생산성을 높였다", ["인덱스를 다시 설계했어요"])] }));
+    expect(loose.changes.star[0]).toMatchObject({ review: "needs_review", review_reason: "content_unverified" });
+
+    const ok = run(output({ star_patches: [star("result", "응답 시간이 1.2초에서 0.7초로 줄었고 에러율도 절반으로 줄었음", [NEW])] }), filledResult());
+    expect(ok.changes.star[0]).toMatchObject({ review: "ok", review_reason: null });
+    expect(toDraftPatch(ok.changes).ops[0]).not.toHaveProperty("review_reason");
+  });
+
+  it("V-9j wins over V-9e when both apply", () => {
+    const r = run(output({ star_patches: [star("result", "전사 매출 구조와 조직 문화를 혁신했음", [NEW])] }), filledResult());
+    expect(r.changes.star[0]).toMatchObject({ review: "needs_review", review_reason: "existing_missing" });
+  });
+
+  it("QA-06: carried sources beyond 20 are clamped by toDraftPatch (new sources first), so the RPC never sees > 20", () => {
+    const priorIds = Array.from({ length: 20 }, (_, i) => `00000000-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`);
+    const priorQuotes = Array.from({ length: 20 }, (_, i) => `이전 인용 ${i}`);
+    const ctx = ctxFor(
+      { project: filledProject({ result: RESULT }), structuredDraft: { star: { result: field("에러율이 3%에서 1%로 줄었음", { op: "set", source_message_ids: priorIds, source_quotes: priorQuotes }) } } },
+      [["assistant", GREETING], ["user", NEW]],
+    );
+    const r = run(output({ star_patches: [star("result", "응답 시간이 1.2초에서 0.7초로 줄고 에러율이 3%에서 1%로 줄었으며 에러율도 절반으로 줄었음", [NEW])] }), ctx);
+    expect(r.changes.star[0].source_message_ids).toHaveLength(21);
+    const op = toDraftPatch(r.changes).ops[0] as { source_message_ids: string[]; source_quotes: string[] };
+    expect(op.source_message_ids).toHaveLength(20);
+    expect(op.source_message_ids[0]).toBe(msgId(2));
+    expect(op.source_quotes).toHaveLength(20);
+    expect(op.source_quotes[0]).toBe(NEW);
+  });
+
+  it("QA-01: no op `append` reaches the RPC for a field with existing text", () => {
+    const r = run(output({ star_patches: [star("result", "에러율도 절반으로 줄었다", [NEW], "append")] }), filledResult());
+    expect(toDraftPatch(r.changes).ops).toMatchObject([{ op: "set", value: `${RESULT}\n에러율도 절반으로 줄었다` }]);
+    // An append whose sentence is already there is still a no-op.
+    const dup = run(output({ star_patches: [star("result", "0.7초로 줄었다", [NEW], "append")] }), filledResult());
+    expect(dup.changes.star).toEqual([]);
+  });
+});
+
+describe("V-9e ㅁ 명사형 (R8 QA-04)", () => {
+  it.each([
+    ["만듦", ["만들"]],
+    ["이끎", ["이끌"]],
+    ["맡음", ["맡으", "맡"]],
+    ["높임", ["높이", "높"]],
+    ["설계", []],
+    ["프로그램", []],
+  ])("nominalStems(%s) = %j", (token, stems) => {
+    expect(nominalStems(token)).toEqual(stems);
+  });
+
+  it.each([
+    ["관리자 대시보드를 만듦", ["관리자 대시보드를 만들었어요"]],
+    ["백엔드 API 개발을 맡음", ["백엔드 API 개발을 맡았어요"]],
+    ["전환율을 높임", ["전환율을 높였어요"]],
+    ["처리 시간을 줄임", ["처리 시간을 줄였어요"]],
+    ["배포 파이프라인을 바꿈", ["배포 파이프라인을 바꿨어요"]],
+    ["프로젝트를 이끎", ["프로젝트를 이끌었어요"]],
+  ])("%s ↔ %j → 0 uncovered", (value, quotes) => {
+    expect(uncoveredRatio(value, quotes)).toBe(0);
+  });
+
+  it("a one-syllable stem must start a word in the quotes", () => {
+    expect(uncoveredRatio("시간을 줄임", ["시간이 오줄었어요"])).toBeGreaterThan(0);
+  });
+});
+
+describe("-음 체 (v4.9 RQ-4): suffixes and V-9e", () => {
+  it.each([
+    ["설계함", "설계"],
+    ["줄었음", "줄었"],
+    ["개선했음", "개선"],
+    ["정리하였음", "정리"],
+    ["도입됨", "도입"],
+    ["도입되었음", "도입"],
+    ["기능임", "기능"],
+    ["바뀌었음", "바뀌"],
+    ["만들었음", "만들"],
+    ["포함", "포함"],
+    ["처음", "처음"],
+  ])("stripKoreanSuffix(%s) = %s", (word, stem) => {
+    expect(stripKoreanSuffix(word)).toBe(stem);
+  });
+
+  it("each -음 ending comes before every shorter entry it ends with (longest first)", () => {
+    for (const suffix of ["하였음", "했었음", "되었음", "했음", "됐음", "었음", "였음", "았음", "함", "됨", "음", "임"]) {
+      const at = KOREAN_SUFFIXES.indexOf(suffix);
+      expect(at).toBeGreaterThanOrEqual(0);
+      for (const other of KOREAN_SUFFIXES) {
+        if (other !== suffix && suffix.endsWith(other)) expect(KOREAN_SUFFIXES.indexOf(other)).toBeGreaterThan(at);
+      }
+    }
+  });
+
+  it.each([
+    ["캐시 무효화 규칙을 설계함", ["캐시 무효화 규칙을 설계했어요"]],
+    ["배포 시간이 40분에서 10분으로 줄었음", ["배포 시간이 40분에서 10분으로 줄었어요"]],
+    ["결제 실패 문의가 많았음", ["결제 실패 문의가 많았어요"]],
+    ["주문 조회 캐시를 도입함", ["주문 조회에 캐시를 도입했습니다"]],
+  ])("V-9e: %s passes against %j", (value, quotes) => {
+    expect(uncoveredRatio(value, quotes)).toBeLessThanOrEqual(V9E_MAX_UNCOVERED_RATIO);
+    expect(uncoveredRatio(value, quotes)).toBe(0);
+  });
+
+  it("a -음 체 STAR value passes V-9 end to end with review ok", () => {
+    const ctx = ctxFor({}, [["assistant", GREETING], ["user", "저는 캐시 무효화 규칙을 설계했어요"]]);
+    const r = run(output({ star_patches: [star("action", "캐시 무효화 규칙을 설계함", ["캐시 무효화 규칙을 설계했어요"])] }), ctx);
+    expect(r.changes.star).toMatchObject([{ field: "action", review: "ok" }]);
   });
 });
 

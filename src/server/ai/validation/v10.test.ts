@@ -18,6 +18,7 @@ import {
 import { buildDeliverableChatContext, type DeliverableChatTurnInput } from "../context-pack/deliverable-chat";
 import type { Ai13ExtractOutput } from "../schemas/AI-13";
 import { deliverableMarkdown } from "../schemas/deliverable-markdown";
+import { uncoveredRatio } from "./v9";
 import {
   BLOCK_TEXT_MAX,
   DRAFT_VALUE_MAX,
@@ -29,6 +30,7 @@ import {
   validateDraftBlock,
   validateFactsOutput,
   violationSummary,
+  V10E_MAX_UNCOVERED_RATIO,
 } from "./v10";
 
 /** AI-13 server validation: facts (V-9a–e, g + actor) and draft blocks (V-10a–h). */
@@ -88,6 +90,17 @@ describe("validateFactsOutput — V-9 per fact", () => {
     expect(r.sensitiveAdd).toBe(1);
     const old = validateFactsOutput(extractOutput({ facts: [f("우울증 치료 중에 런북을 썼다", ["우울증 치료를 받으면서 런북을 썼어요"])] }), factsCtx(say, { lastExtractedSequence: 2 }));
     expect(old.sensitiveAdd).toBe(0);
+  });
+
+  it("v4.9 (RQ-6): only the fact text is checked; work-domain facts and -음 체 pass", () => {
+    const say = "그때 제가 우울증 치료를 받으면서 런북을 썼어요.";
+    const quoteOnly = validateFactsOutput(extractOutput({ facts: [f("런북을 작성함", ["우울증 치료를 받으면서 런북을 썼어요"])] }), factsCtx(say));
+    expect(quoteOnly.rejections).toEqual([]);
+    expect(quoteOnly.sensitiveAdd).toBe(0);
+    const domain = "제가 병원 예약 시스템의 출산 휴가 신청 기능 런북을 썼어요.";
+    const ok = validateFactsOutput(extractOutput({ facts: [f("병원 예약 시스템의 출산 휴가 신청 기능 런북을 작성함", ["병원 예약 시스템의 출산 휴가 신청 기능 런북을 썼어요"])] }), factsCtx(domain));
+    expect(ok.rejections).toEqual([]);
+    expect(ok.facts).toHaveLength(1);
   });
 
   it("V-9e: mostly new words → needs_review; close paraphrase → ok", () => {
@@ -200,6 +213,12 @@ describe("validateDraftBlock — V-10b / c / f", () => {
     expect(withSkills.block).not.toBeNull();
     const url = validateDraftBlock(paragraph("자세한 내용은 https://example.com/runbook 에 있다.", { source_fact_ids: ["F1"] }), 0, vctx());
     expect(url.block).toBeNull();
+  });
+
+  it("V-10f (v4.9): a work-domain block in -음 체 is kept", () => {
+    const r = validateDraftBlock(paragraph("결제 모듈의 장애 대응 런북을 직접 작성함.", { source_fact_ids: ["F1"] }), 0, vctx());
+    expect(r.rejections).toEqual([]);
+    expect(r.block).not.toBeNull();
   });
 
   it("V-10f: sensitive text drops the unit and counts", () => {
@@ -332,4 +351,25 @@ describe("validateComposeOutput", () => {
 
 it("fixtures: twoFacts has F1 self contribution and F2 team went_well", () => {
   expect(twoFacts().map((x) => `${x.slot}:${x.actor}`)).toEqual(["contribution:self", "went_well:team"]);
+});
+
+describe("V-10e -음 체 (R8 QA-04)", () => {
+  it.each([
+    ["관리자 대시보드를 만듦.", ["관리자 대시보드를 만들었어요"]],
+    ["백엔드 API 개발을 맡음.", ["백엔드 API 개발을 맡았어요"]],
+    ["전환율을 높임.", ["전환율을 높였어요"]],
+    ["처리 시간을 줄임.", ["처리 시간을 줄였어요"]],
+    ["배포 파이프라인을 바꿈.", ["배포 파이프라인을 바꿨어요"]],
+    ["프로젝트를 이끎.", ["프로젝트를 이끌었어요"]],
+    ["캐시 무효화 규칙을 설계함.", ["캐시 무효화 규칙을 설계했어요"]],
+  ])("%s ↔ %j is covered", (text, sources) => {
+    expect(uncoveredRatio(text, sources)).toBe(0);
+    expect(uncoveredRatio(text, sources)).toBeLessThanOrEqual(V10E_MAX_UNCOVERED_RATIO);
+  });
+
+  it("a -음 체 block against a -했어요 body quote keeps review ok", () => {
+    const r = validateDraftBlock(paragraph("결제 모듈의 장애 대응 런북을 직접 작성함.", { source_fact_ids: ["F1"] }), 0, vctx());
+    expect(r.block).not.toBeNull();
+    expect(r.rejections).toEqual([]);
+  });
 });

@@ -269,3 +269,10 @@
 
 - 1라운드 "전체 점검" 결론은 그대로다. 이번 수정으로 RLS·authenticated·service_role 허용 목록이 테스트로 고정되면서 회귀 장치가 생겼다.
 - spec-gaps S9(QA) ①·②는 기획·UX 확인 대기다.
+
+## 후속 (2026-11-04, QA-S9-07 해결)
+- `supabase/tests/account_deletion.test.sql`: running 작업 `…0002`에 `heartbeat_at = now()`를 넣었다.
+- 탈퇴 **전** 대조 단정 추가: app_ai_writer heartbeat update 2행, app_key_reader `get_provider_key_secret(…0002)`가 gemini 키 1행을 돌려줌.
+- queued 작업 `…0003`은 상태 때문에 탈퇴 전에도 거절되므로 "대조 불가" 단정으로 바꾸고 탈퇴 후 단정에서 뺐다.
+- 이제 탈퇴 후 단정(heartbeat 0행, 키 거절)은 `delete_account`가 작업·키를 지워야만 통과한다. pgTAP 57파일 2,782 통과.
+- 상태: **해결**

@@ -80,3 +80,9 @@
 
 ## 라운드 요약
 - 막는 이슈 0, Minor 1(선택). 모든 검사 통과(typecheck·lint·Vitest 1439·build·pgTAP 2177). 커밋 안 함, 원격 적용 없음.
+
+## 후속 (2026-11-04, QA-01 해결)
+- `supabase/tests/readiness_consent_required.test.sql`: A의 활성 공급자로 running 작업 하나를 두고 `pg_temp.gate_agrees()`를 추가했다.
+- 동의 상태 8곳(동의 없음, 동의 있음, 재동의 고지, 재동의, 미래 고지, 등급 불일치, 유료 등급 동의, 철회)마다 app_ai_writer로 `consent_required = true ⇔ check_ai_run_allowed(job) = 'consent_required'`를 단정한다.
+- 키 invalid 상태는 게이트가 `key_invalid`를 먼저 내므로 짝 단정에서 뺐다. `retry_ai_job`은 같은 헬퍼를 쓰고 작업을 바꾸는 RPC라 이번 대조에 넣지 않았다(코드 대조로 확인됨, 1라운드 기록).
+- 상태: **해결**

@@ -117,6 +117,8 @@ insert into public.ai_jobs (id, user_id, job_type, application_project_id, targe
    null, 'writing_chat', 'a0000000-c4a7-0000-0000-000000000001', 'queued', 1, 'gemini', 'default', 'free'),
   ('a0000000-7777-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'key_verification',
    null, null, null, 'failed', 1, 'gemini', 'light', 'free');
+-- QA-S9-07: the running job has a fresh heartbeat, so the runner's key fetch works before deletion (control below).
+update public.ai_jobs set heartbeat_at = now() where id = 'a0000000-7777-0000-0000-000000000002';
 
 insert into public.insights (id, user_id, application_project_id, version_no, is_latest, status, result,
                              match_stage_result, requirements_hash, career_snapshot_hash, input_hash, schema_version,
@@ -259,6 +261,33 @@ select throws_ok($$select * from public.account_deletion_logs$$, '42501', null, 
 select throws_ok($$insert into public.account_deletion_logs (subject_hash, reason) values (repeat('b', 64), 'user_request')$$,
                  '42501', null, 'user cannot insert logs');
 
+-- QA-S9-07 controls: the same runner calls succeed BEFORE deletion, so the "after" assertions below can only pass
+-- because delete_account removed the jobs and keys (not because of the fixture).
+reset role;
+set local role app_ai_writer;
+set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
+with u as (
+  update public.ai_jobs j set heartbeat_at = now()
+   where j.id in ('a0000000-7777-0000-0000-000000000002', 'a0000000-7777-0000-0000-000000000003')
+     and j.run_generation = 1 and j.status in ('queued', 'running')
+  returning 1)
+select set_config('t.heartbeat_rows_before', count(*)::text, true) from u;
+reset role;
+select is(current_setting('t.heartbeat_rows_before'), '2',
+          'before delete_account: runner heartbeat updates both in-flight jobs (control)');
+
+set local role app_key_reader;
+set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_key_reader"}';
+select results_eq($$select key_id from public.get_provider_key_secret('a0000000-7777-0000-0000-000000000002')$$,
+                  $$values ('a0000000-9999-0000-0000-000000000001'::uuid)$$,
+                  'before delete_account: key fetch for the running job returns the gemini key (control)');
+-- The queued chat turn (0003) is refused by status alone, before and after deletion, so it has no control.
+select throws_ok($$select * from public.get_provider_key_secret('a0000000-7777-0000-0000-000000000003')$$,
+                 'P0001', 'key_not_available', 'before delete_account: queued job is refused by status (no control possible)');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
+
 -- ── delete_account ──
 select is(public.delete_account('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef') - 'db_deleted_at',
           '{"deleted": true, "log_written": true, "in_flight_jobs": 2, "deleted_provider_keys": 2}'::jsonb,
@@ -279,7 +308,7 @@ select is(public.delete_account('0123456789abcdef0123456789abcdef0123456789abcde
 reset role;
 
 -- QA-S9-05 (a): the runner after deletion. Its in-flight jobs (insight-evaluation 0002 running, chat turn 0003
--- queued) are gone, so the heartbeat update (supabase-store heartbeat: id + run_generation + active status) hits 0
+-- queued) are gone, so the heartbeat update (2 rows before deletion, control above) (supabase-store heartbeat: id + run_generation + active status) hits 0
 -- rows -> current:false (lost), and the key fetch is refused.
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
@@ -296,8 +325,6 @@ set local role app_key_reader;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_key_reader"}';
 select throws_ok($$select * from public.get_provider_key_secret('a0000000-7777-0000-0000-000000000002')$$,
                  'P0001', 'key_not_available', 'after delete_account: key fetch for the running job is refused');
-select throws_ok($$select * from public.get_provider_key_secret('a0000000-7777-0000-0000-000000000003')$$,
-                 'P0001', 'key_not_available', 'after delete_account: key fetch for the queued chat turn is refused');
 reset role;
 
 -- completeness (catalog-driven)

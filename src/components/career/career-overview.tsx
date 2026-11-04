@@ -191,14 +191,14 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
       <nav
         aria-label="커리어 목록"
         // empty: the list column fills the narrow screen so its guide sits in the middle (lg: fixed width, row stretch)
-        className={cn("flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:flex-none lg:px-3", empty && "flex-1", showDetailOnNarrow && "hidden lg:flex")}
+        className={cn("relative flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:flex-none lg:px-3", empty && "flex-1", showDetailOnNarrow && "hidden lg:flex")}
       >
         <h2 className="text-sm font-semibold text-muted-foreground">커리어</h2>
         {/* "커리어 추가" always sits under the list heading, empty or not (user request 2026-11-04, supersedes UQ-723) */}
         <AddCareerMenu onCreated={onAdded} />
         {empty ? (
-          // [UI-가정] 빈 목록 칸 안내 문구 — 칸 안 가운데, 버튼 없음
-          <p className="flex flex-1 items-center justify-center py-16 text-center text-sm text-muted-foreground">아직 추가한 커리어가 없어요</p>
+          // ED-1 빈 목록 칸 안내 — 칸 안 가운데, 버튼 없음. lg: 칸 전체 높이 기준 가운데(오른쪽 안내와 같은 세로 위치, UQ-737)
+          <p data-empty-guide="list" className="flex flex-1 items-center justify-center py-16 text-center text-sm text-muted-foreground lg:pointer-events-none lg:absolute lg:inset-0 lg:px-3">아직 추가한 커리어가 없어요</p>
         ) : (
           <CareerList groups={groups} selectedKey={selected ? itemKey(selected) : null} onSelect={select} />
         )}
@@ -206,7 +206,7 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
 
       <section
         aria-label="커리어 상세"
-        className={cn("flex min-w-0 flex-1 flex-col gap-4 lg:px-3", !showDetailOnNarrow && "hidden lg:flex")}
+        className={cn("relative flex min-w-0 flex-1 flex-col gap-4 lg:px-3", !showDetailOnNarrow && "hidden lg:flex")}
       >
         {showDetailOnNarrow ? (
           <Button variant="ghost" size="sm" className="-ml-2 self-start lg:hidden" onClick={() => select(null)}>
@@ -218,8 +218,9 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
         {selected ? (
           <DetailPanel key={itemKey(selected)} item={selected} deliverables={deliverables[selected.id] ?? null} onDelete={setDeleting} onEdit={setEditing} />
         ) : (
-          // 빈 칸 안내만 — 버튼은 왼쪽 목록 머리의 "커리어 추가" 하나 (user request 2026-11-04)
-          <div className="flex flex-1 items-center justify-center">
+          // 빈 칸 안내만 — 버튼은 왼쪽 목록 머리의 "커리어 추가" 하나 (ED-1). lg: 칸 전체 높이 기준 가운데 —
+          // 두 칸의 머리 높이가 달라도(왼쪽은 제목 + 버튼) 두 안내의 세로 중심이 같다 (UQ-737)
+          <div data-empty-guide="detail" className="flex flex-1 items-center justify-center lg:absolute lg:inset-0 lg:px-3">
             <EmptyState
               icon={Layers}
               title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"

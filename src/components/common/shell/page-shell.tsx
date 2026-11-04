@@ -19,12 +19,11 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, FileText, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, Check, CircleAlert, Loader2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -33,18 +32,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatTime } from "@/lib/data/labels"
-import { shellSignOutAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
-import { ACCOUNT_MENU_ITEMS, type AccountMenuItem } from "./account-menu-items"
+import { AccountMenuContent, useAccountSignOut } from "./nav-user"
 import { useSettingsDialog } from "./settings-dialog"
 import { LogoMark, LogoWordmark } from "./logo-mark"
 import { UserAvatar, displayName, useShellUser } from "./user-avatar"
@@ -220,19 +212,19 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
   return { dirty, navigate, pending, saving, cancel, leaveWithoutSaving, saveAndLeave, reloadDiscarding }
 }
 
-/** 이탈 확인 다이얼로그 — AlertDialog 3 actions (5.8). Rendered by <PageShell>. */
+/** 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>. */
 export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
   return (
     <AlertDialog open={guard.pending !== null} onOpenChange={(o) => !o && !guard.saving && guard.cancel()}>
       <AlertDialogContent className="sm:max-w-md">
-        <AlertDialogHeader className="text-left">
+        <AlertDialogHeader>
           <AlertDialogTitle>저장하지 않은 변경이 있어요</AlertDialogTitle>
           {/* [UI-가정] description line (the spec gives the title and the 3 buttons only) */}
           <AlertDialogDescription>저장하지 않고 나가면 이번에 고친 내용이 사라져요</AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="max-sm:flex-col-reverse max-sm:[&>*]:w-full">
-          <AlertDialogCancel disabled={guard.saving}>계속 편집</AlertDialogCancel>
-          <Button variant="destructive-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
+        {/* 2026-11 모달 개편: "계속 편집" is the top-right X (closes = stay); 2 buttons right-aligned */}
+        <AlertDialogFooter>
+          <Button variant="muted-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
             저장하지 않고 나가기
           </Button>
           <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
@@ -402,14 +394,14 @@ export function StaleWriteDialog({
           keepRef.current?.focus()
         }}
       >
-        <AlertDialogHeader className="text-left">
+        <AlertDialogHeader>
           <AlertDialogTitle>다른 곳에서 {what} 바뀌었어요</AlertDialogTitle>
           {/* [UI-가정] 명세 "버린다고 함께 알림"의 글자 */}
           <AlertDialogDescription>새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           {/* not AlertDialogCancel: Radix focuses Cancel first, and this one throws edits away (QA UQ-PA-4) */}
-          <Button variant="outline" disabled={busy} onClick={onReload}>
+          <Button variant="muted-ghost" disabled={busy} onClick={onReload}>
             새로 불러오기
           </Button>
           <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>
@@ -426,14 +418,6 @@ export function StaleWriteDialog({
 // ShellBar + PageShell
 // ---------------------------------------------------------------------------
 
-const ACCOUNT_ICONS: Record<AccountMenuItem["key"], React.ComponentType<{ className?: string }>> = {
-  profile: UserRound,
-  settings: Settings,
-  ai: KeyRound,
-  policies: FileText,
-  sign_out: LogOut,
-}
-
 /** [Resumate AI] 다시 열기 (shown only while the wide panel is closed, D-UX-27). */
 export interface AiReopenProps {
   visible: boolean
@@ -449,16 +433,7 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
   const bindReopen = aiReopen?.bindButton
   const leave = usePageLeave()
   const { openSettings } = useSettingsDialog()
-  const router = useRouter()
-  const signOut = async () => {
-    try {
-      await shellSignOutAction()
-    } catch {
-      // [UI-가정] like L-01: leave to S-01 even if sign-out failed
-    } finally {
-      router.replace(routes.landing())
-    }
-  }
+  const signOut = useAccountSignOut()
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 bg-shell px-4 max-md:border-b">
       <Link
@@ -484,24 +459,14 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
               <UserAvatar name={displayName(user)} avatarUrl={user?.avatar_url ?? null} className="size-7" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-48">
-            {ACCOUNT_MENU_ITEMS.map((item) => {
-              const Icon = ACCOUNT_ICONS[item.key]
-              return (
-                <React.Fragment key={item.key}>
-                  {item.key === "sign_out" ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      "section" in item ? openSettings(item.section) : "href" in item ? leave(item.href) : leave(() => void signOut())
-                    }
-                  >
-                    <Icon aria-hidden />
-                    {item.label}
-                  </DropdownMenuItem>
-                </React.Fragment>
-              )
-            })}
-          </DropdownMenuContent>
+          {/* the same popover as the L-01 NavUser (sidebar is the reference) */}
+          <AccountMenuContent
+            user={user ? { name: displayName(user), email: user.email, avatarUrl: user.avatar_url } : null}
+            onOpenSettings={() => openSettings()}
+            onSignOut={() => leave(() => void signOut())}
+            side="bottom"
+            align="end"
+          />
         </DropdownMenu>
       </div>
     </header>

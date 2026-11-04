@@ -9,7 +9,7 @@
  */
 import * as React from "react"
 import { usePathname } from "next/navigation"
-import { Briefcase, FileText, KanbanSquare, Layers, MessagesSquare, Settings, type LucideIcon } from "lucide-react"
+import { Briefcase, KanbanSquare, Layers, MessagesSquare, Settings, type LucideIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -159,7 +159,6 @@ function AppSidebarView({
   }
   const navSecondary: NavSecondaryItem[] = [
     { title: "설정", icon: <Settings aria-hidden />, isActive: pathname.startsWith(routes.withdraw()), onSelect: openSettingsFromMenu },
-    { title: "개인정보 처리방침", url: routes.policies(), icon: <FileText aria-hidden />, onClick: close },
   ]
 
   return (

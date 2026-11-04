@@ -65,15 +65,15 @@ export function OverwriteConfirm({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
-        <AlertDialogHeader className="text-left">
-          <AlertDialogTitle className="text-lg font-semibold">{career ? "새 경력기술서 초안을 만들까요?" : "이 문항을 다시 생성할까요?"}</AlertDialogTitle>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{career ? "새 경력기술서 초안을 만들까요?" : "이 문항을 다시 생성할까요?"}</AlertDialogTitle>
           <AlertDialogDescription>
             {career
               ? "바꾼 포함 항목으로 새 초안을 만들어요. 지금 초안은 서류 초안 목록에 그대로 남아요. 다시 하면 공급자 토큰을 다시 써요"
               : "지금 문항 본문과 직접 고친 내용이 새 초안으로 바뀌어요. 이전 본문은 보관되지 않아요. 다시 하면 공급자 토큰을 다시 써요"}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <AlertDialogFooter>
           <AlertDialogCancel>취소</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm}>{career ? "새 초안 만들기" : "다시 생성"}</AlertDialogAction>
         </AlertDialogFooter>

@@ -428,14 +428,14 @@ export function InterviewPrep({
 
       <AlertDialog open={abandonOpen} onOpenChange={(o) => !abandoning && setAbandonOpen(o)}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
+          <AlertDialogHeader>
             {/* [UI-가정] 그만두기 확인 문구 */}
-            <AlertDialogTitle className="text-lg font-semibold">작성 중인 면접을 그만둘까요?</AlertDialogTitle>
+            <AlertDialogTitle>작성 중인 면접을 그만둘까요?</AlertDialogTitle>
             <AlertDialogDescription>
               그만둔 면접은 채점하지 않아요. 목록의 &lsquo;그만둠&rsquo;에 남고, 언제든 삭제할 수 있어요.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel disabled={abandoning}>취소</AlertDialogCancel>
             <Button variant="destructive" className="max-md:h-8" onClick={abandon} disabled={abandoning}>
               {abandoning ? <Loader2 className="animate-spin" aria-hidden /> : null}

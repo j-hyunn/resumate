@@ -7,10 +7,8 @@
  * 섹션(S-40 / S-42 내용 컴포넌트), AI 데이터 처리에 F-COM-03 v4 문구 + 고지 다시 보기(UQ-201).
  */
 import Link from "next/link"
-import { ChevronRight, Monitor, Moon, ShieldCheck, Sun } from "lucide-react"
+import { ChevronRight, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { useTheme, type ThemePreference } from "@/components/common/theme"
 import type { ConsentStatus } from "@/lib/data/account"
 import { routes } from "@/lib/routes"
 import type { AiProviderName } from "@/types/db"
@@ -70,8 +68,6 @@ export function SettingsSectionBody({
       return <AiConnectionPanel onNavigate={onNavigate} focusProvider={provider} preview={preview} />
     case "ai-usage":
       return <AiUsagePanel onNavigate={onNavigate} preview={preview} />
-    case "appearance":
-      return <ThemeSetting />
     case "consents":
       return <ConsentSettings statuses={data.statuses} failSave={preview === "save-failed"} />
     case "ai-data":
@@ -118,37 +114,6 @@ export function SettingsSectionBody({
         </Button>
       )
   }
-}
-
-const THEME_OPTIONS: { value: ThemePreference; label: string; icon: React.ReactNode }[] = [
-  { value: "system", label: "시스템 설정", icon: <Monitor aria-hidden /> },
-  { value: "light", label: "라이트", icon: <Sun aria-hidden /> },
-  { value: "dark", label: "다크", icon: <Moon aria-hidden /> },
-]
-
-/** 화면 모드 (Q-2). "시스템 설정" follows the OS light/dark setting. */
-function ThemeSetting() {
-  const { theme, setTheme } = useTheme()
-  return (
-    <ToggleGroup
-      type="single"
-      variant="outline"
-      spacing={0}
-      value={theme}
-      onValueChange={(v) => {
-        // radix sends "" when the pressed item is clicked again — keep the current choice
-        if (v) setTheme(v as ThemePreference)
-      }}
-      aria-label="화면 모드"
-    >
-      {THEME_OPTIONS.map((o) => (
-        <ToggleGroupItem key={o.value} value={o.value} className="h-10 gap-2 px-3 text-base">
-          {o.icon}
-          {o.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  )
 }
 
 /** "데이터 사용 고지 다시 보기" (02 S-24 v5 "S-40 고지 다시 보기 링크", UQ-201) → AI 연결 섹션 */

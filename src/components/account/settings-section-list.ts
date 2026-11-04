@@ -2,9 +2,9 @@
  * S-24 설정 section list. Plain module (not "use client") so both the /settings server page and
  * the client settings dialog can read the array.
  */
-import { FileText, Gauge, PlugZap, SunMoon, ShieldCheck, Sparkles, UserRound, UserX, type LucideIcon } from "lucide-react"
+import { FileText, Gauge, PlugZap, ShieldCheck, Sparkles, UserRound, UserX, type LucideIcon } from "lucide-react"
 
-export type SettingsSectionId = "account" | "ai-connection" | "ai-usage" | "appearance" | "consents" | "ai-data" | "policies" | "withdraw"
+export type SettingsSectionId = "account" | "ai-connection" | "ai-usage" | "consents" | "ai-data" | "policies" | "withdraw"
 
 export interface SettingsSection {
   id: SettingsSectionId
@@ -18,13 +18,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   // v2 BYOK (design-system 5.1): right below 계정 [가정]. Content = S-40 / S-42 shared components (A1)
   { id: "ai-connection", label: "AI 연결", icon: PlugZap },
   { id: "ai-usage", label: "AI 사용량", icon: Gauge },
-  // [UI-가정] 화면 모드 (Q-2): 시스템 설정 / 라이트 / 다크, 이 브라우저에만 저장
-  {
-    id: "appearance",
-    label: "화면",
-    description: "화면을 밝게 또는 어둡게 볼 수 있어요. 이 브라우저에만 저장돼요.",
-    icon: SunMoon,
-  },
+  // 화면 모드 (Q-2) moved to the account menu dark-mode switch (shell/nav-user.tsx)
   {
     id: "consents",
     label: "동의 관리",

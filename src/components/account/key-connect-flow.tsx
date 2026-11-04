@@ -405,9 +405,9 @@ export function KeyConnectFlow({
 
       <AlertDialog open={quitOpen} onOpenChange={setQuitOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
+          <AlertDialogHeader>
             <AlertDialogTitle>연결을 그만둘까요?</AlertDialogTitle>
-            <AlertDialogDescription className="text-base text-foreground">입력한 키는 저장되지 않아요</AlertDialogDescription>
+            <AlertDialogDescription>입력한 키는 저장되지 않아요</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>계속 연결하기</AlertDialogCancel>

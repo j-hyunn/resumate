@@ -55,3 +55,24 @@ export function useTheme(): { theme: ThemePreference; setTheme: (t: ThemePrefere
   }, [])
   return { theme, setTheme }
 }
+
+function subscribeResolved(onChange: () => void) {
+  const unsubscribe = subscribe(onChange)
+  const media = window.matchMedia(DARK_QUERY)
+  media.addEventListener("change", onChange)
+  return () => {
+    unsubscribe()
+    media.removeEventListener("change", onChange)
+  }
+}
+
+/** The theme actually shown: "system" resolved against the OS setting. */
+export function useResolvedTheme(): "light" | "dark" {
+  const pref = useTheme().theme
+  const osDark = React.useSyncExternalStore(
+    subscribeResolved,
+    () => window.matchMedia(DARK_QUERY).matches,
+    () => false
+  )
+  return pref === "dark" || (pref === "system" && osDark) ? "dark" : "light"
+}

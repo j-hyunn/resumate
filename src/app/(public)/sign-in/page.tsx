@@ -73,7 +73,11 @@ async function Screen({ searchParams }: Props) {
               가입할 때 다음 화면에서 약관과 개인정보 처리에 동의를 받아요.{" "}
               {/* [UI-가정] max-md:h-auto: keep the inline link on the text line (default size adds max-md:h-11) */}
               <Button variant="link" asChild className="h-auto p-0 text-sm max-md:h-auto">
-                <Link href={routes.policies()}>처리방침·약관 보기</Link>
+                <Link href={routes.policies("terms")}>이용약관</Link>
+              </Button>
+              {" · "}
+              <Button variant="link" asChild className="h-auto p-0 text-sm max-md:h-auto">
+                <Link href={routes.policies("privacy")}>개인정보 처리방침</Link>
               </Button>
             </p>
           }

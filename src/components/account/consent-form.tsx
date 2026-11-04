@@ -23,6 +23,9 @@ import type { PolicyType, PolicyVersion } from "@/types/db"
 type Agreed = Record<ConsentType, boolean>
 
 const MISSING_ERROR_ID = "consent-missing-error"
+const AGE_ID = "consent-age-14"
+/** 이용약관 제4조·처리방침: 만 14세 미만은 가입 불가 (확정 2026-11-04 (사용자)). 화면 확인만, 별도 동의 행은 저장하지 않음. */
+const AGE_LABEL = "만 14세 이상이에요"
 
 const NONE: Agreed = {
   terms: false,
@@ -44,6 +47,7 @@ export function ConsentForm({
 }) {
   const router = useRouter()
   const [agreed, setAgreed] = React.useState<Agreed>(NONE)
+  const [ageOk, setAgeOk] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
   const [showMissing, setShowMissing] = React.useState(false)
@@ -59,11 +63,16 @@ export function ConsentForm({
     }
   }
 
-  const all = CONSENT_ITEMS.every((c) => agreed[c.consent_type])
-  const some = CONSENT_ITEMS.some((c) => agreed[c.consent_type])
-  const missing = CONSENT_ITEMS.filter((c) => c.required && !agreed[c.consent_type])
+  const all = ageOk && CONSENT_ITEMS.every((c) => agreed[c.consent_type])
+  const some = ageOk || CONSENT_ITEMS.some((c) => agreed[c.consent_type])
+  const missing = [
+    ...(ageOk ? [] : [AGE_LABEL]),
+    ...CONSENT_ITEMS.filter((c) => c.required && !agreed[c.consent_type]).map((c) => c.label),
+  ]
+  const ageMissing = showMissing && !ageOk
 
   function setAll(value: boolean) {
+    setAgeOk(value)
     setAgreed(Object.fromEntries(CONSENT_ITEMS.map((c) => [c.consent_type, value])) as Agreed)
   }
 
@@ -98,6 +107,22 @@ export function ConsentForm({
         </Label>
 
         <ul className="space-y-1">
+          <li className="flex items-start gap-3 rounded-md px-3 py-2">
+            <Checkbox
+              id={AGE_ID}
+              className="mt-1"
+              checked={ageOk}
+              onCheckedChange={(v) => setAgeOk(v === true)}
+              aria-describedby={ageMissing ? MISSING_ERROR_ID : undefined}
+              aria-invalid={ageMissing || undefined}
+            />
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+              <Label htmlFor={AGE_ID} className="text-base font-normal">
+                {AGE_LABEL}
+              </Label>
+              <Badge variant="info">필수</Badge>
+            </div>
+          </li>
           {CONSENT_ITEMS.map((item) => {
             const id = `consent-${item.consent_type}`
             const isMissing = showMissing && item.required && !agreed[item.consent_type]
@@ -157,7 +182,7 @@ export function ConsentForm({
         <p id={MISSING_ERROR_ID} role="alert" className="flex items-start gap-1.5 text-sm text-destructive">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {/* [UI-가정] */}
-          필수 항목에 모두 동의해야 시작할 수 있어요 ({missing.map((m) => m.label).join(", ")})
+          필수 항목에 모두 동의해야 시작할 수 있어요 ({missing.join(", ")})
         </p>
       ) : null}
       {failed ? (

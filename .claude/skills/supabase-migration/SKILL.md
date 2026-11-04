@@ -1,6 +1,6 @@
 ---
 name: supabase-migration
-description: "Guide for implementing the Resumate data model as Supabase migrations: tables, text+CHECK enums, composite FKs (parent_id, user_id), updated_at triggers, RLS policies, the app_ai_writer role and column grants, RPC functions (security invoker/definer), evidence deletion triggers, pgTAP tests, seed data, and TypeScript type generation. Use whenever writing or fixing migration SQL, RLS policies, RPCs, DB triggers, pgTAP tests, or applying migrations locally or to a Supabase development branch. Korean triggers: 마이그레이션 작성, 테이블 생성, RLS 정책 구현, RPC 함수 구현, DB 트리거, pgTAP 테스트, 타입 생성, 스키마 반영, 개발 브랜치에 적용. Not for planning-stage schema design documents (use data-model-spec)."
+description: "Guide for implementing the Resumate data model as Supabase migrations: tables, text+CHECK enums, composite FKs (parent_id, user_id), updated_at triggers, RLS policies, the app_ai_writer role and column grants, RPC functions (security invoker/definer), evidence deletion triggers, pgTAP tests, seed data, and TypeScript type generation. Use whenever writing or fixing migration SQL, RLS policies, RPCs, DB triggers, pgTAP tests, applying migrations locally, or preparing them for the remote (production) project — file ordering, destructive-migration marking, release checks. Korean triggers: 마이그레이션 작성, 테이블 생성, RLS 정책 구현, RPC 함수 구현, DB 트리거, pgTAP 테스트, 타입 생성, 스키마 반영, 원격 반영 준비, 마이그레이션 순서. Not for planning-stage schema design documents (use data-model-spec)."
 ---
 
 # Supabase Migration
@@ -10,12 +10,25 @@ The data model document (`docs/planning/04-data-model.md`) is the spec; this ski
 ## Order of work (per slice)
 
 1. Read the slice plan and the DM sections it points to. List every table, column, CHECK list, FK, index, policy, grant, and RPC the slice needs.
-2. Write migrations — one concern per file, in dependency order (tables → triggers → RLS → grants → RPCs).
+2. Write migrations — one concern per file, in dependency order (tables → triggers → RLS → grants → RPCs). Name them per "File names" below.
 3. `supabase db reset` (applies all migrations + `seed.sql` locally).
 4. Write pgTAP tests, `supabase test db`.
 5. `supabase gen types typescript --local > src/server/db/database.types.ts`.
 6. Write `02_db-engineer_notes.md` and notify teammates.
-7. Only if the slice plan says so: apply to the Supabase development branch (see "Remote branch").
+7. Remote: never applied by you during a slice. The leader's release step (orchestrator Phase 4) handles it; see "Remote (production)".
+
+## File names
+
+- `YYYYMMDDHHMMSS_<slice>_<what>.sql` (e.g. `…_r6_drop_old_column.sql`). The timestamp must be greater than the newest file in `supabase/migrations/` — existing files run ahead of the real date, so compute `max(now, newest + 1 second)`. Check with `ls supabase/migrations | tail -1` before naming.
+- Never edit or rename a migration that has been pushed to the remote (`list_migrations` shows it). An unpushed file of this slice may be renamed to fix ordering.
+
+## Destructive migrations
+
+A migration that deletes or truncates rows, drops a table or a column that holds data, or rewrites data irreversibly:
+- First line: `-- DESTRUCTIVE: <what is lost, which tables>`.
+- Keep it in its own file, separate from additive changes, so the user can see exactly what a push will delete.
+- List it in the notes under "파괴적 마이그레이션". The remote project is production — it reaches the remote only after the user confirms that data loss.
+- Prefer an additive path (new column + backfill, drop later) when the spec allows it; if it doesn't, say so in the notes.
 
 ## Table rules (from DM §0)
 
@@ -59,13 +72,15 @@ The data model document (`docs/planning/04-data-model.md`) is the spec; this ski
 - Cascades and deletion triggers: deleting a source sets `evidence_links.quote = null` and `source_deleted_at` (C-3).
 - Simulate users with `set local role authenticated; set local request.jwt.claims = '{"sub":"<uuid>","role":"authenticated"}';`.
 
-## Remote branch
+## Remote (production)
 
-Allowed only for a Supabase **development branch** (backend-context.md safety policy).
-1. `list_branches` and confirm the target `project_ref` belongs to a branch, not the main project. Say which one in your notes.
-2. Creating a branch costs money — only after the user confirms the cost in chat.
-3. Apply the same migration files in order with `apply_migration` (name = file name without timestamp). Don't paste ad-hoc SQL that isn't in `supabase/migrations/`.
-4. Run `get_advisors` (security + performance) on the branch and put findings in the notes.
+The single remote project is production (backend-context.md "Remote environments"); there is no development branch.
+- Read-only checks are fine anytime: `list_migrations` (what's applied), `list_tables`, `get_advisors`.
+- The push itself is `supabase db push` on the linked project, run by the user from the release checklist (`05_release.md`). The SQL is too large for per-file MCP `apply_migration`, and the user holds the DB password. Run it yourself only if the user asks for exactly that.
+- Before the push: every local-only file sorts after the remote's last applied migration; destructive files are confirmed by the user.
+- After the push: `list_migrations` matches the local folder; `get_advisors` (security + performance) — compare with the accepted items in `decisions.md` and report only new ones.
+- Remote types: `database.types.ts` stays generated from the local stack; if `list_tables` shows the remote differs from local after a push, report it — don't regenerate from the remote.
+- If a Supabase development branch is created later (cost confirmed by the user): `list_branches`, confirm the target `project_ref` is that branch before every call, apply the same files in order, run advisors there.
 
 ## Notes template (`02_db-engineer_notes.md`, Korean)
 
@@ -76,6 +91,7 @@ Allowed only for a Supabase **development branch** (backend-context.md safety po
 ## RPC 시그니처와 반환 형태
 ## RLS·권한 요약 (DM §5 대비)
 ## 테스트 (`supabase test db` 결과)
-## 원격 브랜치 적용 여부 (project_ref, advisors 결과)
+## 파괴적 마이그레이션 (파일, 지워지는 데이터 — 없으면 "없음")
+## 원격 반영 (반영 전이면 "미반영", 반영 뒤 list_migrations·advisors 결과)
 ## 스펙 차이·가정 (spec-gaps.md에 기록한 항목)
 ```

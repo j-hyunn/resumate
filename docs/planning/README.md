@@ -69,4 +69,4 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 - **백엔드 후속 수정 ★ 14건**(A2·A5·A6·A7·A10·A11·A13·A18·A19·A20·A22·A23·A24 + R-67 readiness `consent_required`)과 확인 항목 5건(2건 해소, 남은 3건). A1은 구현됨(42f7611). A6은 2026-11-02 커리어 재설계(CR-5·CR-6)로 취소되어 실제 남은 것은 13건, A18은 내용 변경. 목록은 [decisions.md](decisions.md) 4장. `resumate-backend`로 처리한다
 - **UI QA 후속 ★**: Q53 결정의 백엔드 수정 목록은 [decisions.md](decisions.md) 4.1a. `resumate-backend`로 처리한다
 - **커리어 재설계 후속 ★**: 백엔드는 DM 11장(`project_details`·`achievements` 삭제, `projects` STAR 컬럼, `project_deliverables`, `writing_chats` 개정·`apply_writing_chat_proposal`, 90일 크론 삭제, readiness 힌트, `projects.is_current`, 분류 추천 반영), UI는 S-08·S-10·S-43·S-44 재작업과 화면 용어 "기업 JD" → "자기소개서"·기본 이름 "새 자기소개서 (날짜)". ★ A6 취소, A18 내용 변경. 목록은 [decisions.md](decisions.md) 4.3
-- **UI 하네스 문서**: `patterns.md`의 AI-12 설명과 한도 문구는 2026-10-30에 고쳤다(`.claude/harness/CHANGELOG.md`)
+- **UI·기획 하네스 문서**: `patterns.md`의 AI-12 설명과 한도 문구는 2026-10-30에, 나머지(BYOK·커리어 재설계·PA·실제 백엔드 연결·결정 반영 사이클)는 2026-11-04에 기획 v4.6/v5.6/v4.6/v4.5 기준으로 맞췄다(`.claude/harness/CHANGELOG.md`)

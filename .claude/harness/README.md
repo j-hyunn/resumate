@@ -8,11 +8,11 @@
 
 ## 1. 기획 하네스
 
-**목표:** 커리어 데이터 관리 · JD 인사이트/채팅 · AI 모의 면접 3대 축의 기획 문서(PRD, 유저 플로우, AI 기능 명세, 데이터 모델, 결정 로그)를 `docs/planning/`에 만들고 지속 갱신한다.
+**목표:** 커리어 데이터 관리 · 지원 프로젝트(JD 인사이트·서류) · AI 모의 면접 3대 축의 기획 문서(PRD, 유저 플로우, AI 기능 명세, 데이터 모델, 결정 로그)를 `docs/planning/`에 만들고 지속 갱신한다. 지금은 주로 **결정 반영 사이클**(사용자 결정·Figma·백엔드 spec-gaps·UI 기획 질문 → `_workspace/00_input/planning-decisions-{slug}.md` → 네 문서 개정 → 사이클별 리뷰 → `decisions.md`의 "백엔드·UI 후속")로 돈다.
 
 **진입점:** `resumate-planning` 스킬 (`.claude/skills/resumate-planning/SKILL.md`)
 
-**트리거:** 기획·요구사항·MVP·기능 명세·화면 흐름·AI 기능 설계·데이터 모델 관련 작업 요청(초기 실행과 수정·보완·재실행 모두). 단순 질문은 직접 응답 가능.
+**트리거:** 기획·요구사항·MVP·기능 명세·화면 흐름·AI 기능 설계·데이터 모델 관련 작업 요청(초기 실행과 수정·보완·재실행, 결정 반영, Figma 기획 반영, spec-gaps 반영 모두). 단순 질문은 직접 응답 가능.
 
 **범위:** 기획 전용. 코드 작성·DB 마이그레이션·배포는 하지 않는다.
 
@@ -22,31 +22,31 @@
 
 ## 2. UI 하네스
 
-**목표:** 기획 문서를 디자인 시스템(`docs/ui/design-system.md`)과 실제 동작하는 화면(Next.js + Tailwind + shadcn/ui, mock 데이터 계층)으로 옮기고, 화면별 진행 상황을 `docs/ui/screen-status.md`에서 추적한다.
+**목표:** 기획 문서를 디자인 시스템(`docs/ui/design-system.md`)과 실제 동작하는 화면(Next.js + Tailwind + shadcn/ui)으로 옮기고, 화면별 진행 상황을 `docs/ui/screen-status.md`에서 추적한다. 화면은 `src/lib/data` 계층을 거쳐 실제 백엔드를 쓰고(`previewOr`), `?state=` 미리보기만 mock을 쓴다.
 
 **진입점:** `resumate-ui` 스킬 (`.claude/skills/resumate-ui/SKILL.md`)
 
 **트리거:** UI 작업, 화면 구현, 디자인 시스템, 프론트엔드 구축, Figma 디자인 반영, 화면 수정·이어서·재실행, 기획 변경의 화면 반영, UI QA 이슈 수정.
 
-**범위:** 디자인 시스템 + 화면 코드 + UI QA. 백엔드(Supabase 마이그레이션, 실제 AI 공급자 연동)는 하지 않고 mock 데이터 계층 뒤에 둔다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
+**범위:** 디자인 시스템 + 화면 코드 + 데이터 계층 함수 + UI QA(브라우저 확인 포함). 백엔드 코드(`src/server/`, `src/app/api/`, `src/lib/contracts/`, `supabase/`)는 고치지 않는다. 이미 연결된 데이터 함수는 백엔드 소유라 그대로 쓰고, 새 함수는 `// 연결 대기`로 두고 "백엔드 요청"으로 `_workspace/backend/spec-gaps.md`에 넘긴다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
 
 **팀:** ui-designer, frontend-engineer(파운데이션 1 + 화면 영역별 인스턴스), ui-qa
 
-**실행 모드:** 하이브리드 — 디자인 시스템·파운데이션은 서브 에이전트, 화면 영역은 에이전트 팀(없으면 백그라운드 서브 에이전트), 통합 QA는 서브 에이전트.
+**실행 모드:** 하이브리드 — 디자인 시스템·파운데이션은 서브 에이전트, 화면 영역은 에이전트 팀(없으면 백그라운드 서브 에이전트), 통합 QA는 서브 에이전트 + 리더의 브라우저 확인.
 
 **공통 UI 컨텍스트:** `.claude/skills/resumate-ui/references/ui-context.md` (스택, 디렉터리, 영역 소유권, 데이터 계층 규칙)
 
 ## 3. 백엔드 하네스
 
-**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), AI 파이프라인(사용자 본인 키(BYOK)로 OpenAI·Gemini·Claude 중 활성 공급자 1개를 호출하는 어댑터, 프롬프트, 근거 검증)을 기능 단위 슬라이스(S0~S9, S3은 S3a·S3b)로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다.
+**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), AI 파이프라인(사용자 본인 키(BYOK)로 OpenAI·Gemini·Claude 중 활성 공급자 1개를 호출하는 어댑터, 프롬프트, 근거 검증)을 슬라이스 단위로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다. 초기 구축 S0~S9(S3은 S3a·S3b)와 화면 연결 W0~W5는 끝났고, 지금은 기획 개정마다 수정 슬라이스(R-n)를 돌린다.
 
 **진입점:** `resumate-backend` 스킬 (`.claude/skills/resumate-backend/SKILL.md`)
 
-**트리거:** 백엔드 구현·프로젝트 셋업·DB 구축·API 개발·AI 기능 구현·mock 데이터 계층 연결·백엔드 수정·QA 재실행·다음 슬라이스 진행 요청. 단순 질문은 직접 응답 가능.
+**트리거:** 백엔드 구현·프로젝트 셋업·DB 구축·API 개발·AI 기능 구현·기획 변경 반영(수정 슬라이스)·mock 데이터 계층 연결·원격 반영 준비·백엔드 수정·QA 재실행·다음 슬라이스 진행 요청. 단순 질문은 직접 응답 가능.
 
 **팀:** db-engineer, api-engineer, ai-pipeline-engineer, backend-qa (에이전트 팀, 팀 도구가 없으면 서브 에이전트로 대체)
 
-**범위와 안전 정책:** 로컬 Supabase와 Supabase 개발 브랜치까지만 적용한다. 메인(프로덕션) 프로젝트 적용·배포·커밋은 사용자가 요청할 때만 한다. 화면과 컴포넌트는 UI 하네스 소관이다.
+**범위와 안전 정책:** 원격 Supabase 프로젝트는 운영 겸용 1개(개발 브랜치 없음)이고, main 병합이 곧 Vercel 운영 배포다(2026-11-04). 에이전트는 로컬 스택에만 쓰고, 원격에는 읽기 전용 확인만 한다. 원격 마이그레이션(`supabase db push`)은 반영 체크리스트를 보고 사용자가 실행한다. 데이터가 지워지는 마이그레이션은 `-- DESTRUCTIVE:`로 표시하고 사용자 확인을 받는다. 배포 순서는 db push → main 병합이다. 커밋·병합·Vercel 환경 변수는 사용자가 요청할 때만 한다. 화면과 컴포넌트는 UI 하네스 소관이고, 연결에 꼭 필요한 최소 수정만 예외로 허용한다.
 
 **공통 백엔드 컨텍스트:** `.claude/skills/resumate-backend/references/backend-context.md`, 슬라이스 목록 `references/slice-catalog.md`
 
@@ -63,13 +63,13 @@
 ## 하네스 간 관계
 
 ```
-                       ┌──→ resumate-ui ──── 화면 + mock 데이터 계층(src/lib/data, src/lib/mock)
-resumate-planning ─────┤                                   │  연결 단계: 함수 시그니처는 유지,
-  (docs/planning/*)    └──→ resumate-backend ── DB·API·AI ──┘  구현만 실제 서비스로 교체
+                       ┌──→ resumate-ui ──── 화면 + 데이터 계층(src/lib/data: 실제 액션 / 미리보기 mock)
+resumate-planning ─────┤                                   │  연결 완료(W0~W5). 새 계약이 없으면
+  (docs/planning/*)    └──→ resumate-backend ── DB·API·AI ──┘  UI는 연결 대기 → spec-gaps로 요청
         ↑                          │
         └── 기획 확인 필요 / spec-gaps.md (사용자 경유) ──┘
 ```
 
 - 기획 문서가 UI와 백엔드 모두의 명세다. 두 하네스 모두 `docs/planning/`을 직접 고치지 않는다. 모순·누락은 UI는 "기획 확인 필요", 백엔드는 `_workspace/backend/spec-gaps.md`로 사용자에게 넘기고, 기획 수정은 `resumate-planning`으로 한다.
 - 두 하네스가 같은 Next.js 앱을 다룬다. 프로젝트 골격은 먼저 실행한 쪽이 만들고, 다른 쪽은 자기 의존성만 추가한다. 파일 소유권은 `backend-context.md`의 "Coexisting with the UI harness"에 있다.
-- 화면 데이터 계층을 실제 백엔드로 바꾸는 작업(연결 단계)은 백엔드 하네스가 한다. UI 실행이 진행 중일 때는 하지 않는다.
+- 화면 데이터 계층은 실제 백엔드에 연결됐다(W0~W5). 이미 연결된 함수는 백엔드 소유다. 새 화면·바뀐 화면을 위해 UI가 더하는 함수는 `previewOr` + mock + `연결 대기`로 두고, 백엔드의 연결 단계가 본문만 실제 호출로 바꾼다. 기획 사이클이 끝나면 `decisions.md` 4장 "백엔드·UI 후속"이 두 하네스의 다음 작업 목록이 된다.

@@ -7,13 +7,14 @@ You are the API engineer for Resumate. You turn the data model's API boundary ta
 
 ## Core responsibilities
 1. Bootstrap (slice S0) — Next.js App Router project, pnpm scripts, env loader, directory layout
-2. Auth — magic link + Google callback, session refresh in `proxy.ts`, the user-session Supabase client
+2. Auth — Google OAuth callback (Google only, D-09 change 2026-11-04), session refresh in `proxy.ts`, the user-session Supabase client
 3. Server Actions and Route Handlers — one per row of the API boundary table for the current slice
 4. Contracts — zod request/response schemas and SSE event types in `src/lib/contracts/`
 5. Domain services — business rules that aren't in SQL (status recompute callers, readiness gating before AI calls)
 6. AI job plumbing — `ai_jobs` create/update with the provider and tier fixed at start, `after()` step runner, heartbeat, stalled detection, C-11.3 retries scheduled via `next_run_at` (never sleeping in the function), free-tier sequential runs, one `ai_usage_records` row per provider call
-7. Wiring — when UI screens exist for the slice's area, replace the mock bodies in `src/lib/data/` with real calls, keeping signatures (UI pages, components, and `src/lib/mock/` stay untouched)
+7. Wiring — `src/lib/data/` is wired (W0–W5); replace the `// 연결 대기` mock bodies the UI adds for newer contracts, and update already-wired functions when a slice changes their service, keeping signatures. UI pages and components change only within "Minimal UI edits" (backend-context.md); `src/lib/mock/` stays untouched
 8. BYOK keys — envelope encryption + KMS adapter, `app_key_reader` decryption at run time only, key registration / verification / deletion, active provider, provider consent checks before saving or using a key
+9. Production deps factories — the real `deps` built in `src/server/jobs/*` must bind what the tests fake (job provider on the key source, etc.); add a test that runs one step through the real factory
 
 ## Working principles
 - Before starting, read `.agents/skills/resumate-backend/references/backend-context.md`, then follow the `nextjs-server-api` skill.

@@ -1,6 +1,6 @@
 ---
 name: ai-feature-spec
-description: "Guide for writing and revising Resumate AI feature specs. LLM design for career data structuring (resume parsing), JD analysis and fit insights, application direction, career chat, and AI mock interviews (question generation, follow-ups, answer evaluation and feedback) — input context, processing steps, model choice, prompt strategy, output JSON schema, evaluation criteria, cost/latency, guardrails. Use for AI feature design, prompt design direction, LLM architecture, deciding whether RAG is needed, interview evaluation rubrics, and AI spec revisions. Korean triggers: AI 기능 설계, 프롬프트 설계, LLM 구조, RAG 필요성, 면접 평가 루브릭, AI 명세 수정. Not for implementing prompt code or writing API integration code."
+description: "Guide for writing and revising Resumate AI feature specs. LLM design for the Resumate AI writing chat (STAR and deliverable drafting), JD requirement extraction and fit insights, 경력기술서 / 자기소개서 drafts, career chat, and AI mock interviews (question generation, answer evaluation and feedback) — input context, processing steps, provider-neutral model tier (BYOK: OpenAI / Gemini / Claude), prompt strategy, canonical output JSON schema, evidence validation, evaluation criteria, token/latency estimates, provider error causes, guardrails. Use for AI feature design, prompt design direction, LLM architecture, deciding whether RAG is needed, interview evaluation rubrics, and AI spec revisions. Korean triggers: AI 기능 설계, 프롬프트 설계, LLM 구조, RAG 필요성, 면접 평가 루브릭, AI 명세 수정. Not for implementing prompt code or writing API integration code."
 ---
 
 # AI Feature Specs
@@ -10,7 +10,7 @@ Write one "design card" per AI feature. An implementer should be able to build t
 ## Order of work
 
 1. Pull every feature ID from the PRD that involves AI.
-2. Write a design card per feature. For design decisions that need judgment, read `references/design-guide.md`.
+2. Write a design card per feature (or revise the existing card — the AI spec is at v4.x with common sections C-1 … C-14 that every card relies on). For design decisions that need judgment, read `references/design-guide.md`.
 3. Collect the cards' "input context" and send the field list to data-architect.
 4. Share each card's "response mode" and "output schema" with ux-planner.
 5. Pull elements shared across features (assembling user context, evidence format, guardrails) into a common section.
@@ -27,7 +27,7 @@ Write cards in Korean; translate the field labels below. Keep JSON keys in Engli
 - Input context:
   | Source | entity.field | Required | Size estimate (tokens) |
 - Processing: single call / chain (list steps) / tool-using agent
-- Model: claude-sonnet-5-5 etc. + reason
+- Model tier: `light` / `default` / `heavy` + reason (per-provider model IDs come from the C-10.1 mapping, not from the card)
 - Response mode: streaming / sync / async
 - Prompt strategy: role, key instructions, how evidence is cited, whether few-shot is needed (do not write the full prompt)
 - Output schema:
@@ -37,7 +37,7 @@ Write cards in Korean; translate the field labels below. Keep JSON keys in Engli
 - Storage: table/field, whether history is kept on regeneration
 - Quality bar: what a good output looks like / how it is evaluated
 - Failure modes & guardrails:
-- Cost/latency estimate: N input tokens + M output tokens → about $X per call, about Y seconds
+- Token/latency estimate: N input tokens + M output tokens per call (feeds the usage meter estimate, section 7), latency per provider tier, and whether it fits the Gemini free tier's rate limits
 - Decisions needed:
 ```
 
@@ -56,4 +56,5 @@ Write cards in Korean; translate the field labels below. Keep JSON keys in Engli
 - Every card has an output schema, and every field in it is linked to a storage location or a screen element.
 - Every judgment shown to the user (score, strength, gap, evaluation) has an `evidence` field.
 - Every `entity.field` in the input context exists in the data model (verified in review). Use the data model's table names (plural snake_case, e.g. `projects.role`).
-- There is a cost estimate, and the per-user monthly cost is compared against the ceiling in the PRD's non-functional requirements.
+- There is a token estimate per call and per typical month, the feature works on all three providers (structured output within the canonical-schema rules of C-10.2), and failures map to the 7 causes of C-11. There is no service cost ceiling to compare against (BYOK); token efficiency is the user's cost, so justify large contexts.
+- Revisions in a decision cycle cite the decision ID next to changed text and in the change log; a changed output schema bumps `schema_version` and is announced to data-architect and ux-planner.

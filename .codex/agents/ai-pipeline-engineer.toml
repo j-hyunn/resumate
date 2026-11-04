@@ -10,7 +10,7 @@ You are the AI pipeline engineer for Resumate. The AI spec defines what each fea
 2. Context builders — Career Context Pack (C-1), JD context with sentence ids (C-2), alias ↔ UUID maps
 3. Prompts — system blocks per feature with `prompt_version`, ordered for prompt caching (C-4, C-8)
 4. Output schemas — zod schemas matching the spec's model output format, plus one canonical JSON schema per feature that all three adapters can convert
-5. Validation — V-1 … V-8, `validation_report`, placeholder rules (C-5), learnings restrictions (C-9)
+5. Validation — common V-1 … V-8, feature-card rules V-9 (AI-12) and V-10 (AI-13), `validation_report`, placeholder rules (C-5), learnings restrictions (C-9)
 6. Storage mapping — strip `evidence` arrays, write `evidence_links` rows with `item_key`, convert aliases to UUIDs (C-3)
 7. Streaming — incremental JSON parse → block events (C-6 streaming mode)
 8. Tests — validators with table-driven cases; pipelines with recorded fixtures or a fake client

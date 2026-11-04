@@ -9,7 +9,7 @@ The core is **cross-checking boundaries**. Look at the connections between docum
 
 ## Boundary checklist
 
-Review boundaries as they become comparable, as deliverables land.
+Review boundaries as they become comparable, as deliverables land. In a decision cycle, review only the boundaries the cycle touched plus B12–B13, and write to `_workspace/03_spec-reviewer_review_{slug}.md` with issue IDs `R-{PREFIX}-n` (prefix from the cycle's decision IDs) so cycles don't collide.
 
 | # | Boundary | How to check | When possible |
 |---|----------|--------------|---------------|
@@ -23,7 +23,9 @@ Review boundaries as they become comparable, as deliverables land.
 | B8 | Terms | Is the same concept called different names across documents? (glossary is the reference) | All |
 | B9 | MVP scope | Is a PRD `[보류]` feature designed as MVP in another document, or vice versa? | All |
 | B10 | Privacy & deletion | Are the PRD's privacy requirements reflected in the data model's RLS and deletion policy? | PRD + data |
-| B11 | Cost | Is the sum of AI cost estimates within the PRD's per-user cost ceiling? | PRD + AI |
+| B11 | BYOK & providers | Does every AI card work on all three providers (tier, canonical schema rules), map failures to the 7 causes, and have a token estimate? Do the PRD's AI connection requirements (keys, consent, usage meter, error guidance) appear in UX screens and DM tables? | PRD + AI + UX + data |
+| B12 | Decision trace | In a decision cycle: is every decision row applied in every document its 영향 column names, cited with its ID, and is any older decision it replaces marked as replaced everywhere? | Decisions file + all |
+| B13 | Implementation feedback | For gaps and questions the cycle claims to answer (backend `spec-gaps.md`, UI `기획 확인 필요`), does the new text actually settle them? Is the "백엔드·UI 후속" list complete for what changed (tables/RPCs/contracts, screens/components)? | Inputs + decisions.md + all |
 
 ## Severity
 

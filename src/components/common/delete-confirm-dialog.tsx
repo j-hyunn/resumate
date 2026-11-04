@@ -199,9 +199,9 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
   return (
     <AlertDialog open={open} onOpenChange={(o) => !running && onOpenChange(o)}>
       <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg" onEscapeKeyDown={(e) => running && e.preventDefault()}>
-        <AlertDialogHeader className="text-left">
-          <AlertDialogTitle className="text-lg leading-7 font-semibold">{name} 삭제</AlertDialogTitle>
-          <AlertDialogDescription className="text-base text-foreground">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{name} 삭제</AlertDialogTitle>
+          <AlertDialogDescription>
             {target.kind === "application_project"
               ? "이 기업 JD를 삭제할까요?"
               : target.kind === "api_key"
@@ -274,7 +274,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           ) : null}
         </div>
 
-        <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <AlertDialogFooter>
           <AlertDialogCancel disabled={running}>취소</AlertDialogCancel>
           <Button variant="destructive" disabled={disabled} onClick={confirm}>
             {running ? <Loader2 className="animate-spin" aria-hidden /> : null}

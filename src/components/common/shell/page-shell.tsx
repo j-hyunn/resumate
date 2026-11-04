@@ -24,7 +24,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -191,19 +190,19 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
   return { dirty, navigate, pending, saving, cancel, leaveWithoutSaving, saveAndLeave, reloadDiscarding }
 }
 
-/** 이탈 확인 다이얼로그 — AlertDialog 3 actions (5.8). Rendered by <PageShell>. */
+/** 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>. */
 export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
   return (
     <AlertDialog open={guard.pending !== null} onOpenChange={(o) => !o && !guard.saving && guard.cancel()}>
       <AlertDialogContent className="sm:max-w-md">
-        <AlertDialogHeader className="text-left">
+        <AlertDialogHeader>
           <AlertDialogTitle>저장하지 않은 변경이 있어요</AlertDialogTitle>
           {/* [UI-가정] description line (the spec gives the title and the 3 buttons only) */}
           <AlertDialogDescription>저장하지 않고 나가면 이번에 고친 내용이 사라져요</AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="max-sm:flex-col-reverse max-sm:[&>*]:w-full">
-          <AlertDialogCancel disabled={guard.saving}>계속 편집</AlertDialogCancel>
-          <Button variant="destructive-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
+        {/* 2026-11 모달 개편: "계속 편집" is the top-right X (closes = stay); 2 buttons right-aligned */}
+        <AlertDialogFooter>
+          <Button variant="muted-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
             저장하지 않고 나가기
           </Button>
           <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
@@ -373,14 +372,14 @@ export function StaleWriteDialog({
           keepRef.current?.focus()
         }}
       >
-        <AlertDialogHeader className="text-left">
+        <AlertDialogHeader>
           <AlertDialogTitle>다른 곳에서 {what} 바뀌었어요</AlertDialogTitle>
           {/* [UI-가정] 명세 "버린다고 함께 알림"의 글자 */}
           <AlertDialogDescription>새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           {/* not AlertDialogCancel: Radix focuses Cancel first, and this one throws edits away (QA UQ-PA-4) */}
-          <Button variant="outline" disabled={busy} onClick={onReload}>
+          <Button variant="muted-ghost" disabled={busy} onClick={onReload}>
             새로 불러오기
           </Button>
           <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>

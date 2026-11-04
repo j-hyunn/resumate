@@ -133,10 +133,10 @@ export function CopyWithPlaceholderGuard({
       {children(() => (count > 0 ? setOpen(true) : onCopy()))}
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-lg font-semibold">자리 표시 {count}개가 남아 있습니다</AlertDialogTitle>
+          <AlertDialogHeader>
+            <AlertDialogTitle>자리 표시 {count}개가 남아 있습니다</AlertDialogTitle>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {

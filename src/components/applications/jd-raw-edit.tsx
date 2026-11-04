@@ -378,11 +378,11 @@ export function JdRawEditor({
       </div>
       <AlertDialog open={ask !== null} onOpenChange={(open) => !open && stay()}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-lg font-semibold">{(ask?.kind === "cancel" ? LEAVE_COPY.cancel : LEAVE_COPY.leave).title}</AlertDialogTitle>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{(ask?.kind === "cancel" ? LEAVE_COPY.cancel : LEAVE_COPY.leave).title}</AlertDialogTitle>
             <AlertDialogDescription>{LEAVE_BODY}</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel>계속 고치기</AlertDialogCancel>
             <AlertDialogAction onClick={discard}>{(ask?.kind === "cancel" ? LEAVE_COPY.cancel : LEAVE_COPY.leave).action}</AlertDialogAction>
           </AlertDialogFooter>

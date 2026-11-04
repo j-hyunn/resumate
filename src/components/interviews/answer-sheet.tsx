@@ -590,9 +590,9 @@ export function AnswerSheet({
 
       <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
         <AlertDialogContent>
-          <AlertDialogHeader className="text-left">
+          <AlertDialogHeader>
             {/* [UI-가정] 제출 확인·미응답·짧은 답변 경고 문구는 명세에 없음 (FL-12 "미응답·짧은 답변 경고 → 확인") */}
-            <AlertDialogTitle className="text-lg font-semibold">답변을 제출할까요?</AlertDialogTitle>
+            <AlertDialogTitle>답변을 제출할까요?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-base text-foreground">
                 <p>제출하면 답변을 고칠 수 없어요.</p>
@@ -611,7 +611,7 @@ export function AnswerSheet({
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel disabled={submitting}>계속 쓰기</AlertDialogCancel>
             <Button onClick={submit} disabled={submitting} className="max-md:h-11">
               {submitting ? <Loader2 className="animate-spin" aria-hidden /> : null}

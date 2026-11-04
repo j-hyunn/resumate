@@ -422,13 +422,13 @@ function QuestionCard({
       {/* C-05 패턴의 확인 — 초안이 있는 문항만 (A3 UQ-67, 기획 확인 P-A3-2) // [UI-가정] 문구 */}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent className="sm:max-w-lg">
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-lg font-semibold">문항 삭제</AlertDialogTitle>
+          <AlertDialogHeader>
+            <AlertDialogTitle>문항 삭제</AlertDialogTitle>
             <AlertDialogDescription>
               문항 {index}과 이 문항의 초안·직접 고친 내용·사용한 경력·프로젝트가 함께 삭제돼요. 되돌릴 수 없어요
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <Button
               variant="destructive"

@@ -130,7 +130,8 @@ export function MonthField({
   }
 
   const sm = size === "sm"
-  const triggerSm = "h-8 text-sm data-[size=sm]:h-8 data-[size=default]:h-8"
+  // head row: h-8 on narrow screens too (the base trigger grows to 44px there)
+  const triggerSm = "h-8 text-sm data-[size=sm]:h-8 data-[size=default]:h-8 max-md:data-[size=sm]:h-8 max-md:data-[size=default]:h-8"
   return (
     <div className={cn(labelHidden ? "contents" : "space-y-1.5", className)}>
       <span id={`${id}-label`} className={labelHidden ? "sr-only" : "block text-sm leading-5 font-medium"}>

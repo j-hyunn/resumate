@@ -11,6 +11,7 @@ import {
   isReflectionEvidence,
   type EvidenceSourceType,
 } from "../evidence-rules";
+import { plainForValidation } from "../context-pack/deliverable-text";
 import { matchQuote } from "./quote";
 import { emptyReport, type ValidationReport } from "./report";
 
@@ -87,9 +88,14 @@ export function checkEvidence(raw: ModelEvidence, ctx: EvidenceContext): Evidenc
   if (quote === null) {
     if (isQuoteRequired(sourceType, field)) return { ok: false, rule: "v3_quote" };
   } else {
-    const sourceText = entry.fields[field ?? WHOLE_SOURCE_FIELD];
+    const key = field ?? WHOLE_SOURCE_FIELD;
+    // v4.10 (UP-14): STAR markdown is matched on its plain text, and so is the quote (the model saw the
+    // markdown and may copy list markers); the stored quote is then a span of the plain text.
+    const plain = !!entry.matchFields && key in entry.matchFields;
+    const sourceText = plain ? entry.matchFields![key] : entry.fields[key];
     if (!sourceText) return { ok: false, rule: "v3_quote" };
-    const match = matchQuote(quote, sourceText);
+    // R9 QA-02: a quote is a fragment of the list — "fragment" drops a lone "2." the source drops as a list number.
+    const match = matchQuote(plain ? plainForValidation(quote, "fragment") : quote, sourceText);
     if (!match.ok) return { ok: false, rule: "v3_quote" };
     storedQuote = match.quote;
     adjusted = match.adjusted;

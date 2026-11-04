@@ -6,6 +6,7 @@ import {
   STAR_FIELD_MAX_LENGTH,
   emptyDraftChanges,
   hasValue,
+  isDismissedClassification,
   isPending,
   isProtected,
   type Clarification,
@@ -20,6 +21,7 @@ import {
   type StarReviewReason,
   type StructuredDraft,
 } from "../schemas/structured-draft";
+import { plainForValidation } from "../context-pack/deliverable-text";
 import { normalizeForMatch, originalSpan } from "./normalize";
 import { extractNumbers } from "./numbers";
 import {
@@ -53,7 +55,7 @@ import {
  * | V-9f | `action` whose subject is the team | actor_ambiguous (+ situation candidate) |
  * | V-9g | sensitive information in the value (not the quotes, v4.9 RQ-6) | reject + sensitive count |
  * | V-9h | v4.9 (RQ-5): STAR `set` allowed on a filled field = merged proposal; `append` still accepted (old drafts); period only when the project column is empty | reject |
- * | V-9i | classification: key list, ≤ 3 distinct competencies, target empty, user sources, situation + action present | drop (classification is not a claim) |
+ * | V-9i | classification: key list, ≤ 3 distinct competencies, target empty, user sources, situation + action present; v4.10 (UP-6) not dismissed ([무시]) in this chat | drop (classification is not a claim; dismissed = silent, counted only) |
  * | V-9j | v4.9 (RQ-5): a merged `set` keeps every number (with unit) and V-9d name of the existing text | needs_review |
  *
  * "Existing text" of a STAR field (v4.9) = the form value + the pending
@@ -66,6 +68,13 @@ import {
  * text is already in the form (filled, not saved) is treated as part of the
  * current value: the next STAR patch for that field starts a new object
  * (`new_object: true`, DM 2.5 DA-10), and it no longer counts toward C-14 twice.
+ * v4.10 (UP-14): STAR values are markdown. V-9c / V-9d / V-9e / V-9g, V-9j and
+ * the no-op / "already in the form" checks compare the C-1.1 plain text of the
+ * value and of the existing text (`plainForValidation`) — list numbers and
+ * markers, headings, emphasis and editor escapes are not numbers, names or
+ * content words. Quotes and user messages are plain already. The value that is
+ * stored is the model's markdown as returned.
+ *
  * Pure functions only. Results carry counts and field paths, never text (C-7).
  */
 
@@ -128,6 +137,8 @@ export type V9Report = {
   preservation_review: number;
   /** R8 QA-01: legacy `append` patches on existing text turned into merged `set` (existing + new). */
   append_merged: number;
+  /** v4.10 (UP-6): classification suggestions dropped because the user dismissed that field ([무시]). Not a rejection. */
+  classification_dismissed: number;
 };
 
 export type V9Rejection = { check: V9Check; target: string };
@@ -491,17 +502,20 @@ function checkClaim(
   if (!a.ok) return { ok: false, check: a.check };
   const b = checkQuotes(rawQuotes, a.sources);
   if (!b.ok) return { ok: false, check: "V-9b" };
-  const sensitive = detectSensitive(value);
+  // v4.10 (UP-14): STAR markdown is compared as plain text (validation only).
+  const text = kind === "text" ? plainForValidation(value) : value;
+  const existingPlain = existing.map((e) => plainForValidation(e));
+  const sensitive = detectSensitive(text);
   if (sensitive.length > 0) {
     return { ok: false, check: "V-9g", sensitive: { aliases: a.sources.map((s) => s.alias), categories: [...new Set(sensitive)] } };
   }
-  const allowed = [...b.quotes, ...existing];
-  const numbersOk = kind === "month" ? checkMonthValue(value, b.quotes) : checkTextNumbers(value, allowed);
+  const allowed = [...b.quotes, ...existingPlain];
+  const numbersOk = kind === "month" ? checkMonthValue(value, b.quotes) : checkTextNumbers(text, allowed);
   if (!numbersOk) return { ok: false, check: "V-9c" };
-  if (kind === "text" && findUnsupportedNames(value, [...a.sources.map((s) => s.content), ...existing]).length > 0) {
+  if (kind === "text" && findUnsupportedNames(text, [...a.sources.map((s) => s.content), ...existingPlain]).length > 0) {
     return { ok: false, check: "V-9d" };
   }
-  const review = kind === "text" && uncoveredRatio(value, allowed) > V9E_MAX_UNCOVERED_RATIO ? "needs_review" : "ok";
+  const review = kind === "text" && uncoveredRatio(text, allowed) > V9E_MAX_UNCOVERED_RATIO ? "needs_review" : "ok";
   return { ok: true, sourceIds: a.sources.map((s) => s.id), quotes: b.quotes, review, reviewReason: review === "needs_review" ? "content_unverified" : null };
 }
 
@@ -512,7 +526,13 @@ function checkClaim(
  * and wording are not judged here (evaluation set "보존").
  */
 export function preservesExisting(value: string, existing: readonly string[]): boolean {
-  return existing.every((text) => checkTextNumbers(text, [value]) && findUnsupportedNames(text, [value]).length === 0);
+  // v4.10 (UP-14): plain text on both sides — a list number ("1.") is not an existing number;
+  // R9 QA-02: a line-leading year / count ("2023. 03 ~") is (not a list marker).
+  const merged = [plainForValidation(value)];
+  return existing.every((raw) => {
+    const text = plainForValidation(raw);
+    return checkTextNumbers(text, merged) && findUnsupportedNames(text, merged).length === 0;
+  });
 }
 
 function filledText(v: string | null | undefined): boolean {
@@ -523,11 +543,16 @@ function clarKey(c: Clarification): string {
   return `${c.kind}|${c.field ?? ""}`;
 }
 
-/** Normalized containment (V-9b normalization): `needle` is inside `haystack`. */
+/**
+ * Normalized containment of STAR texts: `needle` is inside `haystack` after
+ * the C-1.1 plain-text pass (v4.10 UP-14 — markdown markers, list numbers and
+ * editor escapes don't count) and the V-9b normalization.
+ */
 export function containsNormalized(haystack: string | null | undefined, needle: string | null | undefined): boolean {
   if (!haystack || !needle) return false;
-  const n = norm(needle);
-  return n.length > 0 && norm(haystack).includes(n);
+  // R9 QA-02: the needle may be one item cut out of a list (its siblings are in the haystack).
+  const n = norm(plainForValidation(needle, "fragment"));
+  return n.length > 0 && norm(plainForValidation(haystack)).includes(n);
 }
 
 /**
@@ -606,6 +631,7 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
     merged: 0,
     preservation_review: 0,
     append_merged: 0,
+    classification_dismissed: 0,
   };
   const flags: V9Flags = { needsReview: [], actorAmbiguous: [], sensitiveAdded: 0, lengthFull: [] };
   const newClarifications: Clarification[] = [];
@@ -811,6 +837,12 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
     const suggestion = output.classification_suggestions[field];
     if (!suggestion) continue;
     report.proposed++;
+    // v4.10 (UP-6, DM 11.5 #1 (b)): the user dismissed this field's suggestion in this chat → drop silently
+    // (log count only; not a rejection — the model was told not to recommend it).
+    if (isDismissedClassification(ctx.draft.classification[field])) {
+      report.classification_dismissed++;
+      continue;
+    }
     const result = checkClassification(field, suggestion, ctx, situationKnown && actionKnown);
     if ("drop" in result) {
       reject("V-9i", `classification.${field}`);

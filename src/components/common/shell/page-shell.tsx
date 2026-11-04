@@ -12,7 +12,8 @@
  *
  * Everything that leaves the page in-app goes through `guard.navigate(href)` (logo, account menu, ←, 이동 경로)
  * or is caught by the document click capture (any other `<a>`: C-10 "돌아가기", C-02 …). Browser close /
- * reload → `beforeunload`. // [UI-가정] browser back / forward is not intercepted (no reliable SPA hook).
+ * reload → `beforeunload`. Browser back / forward → the same dialog (popstate caught before Next's router, the
+ * entry restored with history.forward(), then 나가기 = history.back()).
  */
 import * as React from "react"
 import Link from "next/link"
@@ -150,6 +151,35 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
     window.addEventListener("beforeunload", onBeforeUnload)
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [dirty])
+
+  // browser back / forward: a capture listener on window runs before the router's own popstate listener. With
+  // unsaved edits it stops the router, steps forward again to this page's entry and asks; 나가기 = history.back().
+  React.useEffect(() => {
+    // direction from the Navigation API entry index where available (Chromium); otherwise assume 뒤로
+    const entryIndex = () => (window as Window & { navigation?: { currentEntry?: { index: number } | null } }).navigation?.currentEntry?.index
+    let index = entryIndex()
+    let restoring = false
+    const onPopState = (e: PopStateEvent) => {
+      if (restoring) {
+        restoring = false
+        e.stopImmediatePropagation()
+        return
+      }
+      const now = entryIndex()
+      const forward = index !== undefined && now !== undefined && now > index
+      if (!dirtyRef.current || bypass.current) {
+        index = now
+        return
+      }
+      e.stopImmediatePropagation()
+      restoring = true
+      if (forward) window.history.back()
+      else window.history.forward()
+      setPending(() => () => (forward ? window.history.forward() : window.history.back()))
+    }
+    window.addEventListener("popstate", onPopState, true)
+    return () => window.removeEventListener("popstate", onPopState, true)
+  }, [])
 
   // any other in-app <a> (C-10 돌아가기, C-02, links in the panel …)
   React.useEffect(() => {

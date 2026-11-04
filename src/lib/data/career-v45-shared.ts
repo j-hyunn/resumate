@@ -575,7 +575,6 @@ export const PANEL_COPY = {
   newChatTitle: "새 대화",
   closedChatBadge: "끝난 대화",
   backToChat: "대화로 돌아가기",
-  quickAnswers: ["잘 모르겠어요", "건너뛸게요"] as const,
   lock: {
     project: "질문에 답하면 AI가 STAR(상황·역할·행동·결과/성과·배운 점)에 넣을 내용을 제안해요",
     deliverable: "질문에 답하면 AI가 산출물 본문 초안을 제안해요",

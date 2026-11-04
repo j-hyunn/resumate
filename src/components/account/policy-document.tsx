@@ -48,7 +48,7 @@ export function PolicyDocument({ type, version }: { type: PolicyType; version: P
             <li key={t}>
               <Link
                 href={routes.policies(t)}
-                className="underline underline-offset-4 hover:text-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center"
+                className="underline underline-offset-4 hover:text-foreground max-md:inline-flex max-md:min-h-8 max-md:items-center"
               >
                 {POLICY_TYPE_LABELS[t]}
               </Link>

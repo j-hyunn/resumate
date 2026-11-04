@@ -172,6 +172,7 @@ export function emptyV9Report(): V9Report {
     merged: 0,
     preservation_review: 0,
     append_merged: 0,
+    classification_dismissed: 0,
   };
 }
 
@@ -203,6 +204,7 @@ export function flattenReport(report: V9Report): Record<string, number> {
     merged: report.merged,
     preservation_review: report.preservation_review,
     append_merged: report.append_merged,
+    classification_dismissed: report.classification_dismissed,
   };
   for (const [check, n] of Object.entries(report.by_check)) if (n > 0) out[`rejected_${check}`] = n;
   return out;

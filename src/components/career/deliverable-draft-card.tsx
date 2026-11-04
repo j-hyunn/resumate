@@ -17,7 +17,6 @@ import {
   ChevronRight,
   ChevronsUpDown,
   EyeOff,
-  FileText,
   Info,
   ListPlus,
   Loader2,
@@ -96,101 +95,112 @@ export function DeliverableDraftCard({ panel, formBody, filled, skipLine, draftF
   const applied = Boolean(body?.applied_at && body.applied_rev === body.rev)
   const isFilled = Boolean(body && filled && filled.writing_chat_id === chat?.id && filled.rev === body.rev)
   const remaining = Math.max(0, PAGE_LIMITS.maxDrafts - (draft?.draft_count ?? 0))
+  const unreviewed = body ? unreviewedCount(body.blocks) : 0
+  const fillable = body ? hasFillableContent(body.blocks) : false
+  const insertMode = body ? fillButtons(formBody, body.blocks, body.replace_allowed).kind === "insert" : true
+  const describe = (): string | null => {
+    if (drafting) return null
+    if (applied) return `반영됨 · ${body?.applied_mode === "append" ? "덧붙임" : "교체"}`
+    if (isFilled) return "본문에 채움 · 저장하기를 눌러야 저장돼요"
+    if (body) {
+      if (!fillable) return "검토가 필요한 문장을 수락하거나 빼 주세요"
+      const ask = insertMode ? "초안을 본문에 넣을까요?" : "초안을 본문에 반영할까요?"
+      return `${ask}${unreviewed ? ` · 검토 필요 ${unreviewed}개` : ""}`
+    }
+    if (failedNow) return DRAFT_STAGE_COPY.failed
+    return `확인이 필요한 내용 ${reviewFacts.length}개`
+  }
   return (
     <CardFrame
       key={`${chat?.id}:${applied}`}
-      applied={applied}
-      appliedMode={body?.applied_mode ?? null}
-      isFilled={isFilled}
       drafting={drafting}
       remaining={draft ? remaining : null}
       freeTier={panel.connection?.connection_tier === "free"}
+      describe={describe}
     >
-      {failedNow ? <DraftFailedLine panel={panel} /> : null}
-      {drafting ? (
-        <DraftingView provisional={panel.provisionalBlocks} previous={body ?? null} />
-      ) : body ? (
-        <ProposalView
-          panel={panel}
-          draft={draft!}
-          formBody={formBody}
-          locked={isFilled || applied || panel.responding}
-          applied={applied}
-          isFilled={isFilled}
-          onFill={onFill}
-          onBodyQuote={onBodyQuote}
-          remaining={remaining}
-        />
-      ) : null}
-      {draft && reviewFacts.length ? <ReviewFacts panel={panel} facts={reviewFacts} /> : null}
-      {!drafting && !body && draft && draft.draft_count >= PAGE_LIMITS.maxDrafts ? <DraftLimit panel={panel} /> : null}
-      {skipLine ? <p className="px-4 pb-3 text-sm text-muted-foreground">{skipLine}</p> : null}
+      {({ open }) => (
+        <>
+          {failedNow ? <DraftFailedLine panel={panel} /> : null}
+          {drafting ? (
+            // the draft being written stays visible (short-lived); the finished draft folds under [자세히]
+            <DraftingView provisional={panel.provisionalBlocks} previous={body ?? null} />
+          ) : body ? (
+            <ProposalView
+              panel={panel}
+              draft={draft!}
+              formBody={formBody}
+              locked={isFilled || applied || panel.responding}
+              applied={applied}
+              isFilled={isFilled}
+              onFill={onFill}
+              onBodyQuote={onBodyQuote}
+              remaining={remaining}
+              detailsOpen={open}
+            />
+          ) : null}
+          {draft && reviewFacts.length && (open || !body) ? <ReviewFacts panel={panel} facts={reviewFacts} /> : null}
+          {!drafting && !body && draft && draft.draft_count >= PAGE_LIMITS.maxDrafts ? <DraftLimit panel={panel} /> : null}
+          {skipLine ? <p className="px-4 pb-3 text-sm text-muted-foreground">{skipLine}</p> : null}
+        </>
+      )}
     </CardFrame>
   )
 }
 
 // ---------------------------------------------------------------------------
-// frame
+// frame — 혼합형 확인 줄 (shadcn AI Elements Confirmation 방식): media · title · description · [자세히].
+// The fill buttons under it are its actions (primary, as STAR 제안); [자세히] opens the block list. No icon, no [나중에].
 // ---------------------------------------------------------------------------
 
 function CardFrame({
-  applied,
-  appliedMode,
-  isFilled,
   drafting,
   remaining,
   freeTier,
+  describe,
   children,
 }: {
-  applied: boolean
-  appliedMode: "replace" | "append" | null
-  isFilled: boolean
   drafting: boolean
   remaining: number | null
   freeTier: boolean
-  children: React.ReactNode
+  describe: () => string | null
+  children: (state: { open: boolean }) => React.ReactNode
 }) {
-  // 반영됨: block list folded by default (head only)
-  const [open, setOpen] = React.useState(!applied)
+  const [open, setOpen] = React.useState(false)
+  const description = describe()
   return (
-    <section id={DRAFT_CARD_ID} aria-label="본문 초안" className="mb-1 rounded-xl border bg-card text-card-foreground">
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center gap-2 rounded-t-xl px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="text-sm font-semibold">본문 초안</span>
-            {drafting ? (
-              <span className="flex items-center gap-1 text-xs text-ai-subtle-foreground">
-                <Loader2 className="size-3.5 animate-spin text-ai" aria-hidden />
-                {DRAFT_STAGE_COPY.compose}
-              </span>
-            ) : applied ? (
-              <Badge variant="success">
-                <Check className="size-3" aria-hidden />
-                {/* [UI-가정] 방식 글자 (design-system 3.25) */}
-                반영됨 · {appliedMode === "append" ? "덧붙임" : "교체"}
-              </Badge>
-            ) : isFilled ? (
-              <Badge variant="info">
-                <ArrowLeftToLine className="size-3" aria-hidden />
-                폼에 채움
-              </Badge>
-            ) : null}
-            <span className="flex-1" />
-            {remaining !== null ? (
-              <span className={cn("text-xs tabular-nums", remaining === 0 ? "text-warning-subtle-foreground" : "text-muted-foreground")}>
-                초안 남은 횟수 {remaining} / {PAGE_LIMITS.maxDrafts}
-              </span>
-            ) : null}
-            <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
-          </button>
-        </CollapsibleTrigger>
-        {drafting && freeTier ? (
-          // C-03 무료 등급 문구 (공유 함수)
-          <p className="px-4 pb-2 text-xs text-muted-foreground">{freeTierLine("writing_chat_turn")}</p>
-        ) : null}
-        <CollapsibleContent>{children}</CollapsibleContent>
-      </Collapsible>
+    <section id={DRAFT_CARD_ID} aria-label="본문 초안" className="rounded-xl border bg-card text-card-foreground">
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">본문 초안</p>
+          {description === null ? (
+            <p className="flex items-center gap-1 text-xs text-ai-subtle-foreground">
+              <Loader2 className="size-3.5 animate-spin text-ai" aria-hidden />
+              {DRAFT_STAGE_COPY.compose}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {description}
+              {remaining !== null ? (
+                <span className={cn(remaining === 0 && "text-warning-subtle-foreground")}>
+                  {" "}
+                  · 초안 남은 횟수 {remaining} / {PAGE_LIMITS.maxDrafts}
+                </span>
+              ) : null}
+            </p>
+          )}
+        </div>
+        {drafting ? null : (
+          <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="shrink-0 text-muted-foreground">
+            {open ? "접기" : "자세히"}
+            <ChevronDown className={cn("transition-transform", open && "rotate-180")} aria-hidden />
+          </Button>
+        )}
+      </div>
+      {drafting && freeTier ? (
+        // C-03 무료 등급 문구 (공유 함수)
+        <p className="px-4 pb-2 text-xs text-muted-foreground">{freeTierLine("writing_chat_turn")}</p>
+      ) : null}
+      {children({ open })}
     </section>
   )
 }
@@ -281,6 +291,7 @@ function ProposalView({
   remaining,
   onFill,
   onBodyQuote,
+  detailsOpen,
 }: {
   panel: AiPanelController
   draft: DeliverableStructuredDraft
@@ -291,6 +302,8 @@ function ProposalView({
   remaining: number
   onFill: (fill: DeliverableFill) => void
   onBodyQuote: (quote: string) => void
+  /** [자세히]: the block list and its notes */
+  detailsOpen: boolean
 }) {
   const body = draft.deliverable.body!
   const blocks = body.blocks
@@ -339,7 +352,8 @@ function ProposalView({
 
   return (
     <>
-      <div className="px-4 pb-3">
+      {detailsOpen ? (
+      <div className="border-t px-4 pt-3 pb-3">
         <div ref={listRef} className={cn("relative space-y-2", !expanded && "max-h-[28rem] overflow-hidden")}>
           {blocks.map((b) => (
             <DraftBlock
@@ -399,14 +413,14 @@ function ProposalView({
           ) : null}
         </div>
       </div>
+      ) : null}
 
       {remaining === 0 ? <DraftLimit panel={panel} /> : null}
 
-      {applied ? null : (
-        <div className="sticky bottom-0 space-y-2 rounded-b-xl border-t bg-card px-4 py-3">
-          {isFilled ? (
-            <p className="text-xs text-info-subtle-foreground">폼에 채움 · 저장하기를 눌러야 저장돼요</p>
-          ) : (
+      {/* the confirmation's actions (filled / applied: the head line is the answer) */}
+      {applied || isFilled ? null : (
+        <div className="space-y-2 px-3 pb-3">
+          {(
             <>
               {tooLong ? (
                 <p className="flex items-start gap-1.5 text-sm text-warning-subtle-foreground" role="alert">
@@ -421,22 +435,21 @@ function ProposalView({
                   {buttons.kind === "replace_append" && buttons.appendDisabled ? <ReasonLine>덧붙일 새 내용이 없어요(지금 본문을 다시 정리한 초안이에요)</ReasonLine> : null}
                 </>
               )}
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-1.5">
                 {buttons.kind === "insert" ? (
-                  <Button variant="outline" size="sm" disabled={disabledAll} onClick={() => doFill("insert")}>
+                  <Button size="sm" disabled={disabledAll} onClick={() => doFill("insert")}>
                     <ArrowLeftToLine aria-hidden />
                     본문에 넣기
                   </Button>
                 ) : (
                   <>
                     {buttons.showReplace ? (
-                      <Button variant="outline" size="sm" disabled={disabledAll} onClick={() => void askReplace()}>
+                      <Button size="sm" disabled={disabledAll} onClick={() => void askReplace()}>
                         <Replace aria-hidden />
                         본문 교체
                       </Button>
                     ) : null}
                     <Button
-                      variant="outline"
                       size="sm"
                       disabled={disabledAll || buttons.appendDisabled}
                       aria-describedby={describeId}

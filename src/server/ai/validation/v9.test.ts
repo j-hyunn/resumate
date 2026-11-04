@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { baseInput, emptyProject, filledProject, GREETING, msgId, output, rows } from "../__fixtures__/AI-12/conversations";
 import { buildWritingChatContext, type WritingChatTurnInput } from "../context-pack/writing-chat";
+import { plainForValidation } from "../context-pack/deliverable-text";
 import type { Ai12ExtractOutput } from "../schemas/AI-12";
 import { STAR_FIELD_MAX_LENGTH, toDraftPatch } from "../schemas/structured-draft";
 import { KOREAN_SUFFIXES, wordForm } from "./v9-lexicon";
@@ -21,6 +22,7 @@ import {
   nominalStems,
   normalizeMessageAlias,
   preservesExisting,
+  containsNormalized,
   remainingStarChars,
   stripKoreanSuffix,
   uncoveredRatio,
@@ -269,7 +271,7 @@ const star = (field: string, value: string, quotes: string[], op: "set" | "appen
 const SITUATION = star("situation", "피크 시간에 결제 승인 API가 느려졌다", ["피크 시간에 결제 승인 API가 느려졌어요"]);
 const ACTION = star("action", "병목 쿼리를 찾아 인덱스를 재설계했다", ["병목 쿼리를 찾아 인덱스를 다시 설계했어요"]);
 
-const field = (value: string | string[], extra: Record<string, unknown> = {}) => ({
+const field = (value: string | string[] | null, extra: Record<string, unknown> = {}) => ({
   value,
   origin: "ai",
   source_message_ids: [msgId(2)],
@@ -723,6 +725,101 @@ describe("-음 체 (v4.9 RQ-4): suffixes and V-9e", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// v4.10 (UP-14): STAR markdown — validators compare plain text, the stored value is the model's markdown
+// ---------------------------------------------------------------------------
+
+describe("validateExtractOutput — markdown STAR (v4.10 UP-14)", () => {
+  const LIST = "1. 결제 실패 문의가 줄었음\n2. **정산 오류**가 사라졌음";
+  const NEW = "배치 시간도 30분에서 5분으로 줄었어요";
+  const turns = [["assistant", GREETING], ["user", NEW]] as const;
+  const listResult = (result = LIST) => ctxFor({ project: filledProject({ result }) }, turns);
+
+  it("a merged set that adds an item to a numbered list passes: list numbers are not numbers (V-9c, V-9j)", () => {
+    const value = "1. 결제 실패 문의가 줄었음\n2. 정산 오류가 사라졌음\n3. 배치 시간이 30분에서 5분으로 줄었음";
+    const r = run(output({ star_patches: [star("result", value, [NEW])] }), listResult());
+    expect(r.rejections).toEqual([]);
+    // Stored as the model returned it (markdown list kept).
+    expect(r.changes.star).toMatchObject([{ field: "result", op: "set", value, review: "ok", review_reason: null }]);
+    expect(r.report).toMatchObject({ merged: 1, preservation_review: 0 });
+  });
+
+  it("dropping the numbering (one paragraph) is not existing_missing", () => {
+    const value = "결제 실패 문의가 줄었고 정산 오류가 사라졌으며 배치 시간이 30분에서 5분으로 줄었음";
+    const r = run(output({ star_patches: [star("result", value, [NEW])] }), listResult());
+    expect(r.changes.star).toMatchObject([{ review: "ok" }]);
+  });
+
+  it("V-9j still catches a real number missing from a list item", () => {
+    const ctx = listResult("1. 문의가 40% 줄었음\n2. 정산 오류가 사라졌음");
+    const value = "1. 문의가 줄었음\n2. 정산 오류가 사라졌음\n3. 배치 시간이 30분에서 5분으로 줄었음";
+    const r = run(output({ star_patches: [star("result", value, [NEW])] }), ctx);
+    expect(r.changes.star).toMatchObject([{ review: "needs_review", review_reason: "existing_missing" }]);
+  });
+
+  it("V-9c still rejects a new number that only looks like a list item elsewhere", () => {
+    const value = "1. 결제 실패 문의가 줄었음\n2. 정산 오류가 사라졌음\n3. 배치 시간이 30분에서 3분으로 줄었음";
+    expect(run(output({ star_patches: [star("result", value, [NEW])] }), listResult()).rejections).toEqual([{ check: "V-9c", target: "star.result" }]);
+  });
+
+  it("existing markdown (headings, emphasis, escapes, &lt;) is a plain source for V-9c / V-9d / V-9e", () => {
+    const existing = "### 지표\n- **p99** 지연 1.2초 \\[측정\\]\n- `Redis` 캐시 &lt;hit> 비율 80%";
+    const ctx = ctxFor({ project: filledProject({ result: existing }) }, turns);
+    const value = "### 지표\n- p99 지연 1.2초 [측정]\n- Redis 캐시 &lt;hit> 비율 80%\n- 배치 시간이 30분에서 5분으로 줄었음";
+    const r = run(output({ star_patches: [star("result", value, [NEW])] }), ctx);
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ value, review: "ok" }]);
+    // A raw `<hit>` in the model's markdown is an HTML tag (not shown) → the existing name is missing.
+    const tag = run(output({ star_patches: [star("result", value.replace("&lt;hit>", "<hit>"), [NEW])] }), ctx);
+    expect(tag.changes.star).toMatchObject([{ review: "needs_review", review_reason: "existing_missing" }]);
+  });
+
+  it("a formatting-only rewrite of the existing text is unchanged (no new content)", () => {
+    const r = run(output({ star_patches: [star("result", "- 결제 실패 문의가 줄었음\n- 정산 오류가 사라졌음", [NEW])] }), listResult());
+    expect(r.report.unchanged).toBe(1);
+    expect(r.changes.star).toEqual([]);
+  });
+
+  it("a pending proposal the editor re-escaped on [반영] still counts as in the form", () => {
+    const proposal = "1. a < b 조건의 [메모] _초안_ 비율이 2배 늘었음";
+    const ctx = ctxFor(
+      { project: filledProject({ result: "1. a < b 조건의 \\[메모\\] *초안* 비율이 2배 늘었음" }), structuredDraft: { star: { result: field(proposal) } } },
+      turns,
+    );
+    const r = run(output({ star_patches: [star("result", "1. a < b 조건의 [메모] 초안 비율이 2배 늘었음\n2. 배치 시간이 30분에서 5분으로 줄었음", [NEW])] }), ctx);
+    expect(r.changes.star).toMatchObject([{ field: "result", new_object: true }]);
+  });
+
+  // R9 QA-02: a line-leading number that is not a list marker is a body number
+  it("V-9c checks line-leading body numbers (QA-02 probes)", () => {
+    const quotes = ["서비스를 출시했어요"];
+    expect(checkTextNumbers(plainForValidation("2024. 서비스를 출시함"), quotes)).toBe(false);
+    expect(checkTextNumbers(plainForValidation("300) 명이 가입함"), quotes)).toBe(false);
+    expect(checkTextNumbers(plainForValidation("1. 서비스를 출시함"), quotes)).toBe(true);
+  });
+
+  it("V-9j keeps a line-leading year of the existing text (QA-02 probes)", () => {
+    expect(preservesExisting("3월부터 결제 개선을 맡음", ["2023. 03 ~ 결제 개선을 맡음"])).toBe(false);
+    expect(preservesExisting("2023. 03부터 결제 개선을 맡음", ["2023. 03 ~ 결제 개선을 맡음"])).toBe(true);
+  });
+
+  it("containsNormalized finds one list item cut out of a list (QA-02 fragment)", () => {
+    expect(containsNormalized("1. 응답 개선\n2. 오류 감소", "2. 오류 감소")).toBe(true);
+    expect(containsNormalized("2023. 03 ~ 결제 개선", "2023. 03 ~ 결제 개선")).toBe(true);
+    expect(containsNormalized("결제 개선", "2023. 03 ~ 결제 개선")).toBe(false);
+  });
+
+  it("V-9c accepts an existing line-leading year rewritten as 2023년 (QA-02 probes)", () => {
+    const existing = plainForValidation("2023. 3월 입사");
+    expect(checkTextNumbers(plainForValidation("2023년 3월 입사"), [existing])).toBe(true);
+  });
+
+  it("preservesExisting compares plain text", () => {
+    expect(preservesExisting("응답 2초 → 0.5초, 오류 감소", ["1. 응답 2초 → 0.5초\n2. 오류 감소"])).toBe(true);
+    expect(preservesExisting("응답이 줄었음", ["1. 응답 **2초** → 0.5초"])).toBe(false);
+  });
+});
+
 describe("validateExtractOutput — V-9i classification", () => {
   const ready = () => ctxFor({ project: emptyProject({ situation: "상황", action: "행동" }) });
   const sugg = (s: Partial<Ai12ExtractOutput["classification_suggestions"]>) =>
@@ -790,6 +887,30 @@ describe("validateExtractOutput — V-9i classification", () => {
     expect(long.changes.classification[0].reason).toHaveLength(100);
     const health = run(sugg({ project_type: { value: "improvement", source_message_ids: [], reason: "우울증 치료 뒤 복귀" } }), ready());
     expect(health.changes.classification[0].reason).toBeNull();
+  });
+
+  it("UP-6 [무시]: a suggestion for a dismissed field (value null, rev ≥ 2) is dropped silently — counted, not a rejection", () => {
+    const ctx = ctxFor({
+      project: emptyProject({ situation: "상황", action: "행동" }),
+      structuredDraft: { classification: { project_type: field(null, { rev: 2, reviewed_at: "2026-11-04T00:00:00Z", source_message_ids: [] }) } },
+    });
+    const r = run(
+      sugg({
+        project_type: { value: "improvement", source_message_ids: [], reason: null },
+        experience_type: { value: "impact", source_message_ids: [], reason: null },
+      }),
+      ctx,
+    );
+    expect(r.changes.classification.map((c) => c.field)).toEqual(["experience_type"]);
+    expect(r.rejections).toEqual([]);
+    expect(r.report).toMatchObject({ classification_dismissed: 1, rejected: 0, applied: 1 });
+  });
+
+  it("UP-6: an empty rev-1 slot (never written by the RPC) is not dismissed", () => {
+    const ctx = ctxFor({ project: emptyProject({ situation: "상황", action: "행동" }), structuredDraft: { classification: { project_type: field(null, { rev: 1 }) } } });
+    const r = run(sugg({ project_type: { value: "improvement", source_message_ids: [], reason: null } }), ctx);
+    expect(r.changes.classification).toHaveLength(1);
+    expect(r.report.classification_dismissed).toBe(0);
   });
 
   it("same value as the pending suggestion is unchanged", () => {

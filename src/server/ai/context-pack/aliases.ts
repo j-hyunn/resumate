@@ -14,6 +14,12 @@ export type AliasEntry = {
    * these). Field-less sources use WHOLE_SOURCE_FIELD ("") as the key.
    */
   fields: Readonly<Record<string, string | null>>;
+  /**
+   * v4.10 (UP-14): text V-3 matches quotes against when it differs from what
+   * the model saw — affiliated project STAR fields are markdown in the pack
+   * and are matched on their C-1.1 plain text. Missing key → `fields`.
+   */
+  matchFields?: Readonly<Record<string, string | null>>;
   /** Source row `updated_at` → evidence_links.source_snapshot_at. */
   snapshotAt: string | null;
   /** Short label kept after the source is deleted → evidence_links.source_label. */

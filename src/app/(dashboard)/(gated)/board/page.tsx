@@ -82,13 +82,13 @@ async function Screen({ searchParams }: Props) {
           title="기업 JD를 추가하면 여기서 전형 단계를 관리할 수 있어요"
           actions={
             <>
-              <Button asChild className="max-md:h-11">
+              <Button asChild className="max-md:h-8">
                 <Link href={routes.applicationNew({ from: "board" })}>
                   <Plus aria-hidden />
                   기업 JD 추가
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="max-md:h-11">
+              <Button asChild variant="outline" className="max-md:h-8">
                 <Link href={routes.applications()}>기업 JD 관리로</Link>
               </Button>
             </>

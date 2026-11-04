@@ -15,7 +15,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRightLeft, CircleAlert, Info, Lightbulb, MessageCircleQuestion, MoreHorizontal, Sparkles, Trash2, TriangleAlert } from "lucide-react"
+import { ArrowRightLeft, CircleAlert, Info, MoreHorizontal, Sparkles, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -25,8 +25,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, FieldRow, FieldRows, InlineField, InlineFields, flashElement } from "@/components/common/doc-inputs"
-import { CharCount, InputGuide, MonthField } from "@/components/common/input-guide"
+import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, InlineField, InlineFields, flashElement } from "@/components/common/doc-inputs"
+import { MonthField } from "@/components/common/input-guide"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
 import { ErrorState } from "@/components/common/state-views"
 import { RETURN_FEATURE_LABELS, ReturnBanner, notifyCareerSaved, useGateContinuation } from "@/components/common/return-banner"
@@ -34,7 +34,6 @@ import { readCareerReturn } from "@/components/common/return-target"
 import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
-  InputRestoreBanner,
   PageShell,
   SaveButton,
   ShellBanners,
@@ -47,7 +46,7 @@ import {
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
 import { CRUMB_CURRENT, NewRowNotice } from "@/components/career/new-row-notice"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
-import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
+import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type FillOptions, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
 import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillEntry, type FillPlan } from "@/components/career/star-proposal-fill"
 import { saveProjectPageAction } from "@/lib/data/career-v45-actions"
 import {
@@ -84,20 +83,9 @@ const STAR_PLACEHOLDER: Record<ProjectStarField, string> = {
   learnings: "이 경험에서 얻은 교훈을 본인 말로 써 주세요. AI는 이 내용을 사실이 아니라 본인의 회고로 다뤄요",
 }
 
-// [UI-가정] G-4 필드별 한 줄 예시 (명세: "필드별 한 줄 예시", 문구 없음 — v4 S-35 예시 재사용)
-const G4: Partial<Record<ProjectStarField, string>> = {
-  task: "예: 승인 API 응답 시간을 0.8초 이하로 낮추는 목표를 맡았어요",
-  result: "예: 응답 시간이 1.2초에서 0.7초로 줄었고 관련 문의가 줄었어요",
-  learnings: "예: 성능 문제는 추측보다 측정에서 시작해야 한다는 것을 배웠어요",
-}
-
-const AI_HELP_LINE = "상황과 행동을 채우면 인사이트·서류·면접에서 AI가 이 프로젝트를 근거로 써요"
 const NAME_REQUIRED = "프로젝트명을 입력해 주세요"
 const PERIOD_ORDER = "종료월은 시작월보다 빠를 수 없어요"
 const NOT_FOUND_TOAST = "찾을 수 없는 항목이에요"
-
-/** [UI-가정] "AI에게 물어보기" 고정 문구 메시지 (명세: 고정 문구 + requested_slot, 문구 없음) */
-const askCopy = (f: ProjectStarField) => `${STAR_FIELD_LABELS[f].ko} 부분을 물어봐 줘`
 
 type ErrorKey = "name" | "period" | "project_type" | "experience_type" | "competencies" | ProjectStarField
 type Errors = Partial<Record<ErrorKey, string>>
@@ -186,6 +174,9 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   const [saveState, setSaveState] = React.useState<SaveUiState>(previewState === "invalid" ? "invalid" : "idle")
   const [savedAt, setSavedAt] = React.useState<string | null>(null)
   const [stale, setStale] = React.useState(false)
+  const [focusedField, setFocusedField] = React.useState<ProjectStarField | null>(null)
+  // fields whose typing / paste ran into the 2,000 limit — error until the text gets shorter again
+  const [limitHit, setLimitHit] = React.useState<ReadonlySet<ProjectStarField>>(new Set())
   const [saveSkips, setSaveSkips] = React.useState<Extract<SaveProjectPageResult, { ok: true }>["skipped"]>([])
   const [competencyPick, setCompetencyPick] = React.useState<{ key: string; pick: Competency[] } | null>(null)
   const [focusRequest, setFocusRequest] = React.useState<ProposalFocusRequest | null>(null)
@@ -194,7 +185,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [affOpen, setAffOpen] = React.useState(false)
   const [leaving, setLeaving] = React.useState(false)
-  const [focusedField, setFocusedField] = React.useState<ProjectStarField | null>(null)
   const [returnTarget, setReturnTarget] = React.useState<{ application_project_id: string; feature: ReturnTarget["feature"]; params?: Record<string, unknown> } | null>(null)
   const chatIdRef = React.useRef<string | null>(data.open_chat?.id ?? null)
   const titleRef = React.useRef<HTMLInputElement | null>(null)
@@ -353,6 +343,17 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
     doSaveRef.current = doSave
   })
 
+  // 입력 보존: what a previous visit left unsaved comes back on its own (no restore banner) — the page is dirty,
+  // so 저장하기 is enabled and leaving asks first
+  const { stored: preservedStored, resolve: resolvePreserved } = preserved
+  React.useEffect(() => {
+    if (!preservedStored) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- apply the stored copy once, after hydration
+    setValues(preservedStored.values)
+    setApplied(preservedStored.applied)
+    resolvePreserved()
+  }, [preservedStored, resolvePreserved])
+
   const guard = useLeaveGuard({ dirty, onSave: async () => Boolean(await doSaveRef.current()), onDiscard: preserved.clear })
 
   // ---------- panel ----------
@@ -411,10 +412,18 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
     setApplied((a) => a.filter((x) => !(x.writing_chat_id === cid && fills.some((f) => f.field === x.field && f.rev === x.rev))))
   }
 
-  const onFill = (cid: string, fields: readonly ProjectProposalField[]): FillPlan => {
+  const onFill = (cid: string, fields: readonly ProjectProposalField[], opts?: FillOptions): FillPlan => {
     const d = panel.chat?.structured_draft as ProjectStructuredDraft | undefined
     if (!d || panel.chat?.id !== cid) return { fills: [], skips: [] }
-    const plan = planFill({ draft: d, chatId: cid, values: valuesRef.current, applied: appliedRef.current, fields, competencyPick: pick })
+    const plan = planFill({
+      draft: d,
+      chatId: cid,
+      values: valuesRef.current,
+      applied: appliedRef.current,
+      fields,
+      competencyPick: pick,
+      overwriteClassification: opts?.overwriteClassification,
+    })
     if (!plan.fills.length) return plan
     const nextValues = applyFills(valuesRef.current, plan.fills)
     valuesRef.current = nextValues
@@ -474,8 +483,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   ]
   // projectSpanLabel already returns "(1년 11개월)" or "" (QA UQ-S10-1)
   const spanLabel = values.start_month && (values.end_month || values.is_current) ? projectSpanLabel(values.start_month, values.end_month, values.is_current) : ""
-  const keyReady = !panel.locked && Boolean(panel.connection?.active_provider)
-  const showAiHelp = isBlank(baseline.situation) || isBlank(baseline.action)
   const pendingFor = (f: ProjectStarField) => {
     const o = draft?.star[f]
     return Boolean(chatId && o && !isBlank(o.value) && !o.applied_at && !isFilledNow(applied, chatId, f, o))
@@ -497,16 +504,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
       <ShellBanners>
         <ReturnBanner />
         {requirementNotice}
-        {preserved.stored ? (
-          <InputRestoreBanner
-            onContinue={() => {
-              setValues(preserved.stored!.values)
-              setApplied(preserved.stored!.applied)
-              preserved.resolve()
-            }}
-            onDiscard={preserved.clear}
-          />
-        ) : null}
         {pageError ? (
           <Alert variant="destructive" className="py-2">
             <CircleAlert aria-hidden />
@@ -575,7 +572,8 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
           </p>
         ) : null}
         <div className="space-y-2">
-          <InlineFields>
+          {/* row 1: 프로젝트 종류 · 경험 유형 · 역량 / row 2: 진행 기간 — narrow: one field per line */}
+          <InlineFields className="max-md:flex-col">
             <InlineField label="프로젝트 종류" labelId="f-type" error={errors.project_type ? <FieldError id="err-project_type" text={errors.project_type} /> : null}>
               <span id="head-project_type" tabIndex={-1} className="rounded-md">
                 <ChipSelect value={values.project_type} onChange={(v) => set("project_type", v)} options={PROJECT_TYPE_LABELS} labelledBy="f-type" describedBy={errors.project_type ? "err-project_type" : undefined} invalid={Boolean(errors.project_type)} />
@@ -586,6 +584,13 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
                 <ChipSelect value={values.experience_type} onChange={(v) => set("experience_type", v)} options={EXPERIENCE_TYPE_LABELS} labelledBy="f-exp" describedBy={errors.experience_type ? "err-experience_type" : undefined} invalid={Boolean(errors.experience_type)} />
               </span>
             </InlineField>
+            <InlineField label="역량" labelId="f-comp" error={errors.competencies ? <FieldError id="err-competencies" text={errors.competencies} /> : null}>
+              <span id="head-competencies" tabIndex={-1} className="rounded-md">
+                <CompetencyChips value={values.competencies} onChange={(v) => set("competencies", v)} options={COMPETENCY_LABELS} labelledBy="f-comp" describedBy={errors.competencies ? "err-competencies" : undefined} invalid={Boolean(errors.competencies)} />
+              </span>
+            </InlineField>
+          </InlineFields>
+          <InlineFields className="max-md:flex-col">
             <InlineField label="진행 기간" labelId="f-period" error={errors.period ? <FieldError id="err-period" text={errors.period} /> : null}>
               <span id="head-period" tabIndex={-1} className="flex flex-wrap items-center gap-2 rounded-md">
                 <MonthField id="p-start" label="시작" size="sm" labelHidden invalid={Boolean(errors.period)} value={values.start_month} onChange={(v) => set("start_month", v)} />
@@ -608,13 +613,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
               </span>
             </InlineField>
           </InlineFields>
-          <FieldRows>
-            <FieldRow label="역량" labelId="f-comp" error={errors.competencies ? <FieldError id="err-competencies" text={errors.competencies} /> : null}>
-              <span id="head-competencies" tabIndex={-1} className="rounded-md">
-                <CompetencyChips value={values.competencies} onChange={(v) => set("competencies", v)} options={COMPETENCY_LABELS} labelledBy="f-comp" describedBy={errors.competencies ? "err-competencies" : undefined} invalid={Boolean(errors.competencies)} />
-              </span>
-            </FieldRow>
-          </FieldRows>
         </div>
         {/* 저장 응답 건너뜀 for chats whose card isn't open (deleted = not_found, another chat) — QA UQ-S10-2 */}
         {outsideSkipLines.length ? (
@@ -633,23 +631,18 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
       <DocBody
         placement={panel.placement}
         left={
-          <div className="space-y-10">
-            {showAiHelp ? (
-              <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                <Lightbulb className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {AI_HELP_LINE}
-              </p>
-            ) : null}
+          <div className="space-y-6">
             {STAR_FIELDS_ORDER.map((f) => {
               const v = values[f] ?? ""
-              const empty = isBlank(v)
-              const count = v.length
-              const showCount = focusedField === f || count > PAGE_LIMITS.star * 0.9
-              const guide = f === "action" ? <InputGuide guide="G-1" /> : G4[f] && empty ? <InputGuide guide="G-4">{G4[f]}</InputGuide> : null
+              // typing / paste stop at 2,000 (the editor); over only via an outside fill — the label shows it, save refuses
+              const over = v.length > PAGE_LIMITS.star || (limitHit.has(f) && v.length >= PAGE_LIMITS.star)
+              const invalid = over || Boolean(errors[f])
+              const showCount = over || focusedField === f || v.length > PAGE_LIMITS.star * 0.9
               return (
                 <section key={f} aria-labelledby={`star-${f}`} className="space-y-1.5">
                   <h3 id={`star-${f}`} className="flex items-center gap-2 text-base leading-6 font-medium">
-                    {STAR_FIELD_LABELS[f].ko}
+                    {invalid ? <CircleAlert className="size-4 shrink-0 text-destructive" aria-hidden /> : null}
+                    <span className={cn(invalid && "text-destructive")}>{STAR_FIELD_LABELS[f].ko}</span>
                     <span className="font-normal text-muted-foreground">{STAR_FIELD_LABELS[f].en}</span>
                     {pendingFor(f) ? (
                       <button
@@ -667,44 +660,42 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
                         </Badge>
                       </button>
                     ) : null}
+                    {/* 글자 수 in the label row (focus / ≥ 90% / over); over = the error line itself */}
+                    {showCount ? (
+                      <span id={`star-count-${f}`} className={cn("ml-auto text-sm font-normal tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
+                        {over ? `${fieldTooLongCopy(PAGE_LIMITS.star)} · ` : null}
+                        {v.length.toLocaleString("ko-KR")} / {PAGE_LIMITS.star.toLocaleString("ko-KR")}
+                      </span>
+                    ) : null}
                   </h3>
                   <DocTextarea
                     id={`star-field-${f}`}
                     aria-labelledby={`star-${f}`}
-                    aria-invalid={errors[f] ? true : undefined}
-                    aria-describedby={`star-help-${f}`}
+                    aria-invalid={invalid ? true : undefined}
+                    aria-describedby={over ? `star-count-${f}` : errors[f] ? `star-help-${f}` : undefined}
                     maxLength={PAGE_LIMITS.star}
-                    value={v}
-                    placeholder={STAR_PLACEHOLDER[f]}
+                    onLimitReached={() => setLimitHit((s) => (s.has(f) ? s : new Set(s).add(f)))}
                     onFocus={() => setFocusedField(f)}
                     onBlur={() => setFocusedField((x) => (x === f ? null : x))}
-                    onValueChange={(nv) => set(f, nv)}
+                    value={v}
+                    placeholder={STAR_PLACEHOLDER[f]}
+                    className="min-h-32"
+                    onValueChange={(nv) => {
+                      if (nv.length < PAGE_LIMITS.star && limitHit.has(f))
+                        setLimitHit((s) => {
+                          const n = new Set(s)
+                          n.delete(f)
+                          return n
+                        })
+                      set(f, nv)
+                    }}
                   />
-                  <div id={`star-help-${f}`} className="flex min-h-6 items-start justify-between gap-3">
-                    {errors[f] ? (
+                  {/* no 글자 수 (the editor still stops at the limit) — the line is the error only */}
+                  {errors[f] && !over ? (
+                    <div id={`star-help-${f}`}>
                       <FieldError text={errors[f]!} />
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        {guide}
-                        {empty && keyReady ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="-ml-2"
-                            disabled={panel.responding}
-                            onClick={() => {
-                              panel.show()
-                              panel.send(askCopy(f), { requested_slot: f })
-                            }}
-                          >
-                            <MessageCircleQuestion className="size-4" aria-hidden />
-                            AI에게 물어보기
-                          </Button>
-                        ) : null}
-                      </div>
-                    )}
-                    {showCount ? <CharCount count={count} limit={PAGE_LIMITS.star} /> : null}
-                  </div>
+                    </div>
+                  ) : null}
                 </section>
               )
             })}
@@ -716,6 +707,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
         aside={
           <AiPanel
             panel={panel}
+            proposalInline
             renderProposal={(p) => (
               <StarProposalCard
                 panel={p}
@@ -734,7 +726,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
               if (!p.chat || !d) return null
               const n = fillableFields(d, p.chat.id, applied, pick, values)
               return (
-                <Button variant="outline" size="sm" disabled={!n.length || p.responding} onClick={() => p.chat && onFill(p.chat.id, n)}>
+                <Button size="sm" disabled={!n.length || p.responding} onClick={() => p.chat && onFill(p.chat.id, n)}>
                   모두 반영 <span className="tabular-nums">({n.length})</span>
                 </Button>
               )

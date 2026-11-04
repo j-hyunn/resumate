@@ -28,6 +28,12 @@ import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
  */
 
 /**
+ * v7 (R9, v4.10 UP-14·UP-6): STAR values come as stored markdown in
+ * <star_value> blocks; a merged `set` keeps the field's block formatting
+ * (lists with numbers and nesting, headings, paragraphs/lines, quotes, tables,
+ * code blocks) and carries no inline emphasis (bold/italic/strike/inline code);
+ * escapes stay as written. A classification the user dismissed ([무시]) in this
+ * chat is marked and never recommended.
  * v6 (R8, v4.9 RQ-4·RQ-5): a filled field gets op "set" with the merged full
  * text (form value + pending proposal + new content, every existing fact kept;
  * never "append"); STAR values in -음 체 (examples and boundary cases too).
@@ -37,7 +43,7 @@ import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
  * unsaved edits included); proposals already filled into the form are marked and
  * not re-proposed. v3 (R4, v4.5): one project, one STAR; set/append; CR-20.
  */
-export const AI12_EXTRACT_PROMPT_VERSION = `ai-12.extract.v6+${COMMON_PROMPT_VERSION}`;
+export const AI12_EXTRACT_PROMPT_VERSION = `ai-12.extract.v7+${COMMON_PROMPT_VERSION}`;
 /**
  * v6 (R8, v4.9 RQ-5): proposals for filled fields are "합친 제안"; asking to
  * rewrite existing text → a merged proposal can be offered (no "덧붙임만").
@@ -81,6 +87,8 @@ export const AI12_EXTRACT_SYSTEM = `${SHARED_RULES}
 - star_patches는 항상 op "set"입니다. "append"는 쓰지 않습니다.
 - <project_state>의 star와 <draft>의 아직 폼에 넣지 않은 제안이 모두 비어 있는 필드: value에 이번에 새로 나온 내용만 씁니다.
 - 기존 텍스트가 있는 필드(<project_state>의 star 값, 또는 <draft>에서 "(폼에 채워짐)"이 아닌 제안): 기존 텍스트와 새 내용을 합쳐 자연스럽게 다시 쓴 **전체 문장**을 value에 넣습니다. 사용자가 직접 쓴 문장도 합치면서 다시 써도 되지만, 기존 텍스트의 사실(수치·고유명사·기술 이름·행동)은 하나도 빠뜨리지 않습니다. 폼 값과 제안에 같은 내용이 있으면 한 번만 씁니다. 기존 텍스트에 없는 내용은 이번 발화에서 나온 것만 더합니다.
+- 서식: <star_value> 안의 값은 화면 편집기에 저장된 마크다운 그대로입니다. 기존 텍스트가 있는 필드의 합친 value는 그 필드의 블록 서식을 그대로 유지합니다 — 목록(\`-\`·\`1.\` 기호와 번호, 들여쓰기로 나타낸 중첩), 제목(\`#\`~\`###\`), 문단(빈 줄)과 줄 구조, 인용(\`>\`), 표, 코드 블록. 새 내용은 그 구조 안의 알맞은 자리(같은 목록의 새 항목, 관련 문단)에 넣고, 번호 목록에 항목을 더하면 번호를 이어서 매깁니다. 기존 텍스트가 한 문단이면 한 문단으로 씁니다. 서식을 새로 만들거나 다른 서식으로 바꾸지 않습니다.
+- 인라인 강조(굵게 \`**\`, 기울임 \`*\`·\`_\`, 취소선 \`~~\`, 인라인 코드 백틱 \`)는 어떤 value에도 넣지 않습니다. 기존 텍스트에 있던 인라인 강조는 기호만 지우고 글은 남깁니다. \`\\*\`, \`\\[\`, \`&lt;\` 같은 이스케이프는 쓰인 그대로 둡니다.
 - 새 내용이 기존 텍스트에 이미 있으면 그 필드는 패치하지 않습니다.
 - source_message_ids·source_quotes에는 이번에 새로 들어간 내용의 출처(user 발화)만 넣습니다. 기존 텍스트의 출처는 넣지 않습니다.
 - 합친 value는 2,000자 이하입니다. 남은 글자 수가 부족한 필드에는 패치를 내지 않습니다.
@@ -98,6 +106,7 @@ export const AI12_EXTRACT_SYSTEM = `${SHARED_RULES}
 분류 추천 (classification_suggestions)
 - 상황(situation)과 행동(action)이 <project_state>나 <draft>, 이번 패치 중 어디에든 있을 때만 추천합니다. 그 전에는 세 키 모두 null입니다.
 - <project_state>의 classification에서 "(비어 있음)"인 것만 추천합니다. 이미 값이 있는 분류와 <draft>에서 [user_edit]인 분류는 null로 둡니다.
+- 사용자가 이 대화에서 추천을 무시한 분류(<project_state>의 "사용자가 이 대화에서 추천을 무시함", <draft>의 "(무시함)")는 추천하지 않고 null로 둡니다.
 - 아래 값 목록의 키만 씁니다. STAR로 정리된 내용에 가장 맞는 값 하나(역량은 최대 3개)를 고르고, 판단이 서지 않으면 null로 둡니다.
 - source_message_ids에는 판단의 실마리가 된 사용자 발화를 넣습니다(없으면 빈 배열). reason은 추천 이유 한 줄(100자 이내, 발화 별칭 없이)이며 없으면 null입니다.
 - 분류는 사용자가 고를 라벨일 뿐 사실이 아닙니다. 분류 값을 STAR 문장에 쓰지 않습니다.
@@ -109,6 +118,12 @@ export const AI12_EXTRACT_SYSTEM = `${SHARED_RULES}
 2) 정도 표현 vs 수치 — 발화: "배포 시간이 확 줄었어요." → result "배포 시간이 크게 줄었음", number_vague. 발화: "40분 걸리던 배포가 10분이 됐어요." → result "배포 시간이 40분에서 10분으로 줄었음".
 3) 배운 점 vs 결과 — 발화: "장애가 절반으로 줄었고, 모니터링을 먼저 설계했어야 했다는 걸 배웠어요." → result "장애가 절반으로 줄었음", learnings "모니터링을 먼저 설계했어야 했음".
 4) 합친 제안 — <project_state>의 action "결제 승인 API의 병목 쿼리를 APM으로 찾음"이 있고, 발화: "그다음에 인덱스를 다시 설계해서 응답이 2초에서 0.5초로 줄었어요." → action op "set", value "APM으로 결제 승인 API의 병목 쿼리를 찾고 인덱스를 다시 설계함"(기존의 APM·병목 쿼리를 그대로 남김), result op "set", value "결제 승인 API 응답 시간이 2초에서 0.5초로 줄었음". source_quotes는 이번 발화의 구간만.
+5) 합친 제안의 서식 — <project_state>의 result가 아래 번호 목록이고,
+<star_value field="result">
+1. 결제 실패 문의가 줄었음
+2. **정산 오류**가 사라졌음
+</star_value>
+발화: "배치 시간도 30분에서 5분으로 줄었어요." → result op "set", value "1. 결제 실패 문의가 줄었음\\n2. 정산 오류가 사라졌음\\n3. 배치 시간이 30분에서 5분으로 줄었음"(번호 목록과 줄 구조는 유지, 굵게 기호는 지움).
 
 ${classificationList()}`;
 

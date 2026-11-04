@@ -28,7 +28,7 @@ export function PageShellSkeleton({ rows = 5 }: { rows?: number }) {
         <div className="flex min-h-[50%] flex-1 border-t">
           <div className="relative min-w-0 flex-1 space-y-8 overflow-hidden px-6 py-6 max-md:px-4">
             {Array.from({ length: rows }, (_, i) => (
-              <div key={i} className="max-w-[42rem] space-y-2">
+              <div key={i} className="space-y-2">
                 <Skeleton className="h-5 w-32" />
                 <Skeleton className="h-16 w-full" />
               </div>

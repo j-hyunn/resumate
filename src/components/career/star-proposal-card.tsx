@@ -6,8 +6,10 @@
  *
  * One card per chat. Sections: (기간) → 상황 / 역할 / 행동 / 결과·성과 / 배운 점 → 분류 추천. Per section:
  * 빈 칸 = 새 값 / 내용 있는 칸: op "set" = "기존 내용과 합친 제안"([반영] = 교체, [기존 내용과 비교] — RQ-5; V-9j = "기존 내용 일부가 빠졌을 수 있어요"),
- * op "append"(과거 초안) = "현재 내용 뒤에 붙어요", C-15 칩, 검토 필요 [수락]/[거절(비우기)], 직접 고치기,
+ * op "append"(과거 초안) = "현재 내용 뒤에 붙어요", C-15 칩, 검토 필요 [수락]/[거절(비우기)],
  * ④ "폼에 채움 · 저장 전" / ⑤ "반영됨" / "새 제안이 있어요". [반영] / [모두 반영] ask the page to fill the form
+ * Shown as a confirmation line in the thread (혼합형): "N개 섹션을 폼에 반영할까요? [반영]", answered →
+ * "상황·행동 반영함"; [자세히] opens the per-section list below (edit / review / single 반영 stay there).
  * (`onFill` → planFill; no AI / DB call); the page remembers `{writing_chat_id, field, rev}`.
  */
 import * as React from "react"
@@ -19,11 +21,8 @@ import {
   ChevronRight,
   CornerDownRight,
   Info,
-  ListChecks,
   Loader2,
   MessageCircleQuestion,
-  PenLine,
-  Pencil,
   Sparkles,
   TriangleAlert,
 } from "lucide-react"
@@ -32,14 +31,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { flashElement } from "@/components/common/doc-inputs"
 import { useDocBodyMode } from "@/components/common/shell/doc-body"
 import { SourceChip, SourceChips } from "@/components/common/source-chip"
 import type { AiPanelController } from "@/components/career/ai-panel"
 import {
-  PAGE_LIMITS,
   PAGE_SAVE_SKIP_COPY,
   PANEL_COPY,
   STAR_FIELDS_ORDER,
@@ -49,7 +46,7 @@ import {
   type ProjectProposalField,
 } from "@/lib/data/career-v45-shared"
 import { COMPETENCY_LABELS, EXPERIENCE_TYPE_LABELS, PROJECT_TYPE_LABELS, STAR_FIELD_LABELS } from "@/lib/data/labels"
-import type { Competency, PageSaveSkipReason, ProjectStarField, ProjectStructuredDraft } from "@/types/db"
+import type { Competency, PageSaveSkipReason, ProjectStructuredDraft } from "@/types/db"
 import {
   CLASSIFICATION_FIELDS,
   PERIOD_FIELDS,
@@ -62,6 +59,7 @@ import {
   type FillPlan,
   type FillSkipReason,
 } from "./star-proposal-fill"
+import { ignoreClassification, ignoredClassifications } from "./ignored-classification"
 
 /** 섹션 이름 (토스트·안내 문구) */
 export const PROPOSAL_FIELD_LABELS: Record<ProjectProposalField, string> = {
@@ -105,13 +103,18 @@ export interface ProposalFocusRequest {
   nonce: number
 }
 
+export interface FillOptions {
+  /** 분류 추천 row [반영]: replace what the user already chose */
+  overwriteClassification?: boolean
+}
+
 export interface StarProposalCardProps {
   panel: AiPanelController
   values: ProjectPageValues
   /** this visit's p_applied_proposals */
   applied: AppliedProjectProposal[]
   /** fill these fields now; resolves the plan the page applied (skips → the bottom lines) */
-  onFill: (chatId: string, fields: readonly ProjectProposalField[]) => FillPlan
+  onFill: (chatId: string, fields: readonly ProjectProposalField[], opts?: FillOptions) => FillPlan
   /** competency recommendation chips (checked) — owned by the page so [모두 반영] outside the card uses them */
   competencyPick: Competency[] | null
   onCompetencyPickChange: (pick: Competency[]) => void
@@ -135,7 +138,8 @@ export function fillableFields(
   competencyPick: Competency[] | null,
   values: ProjectPageValues,
 ): ProjectProposalField[] {
-  const candidates = PROPOSAL_FIELDS_ORDER.filter((f) => isFillable(draft, chatId, f, applied))
+  const ignored = ignoredClassifications(chatId)
+  const candidates = PROPOSAL_FIELDS_ORDER.filter((f) => !ignored.has(f) && isFillable(draft, chatId, f, applied))
   // the count = what [모두 반영] really fills now (form-value checks included, QA UQ-S10-4)
   return planFill({ draft, chatId, values, applied, fields: candidates, competencyPick }).fills.map((x) => x.field)
 }
@@ -153,9 +157,11 @@ export function StarProposalCard(props: StarProposalCardProps) {
   const { panel, values, applied, onFill, saveSkips, focusRequest } = props
   const chat = panel.chat
   const draft = chat?.structured_draft as ProjectStructuredDraft | undefined
-  const [open, setOpen] = React.useState(true)
+  // 혼합형 확인 줄: collapsed by default ("자세히" opens the sections)
+  const [open, setOpen] = React.useState(false)
+  // re-render after [무시] (the ignored set lives in localStorage)
+  const [, bumpIgnored] = React.useState(0)
   const [fillSkips, setFillSkips] = React.useState<FillPlan["skips"]>([])
-  const [editing, setEditing] = React.useState<ProjectStarField | null>(null)
   const [busy, setBusy] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const busyAll = panel.responding || busy
@@ -239,8 +245,8 @@ export function StarProposalCard(props: StarProposalCardProps) {
     return o && o.review === "needs_review" && !o.applied_at && o.value != null
   }).length
 
-  const fill = (fields: readonly ProjectProposalField[]) => {
-    const plan = onFill(chat.id, fields)
+  const fill = (fields: readonly ProjectProposalField[], opts?: FillOptions) => {
+    const plan = onFill(chat.id, fields, opts)
     setFillSkips(plan.skips)
   }
 
@@ -287,34 +293,86 @@ export function StarProposalCard(props: StarProposalCardProps) {
   }
 
   const summary = panel.phase === "patching" ? null : `반영할 수 있는 섹션 ${fillable.length}${reviewCount ? ` · 검토 필요 ${reviewCount}` : ""}`
-  const starRows = STAR_FIELDS_ORDER.filter((f) => !isBlank(draft.star[f]?.value ?? null))
-  const periodRows = PERIOD_FIELDS.filter((f) => draft.project[f]?.value)
+  // already reflected (반영됨 / 폼에 채움) sections leave the list — the head line names them ("… 반영함");
+  // a newer proposal for the same field (rev changed) is a proposal again and comes back
+  const pendingOnly = (f: ProjectProposalField) => {
+    const st = sectionState(f)
+    return st !== "applied" && st !== "filled"
+  }
+  // [무시]한 분류 (this chat, this browser) — never shown again, a later proposal included
+  const ignored = ignoredClassifications(chat.id)
+  const starRows = STAR_FIELDS_ORDER.filter((f) => !isBlank(draft.star[f]?.value ?? null) && pendingOnly(f))
+  const periodRows = PERIOD_FIELDS.filter((f) => draft.project[f]?.value && pendingOnly(f))
   const classRows = CLASSIFICATION_FIELDS.filter((f) => {
     const v = draft.classification[f]?.value
-    return Array.isArray(v) ? v.length > 0 : Boolean(v)
+    return (Array.isArray(v) ? v.length > 0 : Boolean(v)) && pendingOnly(f) && !ignored.has(f)
   })
+  const hasRows = starRows.length + periodRows.length + classRows.length > 0
+  // nothing left to decide (all reflected, ignored, or no proposal yet): no confirmation line at all
+  if (!hasRows) return null
+
+  const doneFields = PROPOSAL_FIELDS_ORDER.filter((f) => {
+    const o = proposalObject(draft, f)
+    if (!o || o.value == null || (Array.isArray(o.value) && o.value.length === 0)) return false
+    const st = sectionState(f)
+    return st === "applied" || st === "filled"
+  })
+  const patching = summary === null
+  const asking = !patching && !panel.closed && fillable.length > 0
+  const reviewSuffix = reviewCount ? ` · 검토 필요 ${reviewCount}개` : ""
+  const description = patching
+    ? null
+    : fillable.length > 0
+      ? `${fillable.length}개 섹션을 폼에 반영할까요?${reviewSuffix}`
+      : reviewCount
+        ? `검토 필요 ${reviewCount}개 · 자세히에서 확인해 주세요`
+        : doneFields.length
+          ? `${doneFields.map((f) => PROPOSAL_FIELD_LABELS[f]).join("·")} 반영함`
+          : "반영할 섹션이 없어요"
 
   return (
-    <div ref={rootRef} className="mb-3 rounded-xl border bg-card text-card-foreground">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <ListChecks className="size-4 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-semibold">STAR 제안</span>
-        {summary === null ? (
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            정리 중
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">{summary}</span>
-        )}
-        <ChevronDown className={cn("ml-auto size-4 transition-transform", open && "rotate-180")} aria-hidden />
-      </button>
-      {open ? (
+    <div ref={rootRef} className="rounded-xl border bg-card text-card-foreground">
+      {/* Confirmation (shadcn AI Elements 방식): media · title · description · actions. Answered → a result line. */}
+      <div className="space-y-2.5 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">STAR 제안</p>
+            {description === null ? (
+              <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                정리 중
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground tabular-nums">{description}</p>
+            )}
+          </div>
+          {hasRows ? (
+            <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="shrink-0 text-muted-foreground">
+              {open ? "접기" : "자세히"}
+              <ChevronDown className={cn("transition-transform", open && "rotate-180")} aria-hidden />
+            </Button>
+          ) : null}
+        </div>
+        {asking ? (
+          <div className="flex justify-end">
+            <Button size="sm" disabled={busyAll} onClick={() => fill(fillable)}>
+              <CheckCheck aria-hidden />
+              반영 <span className="tabular-nums">({fillable.length})</span>
+            </Button>
+          </div>
+        ) : null}
+        {bottomLines.length ? (
+          <ul className="space-y-0.5" aria-live="polite">
+            {bottomLines.map((l) => (
+              <li key={l} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <Info className="mt-px size-3.5 shrink-0" aria-hidden />
+                {l}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {open && hasRows ? (
         <>
           <div className="divide-y border-t">
             {periodRows.length ? (
@@ -370,7 +428,7 @@ export function StarProposalCard(props: StarProposalCardProps) {
                           <ArrowLeftToLine className="size-3" aria-hidden />
                           폼에 채움
                         </Badge>
-                      ) : st === "proposal" && editing !== f ? (
+                      ) : st === "proposal" ? (
                         <>
                           {changed.has(f) || replaced(f) ? (
                             <Badge variant="ai" className="gap-1">
@@ -382,11 +440,8 @@ export function StarProposalCard(props: StarProposalCardProps) {
                           ) : mergedMode ? (
                             <span className="text-xs text-muted-foreground">기존 내용과 합친 제안</span>
                           ) : null}
-                          <Button variant="outline" size="sm" disabled={busyAll} onClick={() => fill([f])}>
+                          <Button size="sm" disabled={busyAll} onClick={() => fill([f])}>
                             반영
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label={`${PROPOSAL_FIELD_LABELS[f]} 직접 고치기`} disabled={busyAll} onClick={() => setEditing(f)}>
-                            <Pencil aria-hidden />
                           </Button>
                         </>
                       ) : null}
@@ -398,18 +453,7 @@ export function StarProposalCard(props: StarProposalCardProps) {
                       {o.review_reason === "existing_missing" ? EXISTING_MISSING_COPY : NEEDS_REVIEW_COPY}
                     </p>
                   ) : null}
-                  {editing === f ? (
-                    <StarEdit
-                      initial={o.value ?? ""}
-                      label={PROPOSAL_FIELD_LABELS[f]}
-                      busy={busyAll}
-                      onCancel={() => setEditing(null)}
-                      onSave={async (value) => {
-                        const ok = await patch({ kind: "edit", section: "star", field: f, value: value.trim() ? value : null })
-                        if (ok) setEditing(null)
-                      }}
-                    />
-                  ) : st === "applied" ? (
+                  {st === "applied" ? (
                     <AppliedValue value={o.value ?? ""} />
                   ) : appendMode && st !== "filled" ? (
                     <div className="space-y-1">
@@ -450,14 +494,7 @@ export function StarProposalCard(props: StarProposalCardProps) {
                     <p className="text-sm leading-6 whitespace-pre-wrap">{o.value}</p>
                   )}
                   {st === "filled" ? <FilledNote onShow={() => props.onShowInForm(f)} /> : null}
-                  {o.origin === "user_edit" ? (
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <PenLine className="size-3" aria-hidden />
-                      직접 수정
-                    </p>
-                  ) : (
-                    chips(o.source_message_ids, o.source_quotes)
-                  )}
+                  {o.origin === "user_edit" ? null : chips(o.source_message_ids, o.source_quotes)}
                   {o.review === "accepted" && st === "proposal" ? (
                     <p className="flex items-center gap-1 text-xs text-success-subtle-foreground">
                       <Check className="size-3" aria-hidden />
@@ -493,7 +530,6 @@ export function StarProposalCard(props: StarProposalCardProps) {
               <ClassificationGroup
                 draft={draft}
                 fields={classRows}
-                values={values}
                 state={sectionState}
                 busy={busyAll}
                 onFill={fill}
@@ -502,29 +538,14 @@ export function StarProposalCard(props: StarProposalCardProps) {
                 onPickChange={props.onCompetencyPickChange}
                 alreadySet={fillSkips.filter((s) => s.reason === "classification_already_set").map((s) => s.field)}
                 onShowInForm={props.onShowInForm}
+                // 무시: remember it for this chat (never shown again) + clear the proposal on the server (user `set` null)
+                onIgnore={(f) => {
+                  ignoreClassification(chat.id, f)
+                  bumpIgnored((n) => n + 1)
+                  void patch({ kind: "edit", section: "classification", field: f, value: null })
+                }}
               />
             ) : null}
-          </div>
-          <div className="sticky bottom-0 space-y-2 rounded-b-xl border-t bg-card px-4 py-3">
-            {bottomLines.length ? (
-              <ul className="space-y-0.5" aria-live="polite">
-                {bottomLines.map((l) => (
-                  <li key={l} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                    <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-                    {l}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {/* a closed chat shows [모두 반영] in the closed box (renderClosedActions) — one button only (QA UQ-S10-3) */}
-            {panel.closed ? null : (
-              <div className="flex justify-end">
-                <Button variant="outline" size="sm" disabled={busyAll || fillable.length === 0} onClick={() => fill(fillable)}>
-                  <CheckCheck aria-hidden />
-                  모두 반영 <span className="tabular-nums">({fillable.length})</span>
-                </Button>
-              </div>
-            )}
           </div>
         </>
       ) : null}
@@ -560,35 +581,27 @@ function AppliedValue({ value }: { value: string }) {
   )
 }
 
-function StarEdit({ initial, label, busy, onSave, onCancel }: { initial: string; label: string; busy: boolean; onSave: (v: string) => void; onCancel: () => void }) {
-  const [value, setValue] = React.useState(initial)
-  return (
-    <div className="space-y-2">
-      <Textarea
-        aria-label={`${label} 제안 고치기`}
-        autoFocus
-        value={value}
-        maxLength={PAGE_LIMITS.star}
-        onChange={(e) => setValue(e.target.value)}
-        className="field-sizing-content min-h-20 text-sm"
-      />
-      <div className="flex gap-2">
-        {/* [UI-가정] 버튼 글자 "저장" = 제안 고치기(apply_structured_draft_patch), 커리어 저장 아님 */}
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => onSave(value)}>
-          저장
-        </Button>
-        <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
-          취소
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 type ChipsFn = (ids: string[], quotes?: string[]) => React.ReactNode
 type StateFn = (f: ProjectProposalField) => "applied" | "filled" | "review" | "proposal"
 
-function RowState({ st, busy, onFill, onShow, label }: { st: ReturnType<StateFn>; busy: boolean; onFill: () => void; onShow: () => void; label: string }) {
+function RowState({
+  st,
+  busy,
+  fillDisabled,
+  onFill,
+  onIgnore,
+  onShow,
+  label,
+}: {
+  st: ReturnType<StateFn>
+  busy: boolean
+  fillDisabled?: boolean
+  onFill: () => void
+  /** 분류 추천: [무시] (ghost) next to a primary [반영] */
+  onIgnore?: () => void
+  onShow: () => void
+  label: string
+}) {
   if (st === "applied")
     return (
       <Badge variant="success" className="gap-1">
@@ -606,8 +619,19 @@ function RowState({ st, busy, onFill, onShow, label }: { st: ReturnType<StateFn>
         <FilledNote onShow={onShow} />
       </span>
     )
+  if (onIgnore)
+    return (
+      <span className="flex items-center gap-1">
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onIgnore} aria-label={`${label} 추천 무시`}>
+          무시
+        </Button>
+        <Button size="sm" disabled={busy || fillDisabled} onClick={onFill} aria-label={`${label} 반영`}>
+          반영
+        </Button>
+      </span>
+    )
   return (
-    <Button variant="outline" size="sm" disabled={busy} onClick={onFill} aria-label={`${label} 반영`}>
+    <Button size="sm" disabled={busy || fillDisabled} onClick={onFill} aria-label={`${label} 반영`}>
       반영
     </Button>
   )
@@ -656,7 +680,6 @@ function PeriodSection({
 function ClassificationGroup({
   draft,
   fields,
-  values,
   state,
   busy,
   onFill,
@@ -665,19 +688,22 @@ function ClassificationGroup({
   onPickChange,
   alreadySet,
   onShowInForm,
+  onIgnore,
 }: {
   draft: ProjectStructuredDraft
   fields: Array<(typeof CLASSIFICATION_FIELDS)[number]>
-  values: ProjectPageValues
   state: StateFn
   busy: boolean
-  onFill: (f: readonly ProjectProposalField[]) => void
+  onFill: (f: readonly ProjectProposalField[], opts?: FillOptions) => void
   chips: ChipsFn
   pick: Competency[] | null
   onPickChange: (p: Competency[]) => void
   alreadySet: ProjectProposalField[]
   onShowInForm: (f: ProjectProposalField) => void
+  onIgnore: (f: ProjectProposalField) => void
 }) {
+  // row [반영] replaces a classification the user already chose (the recommendation wins)
+  const overwrite = { overwriteClassification: true }
   const sources = [...new Set(fields.flatMap((f) => draft.classification[f]?.source_message_ids ?? []))]
   // leader K1: UX v5.6 copy only — the row repeats the bottom line "이미 직접 고른 분류는 바꾸지 않았어요"
   const note = (f: ProjectProposalField) =>
@@ -695,7 +721,7 @@ function ClassificationGroup({
         if (f === "competencies") {
           const offered = ((o.value as Competency[] | null) ?? []).slice(0, 3)
           const checked = pick ?? offered
-          const disabled = st !== "proposal" || values.competencies.length > 0
+          const disabled = st !== "proposal"
           return (
             <div key={f} id="star-proposal-competencies" className="space-y-1">
               <div className="grid grid-cols-[6.25rem_minmax(0,1fr)_auto] items-center gap-2">
@@ -716,7 +742,15 @@ function ClassificationGroup({
                     </label>
                   ))}
                 </div>
-                <RowState st={st} busy={busy || (st === "proposal" && checked.length === 0)} onFill={() => onFill([f])} onShow={() => onShowInForm(f)} label="역량" />
+                <RowState
+                  st={st}
+                  busy={busy}
+                  fillDisabled={st === "proposal" && checked.length === 0}
+                  onFill={() => onFill([f], overwrite)}
+                  onIgnore={() => onIgnore(f)}
+                  onShow={() => onShowInForm(f)}
+                  label="역량"
+                />
               </div>
               {o.reason ? <p className="text-xs text-muted-foreground">{o.reason}</p> : null}
               {note(f)}
@@ -734,7 +768,14 @@ function ClassificationGroup({
                   {label}
                 </Badge>
               </span>
-              <RowState st={st} busy={busy} onFill={() => onFill([f])} onShow={() => onShowInForm(f)} label={PROPOSAL_FIELD_LABELS[f]} />
+              <RowState
+                st={st}
+                busy={busy}
+                onFill={() => onFill([f], overwrite)}
+                onIgnore={() => onIgnore(f)}
+                onShow={() => onShowInForm(f)}
+                label={PROPOSAL_FIELD_LABELS[f]}
+              />
             </div>
             {o.reason ? <p className="text-xs text-muted-foreground">{o.reason}</p> : null}
             {note(f)}

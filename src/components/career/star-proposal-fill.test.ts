@@ -83,6 +83,10 @@ describe("planFill", () => {
   it("classification: only empty values; partial competency pick; none checked = no entry", () => {
     const set = planFill({ draft: draft(), chatId: "c", values: { ...base(), project_type: "new_build" }, applied: [], fields: ["project_type"] })
     expect(set.skips[0].reason).toBe("classification_already_set")
+    // row [반영] (overwriteClassification): the recommendation replaces what the user chose
+    const over = planFill({ draft: draft(), chatId: "c", values: { ...base(), project_type: "new_build" }, applied: [], fields: ["project_type"], overwriteClassification: true })
+    expect(over.skips).toEqual([])
+    expect(over.fills[0]).toMatchObject({ field: "project_type", prev: "new_build" })
     const part = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["competencies"], competencyPick: ["execution"] })
     expect(part.fills).toEqual([{ field: "competencies", prev: [], next: ["execution"], rev: 2 }])
     const none = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["competencies"], competencyPick: [] })

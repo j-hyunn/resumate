@@ -22,3 +22,10 @@ supabase db push
 
 ## push 뒤 확인(리더)
 - `list_migrations`에 `20261113000400` 있음, `get_advisors`(security·performance) — 함수 교체만이라 새 항목은 없을 것으로 예상.
+
+## 결과 (2026-11-04)
+- 사용자 요청으로 상위 세션이 이 워크트리에서 `supabase db push` 실행 → `20261113000400_r10_classification_dismiss_guard.sql` 적용.
+- 원격 `list_migrations` 마지막 항목: `20261113000400 r10_classification_dismiss_guard`.
+- 보안 advisor: 기존 항목뿐(authenticated SECURITY DEFINER public RPC 22건, `account_deletion_logs` RLS 정책 없음 INFO, 유출 비밀번호 보호, MFA 옵션). R10은 `private.wc_patch_star`만 바꿔 새 항목 없음.
+- 남은 것: 코드 머지(R8·R9·UI 개정과 같은 묶음).
+- 참고: 이 워크트리는 `supabase link`로 원격 프로젝트에 연결됨(`supabase/.temp`, git 무시 대상).

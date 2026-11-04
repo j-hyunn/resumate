@@ -1,14 +1,14 @@
 "use client"
 
 /**
- * S-40 AI 연결 (02 S-40, FL-18~20, design-system 5.7) — shared by the `/settings/ai` page and the
- * settings dialog section "AI 연결" (leader decision).
+ * S-40 AI 연결 (02 S-40, FL-18~20, design-system 5.7) — the settings dialog section "AI 연결"
+ * (there is no S-40 page).
  *
- * The dialog renders this outside <Suspense>, so the panel never reads `?state=` itself: the page
- * passes `preview` (its awaited ?state=) instead. Hooks that read search params (AiErrorNotice)
- * sit inside local <Suspense> boundaries.
+ * The dialog renders this outside <Suspense>, so the panel never reads `?state=` itself: the dialog
+ * passes `preview` (the ?state= it was opened with by URL) instead. Hooks that read search params
+ * (AiErrorNotice) sit inside local <Suspense> boundaries.
  *
- * preview values (page only): ai-locked · key-invalid · key-check · no-active · paused ·
+ * preview values: ai-locked · key-invalid · key-check · no-active · paused ·
  * recheck-failed · save-failed · ai-return · consent-required (v5.3 활성 카드 "동의 필요" + "동의하기")
  *
  * v5.3 (02 S-40, R-67 / A1 / A20; design-system 5.7 (v3)):
@@ -73,6 +73,7 @@ import {
   ProviderConsentLine,
   ProviderStatusLine,
   StaticConnectionBadge,
+  providerCardId,
   providerCardState,
 } from "./provider-card"
 import { Item } from "@/components/ui/item"
@@ -161,15 +162,15 @@ async function loadOverview(preview: string | null): Promise<{ load: Load; retur
 }
 
 export function AiConnectionPanel({
-  variant = "page",
   onNavigate,
+  focusProvider = null,
   preview = null,
 }: {
-  /** "section" = settings dialog / `/settings` card, "page" = S-40 route */
-  variant?: "page" | "section"
   /** closes the dialog when a link leaves it */
   onNavigate?: () => void
-  /** page-only `?state=` value (the dialog passes nothing) */
+  /** UQ-267: scroll to this provider's card once the cards load (C-19 경고 → "S-40 해당 카드") */
+  focusProvider?: AiProviderName | null
+  /** dev `?state=` value the dialog was opened with by URL */
   preview?: string | null
 }) {
   const router = useRouter()
@@ -207,14 +208,12 @@ export function AiConnectionPanel({
     }
   }, [preview])
 
-  // UQ-267: `/settings/ai#provider-card-{provider}` — cards load on the client, so scroll once they exist
+  // UQ-267: cards load on the client, so scroll to the requested card once they exist
   const ready = load.status === "ready"
   React.useEffect(() => {
-    if (!ready || variant !== "page") return
-    const id = window.location.hash.slice(1)
-    if (!id.startsWith("provider-card-")) return
-    document.getElementById(id)?.scrollIntoView({ block: "start" })
-  }, [ready, variant])
+    if (!ready || !focusProvider) return
+    document.getElementById(providerCardId(focusProvider))?.scrollIntoView({ block: "start" })
+  }, [ready, focusProvider])
 
   const leave = () => onNavigate?.()
 
@@ -438,18 +437,10 @@ export function AiConnectionPanel({
         })}
       </RadioGroup>
 
-      {/* 사용량 입구 — 다이얼로그에서는 섹션만 바꾼다 (5.7) */}
-      {variant === "section" ? (
-        <Item variant="outline" size="lg" className="justify-between gap-3" onClick={() => openSettings("ai-usage")}>
-          <UsageEntryText cost={data.month_estimated_cost_usd} />
-        </Item>
-      ) : (
-        <Item asChild variant="outline" size="lg" className="justify-between gap-3">
-          <Link href={routes.aiUsage()}>
-            <UsageEntryText cost={data.month_estimated_cost_usd} />
-          </Link>
-        </Item>
-      )}
+      {/* 사용량 입구 — 섹션만 바꾼다 (5.7) */}
+      <Item variant="outline" size="lg" className="justify-between gap-3" onClick={() => openSettings("ai-usage")}>
+        <UsageEntryText cost={data.month_estimated_cost_usd} />
+      </Item>
 
       <p className="flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />

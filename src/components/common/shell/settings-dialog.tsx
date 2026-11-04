@@ -3,11 +3,16 @@
 /**
  * S-24 설정 as a dialog (shadcn sidebar-13 "sidebar in a dialog"): section list on the left
  * (collapsible="none" sidebar), breadcrumb "설정 › {section}" + scrolling body on the right.
- * Opened from the L-01 사이드바 (NavSecondary 설정, NavUser 설정) via useSettingsDialog().
+ * There are no settings pages: S-24 · S-40 AI 연결 · S-42 AI 사용량 live only here.
+ * Opened from the L-01 사이드바 (NavSecondary 설정, NavUser 설정), the L-02 계정 메뉴 and in-app links
+ * via useSettingsDialog() / <SettingsLink>, or by URL `?settings={section}[&provider=]` (routes.settings,
+ * the fallback for screens without this provider) — the query is dropped once the dialog opens.
  * Below md the block hides the section list, so a horizontal section strip replaces it [UI-가정].
  * Data (email + consent statuses) is read when the dialog opens.
  */
 import * as React from "react"
+import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { RotateCcw } from "lucide-react"
 import {
   Breadcrumb,
@@ -30,13 +35,23 @@ import {
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { routes } from "@/lib/routes"
+import { readPreviewState } from "@/lib/preview-state"
+import type { AiProviderName } from "@/types/db"
 import { getSettingsDataAction } from "@/components/account/actions"
 import { SettingsSectionBody, type SettingsData } from "@/components/account/settings-sections"
 import { SETTINGS_SECTIONS, type SettingsSectionId } from "@/components/account/settings-section-list"
 import { useAiConnectionBase } from "../ai-connection-context"
 
+export interface OpenSettingsOptions {
+  /** S-40: scroll to this provider's card (UQ-208 / UQ-267) */
+  provider?: AiProviderName | null
+  /** dev `?state=` preview for the section panels (only when opened by URL) */
+  preview?: string | null
+}
+
 interface SettingsDialogContextValue {
-  openSettings: (section?: SettingsSectionId) => void
+  openSettings: (section?: SettingsSectionId, options?: OpenSettingsOptions) => void
 }
 
 const SettingsDialogContext = React.createContext<SettingsDialogContextValue | null>(null)
@@ -47,11 +62,67 @@ export function useSettingsDialog(): SettingsDialogContextValue {
   return ctx
 }
 
+const SECTION_IDS = new Set<string>(SETTINGS_SECTIONS.map((s) => s.id))
+const PROVIDERS = new Set<string>(["gemini", "anthropic", "openai"])
+
+/**
+ * Link that opens the settings dialog on `section`. Inside a provider it opens in place (no
+ * navigation, so the L-02 leave guard skips it); elsewhere it navigates to routes.settings().
+ */
+export function SettingsLink({
+  section,
+  provider,
+  onClick,
+  ...props
+}: Omit<React.ComponentProps<typeof Link>, "href"> & { section: SettingsSectionId; provider?: AiProviderName | null }) {
+  const ctx = React.useContext(SettingsDialogContext)
+  return (
+    <Link
+      {...props}
+      href={routes.settings(section, provider ?? undefined)}
+      data-leave-guard={ctx ? "skip" : undefined}
+      onClick={(e) => {
+        onClick?.(e)
+        if (!ctx || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+        e.preventDefault()
+        ctx.openSettings(section, { provider })
+      }}
+    />
+  )
+}
+
+/** `?settings={section}[&provider=]` → open the dialog, then drop those params (keeps the rest) */
+function SettingsUrlOpener({ open }: { open: SettingsDialogContextValue["openSettings"] }) {
+  const params = useSearchParams()
+  const pathname = usePathname()
+  const router = useRouter()
+  const section = params.get("settings")
+  React.useEffect(() => {
+    if (!section) return
+    const provider = params.get("provider")
+    open(SECTION_IDS.has(section) ? (section as SettingsSectionId) : "account", {
+      provider: provider && PROVIDERS.has(provider) ? (provider as AiProviderName) : null,
+      preview: readPreviewState(params),
+    })
+    const next = new URLSearchParams(params.toString())
+    next.delete("settings")
+    next.delete("provider")
+    const qs = next.toString()
+    router.replace(`${pathname}${qs ? `?${qs}` : ""}${window.location.hash}`, { scroll: false })
+  }, [section, params, pathname, router, open])
+  return null
+}
+
 type LoadState = { status: "loading" } | { status: "error" } | { status: "ready"; data: SettingsData }
 
 export function SettingsDialogProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
   const [section, setSection] = React.useState<SettingsSectionId>("account")
+  const [options, setOptions] = React.useState<OpenSettingsOptions>({})
+  const openRef = React.useRef(false)
+  React.useEffect(() => {
+    openRef.current = open
+  }, [open])
   const [load, setLoad] = React.useState<LoadState>({ status: "loading" })
 
   // read fresh data every time the dialog opens (consents may have changed elsewhere)
@@ -63,10 +134,13 @@ export function SettingsDialogProvider({ children }: { children: React.ReactNode
 
   const value = React.useMemo<SettingsDialogContextValue>(
     () => ({
-      openSettings: (s) => {
+      openSettings: (s, o) => {
         setSection(s ?? "account")
+        // switching sections inside the open dialog keeps a URL preview; a fresh open resets it
+        const wasOpen = openRef.current
+        setOptions((prev) => ({ provider: o?.provider ?? null, preview: o?.preview ?? (wasOpen ? prev.preview : null) }))
+        if (!wasOpen) void fetchData()
         setOpen(true)
-        void fetchData()
       },
     }),
     [fetchData],
@@ -74,11 +148,18 @@ export function SettingsDialogProvider({ children }: { children: React.ReactNode
   return (
     <SettingsDialogContext.Provider value={value}>
       {children}
+      <React.Suspense fallback={null}>
+        <SettingsUrlOpener open={value.openSettings} />
+      </React.Suspense>
       <SettingsDialog
         open={open}
         onOpenChange={setOpen}
         section={section}
-        onSectionChange={setSection}
+        onSectionChange={(s) => {
+          setSection(s)
+          setOptions((prev) => ({ ...prev, provider: null }))
+        }}
+        options={options}
         load={load}
         onRetry={() => void fetchData()}
       />
@@ -103,6 +184,7 @@ function SettingsDialog({
   onOpenChange,
   section,
   onSectionChange,
+  options,
   load,
   onRetry,
 }: {
@@ -110,6 +192,7 @@ function SettingsDialog({
   onOpenChange: (open: boolean) => void
   section: SettingsSectionId
   onSectionChange: (s: SettingsSectionId) => void
+  options: OpenSettingsOptions
   load: LoadState
   onRetry: () => void
 }) {
@@ -199,7 +282,13 @@ function SettingsDialog({
                     </Button>
                   </div>
                 ) : (
-                  <SettingsSectionBody section={section} data={load.data} onNavigate={close} />
+                  <SettingsSectionBody
+                    section={section}
+                    data={load.data}
+                    onNavigate={close}
+                    provider={options.provider ?? null}
+                    preview={options.preview ?? null}
+                  />
                 )}
               </div>
             </div>

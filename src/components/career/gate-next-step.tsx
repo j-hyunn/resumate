@@ -10,7 +10,8 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { useAiConnection, useAiConnectHref, useAiConnectionLoaded } from "@/components/common/ai-connection-context"
+import { useAiConnection, useAiConnectionLoaded } from "@/components/common/ai-connection-context"
+import { AiConnectLink } from "@/components/common/ai-connect-link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { markAiConnectReturn } from "@/components/common/ai-connect-return"
 import { directionParticle, AI_FEATURE_NAMES } from "@/lib/data/labels"
@@ -38,7 +39,6 @@ export function GateNextStep({
 }) {
   const connection = useAiConnection()
   const connectionLoaded = useAiConnectionLoaded()
-  const connectHref = useAiConnectHref()
   const aiUsable = !connection || (connection.active_provider !== null && connection.key_status !== "invalid")
   const invalid = connection?.key_status === "invalid"
   if (loading || !connectionLoaded)
@@ -76,9 +76,9 @@ export function GateNextStep({
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             키를 확인하면 AI와 대화로 채울 수 있어요
             <Button asChild variant="link" size="sm" className="h-auto px-0">
-              <Link href={connectHref} onClick={() => markAiConnectReturn({ feature_label: AI_FEATURE_NAMES.writing_chat })}>
+              <AiConnectLink onClick={() => markAiConnectReturn({ feature_label: AI_FEATURE_NAMES.writing_chat })}>
                 AI 연결 확인
-              </Link>
+              </AiConnectLink>
             </Button>
           </p>
         </div>

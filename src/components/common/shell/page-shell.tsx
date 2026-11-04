@@ -45,6 +45,7 @@ import { formatTime } from "@/lib/data/labels"
 import { shellSignOutAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
 import { ACCOUNT_MENU_ITEMS, type AccountMenuItem } from "./account-menu-items"
+import { useSettingsDialog } from "./settings-dialog"
 import { LogoMark } from "./logo-mark"
 import { useToasterPosition } from "./shell-parts"
 import { createPreservationStore } from "./input-preservation"
@@ -415,6 +416,7 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
   const onReopen = aiReopen?.onClick
   const bindReopen = aiReopen?.bindButton
   const leave = usePageLeave()
+  const { openSettings } = useSettingsDialog()
   const router = useRouter()
   const signOut = async () => {
     try {
@@ -455,7 +457,11 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
               return (
                 <React.Fragment key={item.key}>
                   {item.key === "sign_out" ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem onSelect={() => ("href" in item ? leave(item.href) : leave(() => void signOut()))}>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      "section" in item ? openSettings(item.section) : "href" in item ? leave(item.href) : leave(() => void signOut())
+                    }
+                  >
                     <Icon aria-hidden />
                     {item.label}
                   </DropdownMenuItem>

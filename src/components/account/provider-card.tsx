@@ -171,7 +171,7 @@ const BORDER: Record<ProviderCardState, string> = {
   paused: "bg-muted/50",
 }
 
-/** Stable anchor for deep links to an S-40 card (UQ-267, C-19 경고 → "S-40 해당 카드"): `/settings/ai#provider-card-gemini` */
+/** Stable anchor for deep links to an S-40 card (UQ-267, C-19 경고 → "S-40 해당 카드"): `provider-card-gemini` (routes.settings("ai-connection", provider)) */
 export function providerCardId(provider: AiProviderName): string {
   return `provider-card-${provider}`
 }

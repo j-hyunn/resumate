@@ -7,6 +7,7 @@
  */
 import type { InterviewType, PolicyType, ProjectStarField } from "@/types/db"
 import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
+import type { SettingsSectionId } from "@/components/account/settings-section-list"
 
 type Id = string
 
@@ -93,15 +94,15 @@ export const routes = {
   board: () => "/board", // S-39
 
   // 설정 — A1
-  settings: () => "/settings", // S-24
   /**
-   * S-40 AI 연결 (page; the settings dialog has the same section "AI 연결").
-   * `provider` → `#provider-card-{provider}` (C-19 경고 배지 → 해당 카드, UQ-208 / A1 UQ-267).
+   * S-24 설정 다이얼로그 (S-40 AI 연결 · S-42 AI 사용량 are its sections; there are no settings
+   * pages). Inside a shell use <SettingsLink> / openSettings(): it opens the dialog in place. This URL
+   * is the fallback for screens without the dialog (S-41 focus screen, S-25 취소): S-08 with
+   * `?settings={section}` — the shell opens the dialog on that section and drops the query.
+   * `provider` scrolls to that S-40 card (C-19 경고 배지 → 해당 카드, UQ-208 / UQ-267).
    */
-  aiConnection: (provider?: "gemini" | "anthropic" | "openai") =>
-    provider ? `/settings/ai#provider-card-${provider}` : "/settings/ai", // S-40
-  /** S-42 AI 사용량 (page; dialog section "AI 사용량") */
-  aiUsage: () => "/settings/ai/usage", // S-42
+  settings: (section?: SettingsSectionId, provider?: "gemini" | "anthropic" | "openai") =>
+    withQuery("/career", { settings: section ?? "account", provider }), // S-24 · S-40 · S-42
   /**
    * S-41 키 연결 단계 (focus screen outside the shell, leader decision Q-5).
    * `provider` omitted → 공급자 선택; `mode` = replace (③만) / tier (①②만); `activate` → 끝나면

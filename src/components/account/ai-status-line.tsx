@@ -2,22 +2,20 @@
 
 /**
  * S-24 계정 섹션의 "AI 연결" 한 줄 (02 S-24 v5, design-system 6 A1, UQ-201):
- * "연결 안 됨" 또는 C-19 배지 + "••••1a2b". 다이얼로그에서는 섹션을 바꾸고, /settings 페이지에서는 S-40으로 간다.
+ * "연결 안 됨" 또는 C-19 배지 + "••••1a2b". 누르면 다이얼로그의 "AI 연결" 섹션으로 바꾼다.
  * Outside <Suspense> in the dialog → no `?state=` reads.
  */
 import * as React from "react"
-import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import type { AiProviderKeyPublic, AiProviderName } from "@/types/db"
 import { getAiConnectionOverviewAction } from "@/lib/data/actions"
-import { routes } from "@/lib/routes"
 import { useAiConnectionBase } from "@/components/common/ai-connection-context"
 import { useSettingsDialog } from "@/components/common/shell/settings-dialog"
 import { connectionStatusText } from "@/components/common/provider-badge"
 import { KeyMask, StaticConnectionBadge } from "./provider-card"
 import { Item } from "@/components/ui/item"
 
-export function AiStatusLine({ inDialog }: { inDialog: boolean }) {
+export function AiStatusLine() {
   const { openSettings } = useSettingsDialog()
   // re-fetch when the shell's connection value changes (notifyAiConnectionChanged)
   const connection = useAiConnectionBase()
@@ -71,19 +69,10 @@ export function AiStatusLine({ inDialog }: { inDialog: boolean }) {
   return (
     <div className="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center sm:gap-3">
       <span className="text-sm leading-5 font-medium text-muted-foreground">AI 연결</span>
-      {inDialog ? (
-        <Item size="sm" className="-mx-2 w-auto justify-between" onClick={() => openSettings("ai-connection")} aria-label={label}>
-          {content}
-          <ChevronRight aria-hidden />
-        </Item>
-      ) : (
-        <Item asChild size="sm" className="-mx-2 w-auto justify-between">
-          <Link href={routes.aiConnection()} aria-label={label}>
-            {content}
-            <ChevronRight aria-hidden />
-          </Link>
-        </Item>
-      )}
+      <Item size="sm" className="-mx-2 w-auto justify-between" onClick={() => openSettings("ai-connection")} aria-label={label}>
+        {content}
+        <ChevronRight aria-hidden />
+      </Item>
     </div>
   )
 }

@@ -52,7 +52,9 @@ import { errorCategoryOf, isInputCausedFailure, nextQuotaReset, SAME_ROW_RETRY_J
 import { CONNECTION_TIER_LABELS, directionParticle } from "@/lib/data/labels"
 import { AI_PROVIDER_LABELS, AI_PROVIDERS } from "@/lib/mock/ai-providers"
 import { routes } from "@/lib/routes"
-import { notifyAiConnectionChanged, useAiConnection, useAiConnectHref, useAiConnectionRefresh } from "./ai-connection-context"
+import { notifyAiConnectionChanged, useAiConnection, useAiConnectionRefresh } from "./ai-connection-context"
+import { AiConnectLink } from "./ai-connect-link"
+import { SettingsLink } from "./shell/settings-dialog"
 import { markAiConnectReturn } from "./ai-connect-return"
 import { AI_LOCK_RETRY_TITLE, AiLock, type AiLockEntry } from "./ai-lock"
 import { useAiConsentGate } from "./consent-gate"
@@ -417,7 +419,6 @@ export function AiErrorNotice({
   className,
 }: AiErrorNoticeProps) {
   const ctxConnection = useAiConnection()
-  const connectHref = useAiConnectHref()
   const now = useNow()
   const consent = useAiConsentGate()
   // key_missing: "먼저 readiness를 다시 읽는다" (02 C-20) — consent cause vs no key. Skeleton from the
@@ -510,9 +511,9 @@ export function AiErrorNotice({
   const dash = info && pName ? <ExternalProviderLink href={info.dashboard_url}>{`${pName} 대시보드`}</ExternalProviderLink> : null
   const toS40 = (label: string, variant: "outline" | "link") => (
     <Button variant={variant} size="sm" asChild className={variant === "link" ? "h-auto px-0" : undefined}>
-      <Link href={routes.aiConnection()} onClick={() => markAiConnectReturn()}>
+      <SettingsLink section="ai-connection" onClick={() => markAiConnectReturn()}>
         {label}
-      </Link>
+      </SettingsLink>
     </Button>
   )
   const inputAction = (label: string, variant: "outline" | "link") =>
@@ -635,9 +636,9 @@ export function AiErrorNotice({
       actions = (
         <>
           <Button variant={inline ? "link" : "default"} size="sm" asChild className={inline ? "h-auto px-0" : undefined}>
-            <Link href={connectHref} onClick={() => markAiConnectReturn()}>
+            <AiConnectLink onClick={() => markAiConnectReturn()}>
               AI 연결하기
-            </Link>
+            </AiConnectLink>
           </Button>
           {inputAction(inputLabel ?? "입력으로 돌아가기", "link")}
         </>

@@ -54,7 +54,7 @@ function Frame({ children }: { children: React.ReactNode }) {
     <>
       <header className="flex h-16 shrink-0 items-center gap-4 border-b px-4 md:px-6">
         <Button variant="ghost" size="icon" asChild>
-          <Link href={routes.aiConnection()} aria-label="연결 그만두기">
+          <Link href={routes.settings("ai-connection")} aria-label="연결 그만두기">
             <X aria-hidden />
           </Link>
         </Button>

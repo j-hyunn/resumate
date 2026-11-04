@@ -4,19 +4,18 @@
  * C-19 공급자·등급 배지 (02 C-19, design-system 3.19). Text only — no provider logos (Q-4).
  *
  * - <ProviderBadge connection={…} />      연결 배지: next to AI run buttons, C-03 card head, S-36 top,
- *                                         S-40 active card. Link → S-40 (`/settings/ai`).
+ *                                         S-40 active card. Link → settings dialog "AI 연결" (S-40).
  * - <ProviderResultTag provider model_tier model />   결과 배지 "Gemini · 기본로 만든 결과" (S-16/S-19/S-22)
  * - providerRunLabel(session)              목록 열 "실행 공급자" (S-20 / S-37 / S-22)
  */
 import * as React from "react"
-import Link from "next/link"
 import { CircleHelp, Cpu, KeyRound, ScrollText, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { AiConnection, AiProviderName, InterviewSession, ModelTier } from "@/types/db"
 import { CONNECTION_TIER_LABELS, MODEL_TIER_LABELS } from "@/lib/data/labels"
 import { AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
-import { routes } from "@/lib/routes"
+import { SettingsLink } from "@/components/common/shell/settings-dialog"
 import { useAiConnection } from "./ai-connection-context"
 
 /** "Gemini · 무료 등급" / "Claude · 유료" */
@@ -71,9 +70,10 @@ export function ProviderBadge({ connection: explicit, className }: { connection?
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Link
-          // UQ-208: warning states go straight to that provider's S-40 card (#provider-card-{provider})
-          href={routes.aiConnection(warn ? connection.active_provider : undefined)}
+        <SettingsLink
+          // UQ-208: warning states go straight to that provider's S-40 card
+          section="ai-connection"
+          provider={warn ? connection.active_provider : null}
           aria-label={`AI 연결: ${text}. AI 연결 설정 열기`}
           className={cn(
             "inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-11",
@@ -85,7 +85,7 @@ export function ProviderBadge({ connection: explicit, className }: { connection?
         >
           <Icon className="size-3 shrink-0" aria-hidden />
           <span className="whitespace-nowrap">{text}</span>
-        </Link>
+        </SettingsLink>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">{tooltipText(connection)}</TooltipContent>
     </Tooltip>

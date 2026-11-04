@@ -1,10 +1,10 @@
 "use client"
 
 /**
- * S-42 AI 사용량 미터 (02 S-42, F-AI-07, design-system 5.7) — shared by the `/settings/ai/usage`
- * page and the settings dialog section "AI 사용량". 이번 달(KST)만, 기능별·공급자별, 예상치 고지 상시.
+ * S-42 AI 사용량 미터 (02 S-42, F-AI-07, design-system 5.7) — the settings dialog section
+ * "AI 사용량" (there is no S-42 page). 이번 달(KST)만, 기능별·공급자별, 예상치 고지 상시.
  *
- * Never reads `?state=` (the dialog is outside <Suspense>); the page passes `preview`:
+ * Never reads `?state=` (the dialog is outside <Suspense>); the dialog passes `preview` (opened by URL):
  * ai-locked (연결 전, C-18 영역형) · empty (연결했지만 이번 달 기록 없음) · error · loading
  */
 import * as React from "react"
@@ -22,7 +22,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getAiConnectionStateAction, getAiUsageSummaryAction } from "@/lib/data/actions"
 import { AI_USAGE_FEATURE_LABELS, CONNECTION_TIER_LABELS, displayInputTokens } from "@/lib/data/labels"
 import { AI_PROVIDER_FULL_NAMES, AI_PROVIDER_LABELS, AI_PROVIDER_ORDER, AI_PROVIDERS } from "@/lib/mock/ai-providers"
-import { routes } from "@/lib/routes"
 import { AiLock } from "@/components/common/ai-lock"
 import { ExternalProviderLink } from "@/components/common/ai-error-notice"
 import { EmptyState } from "@/components/common/state-views"
@@ -55,13 +54,11 @@ async function loadUsage(preview: string | null): Promise<Load> {
 type SortKey = "order" | "cost" | "input" | "output" | "calls"
 
 export function AiUsagePanel({
-  variant = "page",
   onNavigate,
   preview = null,
 }: {
-  variant?: "page" | "section"
   onNavigate?: () => void
-  /** page-only `?state=` value */
+  /** dev `?state=` value the dialog was opened with by URL */
   preview?: string | null
 }) {
   const [load, setLoad] = React.useState<Load>({ status: "loading" })
@@ -78,7 +75,7 @@ export function AiUsagePanel({
 
   return (
     <div className="space-y-6">
-      <FixedNotice sticky={variant === "page" ? "top-16" : "top-0"} />
+      <FixedNotice sticky="top-0" />
       {load.status === "loading" ? (
         <UsageSkeleton />
       ) : load.status === "error" ? (
@@ -168,7 +165,7 @@ function UsageBody({
         }}
       >
         <React.Suspense fallback={null}>
-          <AiLock entry="usage" size="area" featureLabel="AI 사용량" returnHref={routes.aiUsage()} />
+          <AiLock entry="usage" size="area" featureLabel="AI 사용량" />
         </React.Suspense>
       </div>
     )

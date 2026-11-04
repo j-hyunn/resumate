@@ -17,7 +17,7 @@ import { Card } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import { AiProgressInline } from "@/components/common/ai-progress"
+import { AiProgressInline, useAiJob } from "@/components/common/ai-progress"
 import { DataInsufficientGate } from "@/components/common/data-gate"
 import { EvidenceChips, EvidenceProvider } from "@/components/common/evidence"
 import { countChars } from "@/components/common/input-guide"
@@ -53,6 +53,7 @@ function notifyRefused(reason: "insufficient" | "locked" | "key_invalid" | "unav
   else if (reason === "insufficient") toast.error("서류 초안을 만들려면 커리어가 조금 더 필요해요. 서류 초안 화면에서 채울 항목을 확인해 주세요")
   else toast.error(actionFailedMessage("생성 시작"))
 }
+import { remoteRunTargets } from "./remote-runs"
 import { CareerDescriptionSources, OverwriteConfirm, SectionSources, type RegenerateGuard } from "./sources-used"
 import { AutoRefresh, useRestoreReturnParams } from "./shared"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
@@ -180,10 +181,64 @@ export function DraftEditor(props: DraftEditorProps) {
       }),
     )
   }
+  // a run that ended while nobody watched (reconnect, below) comes back as a stored failure after the refresh
+  const [syncedFailure, setSyncedFailure] = React.useState(props.storedFailure)
+  if (syncedFailure !== props.storedFailure && current === null) {
+    setSyncedFailure(props.storedFailure)
+    if (props.storedFailure && !cdFailed) {
+      const f = props.storedFailure
+      setCdFailed(f.code)
+      setFailInfo((m) => ({ ...m, draft: { provider: f.provider, retryAfter: f.retryAfter, quotaResetsAt: f.quotaResetsAt } }))
+    }
+  }
   useRestoreReturnParams(apId, feature)
 
+  // ---------------------------------------------------------------- reconnect (C-04 "이탈 시 서버가 끝까지 생성·저장")
+  // A reload (or coming back) while a run goes on: the SSE stream can't be joined again, so the screen follows the run's
+  // ai_jobs row and shows the saved result when it ends. Target "draft" = career description, otherwise a section id.
+  const remoteRuns = isPreview ? {} : remoteRunTargets(draft, sections, current)
+  const remoteBusy = Object.keys(remoteRuns).length > 0
+  const [remoteStopping, setRemoteStopping] = React.useState<Record<string, true>>({})
+  const remoteEnded = React.useCallback(
+    (target: string, status: "succeeded" | "failed" | "canceled") => {
+      // a regeneration stopped elsewhere has no row any more (Q53-7) — back to the draft it came from
+      if (target === "draft" && status === "canceled" && draft.regenerated_from_id) {
+        router.replace(routes.draft(apId, draft.regenerated_from_id))
+        return
+      }
+      router.refresh()
+    },
+    [apId, draft.regenerated_from_id, router],
+  )
+  /** 중단 of a run this screen didn't start: same server stop as the stream's (Q53-7 for the career description) */
+  const stopRemote = async (target: string, startedMs: number) => {
+    if (remoteStopping[target]) return
+    setRemoteStopping((m) => ({ ...m, [target]: true }))
+    const generation = `${target === "draft" ? draft.id : target}:${startedMs}`
+    const result = { ok: false, canceled: true, completed_block_ids: [], error_code: null, retry_after: null, quota_resets_at: null }
+    try {
+      if (target === "draft") {
+        const stopped = await finalizeCareerDescriptionAction(draft.id, generation, result)
+        if (stopped) {
+          toast("생성을 중단했어요") // [UI-가정]
+          if (stopped.stopped === "regeneration") router.replace(routes.draft(apId, stopped.back_to_draft_id))
+          else router.replace(`${routes.applicationDrafts(apId)}#new-draft`)
+          return
+        }
+      } else await finalizeCoverLetterSectionAction(target, generation, result)
+    } catch {
+      toast.error(actionFailedMessage("중단"))
+    }
+    setRemoteStopping((m) => {
+      const next = { ...m }
+      delete next[target]
+      return next
+    })
+    router.refresh()
+  }
+
   const returnTarget: ReturnTargetInput = { application_project_id: apId, feature, application_name: applicationName, href: routes.draft(apId, draft.id) }
-  const guard: RegenerateGuard = { ready: readiness.features.draft.ready, busy: current !== null || req.busy }
+  const guard: RegenerateGuard = { ready: readiness.features.draft.ready, busy: current !== null || req.busy || remoteBusy }
   const requirementLabel = (id: string) => requirements[id] ?? "삭제된 요건"
 
   // ---------------------------------------------------------------- autosave edits
@@ -329,6 +384,7 @@ export function DraftEditor(props: DraftEditorProps) {
     const completed = blocksRef.current.filter((b) => b.state === "validated").map((b) => b.block_id)
     // A21: 생성 직후 안내 stays in memory for this visit only
     const notes = stream.notes
+    const doneInfo = stream.doneInfo
     void (async () => {
       // UQ-528: a new generation replaces that target's notes (no notes → the old box entry goes away)
       if (ok)
@@ -352,6 +408,14 @@ export function DraftEditor(props: DraftEditorProps) {
         }
         if (target === "draft") {
           const stopped = await finalizeCareerDescriptionAction(draft.id, generationId, result)
+          // AI-03 `done.draftId`: C-6 재사용 answers with an existing ready draft (no call) — open that one
+          const doneDraft = ok ? doneInfo?.draft_id : undefined
+          if (doneDraft && doneDraft !== draft.id) {
+            setCurrent(null)
+            if (doneInfo?.reused) toast("같은 설정으로 만든 초안이 있어 그 초안을 열었어요") // [UI-가정]
+            router.replace(routes.draft(apId, doneDraft))
+            return
+          }
           // Q53-7: 블록 없이 이전 상태로. 이 초안 행은 없어졌거나(다시 생성) 생성 전으로 돌아갔다(첫 생성)
           if (stopped) {
             setCurrent(null)
@@ -376,7 +440,7 @@ export function DraftEditor(props: DraftEditorProps) {
       setCurrent(null)
       if (!isPreview) router.refresh()
     })()
-  }, [stream.status, stream.error, stream.errorInfo, stream.notes, stream.validatedSections, current, draft.id, apId, isPreview, router])
+  }, [stream.status, stream.error, stream.errorInfo, stream.notes, stream.validatedSections, stream.doneInfo, current, draft.id, apId, isPreview, router])
 
   // drain queue (전체 생성: 문항 순서대로)
   React.useEffect(() => {
@@ -621,9 +685,19 @@ export function DraftEditor(props: DraftEditorProps) {
                   onFocus={() => setActiveId(s.id)}
                   streaming={current === s.id || (isPreview && lastTarget === s.id && failedIds[s.id]) ? stream : null}
                   queued={queue.includes(s.id)}
+                  remote={
+                    remoteRuns[s.id] ? (
+                      <RemoteRun
+                        jobId={remoteRuns[s.id]}
+                        stopping={!!remoteStopping[s.id]}
+                        onStop={(startedMs) => void stopRemote(s.id, startedMs)}
+                        onEnded={(status) => remoteEnded(s.id, status)}
+                      />
+                    ) : null
+                  }
                   failed={failedIds[s.id] ?? null}
                   failedInfo={failInfo[s.id]}
-                  busy={current !== null}
+                  busy={current !== null || remoteBusy}
                   canGenerate={guard.ready && !waitJd && !req.busy}
                   onGenerate={() => req.run(() => generateSection(s.id))}
                   onEdit={(blockId, text) => editBlock(s.id, blockId, text)}
@@ -644,6 +718,13 @@ export function DraftEditor(props: DraftEditorProps) {
                   }
                 />
               ))
+            ) : !isCover && remoteRuns.draft ? (
+              <RemoteRun
+                jobId={remoteRuns.draft}
+                stopping={!!remoteStopping.draft}
+                onStop={(startedMs) => void stopRemote("draft", startedMs)}
+                onEnded={(status) => remoteEnded("draft", status)}
+              />
             ) : current === "draft" || (isPreview && lastTarget === "draft" && (cdFailed || canceled) && stream.blocks.length > 0) ? (
               <StreamRegion status={stream.status} className="space-y-3">
                 {current === "draft" ? <StreamingHeader onStop={stream.cancel} phase={stream.phase} adjusting={stream.adjusting} stopping={stream.status === "canceled"} /> : null}
@@ -699,6 +780,44 @@ export function DraftEditor(props: DraftEditorProps) {
         </SheetContent>
       </Sheet>
     </EvidenceProvider>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// reconnect
+// ---------------------------------------------------------------------------
+
+/**
+ * A run that goes on without this screen's stream (reload, coming back from another page). Its blocks only exist
+ * on the server until `validated`, so the screen shows C-04's waiting state, polls the ai_jobs row and lets the parent
+ * re-read the saved result when it ends. 중단 works as in a live stream.
+ */
+function RemoteRun({
+  jobId,
+  stopping,
+  onStop,
+  onEnded,
+}: {
+  jobId: string
+  stopping: boolean
+  onStop: (startedMs: number) => void
+  onEnded: (status: "succeeded" | "failed" | "canceled") => void
+}) {
+  const { job, status } = useAiJob(jobId)
+  const ended = React.useRef(false)
+  React.useEffect(() => {
+    if (ended.current || (status !== "succeeded" && status !== "failed" && status !== "canceled")) return
+    ended.current = true
+    onEnded(status)
+  }, [status, onEnded])
+  const startedMs = job ? Date.parse(job.created_at) : NaN
+  return (
+    <StreamRegion status="streaming" className="space-y-3">
+      <StreamingHeader onStop={Number.isFinite(startedMs) ? () => onStop(startedMs) : undefined} stopping={stopping} />
+      {/* [UI-가정] 재연결 안내 문구 */}
+      <p className="text-sm text-muted-foreground">화면을 떠나 있는 동안에도 계속 만들고 있어요. 끝나면 결과를 바로 보여 드려요</p>
+      <PendingBlock />
+    </StreamRegion>
   )
 }
 
@@ -807,6 +926,7 @@ function QuestionSection({
   onFocus,
   streaming,
   queued,
+  remote,
   failed,
   failedInfo,
   busy,
@@ -825,6 +945,8 @@ function QuestionSection({
   onFocus: () => void
   streaming: ReturnType<typeof useAiStream> | null
   queued: boolean
+  /** reconnect: a run of this question that this screen didn't start (reload) */
+  remote: React.ReactNode
   failed: AiErrorCode | null
   failedInfo?: Omit<AiErrorInfo, "code">
   busy: boolean
@@ -890,7 +1012,9 @@ function QuestionSection({
         ) : null}
       </header>
 
-      {streaming ? (
+      {remote && !streaming ? (
+        remote
+      ) : streaming ? (
         <StreamRegion status={streaming.status} className="space-y-3">
           {/* W3-4: after 중단, `busy` lasts until the run has closed (finalize waits for it) */}
           {streaming.status === "streaming" || (streaming.status === "canceled" && busy) ? (
@@ -962,7 +1086,7 @@ function QuestionSection({
           inputLabel="문항 설정으로"
           reduceTarget="문항 메모"
         />
-      ) : section.status === "failed" && !hasContent && !streaming ? (
+      ) : remote ? null : section.status === "failed" && !hasContent && !streaming ? (
         // [UI-가정] 이전 방문에서 실패한 문항 (원인은 저장돼 있지 않음) — 아래 "이 문항만 생성"으로 다시
         <AiFailedInline message="이 문항을 만들지 못했어요" />
       ) : partial && !streaming ? (
@@ -976,7 +1100,7 @@ function QuestionSection({
         </div>
       ) : null}
 
-      {!streaming && !queued ? (
+      {!streaming && !queued && !remote ? (
         <div className="flex flex-wrap items-center gap-2">
           {hasContent ? (
             <>

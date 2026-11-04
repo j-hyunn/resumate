@@ -210,6 +210,10 @@ describe("career description (AI-03, SSE)", () => {
     expect(events).toEqual([expect.objectContaining({ type: "done", draftId: "old-draft", reused: true })]);
     expect(k.usage.records).toHaveLength(0);
     expect(k.store.jobs.size).toBe(0);
+    // S-19 first generation (stand-in id from S-17): reused as well — `done.draftId` names the ready draft, no job.
+    const fromScreen = await prepareCareerDescription(k.deps, AP, { ...cdInput, draftId: "00000000-0000-4000-8000-0000000000d9" });
+    expect(fromScreen.kind === "ready" && fromScreen.reusedDraftId).toBe("old-draft");
+    expect(k.store.jobs.size).toBe(0);
     // QA-S7-08: an unknown / foreign original → 404 before any job.
     await expect(prepareCareerDescription(k.deps, AP, { ...cdInput, regeneratedFromId: "00000000-0000-4000-8000-00000000aaaa" })).rejects.toMatchObject({ code: "not_found", status: 404 });
     expect(k.store.jobs.size).toBe(0);

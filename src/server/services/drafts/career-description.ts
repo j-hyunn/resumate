@@ -26,7 +26,7 @@ import type { CareerDescriptionPlan, DraftAiDeps, DraftOptionsRow, PipelineStrea
  *   when not extracted — no provider call, no job; the screen runs the
  *   extraction route first, UX FL-03 / AI C-6) → connection gate (blocked →
  *   one SSE `error`, F-AI-08 lock) → input_hash reuse of an identical ready
- *   draft unless "다시 생성" (C-6).
+ *   draft unless "다시 생성" (C-6; also with the screen's stand-in `draftId`).
  *
  * runCareerDescription (inside the stream; never throws):
  *   ai_jobs `career_description` (target = the new draft id; the whole 58 s
@@ -154,8 +154,10 @@ export async function prepareCareerDescription(deps: DraftAiDeps, applicationPro
 
   const insight = await loadLatestInsightSignal(user, applicationProjectId);
 
+  // C-6 / AI-03: only an explicit "다시 생성" skips reuse. A first generation opened from S-17 carries the stand-in
+  // `draftId` (W3-2) and is reused too: `done { draftId: <the ready draft>, reused: true }` and S-19 moves there.
   let reusedDraftId: string | null = null;
-  if (!input.regeneratedFromId && !input.draftId) {
+  if (!input.regeneratedFromId) {
     const requirements = await loadRequirements(user, jd.jobDescriptionId);
     const ctx = pipeline.buildContext({ careerRows, plan, jobDescriptionId: jd.jobDescriptionId, requirements, insightSignal: insightSignalForAi03(insight) });
     const inputHash = pipeline.inputHash({

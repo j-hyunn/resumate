@@ -27,6 +27,7 @@ import { AiRunButton } from "@/components/common/ai-run-button"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import type { DraftOptions, DraftSection, DraftSectionSource } from "@/types/db"
 import { SELECTION_ORIGIN_LABELS, SOURCE_ORIGIN_LABELS, SOURCE_ROLE_LABELS } from "./labels"
+import { sourceRowLabel } from "./source-label"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { DraftTone } from "@/types/db"
 import { SourceCheckTree, type TreeSelection } from "./source-tree"
@@ -82,13 +83,13 @@ export function OverwriteConfirm({
   )
 }
 
-function SourceRow({ src, requirementLabel }: { src: DraftSectionSource; requirementLabel: (id: string) => string }) {
+function SourceRow({ src, label, requirementLabel }: { src: DraftSectionSource; label: string | null; requirementLabel: (id: string) => string }) {
   const deleted = !!src.source_deleted_at
   return (
     <li className="space-y-1 border-b py-2 last:border-0">
       <p className={deleted ? "flex items-start gap-1.5 text-sm font-medium text-muted-foreground" : "text-sm font-medium"}>
         {deleted ? <Unlink className="mt-0.5 size-3.5 shrink-0" aria-hidden /> : null}
-        {src.source_label}
+        {label}
         {deleted ? <span className="font-normal"> · 원본 삭제됨</span> : null}
       </p>
       <div className="flex flex-wrap gap-1">
@@ -173,7 +174,7 @@ export function SectionSources({
         ) : (
           <ul>
             {sources.map((s) => (
-              <SourceRow key={s.id} src={s} requirementLabel={requirementLabel} />
+              <SourceRow key={s.id} src={s} label={sourceRowLabel(s, tree.project_labels)} requirementLabel={requirementLabel} />
             ))}
           </ul>
         )

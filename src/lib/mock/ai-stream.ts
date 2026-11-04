@@ -90,7 +90,8 @@ export type BlockStreamEvent =
       notes?: GenerationNotesPayload
     }
   | { type: "adjusting_length"; section_id?: string; current_chars: number; char_limit: number }
-  | { type: "done" }
+  /** real AI-03: `draft_id` = the draft the result lives in (another one when `reused`, C-6) */
+  | { type: "done"; draft_id?: string; reused?: boolean }
   | StreamErrorEvent
 
 export type ChatTurnEvent =

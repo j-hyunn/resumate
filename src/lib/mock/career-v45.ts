@@ -7,6 +7,7 @@
  * calls them only inside the preview branch of `previewOr` (mock-isolation.test.ts).
  */
 import { connection } from "next/server"
+import { educationDisplayName as displayName } from "@/server/services/career/education-name"
 import type {
   CareerItemStatus,
   DeliverableFact,
@@ -264,10 +265,9 @@ export function previewStarDraft(chat: ProjectChatView, state: string | null): P
   return { ...chat, structured_draft: d }
 }
 
-/** 교육 이름 = 교육 명(program_name), 비면 운영 기관 — same rule as components/career/education-name.ts (2026-11-04).
- * The server applies the same rule (src/server/services/career/education-name.ts, UI32). */
+/** 교육 이름 = 교육 명(program_name), 비면 운영 기관 — the one shared rule (ED-2, UQ-735). */
 const educationDisplayName = (e: { program_name: string | null; institution_name: string | null }) =>
-  e.program_name?.trim() || e.institution_name?.trim() || null
+  displayName(e.program_name, e.institution_name)
 
 export async function mockAffiliationName(type: "experience" | "education", id: string): Promise<string | null | undefined> {
   await db()

@@ -42,6 +42,7 @@ import { deleteCareerItemAction } from "./actions"
 import { AddCareerDialog, type AddCareerKind, type CareerEditTarget } from "./add-career-dialog"
 import { Item } from "@/components/ui/item"
 import { AddProjectDialog } from "./add-project-dialog"
+import { educationName } from "./education-name"
 
 /** S-43 산출물 섹션 data per standalone project (`listProjectDeliverables`); null = not standalone / not found */
 export type DeliverableLists = Record<string, { deliverables: Array<{ id: string; title: string; sort_order: number }>; limit_reached: boolean } | null>
@@ -62,7 +63,7 @@ const itemKey = (item: Pick<CareerItem, "kind" | "id">) => `${item.kind}:${item.
 
 function itemName(item: CareerItem): string {
   if (item.kind === "experience") return item.experience.company_name ?? "이름 없는 경력"
-  if (item.kind === "education") return item.education.institution_name ?? "이름 없는 교육"
+  if (item.kind === "education") return educationName(item.education) ?? "이름 없는 교육"
   return item.project.name ?? "이름 없는 프로젝트"
 }
 
@@ -182,21 +183,32 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
     if (selected && deleting.entity_id === selected.id) select(null)
   }
 
-  // 좁은 화면: URL에 항목이 있으면 상세부터, 없으면 목록부터 [가정]
+  // 좁은 화면: URL에 항목이 있으면 상세부터, 없으면 목록부터 [가정]. 빈 커리어도 목록 칸(커리어 추가 + 안내)만 —
+  // 버튼이 목록 머리에 있으니 상세 칸의 같은 안내를 아래에 겹쳐 보이지 않는다 (2026-11-04)
   const showDetailOnNarrow = requestedItem !== undefined
+  const empty = items.length === 0
 
   return (
     <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:gap-0">
-      <nav aria-label="커리어 목록" className={cn("flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:px-3", showDetailOnNarrow && "hidden lg:flex")}>
+      <nav
+        aria-label="커리어 목록"
+        // empty: the list column fills the narrow screen so its guide sits in the middle (lg: fixed width, row stretch)
+        className={cn("flex w-full shrink-0 flex-col gap-4 lg:w-60 lg:flex-none lg:px-3", empty && "flex-1", showDetailOnNarrow && "hidden lg:flex")}
+      >
         <h2 className="text-sm font-semibold text-muted-foreground">커리어</h2>
-        {/* UQ-723: with no careers the empty state's button is the start point (FL-09), so don't show two */}
-        {items.length > 0 ? <AddCareerMenu onCreated={onAdded} /> : null}
-        <CareerList groups={groups} selectedKey={selected ? itemKey(selected) : null} onSelect={select} />
+        {/* "커리어 추가" always sits under the list heading, empty or not (user request 2026-11-04, supersedes UQ-723) */}
+        <AddCareerMenu onCreated={onAdded} />
+        {empty ? (
+          // [UI-가정] 빈 목록 칸 안내 문구 — 칸 안 가운데, 버튼 없음
+          <p className="flex flex-1 items-center justify-center py-16 text-center text-sm text-muted-foreground">아직 추가한 커리어가 없어요</p>
+        ) : (
+          <CareerList groups={groups} selectedKey={selected ? itemKey(selected) : null} onSelect={select} />
+        )}
       </nav>
 
       <section
         aria-label="커리어 상세"
-        className={cn("flex min-w-0 flex-1 flex-col gap-4 lg:px-3", !showDetailOnNarrow && items.length > 0 && "hidden lg:flex")}
+        className={cn("flex min-w-0 flex-1 flex-col gap-4 lg:px-3", !showDetailOnNarrow && "hidden lg:flex")}
       >
         {showDetailOnNarrow ? (
           <Button variant="ghost" size="sm" className="-ml-2 self-start lg:hidden" onClick={() => select(null)}>
@@ -208,12 +220,14 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
         {selected ? (
           <DetailPanel key={itemKey(selected)} item={selected} deliverables={deliverables[selected.id] ?? null} onDelete={setDeleting} onEdit={setEditing} />
         ) : (
-          <EmptyState
-            icon={Layers}
-            title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"
-            description="경력·교육 아래에 프로젝트를 만들면 Resumate AI와 대화하며 내용을 채울 수 있어요(AI 연결 필요)"
-            actions={<AddCareerMenu placement={items.length > 0 ? "empty" : "start"} onCreated={onAdded} />}
-          />
+          // 빈 칸 안내만 — 버튼은 왼쪽 목록 머리의 "커리어 추가" 하나 (user request 2026-11-04)
+          <div className="flex flex-1 items-center justify-center">
+            <EmptyState
+              icon={Layers}
+              title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"
+              description="경력·교육 아래에 프로젝트를 만들면 Resumate AI와 대화하며 내용을 채울 수 있어요(AI 연결 필요)"
+            />
+          </div>
         )}
       </section>
 
@@ -227,16 +241,10 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
  * C-22 커리어 추가 — 유형 선택 → 피그마 1009:2 추가 모달(AddCareerDialog). 만든 항목을 바로 선택한다.
  */
 function AddCareerMenu({
-  placement = "list",
   onCreated,
 }: {
-  /** "list": the main button atop the career list (primary, full width). "empty": the repeat inside the
-   * empty state, secondary so the screen never shows two primary buttons (UQ-718). "start": the only
-   * button when there are no careers yet (primary, list button hidden — UQ-723) */
-  placement?: "list" | "empty" | "start"
   onCreated: (item: { kind: AddCareerKind; id: string }, opts?: { edit?: boolean }) => void
 }) {
-  const inList = placement === "list"
   const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
   // C-22 "프로젝트" → C-23 ① 이름 다이얼로그 (D-UX-28 (a))
   const [addingProject, setAddingProject] = React.useState(false)
@@ -249,12 +257,12 @@ function AddCareerMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant={placement === "empty" ? "secondary" : "default"} className={cn(inList && "w-full")}>
+          <Button className="w-full">
             <CirclePlus aria-hidden />
             커리어 추가
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={inList ? "start" : "center"} className="w-72">
+        <DropdownMenuContent align="start" className="w-72">
           <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
           {options.map((o) => (
             <DropdownMenuItem key={o.kind} onSelect={() => (o.kind === "project" ? setAddingProject(true) : setAdding(o.kind))} className="flex flex-col items-start gap-0.5">
@@ -420,7 +428,7 @@ function DetailPanel({
                   .filter(Boolean)
                   .join(" · "),
               ],
-              ["전공/과정명", e.program_name],
+              ["운영 기관", e.institution_name],
             ]}
           />
         </PanelSection>

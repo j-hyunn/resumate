@@ -28,7 +28,7 @@
 
 **트리거:** UI 작업, 화면 구현, 디자인 시스템, 프론트엔드 구축, Figma 디자인 반영, 화면 수정·이어서·재실행, 기획 변경의 화면 반영, UI QA 이슈 수정.
 
-**범위:** 디자인 시스템 + 화면 코드 + 데이터 계층 함수 + UI QA(브라우저 확인 포함). 백엔드 코드(`src/server/`, `src/app/api/`, `src/lib/contracts/`, `supabase/`)는 고치지 않는다. 백엔드 계약이 아직 없으면 `// 연결 대기`로 두고 "백엔드 요청"으로 `_workspace/backend/spec-gaps.md`에 넘긴다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
+**범위:** 디자인 시스템 + 화면 코드 + 데이터 계층 함수 + UI QA(브라우저 확인 포함). 백엔드 코드(`src/server/`, `src/app/api/`, `src/lib/contracts/`, `supabase/`)는 고치지 않는다. 이미 연결된 데이터 함수는 백엔드 소유라 그대로 쓰고, 새 함수는 `// 연결 대기`로 두고 "백엔드 요청"으로 `_workspace/backend/spec-gaps.md`에 넘긴다. 기획 문서는 읽기만 하고, 기획 공백은 "기획 확인 필요"로 사용자에게 넘긴다.
 
 **팀:** ui-designer, frontend-engineer(파운데이션 1 + 화면 영역별 인스턴스), ui-qa
 
@@ -38,15 +38,15 @@
 
 ## 3. 백엔드 하네스
 
-**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), AI 파이프라인(사용자 본인 키(BYOK)로 OpenAI·Gemini·Claude 중 활성 공급자 1개를 호출하는 어댑터, 프롬프트, 근거 검증)을 기능 단위 슬라이스(S0~S9, S3은 S3a·S3b)로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다.
+**목표:** `docs/planning/` 기획을 명세로 삼아 Next.js 서버(Server Action·Route Handler·비동기 AI 작업), Supabase(마이그레이션·RLS·RPC), AI 파이프라인(사용자 본인 키(BYOK)로 OpenAI·Gemini·Claude 중 활성 공급자 1개를 호출하는 어댑터, 프롬프트, 근거 검증)을 슬라이스 단위로 구현하고, 화면의 mock 데이터 계층을 실제 서비스로 연결한다. 초기 구축 S0~S9(S3은 S3a·S3b)와 화면 연결 W0~W5는 끝났고, 지금은 기획 개정마다 수정 슬라이스(R-n)를 돌린다.
 
 **진입점:** `resumate-backend` 스킬 (`.claude/skills/resumate-backend/SKILL.md`)
 
-**트리거:** 백엔드 구현·프로젝트 셋업·DB 구축·API 개발·AI 기능 구현·mock 데이터 계층 연결·백엔드 수정·QA 재실행·다음 슬라이스 진행 요청. 단순 질문은 직접 응답 가능.
+**트리거:** 백엔드 구현·프로젝트 셋업·DB 구축·API 개발·AI 기능 구현·기획 변경 반영(수정 슬라이스)·mock 데이터 계층 연결·원격 반영 준비·백엔드 수정·QA 재실행·다음 슬라이스 진행 요청. 단순 질문은 직접 응답 가능.
 
 **팀:** db-engineer, api-engineer, ai-pipeline-engineer, backend-qa (에이전트 팀, 팀 도구가 없으면 서브 에이전트로 대체)
 
-**범위와 안전 정책:** 로컬 Supabase와 Supabase 개발 브랜치까지만 적용한다. 메인(프로덕션) 프로젝트 적용·배포·커밋은 사용자가 요청할 때만 한다. 화면과 컴포넌트는 UI 하네스 소관이다.
+**범위와 안전 정책:** 원격 Supabase 프로젝트는 운영 겸용 1개(개발 브랜치 없음)이고, main 병합이 곧 Vercel 운영 배포다(2026-11-04). 에이전트는 로컬 스택에만 쓰고, 원격에는 읽기 전용 확인만 한다. 원격 마이그레이션(`supabase db push`)은 반영 체크리스트를 보고 사용자가 실행한다. 데이터가 지워지는 마이그레이션은 `-- DESTRUCTIVE:`로 표시하고 사용자 확인을 받는다. 배포 순서는 db push → main 병합이다. 커밋·병합·Vercel 환경 변수는 사용자가 요청할 때만 한다. 화면과 컴포넌트는 UI 하네스 소관이고, 연결에 꼭 필요한 최소 수정만 예외로 허용한다.
 
 **공통 백엔드 컨텍스트:** `.claude/skills/resumate-backend/references/backend-context.md`, 슬라이스 목록 `references/slice-catalog.md`
 
@@ -64,7 +64,7 @@
 
 ```
                        ┌──→ resumate-ui ──── 화면 + 데이터 계층(src/lib/data: 실제 액션 / 미리보기 mock)
-resumate-planning ─────┤                                   │  연결 완료(W1~W5). 새 계약이 없으면
+resumate-planning ─────┤                                   │  연결 완료(W0~W5). 새 계약이 없으면
   (docs/planning/*)    └──→ resumate-backend ── DB·API·AI ──┘  UI는 연결 대기 → spec-gaps로 요청
         ↑                          │
         └── 기획 확인 필요 / spec-gaps.md (사용자 경유) ──┘
@@ -72,4 +72,4 @@ resumate-planning ─────┤                                   │  연�
 
 - 기획 문서가 UI와 백엔드 모두의 명세다. 두 하네스 모두 `docs/planning/`을 직접 고치지 않는다. 모순·누락은 UI는 "기획 확인 필요", 백엔드는 `_workspace/backend/spec-gaps.md`로 사용자에게 넘기고, 기획 수정은 `resumate-planning`으로 한다.
 - 두 하네스가 같은 Next.js 앱을 다룬다. 프로젝트 골격은 먼저 실행한 쪽이 만들고, 다른 쪽은 자기 의존성만 추가한다. 파일 소유권은 `backend-context.md`의 "Coexisting with the UI harness"에 있다.
-- 화면 데이터 계층은 실제 백엔드에 연결됐다(W1~W5). 이후 새 데이터 함수는 UI 하네스가 `previewOr`로 쓰고, 계약이 없으면 `연결 대기`로 둔다. 기획 사이클이 끝나면 `decisions.md` 4장 "백엔드·UI 후속"이 두 하네스의 다음 작업 목록이 된다.
+- 화면 데이터 계층은 실제 백엔드에 연결됐다(W0~W5). 이미 연결된 함수는 백엔드 소유다. 새 화면·바뀐 화면을 위해 UI가 더하는 함수는 `previewOr` + mock + `연결 대기`로 두고, 백엔드의 연결 단계가 본문만 실제 호출로 바꾼다. 기획 사이클이 끝나면 `decisions.md` 4장 "백엔드·UI 후속"이 두 하네스의 다음 작업 목록이 된다.

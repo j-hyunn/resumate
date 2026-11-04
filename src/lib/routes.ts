@@ -27,8 +27,8 @@ export const routes = {
   /** S-02. `next` = 로그인 후 돌아갈 원래 경로 (same-origin path; checked by safeNextPath) */
   signIn: (next?: string | null) => withQuery("/sign-in", { next }), // S-02
   consent: (next?: string | null) => withQuery("/consent", { next }), // S-03
-  /** S-30 with a document tab preselected */
-  policies: (doc?: PolicyType) => withQuery("/policies", { doc }), // S-30
+  /** S-30: one page per policy document (default 개인정보 처리방침) */
+  policies: (doc: PolicyType = "privacy") => `/policies/${doc}`, // S-30
 
   // 커리어 — A2
   career: () => "/career", // S-08

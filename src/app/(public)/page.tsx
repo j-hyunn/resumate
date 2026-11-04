@@ -71,8 +71,12 @@ export default function Page() {
           로그인
         </Link>
         <span aria-hidden>·</span>
-        <Link href={routes.policies()} className="underline-offset-4 hover:underline">
-          처리방침·약관
+        <Link href={routes.policies("terms")} className="underline-offset-4 hover:underline">
+          이용약관
+        </Link>
+        <span aria-hidden>·</span>
+        <Link href={routes.policies("privacy")} className="underline-offset-4 hover:underline">
+          개인정보 처리방침
         </Link>
       </footer>
     </div>

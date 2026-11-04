@@ -34,7 +34,7 @@ declare
   disclosure text := (select version from public.ai_disclosures where provider = 'gemini' and connection_tier = 'paid' order by effective_at desc limit 1);
 begin
   -- S1 consents
-  insert into public.consents (user_id, consent_type, policy_version, agreed) values (u, 'terms', '2026-10-01', true);
+  insert into public.consents (user_id, consent_type, policy_version, agreed) values (u, 'terms', '2026-11-04', true);
   -- S2 career
   insert into public.experiences (id, user_id, company_name, start_month, job_rank) values (exp, u, 'A사', '2020-01-01', 'S');
   insert into public.educations (id, user_id, institution_name) values (edu, u, 'B대');

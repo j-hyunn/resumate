@@ -5,6 +5,7 @@ import { isTrustedPreviewMarker } from "./preview-marker";
 import { resetServerEnvCache } from "@/server/env";
 
 const getClaims = vi.fn();
+const rpc = vi.fn();
 let pendingCookies: { name: string; value: string; options: object }[] = [];
 
 vi.mock("@supabase/ssr", () => ({
@@ -15,6 +16,7 @@ vi.mock("@supabase/ssr", () => ({
         return getClaims();
       },
     },
+    rpc,
   }),
 }));
 
@@ -29,6 +31,8 @@ beforeEach(() => {
   resetServerEnvCache();
   pendingCookies = [];
   getClaims.mockReset();
+  rpc.mockReset();
+  rpc.mockResolvedValue({ data: true, error: null });
 });
 
 const req = (path: string) => new NextRequest(new URL(path, "http://localhost:3000"));
@@ -117,6 +121,50 @@ describe("updateSession", () => {
       getClaims.mockResolvedValue({ data: { claims: { sub: "u1" } }, error: null });
       const res = await updateSession(req("/career"));
       expect(forwarded(res, "cookie")).toContain("sb-test-auth-token=new");
+    });
+  });
+
+  describe("last_active_at (inactive account deletion)", () => {
+    const USER = "a0000000-0000-0000-0000-000000000001";
+    const signedIn = () => getClaims.mockResolvedValue({ data: { claims: { sub: USER } }, error: null });
+
+    it("touches once and sets the throttle cookie", async () => {
+      signedIn();
+      const res = await updateSession(req("/career"));
+      expect(rpc).toHaveBeenCalledWith("touch_last_active");
+      const cookie = res.cookies.get("rm_last_active");
+      expect(cookie?.value).toBe(USER);
+      expect(cookie?.httpOnly).toBe(true);
+    });
+
+    it("skips while the cookie names the same user", async () => {
+      signedIn();
+      const r = req("/career");
+      r.cookies.set("rm_last_active", USER);
+      await updateSession(r);
+      expect(rpc).not.toHaveBeenCalled();
+    });
+
+    it("touches again for another user on the same browser", async () => {
+      signedIn();
+      const r = req("/career");
+      r.cookies.set("rm_last_active", "b0000000-0000-0000-0000-000000000002");
+      await updateSession(r);
+      expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it("a failed touch doesn't block the page and sets no cookie", async () => {
+      signedIn();
+      rpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "down" } });
+      const res = await updateSession(req("/career"));
+      expect(res.status).toBe(200);
+      expect(res.cookies.get("rm_last_active")).toBeUndefined();
+    });
+
+    it("anonymous requests never touch", async () => {
+      getClaims.mockResolvedValue({ data: null, error: null });
+      await updateSession(req("/sign-in"));
+      expect(rpc).not.toHaveBeenCalled();
     });
   });
 });

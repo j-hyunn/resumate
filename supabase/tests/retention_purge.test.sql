@@ -199,7 +199,8 @@ select set_eq(
      where n.nspname = 'public' and p.proname like 'purge\_%'
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['purge_old_ai_jobs:service_role',
-        'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role'],
+        'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role',
+        'purge_inactive_account:service_role'],
   'purge RPCs: service_role only');
 select is_empty($$select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                    where n.nspname = 'public' and p.proname like 'purge\_%' and not p.prosecdef$$,

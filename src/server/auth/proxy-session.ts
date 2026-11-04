@@ -5,6 +5,7 @@ import { isDevPath, isPreviewUrl, PREVIEW_REQUEST_HEADER, REQUEST_PATH_HEADER } 
 import { isPreviewEnabled } from "@/lib/preview-state";
 import type { Database } from "@/server/db/database.types";
 import { getPublicEnv } from "@/server/env";
+import { touchLastActiveIfDue } from "./last-active";
 import { previewMarkerValue } from "./preview-marker";
 
 /**
@@ -12,7 +13,8 @@ import { previewMarkerValue } from "./preview-marker";
  * 1. refreshes the Supabase session cookies (Server Components can't write them);
  * 2. optimistic gate: anonymous requests to protected paths → S-02 with `?next=`;
  * 3. marks the request for the page: its path (`?next=` of the consent gate) and, in development
- *    only, whether it is a `?state=` / `/dev/` preview (mock store, no sign-in needed).
+ *    only, whether it is a `?state=` / `/dev/` preview (mock store, no sign-in needed);
+ * 4. for a signed-in user, updates profiles.last_active_at (`touch_last_active`, at most every few hours).
  *
  * This is not authorization. Every action, handler, and page still calls
  * requireUser() / requireConsentedUser(). The consent gate is server-side only
@@ -54,7 +56,13 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   // Don't put code between client creation and this call: it refreshes the token.
   const { data } = await supabase.auth.getClaims();
-  const signedIn = Boolean(data?.claims?.sub);
+  const sub = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+  const signedIn = Boolean(sub);
+
+  // 4. last access for the inactive account deletion (privacy policy §4), throttled by a cookie.
+  if (sub) {
+    await touchLastActiveIfDue(supabase, sub, request.cookies, () => response.cookies, request.nextUrl.protocol === "https:");
+  }
 
   if (!signedIn && !preview && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone();

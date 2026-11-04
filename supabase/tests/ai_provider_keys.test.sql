@@ -103,7 +103,7 @@ select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-0000
                  'P0001', 'consent_required', 'null disclosure version → consent_required');
 select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abc', 'v2026-10-29', 'valid', gen_random_uuid())$$,
                  '23514', null, 'key_last4 length enforced');
-select is((select count(*)::int from public.ai_provider_keys), 0, 'nothing stored after the refusals');
+select is((select count(*)::int from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 0, 'nothing stored after the refusals');
 
 -- first key, valid → stored, becomes active
 select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x0a0b', '\x0c', '\x0d', 'env-v1', 'gm01', 'v2026-10-29', 'valid',
@@ -111,7 +111,7 @@ select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemi
           '{"id": "aaaaaaaa-9999-0000-0000-000000000001", "provider": "gemini", "connection_tier": "free", "key_last4": "gm01",
             "status": "valid", "last_failure_cause": null, "last_failure_at": null, "is_active": true, "replaced": false}'::jsonb,
           'first valid key: stored, active, meta returned');
-select ok((select last_verified_at is not null from public.ai_provider_keys where provider = 'gemini'),
+select ok((select last_verified_at is not null from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'gemini'),
           'valid → last_verified_at set');
 select is((select active_ai_provider from public.profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'gemini',
           'first key becomes active (F-AI-01 (5))');
@@ -124,7 +124,7 @@ select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'open
             "status": "needs_check", "last_verified_at": null, "last_failure_cause": "daily_quota_exhausted",
             "is_active": false, "replaced": false}'::jsonb,
           'limited → needs_check with cause, last_verified_at null, not active');
-select ok((select last_failure_at is not null from public.ai_provider_keys where provider = 'openai'), 'limited → last_failure_at set');
+select ok((select last_failure_at is not null from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'openai'), 'limited → last_failure_at set');
 select is((select active_ai_provider from public.profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'gemini',
           'second key does not switch the active provider');
 
@@ -158,13 +158,13 @@ set local request.jwt.claims = '{"role":"service_role"}';
 select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa02', 'v2026-10-29', 'valid',
                                    'aaaaaaaa-9999-0000-0000-000000000002') ->> 'status', 'valid', 'replacing a needs_check key with a valid one');
 select results_eq($$select last_failure_cause, last_failure_at is null, last_verified_at is not null
-                      from public.ai_provider_keys where provider = 'openai'$$,
+                      from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'openai'$$,
                   $$values (null::text, true, true)$$, 'new valid key clears failure fields');
 -- tier change back to free without a current free consent → refused, key unchanged
 select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm03', 'v2026-10-29', 'valid',
                                                    'aaaaaaaa-9999-0000-0000-000000000001')$$,
                  'P0001', 'consent_required', 'tier change needs a consent for the new tier');
-select is((select key_last4 from public.ai_provider_keys where provider = 'gemini'), 'gm02',
+select is((select key_last4 from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'gemini'), 'gm02',
           'failed replacement keeps the existing key');
 reset role;
 set local role authenticated;
@@ -244,7 +244,7 @@ select results_eq($$select r->>'status', r->>'last_failure_cause' from (select p
 select results_eq($$select r->>'status', (r->>'last_verified_at') is not null, r->>'last_failure_cause', (r->>'is_active')::boolean
                       from (select public.record_provider_key_check('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'valid') r) x$$,
                   $$values ('valid', true, 'key_invalid', true)$$, 'check success → valid, verified now, failure kept as history');
-select is((select count(*)::int from public.ai_provider_keys), 2, 'checks never delete the key');
+select is((select count(*)::int from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 2, 'checks never delete the key');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';

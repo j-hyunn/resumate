@@ -207,6 +207,8 @@ describe("streamCareerDescription (AI-03)", () => {
     // Education section: header + capstone (re-homed from standalone_projects); JD-only evidence → V-7 removal → flagged.
     const edu = blocksOf(1);
     expect(edu[0].text).toBe("가상대학교 컴퓨터공학 | 2014-03 ~ 2018-02 | 졸업");
+    // UI32-2: the header reads the raw fields, not the alias label (= display name, 교육 명).
+    expect((edu[0] as { header?: Record<string, unknown> }).header).toMatchObject({ institution_name: "가상대학교", program_name: "컴퓨터공학" });
     expect(edu.find((b) => b.block_kind === "bullet")).toMatchObject({ project_id: IDS.prjEdu, flags: ["evidence_check_needed"] });
     expect(edu.some((b) => b.block_kind === "role_line")).toBe(false); // no task → no role line
 

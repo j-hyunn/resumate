@@ -37,6 +37,7 @@ import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { assertApplicationProjectOwned } from "@/server/services/application/db";
 import { loadEvidenceChips } from "@/server/services/evidence";
+import { educationDisplayName } from "@/server/services/career/education-name";
 import { countShownChars, parseBlocks, toBlockViews } from "./blocks";
 
 /**
@@ -331,13 +332,19 @@ async function loadNames(user: UserSupabaseClient, sources: readonly SourceRow[]
   const prjIds = uniq(sources.map((s) => s.project_id));
   const [exp, edu, prj] = await Promise.all([
     expIds.length ? user.from("experiences").select("id, company_name").in("id", expIds) : Promise.resolve({ data: [], error: null }),
-    eduIds.length ? user.from("educations").select("id, institution_name").in("id", eduIds) : Promise.resolve({ data: [], error: null }),
+    eduIds.length ? user.from("educations").select("id, program_name, institution_name").in("id", eduIds) : Promise.resolve({ data: [], error: null }),
     prjIds.length ? user.from("projects").select("id, name").in("id", prjIds) : Promise.resolve({ data: [], error: null }),
   ]);
   for (const r of [exp, edu, prj]) if (r.error) throw mapDbError(r.error);
   return {
     experiences: new Map(((exp.data ?? []) as Array<{ id: string; company_name: string }>).map((r) => [r.id, r.company_name])),
-    educations: new Map(((edu.data ?? []) as Array<{ id: string; institution_name: string }>).map((r) => [r.id, r.institution_name])),
+    // UI32-2: an education's name = trimmed program_name, else institution_name (educationDisplayName)
+    educations: new Map(
+      ((edu.data ?? []) as Array<{ id: string; program_name: string | null; institution_name: string | null }>).flatMap((r) => {
+        const name = educationDisplayName(r.program_name, r.institution_name);
+        return name ? [[r.id, name] as const] : [];
+      }),
+    ),
     projects: new Map(((prj.data ?? []) as Array<{ id: string; name: string }>).map((r) => [r.id, r.name])),
   };
 }

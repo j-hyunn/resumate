@@ -23,6 +23,7 @@ import { saveEducationAction } from "./actions"
 import { DangerZone, FormSection, PeriodError, RequiredMark, SaveProblemNotice, TextField, monthText, nn, useRowAutosave, type ConflictField } from "./form-parts"
 import { periodPatch, storedPeriod } from "@/lib/data/row-save"
 import { Item } from "@/components/ui/item"
+import { educationName } from "./education-name"
 
 interface Values {
   institution_name: string
@@ -97,7 +98,8 @@ export function EducationForm({ education }: { education: EducationWithChildren 
   }
   const blur = () => void autosave.flush()
   const status = row?.status ?? education?.status ?? "draft"
-  const title = values.institution_name.trim() || "새 교육"
+  // 교육 이름 = 교육 명(전공/과정명), 비면 기관명 (education-name.ts, 2026-11-04)
+  const title = educationName(values) ?? "새 교육"
   const enrolled = values.enrollment_status === "enrolled"
 
   return (

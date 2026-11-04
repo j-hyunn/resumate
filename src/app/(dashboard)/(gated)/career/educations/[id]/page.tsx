@@ -6,6 +6,7 @@ import { getEducation } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
 import { EducationForm } from "@/components/career/education-form"
 import { careerPreviewView } from "@/components/career/screen-state"
+import { educationName } from "@/components/career/education-name"
 
 // S-34 교육 편집
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
@@ -26,7 +27,7 @@ async function Screen({ params, searchParams }: Props) {
   if (!preview && !row) notFound()
   return (
     <>
-      <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: row?.institution_name ?? "교육" }]} />
+      <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: (row && educationName(row)) ?? "교육" }]} />
       {preview ?? (row ? <EducationForm key={`${row.id}-${row.updated_at}`} education={row} /> : null)}
     </>
   )

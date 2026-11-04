@@ -9,6 +9,7 @@ import type { MockDb } from "@/lib/mock/fixtures"
 import { routes } from "@/lib/routes"
 import { loadEvidenceRows } from "./evidence-real"
 import { previewOr } from "./source"
+import { educationDisplayName } from "@/server/services/career/education-name"
 import { DETAIL_FIELD_LABELS, ENROLLMENT_STATUS_LABELS, EDUCATION_TYPE_LABELS, evidenceKindLabel } from "./labels"
 
 export type EvidenceStatus = "ok" | "changed" | "deleted"
@@ -39,6 +40,17 @@ export interface EvidenceView {
 
 function year(date: string | null | undefined): string | null {
   return date ? date.slice(0, 4) : null
+}
+
+/** UI32-2: an education's name = trimmed program_name, else institution_name (null = both empty) */
+function educationName(x: Pick<MockDb["educations"][number], "program_name" | "institution_name"> | undefined): string | null {
+  return x ? educationDisplayName(x.program_name, x.institution_name) : null
+}
+
+/** Parent name of an affiliated project: company_name, or the education's name */
+function parentName(db: MockDb, p: Pick<MockDb["projects"][number], "experience_id" | "education_id"> | undefined): string | null | undefined {
+  if (!p) return undefined
+  return db.experiences.find((r) => r.id === p.experience_id)?.company_name ?? educationName(db.educations.find((r) => r.id === p.education_id))
 }
 
 /** 04 §2.4: project year = coalesce(projects.start_month, 소속 start_month) (UQ-11) */
@@ -84,9 +96,9 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
               ? x.description
               : x.program_name
       return {
-        source_label: e.source_label ?? x.institution_name ?? "",
+        source_label: e.source_label ?? educationName(x) ?? "",
         current_value: value,
-        path: [year(x.start_month), x.institution_name].filter(Boolean) as string[],
+        path: [year(x.start_month), educationName(x)].filter(Boolean) as string[],
         href: routes.education(x.id),
         to_career: true,
         updated_at: x.updated_at,
@@ -95,7 +107,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
     case "project": {
       const x = db.projects.find((r) => r.id === sid)
       if (!x) return empty
-      const parent = db.experiences.find((r) => r.id === x.experience_id)?.company_name ?? db.educations.find((r) => r.id === x.education_id)?.institution_name
+      const parent = parentName(db, x)
       // DM v4.4: real rows carry STAR / description columns and `content_updated_at` (the "변경됨" baseline, DM 2.8).
       const v44 = x as unknown as Record<string, string | null | undefined>
       const field = e.source_field
@@ -128,7 +140,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       const d = db.project_details.find((r) => r.id === sid)
       if (!d) return empty
       const p = db.projects.find((r) => r.id === d.project_id)
-      const parent = db.experiences.find((r) => r.id === p?.experience_id)?.company_name ?? db.educations.find((r) => r.id === p?.education_id)?.institution_name
+      const parent = parentName(db, p)
       const field = (e.source_field ?? "title") as ProjectDetailField
       return {
         source_label: e.source_label ?? d.title ?? "",
@@ -145,10 +157,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       if (!a) return empty
       const d = db.project_details.find((r) => r.id === a.project_detail_id)
       const ap = d ? db.projects.find((r) => r.id === d.project_id) : undefined
-      const aParent = ap
-        ? (db.experiences.find((r) => r.id === ap.experience_id)?.company_name ??
-          db.educations.find((r) => r.id === ap.education_id)?.institution_name)
-        : db.experiences.find((r) => r.id === a.experience_id)?.company_name
+      const aParent = ap ? parentName(db, ap) : db.experiences.find((r) => r.id === a.experience_id)?.company_name
       const value = a.metric_name ? `${a.metric_name} ${a.value_before ?? ""} → ${a.value_after ?? ""} ${a.unit ?? ""}`.trim() : a.description
       // [UI-가정] S-11 is a modal; deep link opens its host screen (S-35 or S-09)
       return {

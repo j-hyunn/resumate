@@ -30,6 +30,7 @@ import {
   toProjectDto,
   toSkillDto,
 } from "./mappers";
+import { educationDisplayName } from "./education-name";
 import { mapSaveError } from "./save";
 import { groupCareerByYear } from "./year-view";
 
@@ -56,12 +57,12 @@ const month = (d: string | null) => (d === null ? null : d.slice(0, 7));
 export async function getCareerList(supabase: UserSupabaseClient): Promise<CareerListDto> {
   const [experiences, educations, projects] = await Promise.all([
     supabase.from("experiences").select("id, company_name, start_month, status, created_at"),
-    supabase.from("educations").select("id, institution_name, start_month, status, created_at"),
+    supabase.from("educations").select("id, program_name, institution_name, start_month, status, created_at"),
     supabase.from("projects").select("id, name, start_month, status, created_at").is("experience_id", null).is("education_id", null),
   ]);
   const items: CareerListItem[] = [
     ...rows(experiences).map((r) => ({ entityType: "experience" as const, id: r.id, name: r.company_name, startMonth: month(r.start_month), status: r.status as CareerStatus, createdAt: r.created_at })),
-    ...rows(educations).map((r) => ({ entityType: "education" as const, id: r.id, name: r.institution_name, startMonth: month(r.start_month), status: r.status as CareerStatus, createdAt: r.created_at })),
+    ...rows(educations).map((r) => ({ entityType: "education" as const, id: r.id, name: educationDisplayName(r.program_name, r.institution_name), startMonth: month(r.start_month), status: r.status as CareerStatus, createdAt: r.created_at })),
     ...rows(projects).map((r) => ({ entityType: "project" as const, id: r.id, name: r.name, startMonth: month(r.start_month), status: r.status as CareerStatus, createdAt: r.created_at })),
   ];
   return { years: groupCareerByYear(items), isEmpty: items.length === 0 };
@@ -117,14 +118,14 @@ export async function getProjectDetail(supabase: UserSupabaseClient, id: string)
     ? row(await supabase.from("experiences").select("id, company_name").eq("id", project.experience_id).maybeSingle())
     : null;
   const edu = project.education_id
-    ? row(await supabase.from("educations").select("id, institution_name").eq("id", project.education_id).maybeSingle())
+    ? row(await supabase.from("educations").select("id, program_name, institution_name").eq("id", project.education_id).maybeSingle())
     : null;
   const writingChats = await listProjectWritingChats(supabase, id);
   return {
     project: toProjectDto(project),
     parent: project.experience_id
       ? { type: "experience", id: project.experience_id, name: parent?.company_name ?? null }
-      : { type: "education", id: project.education_id!, name: edu?.institution_name ?? null },
+      : { type: "education", id: project.education_id!, name: edu ? educationDisplayName(edu.program_name, edu.institution_name) : null },
     writingChats,
   };
 }

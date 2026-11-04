@@ -19,9 +19,8 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, FileText, History, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, Check, CircleAlert, FileText, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -673,26 +672,8 @@ export function useInputPreservation<T>(key: string, opts?: { enabled?: boolean;
   return { stored, write, clear, resolve, dismiss: resolve }
 }
 
-/** 입력 보존 배너 (5.8 배너 자리): "저장하지 않은 수정이 있어요 · 이어서 편집 / 버리기" [가정: 배너형]. */
-export function InputRestoreBanner({ onContinue, onDiscard }: { onContinue: () => void; onDiscard: () => void }) {
-  return (
-    <Alert variant="info" className="flex items-center gap-2 py-2">
-      <History className="size-4 shrink-0" aria-hidden />
-      <AlertDescription className="flex-1 text-sm">저장하지 않은 수정이 있어요</AlertDescription>
-      <div className="flex shrink-0 gap-1">
-        <Button variant="outline" size="sm" onClick={onContinue}>
-          이어서 편집
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onDiscard}>
-          버리기
-        </Button>
-      </div>
-    </Alert>
-  )
-}
-
 /**
- * 배너 자리: CrumbRow 바로 아래 (C-10 first, then the restore banner). On a short window with several banners it
+ * 배너 자리: CrumbRow 바로 아래 (C-10; the input restore banner is gone — UP-11 auto-restores). On a short window with several banners it
  * shrinks (DocBody keeps 50% of the card) and scrolls by itself with the same overflow cue / keyboard region as
  * DocHead (5.9, UQ-SC-1 · UQ-SC-2).
  */

@@ -536,7 +536,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 ### 4.11 AI 패널·문서형 입력 백엔드·UI 후속 (2026-11-04, UP-1~UP-14)
 
-> **진행 (2026-11-04, 백엔드 R9 done)**: ★1 정규화·★2 UP-14(`ai-12.extract.v7`)·3 분류 [무시] 서버 기억(DM 11.5 #1 후보 b, 마이그레이션 없음)·5 pgTAP·6 글자 수 셈 확인 완료(`_workspace/backend/R9/04_summary.md`). 4(사용자 `edit` 경로)는 유지로 결론(막지 않음). 편집기 왕복 동일성은 `trailingNode: false`로 해결. UI 7·8·9는 미처리. 남은 것: R9 QA-05(턴 진행 중 [무시] 경합 — RPC 가드 마이그레이션 후보).
+> **진행 (2026-11-04, 백엔드 R9 done)**: ★1 정규화·★2 UP-14(`ai-12.extract.v7`)·3 분류 [무시] 서버 기억(DM 11.5 #1 후보 b, 마이그레이션 없음)·5 pgTAP·6 글자 수 셈 확인 완료(`_workspace/backend/R9/04_summary.md`). 4(사용자 `edit` 경로)는 유지로 결론(막지 않음). 편집기 왕복 동일성은 `trailingNode: false`로 해결. UI 7·8·9 처리(2026-11-04): 분류 건너뜀 안내 경로 제거, `InputRestoreBanner`·데모 배너 제거, `career/actions.ts` 주석 정리, STAR 제안 값·[기존 내용과 비교]를 마크다운 기호 없이 읽기 글로 표시(`src/components/common/markdown-plain.ts`). 남은 것: R9 QA-05(턴 진행 중 [무시] 경합 — RPC 가드 마이그레이션 후보).
 
 - **백엔드 ★** (ai-pipeline-engineer)
   1. C-1.1 정규화(`src/server/ai/context-pack/deliverable-text.ts`): 백슬래시 이스케이프 되돌리기(`\x` → `x`, 오프셋 지도는 `x`의 원문 위치)와 `&lt;` → `<`(그 엔티티만). 지금은 `2\*3` → `2\3`. fixture: `2\*3`·`\[메모\]`·`a &lt;div>`·`snake_case` (DM 11.5 #4, AI C-1.1, R-UP-1·2)

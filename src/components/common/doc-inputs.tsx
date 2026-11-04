@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { editorOf, rawValueOf } from "./doc-markdown-editor"
+import { markdownToReadable } from "./markdown-plain"
 
 // ---------------------------------------------------------------------------
 // DocTitleInput — 머리 제목 = 입력 칸 (S-10 프로젝트명 / S-44 산출물 제목)
@@ -98,23 +99,8 @@ export function highlightRange(field: HTMLElement | null, range: { start: number
 
 /** markdown → the text a reader sees (marks, list / heading / quote markers removed), first line only */
 function plainQuote(md: string): string {
-  // the editor escapes literal markup characters (\* \_ \[ …) and writes `&lt;` for a tag-like `<`, so an unescaped
-  // `*` / `~` / `` ` `` is always markup; `_` is markup only at a word edge (snake_case stays). Protect escapes first,
-  // strip markup, then restore the escaped characters as plain text (backend QA R9 QA-04).
-  const kept: string[] = []
-  const protectedText = md.replace(/\\([\\`*_[\]~|#>().!+-])/g, (_, ch: string) => {
-    kept.push(ch)
-    return `\u0000${kept.length - 1}\u0000`
-  })
-  return protectedText
-    .split("\n")
-    .map((l) => l.replace(/^\s*(?:[-*+]|\d+\.|#{1,6}|>)\s+/, ""))
-    .join(" ")
-    .replace(/(\*\*|~~|\*|`)/g, "")
-    .replace(/(?<![\p{L}\p{N}])__?|__?(?![\p{L}\p{N}])/gu, "")
-    .replace(/\u0000(\d+)\u0000/g, (_, i: string) => kept[Number(i)] ?? "")
-    .replace(/&lt;/g, "<")
-    .trim()
+  // one line of reader text (escapes undone, markup and list markers dropped) — see markdown-plain.ts
+  return markdownToReadable(md, { keepListMarkers: false }).split("\n").join(" ").replace(/\s+/g, " ").trim()
 }
 
 /** the quote inside one text block of the editor → its document positions */

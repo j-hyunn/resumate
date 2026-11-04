@@ -35,6 +35,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { flashElement } from "@/components/common/doc-inputs"
 import { useDocBodyMode } from "@/components/common/shell/doc-body"
 import { SourceChip, SourceChips } from "@/components/common/source-chip"
+import { markdownToReadable } from "@/components/common/markdown-plain"
 import type { AiPanelController } from "@/components/career/ai-panel"
 import {
   PAGE_SAVE_SKIP_COPY,
@@ -76,13 +77,15 @@ export const PROPOSAL_FIELD_LABELS: Record<ProjectProposalField, string> = {
   competencies: "역량",
 }
 
-/** 채우기 단계 건너뜀 문구 (UX S-10 반영 규칙) */
-export const FILL_SKIP_COPY: Record<Exclude<FillSkipReason, "too_long">, string> = {
+/**
+ * 채우기 단계 건너뜀 문구 (UX S-10 반영 규칙). `classification_already_set` has no line any more (UP-6): the row
+ * [반영] overwrites, and [반영 (n)] leaves already-chosen classifications out of n before filling.
+ */
+export const FILL_SKIP_COPY: Record<Exclude<FillSkipReason, "too_long" | "classification_already_set">, string> = {
   needs_review: "검토하지 않은 섹션은 반영하지 않았어요",
   already_applied: "이미 반영한 섹션이에요",
   empty: "반영할 내용이 없는 섹션은 건너뛰었어요",
   period_already_set: "기간은 이미 입력돼 있어 바꾸지 않았어요",
-  classification_already_set: "이미 직접 고른 분류는 바꾸지 않았어요",
 }
 
 /** UX v5.11 S-10 "2,000자 초과" (교체 = 제안 값, 과거 append = 덧붙인 결과) */
@@ -454,19 +457,19 @@ export function StarProposalCard(props: StarProposalCardProps) {
                     </p>
                   ) : null}
                   {st === "applied" ? (
-                    <AppliedValue value={o.value ?? ""} />
+                    <AppliedValue value={markdownToReadable(o.value ?? "")} />
                   ) : appendMode && st !== "filled" ? (
                     <div className="space-y-1">
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <CornerDownRight className="size-3.5" aria-hidden />
                         현재 내용 뒤에 붙어요
                       </p>
-                      <p className="line-clamp-2 text-sm text-muted-foreground">{(formValue ?? "").trim().split("\n").pop()}</p>
-                      <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{o.value}</p>
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{markdownToReadable(formValue ?? "").trim().split("\n").pop()}</p>
+                      <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{markdownToReadable(o.value ?? "")}</p>
                     </div>
                   ) : mergedMode && st !== "filled" ? (
                     <div className="space-y-1">
-                      <p className="text-sm leading-6 whitespace-pre-wrap">{o.value}</p>
+                      <p className="text-sm leading-6 whitespace-pre-wrap">{markdownToReadable(o.value ?? "")}</p>
                       <Collapsible>
                         <CollapsibleTrigger asChild>
                           <Button variant="ghost" size="xs" className="group/prev -ml-2 text-muted-foreground">
@@ -480,18 +483,18 @@ export function StarProposalCard(props: StarProposalCardProps) {
                           <div className="grid gap-2 sm:grid-cols-2">
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-muted-foreground">지금 폼 값</p>
-                              <p className="rounded-md bg-muted px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">{formValue}</p>
+                              <p className="rounded-md bg-muted px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">{markdownToReadable(formValue ?? "")}</p>
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-muted-foreground">제안</p>
-                              <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{o.value}</p>
+                              <p className="rounded-md bg-ai-subtle px-2 py-1.5 text-sm leading-6 whitespace-pre-wrap text-ai-subtle-foreground">{markdownToReadable(o.value ?? "")}</p>
                             </div>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
                   ) : (
-                    <p className="text-sm leading-6 whitespace-pre-wrap">{o.value}</p>
+                    <p className="text-sm leading-6 whitespace-pre-wrap">{markdownToReadable(o.value ?? "")}</p>
                   )}
                   {st === "filled" ? <FilledNote onShow={() => props.onShowInForm(f)} /> : null}
                   {o.origin === "user_edit" ? null : chips(o.source_message_ids, o.source_quotes)}
@@ -536,7 +539,6 @@ export function StarProposalCard(props: StarProposalCardProps) {
                 chips={chips}
                 pick={props.competencyPick}
                 onPickChange={props.onCompetencyPickChange}
-                alreadySet={fillSkips.filter((s) => s.reason === "classification_already_set").map((s) => s.field)}
                 onShowInForm={props.onShowInForm}
                 // 무시: remember it for this chat (never shown again) + clear the proposal on the server (user `set` null)
                 onIgnore={(f) => {
@@ -686,7 +688,6 @@ function ClassificationGroup({
   chips,
   pick,
   onPickChange,
-  alreadySet,
   onShowInForm,
   onIgnore,
 }: {
@@ -698,16 +699,12 @@ function ClassificationGroup({
   chips: ChipsFn
   pick: Competency[] | null
   onPickChange: (p: Competency[]) => void
-  alreadySet: ProjectProposalField[]
   onShowInForm: (f: ProjectProposalField) => void
   onIgnore: (f: ProjectProposalField) => void
 }) {
   // row [반영] replaces a classification the user already chose (the recommendation wins)
   const overwrite = { overwriteClassification: true }
   const sources = [...new Set(fields.flatMap((f) => draft.classification[f]?.source_message_ids ?? []))]
-  // leader K1: UX v5.6 copy only — the row repeats the bottom line "이미 직접 고른 분류는 바꾸지 않았어요"
-  const note = (f: ProjectProposalField) =>
-    alreadySet.includes(f) ? <p className="text-sm text-muted-foreground">{FILL_SKIP_COPY.classification_already_set}</p> : null
   return (
     <section id="star-proposal-classification" aria-label="분류 추천" className="space-y-3 bg-muted/40 px-4 py-3">
       <div className="space-y-0.5">
@@ -753,7 +750,6 @@ function ClassificationGroup({
                 />
               </div>
               {o.reason ? <p className="text-xs text-muted-foreground">{o.reason}</p> : null}
-              {note(f)}
             </div>
           )
         }
@@ -778,7 +774,6 @@ function ClassificationGroup({
               />
             </div>
             {o.reason ? <p className="text-xs text-muted-foreground">{o.reason}</p> : null}
-            {note(f)}
           </div>
         )
       })}

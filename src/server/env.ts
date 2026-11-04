@@ -17,7 +17,8 @@ export const PublicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   // Public origin for auth redirect URLs (Google OAuth). Required in
-  // production (checked in getSiteOrigin, QA-10); in development and Vercel
+  // production (checked in getSiteOrigin, QA-10, and at Vercel production
+  // build time by next.config.ts → site-url-build-check.ts); in development and Vercel
   // preview the request origin is used when unset. Must be on Supabase Auth's
   // redirect allow-list either way.
   NEXT_PUBLIC_SITE_URL: z.url().optional(),

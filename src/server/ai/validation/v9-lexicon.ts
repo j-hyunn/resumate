@@ -276,10 +276,18 @@ export const PERSONAL_PHRASES: Readonly<Record<PersonalCategory, { strong: reado
       v(new RegExp(`(?:^|[^가-힣A-Za-z])(?:${DISEASES})(?:이|가)\\s?(?:있|생기|생겼|생김|심해|심했|심함|와서|왔)`)),
       n(new RegExp(`(?:^|[^가-힣A-Za-z])(?:${DISEASES})(?:으로|로|\\s?때문에)\\s?(?:휴직|퇴사|입원|병가|휴가|휴학)`)),
       v(new RegExp(`(?:^|[^가-힣A-Za-z])(?:${DISEASES})(?:으로|로|\\s?때문에)\\s?(?:쉬|쉼|고생|힘들)`)),
+      // R8 QA-07: up to two words between the cause and the predicate ("공황장애 때문에 프로젝트에서 빠짐").
+      v(new RegExp(`(?:^|[^가-힣A-Za-z])(?:${DISEASES})(?:으로|로|\\s?때문에)\\s(?:[가-힣0-9]+\\s){1,2}(?:쉬|쉼|빠졌|빠짐|빠지|그만두|그만둠|휴직|퇴사)`)),
       // "우울증 치료로 3개월 쉬었다가", "우울증 치료 중에 런북을 씀", "우울증 치료 뒤 복귀" (connectives; a work noun right after → clean).
       v(new RegExp(`(?:^|[^가-힣A-Za-z])(?:${DISEASES})\\s?(?:치료|투병)(?:\\s?(?:중에도|중에|뒤에|뒤|후에|후|이후|때문에)|로|으로)`)),
       n(/입원|휴직|휴학|투병|임신|출산|유산|간병/),
       v(/수술을?\s?받|수술받|치료를?\s?받|치료받|통원\s?치료를?\s?받/),
+      // R8 QA-07: "허리 수술로 두 달 쉬었음", "수술 후 한 달 휴직함" (adnominal "쉬는 기간" stays clean).
+      v(/수술(?:로|으로|\s?때문에|\s?(?:후|뒤|이후)에?)\s(?:[가-힣0-9]+\s){0,2}(?:쉬|쉼|휴직|휴학|빠졌|빠짐)/),
+      // R8 QA-07: back from leave ("출산 후 복직함"); "복직 지원 제도" is a noun + noun work topic.
+      n(/(?:출산|육아\s?휴직|휴직|병가|입원|수술|투병|치료)\s?(?:후|뒤|이후)에?\s?복직/),
+      // R8 QA-07: during sick leave / a hospital stay ("병가 중에도 리뷰를 함"); a work noun right after stays clean.
+      v(/(?:^|[^가-힣])(?:병가|입원)\s?중에도?(?![가-힣])/),
       v(/병가를?\s?(?:냈|냄|내|썼|씀|쓰|써)|병가를?\s?사용(?=했|함|하|해)/),
       v(/(?:출산|육아)\s?휴가를?\s?(?:냈|냄|내|썼|씀|쓰|써|다녀|다녀옴)/),
       v(/장애\s?(?:판정|등급)을?\s?받|심리\s?상담을?\s?받|정신과\s?(?:치료|진료)를?\s?받/),
@@ -318,6 +326,8 @@ export const PERSONAL_PHRASES: Readonly<Record<PersonalCategory, { strong: reado
       n(/(?:촛불|탄핵|정치)\s?집회에\s?(?:참여|참가)/),
       v(/(?:촛불|탄핵|정치)\s?집회에\s?(?:나가|나갔|나감)/),
       n(/(?:정당|후보)을\s?지지/),
+      // R8 QA-07: "선거 캠프에서 일함" ("선거 캠프에서 쓰는 앱" has no such predicate).
+      v(/선거\s?캠프에서\s?(?:일|근무|활동|봉사)/),
     ],
     weak: [n(/지지(?:하는)?\s?정당/), n(/(?:^|[^가-힣])당원/), n(/정치\s?성향|정치적\s?성향|(?:진보|보수)\s?성향/)],
   },
@@ -407,17 +417,24 @@ export function sensitiveSentences(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** A work noun within the next two words after `from` ("입원하고 퇴원하는 흐름"). */
-function workNounSoon(s: string, from: number): boolean {
+/**
+ * A work noun within the next two words after `from` ("입원하고 퇴원하는 흐름").
+ * R8 QA-07: after a realized cause ("입원해서", "-아서/-어서") a work noun that is
+ * the next clause's subject ("일정이 밀렸음") is a consequence, not a work topic.
+ */
+function workNounSoon(s: string, from: number, predicate: string): boolean {
+  const realizedCause = /서$/.test(predicate.replace(/[^가-힣]+$/, ""));
   let at = from;
   for (let k = 0; k < 2; k++) {
     const w = nextWord(s, at);
     if (!w) return false;
-    if (WORK_NOUN_START.test(w.word)) return true;
+    if (WORK_NOUN_START.test(w.word)) return !(realizedCause && SUBJECT_AFTER_WORK_NOUN.test(w.word));
     at = w.end;
   }
   return false;
 }
+
+const SUBJECT_AFTER_WORK_NOUN = new RegExp(`^(?:${WORK_NOUNS})(?:이|가)[^가-힣]*$`);
 
 function phraseCounts(s: string, phrase: PersonalPhrase, personal: boolean, otherPerson: boolean, strong: boolean): boolean {
   const flags = phrase.pattern.flags.includes("g") ? phrase.pattern.flags : `${phrase.pattern.flags}g`;
@@ -425,7 +442,7 @@ function phraseCounts(s: string, phrase: PersonalPhrase, personal: boolean, othe
     if (THIRD_PARTY_SUBJECT_BEFORE.test(s.slice(Math.max(0, m.index! - 12), m.index!))) continue;
     const pred = predicateOf(s, m, phrase.kind, !strong && personal);
     if (!pred || pred.form === "adnominal") continue;
-    if (pred.form === "connective" && workNounSoon(s, pred.end)) continue;
+    if (pred.form === "connective" && workNounSoon(s, pred.end, s.slice(wordStartAt(s, pred.end - 1), pred.end))) continue;
     // strong: a marker, or no other person in the sentence. weak: a marker, or a finite copula with no other person.
     if (personal || (!otherPerson && (strong || pred.form === "finite"))) return true;
   }

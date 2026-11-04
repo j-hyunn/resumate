@@ -78,9 +78,9 @@ select is(
   (select agreed_version from public.record_consents(
      '[{"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null)
     where consent_type = 'cross_border_transfer'),
-  '2026-11-04', 'cross_border_transfer can be recorded as agreed');
+  '2026-11-04.1', 'cross_border_transfer can be recorded as agreed');
 select lives_ok($$insert into public.consents (consent_type, policy_version, agreed)
-                  values ('cross_border_transfer', '2026-11-04', true)$$,
+                  values ('cross_border_transfer', '2026-11-04.1', true)$$,
                 'direct insert of cross_border_transfer at the current version works');
 
 -- withdrawal rules
@@ -158,7 +158,7 @@ select is((select needs_consent from public.get_consent_status() where consent_t
 select is((select needs_consent from public.get_consent_status() where consent_type = 'cross_border_transfer'),
           false, 'requires_reconsent version of cross_border_transfer does not reopen the gate');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'cross_border_transfer'),
-          '2026-11-04', 'an existing cross_border_transfer agreement keeps its version');
+          '2026-11-04.1', 'an existing cross_border_transfer agreement keeps its version');
 select is((select needs_consent from public.get_consent_status() where consent_type = 'terms'),
           false, 'version without requires_reconsent does not');
 select is(

@@ -12,7 +12,7 @@ An AI career management service that accumulates a user's experience and project
 |--------|-------|--------------|
 | P1. Career data management | Experiences, educations, projects (STAR per project), standalone projects and their deliverables, skills; filled in directly or through the Resumate AI writing chat | How far can we reduce input friction without the AI inventing anything? |
 | P2. Application projects (JD insights & documents) | Per application: JD, requirement extraction, insight, 경력기술서 and 자기소개서 answers, all anchored to P1 data | How do we keep every output traceable to the user's own data or the JD? |
-| P3. AI mock interview + board | Interview questions, answers submitted in one go, scores and feedback; a kanban board of application stages | Which evaluation feels closest to a real interview? (score formula still open, D-14) |
+| P3. AI mock interview + board | Interview questions, answers submitted in one go, scores and feedback; a kanban board of application stages | Which evaluation feels closest to a real interview? (score formula settled 2026-11-05, OD-I1: weighted 30·30·20·20, unanswered = 0) |
 
 P1 is the input to P2 and P3. P1 data quality determines the quality of the whole service; keep this in mind in every design decision.
 

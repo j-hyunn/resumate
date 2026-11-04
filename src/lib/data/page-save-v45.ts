@@ -2,9 +2,8 @@
  * S-10 프로젝트 상세 page save + S-44 산출물 상세 AI 패널 data layer v4.5 (DM 2.5.1 / §3.3 / §7,
  * AI-12 v4.6 · AI-13, PA-1·PA-3). Server only.
  *
- * 연결 대기: the reworked S-10 (page-level "저장하기") and S-44 (deliverable + AI panel) screens import
- * these. Nothing in the current UI imports this file yet; the old section saves and the old panel
- * keep working through `./career`, `./career-v44`, `./writing-chats`, `./writing-chats-v44`.
+ * The S-10 / S-44 screens reach these through `./career-v45` (snake_case view models, `?state=` mock
+ * branch); this file is the camelCase service boundary.
  *
  * 새 페이지의 첫 AI 메시지 (DM §7, the screen calls in order — not one transaction):
  *   ① name (S-10) / title (S-44) empty → don't send (focus the field, no temporary name)
@@ -106,6 +105,12 @@ export async function listDeliverableChats(projectDeliverableId: string): Promis
 export async function getDeliverableChat(chatId: string): Promise<DeliverableWritingChatDto> {
   const { supabase, user } = await requireConsentedUser()
   return asDeliverableChat(await chats.getWritingChat(supabase, user.id, chatId))
+}
+
+/** Open one chat of either target (대화 기록 → 열기 on S-10 or S-44). */
+export async function getAnyChat(chatId: string): Promise<AnyWritingChatDto> {
+  const { supabase, user } = await requireConsentedUser()
+  return chats.getWritingChat(supabase, user.id, chatId)
 }
 
 /** S-44 card: fact [수락] / [거절], draft block [수락] / [빼기]. */

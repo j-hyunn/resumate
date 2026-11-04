@@ -8,8 +8,9 @@
  * or `error` (one terminal). The chips are not in `turn_done` (R-PA-5) — the screen recomputes them.
  *
  * `streamTurn(request)` takes the `TurnRequest` the server action prepared: `real` POSTs to
- * `/api/writing-chats/{id}/turns` (v4.4 route — camelCase events mapped here; `form_snapshot` is sent but the
- * v4.4 route ignores it: 연결 대기 (DM v4.5 11.3)), `mock` runs the client-side generator (previews).
+ * `/api/writing-chats/{id}/turns` (camelCase events of `@/lib/contracts/writing-chat` mapped here — AI-12
+ * `WritingChatTurnEvent` or AI-13 `DeliverableTurnEvent` by `request.target`), `mock` runs the client-side
+ * generator (previews).
  */
 import type {
   AiErrorCode,
@@ -17,6 +18,7 @@ import type {
   DeliverableDraftBlock,
   DeliverableDraftBody,
   DeliverableFact,
+  DeliverableStructuredDraft,
   ProjectStructuredDraft,
   WritingChatErrorCode,
 } from "@/types/db"
@@ -51,8 +53,8 @@ export type PanelTurnEvent =
     }
 
 export type PanelTurnEventType = PanelTurnEvent["type"]
-/** C-20 causes + panel refusals + `backend_pending` (연결 대기) + gate codes */
-export type PanelTurnErrorCode = AiErrorCode | WritingChatErrorCode | "backend_pending" | "ai_not_connected" | "ai_consent_required"
+/** C-20 causes + panel refusals + gate codes */
+export type PanelTurnErrorCode = AiErrorCode | WritingChatErrorCode | "ai_not_connected" | "ai_consent_required"
 
 /** codes that come back before the stream opens (DM 2.5 / 2.5.0 / turn request validation) */
 const PRE_STREAM_CODES = new Set<string>([
@@ -108,8 +110,83 @@ function fieldName(path: unknown): string {
   return str(p.field) ?? ""
 }
 
-/** v4.4 route events (camelCase, AI-12 only) → PanelTurnEvent. */
-function mapRealEvent(raw: Raw, provider: AiProviderName | null): PanelTurnEvent | null {
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+const strs = (v: unknown): string[] => arr(v).filter((x): x is string => typeof x === "string")
+
+/**
+ * Stored AI-13 block (`StoredBlockSchema`: list items `{text, …sources}`, table rows `{cells, …sources}`,
+ * nulls) → the panel's `DeliverableDraftBlock` (items / rows as strings, absent = undefined).
+ */
+export function normalizeDeliverableBlock(raw: unknown): DeliverableDraftBlock {
+  const b = (raw ?? {}) as Raw
+  const items = Array.isArray(b.items) ? b.items.map((i) => (typeof i === "string" ? i : (str((i as Raw)?.text) ?? ""))) : undefined
+  const rows = Array.isArray(b.rows) ? b.rows.map((r) => (Array.isArray(r) ? strs(r) : strs((r as Raw)?.cells))) : undefined
+  return {
+    block_id: str(b.block_id) ?? "",
+    type: (str(b.type) ?? "paragraph") as DeliverableDraftBlock["type"],
+    ...(typeof b.text === "string" ? { text: b.text } : {}),
+    ...(items ? { items } : {}),
+    ...(rows ? { rows } : {}),
+    ...(typeof b.level === "number" ? { level: b.level } : {}),
+    basis: b.basis === "current_body" ? "current_body" : "new",
+    source_fact_ids: strs(b.source_fact_ids),
+    source_body_quotes: strs(b.source_body_quotes),
+    source_project_fields: strs(b.source_project_fields) as DeliverableDraftBlock["source_project_fields"],
+    review: (str(b.review) ?? "ok") as DeliverableDraftBlock["review"],
+  }
+}
+
+export function normalizeDeliverableBody(raw: unknown): DeliverableDraftBody {
+  const b = (raw ?? {}) as Raw
+  return {
+    value: str(b.value) ?? "",
+    blocks: arr(b.blocks).map(normalizeDeliverableBlock),
+    rev: typeof b.rev === "number" ? b.rev : 1,
+    generated_at: str(b.generated_at) ?? "",
+    base_body_hash: str(b.base_body_hash) ?? "",
+    replace_allowed: b.replace_allowed !== false,
+    missing_slots: strs(b.missing_slots),
+    dropped_block_count: typeof b.dropped_block_count === "number" ? b.dropped_block_count : 0,
+    applied_at: str(b.applied_at),
+    applied_mode: b.applied_mode === "replace" || b.applied_mode === "append" ? b.applied_mode : null,
+    applied_rev: typeof b.applied_rev === "number" ? b.applied_rev : null,
+  }
+}
+
+/** Stored deliverable `structured_draft` (DM 2.5.0, `DeliverableDraftSchema`) → the panel's view. */
+export function normalizeDeliverableDraft(raw: unknown): DeliverableStructuredDraft {
+  const d = (raw ?? {}) as Raw
+  const deliverable = (d.deliverable ?? {}) as Raw
+  return {
+    schema_version: 1,
+    target: "project_deliverable",
+    writing_kind: (str(d.writing_kind) as DeliverableStructuredDraft["writing_kind"]) ?? null,
+    facts: arr(d.facts).map((f) => {
+      const x = (f ?? {}) as Raw
+      return {
+        id: str(x.id) ?? "",
+        slot: str(x.slot) ?? "",
+        text: str(x.text) ?? "",
+        actor: (str(x.actor) ?? "unknown") as DeliverableFact["actor"],
+        source_message_ids: strs(x.source_message_ids),
+        source_quotes: strs(x.source_quotes),
+        review: (str(x.review) ?? "ok") as DeliverableFact["review"],
+        reviewed_at: str(x.reviewed_at),
+        origin: (str(x.origin) ?? "ai") as DeliverableFact["origin"],
+      }
+    }),
+    deliverable: deliverable.body ? { body: normalizeDeliverableBody(deliverable.body) } : {},
+    clarifications: arr(d.clarifications).map((c) => {
+      const x = (c ?? {}) as Raw
+      return { kind: x.kind === "number_vague" ? "number_vague" : "actor_ambiguous", slot: str(x.slot), note: str(x.note) }
+    }),
+    sensitive_flags_count: typeof d.sensitive_flags_count === "number" ? d.sensitive_flags_count : 0,
+    draft_count: typeof d.draft_count === "number" ? d.draft_count : 0,
+  }
+}
+
+/** Route events (camelCase) → PanelTurnEvent. AI-12 (`project`) and AI-13 (`deliverable`) share the names they have in common. */
+function mapRealEvent(raw: Raw, provider: AiProviderName | null, target: "project" | "deliverable"): PanelTurnEvent | null {
   switch (raw.type) {
     case "turn_started":
       return {
@@ -126,7 +203,20 @@ function mapRealEvent(raw: Raw, provider: AiProviderName | null): PanelTurnEvent
       return { type: "reply_done", message: messageOf(raw.message) }
     case "draft_patch":
       return { type: "draft_patch", structured_draft: normalizeProjectDraft(raw.structuredDraft ?? raw.structured_draft), changed: Array.isArray(raw.changed) ? raw.changed.map(fieldName) : [] }
+    case "facts_patch": {
+      const draft = normalizeDeliverableDraft(raw.structuredDraft)
+      return { type: "facts_patch", facts: draft.facts, writing_kind: draft.writing_kind }
+    }
     case "draft_flags":
+      if (target === "deliverable") {
+        return {
+          type: "draft_flags",
+          needs_review: strs(raw.needsReview),
+          actor_ambiguous: raw.actorAmbiguous === true ? ["actor"] : [],
+          sensitive_added: Number(raw.sensitiveAdded ?? 0),
+          sensitive_flags_count: Number(raw.sensitiveFlagsCount ?? 0),
+        }
+      }
       return {
         type: "draft_flags",
         needs_review: Array.isArray(raw.needsReview) ? raw.needsReview.map(fieldName) : [],
@@ -134,6 +224,13 @@ function mapRealEvent(raw: Raw, provider: AiProviderName | null): PanelTurnEvent
         sensitive_added: Number(raw.sensitiveAdded ?? 0),
         sensitive_flags_count: Number(raw.sensitiveFlagsCount ?? 0),
       }
+    case "draft_started":
+      // attempt 2 (schema retry / regenerate) arrives as another draft_started: the panel drops the provisional blocks
+      return { type: "draft_started" }
+    case "draft_block":
+      return { type: "draft_block", block: normalizeDeliverableBlock(raw.block) }
+    case "draft_done":
+      return { type: "draft_done", body: normalizeDeliverableBody(raw.body), draft_count: Number(raw.draftCount ?? 0) }
     case "turn_done":
       return {
         type: "turn_done",
@@ -176,7 +273,7 @@ async function* realTurn(request: Extract<TurnRequest, { kind: "real" }>, signal
   }
   let provider: AiProviderName | null = null
   for await (const raw of readSse(response)) {
-    const ev = mapRealEvent(raw, provider)
+    const ev = mapRealEvent(raw, provider, request.target)
     if (!ev) continue
     if (ev.type === "turn_started") provider = ev.provider
     yield ev
@@ -187,7 +284,7 @@ async function* realTurn(request: Extract<TurnRequest, { kind: "real" }>, signal
 /** One turn as events. Aborting the signal ends the generator (the server keeps going, C-04). */
 export async function* streamTurn(request: TurnRequest, signal: AbortSignal): AsyncGenerator<PanelTurnEvent> {
   if (request.kind === "refused") {
-    // backend_pending stays itself (the panel shows the 연결 대기 block, QA UQ-PA-10); "failed" → system failure
+    // "failed" → system failure
     const code = request.error.code === "failed" ? "schema_invalid" : request.error.code
     yield { type: "error", error_code: code as PanelTurnErrorCode, provider: null, retry_after: null, quota_resets_at: null, before_stream: true }
     return

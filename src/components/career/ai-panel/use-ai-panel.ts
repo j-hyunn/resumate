@@ -65,7 +65,6 @@ export type PanelBlock =
   | { kind: "deliverable_limit" }
   | { kind: "first_save_failed" }
   | { kind: "start_failed"; code: AiErrorCode | null }
-  | { kind: "backend_pending" }
   /** ② found no active provider (C-18 inline) */
   | { kind: "ai_not_connected" }
   /** ② couldn't read ai_connection — "연결 상태를 확인하지 못했어요 · 다시 시도" [UI-가정] */
@@ -164,8 +163,6 @@ function blockOf(error: PanelCallError["code"] | PanelTurnErrorCode): PanelBlock
       return { kind: "writing_chat_closed" }
     case "writing_chat_draft_limit_reached":
       return { kind: "draft_limit" }
-    case "backend_pending":
-      return { kind: "backend_pending" }
     case "ai_not_connected":
     case "key_missing":
       return { kind: "ai_not_connected" }
@@ -747,7 +744,7 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
       if (!r.ok) {
         setPatchRefusal({ patch, code: r.error.code })
         const inlineLine = patchOpts?.inline && r.error.code === "field_already_applied"
-        if (!inlineLine) toast(r.error.code === "field_already_applied" ? PANEL_COPY.alreadyApplied : r.error.code === "backend_pending" ? PANEL_COPY.backendPending : "바꾸지 못했어요. 다시 시도해 주세요")
+        if (!inlineLine) toast(r.error.code === "field_already_applied" ? PANEL_COPY.alreadyApplied : "바꾸지 못했어요. 다시 시도해 주세요")
         return false
       }
       setPatchRefusal(null)

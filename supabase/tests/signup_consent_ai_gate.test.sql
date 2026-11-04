@@ -87,7 +87,7 @@ select is(
   (select agreed_version from public.record_consents(
      '[{"consent_type":"cross_border_transfer","agreed":true}]'::jsonb, null)
     where consent_type = 'cross_border_transfer'),
-  '2026-10-01', 'cross_border_transfer agreement recorded');
+  '2026-11-04', 'cross_border_transfer agreement recorded');
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'true'::jsonb,
           'readiness: cross_border_transfer does not satisfy C-21');
 reset role;

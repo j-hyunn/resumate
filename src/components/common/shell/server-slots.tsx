@@ -6,6 +6,7 @@ import { getCurrentUser, getServiceStatus } from "@/lib/data/shell"
 import { AppSidebar } from "./app-sidebar"
 import { AiOutageBanner } from "./shell-parts"
 import { PageShellOutagePortal } from "./page-shell-outage"
+import { ShellUserPublisher } from "./user-avatar"
 
 /** 왼쪽 메뉴 + 하단 사용자 메뉴(계정 이메일) */
 export async function ShellSidebar() {
@@ -25,4 +26,10 @@ export async function PageShellOutageSlot() {
   const status = await getServiceStatus()
   const affected = status.active_provider && status.affected_providers.includes(status.active_provider) ? status.active_provider : null
   return <PageShellOutagePortal provider={affected} />
+}
+
+/** L-02 (`(page)` layout): 계정 버튼 아바타용 사용자 정보 — 페이지가 그리는 ShellBar가 `useShellUser()`로 읽는다. */
+export async function PageShellUserSlot() {
+  const user = await getCurrentUser()
+  return <ShellUserPublisher user={user} />
 }

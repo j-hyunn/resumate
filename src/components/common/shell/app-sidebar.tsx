@@ -8,7 +8,6 @@
  * and count badges become a dot on the icon. Below lg (1024px) it renders as a left Sheet drawer.
  */
 import * as React from "react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Briefcase, FileText, KanbanSquare, Layers, MessagesSquare, Settings, type LucideIcon } from "lucide-react"
 import {
@@ -16,10 +15,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
   SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
@@ -30,7 +26,8 @@ import { clearNavOrigin } from "../return-target"
 import { NavMain } from "./nav-main"
 import { NavSecondary, type NavSecondaryItem } from "./nav-secondary"
 import { NavUser } from "./nav-user"
-import { LogoMark } from "./logo-mark"
+import { displayName } from "./user-avatar"
+import { LogoMark, LogoWordmark } from "./logo-mark"
 import { useSettingsDialog } from "./settings-dialog"
 import { NavAiStatus } from "./nav-ai-status"
 import { useAiConnection } from "../ai-connection-context"
@@ -168,21 +165,11 @@ function AppSidebarView({
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip="Resumate">
-              <Link href={routes.career()} onClick={onMenu}>
-                {/* [UI-가정] 로고 자리: 브랜드 마크가 정해지기 전까지 lucide 아이콘 (LogoMark, shared with L-02) */}
-                <LogoMark />
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Resumate</span>
-                  {/* [UI-가정] 부제 문구 */}
-                  <span className="truncate text-xs">AI 커리어 관리</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {/* 로고는 표시만 한다 (링크·호버 없음). 접힌 레일에서는 심볼만 남는다. */}
+        <div className="flex h-12 items-center gap-2.5 overflow-hidden px-2.5 py-2 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:p-1">
+          <LogoMark />
+          <LogoWordmark className="h-4 group-data-[collapsible=icon]:hidden" />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         {/* [UI-가정] 그룹 라벨 문구 */}
@@ -202,7 +189,10 @@ function AppSidebarView({
         />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user ? { name: user.email.split("@")[0] ?? "", email: user.email } : null} onOpenSettings={openSettingsFromMenu} />
+        <NavUser
+          user={user ? { name: displayName(user), email: user.email, avatarUrl: user.avatar_url } : null}
+          onOpenSettings={openSettingsFromMenu}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

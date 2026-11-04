@@ -3,6 +3,8 @@
 - 디자인 시스템: v5 (v4 = 사용자 지정 브랜드 토큰 2026-11-03, v5 = L-02·S-10·S-44·AI 패널·제안 카드 2026-11-03) · 최종 갱신: 2026-11-03
 - 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
 
+> L-02 스크롤 정비 (2026-11-04): S-10·S-44에서 창 전체가 스크롤되던 문제 수정(원인: 위치 기준 없는 `sr-only` 라이브 영역이 문서 높이를 늘림). 셸 `relative overflow-clip`, 머리 `DocHead` 카드 높이 40% 상한. QA 0 Critical·0 Major. Minor UQ-SC-1~7·9·10 해결(재검수 `31_ui-qa_l02-minor_recheck.md`, SC-9·10은 리더가 한 줄 수정 후 재검수 없이 lint·typecheck·test로만 확인), UQ-SC-8(역량을 한 줄 배치 아래로 — 명세 순서와 다름)은 기획 확인 필요 → **QA 통과 (mock·브라우저 미확인)**. 같은 날 로고(심볼·워드마크)·Google 프로필 아바타·S-10 머리 필드 한 줄 배치도 반영. 기록: `_workspace/ui/28_brief_l02-scroll-fix.md` ~ `31_ui-qa_l02-minor_recheck.md`
+
 > 브랜드 토큰 정합 (2026-11-03): main의 v4 브랜드 토큰 머지 뒤 v5 화면을 맞췄다(`_workspace/ui/27_ui-qa_v5-brand-conformance.md`, 17건 — 코드 11·문서 8 반영, 재검토는 grep·lint·typecheck·test·build로만, 브라우저 hover 미확인).
 
 > 프로젝트 추가·산출물 상세 런 (2026-11-03): L-02·S-10·S-43 산출물·S-44·C-23 구현. 파운데이션 QA 2라운드 + 영역 QA 2라운드 + 통합 QA, 이슈 Critical 1·Major 12 모두 해결(통합 QA 뒤 마지막 수정 UQ-INT-1~5·UQ-S44-4는 리뷰어 재검토 없이 lint·typecheck·테스트로만 확인). **모두 mock·SSR 렌더 기준이며 브라우저에서 눌러 본 확인은 없다.** DM v4.5 계약(페이지 저장 RPC 반영 기록, 산출물 AI 대화 AI-13)은 백엔드에 없어 데이터 계층이 v4.4 백엔드 + mock으로 잇는다(`// 연결 대기 (DM v4.5 11.3)`). 기록: `_workspace/ui/21_brief_project-add.md` ~ `26_ui-qa_project-add_round2-integration.md`

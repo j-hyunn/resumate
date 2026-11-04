@@ -18,7 +18,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, CircleUserRound, FileText, History, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, Check, CircleAlert, FileText, History, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -46,10 +46,12 @@ import { shellSignOutAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
 import { ACCOUNT_MENU_ITEMS, type AccountMenuItem } from "./account-menu-items"
 import { useSettingsDialog } from "./settings-dialog"
-import { LogoMark } from "./logo-mark"
+import { LogoMark, LogoWordmark } from "./logo-mark"
+import { UserAvatar, displayName, useShellUser } from "./user-avatar"
 import { useToasterPosition } from "./shell-parts"
 import { createPreservationStore } from "./input-preservation"
 import { registerOutageSlot } from "./page-shell-outage"
+import { OverflowScroller } from "./overflow-scroller"
 
 // ---------------------------------------------------------------------------
 // LeaveGuard — 페이지 단위 이탈 확인 (1.3a 이탈 확인, UX-7)
@@ -412,6 +414,7 @@ export interface AiReopenProps {
 }
 
 function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReopenProps | null }) {
+  const user = useShellUser()
   const reopenVisible = aiReopen?.visible ?? false
   const onReopen = aiReopen?.onClick
   const bindReopen = aiReopen?.bindButton
@@ -435,7 +438,8 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
         className="flex items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <LogoMark className="size-7" />
-        <span className="text-base font-semibold">Resumate</span>
+        <LogoWordmark />
+
       </Link>
       <div className="ml-auto flex items-center gap-2">
         {reopenVisible ? (
@@ -447,8 +451,8 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
         {save}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="계정 메뉴">
-              <CircleUserRound className="size-5" aria-hidden />
+            <Button variant="ghost" size="icon" aria-label="계정 메뉴" className="rounded-lg">
+              <UserAvatar name={displayName(user)} avatarUrl={user?.avatar_url ?? null} className="size-7" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-48">
@@ -475,7 +479,7 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
   )
 }
 
-/** L-02 frame: mint-grey shell, ShellBar, the white card (h-dvh, the window never scrolls). */
+/** L-02 frame: mint-grey shell, ShellBar, the white card (h-dvh, the window never scrolls — only DocHead / DocBody columns / panel lists do). */
 export function PageShell({
   guard,
   save,
@@ -491,11 +495,15 @@ export function PageShell({
   useToasterPosition("bottom-left")
   return (
     <LeaveGuardContext.Provider value={guard}>
-      <div className="flex h-dvh flex-col overflow-hidden bg-shell text-shell-foreground">
+      {/* relative + overflow-clip (not hidden): absolutely positioned descendants (sr-only live regions …) get a
+          containing block here instead of the viewport, so they can't grow the document; clip is not a scroll
+          container, so focus() / scrollIntoView() can't scroll the shell or the card either (28 run). */}
+      <div className="relative flex h-dvh flex-col overflow-clip bg-shell text-shell-foreground">
         <ShellBar save={save} aiReopen={aiReopen} />
         {/* S-28 활성 공급자 장애 배너 (leader UQ-PA-17): (page)/layout portals it here */}
-        <div ref={registerOutageSlot} className="shrink-0 empty:hidden" />
-        <main id="main" className="mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-sm max-md:m-0 max-md:rounded-none max-md:shadow-none">
+        {/* capped at 25% of the window and scrolls by itself, so it can't squash the card (UQ-SC-1) */}
+        <div ref={registerOutageSlot} className="relative max-h-[25%] shrink-0 overflow-y-auto empty:hidden" />
+        <main id="main" className="relative mx-2 mb-2 flex min-h-0 flex-1 flex-col overflow-clip rounded-2xl bg-card text-card-foreground shadow-sm max-md:m-0 max-md:rounded-none max-md:shadow-none">
           {children}
         </main>
       </div>
@@ -653,9 +661,17 @@ export function InputRestoreBanner({ onContinue, onDiscard }: { onContinue: () =
   )
 }
 
-/** 배너 자리: CrumbRow 바로 아래 (C-10 first, then the restore banner). */
+/**
+ * 배너 자리: CrumbRow 바로 아래 (C-10 first, then the restore banner). On a short window with several banners it
+ * shrinks (DocBody keeps 50% of the card) and scrolls by itself with the same overflow cue / keyboard region as
+ * DocHead (5.9, UQ-SC-1 · UQ-SC-2).
+ */
 export function ShellBanners({ children }: { children: React.ReactNode }) {
   const items = React.Children.toArray(children).filter(Boolean)
   if (!items.length) return null
-  return <div className="shrink-0 space-y-2 px-6 pb-2 max-md:px-4">{items}</div>
+  return (
+    <OverflowScroller label="알림" className="shrink px-6 pb-2 max-md:px-4" innerClassName="space-y-2">
+      {items}
+    </OverflowScroller>
+  )
 }

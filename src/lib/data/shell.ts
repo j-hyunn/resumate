@@ -26,17 +26,35 @@ async function sessionOrNull() {
 export interface CurrentUser {
   id: string
   email: string
+  /** Google 프로필 이름 (user_metadata.full_name · name). 없으면 null */
+  name: string | null
+  /** Google 프로필 사진 URL (user_metadata.avatar_url · picture). 없으면 null → 이니셜 */
+  avatar_url: string | null
+}
+
+function metaString(meta: Record<string, unknown> | undefined, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const v = meta?.[key]
+    if (typeof v === "string" && v.trim()) return v.trim()
+  }
+  return null
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
   return previewOr(
     async () => {
       const db = await mockRequest(0)
-      return { ...db.user }
+      return { ...db.user, name: null, avatar_url: null }
     },
     async () => {
       const ctx = await sessionOrNull()
-      return { id: ctx?.user.id ?? "", email: ctx?.user.email ?? "" }
+      const meta = ctx?.user.user_metadata
+      return {
+        id: ctx?.user.id ?? "",
+        email: ctx?.user.email ?? "",
+        name: metaString(meta, "full_name", "name"),
+        avatar_url: metaString(meta, "avatar_url", "picture"),
+      }
     },
   )
 }

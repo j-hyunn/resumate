@@ -72,10 +72,15 @@ describe("applyFormSnapshot", () => {
 });
 
 describe("V-9h and empty-field judgments use the snapshot", () => {
-  it("a field the user filled in the form (unsaved) takes append only", () => {
-    const ctx = ctxFor({ project: emptyProject(), formSnapshot: { star: { action: "병목 쿼리를 찾았다" } } });
-    const r = validateExtractOutput(output({ star_patches: [star("action", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"])] }), ctx.v9);
-    expect(r.rejections).toEqual([{ check: "V-9h", target: "star.action" }]);
+  it("v4.9 (RQ-5): a field the user filled in the form (unsaved) takes a merged set; its text is a source", () => {
+    const ctx = ctxFor({ project: emptyProject(), formSnapshot: { star: { action: "APM으로 병목 쿼리를 찾았다" } } });
+    const r = validateExtractOutput(output({ star_patches: [star("action", "APM으로 병목 쿼리를 찾고 인덱스를 다시 설계함", ["인덱스를 다시 설계했어요"])] }), ctx.v9);
+    expect(r.rejections).toEqual([]);
+    expect(r.changes.star).toMatchObject([{ field: "action", op: "set", review: "ok" }]);
+    expect(r.report.merged).toBe(1);
+    // Without the form text, "APM" is not in the cited message (V-9d).
+    const db = validateExtractOutput(output({ star_patches: [star("action", "APM으로 병목 쿼리를 찾고 인덱스를 다시 설계함", ["인덱스를 다시 설계했어요"])] }), ctxFor({ project: emptyProject() }).v9);
+    expect(db.rejections).toEqual([{ check: "V-9d", target: "star.action" }]);
   });
 
   it("a field the user cleared in the form (DB still has it) takes set", () => {
@@ -130,15 +135,21 @@ describe("new_object (proposal already filled into the form, DA-10)", () => {
     expect(renderDraftForExtract(ctx)).toContain("situation: (폼에 채워짐");
   });
 
-  it("the next patch for that field is append + new_object, and toDraftPatch passes it through", () => {
+  it("the next patch for that field (merged set) is new_object, and toDraftPatch passes it through", () => {
     const ctx = ctxFor({ structuredDraft: { star: { situation: pending(filled) } }, formSnapshot: { star: { situation: filled } } });
-    const r = validateExtractOutput(output({ star_patches: [star("situation", "응답 시간이 1.2초에서 0.7초로 줄었다", ["응답 시간이 1.2초에서 0.7초로 줄었어요"], "set"), star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctx.v9);
-    // set on a filled form field is V-9h; the append starts a new object.
-    expect(r.rejections).toEqual([{ check: "V-9h", target: "star.situation" }]);
+    const merged = "피크 시간에 결제 승인 API가 느려졌고 응답 시간이 1.2초였음";
+    const r = validateExtractOutput(output({ star_patches: [star("situation", merged, ["응답 시간이 1.2초에서"])] }), ctx.v9);
+    expect(r.rejections).toEqual([]);
     expect(r.changes.star).toHaveLength(1);
-    expect(r.changes.star[0]).toMatchObject({ op: "append", new_object: true });
+    expect(r.changes.star[0]).toMatchObject({ op: "set", new_object: true, source_message_ids: ["00000000-0000-4000-8000-000000000002"] });
     const op = toDraftPatch(r.changes).ops[0];
-    expect(op).toMatchObject({ op: "append", target: { section: "star", field: "situation" }, new_object: true });
+    expect(op).toMatchObject({ op: "set", target: { section: "star", field: "situation" }, new_object: true });
+  });
+
+  it("a legacy append on a filled form field becomes a merged set (form value + new) that starts a new object (QA-01)", () => {
+    const ctx = ctxFor({ structuredDraft: { star: { situation: pending(filled) } }, formSnapshot: { star: { situation: filled } } });
+    const r = validateExtractOutput(output({ star_patches: [star("situation", "인덱스를 다시 설계했다", ["인덱스를 다시 설계했어요"], "append")] }), ctx.v9);
+    expect(r.changes.star[0]).toMatchObject({ op: "set", value: `${filled}\n인덱스를 다시 설계했다`, new_object: true });
   });
 
   it("only the first patch of the turn carries new_object; later ones append to the new object", () => {

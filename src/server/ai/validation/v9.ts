@@ -17,23 +17,26 @@ import {
   type StarChange,
   type StarField,
   type StarOp,
+  type StarReviewReason,
   type StructuredDraft,
 } from "../schemas/structured-draft";
 import { normalizeForMatch, originalSpan } from "./normalize";
 import { extractNumbers } from "./numbers";
 import {
+  CONTACT_PATTERN,
   DELEGATION_PATTERN,
   KOREAN_SUFFIXES,
   NATIVE_COUNTERS,
   NATIVE_COUNT_WORDS,
   NOT_A_NAME,
+  NOT_A_NAME_ENDINGS,
   ORG_SUFFIXES,
   PERSONAL_ACTOR_PATTERN,
-  SENSITIVE_PATTERNS,
   SKILL_DICTIONARY,
   STOPWORDS,
   TEAM_SUBJECT_PATTERN,
   THIRD_PARTY_NAME_PATTERN,
+  detectPersonalCategories,
 } from "./v9-lexicon";
 
 /**
@@ -44,21 +47,25 @@ import {
  * |---|-------|------------|
  * | V-9a | sources are this chat's `role = 'user'` messages; not only delegation requests | reject |
  * | V-9b | each quote is a substring of a cited message (normalized) | reject |
- * | V-9c | every number (with unit) / month in the value is in the quotes | reject |
- * | V-9d | English tokens, dictionary skills, company names are in the cited messages | reject |
- * | V-9e | ≤ 40% of the value's content words are missing from the quotes | needs_review |
+ * | V-9c | every number (with unit) / month in the value is in the quotes (+ the field's existing text, v4.9) | reject |
+ * | V-9d | English tokens, dictionary skills, company names are in the cited messages (+ existing text) | reject |
+ * | V-9e | ≤ 40% of the value's content words are missing from the quotes (+ existing text) | needs_review |
  * | V-9f | `action` whose subject is the team | actor_ambiguous (+ situation candidate) |
- * | V-9g | sensitive information | reject + sensitive count |
- * | V-9h | STAR field filled on the project → `append` only; period only when the project column is empty | reject (RPC only downgrades set → append, v4.5) |
+ * | V-9g | sensitive information in the value (not the quotes, v4.9 RQ-6) | reject + sensitive count |
+ * | V-9h | v4.9 (RQ-5): STAR `set` allowed on a filled field = merged proposal; `append` still accepted (old drafts); period only when the project column is empty | reject |
  * | V-9i | classification: key list, ≤ 3 distinct competencies, target empty, user sources, situation + action present | drop (classification is not a claim) |
+ * | V-9j | v4.9 (RQ-5): a merged `set` keeps every number (with unit) and V-9d name of the existing text | needs_review |
  *
- * Plus C-14: ≤ 10 patches per turn, merged STAR value ≤ 2,000 chars.
+ * "Existing text" of a STAR field (v4.9) = the form value + the pending
+ * proposal not in the form yet (+ this turn's earlier patch of the field).
+ * Plus C-14: ≤ 10 patches per turn, STAR value on apply ≤ 2,000 chars (a set
+ * replaces, so its own length; an append adds to the current value).
  *
  * v4.6 (PA-3): "the project" is the form as the user sees it (`form_snapshot`
  * applied by buildWritingChatContext, else DB values). A pending proposal whose
  * text is already in the form (filled, not saved) is treated as part of the
- * current value: the next STAR patch for that field is an `append` with
- * `new_object: true` (DM 2.5 DA-10), and it no longer counts toward C-14 twice.
+ * current value: the next STAR patch for that field starts a new object
+ * (`new_object: true`, DM 2.5 DA-10), and it no longer counts toward C-14 twice.
  * Pure functions only. Results carry counts and field paths, never text (C-7).
  */
 
@@ -115,6 +122,12 @@ export type V9Report = {
   sensitive_added: number;
   /** Same value already in the draft (no-op). */
   unchanged: number;
+  /** v4.9 (RQ-5): applied `set` patches on a field that had existing text (merged proposals). */
+  merged: number;
+  /** v4.9 V-9j: merged proposals marked needs_review because an existing number / name is missing. */
+  preservation_review: number;
+  /** R8 QA-01: legacy `append` patches on existing text turned into merged `set` (existing + new). */
+  append_merged: number;
 };
 
 export type V9Rejection = { check: V9Check; target: string };
@@ -387,13 +400,36 @@ export function contentWords(text: string): string[] {
 export function uncoveredRatio(value: string, quotes: readonly string[]): number {
   const tokens = contentWords(value);
   if (tokens.length === 0) return 0;
-  const q = norm(quotes.join("\n"));
+  const raw = quotes.join("\n").normalize("NFKC");
+  const q = norm(raw);
   const missing = tokens.filter((t) => {
     if (q.includes(t)) return false;
     if (t.length >= 3 && (q.includes(t.slice(1)) || q.includes(t.slice(0, -1)))) return false;
+    if (nominalStems(t).some((stem) => (stem.length >= 2 ? q.includes(stem) : new RegExp(`(?:^|[^가-힣])${stem}`).test(raw)))) return false;
     return true;
   });
   return missing.length / tokens.length;
+}
+
+/**
+ * R8 QA-04 (AI spec v4.9 V-9e·V-10e): -음 체 words nominalized with a ㅁ / ㄻ
+ * 받침 ("만듦", "맡음", "높임", "줄임", "바꿈", "이끎") → verb stems to look for in
+ * the quotes: the word without the ㅁ (ㄻ → ㄹ: 만듦 → 만들, 이끎 → 이끌, 높임 → 높이)
+ * and, for ㅁ only, without the last syllable (맡음 → 맡, 줄임 → 줄, 바꿈 → 바). A one-syllable
+ * stem must start a word in the quotes.
+ */
+export function nominalStems(token: string): string[] {
+  // Verb nominals are short (만듦, 이끎, 단축함 is stripped earlier); longer words are nouns (프로그램).
+  if (token.length > 3 || !/^[가-힣]+$/.test(token)) return [];
+  const last = token.slice(-1);
+  const code = last.charCodeAt(0) - 0xac00;
+  if (code < 0 || code >= 11172) return [];
+  const jong = code % 28;
+  if (jong !== 16 && jong !== 10) return []; // ㅁ, ㄻ
+  const base = String.fromCharCode(0xac00 + code - jong + (jong === 10 ? 8 : 0));
+  // ㄻ → ㄹ already gives the verb stem (만들, 이끌); only ㅁ also tries the stem without the last syllable.
+  const out = [token.slice(0, -1) + base, ...(jong === 16 ? [token.slice(0, -1)] : [])].filter((x) => x.length > 0);
+  return [...new Set(out)];
 }
 
 /**
@@ -406,15 +442,20 @@ export function isActorAmbiguous(value: string, quotes: readonly string[]): bool
   return !quotes.some((q) => PERSONAL_ACTOR_PATTERN.test(q)) && !PERSONAL_ACTOR_PATTERN.test(value);
 }
 
-/** V-9g: sensitive categories found in a text (NFR-PRV-05). */
+/**
+ * V-9g / V-10f / turn notice: sensitive categories found in a text
+ * (NFR-PRV-05, v4.9 RQ-6 C-7 "민감정보 판정"): contact details; the user's or
+ * family's own health / religion / union / politics circumstances (see
+ * PERSONAL_PHRASES — work-domain words alone never count); a real name with a
+ * title. Order: contact, health, religion, union, politics, third_party_name.
+ */
 export function detectSensitive(text: string): SensitiveCategory[] {
   const found: SensitiveCategory[] = [];
-  for (const [category, pattern] of Object.entries(SENSITIVE_PATTERNS) as [SensitiveCategory, RegExp][]) {
-    if (pattern.test(text)) found.push(category);
-  }
+  if (CONTACT_PATTERN.test(text)) found.push("contact");
+  found.push(...detectPersonalCategories(text));
   for (const match of text.matchAll(THIRD_PARTY_NAME_PATTERN)) {
-    // "정산팀 팀장": a team name, not a person.
-    if (!NOT_A_NAME.has(match[1]) && !match[1].endsWith("팀")) {
+    // "정산팀 팀장": a team name; "기획자 선배", "사업부 부장": job / organization nouns (R8).
+    if (!NOT_A_NAME.has(match[1]) && !NOT_A_NAME_ENDINGS.includes(match[1].slice(-1))) {
       found.push("third_party_name");
       break;
     }
@@ -428,26 +469,50 @@ export function detectSensitive(text: string): SensitiveCategory[] {
 
 type ClaimKind = "text" | "month";
 
-type ClaimOk = { ok: true; sourceIds: string[]; quotes: string[]; review: "ok" | "needs_review" };
+type ClaimOk = { ok: true; sourceIds: string[]; quotes: string[]; review: "ok" | "needs_review"; reviewReason?: StarReviewReason | null };
 type ClaimFail = { ok: false; check: V9Check; sensitive?: { aliases: string[]; categories: SensitiveCategory[] } };
 
-/** Runs V-9a → V-9b → V-9g → V-9c → V-9d → V-9e on one value. */
-function checkClaim(value: string, kind: ClaimKind, rawIds: readonly string[], rawQuotes: readonly string[], ctx: V9Context): ClaimOk | ClaimFail {
+/**
+ * Runs V-9a → V-9b → V-9g → V-9c → V-9d → V-9e on one value. `existing`
+ * (v4.9, STAR text only) = the field's existing text: an extra source for
+ * V-9c / V-9d / V-9e, never for V-9a / V-9b (sources stay user messages).
+ * V-9g looks at the value only (v4.9 RQ-6): a quote the value did not carry
+ * over stores nothing sensitive.
+ */
+function checkClaim(
+  value: string,
+  kind: ClaimKind,
+  rawIds: readonly string[],
+  rawQuotes: readonly string[],
+  ctx: V9Context,
+  existing: readonly string[] = [],
+): ClaimOk | ClaimFail {
   const a = checkSources(rawIds, ctx.messages);
   if (!a.ok) return { ok: false, check: a.check };
   const b = checkQuotes(rawQuotes, a.sources);
   if (!b.ok) return { ok: false, check: "V-9b" };
-  const sensitive = [...detectSensitive(value), ...b.quotes.flatMap(detectSensitive)];
+  const sensitive = detectSensitive(value);
   if (sensitive.length > 0) {
     return { ok: false, check: "V-9g", sensitive: { aliases: a.sources.map((s) => s.alias), categories: [...new Set(sensitive)] } };
   }
-  const numbersOk = kind === "month" ? checkMonthValue(value, b.quotes) : checkTextNumbers(value, b.quotes);
+  const allowed = [...b.quotes, ...existing];
+  const numbersOk = kind === "month" ? checkMonthValue(value, b.quotes) : checkTextNumbers(value, allowed);
   if (!numbersOk) return { ok: false, check: "V-9c" };
-  if (kind === "text" && findUnsupportedNames(value, a.sources.map((s) => s.content)).length > 0) {
+  if (kind === "text" && findUnsupportedNames(value, [...a.sources.map((s) => s.content), ...existing]).length > 0) {
     return { ok: false, check: "V-9d" };
   }
-  const review = kind === "text" && uncoveredRatio(value, b.quotes) > V9E_MAX_UNCOVERED_RATIO ? "needs_review" : "ok";
-  return { ok: true, sourceIds: a.sources.map((s) => s.id), quotes: b.quotes, review };
+  const review = kind === "text" && uncoveredRatio(value, allowed) > V9E_MAX_UNCOVERED_RATIO ? "needs_review" : "ok";
+  return { ok: true, sourceIds: a.sources.map((s) => s.id), quotes: b.quotes, review, reviewReason: review === "needs_review" ? "content_unverified" : null };
+}
+
+/**
+ * V-9j (v4.9, RQ-5): a merged proposal keeps the existing text's facts the
+ * server can check — every number with its unit (V-9c matching, reversed) and
+ * every V-9d name (English tokens, dictionary skills, company names). Actions
+ * and wording are not judged here (evaluation set "보존").
+ */
+export function preservesExisting(value: string, existing: readonly string[]): boolean {
+  return existing.every((text) => checkTextNumbers(text, [value]) && findUnsupportedNames(text, [value]).length === 0);
 }
 
 function filledText(v: string | null | undefined): boolean {
@@ -476,14 +541,47 @@ export function pendingInForm(field: StarField, project: V9Project, draft: Struc
 }
 
 /**
- * Length the STAR field would have if the project's current value and the
- * pending proposal were both filled (AI-12 채우기 규칙: current + separator + proposal).
- * A proposal already in the form is not counted twice.
+ * Length the STAR field would have once the pending proposal is filled into the
+ * form (AI-12 채우기 규칙): a `set` proposal replaces the field (v4.9 merged
+ * proposal — its own length); an `append` (old drafts) is current + separator +
+ * proposal. A proposal already in the form is not counted twice.
  */
 export function mergedStarLength(field: StarField, project: V9Project, draft: StructuredDraft): number {
   const current = (project.star[field] ?? "").trim().length;
-  const pending = isPending(draft.star[field]) && !pendingInForm(field, project, draft) ? (draft.star[field]!.value ?? "").length : 0;
+  const d = draft.star[field];
+  if (!isPending(d) || pendingInForm(field, project, draft)) return current;
+  const pending = (d!.value ?? "").length;
+  if (d!.op === "set") return pending;
   return current + (current > 0 && pending > 0 ? APPEND_SEPARATOR_LENGTH : 0) + pending;
+}
+
+/**
+ * R8 QA-01: the text a STAR field shows once its pending proposal is filled in
+ * (AI-12 채우기 규칙): a pending `set` replaces the form value, a pending
+ * `append` follows it after one line break; a proposal already in the form adds nothing.
+ */
+export function filledStarText(field: StarField, project: V9Project, draft: StructuredDraft): string {
+  const form = (project.star[field] ?? "").trim();
+  const d = draft.star[field];
+  if (!isPending(d) || pendingInForm(field, project, draft) || !filledText(d!.value)) return form;
+  const pending = d!.value!.trim();
+  if (d!.op === "set") return pending;
+  return form ? `${form}\n${pending}` : pending;
+}
+
+/**
+ * v4.9 (RQ-5) "기존 텍스트" of a STAR field, in order: the form value, the
+ * pending proposal when it is not in the form yet, and this turn's earlier
+ * patch of the same field. Empty parts are left out.
+ */
+export function existingStarTexts(field: StarField, project: V9Project, draft: StructuredDraft, touched?: StarChange): string[] {
+  const out: string[] = [];
+  const form = project.star[field];
+  if (filledText(form)) out.push(form!.trim());
+  const d = draft.star[field];
+  if (isPending(d) && !pendingInForm(field, project, draft) && filledText(d!.value)) out.push(d!.value!.trim());
+  if (touched && filledText(touched.value)) out.push(touched.value.trim());
+  return out;
 }
 
 /** Room left for appended text in a STAR field (C-14), separator included. Negative = already over. */
@@ -496,7 +594,19 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
   const changes = emptyDraftChanges();
   const rejections: V9Rejection[] = [];
   const byCheck = Object.fromEntries(V9_CHECKS.map((c) => [c, 0])) as Record<V9Check, number>;
-  const report: V9Report = { proposed: 0, applied: 0, needs_review: 0, rejected: 0, by_check: byCheck, actor_ambiguous: 0, sensitive_added: 0, unchanged: 0 };
+  const report: V9Report = {
+    proposed: 0,
+    applied: 0,
+    needs_review: 0,
+    rejected: 0,
+    by_check: byCheck,
+    actor_ambiguous: 0,
+    sensitive_added: 0,
+    unchanged: 0,
+    merged: 0,
+    preservation_review: 0,
+    append_merged: 0,
+  };
   const flags: V9Flags = { needsReview: [], actorAmbiguous: [], sensitiveAdded: 0, lengthFull: [] };
   const newClarifications: Clarification[] = [];
   const sensitiveKeys = new Set<string>();
@@ -557,17 +667,17 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
   // 2. STAR patches. `projected` = merged length on apply if everything pending is applied (C-14).
   const projected = new Map<StarField, number>();
   const projectedOf = (field: StarField) => projected.get(field) ?? mergedStarLength(field, ctx.project, ctx.draft);
-  const putStar = (field: StarField, op: StarOp, value: string, claim: ClaimOk, path: string): boolean => {
+  /** R8 QA-01: the field's text once everything pending is filled (what a legacy append is added to). */
+  const projectedText = new Map<StarField, string>();
+  const projectedTextOf = (field: StarField) => projectedText.get(field) ?? filledStarText(field, ctx.project, ctx.draft);
+  const putStar = (field: StarField, op: StarOp, value: string, claim: ClaimOk, path: string, existing: readonly string[] = []): boolean => {
     const draftField = ctx.draft.star[field];
-    // V-9h: a filled project (form) field takes appends only.
-    if (projectHas(field) && op === "set") {
-      reject("V-9h", path);
-      return false;
-    }
+    // V-9h (v4.9, RQ-5): a filled field takes `set` = the merged proposal (existing text + new content
+    // rewritten as one text); `append` stays valid for old prompts / retries.
     // v4.6: the pending object is already in the form → this patch starts a new object (DA-10).
     const newObject = !touched.has(field) && pendingInForm(field, ctx.project, ctx.draft);
     // Append onto nothing = set (RPC does the same).
-    const effective: StarOp = op === "append" && !projectHas(field) && !isPending(draftField) && !touched.has(field) ? "set" : op;
+    let effective: StarOp = op === "append" && !projectHas(field) && !isPending(draftField) && !touched.has(field) ? "set" : op;
     if (effective === "set" && !touched.has(field) && isPending(draftField) && draftField!.value === value) {
       report.unchanged++;
       return false;
@@ -582,7 +692,26 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       report.unchanged++;
       return false;
     }
+    // R8 QA-01: a legacy `append` onto existing text becomes a merged `set` (existing + "\n" + new), so the
+    // RPC never appends onto a merged proposal (its op would turn into append and the screen would add the
+    // form value twice). The appended sentence alone was checked against its quotes (legacy V-9c·d·e).
+    let converted = false;
+    if (effective === "append") {
+      const base = projectedTextOf(field);
+      value = base ? `${base}\n${value}` : value;
+      existing = existingStarTexts(field, ctx.project, ctx.draft, touched.get(field));
+      effective = "set";
+      converted = true;
+      report.append_merged++;
+    }
+    const merging = effective === "set" && existing.length > 0;
+    // v4.9: a merged value that adds nothing to the existing text (same after normalization, or a part of it) is a no-op.
+    if (merging && (existing.some((e) => containsNormalized(e, value)) || containsNormalized(existing.join("\n"), value))) {
+      report.unchanged++;
+      return false;
+    }
     const before = projectedOf(field);
+    // A set replaces the field on apply: its own length (a converted append = current + "\n" + new, as before).
     const after = effective === "set" ? value.length : before + (before > 0 ? APPEND_SEPARATOR_LENGTH : 0) + value.length;
     if (after > STAR_FIELD_MAX_LENGTH) {
       reject("length", path);
@@ -590,13 +719,37 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       return false;
     }
     projected.set(field, after);
+    projectedText.set(field, value);
+    let review = claim.review;
+    let reviewReason: StarReviewReason | null = claim.review === "needs_review" ? (claim.reviewReason ?? null) : null;
+    let sourceIds = claim.sourceIds;
+    let quotes = claim.quotes;
+    if (merging) {
+      report.merged++;
+      // V-9j: an existing number / name missing from the merged value → the user checks it.
+      if (!converted && !preservesExisting(value, existing)) {
+        review = "needs_review";
+        reviewReason = "existing_missing";
+        report.preservation_review++;
+      }
+      // The merged value carries the replaced proposal's content: keep its sources with the new ones
+      // (the RPC replaces the pending object on set). Not when a new object starts (that proposal is in the form).
+      const carried = [touched.get(field), newObject || !isPending(draftField) ? undefined : draftField];
+      for (const prior of carried) {
+        if (!prior) continue;
+        // New sources first: toDraftPatch keeps the first 20 (clampSources); the RPC rejects more.
+        sourceIds = [...new Set([...sourceIds, ...prior.source_message_ids])];
+        quotes = [...new Set([...quotes, ...prior.source_quotes])];
+      }
+    }
     const change: StarChange = {
       field,
       op: effective,
       value,
-      source_message_ids: claim.sourceIds,
-      source_quotes: claim.quotes,
-      review: claim.review,
+      source_message_ids: sourceIds,
+      source_quotes: quotes,
+      review,
+      review_reason: review === "needs_review" ? reviewReason : null,
       ...(newObject ? { new_object: true } : {}),
     };
     changes.star.push(change);
@@ -625,7 +778,9 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       reject("length", path);
       continue;
     }
-    const claim = checkClaim(value, "text", s.source_message_ids, s.source_quotes, ctx);
+    // v4.9: a set's sources include the field's existing text (merged proposal); an append's do not.
+    const existing = s.op === "set" ? existingStarTexts(s.field, ctx.project, ctx.draft, touched.get(s.field)) : [];
+    const claim = checkClaim(value, "text", s.source_message_ids, s.source_quotes, ctx, existing);
     if (!claim.ok) {
       reject(claim.check, path, claim.sensitive);
       continue;
@@ -646,7 +801,7 @@ export function validateExtractOutput(output: Ai12ExtractOutput, ctx: V9Context)
       }
       continue;
     }
-    putStar(s.field, s.op, value, claim, path);
+    putStar(s.field, s.op, value, claim, path, existing);
   }
 
   // 3. Classification suggestions (V-9i). Not a claim: drops never reject the turn.

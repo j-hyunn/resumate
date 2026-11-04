@@ -39,7 +39,7 @@ import { PERSONAL_ACTOR_PATTERN, TEAM_SUBJECT_PATTERN } from "./v9-lexicon";
  * counts, check ids, and positions — never text (C-7).
  *
  * 사실 정리 (facts): V-9a (user sources, not delegation) · V-9b (quote is a
- * substring) · V-9g (sensitive → drop + count) · V-9c (numbers) · V-9d (names)
+ * substring) · V-9g (sensitive fact text → drop + count; v4.9: text only, C-7 판정) · V-9c (numbers) · V-9d (names)
  * · V-9e (> 40% uncovered → needs_review), per fact. V-9f becomes the actor
  * mark: a team-subject fact is stored with `actor = team` (kept, not dropped).
  * C-14: ≤ 10 facts per turn, ≤ 60 per chat, text ≤ 300.
@@ -51,7 +51,7 @@ import { PERSONAL_ACTOR_PATTERN, TEAM_SUBJECT_PATTERN } from "./v9-lexicon";
  * | V-10c | English tokens, skill words, company names, URLs are in its source texts | drop |
  * | V-10d | a self-action sentence needs a self fact or a first-person body / description quote | needs_review |
  * | V-10e | > 50% of content words outside the source texts | needs_review |
- * | V-10f | sensitive information | drop + sensitive count |
+ * | V-10f | sensitive information in the unit text (v4.9 C-7 판정; quotes not checked) | drop + sensitive count |
  * | V-10g | type / heading depth ≤ 3 / no HTML or images / unit text ≤ 1,500 / draft ≤ 8,000 | clean, cut, or drop |
  * | V-10h | basis = new only with an F-n source, else current_body (re-derived) | — |
  */
@@ -175,7 +175,8 @@ export function validateFactsOutput(output: Ai13ExtractOutput, ctx: DeliverableC
     if (!a.ok) return reject(a.check, target);
     const b = checkQuotes(f.source_quotes, a.sources);
     if (!b.ok) return reject("V-9b", target);
-    const sensitive = [...detectSensitive(text), ...b.quotes.flatMap(detectSensitive)];
+    // V-9g on the fact text only (v4.9 RQ-6): a quote the fact did not carry over stores nothing sensitive.
+    const sensitive = detectSensitive(text);
     if (sensitive.length > 0) {
       for (const s of a.sources) for (const c of sensitive) countSensitive(s.alias, c);
       return reject("V-9g", target);

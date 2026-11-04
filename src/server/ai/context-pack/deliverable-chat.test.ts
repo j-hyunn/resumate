@@ -40,6 +40,12 @@ describe("buildDeliverableChatContext — values", () => {
     expect(renderCurrentBody(over)).toContain('truncated="true"');
   });
 
+  it("v4.9 (RQ-6): sensitiveNotice uses the personal-context rule", () => {
+    const notice = (say: string) => buildDeliverableChatContext(baseInput({ messages: rows([["assistant", GREETING], ["user", say]]), lastExtractedSequence: 1 })).sensitiveNotice;
+    expect(notice("수술 일정 관리 기능과 입원 환자 조회 화면의 회고예요")).toEqual([]);
+    expect(notice("저는 노조 활동을 했어요")).toEqual(["union"]);
+  });
+
   it("base_body_hash = sha256 of the exact form body", () => {
     const ctx = buildDeliverableChatContext(baseInput({ formSnapshot: { body: "본문\n" } }));
     expect(ctx.baseBodyHash).toBe(bodyHash("본문\n"));

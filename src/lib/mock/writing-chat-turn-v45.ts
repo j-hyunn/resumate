@@ -27,6 +27,22 @@ import type { PanelTurnEvent } from "@/lib/data/writing-chat-turn-v45"
 
 type MockRequest = Extract<TurnRequest, { kind: "mock" }>
 
+/** Mock only: a rough 해요체/습니다체 → -음 체 ending swap so previews read like real STAR sentences. */
+function toEumStyle(text: string): string {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) =>
+      sentence
+        .replace(/[.!?]+$/, "")
+        .replace(/했(?:어요|습니다|다)$/, "함")
+        .replace(/(았|었|였)(?:어요|습니다|다)$/, "$1음")
+        .replace(/(?:해요|합니다)$/, "함")
+        .replace(/(?:이에요|예요|입니다)$/, "임")
+        .replace(/요$/, ""),
+    )
+    .join(". ")
+}
+
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) return reject(new DOMException("aborted", "AbortError"))
@@ -132,10 +148,12 @@ export async function* mockPanelTurn(req: MockRequest, signal: AbortSignal): Asy
     await sleep(500, signal)
     const draft = structuredClone(req.structured_draft as ProjectStructuredDraft)
     const prev = draft.star[slot]
-    const formHas = !isBlank(star?.[slot])
+    // RQ-5 (2026-11-04): 값이 있는 항목도 op "set" — 기존 텍스트(폼 값 + 미반영 제안) + 새 내용을 합친 전체 문장.
+    const existing = [star?.[slot], prev && !prev.applied_at ? prev.value : null].filter((v): v is string => !isBlank(v)).at(-1)
+    const said = toEumStyle(req.body.content.trim())
     draft.star[slot] = {
-      value: req.body.content.trim().replace(/요\.?$/, "다."),
-      op: formHas ? "append" : "set",
+      value: existing ? `${toEumStyle(existing.trim())} ${said}` : said,
+      op: "set",
       origin: "ai",
       source_message_ids: [user.id],
       source_quotes: [req.body.content.trim().slice(0, 40)],

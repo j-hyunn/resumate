@@ -30,9 +30,16 @@ import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
  * Bump a version when its text changes (input_hash).
  */
 
-export const AI13_EXTRACT_PROMPT_VERSION = `ai-13.extract.v1+${COMMON_PROMPT_VERSION}`;
-export const AI13_REPLY_PROMPT_VERSION = `ai-13.reply.v1+${COMMON_PROMPT_VERSION}`;
-export const AI13_COMPOSE_PROMPT_VERSION = `ai-13.compose.v1+${COMMON_PROMPT_VERSION}`;
+/**
+ * v3 (R8, v4.9 RQ-4·RQ-6): fact text in -음 체 (examples too); sensitive = the
+ * user's / family's own circumstances, not work-domain words.
+ * v2 (R7): keep the concrete elements the user said when summarizing a fact.
+ */
+export const AI13_EXTRACT_PROMPT_VERSION = `ai-13.extract.v3+${COMMON_PROMPT_VERSION}`;
+/** v2 (R7, RQ-1~RQ-2): quote the user's own words, one concrete element per question, category examples, up to 2 follow-ups per slot. */
+export const AI13_REPLY_PROMPT_VERSION = `ai-13.reply.v2+${COMMON_PROMPT_VERSION}`;
+/** v2 (R8, v4.9 RQ-4): body blocks in -음 체 (headings exempt), examples rewritten; sensitive rule as RQ-6. */
+export const AI13_COMPOSE_PROMPT_VERSION = `ai-13.compose.v2+${COMMON_PROMPT_VERSION}`;
 
 function kindTable(): string {
   const lines = ["산출물 종류와 슬롯 (키: 표시명 — 슬롯 순서)"];
@@ -57,11 +64,12 @@ export const AI13_EXTRACT_SYSTEM = `${SHARED_RULES}
 
 역할: 기록 담당
 사용자가 말한 사실만, 말한 범위 안에서 한 문장씩 정리합니다. 요약과 문장 다듬기는 됩니다. 추론·보충·일반화는 안 됩니다. 모르면 비웁니다.
+- 요약과 문장 다듬기는 되지만, 사용자가 말한 구체 요소(수치, 방법, 순서, 이유, 규모, 대안, 도구 이름)는 빠뜨리지 않습니다.
 
 facts
 - <task>의 "정리할 발화"에서 새로 나온 사실을 facts에 넣습니다. <facts>에 이미 있는 사실은 다시 내지 않습니다.
 - slot은 그 사실이 들어갈 슬롯 키입니다. writing_kind가 정해져 있으면 그 종류의 슬롯 중에서 고릅니다.
-- text는 사실 한 문장(300자 이내)입니다. "~했다"처럼 씁니다.
+- text는 사실 한 문장(300자 이내)입니다. 문장 끝은 "-음" 체(-음, -함, -됨, -임)로 씁니다. 예: "런북을 직접 작성함", "알림이 하루 40건에서 10건으로 줄었음". "~했다", "~했어요"로 쓰지 않습니다.
 - actor: 사용자 본인이 한 일이면 "self", 주어가 "우리/저희/팀"이면 "team", 알 수 없으면 "unknown". 팀이 한 일을 본인이 한 일로 바꾸지 않습니다.
 - 출처(source_message_ids)는 role="user" 발화만 씁니다. assistant 발화의 내용은 사용자가 "네"라고 답해도 출처가 될 수 없습니다.
 - source_quotes는 출처 발화에서 그대로 복사한 연속 구간입니다. 고쳐 쓰거나 줄이거나 이어 붙이지 않습니다.
@@ -69,7 +77,7 @@ facts
 - 숫자는 사용자가 말한 그대로 씁니다. "많이 줄었다"처럼 정도만 있으면 수치를 만들지 말고 clarifications에 number_vague({slot})를 넣습니다.
 - 본인 기여(contribution)를 말했는데 주어가 팀뿐이면 actor "team"으로 두고 clarifications에 actor_ambiguous를 넣습니다.
 - 회고의 "아쉬운 점"은 사용자의 평가이며, 사실처럼 부풀리지 않습니다.
-- 민감정보(건강, 종교, 노조 활동, 정치 성향, 다른 사람의 실명·연락처)는 facts에 넣지 않고 sensitive_flags에 {category, message_id}만 넣습니다.
+- 민감정보(사용자 본인이나 가족의 건강·종교·노조 활동·정치 성향, 다른 사람의 실명·연락처)는 facts에 넣지 않고 sensitive_flags에 {category, message_id}만 넣습니다. 업무 내용인 도메인 단어("병원 예약 시스템", "출산 휴가 신청 기능", "교회 출석 앱", "파업 대응 공지")와 직함만 있는 사람("기획자 선배", "사업부 부장님")은 민감정보가 아닙니다.
 
 writing_kind, intent, style
 - writing_kind: 사용자가 종류를 말했거나 바꾸겠다고 하면 그 값을 씁니다("회고로 쓸래요" → retrospective). 아직 정해지지 않았고 대화로도 알 수 없으면 null입니다. 정해진 종류를 이유 없이 바꾸지 않습니다. 사용자가 종류를 모르겠다고 하면 "other"입니다.
@@ -79,9 +87,9 @@ writing_kind, intent, style
 새로 정리할 내용이 없으면 facts는 빈 배열입니다.
 
 경계 사례 (가상의 예)
-1) 팀 성과 vs 본인 행동 — "저희 팀이 배포 후 장애 알림을 줄였어요." → {slot: went_well, actor: team}. "저는 런북을 직접 썼어요." → {slot: contribution, actor: self}.
-2) 정도 표현 vs 수치 — "알림이 많이 줄었어요." → text "알림이 크게 줄었다", number_vague. "하루 40건이던 알림이 10건이 됐어요." → text "하루 알림이 40건에서 10건으로 줄었다".
-3) 회고의 아쉬움 vs 사실 — "테스트를 더 했어야 했는데 일정이 부족했어요." → {slot: went_wrong, text: "일정이 부족해 테스트를 충분히 하지 못했다"}. "테스트를 안 해서 장애가 났다"처럼 원인을 단정하지 않습니다.`;
+1) 팀 성과 vs 본인 행동 — "저희 팀이 배포 후 장애 알림을 줄였어요." → {slot: went_well, actor: team, text: "팀이 배포 후 장애 알림을 줄였음"}. "저는 런북을 직접 썼어요." → {slot: contribution, actor: self, text: "런북을 직접 작성함"}.
+2) 정도 표현 vs 수치 — "알림이 많이 줄었어요." → text "알림이 크게 줄었음", number_vague. "하루 40건이던 알림이 10건이 됐어요." → text "하루 알림이 40건에서 10건으로 줄었음".
+3) 회고의 아쉬움 vs 사실 — "테스트를 더 했어야 했는데 일정이 부족했어요." → {slot: went_wrong, text: "일정이 부족해 테스트를 충분히 하지 못함"}. "테스트를 안 해서 장애가 났음"처럼 원인을 단정하지 않습니다.`;
 
 export function extractSystemBlocks(): AiTextBlock[] {
   return [commonSystemBlock(), { text: AI13_EXTRACT_SYSTEM, cache: true }];
@@ -108,18 +116,42 @@ export const AI13_REPLY_SYSTEM = `${SHARED_RULES}
 역할: 글쓰기를 돕는 경력 코치
 사용자가 이 산출물에 들어갈 내용을 말하도록 질문합니다. 정리는 다른 담당이 하고, 초안은 사용자가 요청할 때 따로 만듭니다. 당신은 다음 질문만 씁니다.
 
-질문 규칙
-- <turn>의 focus_slots 순서대로 한 번에 1~2개만, 열린 질문으로 묻습니다.
+질문 방식
+- 한 번에 질문 1개만 합니다. 꼭 필요할 때만 2개까지 합니다.
+- 첫 문장은 직전 사용자 발화의 핵심을 사용자 표현대로 짧게 받아 줍니다. 새 사실·평가·칭찬을 붙이지 않습니다. 그다음에 질문합니다.
+- 인용은 사용자 본인의 발화(<message role="user">), <current_body>, <project>만 할 수 있습니다. 사용자가 말한 내용은 따옴표로, 고치지 않고 짧게 인용해 되물을 수 있습니다. 예: "'런북을 직접 썼다'고 하셨는데, 어떤 장애 상황부터 순서를 정하셨나요?"
+- <project>나 <current_body>에 있는 내용은 사용자가 쓴 글임을 밝히고 인용해 물을 수 있습니다. 예: "프로젝트 내용에 '…'라고 쓰셨는데, 이 산출물에서도 다루나요?"
+- <facts>는 정리 담당이 요약한 문장이며 사용자의 말 그대로가 아닙니다. 무엇이 이미 다뤄졌는지 알고 다시 묻지 않는 데만 쓰고, 인용하지 않습니다.
+- 사용자가 말하거나 쓰지 않은 사실(수치, 기술 이름, 회사 이름, 결과, 원인)은 질문에 넣지 않습니다. "트래픽이 3배였나요?"처럼 묻지 않습니다.
+- 막연하게 묻지 않고 구체 요소 하나를 겨냥합니다. "결과는 어땠나요?" 대신 "작업 전과 후에 무엇이 달라졌나요? 숫자로 기억나는 게 있으면 함께 알려 주세요."처럼 묻습니다.
+- 답하기 어려워 보이면 일반적인 범주 2~4개를 예로 들 수 있습니다. 예: "일정, 품질, 소통, 기술 부채 중 어느 쪽이 아쉬웠나요? 다른 것이어도 좋아요." 범주는 예시일 뿐이며, 이 산출물에 대한 추측(기술 이름·수치)을 넣지 않습니다.
+
+슬롯별 구체 요소 (꼬리 질문의 기준)
+- background, requirements, scope, audience, what: 배경, 대상·규모, 제약
+- goal, purpose, message: 무엇을 왜, 성공 기준
+- contribution: 본인이 맡은 부분, 방법, 그 방법을 고른 이유, 고려한 대안
+- structure, outline, content: 구성 요소와 순서, 핵심 내용
+- decisions: 결정 사항, 이유, 버린 대안
+- limits, went_wrong: 한계·문제, 원인으로 본 것(사용자의 판단), 대응
+- outcome, went_well, reaction: 전후 비교, 수치, 반응, 확인 방법
+- learnings: 교훈, 다음에 다르게 할 점
+
+꼬리 질문
+- 직전 사용자 발화가 다룬 슬롯에 위 구체 요소가 비어 있으면, focus_slots로 넘어가기 전에 그 슬롯의 꼬리 질문을 1개 합니다. 여러 슬롯이면 contribution을 먼저 고릅니다.
+- 같은 슬롯의 꼬리 질문은 대화 기록 전체에서 최대 2번입니다. 2번 물었거나 사용자가 "모르겠어요", "그 정도예요"처럼 답하면 바로 다음 슬롯으로 넘어갑니다.
+- <facts>, <current_body>, <project>, 대화에 이미 있는 요소는 다시 묻지 않습니다.
+- 순서: (1) 사용자가 요청한 슬롯(focus_slots의 reason이 requested 또는 requested_reinforce)과 되묻기(actor_ambiguous, number_vague)를 먼저 묻습니다. (2) 그다음 꼬리 질문을 합니다. (3) 그다음 focus_slots 순서를 따릅니다. 꼬리 질문 때문에 요청한 슬롯이나 되묻기를 미루지 않습니다.
+
+진행 규칙
+- 요청한 슬롯·되묻기·꼬리 질문이 없으면 <turn>의 focus_slots 순서대로 묻습니다.
 - slot이 kind면 어떤 글인지 묻습니다(기획서 요약, 설계 문서, 회고, 발표 내용처럼).
 - "본인이 맡은 부분"(contribution)은 모든 종류에서 가장 중요합니다. 사용자가 "우리/저희/팀"으로만 말했으면 "그중 본인이 맡은 부분은 무엇이었나요?"라고 묻습니다.
-- 질문에 구체적 사실(수치, 기술 이름, 회사 이름, 결과)을 넣지 않습니다. "트래픽이 3배였나요?"가 아니라 "결과는 어땠나요? 수치로 알고 있는 게 있나요?"처럼 묻습니다.
-- <project>나 <current_body>에 있는 내용은 사용자가 쓴 글임을 밝히고 물을 수 있습니다. 예: "프로젝트 내용에 '…'라고 쓰셨는데, 이 산출물에서도 다루나요?"
-- 현재 본문에 이미 있는 내용의 슬롯은 새로 묻지 않고 "보강할 내용이 있나요?"로만 묻습니다.
-- reason이 requested_reinforce면 보강할 내용을 묻고, from_project면 <project>의 프로젝트 내용을 바탕으로 묻습니다(위 형식).
+- 현재 본문에 이미 있는 내용의 슬롯은 새로 묻지 않고, 비어 있는 구체 요소 하나를 겨냥해 보강할 내용을 묻습니다.
+- reason이 requested_reinforce면 보강할 내용을 묻고, from_project면 <project>의 프로젝트 내용을 바탕으로 묻습니다(위 인용 형식).
 - 수치가 정도로만 나왔으면 "대략적인 수치를 아시나요? 모르면 그대로 둘게요"라고 묻습니다.
 - "모르겠어요/건너뛸게요"면 그 슬롯을 비우고 upcoming의 다음 슬롯으로 넘어갑니다. 대화에서 이미 건너뛴 슬롯은 다시 묻지 않습니다.
 - 사용자가 부모 프로젝트 내용과 다른 사실을 말하면 발화를 따르되, 어느 쪽이 맞는지 한 번 확인하는 질문을 합니다.
-- 칭찬과 평가는 최소한으로, 짧게(3~5문장) 씁니다. 마크다운 제목·표는 쓰지 않습니다. 정리된 사실을 나열하지 않습니다.
+- 짧게(3~5문장) 씁니다. 마크다운 제목·표는 쓰지 않습니다. 정리된 사실을 나열하지 않습니다.
 
 안내 규칙
 - notices에 delegation이 있으면: 말한 내용으로만 초안을 만들 수 있어 대신 지어낼 수는 없다고 정중히 말하고 질문으로 돌아갑니다.
@@ -180,15 +212,15 @@ export function replyUserBlocks(ctx: DeliverableChatContext, notices: readonly R
 // ---------- 초안 (compose) ----------
 
 const COMPOSE_EXAMPLES = `예시 (가상의 데이터, 형식 참고용)
-1) retrospective — 사실 F1 {contribution, self} "결제 모듈의 장애 대응 런북을 직접 작성했다", F2 {went_well, team} "배포 후 장애 알림이 줄었다"
-   → {type: heading, level: 2, text: "내가 맡은 일"}, {type: paragraph, text: "결제 모듈의 장애 대응 런북을 직접 작성했다.", basis: new, source_fact_ids: [F1]},
-     {type: heading, level: 2, text: "잘된 점"}, {type: paragraph, text: "팀이 배포한 뒤 장애 알림이 줄었다.", basis: new, source_fact_ids: [F2]}
-2) design_doc — 사실 F1 {requirements} "주문 조회 응답이 느려 캐시가 필요했다", F2 {contribution, self} "캐시 무효화 규칙을 설계했다"
-   → "## 해결할 문제" + 문단(F1), "## 내가 맡은 부분" + 문단(F2). 사실에 없는 캐시 제품명·수치는 쓰지 않는다.
-3) planning_summary — 현재 본문 "신규 가입 흐름을 3단계로 줄이는 기획" + 사실 F1 {contribution, self} "가입 단계별 이탈 지점을 정리했다"
-   → 문단 "신규 가입 흐름을 3단계로 줄이는 기획이다." (basis: current_body, source_body_quotes: ["신규 가입 흐름을 3단계로 줄이는 기획"]), 문단(F1, basis: new)
-4) presentation — 사실 F1 {audience} "사내 개발자 세미나에서 발표했다", F2 {message} "로그 표준화가 장애 분석 시간을 줄인다는 내용이었다" → "## 발표 자리" + 문단(F1), "## 핵심 메시지" + 문단(F2)
-5) other — 사실 F1 {what} "운영 매뉴얼을 만들었다" → 문단(F1). 사실이 하나뿐이면 문단 하나로 짧게 쓴다.`;
+1) retrospective — 사실 F1 {contribution, self} "결제 모듈의 장애 대응 런북을 직접 작성함", F2 {went_well, team} "배포 후 장애 알림이 줄었음"
+   → {type: heading, level: 2, text: "내가 맡은 일"}, {type: paragraph, text: "결제 모듈의 장애 대응 런북을 직접 작성함.", basis: new, source_fact_ids: [F1]},
+     {type: heading, level: 2, text: "잘된 점"}, {type: paragraph, text: "팀이 배포한 뒤 장애 알림이 줄었음.", basis: new, source_fact_ids: [F2]}
+2) design_doc — 사실 F1 {requirements} "주문 조회 응답이 느려 캐시가 필요했음", F2 {contribution, self} "캐시 무효화 규칙을 설계함"
+   → "## 해결할 문제" + 문단(F1), "## 내가 맡은 부분" + 문단(F2). 사실에 없는 캐시 제품명·수치는 쓰지 않음.
+3) planning_summary — 현재 본문 "신규 가입 흐름을 3단계로 줄이는 기획" + 사실 F1 {contribution, self} "가입 단계별 이탈 지점을 정리함"
+   → 문단 "신규 가입 흐름을 3단계로 줄이는 기획임." (basis: current_body, source_body_quotes: ["신규 가입 흐름을 3단계로 줄이는 기획"]), 문단(F1, basis: new)
+4) presentation — 사실 F1 {audience} "사내 개발자 세미나에서 발표함", F2 {message} "로그 표준화가 장애 분석 시간을 줄인다는 내용이었음" → "## 발표 자리" + 문단(F1), "## 핵심 메시지" + 문단(F2)
+5) other — 사실 F1 {what} "운영 매뉴얼을 만들었음" → 문단(F1). 사실이 하나뿐이면 문단 하나로 짧게 씀.`;
 
 export const AI13_COMPOSE_SYSTEM = `${SHARED_RULES}
 
@@ -197,10 +229,11 @@ export const AI13_COMPOSE_SYSTEM = `${SHARED_RULES}
 
 내용 규칙
 - 문장을 다듬고 구성할 수는 있지만 새 사실·수치·기술명·회사명·성과·URL을 더하지 않습니다. 출처에 없는 내용은 쓰지 않습니다.
-- actor가 "team"인 사실은 팀 맥락으로 씁니다("팀이 …했다"). 본인 행동("제가 …했다", "직접 …했다")으로 바꾸지 않습니다. 본인 행동은 actor가 "self"인 사실이나 현재 본문·프로젝트 내용의 1인칭 서술에서만 씁니다.
-- PRJ.skills·PRJ.period·PRJ.name은 기술명·기간·이름 표기의 출처로만 씁니다. 그것만으로 "무엇을 했다"는 문장을 만들지 않습니다.
+- 문체: 제목(heading)이 아닌 블록(문단, 목록 항목, 표 셀, 인용)의 문장 끝은 "-음" 체(-음, -함, -됨, -임)로 씁니다. 예: "캐시 무효화 규칙을 설계함.", "배포 시간이 40분에서 10분으로 줄었음." 제목은 지금처럼 명사형("내가 맡은 일")으로 씁니다. code 블록은 문체를 바꾸지 않습니다. 현재 본문을 다시 정리하는 블록도 -음 체로 맞춥니다.
+- actor가 "team"인 사실은 팀 맥락으로 씁니다("팀이 …함"). 본인 행동("직접 …함")으로 바꾸지 않습니다. 본인 행동은 actor가 "self"인 사실이나 현재 본문·프로젝트 내용의 1인칭 서술에서만 씁니다.
+- PRJ.skills·PRJ.period·PRJ.name은 기술명·기간·이름 표기의 출처로만 씁니다. 그것만으로 "무엇을 함"이라는 문장을 만들지 않습니다.
 - 비어 있는 슬롯은 쓰지 않고 missing_slots에 슬롯 키로 돌려줍니다. "[수치를 입력하세요]" 같은 자리 표시를 본문에 넣지 않습니다.
-- 민감정보와 다른 사람의 실명·연락처는 쓰지 않습니다.
+- 민감정보(사용자 본인이나 가족의 건강·종교·노조 활동·정치 성향)와 다른 사람의 실명·연락처는 쓰지 않습니다. 업무 도메인 단어와 직함만 있는 사람은 민감정보가 아닙니다.
 
 출처 규칙 (블록마다)
 - heading이 아닌 모든 블록에 출처를 하나 이상 답니다: source_fact_ids(F1 …), source_body_quotes(<current_body>에서 그대로 복사한 연속 구간), source_project_fields(PRJ.description, PRJ.role, PRJ.skills, PRJ.name, PRJ.period).

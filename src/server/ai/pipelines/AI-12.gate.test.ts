@@ -42,7 +42,7 @@ describe("R-31 gate requirements in AI-12", () => {
     const llm = createFakeLlm([{ text: "결제 쪽에서 어떤 일을 하셨나요?" }]);
     await drain(reply(c, { llm }));
     expect(llm.requests[0].promptVersion).toBe(AI12_REPLY_PROMPT_VERSION);
-    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v4\+/);
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v6\+/);
   });
 
   it("QA-S5-04: <gate_requirements> is in the data-block (injection) rule of both calls", () => {
@@ -68,7 +68,7 @@ describe("R-31 gate requirements in AI-12", () => {
     expect(text).not.toContain("gate_requirements");
     expect(text).not.toContain("Kafka");
     expect(text).not.toContain("결제 도메인");
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v4\+/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v6\+/);
     const llm = createFakeLlm([{ json: output() }]);
     await extract(ctx(), { llm });
     const sent = [...llm.requests[0].systemBlocks, ...llm.requests[0].userBlocks].map((b) => b.text).join("\n");

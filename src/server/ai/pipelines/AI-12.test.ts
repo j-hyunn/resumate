@@ -19,7 +19,7 @@ import { buildWritingChatContext, type WritingChatTurnInput } from "../context-p
 import { AiError } from "../errors";
 import { createFakeLlm } from "../fake-llm";
 import type { AiLogEntry } from "../log";
-import { AI12_EXTRACT_PROMPT_VERSION, AI12_REPLY_PROMPT_VERSION } from "../prompts/AI-12";
+import { AI12_EXTRACT_PROMPT_VERSION, AI12_EXTRACT_SYSTEM, AI12_REPLY_PROMPT_VERSION, AI12_REPLY_SYSTEM } from "../prompts/AI-12";
 import type { DraftPatchOp } from "../schemas/structured-draft";
 import { extract, rejectionTargetCounts, reply, type ReplyEvent } from "./AI-12";
 
@@ -97,13 +97,15 @@ describe("extract — fixture conversations (V-9 end to end)", () => {
     expect(r.rejections.map((x) => x.check)).toEqual(["V-9a.delegation", "V-9a"]);
   });
 
-  it("filled project: set on a filled field and a period over an existing one are rejected (V-9h); append kept", async () => {
+  it("filled project (v4.9): a merged set on a filled field is kept; a period over an existing one is V-9h; legacy append kept", async () => {
     const r = await extract(ctxOf(filledAppend.messages, { project: filledProject() }), { llm: createFakeLlm([{ json: filledAppend.output }]) });
-    expect(r.rejections).toEqual([
-      { check: "V-9h", target: "project.start_month" },
-      { check: "V-9h", target: "star.result" },
-    ]);
-    expect(ops(r.patch.ops)).toEqual(["append:star.result:ok"]);
+    expect(r.rejections).toEqual([{ check: "V-9h", target: "project.start_month" }]);
+    expect(ops(r.patch.ops)).toEqual(["set:star.result:ok"]);
+    expect(r.report).toMatchObject({ merged: 1, preservation_review: 0 });
+    const legacy = await extract(ctxOf(filledAppend.messages, { project: filledProject() }), { llm: createFakeLlm([{ json: filledAppend.legacyOutput }]) });
+    // R8 QA-01: a legacy append reaches the RPC as a merged set (current value + new sentence).
+    expect(ops(legacy.patch.ops)).toEqual(["set:star.result:ok"]);
+    expect(legacy.report.append_merged).toBe(1);
   });
 
   it("filled project with classification already chosen: no suggestion for that field", async () => {
@@ -123,7 +125,7 @@ describe("extract — calls and errors", () => {
     expect(req.outputSchema).toMatchObject({ type: "object" });
     expect(llm.calls[0].model).toBe(llm.modelFor("light"));
     expect(r.promptVersion).toBe(AI12_EXTRACT_PROMPT_VERSION);
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v4\+common\.v2$/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v6\+common\.v2$/);
     expect(llm.records).toHaveLength(1);
     expect(llm.records[0]).toMatchObject({ modelTier: "light", outcome: "succeeded" });
   });
@@ -238,7 +240,7 @@ describe("reply", () => {
     expect(events.filter((e) => e.type === "delta").length).toBeGreaterThan(1);
     expect(events.at(-1)).toMatchObject({ type: "done", text: "그때 어떤 상황이었나요? 팀이나 서비스 배경을 알려 주세요." });
     expect(llm.requests[0]).toMatchObject({ tier: "default", outputSchema: null, callKey: "writing_chat.reply", promptVersion: AI12_REPLY_PROMPT_VERSION });
-    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v4\+common\.v2$/);
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v6\+common\.v2$/);
     expect(llm.calls[0].model).toBe(llm.modelFor("default"));
   });
 
@@ -266,16 +268,51 @@ describe("reply", () => {
     expect(turn).toContain("can_apply: false");
     expect(turn).toContain("ready_to_return: false");
     expect(turn).toContain("last_message: true");
-    expect(llm.requests[0].userBlocks.at(-2)!.text).toContain("<status>");
+    expect(llm.requests[0].userBlocks.at(-2)!.text).toContain("<project_state>");
   });
 
-  it("reply status shows states, not values", async () => {
+  it("reply <project_state> carries the form values and pending proposals so the coach can quote them (R7)", async () => {
     const llm = createFakeLlm([{ text: "ok" }]);
-    const draft = { star: { action: { value: "비밀 행동", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "ok", reviewed_at: null, applied_at: null } } };
-    await collect(reply(ctxOf(cooperative.messages, { structuredDraft: draft, project: filledProject({ situation: "비밀 상황" }) }), { llm }));
-    const sent = llm.requests[0].userBlocks.map((b) => b.text).join("\n");
-    expect(llm.requests[0].userBlocks.at(-2)!.text).toContain("action: 값 있음 + 덧붙임 제안 있음");
-    expect(sent).not.toContain("비밀");
+    const draft = { star: { action: { value: "캐시 무효화 규칙을 설계함", op: "set", origin: "ai", source_message_ids: [msgId(2)], source_quotes: ["x"], review: "ok", reviewed_at: null, applied_at: null } } };
+    await collect(reply(ctxOf(cooperative.messages, { structuredDraft: draft, project: filledProject({ situation: "주문 조회가 느렸다" }) }), { llm }));
+    const state = llm.requests[0].userBlocks.at(-2)!.text;
+    expect(state).toContain("  situation: 주문 조회가 느렸다");
+    // v6 (RQ-5): a proposal for a field that has a form value is a merged proposal.
+    expect(state).toContain("  action [합친 제안]: 캐시 무효화 규칙을 설계함");
+    expect(state).not.toContain("덧붙임");
+    expect(state).not.toContain("남은 글자 수");
+    expect(state).not.toContain("<status>");
+  });
+
+  it("reply system has the R7 question rules (quote, one element, categories, follow-up cap)", () => {
+    expect(AI12_REPLY_SYSTEM).toContain("따옴표로, 고치지 않고 짧게 인용해");
+    expect(AI12_REPLY_SYSTEM).toContain("사용자가 말하지 않은 사실(수치, 기술 이름, 회사 이름, 결과, 원인)은 질문에 넣지 않습니다");
+    expect(AI12_REPLY_SYSTEM).toContain("구체 요소 하나를 겨냥합니다");
+    expect(AI12_REPLY_SYSTEM).toContain("일반적인 범주 2~4개");
+    expect(AI12_REPLY_SYSTEM).toContain("최대 2번");
+    expect(AI12_REPLY_SYSTEM).toContain("action > result > situation > task > learnings");
+    for (const f of ["situation:", "task:", "action:", "result:", "learnings:"]) expect(AI12_REPLY_SYSTEM).toContain(`- ${f}`);
+    // kept guidance rules
+    for (const k of ["delegation", "sensitive", "can_apply", "full_fields", "ready_to_return", "last_message", "<gate_requirements>", "분류(프로젝트 종류·경험 유형·역량)는 묻지 않습니다"]) expect(AI12_REPLY_SYSTEM).toContain(k);
+    expect(AI12_REPLY_SYSTEM).not.toContain("<status>");
+    // QA-01: requested slot and clarifications before follow-ups, then focus_slots order
+    expect(AI12_REPLY_SYSTEM).toContain("(1) 사용자가 요청한 항목(focus_slots의 reason이 requested 또는 requested_reinforce)과 되묻기(actor_ambiguous, number_vague)를 먼저 묻습니다. (2) 그다음 꼬리 질문을 합니다. (3) 그다음 focus_slots 순서를 따릅니다.");
+    // QA-04: quote only user messages and form values, never proposals
+    expect(AI12_REPLY_SYSTEM).toContain("인용은 사용자 본인의 발화(<message role=\"user\">)와 <project_state>의 star·period(폼 값)만 할 수 있습니다");
+    expect(AI12_REPLY_SYSTEM).toContain("proposals는 인용하지 않습니다");
+    expect(AI12_REPLY_SYSTEM).toContain("<reflection> 안의 learnings도 사용자 본인의 회고");
+    expect(AI12_EXTRACT_SYSTEM).toContain("사용자가 말한 구체 요소(수치, 방법, 순서, 이유, 규모, 대안, 도구 이름)는 빠뜨리지 않습니다");
+    // R8 (v4.9 RQ-4·RQ-5·RQ-6): merged set, never append; -음 체 examples; sensitive = personal circumstances.
+    expect(AI12_EXTRACT_SYSTEM).toContain('star_patches는 항상 op "set"입니다. "append"는 쓰지 않습니다.');
+    expect(AI12_EXTRACT_SYSTEM).toContain("기존 텍스트의 사실(수치·고유명사·기술 이름·행동)은 하나도 빠뜨리지 않습니다");
+    expect(AI12_EXTRACT_SYSTEM).not.toContain('값이 있는 필드는 op "append"만');
+    expect(AI12_EXTRACT_SYSTEM).toContain('"-음" 체');
+    expect(AI12_EXTRACT_SYSTEM).toContain('action "캐시 무효화 규칙을 설계함"');
+    expect(AI12_EXTRACT_SYSTEM).not.toMatch(/(?:situation|action|result|learnings) "[^"]*했다"/);
+    expect(AI12_EXTRACT_SYSTEM).toContain("민감정보가 아닙니다");
+    expect(AI12_REPLY_SYSTEM).toContain("합쳐서 다시 정리한 제안을 드릴 수 있고");
+    expect(AI12_REPLY_SYSTEM).not.toContain("덧붙이는 것만");
+    expect(AI12_REPLY_SYSTEM).toContain("존댓말");
   });
 
   it("delegation request → notice for the reply", async () => {

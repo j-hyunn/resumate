@@ -181,14 +181,19 @@ function projectChatFixture(id: string, projectId: string, status: "active" | "c
   const u1 = mockMessage("user", "p95 응답 시간이 1.2초에서 0.7초로 줄었어요. 가맹점 문의도 거의 없어졌고요.", 1, 1, { created_at: daysAgo(2) })
   const a1 = mockMessage("assistant", "수치까지 알려 주셔서 정리하기 좋아요. 이 경험에서 배운 점이나 다음에 다르게 할 점이 있나요?", 2, null, { created_at: daysAgo(2) })
   const u2 = mockMessage("user", "추측 말고 측정부터 해야 한다는 걸 배웠어요. 그리고 캐시 무효화는 제가 직접 설계했어요.", 3, 2, { created_at: daysAgo(2) })
-  const a2 = mockMessage("assistant", "좋아요. 캐시 무효화 설계를 행동에 덧붙일 수 있게 정리해 두었어요. 제안 카드를 확인해 보세요.", 4, null, { created_at: daysAgo(2) })
+  const a2 = mockMessage("assistant", "좋아요. 캐시 무효화 설계를 기존 행동 내용과 합쳐 정리해 두었어요. 제안 카드에서 기존 내용과 비교해 보세요.", 4, null, { created_at: daysAgo(2) })
   const messages = [greeting, u1, a1, u2, a2]
   const draft: ProjectStructuredDraft = {
     ...emptyProjectDraft(),
     star: {
-      result: star("p95 응답 시간이 1.2초에서 0.7초로 줄었고 가맹점 문의가 거의 사라졌다.", u1.id, "p95 응답 시간이 1.2초에서 0.7초로 줄었어요"),
-      learnings: star("성능 문제는 추측보다 측정에서 시작해야 한다는 것을 배웠다.", u2.id, "추측 말고 측정부터 해야 한다는 걸 배웠어요"),
-      action: star("Redis 캐시의 무효화 방식을 직접 설계했다.", u2.id, "캐시 무효화는 제가 직접 설계했어요", { op: "append" }),
+      result: star("p95 응답 시간이 1.2초에서 0.7초로 줄었고 가맹점 문의가 거의 사라짐.", u1.id, "p95 응답 시간이 1.2초에서 0.7초로 줄었어요"),
+      learnings: star("성능 문제는 추측보다 측정에서 시작해야 한다는 것을 배움.", u2.id, "추측 말고 측정부터 해야 한다는 걸 배웠어요"),
+      // RQ-5: 값이 있는 '행동'에 합친 제안(op "set") — 기존 폼 문장의 사실을 모두 남기고 새 내용을 합침
+      action: star(
+        "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계하고, 가맹점 설정 조회에 Redis 캐시를 도입함. 캐시 무효화 규칙을 직접 설계함",
+        u2.id,
+        "캐시 무효화는 제가 직접 설계했어요",
+      ),
     },
     classification: {
       experience_type: { value: "problem_solving", origin: "ai", source_message_ids: [u1.id], review: "ok", reviewed_at: null, applied_at: null, rev: 1, reason: "응답 지연 원인을 찾아 해결한 과정이 중심이에요" },
@@ -253,7 +258,9 @@ function deliverableChatFixture(id: string, deliverableId: string): DeliverableC
 export function previewStarDraft(chat: ProjectChatView, state: string | null): ProjectChatView {
   if (state !== "needs-review") return chat
   const d = structuredClone(chat.structured_draft)
-  if (d.star.result) d.star.result = { ...d.star.result, review: "needs_review" }
+  if (d.star.result) d.star.result = { ...d.star.result, review: "needs_review", review_reason: "content_unverified" }
+  // V-9j: the merged 'action' proposal may have dropped part of the existing text
+  if (d.star.action) d.star.action = { ...d.star.action, review: "needs_review", review_reason: "existing_missing" }
   return { ...chat, structured_draft: d }
 }
 

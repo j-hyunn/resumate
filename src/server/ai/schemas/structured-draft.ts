@@ -17,6 +17,13 @@ export const STRUCTURED_DRAFT_SCHEMA_VERSION = 3;
 export const DRAFT_PERIOD_FIELDS = ["start_month", "end_month"] as const;
 export const STAR_FIELDS = ["situation", "task", "action", "result", "learnings"] as const;
 export const STAR_OPS = ["set", "append"] as const;
+/**
+ * R8 QA-4 (DM v4.9 2.5 `review_reason`): why a STAR proposal is needs_review —
+ * `existing_missing` = V-9j (an existing number / name is not in the merged value),
+ * `content_unverified` = V-9e. Absent / null = no reason (older objects, review ok).
+ */
+export const STAR_REVIEW_REASONS = ["existing_missing", "content_unverified"] as const;
+export type StarReviewReason = (typeof STAR_REVIEW_REASONS)[number];
 export const REVIEW_STATES = ["ok", "needs_review", "accepted"] as const;
 export const FIELD_ORIGINS = ["ai", "user_edit"] as const;
 /** v4.5: `affiliation_unclear` is gone (the project already has its affiliation). */
@@ -62,9 +69,14 @@ export type PeriodDraftField = z.infer<typeof PeriodFieldSchema>;
 
 export const StarFieldSchema = z.object({
   value: z.string().nullable().default(null),
-  /** set = value for an empty field; append = new sentences only, added after the current value. */
+  /**
+   * set = the whole value of the field (v4.9 RQ-5: on a filled field, the merged proposal that replaces it);
+   * append = new sentences only, added after the current value (old drafts / compatibility).
+   */
   op: z.enum(STAR_OPS).default("set"),
   source_quotes: z.array(z.string()).default([]),
+  /** R8 QA-4: set by the RPC only with review = needs_review; unknown values read as absent. */
+  review_reason: z.enum(STAR_REVIEW_REASONS).nullable().optional().catch(undefined),
   ...fieldBase,
 });
 export type StarDraftField = z.infer<typeof StarFieldSchema>;
@@ -140,12 +152,21 @@ export type PatchSource = { source_message_ids: string[]; source_quotes: string[
 
 export type PeriodChange = PatchSource & { field: PeriodField; value: string; review: "ok" | "needs_review" };
 /**
- * `value` is only this turn's text; the RPC replaces (set) or appends to (append) the pending proposal.
+ * `value`: set = the field's full text (v4.9 merged proposal when the field had text); append = this
+ * turn's new sentences only. The RPC replaces (set) or appends to (append) the pending proposal.
  * `new_object` (v4.5, DM 2.5 DA-10): the pending object is already in this turn's form
  * snapshot (filled, not saved) → the RPC replaces the slot with a new object (rev + 1)
  * instead of appending to it, so the filled sentence is not offered twice.
  */
-export type StarChange = PatchSource & { field: StarField; op: StarOp; value: string; review: "ok" | "needs_review"; new_object?: boolean };
+export type StarChange = PatchSource & {
+  field: StarField;
+  op: StarOp;
+  value: string;
+  review: "ok" | "needs_review";
+  /** R8 QA-4: V-9j → existing_missing, V-9e → content_unverified; null when review is ok (or no rule says why). */
+  review_reason?: StarReviewReason | null;
+  new_object?: boolean;
+};
 export type ClassificationChange = { field: ClassificationField; value: string | string[]; source_message_ids: string[]; reason: string | null };
 
 export type DraftChanges = {
@@ -169,7 +190,7 @@ export function isEmptyDraftChanges(c: DraftChanges): boolean {
 
 export type DraftPatchOp =
   | ({ op: "set"; target: { section: "project"; field: PeriodField }; value: string; review: "ok" | "needs_review" } & PatchSource)
-  | ({ op: StarOp; target: { section: "star"; field: StarField }; value: string; review: "ok" | "needs_review"; new_object?: true } & PatchSource)
+  | ({ op: StarOp; target: { section: "star"; field: StarField }; value: string; review: "ok" | "needs_review"; review_reason?: StarReviewReason; new_object?: true } & PatchSource)
   | { op: "set"; target: { section: "classification"; field: ClassificationField }; value: string | string[]; source_message_ids: string[]; reason: string | null }
   | { op: "set_clarifications"; items: Clarification[] }
   | { op: "add_sensitive_flags"; count: number };
@@ -210,6 +231,8 @@ export function toDraftPatch(changes: DraftChanges): DraftPatch {
         target: { section: "star" as const, field: s.field },
         value: s.value,
         review: s.review,
+        // R8 QA-4: next to `review`, only when needs_review has a reason (the RPC stores it only then).
+        ...(s.review === "needs_review" && s.review_reason ? { review_reason: s.review_reason } : {}),
         ...(s.new_object ? { new_object: true as const } : {}),
         source_message_ids: s.source_message_ids,
         source_quotes: s.source_quotes,

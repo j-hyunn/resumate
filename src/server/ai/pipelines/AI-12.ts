@@ -169,6 +169,9 @@ export function emptyV9Report(): V9Report {
     actor_ambiguous: 0,
     sensitive_added: 0,
     unchanged: 0,
+    merged: 0,
+    preservation_review: 0,
+    append_merged: 0,
   };
 }
 
@@ -197,6 +200,9 @@ export function flattenReport(report: V9Report): Record<string, number> {
     actor_ambiguous: report.actor_ambiguous,
     sensitive_added: report.sensitive_added,
     unchanged: report.unchanged,
+    merged: report.merged,
+    preservation_review: report.preservation_review,
+    append_merged: report.append_merged,
   };
   for (const [check, n] of Object.entries(report.by_check)) if (n > 0) out[`rejected_${check}`] = n;
   return out;

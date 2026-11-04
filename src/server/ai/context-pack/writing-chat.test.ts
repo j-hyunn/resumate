@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { baseInput, emptyProject, filledProject, GREETING, msgId, PROJECT_ID, rows } from "../__fixtures__/AI-12/conversations";
-import { buildWritingChatContext, renderDraftForExtract, renderPeriod, renderProjectForExtract, renderStatusForReply, STAR_FULL_THRESHOLD, toMonth } from "./writing-chat";
+import { buildWritingChatContext, renderDraftForExtract, renderPeriod, renderProjectForExtract, renderProjectForReply, STAR_FULL_THRESHOLD, toMonth } from "./writing-chat";
 
 const field = (value: string | string[], extra: Record<string, unknown> = {}) => ({
   value,
@@ -34,6 +34,14 @@ describe("buildWritingChatContext", () => {
     const ctx = buildWritingChatContext(baseInput({ messages: rows([["assistant", GREETING], ["user", "우울증 치료를 받았어요. 알아서 채워 주세요"]]) }));
     expect(ctx.sensitiveNotice).toEqual(["health"]);
     expect(ctx.delegationRequested).toBe(true);
+  });
+
+  it("v4.9 (RQ-6): the notice uses the personal-context rule — work-domain words alone give no notice", () => {
+    const notice = (say: string) => buildWritingChatContext(baseInput({ messages: rows([["assistant", GREETING], ["user", say]]) })).sensitiveNotice;
+    expect(notice("병원 예약 시스템을 개발했어요. 기획자 선배가 리뷰해 줬고 사업부 부장님께 보고했어요.")).toEqual([]);
+    expect(notice("교회 출석 앱 외주와 파업 대응 공지 시스템을 만들었어요")).toEqual([]);
+    expect(notice("제가 우울증 진단을 받아서 휴직했어요")).toEqual(["health"]);
+    expect(notice("김민수 팀장님과 했어요. 010-1234-5678")).toEqual(["contact", "third_party_name"]);
   });
 
   it("<chat> block: name, affiliation, desired job — no STAR text, no ids; cache on the last message", () => {
@@ -105,19 +113,43 @@ describe("rendering", () => {
     expect(text).not.toContain(msgId(2));
   });
 
-  it("renderStatusForReply shows states, never values", () => {
+  it("renderProjectForReply: form values and pending proposals, no classification values, no remaining chars (R7)", () => {
     const ctx = buildWritingChatContext(
       baseInput({
-        project: emptyProject({ situation: "비밀 상황" }),
-        structuredDraft: { star: { situation: field("덧붙임 비밀"), action: field("비밀 행동", { review: "needs_review" }) }, classification: { project_type: field("improvement") } },
+        project: emptyProject({ situation: "결제 승인이 느렸다", learnings: "먼저 <측정>하기", projectType: "improvement", competencies: ["analysis"] }),
+        structuredDraft: {
+          star: { situation: field("트래픽이 몰렸다", { op: "append" }), action: field("인덱스를 재설계했다", { review: "needs_review" }) },
+          classification: { experience_type: field("problem_solving") },
+        },
       }),
     );
-    const text = renderStatusForReply(ctx);
-    expect(text).toContain("situation: 값 있음 + 덧붙임 제안 있음");
-    expect(text).toContain("action: 제안(검토 필요)");
-    expect(text).toContain("task: 비어 있음");
-    expect(text).toContain("classification_recommended: project_type");
-    expect(text).not.toContain("비밀");
+    const text = renderProjectForReply(ctx);
+    expect(text.startsWith("<project_state>")).toBe(true);
+    expect(text).toContain("  situation: 결제 승인이 느렸다");
+    expect(text).toContain("  learnings: <reflection>먼저 ＜측정＞하기</reflection>");
+    expect(text).toContain("  task: (비어 있음)");
+    expect(text).toContain("  situation [합친 제안]: 트래픽이 몰렸다");
+    expect(text).toContain("  action [새로 채움, 검토 필요]: 인덱스를 재설계했다");
+    expect(text).toContain("classification_recommended: experience_type");
+    expect(text).not.toContain("improvement");
+    expect(text).not.toContain("analysis");
+    expect(text).not.toContain("problem_solving");
+    expect(text).not.toContain("남은 글자 수");
+    expect(text).not.toContain(msgId(2));
+    expect(text).not.toContain("M2");
+  });
+
+  it("renderProjectForReply: a proposal already in the form is not repeated; period proposal shown while period is empty", () => {
+    const ctx = buildWritingChatContext(
+      baseInput({
+        project: emptyProject({ action: "인덱스를 재설계했다" }),
+        structuredDraft: { project: { start_month: field("2023-03") }, star: { action: field("인덱스를 재설계했다") } },
+      }),
+    );
+    const text = renderProjectForReply(ctx);
+    expect(text).toContain("period: (비어 있음)");
+    expect(text).toContain("  period: 2023-03 ~ (없음)");
+    expect(text.match(/인덱스를 재설계했다/g)).toHaveLength(1);
   });
 
   it("toMonth accepts date and month strings", () => {

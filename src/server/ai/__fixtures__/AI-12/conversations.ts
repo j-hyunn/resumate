@@ -51,7 +51,7 @@ export function emptyProject(overrides: Partial<WritingChatProjectInput> = {}): 
   };
 }
 
-/** A project whose STAR is filled (augment = append only, V-9h). */
+/** A project whose STAR is filled (v4.9: merged set, V-9h). */
 export function filledProject(overrides: Partial<WritingChatProjectInput> = {}): WritingChatProjectInput {
   return emptyProject({
     startMonth: "2023-03-01",
@@ -214,17 +214,23 @@ export const delegation = {
   }),
 };
 
-// ---------- Scenario 7: filled project — append only ----------
+// ---------- Scenario 7: filled project — merged set (v4.9 RQ-5) ----------
 
 export const filledAppend = {
   messages: rows([
     ["assistant", GREETING],
     ["user", "결과에 덧붙이면, 결제 실패 문의도 절반으로 줄었어요. 시작은 22년 1월이었어요."],
   ]),
+  /** v6 extract: a merged set (form value "응답 시간이 줄었다" + the new sentence, -음 체); the period is V-9h. */
   output: output({
     project_patches: [{ field: "start_month", op: "set", value: "2022-01", source_message_ids: ["M2"], source_quotes: ["시작은 22년 1월이었어요"] }],
     star_patches: [
-      { field: "result", op: "set", value: "결제 실패 문의도 절반으로 줄었다", source_message_ids: ["M2"], source_quotes: ["결제 실패 문의도 절반으로 줄었어요"] },
+      { field: "result", op: "set", value: "응답 시간이 줄었고 결제 실패 문의도 절반으로 줄었음", source_message_ids: ["M2"], source_quotes: ["결제 실패 문의도 절반으로 줄었어요"] },
+    ],
+  }),
+  /** v5-style output (old prompt / retry): an append with the new sentence only — still accepted. */
+  legacyOutput: output({
+    star_patches: [
       { field: "result", op: "append", value: "결제 실패 문의도 절반으로 줄었다", source_message_ids: ["M2"], source_quotes: ["결제 실패 문의도 절반으로 줄었어요"] },
     ],
   }),

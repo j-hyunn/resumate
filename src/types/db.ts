@@ -551,7 +551,14 @@ export interface DraftStarFieldObject extends DraftFieldObjectBase {
   /** set = value for an empty field / append = new sentences only, added after the form value */
   op: "set" | "append"
   source_quotes: string[]
+  /**
+   * (R8, V-9j / R8-QA-4) why `review = 'needs_review'`: `existing_missing` = a merged `set` may have dropped
+   * facts of the existing text; `content_unverified` = V-9e. Optional — older drafts have no key (= null).
+   */
+  review_reason?: StarReviewReason | null
 }
+
+export type StarReviewReason = "existing_missing" | "content_unverified"
 
 /** structured_draft.classification.{project_type,experience_type,competencies} (CR-20, no `op`, no quotes) */
 export interface DraftClassificationFieldObject<V = string> extends DraftFieldObjectBase {

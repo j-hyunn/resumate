@@ -9,7 +9,7 @@ The PRD is the reference for every planning document. Other teammates must be ab
 
 ## Order of work
 
-1. Read `.agents/skills/resumate-planning/references/product-context.md` and `_workspace/00_input/brief.md`.
+1. Read `.agents/skills/resumate-planning/references/product-context.md`, `_workspace/00_input/brief.md`, and — in a decision cycle — the cycle's `planning-decisions-{slug}.md`. The PRD already exists (v4.x); revise it, don't restart it.
 2. Write personas and problems first. Features must come out of problems — if you start from a feature list, nice-to-haves slip into the MVP.
 3. Write features per pillar as user stories.
 4. Apply MoSCoW and draw the MVP line.
@@ -19,7 +19,7 @@ The PRD is the reference for every planning document. Other teammates must be ab
 
 MVP = **the thinnest path that passes through each of the three pillars once**. Example: enter one experience → register one JD → view the insight → run one mock interview for that JD.
 - Features not on this path are Should or lower.
-- Features that reduce input friction (e.g. auto-fill from resume upload) decide drop-off at the first step of the path, so seriously consider them as Must candidates.
+- Features that reduce input friction decide drop-off at the first step of the path, so seriously consider them as Must candidates (today that is the Resumate AI writing chat; resume upload parsing is `[보류]`).
 
 ## Domain checkpoints
 
@@ -30,7 +30,7 @@ These are easy to miss. Each must end up in the PRD as a conclusion or a `[결�
 - Outputs: insights only, or also drafts of 자기소개서 / 경력기술서?
 - Mock interview format: text / voice, number of questions, follow-up questions, interview type (직무/인성)
 - Privacy: collection consent, retention period, deletion scope on account deletion, notice that data is not used for AI training
-- Cost model: free usage limits, monetization — may be left as `[결정 필요]`
+- AI cost model: BYOK — the user pays their provider. Requirements cover key connection, provider/tier data-use consent, the usage meter (tokens + estimated cost, not a bill), and per-cause error guidance. Service-side usage limits and cost ceilings were dropped (D-12, D-17); only quality/safety caps (e.g. 40 messages per chat) remain. Monetization may stay `[결정 필요]`
 
 ## PRD template
 
@@ -55,13 +55,14 @@ Describe the MVP path step by step
 | F-P1-01 | {user} can {do what}, {why} | {verifiable condition} | Must | |
 ### P2. JD insights & chat
 ### P3. AI mock interview
+### AI connection (F-AI: keys, active provider, consent, usage meter, error guidance)
 ### Common (account, settings, privacy)
 
 ## 5. MVP scope
 - In / out ([보류]) / reasoning for borderline items
 
 ## 6. Non-functional requirements
-- Privacy & security / AI response time targets / per-user AI cost ceiling / availability
+- Privacy & security (incl. key storage and provider data transfer) / AI response time targets per provider tier / token efficiency (no service cost ceiling under BYOK) / availability
 
 ## 7. Success metrics
 | Metric | Definition | Target | Pillar |
@@ -72,6 +73,8 @@ Describe the MVP path step by step
 | ID | Question | Options | Recommendation and reason |
 ## 10. Change log
 ```
+
+In a decision cycle, cite the decision ID on every changed requirement (`(v4.6, PA-3)`) and record replaced decisions in the notes column, so implementers can trace why a line changed.
 
 ## Quality bar
 

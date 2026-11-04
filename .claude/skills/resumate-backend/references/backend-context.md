@@ -73,11 +73,11 @@ Test files sit next to the code as `*.test.ts`.
 
 ## Coexisting with the UI harness
 
-The `resumate-ui` harness builds the screens in the same Next.js app against a mock data layer (`.claude/skills/resumate-ui/references/ui-context.md`). Both harnesses must be able to run without overwriting each other.
+The `resumate-ui` harness builds the screens in the same Next.js app through the `src/lib/data` layer (`.claude/skills/resumate-ui/references/ui-context.md`). The data layer is wired (W1–W5); since then the UI writes new data functions itself with `previewOr`, and marks ones whose contract doesn't exist yet as `// 연결 대기` — those arrive in `spec-gaps.md` as UI requests. Both harnesses must be able to run without overwriting each other.
 
 | Path | Owner | Backend may |
 |------|-------|-------------|
-| `src/app/(public)/`, `src/app/(dashboard)/`, `src/components/`, `docs/ui/` | UI | read only |
+| `src/app/(public)/`, `src/app/(dashboard)/`, `src/app/(page)/`, `src/app/(focus)/`, `src/components/`, `docs/ui/` | UI | read only |
 | `src/lib/mock/` | UI | read only (it shows what shapes the screens expect) |
 | `src/lib/data/` | UI until wired; backend after the wiring step | replace function bodies in the wiring step only, keeping exported names and signatures |
 | `src/types/db.ts` | UI (hand-mirrored from the data model) | in the wiring step, turn it into re-exports of the generated types (`Tables<'experiences'>` → `Experience`), keeping the names the screens import |

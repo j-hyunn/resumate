@@ -1,6 +1,6 @@
 ---
 name: resumate-ui
-description: "Orchestrator for the Resumate UI team. Coordinates ui-designer, frontend-engineer (foundation + one per screen area), and ui-qa to turn the planning documents (docs/planning/) into a design system (docs/ui/design-system.md) and working Next.js + Tailwind + shadcn/ui screens backed by a mock data layer, tracked in docs/ui/screen-status.md. Always use when starting UI work, building or designing screens, setting up the frontend, implementing the dashboard/career/기업 JD/interview/board screens, or applying a Figma design. Follow-ups: always use for UI revisions, re-runs, next screen batches, 'continue the UI', partial re-runs (e.g. only the career screens, only the board, only the design system), applying screen-spec changes to code, and fixing QA issues. Korean triggers: UI 작업, 화면 구현 시작, 프론트엔드 구축, 디자인 시스템 만들기, 화면 만들어줘, 커리어 화면 구현, 보드 화면만 다시, UI 이어서, 다음 화면, UI 수정, 기획 변경 반영해서 화면 수정, 디자인 다시, QA 이슈 수정. Not for planning documents (resumate-planning) or backend work (Supabase migrations, real Claude API integration)."
+description: "Orchestrator for the Resumate UI team. Coordinates ui-designer, frontend-engineer (foundation + one per screen area), and ui-qa to turn the planning documents (docs/planning/) into a design system (docs/ui/design-system.md) and working Next.js + Tailwind + shadcn/ui screens that reach the backend through the data layer (with mock-backed ?state= previews), tracked in docs/ui/screen-status.md. Always use when starting UI work, building or designing screens, implementing the career/자기소개서 관리/모의 면접/지원 현황 screens, the Resumate AI panel, or applying a Figma design or brand tokens. Follow-ups: always use for UI revisions, re-runs, next screen batches, 'continue the UI', partial re-runs (e.g. only the career screens, only the board, only the design system), applying planning-cycle changes (decisions.md UI 후속) to code, browser checks of built screens, and fixing QA issues. Korean triggers: UI 작업, 화면 구현 시작, 디자인 시스템 만들기, 화면 만들어줘, 커리어 화면 구현, 피그마 반영, 보드 화면만 다시, UI 이어서, 다음 화면, UI 수정, 기획 변경 반영해서 화면 수정, 디자인 다시, QA 이슈 수정, 화면 브라우저 확인. Not for planning documents (resumate-planning) or backend work (Supabase migrations, Server Actions, Route Handlers, AI provider adapters — resumate-backend)."
 ---
 
 # Resumate UI Orchestrator
@@ -35,8 +35,9 @@ Spawn every member with `model: "opus"` and `subagent_type` set to the agent nam
 ### Phase 0: Context check
 
 1. Read `docs/ui/screen-status.md`, `docs/ui/design-system.md`, and `_workspace/ui/` if they exist; check whether `package.json` exists.
-2. Check the planning versions in `docs/planning/README.md` against the versions recorded at the top of `screen-status.md`. A newer planning version means some screens may be stale — list the changed screens (from the planning docs' change logs) before doing anything else.
-3. Branch:
+2. Check the planning versions in `docs/planning/README.md` against the versions recorded at the top of `screen-status.md`. A newer planning version means some screens may be stale — list the changed screens before doing anything else. The fastest source is `docs/planning/decisions.md` section 4 ("백엔드·UI 후속" per planning cycle) plus the README's 개정 lines; fall back to the documents' change logs.
+3. Check the backend side: `_workspace/backend/slices.md` and `spec-gaps.md` tell you which contracts exist. A screen whose planning version is ahead of the backend gets the "연결 대기" treatment (ui-context.md → "Data layer"), not a hand-made contract.
+4. Branch:
    - **Nothing exists** → initial run: Phase 1 → 2 → 3 → 4 → 5.
    - **Design system + foundation exist, user asks for more screens / "이어서"** → run Phase 3 for the next areas or screens not yet `QA 통과` in screen-status, then 4 → 5.
    - **Partial revision** (feedback on specific screens, a planning change, a Figma design for one area) → re-invoke only the owners in the table below, then QA only the affected screens.
@@ -45,16 +46,20 @@ Spawn every member with `model: "opus"` and `subagent_type` set to the agent nam
 | Revision scope | Re-invoke | Then |
 |----------------|-----------|------|
 | Visual language, tokens, Figma provided | ui-designer → foundation engineer (apply tokens) | ui-qa Q8 on all built screens |
-| Common components, shell, types, data layer | foundation engineer | ui-qa on foundation + affected areas |
+| Common components, shell (L-01/L-02), types, data layer helpers | foundation engineer | ui-qa on foundation + affected areas |
 | Specific screens | that area's engineer (existing report + feedback verbatim in the prompt) | ui-qa on those screens |
-| Planning document changed | owners of the changed screens; foundation first if `types/db.ts` changes | ui-qa Q1–Q6 on changed screens |
+| Planning cycle landed (new UX/DM version, decisions.md UI 후속) | owners of the changed screens; foundation first if shared components, `types/db.ts`, or routes change | ui-qa Q1–Q7 + Q11 on changed screens |
+| Backend wired a contract that was 연결 대기 | that area's engineer (switch the real branch, remove the marker) | ui-qa Q11 + browser check on those screens |
+| Browser check only ("화면 확인해줘") | nobody — go straight to Phase 4 browser pass for the named screens | issues routed as usual |
+
+**Run brief:** every run (not only the first) writes `_workspace/ui/{nn}_brief_{run}.md` — request, scope (screen IDs per area), Figma file/nodes, planning versions, backend contracts available. Number `{nn}` continues from the highest prefix in `_workspace/ui/`; agents number their outputs from the brief's prefix. This is what keeps the audit trail readable across runs.
 
 ### Phase 1: Design system
 
 **Mode: sub-agent.** Skip if `docs/ui/design-system.md` exists and no visual feedback was given.
 
-1. Create `_workspace/ui/`. Write `_workspace/ui/00_brief.md`: the user's request, scope for this run (areas/screens), Figma URL if any, planning versions.
-2. `Agent(subagent_type: "ui-designer", model: "opus")` with the brief path and the Figma URL.
+1. Write the run brief (above). If the user gave a Figma file, record file key + node IDs per screen in it.
+2. `Agent(subagent_type: "ui-designer", model: "opus")` with the brief path and the Figma file/nodes. If Figma reads fail (MCP rate limit, access), ask the user for screenshots or exported values before letting the designer work from descriptions — guessed sizes and colors became QA churn last time.
 3. Show the user a short summary of the visual direction (font, accent color, density, key patterns) and any `[가정]`. Don't stop unless the user wanted to approve visuals first.
 
 ### Phase 2: Foundation (A0)
@@ -90,15 +95,19 @@ TaskCreate(tasks: [
 
 ### Phase 4: Integration QA
 
-**Mode: sub-agent.** `Agent(subagent_type: "ui-qa", model: "opus")` across everything built: Q5 cross-area routes (flows FL-09, FL-10, FL-13, FL-15, FL-16, FL-17 span areas), C-09 → C-10 return paths, shell badges/breadcrumbs, a full build. Route remaining issues once; whatever is left after that is reported, not looped.
+**Mode: sub-agent + leader browser pass.**
 
-If a browser tool is available, also open the dev server yourself (`pnpm dev`, run in the background) and look at L-01 plus one screen per area at desktop and narrow widths; note anything visibly broken.
+1. `Agent(subagent_type: "ui-qa", model: "opus")` across everything built in this run: Q5 cross-area routes (find the cross-area flows in `02-user-flows.md` section 2 — e.g. data gate → career → return, board → interview popup → S-20, L-02 ↔ L-01 navigation), C-09 → C-10 return paths, shell badges/breadcrumbs, Q11 data layer, a full build.
+2. **Browser pass (required, by you):** start the dev server in the background (`pnpm dev`; the local backend must be running — `supabase start` if the backend harness set it up), open it with the available browser tool (built-in browser or Claude in Chrome — load its skill first; the `run` skill knows how to launch this app), sign in with a local test account (seed or one you create in local Supabase — never a real account), and click through every screen changed in this run against real data: the main task of the screen, one save, one AI action if a test key is configured, then desktop and narrow widths. Use `?state=` only for states real data can't produce. Record what you saw per screen.
+3. Route remaining issues once (QA findings and browser findings together); whatever is left after that is reported, not looped.
+
+If no browser tool is available or sign-in isn't possible, say so to the user, mark the screens `QA 통과 (mock·브라우저 미확인)` in screen-status, and list them — don't let "not clicked" disappear into a plain `QA 통과`.
 
 ### Phase 5: Status and report
 
 1. Update `docs/ui/screen-status.md`.
 2. In team mode, shut down members and `TeamDelete`. Keep `_workspace/ui/` (audit trail).
-3. Report to the user in Korean: what was built (screens per area, how to run: `pnpm dev`, `?state=` preview), QA result (open issues by severity), `[UI-가정]` count, and the **기획 확인 필요** list — those questions go to the user, and answering them is planning work (`resumate-planning`), not UI work.
+3. Report to the user in Korean: what was built (screens per area, how to run: `pnpm dev`, `?state=` preview), QA result (open issues by severity), what was and wasn't checked in a browser, `[UI-가정]` count, the **기획 확인 필요** list — those questions go to the user, and answering them is planning work (`resumate-planning`), not UI work — and the **백엔드 요청** list (`연결 대기` functions), which you also append to `_workspace/backend/spec-gaps.md` so the backend harness picks them up.
 4. Ask for feedback on the result and on the team setup. Harness-level feedback → update the relevant agent/skill and log it in `.claude/harness/CHANGELOG.md` (AGENTS.md only holds a pointer).
 
 ## docs/ui/screen-status.md template (Korean)
@@ -107,8 +116,9 @@ If a browser tool is available, also open the dev server yourself (`pnpm dev`, r
 # 화면 구현 현황
 - 기준 기획: PRD vX / 플로우 vX / AI vX / 데이터 모델 vX
 - 디자인 시스템: vX · 최종 갱신: YYYY-MM-DD
-| 화면 ID | 화면명 | 영역 | 라우트 | 상태 (미착수 / 구현 중 / 구현 완료 / QA 통과) | 열린 이슈 | 마지막 QA |
+| 화면 ID | 화면명 | 영역 | 라우트 | 상태 (미착수 / 구현 중 / 구현 완료 / QA 통과 (mock·브라우저 미확인) / QA 통과) | 열린 이슈 | 마지막 QA |
 ## 기획 확인 필요 (누적)
+## 백엔드 연결 대기 — | 화면 ID | 데이터 함수 | 필요한 계약 (문서 위치) |
 ## [UI-가정] 요약
 ```
 
@@ -136,7 +146,8 @@ docs/planning/* ─→ [ui-designer] ─→ docs/ui/design-system.md
 | Scaffold or install fails (network, Node version) | Report the exact command and output; don't switch package manager or libraries silently |
 | Two areas need conflicting changes to a common component | Don't pick silently — ask ui-designer (visual) or record it as `기획 확인 필요` (behavior), keep both callers working meanwhile |
 | Spec gap or contradiction | Conservative implementation + `[UI-가정]` + 기획 확인 필요. Never edit `docs/planning/` from this harness |
-| An engineer starts wiring real Supabase or Claude calls | Stop it and redirect to the mock data layer; backend is out of scope |
+| An engineer edits backend-owned files (`src/server/`, `src/app/api/`, `src/lib/contracts/`, `supabase/`) or calls Supabase/actions from a component | Stop it; the change goes through `src/lib/data/*`, and a missing contract becomes `연결 대기` + 백엔드 요청 |
+| Dev server or local backend won't start for the browser pass | Report the command and output, mark screens `QA 통과 (mock·브라우저 미확인)`; don't fake the check with SSR HTML |
 
 ## Test scenarios
 
@@ -144,16 +155,16 @@ docs/planning/* ─→ [ui-designer] ─→ docs/ui/design-system.md
 1. User: "UI 작업 시작하자"
 2. Phase 0: no `docs/ui/`, no `package.json` → initial run
 3. Phase 1: design system written (Pretendard, one accent, AI state patterns); `[가정]` brand color reported
-4. Phase 2: scaffold + tokens + shell + C-01~C-10 + mocks; QA round 1 finds 3 Major (enum mismatch in `types/db.ts`, missing `?state=limit`, drawer without focus trap) → fixed → round 2 clean
+4. Phase 2: tokens + shells + common components + data helpers; QA round 1 finds 3 Major (enum mismatch in `types/db.ts`, missing `?state=key-missing`, drawer without focus trap) → fixed → round 2 clean
 5. Phase 3: A2, A3, A4 in parallel, then A1; per-screen QA; foundation requests batched once
-6. Phase 4: integration QA finds a dead link from S-39 card to S-31 → fixed
-7. Phase 5: screen-status shows all Must screens `QA 통과`; report lists 4 기획 확인 필요 items
+6. Phase 4: integration QA finds a dead link from S-39 card to S-31 → fixed; browser pass signs in with a local test account and finds the S-14 save toast missing on narrow width → fixed
+7. Phase 5: screen-status shows all Must screens `QA 통과`; report lists 4 기획 확인 필요 items and 1 백엔드 요청
 
-### Partial re-run flow
-1. User: "기획에서 상세 내용 편집 화면이 바뀌었어, 반영해줘"
-2. Phase 0: planning flows version is newer than screen-status → changed screens S-35, S-36 (and `types/db.ts` field change)
-3. Foundation engineer updates `types/db.ts` → A2 engineer updates S-35/S-36 → ui-qa Q1–Q6 on those screens
-4. screen-status updated with the new planning version
+### Partial re-run flow (planning cycle)
+1. User: "산출물 상세 기획 바뀐 거 화면에 반영해줘"
+2. Phase 0: UX v5.6 / DM v4.5 newer than screen-status; decisions.md 4.4 lists S-10, S-44, L-02, C-23 as UI 후속; `slices.md` shows the page-save RPC isn't built yet
+3. Foundation engineer adds L-02 → A2 engineer updates S-10/S-44; page-save functions get a mock branch + `// 연결 대기 (DM v4.5 11.3)` → ui-qa Q1–Q7 + Q11 on those screens
+4. Browser pass covers the parts backed by real data; screen-status updated with the new planning version and the 연결 대기 rows; 백엔드 요청 appended to spec-gaps
 
 ### Error flow
 1. Phase 3: the A4 engineer fails twice (dnd-kit build error)

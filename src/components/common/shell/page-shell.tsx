@@ -18,7 +18,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, FileText, History, KeyRound, Loader2, LogOut, Settings, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, Check, CircleAlert, History, Loader2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -32,18 +32,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatTime } from "@/lib/data/labels"
-import { shellSignOutAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
-import { ACCOUNT_MENU_ITEMS, type AccountMenuItem } from "./account-menu-items"
+import { AccountMenuContent, useAccountSignOut } from "./nav-user"
 import { useSettingsDialog } from "./settings-dialog"
 import { LogoMark, LogoWordmark } from "./logo-mark"
 import { UserAvatar, displayName, useShellUser } from "./user-avatar"
@@ -396,14 +389,6 @@ export function StaleWriteDialog({
 // ShellBar + PageShell
 // ---------------------------------------------------------------------------
 
-const ACCOUNT_ICONS: Record<AccountMenuItem["key"], React.ComponentType<{ className?: string }>> = {
-  profile: UserRound,
-  settings: Settings,
-  ai: KeyRound,
-  policies: FileText,
-  sign_out: LogOut,
-}
-
 /** [Resumate AI] 다시 열기 (shown only while the wide panel is closed, D-UX-27). */
 export interface AiReopenProps {
   visible: boolean
@@ -419,16 +404,7 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
   const bindReopen = aiReopen?.bindButton
   const leave = usePageLeave()
   const { openSettings } = useSettingsDialog()
-  const router = useRouter()
-  const signOut = async () => {
-    try {
-      await shellSignOutAction()
-    } catch {
-      // [UI-가정] like L-01: leave to S-01 even if sign-out failed
-    } finally {
-      router.replace(routes.landing())
-    }
-  }
+  const signOut = useAccountSignOut()
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 bg-shell px-4 max-md:border-b">
       <Link
@@ -454,24 +430,14 @@ function ShellBar({ save, aiReopen }: { save: React.ReactNode; aiReopen?: AiReop
               <UserAvatar name={displayName(user)} avatarUrl={user?.avatar_url ?? null} className="size-7" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-48">
-            {ACCOUNT_MENU_ITEMS.map((item) => {
-              const Icon = ACCOUNT_ICONS[item.key]
-              return (
-                <React.Fragment key={item.key}>
-                  {item.key === "sign_out" ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      "section" in item ? openSettings(item.section) : "href" in item ? leave(item.href) : leave(() => void signOut())
-                    }
-                  >
-                    <Icon aria-hidden />
-                    {item.label}
-                  </DropdownMenuItem>
-                </React.Fragment>
-              )
-            })}
-          </DropdownMenuContent>
+          {/* the same popover as the L-01 NavUser (sidebar is the reference) */}
+          <AccountMenuContent
+            user={user ? { name: displayName(user), email: user.email, avatarUrl: user.avatar_url } : null}
+            onOpenSettings={() => openSettings()}
+            onSignOut={() => leave(() => void signOut())}
+            side="bottom"
+            align="end"
+          />
         </DropdownMenu>
       </div>
     </header>

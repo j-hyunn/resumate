@@ -56,7 +56,7 @@ export function InterviewsOverview({
     <AiRunButton
       lock={{ entry: "interview_new", returnHref: routes.interviews() }}
       onRun={() => setPickerOpen(true)}
-      buttonClassName="max-md:h-11"
+      buttonClassName="max-md:h-8"
     >
       <Plus aria-hidden />새 면접
     </AiRunButton>
@@ -71,7 +71,7 @@ export function InterviewsOverview({
           icon={MessagesSquare}
           title="기업 JD를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
           actions={
-            <Button asChild className="max-md:h-11">
+            <Button asChild className="max-md:h-8">
               <Link href={routes.applicationNew()}>
                 <Plus aria-hidden />
                 기업 JD 추가
@@ -126,7 +126,7 @@ export function InterviewsOverview({
                         </span>
                       </p>
                     </div>
-                    <Button asChild variant="outline" className="shrink-0 max-md:h-11">
+                    <Button asChild variant="outline" className="shrink-0 max-md:h-8">
                       <Link
                         href={routes.interviewSession(s.application_project_id, s.id)}
                         onClick={() => setNavOrigin("interviews", s.application_project_id)}
@@ -146,7 +146,7 @@ export function InterviewsOverview({
             </h2>
             <div className="flex flex-wrap gap-2" role="group" aria-label="필터">
               <Select value={apFilter} onValueChange={setApFilter}>
-                <SelectTrigger size="sm" className="w-full max-md:h-11 sm:w-64" aria-label="기업 JD 필터">
+                <SelectTrigger size="sm" className="w-full max-md:h-8 sm:w-64" aria-label="기업 JD 필터">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -159,7 +159,7 @@ export function InterviewsOverview({
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as InterviewType | typeof ALL)}>
-                <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-11 sm:w-40" aria-label="유형 필터">
+                <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-8 sm:w-40" aria-label="유형 필터">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -169,7 +169,7 @@ export function InterviewsOverview({
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as InterviewSessionStatus | typeof ALL)}>
-                <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-11 sm:w-40" aria-label="상태 필터">
+                <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-8 sm:w-40" aria-label="상태 필터">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -183,7 +183,7 @@ export function InterviewsOverview({
               </Select>
               {usedProviders.length > 0 ? (
                 <Select value={providerFilter} onValueChange={(v) => setProviderFilter(v as AiProviderName | typeof ALL)}>
-                  <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-11 sm:w-40" aria-label="실행 공급자 필터">
+                  <SelectTrigger size="sm" className="w-[calc(50%-0.25rem)] max-md:h-8 sm:w-40" aria-label="실행 공급자 필터">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -212,7 +212,7 @@ export function InterviewsOverview({
           {abandoned.length > 0 && (statusFilter === ALL || statusFilter === "abandoned") ? (
             <Collapsible className="space-y-3">
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="group px-0 max-md:h-11">
+                <Button variant="ghost" className="group px-0 max-md:h-8">
                   그만둔 면접
                   <span className="text-sm text-muted-foreground tabular-nums">{abandoned.length}개</span>
                   <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" aria-hidden />

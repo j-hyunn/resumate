@@ -19,10 +19,8 @@ import { ChipSelect, CompetencyChips, DocTextarea, DocTitleInput, FieldRow, Fiel
 import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
-  InputRestoreBanner,
   PageShell,
   SaveButton,
-  ShellBanners,
   StaleWriteDialog,
   preservationKey,
   useInputPreservation,
@@ -165,18 +163,6 @@ function ProjectDemo({ data }: { data: ProjectPageData }) {
         items={[{ label: data.parent.name, href: routes.careerItem(data.parent.type, data.parent.id) }, { label: values.name, placeholder: "새 프로젝트" }]}
         current="프로젝트 상세"
       />
-      <ShellBanners>
-        {preserved.stored ? (
-          <InputRestoreBanner
-            onContinue={() => {
-              setValues(preserved.stored!.values)
-              setApplied(preserved.stored!.applied)
-              preserved.resolve()
-            }}
-            onDiscard={preserved.clear}
-          />
-        ) : null}
-      </ShellBanners>
       <DocHead className="space-y-3">
         <div className="flex items-start gap-2">
           <DocTitleInput
@@ -384,18 +370,6 @@ function DeliverableDemo({ data }: { data: DeliverablePageData }) {
         items={[{ label: data.project.name, href: routes.careerItem("project", data.project.id) }, { label: form.title, placeholder: "새 산출물" }]}
         current="산출물 상세"
       />
-      <ShellBanners>
-        {preserved.stored ? (
-          <InputRestoreBanner
-            onContinue={() => {
-              setForm(preserved.stored!.form)
-              setApplied(preserved.stored!.applied)
-              preserved.resolve()
-            }}
-            onDiscard={preserved.clear}
-          />
-        ) : null}
-      </ShellBanners>
       <DocHead className="space-y-3">
         <DocTitleInput
           ref={titleRef}

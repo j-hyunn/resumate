@@ -144,6 +144,22 @@ export function isProtected(field: AnyDraftField | undefined | null): boolean {
   return !!field && field.applied_at === null && (field.origin === "user_edit" || field.review === "accepted");
 }
 
+/**
+ * v4.10 (UP-6, DM 11.5 #1 option (b), leader decision R9): the user dismissed
+ * this classification suggestion ([무시]) in this chat. [무시] is the user patch
+ * `set` null, which the RPC stores as an empty object with the next rev
+ * (`{value: null, origin: 'ai', rev: prev + 1}`). No AI path writes a null
+ * classification value (the RPC rejects it as `invalid_value`; reject/accept
+ * never apply — classification is never needs_review), and a slot's first
+ * object has rev 1, so "exists, value null, rev ≥ 2" is only ever [무시].
+ * An empty competencies array reads the same as null. R10: `private.wc_patch_star` applies the same judgment
+ * and rejects AI classification patches on such a slot (`classification_dismissed`, 20261113000400).
+ */
+export function isDismissedClassification(field: ClassificationDraftField | undefined | null): boolean {
+  if (!field || hasValue(field)) return false;
+  return field.rev >= 2;
+}
+
 // ---------- Validated AI changes (V-9 output) ----------
 // The pipeline builds DraftChanges, then `toDraftPatch` turns them into the
 // RPC's ordered op list (contract: supabase/migrations/20261107101000_r4_structured_draft_patch_v3.sql).

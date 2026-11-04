@@ -11,7 +11,7 @@
  *            onDirectInput={() => focusFirstField()} />                   // C-18 대안 "직접 입력"
  *
  * Thread: shadcn Chat (Message Scroller · Message · Bubble); input: Input Group.
- * Frame: header (Sparkles · "Resumate AI" · C-19 · 기록 · 새 대화 · ⋯ · ×) → chat view (messages → 제안 독 →
+ * Frame: header (Sparkles · "Resumate AI" · 기록 · 새 대화 · ⋯ · ×) → chat view (messages → 제안 독 →
  * chip row → input) or the history view. States: C-18 area / inline lock, closed (40 / `closed`), before-send
  * blocks, failed turn (C-20 + 다시 보내기), streaming (C-04 caret), first-message processing.
  */
@@ -39,7 +39,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
 import { AiLock } from "@/components/common/ai-lock"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
-import { ProviderBadge } from "@/components/common/provider-badge"
 import { StreamingCaret } from "@/components/common/streaming"
 import { useDocBodyMode } from "@/components/common/shell/doc-body"
 import { PAGE_LIMITS, PANEL_COPY, PANEL_NOTICE, freeTierGreetingLine, type WritingChatMessageView } from "@/lib/data/career-v45-shared"
@@ -52,6 +51,11 @@ export interface AiPanelProps {
   panel: AiPanelController
   /** 제안 독 slot (STAR 제안 카드 / 본문 초안 제안 카드) — area-owned */
   renderProposal?: (panel: AiPanelController) => React.ReactNode
+  /**
+   * `true`: the proposal renders inside the thread, right under the latest AI turn (S-10 STAR 제안 — the
+   * confirmation line), instead of the 제안 독 above the input.
+   */
+  proposalInline?: boolean
   /** extra buttons in the closed-chat box (S-10 [모두 반영]) */
   renderClosedActions?: (panel: AiPanelController) => React.ReactNode
   /** a line right above the input (e.g. ready_to_return "돌아가기") */
@@ -69,7 +73,7 @@ export interface AiPanelProps {
   className?: string
 }
 
-export function AiPanel({ panel, renderProposal, renderClosedActions, renderAboveInput, onUserMessageClick, onDirectInput, hideDraftTurnFailure, className }: AiPanelProps) {
+export function AiPanel({ panel, renderProposal, proposalInline, renderClosedActions, renderAboveInput, onUserMessageClick, onDirectInput, hideDraftTurnFailure, className }: AiPanelProps) {
   const [deleting, setDeleting] = React.useState<string | null>(null)
   const areaLock = panel.locked && !panel.chat && panel.chats.length === 0
   return (
@@ -96,12 +100,13 @@ export function AiPanel({ panel, renderProposal, renderClosedActions, renderAbov
             panel={panel}
             onUserMessageClick={onUserMessageClick}
             onDeleteChat={() => panel.chat && setDeleting(panel.chat.id)}
+            proposal={proposalInline && renderProposal ? renderProposal(panel) : null}
             hideFailure={Boolean(
               panel.failure &&
                 (typeof hideDraftTurnFailure === "function" ? hideDraftTurnFailure(panel.failure) : hideDraftTurnFailure && panel.failure.draft_turn),
             )}
           />
-          {renderProposal ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
+          {renderProposal && !proposalInline ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
           {renderAboveInput ? <div className="shrink-0 px-3 pt-2 empty:hidden">{renderAboveInput(panel)}</div> : null}
           <PanelInputArea panel={panel} renderClosedActions={renderClosedActions} onDirectInput={onDirectInput} />
         </>
@@ -144,7 +149,6 @@ function PanelHeader({ panel, onDelete }: { panel: AiPanelController; onDelete: 
     <div className="flex h-12 shrink-0 items-center gap-1 px-3">
       <Sparkles className="size-4 shrink-0 text-ai" aria-hidden />
       <h2 className="text-base font-semibold whitespace-nowrap">Resumate AI</h2>
-      <ProviderBadge className="ml-1 max-w-[10rem] truncate" />
       <div className="ml-auto flex items-center gap-0.5">
         <IconAction label="대화 기록" pressed={history} onClick={() => panel.setView(history ? "chat" : "history")}>
           <History aria-hidden />
@@ -245,7 +249,7 @@ function highlightQuotes(text: string, quotes: string[]): React.ReactNode {
   return (
     <>
       {text.slice(0, i)}
-      <mark className="rounded-sm bg-ai-subtle text-inherit">{q}</mark>
+      <mark className="rounded-sm bg-ai-subtle px-0.5 text-foreground">{q}</mark>
       {text.slice(i + q.length)}
     </>
   )
@@ -273,6 +277,25 @@ function AiMessage({ children, className, ...props }: React.ComponentProps<typeo
   )
 }
 
+/**
+ * Follow the conversation: a send (a new user message, or a turn starting) jumps to the end and puts the scroller
+ * back in "following-bottom", so the reply, the inline proposal and anything after stay in view as they grow.
+ * (No `scrollAnchor` on user messages — anchoring pinned the user's turn to the top and stopped following.)
+ */
+function FollowOnSend({ panel }: { panel: AiPanelController }) {
+  const { scrollToEnd } = useMessageScroller()
+  const userCount = panel.chat?.messages.filter((m) => m.role === "user").length ?? 0
+  const turnRunning = panel.phase === "starting" || panel.phase === "streaming"
+  const prev = React.useRef({ userCount, turnRunning })
+  React.useEffect(() => {
+    const before = prev.current
+    prev.current = { userCount, turnRunning }
+    // a turn starting / a user message added — not a turn ending (the user may be reading further up by then)
+    if ((turnRunning && !before.turnRunning) || userCount > before.userCount) scrollToEnd({ behavior: "smooth" })
+  }, [userCount, turnRunning, scrollToEnd])
+  return null
+}
+
 /** a flashed user message (onUserMessageClick from a card's 근거) is brought into view inside the scroller */
 function FlashScroll({ messageId }: { messageId: string | undefined }) {
   const { scrollToMessage } = useMessageScroller()
@@ -282,17 +305,23 @@ function FlashScroll({ messageId }: { messageId: string | undefined }) {
   return null
 }
 
-const USER_BUBBLE = "rounded-2xl rounded-br-md border-border bg-card px-3.5 py-2.5 text-base leading-[1.75] whitespace-pre-wrap"
+// 내 메시지: primary fill, no stroke (BubbleContent keeps a transparent border)
+const USER_BUBBLE = "rounded-2xl rounded-br-md px-3.5 py-2.5 text-base leading-[1.75] whitespace-pre-wrap"
+// a flashed bubble (card 근거 click) gets an AI ring — the field-flash fill would fight the primary fill
+const USER_BUBBLE_FLASH = "ring-2 ring-ai ring-offset-2 ring-offset-panel"
 
 function MessageList({
   panel,
   onUserMessageClick,
   onDeleteChat,
+  proposal,
   hideFailure,
 }: {
   panel: AiPanelController
   onUserMessageClick?: (m: WritingChatMessageView) => void
   onDeleteChat: () => void
+  /** inline proposal (proposalInline): after the latest AI turn, streaming reply included */
+  proposal?: React.ReactNode
   hideFailure?: boolean
 }) {
   const messages = panel.chat?.messages ?? []
@@ -311,12 +340,13 @@ function MessageList({
     )
   }
 
-  // shadcn Chat: Message Scroller keeps the user's turn as the scroll anchor and follows the reply (autoScroll)
-  // while the user stays at the live edge. Remounted per chat so a switched chat opens at its end.
+  // shadcn Chat: Message Scroller follows the bottom (autoScroll) while the user stays at the live edge; a send
+  // brings it back there (FollowOnSend). Remounted per chat so a switched chat opens at its end.
   return (
     <MessageScrollerProvider key={panel.chat?.id ?? "start"} autoScroll defaultScrollPosition="end">
       <MessageScroller className="h-auto flex-1">
         <FlashScroll messageId={panel.flashedMessage?.id} />
+        <FollowOnSend panel={panel} />
         {/* Content is role="log": an added message is announced; the streaming item is aria-hidden (A-6) */}
         <MessageScrollerViewport aria-label="대화 메시지">
           <MessageScrollerContent className="gap-5 px-4 py-4">
@@ -334,20 +364,20 @@ function MessageList({
               if (m.role === "user") {
                 const text = flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content
                 return (
-                  <MessageScrollerItem key={m.id} messageId={m.id} scrollAnchor>
+                  <MessageScrollerItem key={m.id} messageId={m.id}>
                     <Message align="end">
                       <MessageContent className="gap-1">
                         <MessageHeader className="justify-end px-0 tabular-nums">내 답변 #{m.user_number ?? "?"}</MessageHeader>
-                        <Bubble align="end" variant="outline" className="max-w-[85%]">
+                        <Bubble align="end" variant="default" className="max-w-[85%]">
                           {/* a button only when the page wires the click (no inert tab stops, UQ-PA-16) */}
                           {onUserMessageClick ? (
-                            <BubbleContent asChild className={cn(USER_BUBBLE, "cursor-pointer hover:ring-1 hover:ring-border", flashed && "animate-field-flash")}>
+                            <BubbleContent asChild className={cn(USER_BUBBLE, "cursor-pointer", flashed && USER_BUBBLE_FLASH)}>
                               <button type="button" onClick={() => onUserMessageClick(m)}>
                                 {text}
                               </button>
                             </BubbleContent>
                           ) : (
-                            <BubbleContent className={cn(USER_BUBBLE, flashed && "animate-field-flash")}>{text}</BubbleContent>
+                            <BubbleContent className={cn(USER_BUBBLE, flashed && USER_BUBBLE_FLASH)}>{text}</BubbleContent>
                           )}
                         </Bubble>
                       </MessageContent>
@@ -395,6 +425,12 @@ function MessageList({
                     <span>답을 쓰는 중…</span>
                   </Message>
                 )}
+              </MessageScrollerItem>
+            ) : null}
+            {/* empty:hidden — the card may render nothing (no proposal yet): no stray gap */}
+            {proposal ? (
+              <MessageScrollerItem messageId="proposal" className="pl-8 empty:hidden">
+                {proposal}
               </MessageScrollerItem>
             ) : null}
             {panel.failure && !hideFailure ? (

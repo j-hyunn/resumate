@@ -9,6 +9,7 @@
 import * as React from "react"
 import { Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useScrollActivity } from "@/hooks/use-scroll-activity"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { PANEL_WIDTH, ResizeHandle } from "../doc-inputs"
@@ -93,6 +94,7 @@ export function DocBody({
   const max = Math.max(PANEL_WIDTH.min, Math.min(PANEL_WIDTH.max, Math.floor(cardWidth * 0.5), cardWidth - PANEL_WIDTH.leftMin - 24))
   const width = Math.min(max, Math.max(PANEL_WIDTH.min, placement.width))
   const wideOpen = mode === "wide" && placement.wideOpen
+  const bodyScrollRef = useScrollActivity<HTMLDivElement>()
   const ctx = React.useMemo(() => ({ mode, closeSheet: () => placement.setSheetOpen(false) }), [mode, placement])
 
   return (
@@ -103,9 +105,10 @@ export function DocBody({
         {/* narrow: bottom room so the floating button never covers the last field / counter (UQ-PA-15) */}
         {/* relative: the scroller is the containing block of its absolutely positioned content (sr-only live
             regions), so that content scrolls / clips here instead of growing the document (28 run) */}
-        <div className={cn("relative min-w-0 flex-1 overflow-y-auto px-6 py-6 max-md:px-4", wideOpen && "lg:min-w-[28rem]", mode === "narrow" && "pb-24")}>
-          {/* max-w-doc = max-w-prose-edit (42rem, design-system 1.4) */}
-          <div className="max-w-[42rem]">{left}</div>
+        {/* scrollbar: thin thumb, no track / gutter (as the AI panel), shown only while scrolling + 1s after */}
+        <div ref={bodyScrollRef} className={cn("relative min-w-0 flex-1 scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent data-scrolling:scrollbar-thumb-muted-foreground/30 overflow-y-auto px-6 py-6 max-md:px-4", wideOpen && "lg:min-w-[28rem]", mode === "narrow" && "pb-24")}>
+          {/* full width of the column (no 42rem cap) */}
+          <div>{left}</div>
         </div>
         {wideOpen ? (
           // first paint is "wide" before the measurement: below lg the CSS already hides the panel (UQ-PA-15)

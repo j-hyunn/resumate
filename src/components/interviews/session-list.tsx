@@ -163,7 +163,7 @@ export function SessionList({
   const menu = (row: InterviewSessionRow) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" className="relative z-10 max-md:size-11" aria-label={`${rowLabel(row, showApplication)} 메뉴`}>
+        <Button variant="ghost" size="icon-sm" className="relative z-10 max-md:size-8" aria-label={`${rowLabel(row, showApplication)} 메뉴`}>
           <MoreHorizontal aria-hidden />
         </Button>
       </DropdownMenuTrigger>

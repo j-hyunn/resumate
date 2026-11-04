@@ -76,7 +76,7 @@ export function ProviderBadge({ connection: explicit, className }: { connection?
           provider={warn ? connection.active_provider : null}
           aria-label={`AI 연결: ${text}. AI 연결 설정 열기`}
           className={cn(
-            "inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-11",
+            "inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-md:h-8",
             warn
               ? "border-transparent bg-warning-subtle text-warning-subtle-foreground hover:bg-warning-subtle/80"
               : "border-border text-muted-foreground hover:bg-accent",

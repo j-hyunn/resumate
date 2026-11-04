@@ -235,7 +235,7 @@ export async function startWritingChatAction(input: {
 /**
  * User turn: RPC append_writing_chat_message, then plan the (mock) AI turn.
  * Returns what the client streams (reply + patched paths). `requestedSlot` = "이 부분부터
- * 다시 물어봐 줘" / "AI에게 물어봐 줘" (AI 명세 v3.1 requested_slot).
+ * 다시 물어봐 줘" (AI 명세 v3.1 requested_slot; the S-10 "AI에게 물어보기" button is gone — UP-7).
  */
 export async function sendWritingChatMessageAction(chatId: string, content: string, requestedSlot?: ChatSlot | null) {
   // A2 request 10: `{ rejected: key_missing | key_invalid }` → the message is not appended

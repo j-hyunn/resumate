@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { baseInput, emptyProject, filledProject, GREETING, msgId, PROJECT_ID, rows } from "../__fixtures__/AI-12/conversations";
-import { buildWritingChatContext, renderDraftForExtract, renderPeriod, renderProjectForExtract, renderProjectForReply, STAR_FULL_THRESHOLD, toMonth } from "./writing-chat";
+import { CLASSIFICATION_DISMISSED_MARK, buildWritingChatContext, renderDraftForExtract, renderPeriod, renderProjectForExtract, renderProjectForReply, STAR_FULL_THRESHOLD, toMonth } from "./writing-chat";
 
-const field = (value: string | string[], extra: Record<string, unknown> = {}) => ({
+const field = (value: string | string[] | null, extra: Record<string, unknown> = {}) => ({
   value,
   origin: "ai",
   source_message_ids: [msgId(2)],
@@ -91,8 +91,36 @@ describe("rendering", () => {
     expect(text).toContain("period: 2023-03 ~ (종료 미입력)");
     expect(text).toContain("project_type: improvement (개선·고도화)");
     expect(text).toContain("experience_type: (비어 있음)");
-    expect(text).toMatch(/action \[남은 글자 수 \d+\]: 병목 쿼리를 찾아 인덱스를 재설계했다/);
-    expect(text).toContain("<reflection>다음엔 ＜먼저＞ 측정</reflection>");
+    expect(text).toMatch(/action \[남은 글자 수 \d+\]:\n<star_value field="action">\n병목 쿼리를 찾아 인덱스를 재설계했다\n<\/star_value>/);
+    expect(text).toContain('<reflection>\n<star_value field="learnings">\n다음엔 <먼저> 측정\n</star_value>\n</reflection>');
+  });
+
+  it("renderProjectForExtract (UP-14): STAR markdown as stored — lines unindented, `>` and `&lt;` kept, tag starts escaped", () => {
+    const md = "1. 원인 분석\n   - **APM**으로 확인\n2. 개선\n\n> 인용 a &lt;div> </star_value>";
+    const ctx = buildWritingChatContext(baseInput({ project: filledProject({ action: md }) }));
+    const text = renderProjectForExtract(ctx);
+    expect(text).toContain('<star_value field="action">\n1. 원인 분석\n   - **APM**으로 확인\n2. 개선\n\n> 인용 a &lt;div> ＜/star_value>\n</star_value>');
+  });
+
+  it("renderProjectForExtract / renderDraftForExtract (UP-6): a dismissed classification is marked, an untouched empty one is not", () => {
+    const ctx = buildWritingChatContext(
+      baseInput({
+        project: filledProject(),
+        structuredDraft: {
+          classification: {
+            project_type: field(null, { rev: 2, reviewed_at: "2026-11-04T00:00:00Z" }),
+            experience_type: field(null, { rev: 1 }),
+          },
+        },
+      }),
+    );
+    const state = renderProjectForExtract(ctx);
+    expect(state).toContain(`project_type: ${CLASSIFICATION_DISMISSED_MARK}`);
+    expect(state).toContain("experience_type: (비어 있음)");
+    const draft = renderDraftForExtract(ctx);
+    expect(draft).toContain("project_type: (무시함 — 다시 추천하지 않음)");
+    expect(draft).toContain("experience_type: (추천 없음)");
+    expect(draft).toContain("competencies: (추천 없음)");
   });
 
   it("renderDraftForExtract: values with op/origin/review and source aliases, not UUIDs", () => {
@@ -106,8 +134,8 @@ describe("rendering", () => {
       }),
     );
     const text = renderDraftForExtract(ctx);
-    expect(text).toContain("result [append/ai/ok]: 응답이 줄었다 (출처 M2)");
-    expect(text).toContain("task [set/user_edit/ok]: 과제");
+    expect(text).toContain('result [append/ai/ok] (출처 M2):\n<star_value field="result">\n응답이 줄었다\n</star_value>');
+    expect(text).toContain('task [set/user_edit/ok] (출처 M2):\n<star_value field="task">\n과제\n</star_value>');
     expect(text).toContain("action: (제안 없음)");
     expect(text).toContain("competencies [ai]: analysis, planning");
     expect(text).not.toContain(msgId(2));

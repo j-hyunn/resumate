@@ -427,7 +427,7 @@ function BoardCard({
               <StageCardMenu controller={controller} extraItems={menuExtras} label={`${display} 카드 메뉴`} />
             ) : (
               // before the controller registers (first paint): same trigger, inert
-              <Button variant="ghost" size="icon-sm" disabled className="max-md:size-11" aria-label={`${display} 카드 메뉴`}>
+              <Button variant="ghost" size="icon-sm" disabled className="max-md:size-8" aria-label={`${display} 카드 메뉴`}>
                 <MoreHorizontal aria-hidden />
               </Button>
             )}

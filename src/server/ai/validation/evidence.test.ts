@@ -72,6 +72,23 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("V-3 on STAR markdown (v4.10 UP-14): quotes match the plain text; list markers in the quote are ignored", () => {
+    const rows = careerRowsFixture();
+    const target = rows.projects.find((p) => p.action === "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")!;
+    target.action = "1. **APM**으로 병목 쿼리를 찾음\n2. 인덱스를 \\[재\\]설계함\n   - 응답 2초 &lt;목표>";
+    const md = buildCareerPack(rows, { asOf: { year: 2026, month: 10 } });
+    const mdCtx: EvidenceContext = { aliases: md.aliases, learnings: "forbidden" };
+    const ref = md.aliases.aliasOf("project", target.id)!;
+    expect(md.text).toContain("1. **APM**으로 병목 쿼리를 찾음"); // the model sees the stored markdown
+    const check = (quote: string) => checkEvidence({ source_type: "project", ref, field: "action", quote }, mdCtx);
+    // Across list items: the plain text has no "2." between them.
+    expect(check("병목 쿼리를 찾음 인덱스를 [재]설계함")).toMatchObject({ ok: true, evidence: { quote: "병목 쿼리를 찾음\n인덱스를 [재]설계함", quote_adjusted: false } });
+    // The model copied the markdown (number, bold, escape, entity).
+    expect(check("2. 인덱스를 \\[재\\]설계함\n   - 응답 2초 &lt;목표>")).toMatchObject({ ok: true, evidence: { quote: "인덱스를 [재]설계함\n응답 2초 <목표", quote_adjusted: false } });
+    expect(check("**APM**으로 병목 쿼리를 찾음")).toMatchObject({ ok: true, evidence: { quote: "APM으로 병목 쿼리를 찾음" } });
+    expect(check("Kafka로 병목을 없앰")).toEqual({ ok: false, rule: "v3_quote" });
+  });
+
   it("stores the exact source span and null field for field-less sources", () => {
     expect(checkEvidence({ ...action, quote: "병목쿼리를 찾아 인덱스를 재설계 했다" }, ctx)).toEqual({
       ok: true,

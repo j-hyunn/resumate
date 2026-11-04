@@ -68,7 +68,7 @@ describe("R-31 gate requirements in AI-12", () => {
     expect(text).not.toContain("gate_requirements");
     expect(text).not.toContain("Kafka");
     expect(text).not.toContain("결제 도메인");
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v6\+/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v7\+/);
     const llm = createFakeLlm([{ json: output() }]);
     await extract(ctx(), { llm });
     const sent = [...llm.requests[0].systemBlocks, ...llm.requests[0].userBlocks].map((b) => b.text).join("\n");

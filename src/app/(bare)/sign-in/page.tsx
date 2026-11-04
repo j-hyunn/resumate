@@ -77,7 +77,7 @@ async function Screen({ searchParams }: Props) {
           footnote={
             <p className="mt-6 text-center text-sm leading-5 text-muted-foreground">
               가입할 때 다음 화면에서 약관과 개인정보 처리에 동의를 받아요.{" "}
-              {/* [UI-가정] max-md:h-auto: keep the inline link on the text line (default size adds max-md:h-11) */}
+              {/* [UI-가정] max-md:h-auto: keep the inline link on the text line (default size adds max-md:h-8) */}
               <Button variant="link" asChild className="h-auto p-0 text-sm max-md:h-auto">
                 <Link href={routes.policies("terms")}>이용약관</Link>
               </Button>

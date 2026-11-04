@@ -7,19 +7,15 @@
  * and the `ring-2 ring-ring` focus ring.
  */
 import * as React from "react"
-import { ChevronDown, Plus, X } from "lucide-react"
+import { ChevronDown, Pencil, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { continueList, indentList } from "./doc-list-keys"
+import { editorOf, rawValueOf } from "./doc-markdown-editor"
+import { markdownToReadable } from "./markdown-plain"
 
 // ---------------------------------------------------------------------------
 // DocTitleInput — 머리 제목 = 입력 칸 (S-10 프로젝트명 / S-44 산출물 제목)
@@ -46,7 +42,7 @@ export const DocTitleInput = React.forwardRef<HTMLInputElement, DocTitleInputPro
       aria-invalid={invalid || undefined}
       maxLength={maxLength}
       className={cn(
-        "-mx-2 w-full min-w-0 rounded-md bg-transparent px-2 py-0.5 text-xl leading-8 font-bold outline-none placeholder:text-muted-foreground hover:bg-accent/60 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring aria-invalid:ring-2 aria-invalid:ring-destructive",
+        "-mx-2 w-full min-w-0 rounded-md bg-transparent px-2 py-0.5 text-xl leading-8 font-bold outline-none placeholder:text-muted-foreground hover:bg-accent/60 focus-visible:bg-transparent aria-invalid:ring-2 aria-invalid:ring-destructive",
         attention && "ring-2 ring-primary ring-offset-2 ring-offset-card",
         className,
       )}
@@ -59,70 +55,7 @@ export const DocTitleInput = React.forwardRef<HTMLInputElement, DocTitleInputPro
 // DocTextarea — 마크다운 원문 입력 (G-50: list Enter continues, Tab / Shift+Tab indents on list lines)
 // ---------------------------------------------------------------------------
 
-export interface DocTextareaProps extends Omit<React.ComponentProps<"textarea">, "onChange" | "value"> {
-  value: string
-  onValueChange: (value: string) => void
-}
-
-/**
- * `field-sizing-content`, 16px/1.75, borderless. Pass a visible label via `aria-labelledby` (STAR 칸 제목).
- * Tab only indents / outdents a list line when there is something to do (else focus moves), and Escape
- * makes the next Tab leave the field — no keyboard trap (doc-list-keys.ts, QA UQ-PA-5).
- */
-export const DocTextarea = React.forwardRef<HTMLTextAreaElement, DocTextareaProps>(function DocTextarea(
-  { value, onValueChange, className, onKeyDown, onBlur, ...props },
-  ref,
-) {
-  const inner = React.useRef<HTMLTextAreaElement | null>(null)
-  React.useImperativeHandle(ref, () => inner.current as HTMLTextAreaElement)
-  const pendingCaret = React.useRef<number | null>(null)
-  React.useLayoutEffect(() => {
-    if (pendingCaret.current !== null && inner.current) {
-      inner.current.setSelectionRange(pendingCaret.current, pendingCaret.current)
-      pendingCaret.current = null
-    }
-  })
-  const exitArmed = React.useRef(false)
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    onKeyDown?.(e)
-    if (e.defaultPrevented || e.nativeEvent.isComposing) return
-    if (e.key === "Escape") {
-      exitArmed.current = true
-      return
-    }
-    const armed = exitArmed.current
-    if (e.key !== "Shift") exitArmed.current = false
-    const el = e.currentTarget
-    const plain = !e.metaKey && !e.ctrlKey && !e.altKey
-    const result =
-      e.key === "Enter" && !e.shiftKey && plain
-        ? continueList(el.value, el.selectionStart, el.selectionEnd)
-        : e.key === "Tab" && plain && !armed && el.selectionStart === el.selectionEnd
-          ? indentList(el.value, el.selectionStart, e.shiftKey)
-          : null
-    if (!result) return
-    e.preventDefault()
-    pendingCaret.current = result.caret
-    onValueChange(result.value)
-  }
-  return (
-    <textarea
-      ref={inner}
-      value={value}
-      onChange={(e) => onValueChange(e.target.value)}
-      onKeyDown={handleKey}
-      onBlur={(e) => {
-        exitArmed.current = false
-        onBlur?.(e)
-      }}
-      className={cn(
-        "-mx-2 field-sizing-content min-h-[5.25rem] w-full resize-none rounded-md bg-transparent px-2 py-1.5 text-base leading-[1.75] outline-none placeholder:text-muted-foreground hover:bg-accent/50 focus-visible:bg-transparent focus-visible:ring-2 focus-visible:ring-ring aria-invalid:ring-2 aria-invalid:ring-destructive",
-        className,
-      )}
-      {...props}
-    />
-  )
-})
+export { DocTextarea, type DocTextareaProps } from "./doc-markdown-editor"
 
 /**
  * 근거 구간 강조 (C-02 → S-44 `source_locator {start, end}`) and the "지금 본문에서" chip (3.14 v4, G-51):
@@ -130,8 +63,22 @@ export const DocTextarea = React.forwardRef<HTMLTextAreaElement, DocTextareaProp
  * `quote` instead of offsets: finds the text first. Returns false when the range / quote isn't there
  * (the caller toasts "지금 본문에서 그 문장을 찾지 못했어요" [가정]).
  */
-export function highlightRange(textarea: HTMLTextAreaElement | null, range: { start: number; end: number } | { quote: string }): boolean {
-  if (!textarea) return false
+export function highlightRange(field: HTMLElement | null, range: { start: number; end: number } | { quote: string }): boolean {
+  if (!field) return false
+  const editor = editorOf(field)
+  if (editor) {
+    // offsets are into the saved markdown: take that slice, drop the markdown marks, find it in the editor text
+    // server offsets point into the saved string, not into a re-serialized one
+    const quote = "quote" in range ? range.quote : (rawValueOf(field) ?? editor.getMarkdown()).slice(range.start, range.end)
+    const at = findTextRange(editor, plainQuote(quote))
+    field.scrollIntoView({ block: "center", behavior: "smooth" })
+    if (at) editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(at).run()
+    else editor.commands.focus(undefined, { scrollIntoView: false })
+    flashElement(field)
+    return Boolean(at)
+  }
+  if (!(field instanceof HTMLTextAreaElement)) return false
+  const textarea = field
   let start: number
   let end: number
   if ("quote" in range) {
@@ -148,6 +95,26 @@ export function highlightRange(textarea: HTMLTextAreaElement | null, range: { st
   if (found) textarea.setSelectionRange(start, end)
   flashElement(textarea)
   return found
+}
+
+/** markdown → the text a reader sees (marks, list / heading / quote markers removed), first line only */
+function plainQuote(md: string): string {
+  // one line of reader text (escapes undone, markup and list markers dropped) — see markdown-plain.ts
+  return markdownToReadable(md, { keepListMarkers: false }).split("\n").join(" ").replace(/\s+/g, " ").trim()
+}
+
+/** the quote inside one text block of the editor → its document positions */
+function findTextRange(editor: NonNullable<ReturnType<typeof editorOf>>, quote: string): { from: number; to: number } | null {
+  if (!quote) return null
+  let hit: { from: number; to: number } | null = null
+  editor.state.doc.descendants((node, pos) => {
+    if (hit) return false
+    if (!node.isTextblock) return true
+    const i = node.textContent.indexOf(quote)
+    if (i >= 0) hit = { from: pos + 1 + i, to: pos + 1 + i + quote.length }
+    return false
+  })
+  return hit
 }
 
 /** One `animate-field-flash` (+ ring) on a field — [반영] fills, highlightRange. */
@@ -272,38 +239,44 @@ export function CompetencyChips<K extends string>({
   options: Record<K, string>
   max?: number
   labelledBy?: string
-  /** id(s) of the error / help line → the add trigger's aria-describedby */
+  /** id(s) of the error / help line → the trigger's aria-describedby */
   describedBy?: string
   invalid?: boolean
 }) {
-  const full = value.length >= max
-  const toggle = (k: K, on: boolean) => {
-    if (on) {
-      if (!value.includes(k) && value.length < max) onChange([...value, k])
-    } else onChange(value.filter((v) => v !== k))
+  // pick in a popover (up to `max`), then [적용] commits them at once; closing (outside click / Esc) drops the draft
+  const [open, setOpen] = React.useState(false)
+  const [draft, setDraft] = React.useState<K[]>(value)
+  const keys = Object.keys(options) as K[]
+  const draftFull = draft.length >= max
+  const changed = draft.length !== value.length || draft.some((k) => !value.includes(k))
+  const onOpenChange = (o: boolean) => {
+    if (o) setDraft(value)
+    setOpen(o)
   }
+  const toggle = (k: K, on: boolean) =>
+    setDraft((d) => (on ? (d.includes(k) || d.length >= max ? d : [...d, k]) : d.filter((x) => x !== k)))
   return (
     <div className={cn("flex flex-wrap items-center gap-2 rounded-md", invalid && "ring-2 ring-destructive")} role="group" aria-labelledby={labelledBy}>
       {value.map((k) => (
-        <span key={k} className="inline-flex h-8 items-center gap-1 rounded-full bg-primary-subtle pr-1 pl-3 text-sm text-primary-subtle-foreground max-md:h-11">
+        <span key={k} className="inline-flex h-8 items-center gap-1 rounded-full bg-primary-subtle pr-1 pl-3 text-sm text-primary-subtle-foreground">
           {options[k]}
           <button
             type="button"
             aria-label={`${options[k]} 빼기`}
-            onClick={() => toggle(k, false)}
+            onClick={() => onChange(value.filter((v) => v !== k))}
             className="grid size-6 place-items-center rounded-full hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <X className="size-3.5" aria-hidden />
           </button>
         </span>
       ))}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="chip" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid || undefined}>
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="chip" size="sm" className="max-md:px-3" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid || undefined}>
             {value.length ? (
               <>
-                <Plus className="size-3.5" aria-hidden />
-                역량 추가
+                <Pencil className="size-3.5" aria-hidden />
+                역량 선택
               </>
             ) : (
               <>
@@ -312,30 +285,51 @@ export function CompetencyChips<K extends string>({
               </>
             )}
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-52">
-          {full ? (
-            <>
-              <DropdownMenuLabel className="text-xs font-normal">최대 3개까지 고를 수 있어요</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-            </>
-          ) : null}
-          {(Object.keys(options) as K[]).map((k) => {
-            const checked = value.includes(k)
-            return (
-              <DropdownMenuCheckboxItem
-                key={k}
-                checked={checked}
-                disabled={!checked && full}
-                onSelect={(e) => e.preventDefault()}
-                onCheckedChange={(on) => toggle(k, on === true)}
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-0">
+          <div className="flex items-baseline justify-between gap-2 px-3 pt-3 pb-2">
+            <p className="text-sm font-medium">역량 선택</p>
+            <p className={cn("text-xs tabular-nums", draftFull ? "text-primary-text" : "text-muted-foreground")}>
+              {draft.length} / {max}
+            </p>
+          </div>
+          <ul
+            className="max-h-72 space-y-0.5 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent overflow-y-auto px-1.5 pb-2"
+            aria-label="역량 목록"
+          >
+            {keys.map((k) => {
+              const checked = draft.includes(k)
+              const disabled = !checked && draftFull
+              return (
+                <li key={k}>
+                  <Label
+                    className={cn(
+                      "flex min-h-9 cursor-pointer items-center gap-2.5 rounded-md px-1.5 text-sm font-normal hover:bg-accent",
+                      disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
+                    )}
+                  >
+                    <Checkbox checked={checked} disabled={disabled} onCheckedChange={(on) => toggle(k, on === true)} />
+                    {options[k]}
+                  </Label>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="flex justify-end border-t px-3 py-2">
+            <Button
+                size="sm"
+                disabled={!changed}
+                onClick={() => {
+                  // keep the option order, not the click order
+                  onChange(keys.filter((k) => draft.includes(k)))
+                  setOpen(false)
+                }}
               >
-                {options[k]}
-              </DropdownMenuCheckboxItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+                적용
+              </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

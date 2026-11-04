@@ -31,27 +31,27 @@ const buttonVariants = cva(
         link: "text-primary-text underline-offset-4 hover:underline",
         // design-system 3.5 v4 (UQ-708): inline link inside a red error sentence (저장 실패 — 다시 시도)
         "destructive-link": "text-destructive underline-offset-4 hover:underline",
-        // (v4) design-system 2: L-02 / Resumate AI 패널 빠른 버튼 칩 (Figma 회색 채움 알약), A-4 max-md:h-11
+        // (v4) design-system 2: L-02 / Resumate AI 패널 빠른 버튼 칩 (Figma 회색 채움 알약), A-4 max-md:h-8
         // (v5) UQ-BR-9: warning-coloured ghost (S-44 "확인이 필요한 내용 N개" 트리거)
         "warning-ghost":
           "text-warning-subtle-foreground hover:bg-warning-subtle hover:text-warning-subtle-foreground aria-expanded:bg-warning-subtle aria-expanded:text-warning-subtle-foreground",
         // UQ-BR-5 (leader): Figma grey fill at rest, v4 hover / open = bg-primary/10 + text-primary-text
-        chip: "h-8 rounded-full border-transparent bg-muted px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11",
+        chip: "h-8 rounded-full border-transparent bg-muted bg-clip-border px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-8",
         // (v4) missing_slots 슬롯 묻기: chip 모양 + 점선 테두리
         "chip-dashed":
-          "h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-11",
+          "h-8 rounded-full border border-dashed border-input bg-transparent px-3 text-sm font-normal text-foreground hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text max-md:h-8",
       },
       // design-system 2: sm h-8 text-sm / default h-10 text-base / lg h-11 / icon size-9 / icon-sm size-8
-      // design-system 7 A-4 (UQ-120): every size is ≥44px below 768px; desktop keeps the original size
+      // narrow rule (was A-4 44px): below 768px the sizes use 32px (h-8 / size-8); desktop keeps the original size
       size: {
         default:
-          "h-10 gap-2 px-4 max-md:h-11 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        xs: "h-7 gap-1 px-2 text-xs max-md:h-11 max-md:px-4 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 px-3 text-sm max-md:h-11 max-md:px-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
+          "h-10 gap-2 px-4 max-md:h-8 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        xs: "h-7 gap-1 px-2 text-xs max-md:h-8 max-md:px-4 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 gap-1.5 px-3 text-sm max-md:h-8 max-md:px-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-11 gap-2 px-5 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
-        icon: "size-9 max-md:size-11",
-        "icon-xs": "size-7 max-md:size-11 [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8 max-md:size-11",
+        icon: "size-9 max-md:size-8",
+        "icon-xs": "size-7 max-md:size-8 [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-8 max-md:size-8",
         "icon-lg": "size-11",
       },
     },

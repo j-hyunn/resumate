@@ -18,7 +18,6 @@ import { DocTextarea, DocTitleInput, flashElement, highlightRange } from "@/comp
 import { DocBody, DocHead } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
-  InputRestoreBanner,
   PageShell,
   SaveButton,
   ShellBanners,
@@ -91,7 +90,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
   const [deleting, setDeleting] = React.useState<DeleteTarget | null>(null)
   const [draftFailed, setDraftFailed] = React.useState(false)
   const titleRef = React.useRef<HTMLInputElement | null>(null)
-  const bodyRef = React.useRef<HTMLTextAreaElement | null>(null)
+  const bodyRef = React.useRef<HTMLElement | null>(null)
   const previewState = data.preview?.state ?? null
 
   const dirty = form.title !== baseline.title || form.body !== baseline.body || applied.length > 0
@@ -236,6 +235,17 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     [id, clientId, projectId, updatedAt, applied, previewState, preserved],
   )
 
+  // 입력 보존: what a previous visit left unsaved comes back on its own (no restore banner) — the page is dirty,
+  // so 저장하기 is enabled and leaving asks first
+  const { stored: preservedStored, resolve: resolvePreserved } = preserved
+  React.useEffect(() => {
+    if (!preservedStored) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- apply the stored copy once, after hydration
+    setForm(preservedStored.form)
+    setApplied(preservedStored.applied)
+    resolvePreserved()
+  }, [preservedStored, resolvePreserved])
+
   const guard = useLeaveGuard({ dirty, onSave: async () => Boolean(await doSave()), onDiscard: preserved.clear })
 
   // ---------- Resumate AI 패널 (AI-13) ----------
@@ -357,16 +367,6 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       />
       <ShellBanners>
         <ReturnBanner />
-        {preserved.stored ? (
-          <InputRestoreBanner
-            onContinue={() => {
-              setForm(preserved.stored!.form)
-              setApplied(preserved.stored!.applied)
-              preserved.resolve()
-            }}
-            onDiscard={preserved.clear}
-          />
-        ) : null}
       </ShellBanners>
 
       <DocHead className="space-y-2" label="산출물 정보">
@@ -447,7 +447,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
               ref={bodyRef}
               aria-label="본문"
               aria-invalid={bodyError ? true : undefined}
-              aria-describedby={bodyError ? "dlv-body-error dlv-body-count" : "dlv-body-count"}
+              aria-describedby={bodyError ? "dlv-body-error" : undefined}
               className="min-h-[24rem]"
               value={form.body}
               onValueChange={setBody}
@@ -473,16 +473,13 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
                   {bodyError}
                 </span>
               ) : null}
-              {/* [UI-가정] 글자 수 "n / 20,000" */}
-              <span id="dlv-body-count" className={bodyError ? "text-sm text-destructive tabular-nums" : "text-sm text-muted-foreground tabular-nums"}>
-                {form.body.length.toLocaleString("ko-KR")} / {PAGE_LIMITS.deliverableBody.toLocaleString("ko-KR")}
-              </span>
             </div>
           </div>
         }
         aside={
           <AiPanel
             panel={panel}
+            proposalInline
             hideDraftTurnFailure={(f) => Boolean(f.draft_turn) || draftFailed}
             renderProposal={(p) => (
               <DeliverableDraftCard

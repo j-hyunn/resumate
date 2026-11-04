@@ -31,7 +31,7 @@
 - user_edit 미반영 객체는 AI 합친 set을 protected_field로 거부
 
 ## 적용
-- 로컬: `supabase migration up --local`로 이 파일만 적용(리셋 없음). 원격 미적용.
+- 로컬: `supabase migration up --local`로 이 파일만 적용(리셋 없음). ~~원격 미적용.~~ 원격 적용 2026-11-04(사용자).
 - 출시: UI의 [반영] 교체 처리와 같은 머지. db push 먼저.
 
 ## QA 1라운드 수정 (2026-11-04)

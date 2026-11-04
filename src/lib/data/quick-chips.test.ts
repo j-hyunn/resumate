@@ -118,5 +118,6 @@ describe("quickChips / quickChipsVisible", () => {
     expect(quickChipsVisible({ message_count: 36, closed: false, locked: false })).toBe(false)
     expect(quickChipsVisible({ message_count: 2, closed: true, locked: false })).toBe(false)
     expect(quickChipsVisible({ message_count: 2, closed: false, locked: true })).toBe(false)
+    expect(quickChipsVisible({ message_count: 1, closed: false, locked: false, sent: true })).toBe(false)
   })
 })

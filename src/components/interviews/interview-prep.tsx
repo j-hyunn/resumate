@@ -270,7 +270,7 @@ export function InterviewPrep({
               <AiRunButton
                 connection={connection}
                 variant="outline"
-                buttonClassName="max-md:h-11"
+                buttonClassName="max-md:h-8"
                 lock={{ entry: "interview_new", returnParams: { interview_type: type, question_count: count } }}
                 onRun={restart}
                 pending={restarting}
@@ -279,11 +279,11 @@ export function InterviewPrep({
                 그만두고 새로 시작
               </AiRunButton>
             ) : (
-              <Button variant="ghost" className="max-md:h-11" onClick={() => setAbandonOpen(true)}>
+              <Button variant="ghost" className="max-md:h-8" onClick={() => setAbandonOpen(true)}>
                 그만두기
               </Button>
             )}
-            <Button asChild className="max-md:h-11">
+            <Button asChild className="max-md:h-8">
               <Link href={routes.interviewSession(applicationProjectId, inProgress.id)}>이어서 쓰기</Link>
             </Button>
           </div>
@@ -340,7 +340,7 @@ export function InterviewPrep({
             <ToggleGroupItem
               key={n}
               value={String(n)}
-              className="h-10 min-w-14 px-4 max-md:h-11 text-base tabular-nums"
+              className="h-10 min-w-14 px-4 max-md:h-8 text-base tabular-nums"
               aria-label={`${n}문항`}
             >
               {n}
@@ -437,7 +437,7 @@ export function InterviewPrep({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={abandoning}>취소</AlertDialogCancel>
-            <Button variant="destructive" className="max-md:h-11" onClick={abandon} disabled={abandoning}>
+            <Button variant="destructive" className="max-md:h-8" onClick={abandon} disabled={abandoning}>
               {abandoning ? <Loader2 className="animate-spin" aria-hidden /> : null}
               그만두기
             </Button>

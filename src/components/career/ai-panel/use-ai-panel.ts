@@ -356,7 +356,10 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
       missing_slots: d?.deliverable?.body?.missing_slots,
     })
   }, [opts.target, opts.formSnapshot, chat])
-  const chipsVisible = quickChipsVisible({ message_count: messageCount, closed, locked })
+  // S-10 (project): hidden from the moment the user sends (in-flight first send included); a blocked send leaves no
+  // user message. S-44 (deliverable) keeps its chips during the chat — 초안 만들기 / 더 짧게 (style) live there.
+  const sent = opts.target === "project" && (responding || Boolean(chat?.messages.some((m) => m.role === "user")))
+  const chipsVisible = quickChipsVisible({ message_count: messageCount, closed, locked, sent })
 
   const greeting = React.useMemo(() => localGreeting(opts.target, opts.formSnapshot, opts.gateFeatureLabel), [opts.target, opts.formSnapshot, opts.gateFeatureLabel])
 

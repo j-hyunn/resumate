@@ -12,6 +12,7 @@ import {
   CLASSIFICATION_FIELDS,
   DRAFT_PERIOD_FIELDS,
   STAR_FIELDS,
+  isDismissedClassification,
   isPending,
   parseStructuredDraft,
   type StarField,
@@ -266,32 +267,47 @@ export function renderPeriod(project: V9Project): string {
   return `${project.startMonth} ~ ${end}`;
 }
 
-function classificationValue(field: (typeof CLASSIFICATION_FIELDS)[number], project: V9Project): string {
-  if (field === "project_type") return isProjectType(project.projectType) ? `${project.projectType} (${PROJECT_TYPE_LABELS[project.projectType]})` : "(비어 있음)";
-  if (field === "experience_type") return isExperienceType(project.experienceType) ? `${project.experienceType} (${EXPERIENCE_TYPE_LABELS[project.experienceType]})` : "(비어 있음)";
+function classificationValue(field: (typeof CLASSIFICATION_FIELDS)[number], project: V9Project): string | null {
+  if (field === "project_type") return isProjectType(project.projectType) ? `${project.projectType} (${PROJECT_TYPE_LABELS[project.projectType]})` : null;
+  if (field === "experience_type") return isExperienceType(project.experienceType) ? `${project.experienceType} (${EXPERIENCE_TYPE_LABELS[project.experienceType]})` : null;
   const comps = project.competencies.filter(isCompetency);
-  return comps.length ? comps.map((c) => `${c} (${COMPETENCY_LABELS[c]})`).join(", ") : "(비어 있음)";
+  return comps.length ? comps.map((c) => `${c} (${COMPETENCY_LABELS[c]})`).join(", ") : null;
+}
+
+/** v4.10 (UP-6 [무시]): marker the extract prompt reads as "do not recommend this classification". */
+export const CLASSIFICATION_DISMISSED_MARK = "(비어 있음 — 사용자가 이 대화에서 추천을 무시함, 추천하지 않음)";
+
+/**
+ * v4.10 (UP-14): a STAR value as stored (markdown) in its own block, lines
+ * unindented, so the model sees the user's block formatting (lists, numbers,
+ * nesting, headings, paragraphs, quotes, tables, code) exactly and can keep it.
+ */
+function starValueBlock(field: StarField, value: string): string {
+  const body = `<star_value field="${field}">\n${escMarkdown(value.trim())}\n</star_value>`;
+  return field === "learnings" ? `<reflection>\n${body}\n</reflection>` : body;
 }
 
 /**
  * Extract: the project's current values (STAR text so a merged `set` keeps
- * every existing fact, v4.9 RQ-5; classification as reference, never a
- * source), with the room
- * left per STAR field (C-14 "정리 프롬프트에는 필드별 남은 글자 수").
+ * every existing fact, v4.9 RQ-5; v4.10 UP-14 as stored markdown in
+ * <star_value> blocks; classification as reference, never a source — a
+ * dismissed one marked, UP-6), with the room left per STAR field (C-14
+ * "정리 프롬프트에는 필드별 남은 글자 수").
  */
 export function renderProjectForExtract(ctx: WritingChatContext): string {
   const project = ctx.v9.project;
   const source = ctx.valueSource === "form_snapshot" ? "화면 폼의 현재 값(저장 전 편집 포함)" : "저장된 값";
   const out = ["<project_state>", `values: ${source}`, `period: ${renderPeriod(project)}`, "classification (참고, 출처 아님):"];
-  for (const f of CLASSIFICATION_FIELDS) out.push(`  ${f}: ${classificationValue(f, project)}`);
-  out.push("star (프로젝트에 이미 있는 값 — 값이 있는 필드는 기존 텍스트와 새 내용을 합친 전체 문장으로 set):");
+  for (const f of CLASSIFICATION_FIELDS) {
+    const value = classificationValue(f, project);
+    out.push(`  ${f}: ${value ?? (isDismissedClassification(ctx.draft.classification[f]) ? CLASSIFICATION_DISMISSED_MARK : "(비어 있음)")}`);
+  }
+  out.push("star (프로젝트에 이미 있는 값, 저장된 마크다운 그대로 — 값이 있는 필드는 기존 텍스트와 새 내용을 합친 전체 글로 set):");
   for (const f of STAR_FIELDS) {
     const v = project.star[f];
     const room = `남은 글자 수 ${Math.max(0, ctx.remainingChars[f])}`;
-    if (v && v.trim() !== "") {
-      const text = f === "learnings" ? `<reflection>${esc(v)}</reflection>` : esc(v);
-      out.push(`  ${f} [${room}]: ${text.replace(/\n/g, "\n    ")}`);
-    } else out.push(`  ${f} [${room}]: (비어 있음)`);
+    if (v && v.trim() !== "") out.push(`  ${f} [${room}]:`, starValueBlock(f, v));
+    else out.push(`  ${f} [${room}]: (비어 있음)`);
   }
   out.push("</project_state>");
   return out.join("\n");
@@ -312,13 +328,13 @@ export function renderDraftForExtract(ctx: WritingChatContext): string {
     if (!isPending(d)) out.push(`  ${f}: (제안 없음)`);
     // v4.6: filled into the form already — it is part of <project_state> now.
     else if (pendingInForm(f, ctx.v9.project, draft)) out.push(`  ${f}: (폼에 채워짐 — <project_state>에 있음)`);
-    else out.push(`  ${f} [${d!.op}/${d!.origin}/${d!.review}]: ${esc(d!.value ?? "").replace(/\n/g, "\n    ")}${src(d!.source_message_ids)}`);
+    else out.push(`  ${f} [${d!.op}/${d!.origin}/${d!.review}]${src(d!.source_message_ids)}:`, starValueBlock(f, d!.value ?? ""));
   }
   out.push("classification:");
   for (const f of CLASSIFICATION_FIELDS) {
     const d = draft.classification[f];
     const value = d && isPending(d) ? (Array.isArray(d.value) ? d.value.join(", ") : d.value) : null;
-    out.push(value ? `  ${f} [${d!.origin}]: ${esc(value)}` : `  ${f}: (추천 없음)`);
+    out.push(value ? `  ${f} [${d!.origin}]: ${esc(value)}` : isDismissedClassification(d) ? `  ${f}: (무시함 — 다시 추천하지 않음)` : `  ${f}: (추천 없음)`);
   }
   out.push(`clarifications: ${renderClarifications(ctx)}`);
   out.push("</draft>");
@@ -385,6 +401,15 @@ function renderClarifications(ctx: WritingChatContext): string {
 /** Data blocks can't close their tags (C-4). Full-width brackets normalize away in V-9b. */
 function esc(text: string): string {
   return text.replace(/</g, "＜").replace(/>/g, "＞");
+}
+
+/**
+ * v4.10 (UP-14): STAR markdown in <star_value>: only a `<` that could start a
+ * tag is replaced (C-4), so quote markers `>` and the editor's `&lt;` reach the
+ * model as stored and a merged proposal can keep them.
+ */
+function escMarkdown(text: string): string {
+  return text.replace(/<(?=[A-Za-z/!?])/g, "＜");
 }
 
 /** 'YYYY-MM-DD' (date column) or 'YYYY-MM' → 'YYYY-MM'. */

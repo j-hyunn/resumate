@@ -2,8 +2,8 @@
  * Store → grading facts, and the session facts several data modules share. Server only, but no
  * store access of its own (no import cycle with ai.ts / ai-jobs.ts).
  */
-import type { AiJob, InterviewSession } from "@/types/db"
-import { buildGradingFacts, gradingDecision, isRegradeTarget, type GradingAnswer, type GradingDecision, type GradingFacts } from "@/lib/data/interview-grading"
+import type { AiJob, AnswerEvaluation, InterviewSession } from "@/types/db"
+import { buildGradingFacts, gradingDecision, isInputCausedAnswer, isRegradeTarget, type GradingAnswer, type GradingDecision, type GradingFacts } from "@/lib/data/interview-grading"
 import type { MockDb } from "./fixtures"
 
 /** The latest session-wide grading job (per-answer jobs excluded) */
@@ -57,4 +57,22 @@ export function effectiveGenerationStatus(db: MockDb, s: InterviewSession): Inte
     (j) => j.target_id === s.id && j.job_type === "interview_questions" && (j.status === "queued" || j.status === "running"),
   )
   return running ? "generating" : "failed"
+}
+
+/**
+ * Same-row retry of a session-wide `interview_evaluation` job (04 §2.9.1 case (1)): which evaluation
+ * rows stay as they are. In the mock a reopened row (`pending`) is a removed row.
+ * - `restarted` (another active provider / tier, R-63): every row **this job** wrote reopens —
+ *   succeeded ones and input-caused ones too (DM 2.9.1 "상태 조건 없음", backend spec-gaps W0 ⑨).
+ *   Rows another job wrote (e.g. an earlier run) stay.
+ * - same provider / tier: succeeded rows and input-caused failures stay (begin leaves them out,
+ *   DM 2.7.1); the other failures reopen.
+ */
+export function keepsEvaluationOnRetry(
+  e: Pick<AnswerEvaluation, "status" | "error_code" | "ai_job_id">,
+  jobId: string,
+  restarted: boolean,
+): boolean {
+  if (restarted && e.ai_job_id === jobId) return false
+  return e.status === "succeeded" || isInputCausedAnswer({ evaluation_status: e.status, error_code: e.error_code })
 }

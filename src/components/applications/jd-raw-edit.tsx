@@ -31,7 +31,7 @@ import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, 
 import { routes } from "@/lib/routes"
 import type { AiErrorCode } from "@/types/db"
 import { updateFailedJdRawTextAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
-import { jdRawEditReducer, jdRawEditView } from "./jd-raw-edit-state"
+import { jdRawEditReducer, jdRawEditView, jdRawFocusTarget } from "./jd-raw-edit-state"
 
 /** S-15 "저장 성공" (명세 문구) */
 const SAVED_NOTE = "저장했어요. '요건 정리하기'를 누르면 고친 공고로 다시 정리해요"
@@ -133,14 +133,31 @@ export function JdRawEditButton() {
   const shown = edit.editable && !edit.editing
   // UQ-608: 취소 → the textarea is gone; after 저장 the saved note takes it instead
   React.useEffect(() => {
-    if (shown && !edit.saved && edit.takeFocus()) button.current?.focus()
-  }, [shown, edit])
+    if (jdRawFocusTarget(edit) === "button" && edit.takeFocus()) button.current?.focus()
+  }, [edit])
   if (!shown) return null
   return (
     <Button ref={button} variant="outline" size="sm" onClick={edit.start}>
       <PenLine aria-hidden />
       공고 원문 고치기
     </Button>
+  )
+}
+
+/**
+ * Title of the 공고 원문 panel. UQ-608 remaining case: after a refused save (the condition was taken away)
+ * "취소" closes the textarea and there is no "공고 원문 고치기" to take focus — the title does, not <body>.
+ */
+export function JdRawPanelTitle({ children }: { children: React.ReactNode }) {
+  const edit = useJdRawEdit()
+  const title = React.useRef<HTMLHeadingElement>(null)
+  React.useEffect(() => {
+    if (jdRawFocusTarget(edit) === "title" && edit.takeFocus()) title.current?.focus()
+  }, [edit])
+  return (
+    <h2 ref={title} tabIndex={-1} className="text-lg leading-7 font-semibold outline-none">
+      {children}
+    </h2>
   )
 }
 
@@ -181,7 +198,7 @@ export function JdRawSavedNote() {
   const note = React.useRef<HTMLDivElement>(null)
   // UQ-608: 저장 → the textarea is gone, focus lands on what happened
   React.useEffect(() => {
-    if (saved && edit.takeFocus()) note.current?.focus()
+    if (jdRawFocusTarget(edit) === "note" && edit.takeFocus()) note.current?.focus()
   }, [saved, edit])
   if (!saved) return null
   return (

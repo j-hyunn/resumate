@@ -19,7 +19,7 @@ import { isAiRejected } from "@/components/common/ai-rejection"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { isInputCausedFailure } from "@/lib/data/ai-errors"
 import { refusalOf } from "./extract-first"
-import { JdRawEditButton, JdRawEditor, JdRawSavedNote, useJdRawEdit } from "./jd-raw-edit"
+import { JdRawEditButton, JdRawEditor, JdRawPanelTitle, JdRawSavedNote, useJdRawEdit } from "./jd-raw-edit"
 import type { AiErrorCode, AiJob, AiRetryRefusalCode, JdRequirement, JdSentence } from "@/types/db"
 import { cn } from "@/lib/utils"
 import { IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS, REQUIREMENT_CATEGORY_ORDER } from "./labels"
@@ -80,7 +80,7 @@ export function JdView({
     <div className="grid gap-6 xl:grid-cols-2">
       <Card className="gap-3 p-5 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg leading-7 font-semibold">공고 원문</h2>
+          <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
           <JdRawEditButton />
         </div>
         <JdRawSavedNote />

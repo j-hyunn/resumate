@@ -208,8 +208,9 @@ export interface PageSaveError {
   field?: string | null
   current_updated_at?: string | null
   /**
-   * S-10 real-path bridge only: the row was created but the rest of the save failed. Keep this id (and use
-   * `updated_at` as the expected version) so the retry updates it — no second project (UQ-PA-3).
+   * The row was created but the rest of the save failed: keep this id (and `updated_at` as the expected
+   * version) so the retry updates it. Not produced since R5 wiring (`save_project_page` is one transaction);
+   * kept for the screen's existing handling.
    */
   created?: { project_id: string; updated_at: string }
 }
@@ -240,7 +241,7 @@ export type SaveProjectDeliverableResult =
 export interface SaveProjectPageInput {
   /** null = 만들기 */
   project_id: string | null
-  /** 만들기: one id per new page, reused on retries (idempotent create, [UI-가정] UQ-PA-3) */
+  /** 만들기: one id per new page (mock previews only — the RPC assigns the id, spec-gaps R5-W-1) */
   client_id?: string | null
   values: ProjectPageValues
   /** null = overwrite ("내 내용으로 저장") */
@@ -251,7 +252,7 @@ export interface SaveProjectPageInput {
 export interface SaveProjectDeliverableInput {
   /** null = 만들기 */
   project_deliverable_id: string | null
-  /** 만들기: one id per new page, reused on retries (idempotent create) */
+  /** 만들기: one id per new page (mock previews only — the RPC assigns the id, spec-gaps R5-W-1) */
   client_id?: string | null
   project_id: string
   title: string
@@ -410,9 +411,9 @@ export type PageLoad<T> =
 // panel: start / patch / turn results
 // ---------------------------------------------------------------------------
 
-/** Refusals of the panel's server calls. `backend_pending` = 연결 대기 (DM v4.5 11.3) on the real path. */
+/** Refusals of the panel's server calls. */
 export type PanelCallError = {
-  code: WritingChatErrorCode | "ai_not_connected" | "ai_consent_required" | "key_invalid" | "backend_pending" | "failed"
+  code: WritingChatErrorCode | "ai_not_connected" | "ai_consent_required" | "key_invalid" | "failed"
 }
 
 export type StartChatResult<V extends WritingChatView = WritingChatView> = { ok: true; chat: V } | { ok: false; error: PanelCallError }
@@ -569,8 +570,6 @@ export const PANEL_COPY = {
   invalidFormSnapshot: "입력한 내용 중 길이·형식이 맞지 않는 칸이 있어요. 칸을 고친 뒤 다시 보내 주세요",
   sensitive: "이 부분은 민감한 정보로 보여 제안에 넣지 않았어요. 대화 기록에는 남아 있어요. 필요하면 대화를 삭제하세요",
   deliverableLimit: "산출물은 프로젝트당 50개까지 쓸 수 있어요",
-  /** [UI-가정] the real path has no v4.5 backend for this call yet */
-  backendPending: "아직 연결 준비 중인 기능이에요. 직접 입력은 그대로 저장할 수 있어요",
   emptyHistory: "아직 대화가 없어요",
   newChatTitle: "새 대화",
   closedChatBadge: "끝난 대화",
@@ -636,11 +635,11 @@ export function blocksToMarkdown(blocks: DeliverableDraftBlock[]): string {
 
 
 /**
- * `base_body_hash` comparison (AI-13 "해시 계산 방식은 서버와 같아야 한다"). // [UI-가정] sha256 of the body with
- * CRLF → LF, hex, prefixed "sha256:" (DM example) — confirm with the backend when AI-13 lands (DM v4.5 11.3).
+ * `base_body_hash` comparison (AI-13 "해시 계산 방식은 서버와 같아야 한다"): "sha256:" + hex of the exact UTF-8
+ * body, no normalization — same as the server's `bodyHash` (src/server/ai/context-pack/deliverable-chat.ts).
  */
 export async function bodyHash(body: string): Promise<string> {
-  const bytes = new TextEncoder().encode(body.replace(/\r\n/g, "\n"))
+  const bytes = new TextEncoder().encode(body)
   const digest = await crypto.subtle.digest("SHA-256", bytes)
   return `sha256:${Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("")}`
 }

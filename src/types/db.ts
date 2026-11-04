@@ -512,8 +512,8 @@ export type ProjectWritingChat = Row<"writing_chats", {
   return_target: ReturnTarget | null
 }>
 
-// --- v4.5 (DM 2.5 · 2.5.0 · 2.5.1, PA-1·PA-3) — 연결 대기 (DM v4.5 11.3): the backend has not migrated yet,
-// so these are written from the planning document, not generated. Names are the DM keys verbatim.
+// --- v4.5 (DM 2.5 · 2.5.0 · 2.5.1, PA-1·PA-3) — migrated (R5). The jsonb shapes below are the screen's view
+// models (DM keys verbatim); `src/lib/data/writing-chat-turn-v45.ts` normalizes the stored drafts into them.
 
 /** writing_chats v4.5 (DM 2.5): STAR chat (`project_deliverable_id` null) or deliverable chat. */
 export type WritingChatV45 = Row<"writing_chats", {

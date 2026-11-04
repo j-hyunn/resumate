@@ -28,7 +28,8 @@ export async function loadCareerRows(supabase: UserSupabaseClient) {
     supabase.from("project_deliverables").select("*").order("project_id").order("sort_order"),
     supabase.from("skills").select("*").order("name"),
     supabase.from("project_skills").select("*").order("created_at"),
-    supabase.from("writing_chats").select("*").order("last_activity_at", { ascending: false }),
+    // STAR chats only: deliverable chats (project_deliverable_id set) are not part of the legacy shell (QA-R5-04)
+    supabase.from("writing_chats").select("*").is("project_deliverable_id", null).order("last_activity_at", { ascending: false }),
   ]);
   return {
     experiences: rowsOf(experiences),
@@ -68,7 +69,9 @@ export async function loadProjectSkillRows(supabase: UserSupabaseClient, project
 
 /** Chats of one project, latest activity first (S-10 패널 대화 기록). */
 export async function loadProjectWritingChatRows(supabase: UserSupabaseClient, projectId: string) {
-  return rowsOf(await supabase.from("writing_chats").select("*").eq("project_id", projectId).order("last_activity_at", { ascending: false }));
+  return rowsOf(
+    await supabase.from("writing_chats").select("*").eq("project_id", projectId).is("project_deliverable_id", null).order("last_activity_at", { ascending: false }),
+  );
 }
 
 /**

@@ -30,11 +30,11 @@ describe("blocksToMarkdown (DM 2.5.0 value)", () => {
 })
 
 describe("bodyHash", () => {
-  it("is stable, sha256-prefixed, CRLF-insensitive", async () => {
-    const a = await bodyHash("가\r\n나")
-    expect(a).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(await bodyHash("가\nNa".replace("Na", "나"))).toBe(a)
-    expect(await bodyHash("다")).not.toBe(a)
+  it("matches the server's base_body_hash (sha256 of the exact UTF-8 body, no normalization)", async () => {
+    const { createHash } = await import("node:crypto")
+    const body = "가\r\n나 **굵게**"
+    expect(await bodyHash(body)).toBe(`sha256:${createHash("sha256").update(body, "utf8").digest("hex")}`)
+    expect(await bodyHash("가\n나")).not.toBe(await bodyHash("가\r\n나"))
   })
 })
 

@@ -136,12 +136,6 @@ function BlockNotice({ panel, block }: { panel: AiPanelController; block: PanelB
           </Button>
         </Alert>
       )
-    case "backend_pending":
-      return (
-        <Alert variant="info">
-          <AlertDescription className="text-sm">{PANEL_COPY.backendPending}</AlertDescription>
-        </Alert>
-      )
   }
 }
 

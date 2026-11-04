@@ -2,7 +2,7 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: 2026-11-03 (프로젝트 추가·산출물 상세 Figma 결정 PA-1~PA-4 반영 추가)
+- 최종 갱신: 2026-11-04 (로그인 Google 단일화 — D-09 변경 반영 추가)
 - 근거 문서: [01-prd.md](01-prd.md) 9장, `_workspace/03_spec-reviewer_review.md` (라운드 2 + 확인 패스, 백엔드 구현 반영 리뷰 2026-11-05 라운드 1·2)
 - 2026-11-05 입력: `_workspace/00_input/planning-decisions-2026-11-05.md`(사용자 확정 A1~A24), `spec-gaps-summary.md`(B·C·D), `brief-2026-11-05.md`(리더 판단)
 - 2026-11-02 입력(커리어 재설계): `_workspace/00_input/planning-decisions-career-redesign.md`(사용자 확정 CR-1~CR-14, 피그마 `GagTxDayknEFEa6qdSqQCc` 커리어 프레임 대조), 리뷰 `_workspace/03_spec-reviewer_review_career-redesign.md`(라운드 1~3 — 사용자 결정 10건 → 후속 결정 CR-15~CR-24, 대체·폐기 표기 목록, 이슈 R-CR-1~17 모두 해결). 반영 문서: PRD v4.5, UX v5.5, AI v4.5, DM v4.4
@@ -62,7 +62,7 @@
 | U-7 | MVP 면접 유형은 직무 / 컬처핏 2종 |
 | U-8 | AI 작성 대화 월 한도 10회 |
 | U-9 | 프로젝트에 연결된 AI 대화는 계속 보관, 대화만 따로 삭제 가능 — **일부 대체 (2026-11-02, CR-6)**: 유지. 프로젝트에 묶이지 않은 대화라는 개념은 없어짐 |
-| U-10 | PRD 권고 일괄 승인: D-02(JD 텍스트 입력만), D-04(커리어 채팅 Should), D-05(인사이트에 점수 없음), D-06(질문 수 3/5/7), D-09(매직 링크 + Google 로그인), D-10(출시 전 LLM 약관 확인), D-11(탈퇴 즉시 파기), D-17(사용량 단위), D-18(인사이트는 사용자가 시작) |
+| U-10 | PRD 권고 일괄 승인: D-02(JD 텍스트 입력만), D-04(커리어 채팅 Should), D-05(인사이트에 점수 없음), D-06(질문 수 3/5/7), D-09(매직 링크 + Google 로그인 — **대체 (2026-11-04, 3.11)**: Google 로그인만), D-10(출시 전 LLM 약관 확인), D-11(탈퇴 즉시 파기), D-17(사용량 단위), D-18(인사이트는 사용자가 시작) |
 
 ### 3.2 사용자 확정 (2026-10-23, 인터뷰와 수정 피드백)
 
@@ -295,6 +295,14 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 | `apply_writing_chat_proposal`(DB 즉시 반영) | **폐기**: [반영] = 폼 채우기, 확정 = 저장 RPC | PA-3 |
 | D-UX-26 AI는 저장된 값만 읽음 | **폐기** (리더 정렬) | form_snapshot |
 
+### 3.11 사용자 확정 (2026-11-04, 로그인 Google 단일화)
+
+| # | 결정 | 근거·영향 |
+|---|------|-----------|
+| D-09 (변경) | 가입·로그인은 **Google 계정으로만** 한다. 이메일 매직 링크·재발송을 없앤다(U-10의 D-09 대체) | PRD v4.7 F-COM-01·9장, UX v5.7 S-02·FL-09, DM F-COM-01 행(Auth 공급자 Google만, 스키마 변경 없음) |
+| `[가정]` | 출시 전이므로 매직 링크로 가입한 실제 사용자의 이전은 다루지 않는다. 같은 이메일의 Google 계정으로 로그인하면 Supabase Auth가 같은 계정에 연결한다 | 운영 사용자가 있다면 다시 정해야 함 |
+| `[가정]` | S-02 콜백 실패는 Google 화면 취소와 처리 실패를 나누지 않고 "로그인을 마치지 못했어요 / 다시 시도해 주세요" 하나로 안내한다 | UX S-02 상태 표 |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -379,3 +387,13 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | UI 화면 | L-02 전체 페이지 셸(로고·[Resumate AI]·저장하기·계정), S-10 재구현(빈 새 페이지, 머리 5필드 상시 입력, STAR 입력란, 페이지 저장·이탈 확인·입력 보존, 반영 = 폼 채우기), S-44 산출물 상세 신규(본문 + AI 패널 블록 단위 초안 카드), C-23 범위 축소, 칩 `quickChips` |
 | 피그마 수정 요청 | 산출물 분류 드롭다운 삭제(PA-2), 근무 프레임에 경험 유형·진행 중 / 교육 프레임에 프로젝트 종류(PA-4), 이동 경로·제목 자리표시자, ⋯ 메뉴, [Resumate AI] 다시 열기 버튼, 저장하기 상태 등 — 목록은 `_workspace/project-add-figma/ux_requests.md` FG-1~13 |
 
+### 4.5 로그인 Google 단일화 후속 (2026-11-04)
+
+기획만 고쳤다. 코드·설정은 아직 그대로이며 아래를 고쳐야 한다. 백엔드는 `resumate-backend`, 화면은 `resumate-ui`로 처리한다.
+
+| 구분 | 할 일 |
+|------|-------|
+| 서버 (**R6 완료 2026-11-04**) | `sendMagicLink` 액션·서비스·계약(`SendMagicLinkInput`, `auth_rate_limited`) 제거, `/auth/callback`의 `token_hash`(이메일 OTP) 분기 제거, 관련 테스트·매직 링크 통합 테스트 정리 |
+| Supabase 설정 | **호스팅** 대시보드에서 Email 공급자 끄기("Allow new users to sign up"은 Google 첫 가입 때문에 켜 둠). 로컬 `[auth.email]`은 통합 테스트의 비밀번호 로그인 때문에 켠 채 둔다(R6, `[auth.email] enable_signup`이 이메일 공급자 전체 스위치). `supabase/templates/magic_link.html`과 `config.toml`의 이메일 템플릿 설정 제거, Google 공급자·리디렉트 허용 목록 확인(로컬·Vercel) |
+| UI (**완료 2026-11-04**) | S-02 `sign-in-form.tsx`를 "Google로 계속하기" 하나로, `?state=` 미리보기에서 `sent`·`link-expired` 제거하고 콜백 실패 문구 교체, mock 데이터 계층의 `sendMagicLink`·`openMagicLinkAction`(`method: "magic_link"`) 제거 |
+| 디자인 시스템 (**완료 2026-11-04, v5.1**) | `docs/ui/design-system.md` 6 A1의 이메일 입력·"또는" 구분선 패턴 정리 |

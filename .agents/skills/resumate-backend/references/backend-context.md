@@ -74,7 +74,7 @@ Test files sit next to the code as `*.test.ts`.
 
 ## Coexisting with the UI harness
 
-The `resumate-ui` harness builds the screens in the same Next.js app against a mock data layer (`.agents/skills/resumate-ui/references/ui-context.md`). Both harnesses must be able to run without overwriting each other.
+The `resumate-ui` harness builds the screens in the same Next.js app through the `src/lib/data` layer (`.agents/skills/resumate-ui/references/ui-context.md`). The data layer is wired (W0–W5); since then a function the UI adds for a new or changed screen is written with `previewOr`, mock-backed and marked `// 연결 대기` — those arrive in `spec-gaps.md` as UI requests and are wired in a later slice (table below). Both harnesses must be able to run without overwriting each other.
 
 | Path | Owner | Backend may |
 |------|-------|-------------|

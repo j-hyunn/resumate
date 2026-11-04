@@ -18,19 +18,21 @@ Write the conclusion on the card along with why. If you choose RAG, ask data-arc
 - Single-shot generations (one question, one piece of feedback) are a single call.
 - Splitting steps leaves intermediate results as evidence, which makes debugging and evaluation easier.
 
-## 3. Model choice
+## 3. Model tier (BYOK, provider-neutral)
 
-| Task | Default |
-|------|---------|
-| Parsing, classification, short extraction | claude-haiku-5-5 |
-| Insights, chat, question generation, feedback | claude-sonnet-5-5 |
-| Deep reasoning with low call frequency, such as a comprehensive report | consider claude-opus-5-5 |
+Cards choose a **tier**; the AI spec's C-10.1 table maps each tier to one fixed model per provider (OpenAI / Gemini / Claude). No automatic fallback between providers or models.
 
-Compute per-user cost as call frequency × unit price and compare it against the PRD ceiling. Leave a note that exact prices get confirmed at implementation time via the `claude-api` skill.
+| Task | Tier |
+|------|------|
+| Parsing, classification, short extraction, ranking | `light` |
+| Insights, documents, interview questions and evaluation, chat replies | `default` |
+| Only when the evaluation set shows `default` failing for one provider's feature | `heavy` (Gemini `heavy` has no free tier — prefer prompt tuning there) |
+
+Every feature must pass the evaluation set on all three providers before launch. Estimate tokens per call (section 7 of the AI spec); prices live in the versioned price table and are confirmed against provider docs at implementation time — the card doesn't hard-code prices.
 
 ## 4. Structured output
 
-Outputs that are rendered on screen or stored are received as a JSON schema (structured output via tool use). Include `schema_version` in the schema so past results stay readable after the schema changes.
+Outputs that are rendered on screen or stored are defined once as a canonical JSON Schema and converted per provider by the adapter (C-10.2): OpenAI strict JSON schema, Gemini `responseJsonSchema`, Claude structured output (no forced tool choice). Follow the lowest-common-denominator rules (no top-level `oneOf`, string-enum discriminators, explicit `null` for optional values, depth ≤ 5, array caps enforced by the server). The server re-validates every response (V-6). Include `schema_version` so past results stay readable after the schema changes.
 
 ## 5. Guardrail checklist
 
@@ -38,7 +40,8 @@ Outputs that are rendered on screen or stored are received as a JSON schema (str
 - **Prompt injection**: JDs and resumes are external text. Inject user data separately from instructions so directives inside them are not followed
 - **Privacy**: how much raw text is kept in logs; handling third-party info (e.g. interviewer names)
 - **Tone**: feedback is specific and actionable; no personal attacks
-- **Failure**: on timeout or schema mismatch, retry once → show the user a retry button
+- **Failure**: classify provider errors into the 7 causes (C-11) and say which are retryable; schema mismatch → one retry on the same provider and model → `schema_invalid`. Input-caused failures are fixed by the user, not retried
+- **Provider data use**: what is sent to the provider per feature, and how the free-tier data-use terms (training, human review) are disclosed and consented (F-AI-04)
 
 ## 6. Mock interview design elements
 

@@ -10,7 +10,7 @@ export interface ConsentItem {
   consent_type: ConsentType
   label: string
   required: boolean
-  /** which policy document the "보기" link opens (S-30 tab) */
+  /** which policy document the "보기" link opens (S-30 page /policies/{policy_type}) */
   policy_type: PolicyType
   description?: string
 }

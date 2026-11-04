@@ -5,8 +5,8 @@
  * Sources: 01-prd.md F-COM-02~05, F-AI-04, NFR-PRV-01~10, NFR-KEY-06, D-10, D-11, D-27, D-34, D-39 /
  * 04-data-model.md A.2, 4.4.
  *
- * The policy documents below mirror docs/legal/privacy-policy.md and docs/legal/terms-of-service.md
- * (the review copies). Change both together. Operator facts fixed by the user 2026-11-04.
+ * The policy documents below mirror docs/legal/privacy-policy.md, docs/legal/terms-of-service.md and
+ * docs/legal/cross-border-transfer.md (the review copies). Change both together. Operator facts fixed by the user 2026-11-04.
  */
 import type { PolicyType } from "@/types/db"
 
@@ -327,42 +327,61 @@ export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
   // v5 (F-COM-02 v4, F-AI-04, D-39): 국외 이전 동의는 가입 때가 아니라 AI 키를 연결할 때 공급자·등급별로 받는다(C-21).
   cross_border_transfer: [
     {
-      heading: "언제 이전되나요",
+      heading: "언제 국외로 이전되나요",
       paragraphs: [
-        "AI 기능은 선택이에요. 본인 AI 키를 연결하고 AI 기능을 실행할 때만 아래 내용이 연결한 공급자에게 전송돼요. 키를 연결하지 않으면 전송되지 않아요.",
+        `${OPERATOR_NAME}(이하 "운영자")은 개인정보 보호법 제28조의8에 따라 국외 이전을 알려요. 서비스의 데이터베이스와 서버는 대한민국(서울 리전)에 있고, 아래 두 경우에만 국외로 이전돼요.`,
+      ],
+      items: [
+        "AI 기능 실행: 본인 AI 키를 연결하고 AI 기능을 실행할 때 (선택, 별도 동의)",
+        "장기 미접속 안내 메일: 1년 가까이 접속하지 않은 계정에 파기 사전 안내를 보낼 때 (처리 위탁)",
       ],
     },
     {
-      heading: "이전하는 항목",
-      items: [...CROSS_BORDER_ITEMS],
-      notes: ["AI 기능을 실행할 때 필요한 범위만 전송해요. 이메일과 표시 이름은 보내지 않아요."],
-    },
-    {
-      heading: "이전받는 자와 국가",
+      heading: "AI 기능 실행 — 이전받는 자",
       items: [
-        "OpenAI, L.L.C. — 미국",
-        "Google LLC (Gemini API) — 미국 등 Google 데이터센터 소재 국가",
-        "Anthropic, PBC — 미국",
+        "OpenAI, L.L.C. — 미국 · 연락처 privacy@openai.com · 정책 openai.com/policies/privacy-policy",
+        "Google LLC (Gemini API) — 미국 등 Google 데이터센터 소재 국가 · 연락처 support.google.com/policies/contact/general_privacy_form · 정책 ai.google.dev/gemini-api/terms",
+        "Anthropic, PBC — 미국 · 연락처 privacy@anthropic.com · 정책 anthropic.com/legal/privacy",
       ],
       notes: [
-        "이 중 이용자가 연결한 활성 공급자 1곳으로만 전송해요. 공급자·등급별 학습 사용, 사람 검토, 보관 기간은 키를 연결할 때 보여 드리고 동의를 받아요.",
+        "AI 기능은 선택이에요. 키를 연결하지 않으면 전송되지 않고, 연결한 활성 공급자 1곳으로만 전송해요. 키를 연결할 때 공급자·등급별로 알리고 별도 동의를 받아요.",
       ],
     },
     {
-      heading: "목적과 방법",
+      heading: "AI 기능 실행 — 이전 내용",
+      items: [
+        `이전 항목: ${CROSS_BORDER_ITEMS.join(", ")} 중 실행에 필요한 범위. 이메일과 표시 이름은 보내지 않아요`,
+        "목적: 이용자가 실행한 AI 기능(인사이트, 서류 초안, AI 작성 대화, 모의 면접)의 결과 생성",
+        "시기와 방법: AI 기능을 실행할 때마다 암호화된 통신(TLS)으로 공급자 API에 전송",
+        "보유·이용 기간: 각 공급자·등급의 정책을 따라요. 키를 연결할 때 공급자·등급별 보관 기간, 학습 사용 여부, 사람 검토 가능성을 보여 드려요",
+      ],
+      notes: [
+        "Gemini 무료 등급처럼 입력이 공급자 제품 개선에 쓰이거나 사람이 검토할 수 있는 등급은 한 번 더 별도 동의를 받아요.",
+        AI_TRAINING_NOTICE + ".",
+      ],
+    },
+    {
+      heading: "AI 기능 실행 — 거부할 권리",
       paragraphs: [
-        "이용자가 실행한 AI 기능의 결과를 만들기 위해, 실행할 때마다 암호화된 통신(TLS)으로 공급자 API에 전송해요.",
+        "동의하지 않아도 가입하고 커리어 관리·자기소개서 관리·지원 현황 보드를 쓸 수 있어요. AI 기능만 쓸 수 없어요. 설정 > AI 연결에서 키를 삭제하면 그 공급자에 대한 동의가 철회되고 전송도 멈춰요.",
       ],
     },
     {
-      heading: "AI 학습",
-      paragraphs: [AI_TRAINING_NOTICE + "."],
+      heading: "장기 미접속 안내 메일 (처리 위탁)",
+      items: [
+        "이전받는 자: Google LLC (Gmail) — 미국 등 Google 데이터센터 소재 국가 · 연락처 support.google.com/policies/contact/general_privacy_form",
+        "이전 항목: 계정 이메일 주소, 안내 메일 본문(파기 예정일)",
+        "목적: 장기 미접속 계정의 파기 사전 안내",
+        "시기와 방법: 마지막 접속 후 1년이 되기 30일 전에 한 번, 암호화된 통신(TLS)으로 전송",
+        "보유·이용 기간: 발송한 메일은 운영자의 Gmail 보낸편지함에 남고, 계정이 파기되거나 탈퇴한 뒤 매월 한 번 삭제해요. 계정이 유지되는 동안에는 계정 정보와 함께 보관해요",
+      ],
+      notes: [
+        "이 안내는 개인정보 처리방침에 따른 파기 전 통지라 따로 거부할 수 없어요. 안내를 받지 않으려면 1년이 되기 전에 한 번 로그인하거나 회원 탈퇴를 하면 돼요.",
+      ],
     },
     {
-      heading: "거부할 권리",
-      paragraphs: [
-        "AI 공급자로의 전송에 동의하지 않아도 가입하고 커리어·자기소개서 관리·지원 현황 보드를 쓸 수 있어요. 키를 삭제하면 그 공급자로의 전송도 멈춰요.",
-      ],
+      heading: "문의",
+      paragraphs: [`국외 이전에 관한 문의는 개인정보 보호책임자(${PRIVACY_OFFICER_NAME}, ${OPERATOR_CONTACT_EMAIL})에게 보내 주세요.`],
     },
   ],
 }

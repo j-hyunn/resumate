@@ -24,6 +24,7 @@ import { getAiConnection } from "./ai-connection"
 import * as v44 from "./career-v44"
 import * as chats44 from "./writing-chats-v44"
 import { previewOr } from "./source"
+import { educationDisplayName } from "@/server/services/career/education-name"
 import { formatRange } from "./labels"
 import { bridgeSaveProjectDeliverable, bridgeSaveProjectPage } from "./career-v45-bridge"
 import {
@@ -265,7 +266,7 @@ export async function getNewProjectPage(aff: { experience?: string | null; educa
     async () => {
       const panel = type === "experience" ? await v44.getExperiencePanel(parentId) : await v44.getEducationPanel(parentId)
       if (!panel) return { kind: "not_found" } as const
-      const name = "experience" in panel ? panel.experience.companyName : panel.education.institutionName
+      const name = "experience" in panel ? panel.experience.companyName : educationDisplayName(panel.education.programName, panel.education.institutionName)
       const list = await v44.getCareerList()
       const affiliations = list.years.flatMap((y) => y.items).filter((i) => i.entityType !== "project").map((i) => ({ type: i.entityType as "experience" | "education", id: i.id, name: i.name }))
       return build(name, affiliations)

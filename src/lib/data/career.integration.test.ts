@@ -280,6 +280,31 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
     expect(await count("project_deliverables")).toBe(1);
   });
 
+  it("QA-02 (UI32): S-10 new project under an education — parent name is the trimmed program_name, else institution_name", async () => {
+    const { getNewProjectPage } = await import("./career-v45");
+    const insert = async (program_name: string | null, institution_name: string | null) => {
+      const r = await user.from("educations").insert({ user_id: userId, program_name, institution_name }).select("id").single();
+      if (r.error) throw new Error(`insert education failed: ${r.error.code}`);
+      return r.data.id;
+    };
+    const named = await insert("  클라우드 백엔드 부트캠프 ", "코드스쿨");
+    const blankProgram = await insert("   ", " 코드스쿨 ");
+    const nameless = await insert(null, " ");
+    const parentOf = async (education: string) => {
+      const page = await getNewProjectPage({ education });
+      if (page.kind !== "ok") throw new Error(`expected ok, got ${page.kind}`);
+      return page.data;
+    };
+    const page = await parentOf(named);
+    expect(page.parent).toEqual({ type: "education", id: named, name: "클라우드 백엔드 부트캠프" });
+    expect(page.values).toMatchObject({ education_id: named });
+    expect(page.affiliations).toContainEqual({ type: "education", id: named, name: "클라우드 백엔드 부트캠프" });
+    expect((await parentOf(blankProgram)).parent.name).toBe("코드스쿨");
+    expect((await parentOf(nameless)).parent.name).toBeNull();
+    expect(await getNewProjectPage({ education: crypto.randomUUID() })).toEqual({ kind: "not_found" });
+    await admin.from("educations").delete().in("id", [named, blankProgram, nameless]);
+  });
+
   it("S-08 tree shim: each experience / education once under its start year with all its projects; standalone by year or undated", async () => {
     const { saveExperience, saveEducation, saveProject, getCareerTree } = await career();
     const { deleteCareerItem } = await deletion();

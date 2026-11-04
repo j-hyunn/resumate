@@ -257,6 +257,11 @@ export function previewStarDraft(chat: ProjectChatView, state: string | null): P
   return { ...chat, structured_draft: d }
 }
 
+/** 교육 이름 = 교육 명(program_name), 비면 운영 기관 — same rule as components/career/education-name.ts (2026-11-04).
+ * The server applies the same rule (src/server/services/career/education-name.ts, UI32). */
+const educationDisplayName = (e: { program_name: string | null; institution_name: string | null }) =>
+  e.program_name?.trim() || e.institution_name?.trim() || null
+
 export async function mockAffiliationName(type: "experience" | "education", id: string): Promise<string | null | undefined> {
   await db()
   const s = store()
@@ -265,7 +270,7 @@ export async function mockAffiliationName(type: "experience" | "education", id: 
     return e ? e.company_name : undefined
   }
   const e = s.educations.find((x) => x.id === id)
-  return e ? e.institution_name : undefined
+  return e ? educationDisplayName(e) : undefined
 }
 
 export async function mockAffiliations(): Promise<Array<{ type: "experience" | "education"; id: string; name: string | null }>> {
@@ -273,7 +278,7 @@ export async function mockAffiliations(): Promise<Array<{ type: "experience" | "
   const s = store()
   return [
     ...s.experiences.map((e) => ({ type: "experience" as const, id: e.id, name: e.company_name })),
-    ...s.educations.map((e) => ({ type: "education" as const, id: e.id, name: e.institution_name })),
+    ...s.educations.map((e) => ({ type: "education" as const, id: e.id, name: educationDisplayName(e) })),
   ]
 }
 
@@ -541,6 +546,6 @@ export async function mockAffiliationOptions(): Promise<Array<{ type: "experienc
   const s = store()
   return [
     ...s.experiences.map((e) => ({ type: "experience" as const, id: e.id, name: e.company_name, start_month: e.start_month, end_month: e.end_month, is_current: e.is_current, status: e.status })),
-    ...s.educations.map((e) => ({ type: "education" as const, id: e.id, name: e.institution_name, start_month: e.start_month, end_month: e.end_month, is_current: e.enrollment_status === "enrolled", status: e.status })),
+    ...s.educations.map((e) => ({ type: "education" as const, id: e.id, name: educationDisplayName(e), start_month: e.start_month, end_month: e.end_month, is_current: e.enrollment_status === "enrolled", status: e.status })),
   ].sort((a, b) => (b.start_month ?? "").localeCompare(a.start_month ?? ""))
 }

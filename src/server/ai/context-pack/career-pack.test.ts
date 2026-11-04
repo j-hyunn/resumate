@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { careerRowsFixture, IDS, project } from "../__fixtures__/career-rows";
 import { buildCareerPack } from "./career-pack";
+import { sourceLabel } from "./selection";
+import { buildSummaryCareerPack } from "./summary-pack";
 import type { CareerRows } from "./career-rows";
 import { DELIVERABLE_PACK_MAX_CHARS, DELIVERABLE_PACK_TOTAL_CHARS } from "./deliverable-text";
 import { mergedMonths, monthsInclusive } from "./months";
@@ -231,5 +233,50 @@ describe("months", () => {
         { start: { year: 2022, month: 1 }, end: { year: 2022, month: 1 } },
       ]),
     ).toBe(19);
+  });
+
+  describe("education label = display name (UQ-734 / UI32-2)", () => {
+    const withEducation = (program_name: string | null, institution_name: string) => {
+      const rows = careerRowsFixture();
+      rows.educations = rows.educations.map((e) => ({ ...e, program_name, institution_name }));
+      return buildCareerPack(rows, { asOf });
+    };
+
+    it.each([
+      ["program name when present", "컴퓨터공학", "가상대학교", "컴퓨터공학"],
+      ["trimmed program name", "  컴퓨터공학  ", "가상대학교", "컴퓨터공학"],
+      ["institution when program is null", null, "가상대학교", "가상대학교"],
+      ["trimmed institution when program is blank", "   ", "  가상대학교 ", "가상대학교"],
+      ["null when both are blank", " ", "  ", null],
+    ])("uses the %s", (_name, program, institution, label) => {
+      expect(withEducation(program, institution).aliases.get("EDU-1")?.label).toBe(label);
+    });
+
+    it("keeps both raw fields model-facing", () => {
+      const pack = withEducation("컴퓨터공학", "가상대학교");
+      const edu = pack.aliases.get("EDU-1")!;
+      expect(edu.fields.institution_name).toBe("가상대학교");
+      expect(edu.fields.program_name).toBe("컴퓨터공학");
+      expect(pack.text).toContain("institution_name: 가상대학교");
+      expect(pack.text).toContain("program_name: 컴퓨터공학");
+    });
+
+    it("puts the display name in the parent part of a project source label", () => {
+      const pack = withEducation("컴퓨터공학", "가상대학교");
+      expect(pack.aliases.get("PRJ-3")?.parents).toEqual(["EDU-1"]);
+      expect(sourceLabel(pack.aliases, { parentAlias: "EDU-1", projectAlias: "PRJ-3" })).toBe("컴퓨터공학 › 캡스톤 분산 캐시");
+      expect(sourceLabel(withEducation(null, "가상대학교").aliases, { parentAlias: "EDU-1", projectAlias: "PRJ-3" })).toBe(
+        "가상대학교 › 캡스톤 분산 캐시",
+      );
+      expect(sourceLabel(withEducation(null, " ").aliases, { parentAlias: "EDU-1", projectAlias: "PRJ-3" })).toBe("캡스톤 분산 캐시");
+    });
+
+    it("leaves the summary pack line as 운영 기관 + 교육 명 (model-facing text unchanged)", () => {
+      const summary = buildSummaryCareerPack(careerRowsFixture(), { asOf });
+      const line = summary.text.split("\n").find((l) => l.includes("EDU-1"));
+      expect(line).toContain("가상대학교");
+      expect(line).toContain("컴퓨터공학");
+      expect(line?.match(/컴퓨터공학/g)).toHaveLength(1);
+    });
   });
 });

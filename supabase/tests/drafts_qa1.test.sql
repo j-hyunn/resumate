@@ -92,7 +92,8 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select lives_ok($$select public.delete_career_item('experience', 'a0000000-1111-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,
                 'delete_results: experience with its projects');
 reset role;
-select results_eq($$select id::text, cancel_requested_at is not null, status from public.ai_jobs order by id$$,
+select results_eq($$select id::text, cancel_requested_at is not null, status from public.ai_jobs
+                     where user_id = 'a0000000-0000-0000-0000-000000000001' order by id$$,
                   $$values ('a0000000-7777-0000-0000-000000000001'::text, false, 'canceled'::text),
                            ('a0000000-7777-0000-0000-000000000002', false, 'failed'),
                            ('a0000000-7777-0000-0000-000000000003', true, 'running'),

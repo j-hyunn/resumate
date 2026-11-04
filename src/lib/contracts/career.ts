@@ -615,7 +615,7 @@ export type CareerListEntityType = "experience" | "education" | "project";
 export type CareerListItem = {
   entityType: CareerListEntityType;
   id: string;
-  /** company_name / institution_name / projects.name (null = "이름 없는 …" on screen). */
+  /** company_name / education display name (program_name, else institution_name — UI32-1) / projects.name (null = "이름 없는 …" on screen). */
   name: string | null;
   startMonth: string | null;
   status: CareerStatus;

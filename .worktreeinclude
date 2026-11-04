@@ -1,3 +1,6 @@
 # Gitignored files copied from the main checkout into each new worktree (gitignore syntax).
 # One shared .env.local keeps the local AI key KEK the same across worktrees.
 .env.local
+# Real Google OAuth keys for the local Supabase Auth provider. Without it, `supabase start`
+# in a worktree picks up the dummy values from .env.local and Google login fails (invalid_client).
+supabase/.env

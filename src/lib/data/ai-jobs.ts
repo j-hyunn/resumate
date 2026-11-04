@@ -9,7 +9,7 @@ import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { advanceMockJob, createMockJob, recordMockUsage, retryMockJob } from "@/lib/mock/ai"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
-import { gradingDecisionOf, regradeTargetIds } from "@/lib/mock/grading"
+import { gradingDecisionOf, keepsEvaluationOnRetry, regradeTargetIds } from "@/lib/mock/grading"
 import { newId, USER_ID } from "@/lib/mock/ids"
 import { routes } from "@/lib/routes"
 import { gradingRefusal, isInputCausedAnswer, isInputCausedGrading } from "./interview-grading"
@@ -509,13 +509,10 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
       status: "evaluating",
       ...(restarted ? { evaluation_provider: job.provider, evaluation_model: job.model } : {}),
     })
-    // restarted → every evaluation of this job reopens; same provider → only failed ones.
-    // Input-caused answers keep their row and cause (UQ-612)
+    // restarted → every evaluation of this job reopens, input-caused ones included (R-63, DM 2.9.1);
+    // same provider → only failed ones that are not input-caused (UQ-612, DM 2.7.1)
     db.answer_evaluations = db.answer_evaluations.filter(
-      (e) =>
-        e.session_id !== session.id ||
-        isInputCausedAnswer({ evaluation_status: e.status, error_code: e.error_code }) ||
-        (e.status === "succeeded" && !(restarted && e.ai_job_id === job.id)),
+      (e) => e.session_id !== session.id || keepsEvaluationOnRetry(e, job.id, restarted),
     )
   }
   if (job.job_type === "insight") {

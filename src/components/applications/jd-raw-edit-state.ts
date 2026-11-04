@@ -36,3 +36,13 @@ export function jdRawEditView(s: JdRawEditState, serverEditable: boolean): { edi
     editable: serverEditable && !s.refused,
   }
 }
+
+/**
+ * UQ-608: who takes focus once the textarea closed (one pending focus per close).
+ * 저장 → the saved note; 취소 → "공고 원문 고치기"; 취소 after a refused save (no button) → the panel title.
+ */
+export function jdRawFocusTarget(v: { editing: boolean; editable: boolean; saved: boolean }): "note" | "button" | "title" | null {
+  if (v.editing) return null
+  if (v.saved) return "note"
+  return v.editable ? "button" : "title"
+}

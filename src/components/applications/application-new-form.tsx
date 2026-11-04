@@ -32,6 +32,8 @@ import { CharCount } from "@/components/common/input-guide"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { routes } from "@/lib/routes"
 import { setNavOrigin } from "@/components/common/return-target"
+import { readAiConnectReturn } from "@/components/common/ai-connect-return"
+import { keepsFormDraftOnLeave } from "./form-draft"
 import { createApplicationAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** v5.3 S-14: 회사명·포지션명 각 200자 (구현 값 [가정]) */
@@ -80,6 +82,14 @@ export function ApplicationNewForm({
   React.useEffect(() => {
     writeFormDraft(fromBoard, { raw_text: raw, company, position, deadline })
   }, [fromBoard, raw, company, position, deadline])
+  // B-6: kept only across the key swap / AI 연결 round trip; any other way out drops it
+  // (the URL may already be the next screen's when this cleanup runs, so the path is taken at mount)
+  React.useEffect(() => {
+    const here = window.location.pathname
+    return () => {
+      if (!keepsFormDraftOnLeave(readAiConnectReturn()?.href, here)) clearFormDraft(fromBoard)
+    }
+  }, [fromBoard])
   const [touched, setTouched] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
@@ -310,7 +320,8 @@ function NameFields({
 /** 'YYYY-MM-DD' in KST */
 
 // ---------------------------------------------------------------------------
-// S-14 form draft (A3 UQ-230). // [UI-가정] sessionStorage, 진입 경로(기업 JD 관리 / 보드)별, 만들기 성공 시 삭제.
+// S-14 form draft (A3 UQ-230, UX S-14 입력 보존). sessionStorage, 진입 경로(기업 JD 관리 / 보드)별. 키 교체로 떠날 때만 남고
+// (keepsFormDraftOnLeave), 만들기 성공 시 삭제.
 // Nothing goes to the URL; storage failures are ignored (input still works).
 // ---------------------------------------------------------------------------
 

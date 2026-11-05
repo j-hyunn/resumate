@@ -1,9 +1,9 @@
 /**
- * 33 런 가드 (UQ-334). S-10 새 프로젝트 · S-44 새 산출물의 "추가 중" 표시는 **행 ID 상태**를 따라야 한다.
+ * 33 런 가드 (UQ-334). S-10 새 프로젝트 · S-44 새 산출물의 "추가 중" 표시(이동 줄 문구)는 **행 ID 상태**를 따라야 한다.
  *
  * 왜 소스를 읽는 테스트인가: `replaceUrl`은 `window.history.replaceState`로 URL만 바꾸므로(Next 내비게이션이
  * 아니다) 첫 저장 뒤에도 컴포넌트는 마운트된 채이고 `data.project_id` / `data.project_deliverable_id`는 계속
- * `null`이다. 분기를 서버 prop이나 URL 기준으로 "정리"하면 행이 생긴 뒤에도 "아직 추가되지 않았어요"가 영구히
+ * `null`이다. 분기를 서버 prop이나 URL 기준으로 "정리"하면 행이 생긴 뒤에도 "새 … 추가"가 영구히
  * 남는다. 이 저장소에는 컴포넌트 렌더 테스트 설비가 없어(vitest `environment: "node"`, `*.test.ts`만) 같은
  * 저장소의 소스 가드 관례(`src/lib/data/mock-isolation.test.ts`)를 따른다.
  */
@@ -33,13 +33,9 @@ describe("새 행 표시", () => {
     expect(decl[0]).not.toMatch(/location|pathname|searchParams|usePathname/)
   })
 
-  it.each(PAGES)("$name: 안내는 isNew일 때만 그린다", ({ src, kind }) => {
-    expect(src).toContain(`{isNew ? <NewRowNotice kind="${kind}" /> : null}`)
-  })
-
-  it.each(PAGES)("$name: 안내는 ShellBanners가 아니라 머리에 있다", ({ src }) => {
-    // C-10·관련 요건·입력 보존 배너와 자리를 공유하면 겹침·순서 문제가 생긴다
-    expect(src.indexOf("<NewRowNotice")).toBeGreaterThan(src.indexOf("</ShellBanners>"))
+  it.each(PAGES)("$name: 새 행 안내 배너를 그리지 않는다 (사용자 결정 2026-11-05)", ({ src }) => {
+    expect(src).not.toContain("NewRowNotice")
+    expect(src).not.toContain("아직 추가되지 않았어요")
   })
 
   it.each(PAGES)("$name: 이동 줄 현재 위치도 isNew로 갈린다", ({ src, kind }) => {
@@ -50,10 +46,6 @@ describe("새 행 표시", () => {
     // autoFocus·plain focus()는 낮은 창에서 머리 상자를 내려 안내를 밀어낸다
     expect(src).not.toMatch(/autoFocus=/)
     expect(src).toMatch(new RegExp(`if \\(!${serverProp.replace(".", "\\.")}\\) (return )?titleRef\\.current\\?\\.focus\\(\\{ preventScroll: true \\}\\)`))
-  })
-
-  it("안내 테두리는 불투명 info 토큰이다 (UQ-332)", () => {
-    expect(read("new-row-notice.tsx")).toContain('className="border-dashed border-info"')
   })
 
   it("이동 줄 문구: 새 행은 '추가', 기존 행은 '상세'이고 서로 다르다", () => {

@@ -4,7 +4,7 @@
  * S-10 프로젝트 상세 (UX v5.6 S-10 · L-02 1.3a · FL-05 · FL-14, AI v4.6 AI-12, DM v4.5 2.5.1).
  *
  * L-02 PageShell → CrumbRow "{회사명/기관명} › {프로젝트명} › 프로젝트 상세" → banners (C-10, 관련 요건, 입력 보존)
- * 새 프로젝트(행 없음)는 이동 줄 현재 위치가 "새 프로젝트 추가"이고 머리 맨 위에 새 행 안내(new-row-notice)가 붙는다(33 런).
+ * 새 프로젝트(행 없음)는 이동 줄 현재 위치가 "새 프로젝트 추가"다(33 런). 머리 맨 위 새 행 안내 배너는 두지 않는다(사용자 결정 2026-11-05).
  * → 머리 (제목 = 프로젝트명 입력 · ⋯ 소속 변경 / 프로젝트 삭제 · 종류 · 경험 유형 · 역량 · 진행 기간 · 진행 중)
  * → Separator → DocBody: STAR 5칸 | ResizeHandle | Resumate AI 패널 (+ StarProposalCard).
  *
@@ -44,7 +44,7 @@ import {
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
-import { CRUMB_CURRENT, NewRowNotice } from "@/components/career/new-row-notice"
+import { CRUMB_CURRENT } from "@/components/career/new-row-notice"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
 import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type FillOptions, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
 import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillEntry, type FillPlan } from "@/components/career/star-proposal-fill"
@@ -522,8 +522,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
 
       {/* 머리 */}
       <DocHead className="space-y-3" label="프로젝트 정보">
-        {/* 새 프로젝트: 행이 아직 없고 "저장하기"가 추가 동작임을 머리 맨 위에서 알린다 (33 런) */}
-        {isNew ? <NewRowNotice kind="project" /> : null}
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}

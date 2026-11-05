@@ -40,11 +40,11 @@ async function Screen({ params, searchParams }: Props) {
   const name = applicationDisplayName(ap.name, ap.name_source, ap.created_at)
   const crumbs = (
     <PageCrumbs
-      items={[{ label: "기업 JD 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "서류 초안" }]}
+      items={[{ label: "자기소개서 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "서류 초안" }]}
       applicationProjectId={id}
     />
   )
-  const header = <PageHeader title="서류 초안" description="커리어 데이터를 근거로 이 공고에 맞춘 경력기술서와 자기소개서 초안을 만들어요" />
+  const header = <PageHeader title="서류 초안" description="커리어 데이터를 근거로 이 공고에 맞춘 경력기술서와 자소서 문항 답변 초안을 만들어요" />
   if (state === "loading" || state === "error" || state === "unauth")
     return (
       <div className="mx-auto max-w-6xl space-y-8">

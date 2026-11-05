@@ -8,6 +8,11 @@ import { Badge } from "@/components/ui/badge"
 import type { InterviewSession, InterviewSessionStatus } from "@/types/db"
 import { formatRelative, SESSION_STATUS_LABELS } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
+import {
+  APPLICATION_DELETED_BADGE,
+  isApplicationDeleted,
+  type DeletedApplicationFields,
+} from "@/lib/data/interview-session-view"
 
 export function SessionStatusBadge({ status, className }: { status: InterviewSessionStatus; className?: string }) {
   const label = SESSION_STATUS_LABELS[status]
@@ -62,14 +67,23 @@ export function NewResultDot({ className }: { className?: string }) {
 /**
  * Row target (S-20 / S-37 → S-22 / S-33): writing in progress or abandoned → 답변지,
  * submitted (evaluating / completed / evaluation_failed) → 결과.
+ * OD-I6 자기소개서 삭제됨 → always S-22 (read-only) at `/interviews/{sessionId}/result` (U36-1, under 모의 면접).
  */
-export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status">): string {
-  // R11 최소 수정 (OD-I6): a detached (project-deleted) session has no project segment yet — the S-22 read-only
-  // route for it is UI follow-up work; until then the empty segment keeps the type (the page answers not found).
-  const projectId = s.application_project_id ?? ""
+export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status"> & DeletedApplicationFields): string {
+  if (isApplicationDeleted(s) || !s.application_project_id) return routes.interviewDeletedResult(s.id)
+  const projectId = s.application_project_id
   return s.status === "in_progress" || s.status === "abandoned"
     ? routes.interviewSession(projectId, s.id)
     : routes.interviewResult(projectId, s.id)
+}
+
+/** OD-I6 표식 "자기소개서 삭제됨" (S-37 행, S-22 머리) */
+export function ApplicationDeletedBadge({ className }: { className?: string }) {
+  return (
+    <Badge variant="muted" className={className}>
+      {APPLICATION_DELETED_BADGE}
+    </Badge>
+  )
 }
 
 /** "3시간 전" — rendered on server and client at slightly different times */

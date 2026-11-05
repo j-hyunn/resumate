@@ -186,7 +186,7 @@ export function normalizeDeliverableDraft(raw: unknown): DeliverableStructuredDr
 }
 
 /** Route events (camelCase) → PanelTurnEvent. AI-12 (`project`) and AI-13 (`deliverable`) share the names they have in common. */
-function mapRealEvent(raw: Raw, provider: AiProviderName | null, target: "project" | "deliverable"): PanelTurnEvent | null {
+function mapRealEvent(raw: Raw, provider: AiProviderName | null, target: "project" | "deliverable", started = false): PanelTurnEvent | null {
   switch (raw.type) {
     case "turn_started":
       return {
@@ -240,13 +240,19 @@ function mapRealEvent(raw: Raw, provider: AiProviderName | null, target: "projec
         draft_count: typeof raw.draftCount === "number" ? raw.draftCount : null,
       }
     case "error":
-      return errorOf(raw, provider, false)
+      return errorOf(raw, provider, false, started)
     default:
       return null
   }
 }
 
-function errorOf(raw: Raw, provider: AiProviderName | null, beforeStream: boolean): PanelTurnEvent {
+/**
+ * `started` = `turn_started` already arrived. The route's connection gate answers as an SSE `error` **before**
+ * `turn_started` (key_missing / key_invalid, nothing stored) → a pre-send block (C-18 "AI 연결하면 사용할 수 있어요",
+ * UX v5.13 OD-B4). The same code **after** `turn_started` is a key deleted during the run → C-20 `key_missing`
+ * "키가 삭제되어 작업을 끝냈어요…" (a failed turn, not a block).
+ */
+function errorOf(raw: Raw, provider: AiProviderName | null, beforeStream: boolean, started = false): PanelTurnEvent {
   const code = str(raw.code) ?? str(raw.error_code)
   const known = !code || code === "internal_error" ? "schema_invalid" : code
   return {
@@ -255,7 +261,7 @@ function errorOf(raw: Raw, provider: AiProviderName | null, beforeStream: boolea
     provider,
     retry_after: str(raw.retryAfter) ?? str(raw.retry_after),
     quota_resets_at: str(raw.quotaResetsAt) ?? str(raw.quota_resets_at),
-    before_stream: beforeStream || PRE_STREAM_CODES.has(known),
+    before_stream: beforeStream || (!started && PRE_STREAM_CODES.has(known)),
   }
 }
 
@@ -272,10 +278,14 @@ async function* realTurn(request: Extract<TurnRequest, { kind: "real" }>, signal
     return
   }
   let provider: AiProviderName | null = null
+  let started = false
   for await (const raw of readSse(response)) {
-    const ev = mapRealEvent(raw, provider, request.target)
+    const ev = mapRealEvent(raw, provider, request.target, started)
     if (!ev) continue
-    if (ev.type === "turn_started") provider = ev.provider
+    if (ev.type === "turn_started") {
+      provider = ev.provider
+      started = true
+    }
     yield ev
     if (ev.type === "turn_done" || ev.type === "error") return
   }

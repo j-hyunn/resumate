@@ -5,7 +5,10 @@
  * 머리 카드: C-17 세션 점수 + 고지 + unanswered_count + 다룬 보완 요건 + data_sufficiency 안내
  * → 종합 피드백(session_feedbacks.result) → 답변별 카드(질문 · 내 답변 · 참고 평가 기준 · 잘한 점 ·
  * 개선점 · 질문 의도 · 개선 답변 예시 + C-01). Evaluating → C-03 with finished cards first.
- * No scoring formula here (D-14 undecided): scores render only from the stored score_* slots.
+ * No scoring formula here: the server computes d14.v1 (OD-I1); scores render only from the stored score_* slots.
+ * OD-I2: 참고 평가 기준(항목 등급)은 그 질문이 `scored`일 때만, 다음 연습은 세션이 `scored`일 때만.
+ * OD-I6: 자기소개서가 지워진 세션(application_deleted)은 읽기 전용 — 다시 채점 · 종합 평가 다시 정리 · 새 면접 ·
+ * 자기소개서로 가는 링크 없음, 머리에 "자기소개서 삭제됨".
  */
 import * as React from "react"
 import Link from "next/link"
@@ -22,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AiProgress, useAiJob } from "@/components/common/ai-progress"
 import { EvidenceChips, EvidenceProvider } from "@/components/common/evidence"
 import { PlaceholderText } from "@/components/common/placeholders"
-import { AnswerScore, SessionScore } from "@/components/common/score-display"
+import { AnswerScore, ScoreDisclaimer, SessionScore } from "@/components/common/score-display"
 import { AiRunButton } from "@/components/common/ai-run-button"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
@@ -35,6 +38,8 @@ import type { AiJobView } from "@/lib/data/ai-jobs"
 import type { EvidenceView } from "@/lib/data/evidence"
 import { clearsNewResultOnView, gradingInputCauseCopy, isInputCausedGrading } from "@/lib/data/interview-grading"
 import type { InterviewSessionDetail } from "@/lib/data/interviews"
+import { isApplicationDeleted, showsCriterionGrades, showsNextPractice } from "@/lib/data/interview-session-view"
+import { ApplicationDeletedBadge } from "./session-status"
 import type { AiConnection, AiErrorCode, AiJobProgress, CriterionGrade, CriterionKey, InterviewType } from "@/types/db"
 import { formatDate, GRADE_LABELS, INTERVIEW_TYPE_LABELS, actionFailedMessage } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
@@ -108,6 +113,8 @@ export function ResultView({
   const previewWrite = usePreviewWriteGuard()
   /** 04 §2.7.1 판정표 (lib/data/interview-grading.ts): 버튼·안내는 이 값만 본다. Re-read after every job. */
   const grading = session.grading
+  /** OD-I6 자기소개서 삭제됨: read-only (no 다시 채점 / 종합 평가 다시 정리 / 새 면접 / 자기소개서 링크) */
+  const readOnly = isApplicationDeleted(session)
   const locked = connection !== null && !connection.active_provider
   const keyInvalid = connection?.key_status === "invalid"
   /** C-20 key_invalid under the 다시 채점 row when an answer card's 다시 채점 is clicked with an invalid key */
@@ -138,7 +145,7 @@ export function ResultView({
   /** 04 §2.7.1 {n} = 다시 채점 대상 수 */
   const failedCount = grading.kind === "regrade" ? grading.count : 0
   // 02 S-22 판정표: 다시 채점 / 종합 평가 다시 정리만 버튼이 있다 (입력 원인·실패 없음은 없음)
-  const canRegrade = Boolean(session.submitted_at) && !regrading && (grading.kind === "regrade" || grading.kind === "resummarize")
+  const canRegrade = !readOnly && Boolean(session.submitted_at) && !regrading && (grading.kind === "regrade" || grading.kind === "resummarize")
   // C-20 key_missing with no key: the notice itself offers "AI 연결하기" — no second C-18 lock below
   const showRegradeRow = canRegrade && !(locked && failed === "key_missing")
   /** S-22 "입력 원인 실패": 세션 전체가 채점 실패로 끝났고 다시 할 것이 없다 → 원인 + 새 면접 */
@@ -206,11 +213,12 @@ export function ResultView({
   const feedbackStale = Boolean(feedback && regrading)
   const total = session.question_count
   const thin = session.data_sufficiency === "thin" || session.data_sufficiency === "none"
-  const startNew = (
+  const startNew = readOnly ? null : (
     <Button asChild variant="link" size="sm" className="h-auto px-0 max-md:min-h-8">
       <Link href={routes.interviewPrep(applicationProjectId, session.interview_type)}>새 면접 시작하기</Link>
     </Button>
   )
+  const nextPractice = feedback && showsNextPractice(session.score_status) ? feedback.next_practice : []
 
   return (
     <EvidenceProvider>
@@ -226,8 +234,11 @@ export function ResultView({
               className="mt-2"
             />
           </div>
-          <p className="text-sm text-muted-foreground tabular-nums">
-            {applicationName} · {typeLabel} · {formatDate(session.created_at)} · 질문 {total}개
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums">
+            <span>
+              {applicationName} · {typeLabel} · {formatDate(session.created_at)} · 질문 {total}개
+            </span>
+            {readOnly ? <ApplicationDeletedBadge /> : null}
           </p>
           {session.question_provider && session.evaluation_provider && session.question_provider !== session.evaluation_provider ? (
             // 02 C-19 "둘이 다르면 질문 Gemini · 채점 Claude처럼 둘 다"
@@ -248,7 +259,7 @@ export function ResultView({
         {inputOnlyFailed ? (
           <InputCausedGradingNotice
             cause={grading.kind === "input_only" ? grading.cause : null}
-            newInterviewHref={routes.interviewPrep(applicationProjectId)}
+            newInterviewHref={readOnly ? undefined : routes.interviewPrep(applicationProjectId)}
           />
         ) : inputCausedJob ? (
           <InputCausedGradingNotice cause={failed} />
@@ -298,7 +309,10 @@ export function ResultView({
             <div className="space-y-1">
               <dt className="text-sm font-medium text-muted-foreground">다룬 보완 요건</dt>
               <dd className="flex flex-wrap gap-1">
-                {weakRequirements.length > 0 ? (
+                {readOnly && session.weak_requirement_ids.length > 0 ? (
+                  // OD-I6: the requirements went with the 자기소개서 — C-01 "원본 삭제됨" [UI-가정]
+                  <span className="text-muted-foreground">원본 삭제됨</span>
+                ) : weakRequirements.length > 0 ? (
                   weakRequirements.map((r) => (
                     <Badge key={r.id} variant="secondary" className="h-auto max-w-full whitespace-normal text-left">
                       {r.content}
@@ -355,15 +369,19 @@ export function ResultView({
                 <TextList title="보완할 점" items={feedback.overall_weaknesses.map((s) => s.text)} />
               </div>
               {feedback.unanswered_note ? <p className="text-sm text-muted-foreground">{feedback.unanswered_note}</p> : null}
-              {feedback.next_practice.length > 0 ? (
+              {/* OD-I2: 다음 연습은 세션 점수(scored)와 함께만 */}
+              {nextPractice.length > 0 ? (
                 <div className="space-y-2">
                   <h3 className="text-base leading-6 font-semibold">다음 연습</h3>
                   <ul className="space-y-2">
-                    {feedback.next_practice.map((p, i) => (
+                    {nextPractice.map((p, i) => (
                       <li key={i} className="flex flex-col gap-1 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-base">{p.text}</span>
                         {feedbackStale ? null : p.type === "focus_session" ? (
+                          // OD-I6: no 면접 준비 of a deleted 자기소개서
+                          readOnly ? null : (
                           <NextLink href={routes.interviewPrep(applicationProjectId, p.interview_type ?? session.interview_type)} label="면접 준비로" />
+                          )
                         ) : p.type === "add_data" ? (
                           // [UI-가정] add_data 이동 대상: 커리어(S-08)
                           <NextLink href={routes.career()} label="커리어에 기록하기" />
@@ -529,7 +547,7 @@ function InputCausedGradingNotice({ cause, newInterviewHref }: { cause: AiErrorC
         {newInterviewHref ? (
           <div className="pt-1">
             <Button asChild variant="outline" size="sm" className="max-md:h-8">
-              <Link href={newInterviewHref}>이 기업 JD로 새 면접 시작</Link>
+              <Link href={newInterviewHref}>이 자기소개서로 새 면접 시작</Link>
             </Button>
           </div>
         ) : null}
@@ -630,6 +648,8 @@ function AnswerCard({
         </span>
       </div>
       <p className="text-base leading-[1.75] font-medium">{q.question_text}</p>
+      {/* C-17 고지는 질문 점수 옆에도 [가정](위치) */}
+      {answer?.score_status === "scored" ? <ScoreDisclaimer /> : null}
 
       {unanswered ? (
         // [UI-가정] 미응답 카드 문구
@@ -684,28 +704,30 @@ function AnswerCard({
             </Block>
           ) : null}
 
-          {/* 참고 평가 기준 (03 4.2). 표시 여부는 D-14 결과에 따름 — 기획 확인 필요 */}
-          <Block title="참고 평가 기준">
-            <ul className="space-y-3">
-              {result.criteria.map((c) => (
-                <li key={c.key} className="space-y-1">
-                  <p className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">
-                      {c.key === "job_relevance" && interviewType === "culture_fit" ? CULTURE_FIT_RELEVANCE : CRITERION_LABELS[c.key]}
-                    </span>
-                    <Badge variant={GRADE_VARIANT[c.grade]}>
-                      {GRADE_LABELS[c.grade]}
-                    </Badge>
-                  </p>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {c.reason}
-                    {c.missing ? ` · 빠진 점: ${c.missing}` : ""}
-                  </p>
-                  <EvidenceChips items={evidence[`criteria.${c.key}`]} className="mt-1" />
-                </li>
-              ))}
-            </ul>
-          </Block>
+          {/* 참고 평가 기준 (03 4.2) — OD-I2: 이 질문의 점수(scored)와 함께만, pending_method 동안 숨김 */}
+          {showsCriterionGrades(answer?.score_status ?? null) ? (
+            <Block title="참고 평가 기준">
+              <ul className="space-y-3">
+                {result.criteria.map((c) => (
+                  <li key={c.key} className="space-y-1">
+                    <p className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {c.key === "job_relevance" && interviewType === "culture_fit" ? CULTURE_FIT_RELEVANCE : CRITERION_LABELS[c.key]}
+                      </span>
+                      <Badge variant={GRADE_VARIANT[c.grade]}>
+                        {GRADE_LABELS[c.grade]}
+                      </Badge>
+                    </p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {c.reason}
+                      {c.missing ? ` · 빠진 점: ${c.missing}` : ""}
+                    </p>
+                    <EvidenceChips items={evidence[`criteria.${c.key}`]} className="mt-1" />
+                  </li>
+                ))}
+              </ul>
+            </Block>
+          ) : null}
 
           {result.strengths.length > 0 ? (
             <Block title="잘한 점">

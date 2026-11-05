@@ -33,7 +33,7 @@ export function EmptyState({
   actions,
   className,
 }: {
-  /** 커리어 Layers, 기업 JD Briefcase, 면접 MessagesSquare, 보드 KanbanSquare */
+  /** 커리어 Layers, 자기소개서 Briefcase, 면접 MessagesSquare, 보드 KanbanSquare */
   icon?: LucideIcon
   title: React.ReactNode
   description?: React.ReactNode
@@ -284,9 +284,9 @@ export function WaitJd({ className }: { className?: string }) {
 // S-28 공급자 장애 배너 (v2: per provider; dismiss handled by AiOutageBanner client wrapper)
 // ---------------------------------------------------------------------------
 
-/** "{공급자}에 일시적인 문제가 있어요. 커리어 입력과 열람, 기업 JD, 지원 현황 보드는 정상이에요" */
+/** "{공급자}에 일시적인 문제가 있어요. 커리어 입력과 열람, 자기소개서, 지원 현황 보드는 정상이에요" (02 C-20) */
 export function aiOutageMessage(providerLabel: string): string {
-  return `${providerLabel}에 일시적인 문제가 있어요. 커리어 입력과 열람, 기업 JD, 지원 현황 보드는 정상이에요`
+  return `${providerLabel}에 일시적인 문제가 있어요. 커리어 입력과 열람, 자기소개서, 지원 현황 보드는 정상이에요`
 }
 
 export function AiOutageAlert({

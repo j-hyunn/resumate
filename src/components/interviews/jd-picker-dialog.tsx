@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * C-16 기업 JD 선택 다이얼로그 (02 C-16, FL-17, design-system 3.15).
+ * C-16 자기소개서 선택 다이얼로그 (02 C-16, FL-17, design-system 3.15).
  * Dialog + Command: 이름, 전형 단계, 마감일, 작성 중 세션 여부. 최근 활동순, 검색. 선택 필수.
  * After a pick: in-progress session → "작성 중인 면접이 있어요: 이어서 쓰기 / 그만두고 새로",
  * otherwise → S-20 (breadcrumb origin = 모의 면접).
@@ -143,19 +143,19 @@ export function JdPickerDialog({
         ) : (
           <>
             <DialogHeader className="text-left">
-              <DialogTitle className="text-lg font-semibold">기업 JD 선택</DialogTitle>
+              <DialogTitle className="text-lg font-semibold">자기소개서 선택</DialogTitle>
               {/* [UI-가정] 설명 문구 */}
-              <DialogDescription>면접을 연습할 기업 JD를 골라 주세요</DialogDescription>
+              <DialogDescription>면접을 연습할 자기소개서를 골라 주세요</DialogDescription>
             </DialogHeader>
             {applications.length === 0 ? (
               <EmptyState
                 icon={Briefcase}
                 className="py-6"
-                title="기업 JD를 먼저 추가해 주세요"
+                title="자기소개서를 먼저 추가해 주세요"
                 actions={
                   <Button asChild className="max-md:h-8">
                     <Link href={routes.applicationNew()} onClick={() => close(false)}>
-                      기업 JD 추가
+                      자기소개서 추가
                     </Link>
                   </Button>
                 }

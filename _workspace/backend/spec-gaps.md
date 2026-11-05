@@ -739,3 +739,17 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - **R11-DB-5 `not_scored` 세션의 방식 버전**: 응답 있는데 채점 0개인 `completed` 세션(위 R11-DB-4 경우만 생김)은 `score_status = 'not_scored'`, `score_value`·`score_max` null, `score_method_version = 'd14.v1'`로 쓴다(백필이 다시 고르지 않게). 채점 실패(`evaluation_failed`) 세션은 지금처럼 방식 버전 없음. `[가정]`
 - **R11-DB-6 백필 대상 범위**: DM A.12는 "`pending_method`인 `completed` 세션(그 답변 포함)"이다. 구현은 여기에 더해 **아직 끝나지 않은 제출 세션**(`evaluating`·`evaluation_failed`)의 `pending_method` 질문 점수·옛 미응답 질문 행도 질문 점수만 채운다(세션 점수는 `completed`만). 배포 전에 저장된 평가의 질문 점수가 다시 채점 전까지 "준비 중"으로 남지 않게. `[가정]`
 - **R11-DB-7 계정 자체 삭제 연쇄**: `auth.users` 연쇄로 지원 프로젝트가 지워질 때는(사용자 행이 이미 없음) 트리거가 남길 세션을 고르지 않고 그 프로젝트 세션을 모두 지운다 — 결과는 DM대로 "탈퇴는 전부 삭제". 세션 행을 고치면 user_id FK를 지운 사용자에 다시 검사하게 되는 경우가 있어서다(같은 트랜잭션에서 넣은 행). DM 2.7.2 서술과 결과 같음, 기록만.
+
+## UI 36 런 (리더, 2026-11-05) — 열린 결정 일괄 확정(OD-*) UI 후속의 백엔드 요청
+상세 표: `docs/ui/screen-status.md` "백엔드 연결 대기 (36 런)". 보고 `_workspace/ui/36_frontend-engineer-A2_report.md`·`36_frontend-engineer-A4_report.md`.
+- **UI36-1 (DM 11.6 #1~#6)** `interview-rows.ts` `SESSION_SELECT`에 `company_name_snapshot`·`position_title_snapshot` 추가, `application_project_id` null 허용 뒤 캐스트 제거. 화면은 null = "자기소개서 삭제됨"으로 읽음(라우트 `[id] = "deleted"`).
+- **UI36-2 (#1~#6)** `deletion.ts` `getApplicationDeletionImpact` 실제 분기 → RPC `get_deletion_impact('application_project')`: `interview_sessions` = `cascade.interview_sessions`(완료 아닌 세션), `kept_interview_sessions` = `kept.interview_sessions`. 지금은 완료 세션도 지워지므로 kept 0.
+- **UI36-3 (R-OD-5)** 커리어 `get_deletion_impact`가 `affected_results.detached_interview_sessions`를 내면 `toDeletionImpact`가 그대로 읽음(없으면 0).
+- **UI36-4 (#11)** 턴 라우트 `retryTarget`: 마지막이 답 없는 사용자 메시지면 재응답(지금 409 `nothing_to_retry` → 화면은 토스트 + 입력 복원).
+- **UI36-5 (#15)** 대화 상세 DTO에 실패 응답 메시지의 작업 상태(`canceled`/`failed`, 원인) → `career-v45.ts` `messagesOf`가 `turn_job`을 채우면 됨.
+- **UI36-6** `policy_versions`에 `cross_border_transfer`·`privacy` `2026-11-05` 행(본문은 `policy-content.ts`·`docs/legal/`에 반영됨).
+- **UI36-7 확인** 모든 답이 비어 있는 제출이 `score_status = scored`, `score_value = 0`(d14.v1)으로 저장되는지. mock 채점 완료(`ai-jobs.ts`)는 아직 `pending_method`를 남김 — 실제 산식 배포 뒤 mock도 맞출지 결정.
+- **UI36-8 참고** 로컬 통합 테스트 `src/lib/data/interviews.integration.test.ts` 2건, `src/server/services/interview/interview.integration.test.ts` 2건이 공유 로컬 스택(이미 d14.v1·OD-I6 마이그레이션 적용)에서 옛 기대값(`pending_method`·세션 전부 삭제)으로 실패 — od-backend가 갱신.
+- **UI36-9 참고(A2)** 서버가 `ai_consent_required`를 `key_missing`으로 바꿔 내려 동의 거절이 C-21 대신 C-18로 보임(기존 동작).
+- **UI36-6 확장 (U36-5, 2026-11-05)** `policy_versions` 2026-11-05 행에 `terms_of_service`도 추가(이용약관 2조 "정량 성과" 삭제). 세 문서 모두 재동의 없음(`requires_reconsent = false`). decisions.md 4.13.
+- **UI36-10 (U36-2, 2026-11-05)** CR-23·D-UX-23 화면 용어: 새 `cover_letter` 초안 기본 제목 "자기소개서 (날짜)"(`supabase/migrations/20261102000300_s7_cover_letter_user_rpcs.sql:103`) → "자소서 문항 답변 (날짜)", AI-12 `GATE_FEATURE_LABEL`·r4 writing_chats 마이그레이션 :193의 cover_letter 기능 이름. 화면은 반영됨(UI 37 런).

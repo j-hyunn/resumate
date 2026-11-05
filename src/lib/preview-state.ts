@@ -97,6 +97,12 @@ export function getPreviewState(searchParams: SearchParamsLike): PreviewState | 
   return readPreviewState(searchParams)
 }
 
+/** A redirect target that keeps the previewed `?state=` (so a moved screen keeps its preview, e.g. U36-1). */
+export function withPreviewState(path: string, state: PreviewState | null): string {
+  if (!state) return path
+  return `${path}${path.includes("?") ? "&" : "?"}state=${encodeURIComponent(state)}`
+}
+
 /**
  * `?state=` → the error_code a failed AI run shows (C-20). v4: ai-failed = system schema_invalid,
  * ai-failed-input = not_a_jd, ai-failed-timeout = timeout, ai-failed-<cause> = the 7 causes,

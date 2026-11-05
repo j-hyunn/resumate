@@ -72,8 +72,8 @@ export function PageCrumbs({ items, applicationProjectId }: { items: Crumb[]; ap
   React.useEffect(() => {
     if (!ctx) return
     let trail = items
-    // UQ-7 / UQ-122: any screen outside a 기업 JD (menus, 커리어 incl. S-36, 설정) resets the
-    // origin, so later visits to S-20/S-22/S-31 show "기업 JD 관리" unless they come from S-39/S-37 again
+    // UQ-7 / UQ-122: any screen outside a 자기소개서 (menus, 커리어 incl. S-36, 설정) resets the
+    // origin, so later visits to S-20/S-22/S-31 show "자기소개서 관리" unless they come from S-39/S-37 again
     if (!applicationProjectId) clearNavOrigin()
     const origin = readNavOrigin(applicationProjectId)
     if (origin && items[0]?.href === routes.applications()) trail = [ORIGIN_CRUMB[origin], ...items.slice(1)]

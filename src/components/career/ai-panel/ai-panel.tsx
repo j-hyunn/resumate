@@ -46,6 +46,7 @@ import { formatRelative } from "@/lib/data/labels"
 import { AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
 import type { AiPanelController, TurnFailure } from "./use-ai-panel"
 import { PanelInputArea } from "./panel-input"
+import { UNANSWERED_COPY, isHiddenAssistantRow } from "./unanswered"
 
 export interface AiPanelProps {
   panel: AiPanelController
@@ -327,7 +328,8 @@ function MessageList({
   const messages = panel.chat?.messages ?? []
   const startArea = !panel.chat || panel.chat.message_count === 0
   const providerLabel = panel.connection?.active_provider ? AI_PROVIDER_LABELS[panel.connection.active_provider] : null
-  const freeTier = panel.connection?.connection_tier === "free" && providerLabel
+  // R-OD-15 (AI C-7.1): the free-tier data-use greeting line is Gemini free only — OpenAI · Anthropic free keys get none
+  const freeTier = panel.connection?.connection_tier === "free" && panel.connection?.active_provider === "gemini" && providerLabel
 
   if (panel.loadingChat) {
     return (
@@ -360,6 +362,8 @@ function MessageList({
               </MessageScrollerItem>
             ) : null}
             {messages.map((m) => {
+              // a failed / stopped reply isn't an answer: the line or C-20 below the user message stands for it (OD-P11, R-OD-8)
+              if (isHiddenAssistantRow(m)) return null
               const flashed = panel.flashedMessage?.id === m.id
               if (m.role === "user") {
                 const text = flashed ? highlightQuotes(m.content, panel.flashedMessage?.quotes ?? []) : m.content
@@ -380,6 +384,7 @@ function MessageList({
                             <BubbleContent className={cn(USER_BUBBLE, flashed && USER_BUBBLE_FLASH)}>{text}</BubbleContent>
                           )}
                         </Bubble>
+                        {panel.unanswered?.id === m.id ? <UnansweredLine panel={panel} /> : null}
                       </MessageContent>
                     </Message>
                   </MessageScrollerItem>
@@ -456,6 +461,23 @@ function MessageList({
         </MessageScrollerButton>
       </MessageScroller>
     </MessageScrollerProvider>
+  )
+}
+
+/**
+ * OD-P11 (UX v5.13 S-10 패널 행 "답을 받지 못한 메시지"): under the last user message when it has no answer and no
+ * turn runs. Not a failure (no C-20, no destructive tone). [UI-가정] muted caption + link button, right-aligned
+ * under the bubble.
+ */
+function UnansweredLine({ panel }: { panel: AiPanelController }) {
+  return (
+    <p className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
+      <span>{UNANSWERED_COPY.line}</span>
+      <span aria-hidden>·</span>
+      <Button variant="link" size="sm" className="h-auto px-0" disabled={panel.responding} onClick={panel.resendUnanswered}>
+        {UNANSWERED_COPY.resend}
+      </Button>
+    </p>
   )
 }
 

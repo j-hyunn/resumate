@@ -28,6 +28,7 @@ import { refreshApplicationJobs, regradeFailedAnswers } from "./ai-jobs"
 import { clearsNewResultOnView, hasNewResult, type GradingDecision } from "./interview-grading"
 import { computeReadiness } from "./readiness"
 import { applicationDisplayName } from "./labels"
+import { deletedApplicationName, isDeletedApplicationSegment, SCORE_MAX_DEFAULT, type DeletedApplicationFields } from "./interview-session-view"
 import { loadInterviewSessionDetail, loadInterviewSessionRows } from "./interview-rows"
 import { previewOr, unwrap } from "./source"
 import { requireConsentedUser } from "@/server/auth/session"
@@ -36,8 +37,15 @@ import * as interviewActions from "@/server/actions/interview"
 import { interviewStartDeps } from "@/server/interview-routes"
 import { INTERVIEW_INSUFFICIENT_DATA_MESSAGE, restartInterviewSession as restartInterviewSessionService, startInterviewSession as startInterviewSessionService, submitInterviewSession as submitInterviewSessionService } from "@/server/services/interview/start"
 
-export interface InterviewSessionRow extends InterviewSession {
-  /** application_projects.name for S-37 rows */
+export interface InterviewSessionRow
+  extends Omit<InterviewSession, "application_project_id" | "company_name_snapshot" | "position_title_snapshot">,
+    DeletedApplicationFields {
+  /** "" for a detached (자기소개서 삭제됨) session — read `application_deleted` instead (OD-I6) */
+  application_project_id: string
+  /**
+   * application_projects.name for S-37 rows. OD-I6 자기소개서 삭제됨 → the snapshot name (R-OD-12,
+   * deletedApplicationName). `application_deleted` / `*_snapshot` come from DeletedApplicationFields.
+   */
   application_name: string
   /** running evaluation / generation job (C-03 축약형) */
   running_job_id: string | null
@@ -68,8 +76,11 @@ async function realStartDeps() {
   return interviewStartDeps(supabase, user.id)
 }
 
-function row(db: MockDb, s: InterviewSession): InterviewSessionRow {
+function row(db: MockDb, s: MockDb["interview_sessions"][number]): InterviewSessionRow {
   const ap = db.application_projects.find((a) => a.id === s.application_project_id)
+  // OD-I6 (mock): a kept session may still hold the deleted project's id (older fixtures) or null;
+  // "deleted" = that project is gone. The real branch reads application_project_id is null.
+  const deleted = !ap
   const job = [...db.ai_jobs]
     .reverse()
     .find((j) => j.target_id === s.id && (j.status === "queued" || j.status === "running"))
@@ -79,7 +90,11 @@ function row(db: MockDb, s: InterviewSession): InterviewSessionRow {
       .find((j) => j.target_id === s.id && j.job_type === type && typeof j.params?.answer_id !== "string")
   return {
     ...s,
-    application_name: ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : "",
+    application_project_id: s.application_project_id ?? "",
+    application_name: ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : deletedApplicationName(s.company_name_snapshot, s.position_title_snapshot),
+    application_deleted: deleted,
+    company_name_snapshot: s.company_name_snapshot ?? null,
+    position_title_snapshot: s.position_title_snapshot ?? null,
     running_job_id: job?.id ?? null,
     question_model_tier: latest("interview_questions")?.model_tier ?? (s.question_provider ? "default" : null),
     evaluation_model_tier: latest("interview_evaluation")?.model_tier ?? (s.evaluation_provider ? "default" : null),
@@ -105,7 +120,10 @@ export async function listInterviewSessions(filter: ListSessionsFilter = {}): Pr
         db.interview_sessions
           .filter(
             (s) =>
-              (!filter.application_project_id || s.application_project_id === filter.application_project_id) &&
+              (!filter.application_project_id ||
+                (isDeletedApplicationSegment(filter.application_project_id)
+                  ? !db.application_projects.some((a) => a.id === s.application_project_id)
+                  : s.application_project_id === filter.application_project_id)) &&
               (!filter.interview_type || s.interview_type === filter.interview_type) &&
               (!filter.status || s.status === filter.status),
           )
@@ -114,7 +132,7 @@ export async function listInterviewSessions(filter: ListSessionsFilter = {}): Pr
       )
     },
     async () => {
-      if (filter.application_project_id && !isUuid(filter.application_project_id)) return []
+      if (filter.application_project_id && !isUuid(filter.application_project_id) && !isDeletedApplicationSegment(filter.application_project_id)) return []
       const { supabase } = await requireConsentedUser()
       return loadInterviewSessionRows(supabase, filter)
     },
@@ -136,11 +154,21 @@ export interface InterviewSessionDetail extends InterviewSessionRow {
   feedback: SessionFeedback | null
 }
 
+/**
+ * S-33 / S-22. `applicationProjectId` = DELETED_APPLICATION_SEGMENT ("deleted", a data-layer key, not a URL) reads a
+ * session whose application project was deleted (OD-I6, S-22 at `/interviews/{sessionId}/result`); a live project id
+ * never finds such a session.
+ */
 export async function getInterviewSession(applicationProjectId: string, sessionId: string): Promise<InterviewSessionDetail | null> {
   return previewOr(
     async () => {
       const db = await mockRequest()
-      const s = db.interview_sessions.find((x) => x.id === sessionId && x.application_project_id === applicationProjectId)
+      const apExists = (id: string) => db.application_projects.some((a) => a.id === id)
+      const s = db.interview_sessions.find(
+        (x) =>
+          x.id === sessionId &&
+          (isDeletedApplicationSegment(applicationProjectId) ? !x.application_project_id || !apExists(x.application_project_id) : x.application_project_id === applicationProjectId),
+      )
       if (!s) return null
       const questions = db.interview_questions
         .filter((q) => q.session_id === sessionId)
@@ -160,9 +188,36 @@ export async function getInterviewSession(applicationProjectId: string, sessionI
       return clone({ ...row(db, s), questions, feedback: db.session_feedbacks.find((f) => f.session_id === sessionId) ?? null })
     },
     async () => {
-      if (!isUuid(applicationProjectId) || !isUuid(sessionId)) return null
+      if ((!isUuid(applicationProjectId) && !isDeletedApplicationSegment(applicationProjectId)) || !isUuid(sessionId)) return null
       const { supabase } = await requireConsentedUser()
-      return loadInterviewSessionDetail(supabase, applicationProjectId, sessionId)
+      return loadInterviewSessionDetail(supabase, isDeletedApplicationSegment(applicationProjectId) ? null : applicationProjectId, sessionId)
+    },
+  )
+}
+
+/**
+ * U36-1: where a session's S-22 lives, from the session id alone — `application_project_id` null = 자기소개서
+ * 삭제됨 (→ `/interviews/{sessionId}/result`), else its 자기소개서 (→ `/applications/{id}/interview/…`). Null when the
+ * session isn't this user's.
+ */
+export async function getInterviewSessionLocation(sessionId: string): Promise<{ application_project_id: string | null } | null> {
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const s = db.interview_sessions.find((x) => x.id === sessionId)
+      if (!s) return null
+      // mock: a kept session of a deleted 자기소개서 still carries the gone project's id (see `row`)
+      const live = db.application_projects.some((a) => a.id === s.application_project_id)
+      return { application_project_id: live ? s.application_project_id : null }
+    },
+    async () => {
+      if (!isUuid(sessionId)) return null
+      const { supabase } = await requireConsentedUser()
+      const { data, error } = await supabase.from("interview_sessions").select("application_project_id").eq("id", sessionId).maybeSingle()
+      if (error) throw mapDbError(error)
+      if (!data) return null
+      // OD-I6 (DM v4.11 11.6 #1): nullable once the backend migration lands; the generated type still says string
+      return { application_project_id: (data.application_project_id as string | null) ?? null }
     },
   )
 }
@@ -336,9 +391,18 @@ export async function submitInterviewSession(
         last_activity_at: now,
       })
       if (answered === 0) {
-        // AI-07 not called: score_status = 'not_scored' ("답변이 없어 평가할 내용이 없어요")
-        Object.assign(session, { status: "completed", completed_at: now, score_status: "not_scored" })
-        for (const a of answers) a.score_status = "unanswered"
+        // AI-07 not called. OD-I1 / R-OD-3 (d14.v1): every question unanswered → session scored 0 / 100
+        // ("답변이 없어 0점이에요"), each answer "미응답 · 0점".
+        Object.assign(session, {
+          status: "completed",
+          completed_at: now,
+          score_status: "scored",
+          score_value: 0,
+          score_max: SCORE_MAX_DEFAULT,
+          score_method_version: "d14.v1",
+          score_counted_count: answers.length,
+        })
+        for (const a of answers) Object.assign(a, { score_status: "unanswered", score_value: 0, score_max: SCORE_MAX_DEFAULT, score_method_version: "d14.v1" })
         return { job_id: null }
       }
       session.status = "evaluating"

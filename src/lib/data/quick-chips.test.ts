@@ -94,16 +94,34 @@ describe("AI-13 deliverableQuickChips (S-44)", () => {
     expect(firstEmptyDeliverableSlot(state)).toBe("went_well")
   })
 
-  it("draft_count 6 replaces the draft chips with 빠진 부분 / 새 대화 시작 (no duplicates)", () => {
-    const chips = deliverableQuickChips({ ...base, has_draft: true, draft_count: 6 })
-    expect(labels(chips)).toEqual([C.askMissing, C.newChat])
-    expect(chips[1]).toEqual({ kind: "new_chat", label: C.newChat })
-    expect(chips.some((c) => c.kind === "message" && c.requested_action === "compose_draft")).toBe(false)
+  it("chip 3 of 초안 불가 sends requested_action ask_from_project (OD-P12)", () => {
+    const chips = deliverableQuickChips(base)
+    expect(chips[2]).toEqual({ kind: "message", label: C.fromProject, requested_slot: null, requested_action: "ask_from_project", style: null })
+    expect(C.fromProject).toBe("프로젝트 내용을 바탕으로 물어봐 줘")
   })
 
-  it("draft_count 6 without a draft keeps the non-draft chips and adds 새 대화 시작", () => {
-    const chips = deliverableQuickChips({ ...base, body: "본문", draft_count: 6 })
-    expect(labels(chips)).toEqual([C.askMissing, C.moreDetail, C.newChat])
+  // OD-P6 (AI v4.11 AI-13): at draft_count ≥ 6 the chips are the fixed three whatever the row
+  const FIXED = ["빠진 부분 물어봐 줘", "프로젝트 내용을 바탕으로 물어봐 줘", "새 대화 시작"]
+  it.each([
+    { name: "draft exists", state: { ...base, has_draft: true, draft_count: 6, missing_slots: ["went_wrong"] } },
+    { name: "draft available (body)", state: { ...base, body: "본문", draft_count: 6 } },
+    { name: "draft unavailable", state: { ...base, draft_count: 6 } },
+    { name: "over the limit", state: { ...base, has_draft: true, draft_count: 7 } },
+  ])("draft_count ≥ 6 → fixed 3 chips ($name)", ({ state }) => {
+    const chips = deliverableQuickChips(state)
+    expect(labels(chips)).toEqual(FIXED)
+    expect(chips.some((c) => c.kind === "message" && c.requested_action === "compose_draft")).toBe(false)
+    expect(chips[1]).toMatchObject({ kind: "message", requested_slot: null, requested_action: "ask_from_project", style: null })
+    expect(chips[2]).toEqual({ kind: "new_chat", label: C.newChat })
+  })
+
+  it("draft limit: 빠진 부분 carries the first empty slot and no action", () => {
+    const chips = deliverableQuickChips({ ...base, has_draft: true, draft_count: 6, missing_slots: ["went_wrong"] })
+    expect(chips[0]).toEqual({ kind: "message", label: C.askMissing, requested_slot: "went_wrong", requested_action: null, style: null })
+  })
+
+  it("draft_count 5 keeps the row chips", () => {
+    expect(labels(deliverableQuickChips({ ...base, has_draft: true, draft_count: 5 }))).toEqual([C.recompose, C.shorter, C.askMissing])
   })
 })
 

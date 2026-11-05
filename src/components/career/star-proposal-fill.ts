@@ -20,9 +20,7 @@ export type FillSkipReason = "needs_review" | "already_applied" | "empty" | "per
 
 export interface FillEntry {
   field: ProjectProposalField
-  /** the form value before the fill (되돌리기) */
-  prev: ProjectPageValues[keyof ProjectPageValues]
-  /** the form value after the fill */
+  /** the form value after the fill (OD-P2: no undo — the value before is not kept) */
   next: ProjectPageValues[keyof ProjectPageValues]
   rev: number
 }
@@ -121,12 +119,12 @@ export function planFill(input: {
     if (isStarField(field)) {
       const current = values[field]
       const proposed = String(obj.value)
-      // RQ-5 (2026-11-04): "set" = 기존 내용과 합친 전체 문장 → 폼 항목 교체(prev 보관 → 되돌리기).
+      // RQ-5 (2026-11-04): "set" = 기존 내용과 합친 전체 문장 → 폼 항목 교체(OD-P2: 되돌리기 없음).
       // "append" = 과거 초안 호환 → 기존 값 뒤에 이어 붙임.
       const op = (obj as { op?: "set" | "append" }).op ?? "set"
       const next = op === "append" && !isBlank(current) ? `${current}\n${proposed}` : proposed
       if (next.length > PAGE_LIMITS.star) plan.skips.push({ field, reason: "too_long" })
-      else plan.fills.push({ field, prev: current, next, rev })
+      else plan.fills.push({ field, next, rev })
       continue
     }
     if (isPeriodField(field)) {
@@ -134,7 +132,7 @@ export function planFill(input: {
         plan.skips.push({ field, reason: "period_already_set" })
         continue
       }
-      plan.fills.push({ field, prev: values[field], next: toFormMonth(String(obj.value)), rev })
+      plan.fills.push({ field, next: toFormMonth(String(obj.value)), rev })
       continue
     }
     if (field === "competencies") {
@@ -146,14 +144,14 @@ export function planFill(input: {
       const pick = input.competencyPick ? offered.filter((c) => input.competencyPick!.includes(c)) : offered
       // nothing checked: no fill, no entry (UX S-10 분류 추천)
       if (!pick.length) continue
-      plan.fills.push({ field, prev: values.competencies, next: pick, rev })
+      plan.fills.push({ field, next: pick, rev })
       continue
     }
     if (values[field] && !input.overwriteClassification) {
       plan.skips.push({ field, reason: "classification_already_set" })
       continue
     }
-    plan.fills.push({ field, prev: values[field], next: obj.value as ProjectPageValues[typeof field], rev })
+    plan.fills.push({ field, next: obj.value as ProjectPageValues[typeof field], rev })
   }
   return plan
 }

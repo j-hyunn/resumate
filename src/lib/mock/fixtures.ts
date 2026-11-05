@@ -57,6 +57,16 @@ import { mockAiMeta, mockMessageMeta } from "./ai-meta"
 import { DISCLOSURE_VERSION, MOCK_MODELS, PRICE_TABLE_VERSION, mockDisclosures, mockPriceTables } from "./ai-providers"
 import { currentPeriodMonth, dateFromToday, daysAgo, minutesAgo, month } from "./time"
 
+/**
+ * OD-I6 (DM v4.11 11.6 #1~#6): a kept session of a deleted 자기소개서 carries the company / position snapshot.
+ * The generated row has no snapshot columns yet and `application_project_id` is still non-null, so the mock keeps
+ * the deleted project's id on the row and "deleted" means that project is gone from `application_projects`.
+ */
+export type MockInterviewSession = InterviewSession & {
+  company_name_snapshot?: string | null
+  position_title_snapshot?: string | null
+}
+
 export interface MockDb {
   user: { id: string; email: string }
   profiles: Profile[]
@@ -80,7 +90,7 @@ export interface MockDb {
   drafts: Draft[]
   draft_sections: DraftSection[]
   draft_section_sources: DraftSectionSource[]
-  interview_sessions: InterviewSession[]
+  interview_sessions: MockInterviewSession[]
   interview_questions: InterviewQuestion[]
   interview_answers: InterviewAnswer[]
   answer_evaluations: AnswerEvaluation[]
@@ -135,6 +145,8 @@ const POLICY_VERSION = "2026-04-01"
 
 /** 04 §2.7.1 판정표 fixture sessions: each answer's outcome. "target" = failed, cause unknown (다시 채점 대상) */
 const GRADED_SESSIONS = [7, 8, 9, 10, 11, 14] as const
+/** OD-I6: the deleted 자기소개서 of session 15 — IDS.ap(90) is not in application_projects */
+export const DELETED_AP_N = 90
 const GRADED_OUTCOMES: Record<(typeof GRADED_SESSIONS)[number], Array<"ok" | "target" | "unanswered" | "input_too_long" | "safety_blocked">> = {
   7: ["input_too_long", "input_too_long", "unanswered"],
   8: ["ok", "ok", "ok"],
@@ -692,9 +704,9 @@ export function createFixtures(): MockDb {
     ap(5, "스텔라랩스 – Senior Backend Engineer", "ai", "closed", null, -30, 15, 15),
     ap(6, null, null, "before_apply", null, null, 0, 0),
     // Q53-2 · 9: 입력 원인으로 요건 추출 실패 + 요건 0개 → 공고 원문 고치기 (JD 7, 세션 6 · 12)
-    ap(7, "새 기업 JD (2026-10-29)", "default", "before_apply", null, 14, 1, 1),
+    ap(7, "새 자기소개서 (2026-10-29)", "default", "before_apply", null, 14, 1, 1),
     // Q53-11: 추출은 성공했는데 요건 0개, 이 원문으로 만든 결과 없음
-    ap(8, "새 기업 JD (2026-10-30)", "default", "before_apply", null, 14, 1, 1),
+    ap(8, "새 자기소개서 (2026-10-30)", "default", "before_apply", null, 14, 1, 1),
   ]
 
   const stageEvent = (
@@ -1016,7 +1028,7 @@ export function createFixtures(): MockDb {
       application_project_id: IDS.ap(1),
       insight_id: null,
       draft_type: "cover_letter",
-      title: "자기소개서",
+      title: "자소서 문항 답변",
       status: "composing",
       options: {},
       edited_at: null,
@@ -1251,15 +1263,20 @@ export function createFixtures(): MockDb {
       evaluation_provider: "gemini",
       evaluation_model: MOCK_MODELS.gemini.default,
     })
-  const interview_sessions: InterviewSession[] = [
+  const interview_sessions: MockInterviewSession[] = [
     session(1, 1, "job", "in_progress", { answered_count: 2, weak_requirement_ids: [IDS.req(4)], last_activity_at: minutesAgo(180) }),
+    // OD-I1 d14.v1: good·good·fair·해당 없음 → (75·30 + 75·30 + 50·20) / 80 = 68.75 → 69 per answer
     session(2, 1, "culture_fit", "completed", {
       question_count: 3,
       answered_count: 3,
       submitted_at: daysAgo(4),
       completed_at: daysAgo(4),
       result_viewed_at: null,
-      score_status: "pending_method",
+      score_status: "scored",
+      score_value: 69,
+      score_max: 100,
+      score_method_version: "d14.v1",
+      score_rationale: "답변 3개의 평균이에요. 구체성·질문 의도 부합은 양호, 구조는 보완 필요였고 JD 연관성은 컬처핏 질문이라 빼고 계산했어요.",
       score_counted_count: 3,
       last_activity_at: daysAgo(4),
     }),
@@ -1287,6 +1304,29 @@ export function createFixtures(): MockDb {
     gradedSession(14, 5, "evaluation_failed", 3, 0), // 입력 원인 + 다른 원인 → 대상만 다시 채점 ({n} = 1)
     gradedSession(10, 4, "completed", 3, 0), // 완료 + 입력 원인 답변만 → 메뉴 없음, 답변에 원인
     gradedSession(11, 4, "completed", 3, 0), // 완료 + 대상 ≥ 1 → 실패한 답변 다시 채점 (Q53-6)
+    // OD-I6 자기소개서 삭제됨: 지운 자기소개서(IDS.ap(90), application_projects에 없음)의 끝난 세션 — 스냅샷 이름,
+    // S-37 "자기소개서 삭제됨" 행 · "삭제된 자기소개서" 필터, S-22 읽기 전용 (route segment "deleted")
+    {
+      ...session(15, DELETED_AP_N, "job", "completed", {
+        created_at: daysAgo(12),
+        question_count: 3,
+        answered_count: 2,
+        unanswered_count: 1,
+        submitted_at: daysAgo(12),
+        completed_at: daysAgo(12),
+        result_viewed_at: daysAgo(11),
+        score_status: "scored",
+        // d14.v1: 69 · 69 · 미응답 0 → 46
+        score_value: 46,
+        score_max: 100,
+        score_method_version: "d14.v1",
+        score_rationale: "질문 3개의 평균이에요. 미응답 1개는 0점으로 들어갔어요.",
+        score_counted_count: 3,
+        last_activity_at: daysAgo(12),
+      }),
+      company_name_snapshot: "한빛소프트",
+      position_title_snapshot: "백엔드 개발자",
+    },
   ]
 
   const question = (n: number, sesN: number, sequence: number, text: string, kind: InterviewQuestion["source_kind"]): InterviewQuestion => ({
@@ -1323,6 +1363,10 @@ export function createFixtures(): MockDb {
     question(40, 4, 1, "가장 자신 있는 프로젝트에서 본인이 직접 한 일을 설명해 주세요.", "project_deep_dive"),
     question(41, 4, 2, "공고의 핵심 요건과 맞닿는 경험을 하나 들려주세요.", "requirement_fit"),
     question(42, 4, 3, "경험이 부족한 영역을 어떻게 보완하겠어요?", "gap_probe"),
+    // OD-I6 자기소개서 삭제됨 세션 15
+    question(60, 15, 1, "주문 서버의 장애 대응 경험을 말해 주세요.", "project_deep_dive"),
+    question(61, 15, 2, "트래픽이 몰릴 때 서버를 어떻게 확장하겠어요?", "requirement_fit"),
+    question(62, 15, 3, "메시징 시스템 경험이 부족하다면 어떻게 보완하겠어요?", "gap_probe"),
     // 04 §2.7.1 판정표 세션: 세션마다 질문 3개 (15부터 3개씩, 세션 7 · 8 · 9 · 10 · 11 · 14 순서)
     ...GRADED_SESSIONS.flatMap((sesN, s) =>
       [0, 1, 2].map((i) => question(15 + s * 3 + i, sesN, i + 1, GRADED_QUESTIONS[i], i === 2 ? "gap_probe" : "project_deep_dive")),
@@ -1347,15 +1391,18 @@ export function createFixtures(): MockDb {
     answer(3, 3, 1, "", "draft"),
     answer(4, 4, 1, "", "draft"),
     answer(5, 5, 1, "", "draft"),
-    answer(6, 6, 2, "코드 리뷰 기준을 두고 의견이 갈렸을 때 데이터를 모아 팀 회의에서 함께 정했습니다.", "submitted", "pending_method"),
-    answer(7, 7, 2, "배포 체크리스트를 빠뜨려 장애가 났고, 이후 자동화된 배포 검증을 도입했습니다.", "submitted", "pending_method"),
-    answer(8, 8, 2, "투명한 공유입니다. 문제를 일찍 알리면 팀 전체의 비용이 줄어듭니다.", "submitted", "pending_method"),
+    { ...answer(6, 6, 2, "코드 리뷰 기준을 두고 의견이 갈렸을 때 데이터를 모아 팀 회의에서 함께 정했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(7, 7, 2, "배포 체크리스트를 빠뜨려 장애가 났고, 이후 자동화된 배포 검증을 도입했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(8, 8, 2, "투명한 공유입니다. 문제를 일찍 알리면 팀 전체의 비용이 줄어듭니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
     answer(9, 9, 3, "결제 승인 지연 장애 때 APM으로 병목 쿼리를 찾아 인덱스를 바꿨습니다.", "submitted"),
     answer(10, 10, 3, "트랜잭션 경계와 장애 시 재시도 정책을 먼저 정합니다.", "submitted"),
     answer(11, 11, 3, "개인 프로젝트로 ECS 배포를 직접 해 보며 익히겠습니다.", "submitted"),
     answer(12, 12, 5, "배포 파이프라인의 수동 단계를 줄이는 것부터 하겠습니다.", "submitted", "pending_method"),
     answer(13, 13, 5, "사내 배포 도구를 만들며 서버별 설정 차이를 정리하는 일이 가장 어려웠습니다.", "submitted"),
     answer(14, 14, 5, "사이드 프로젝트로 클러스터를 직접 운영해 보며 익히겠습니다.", "submitted"),
+    { ...answer(60, 60, 15, "장애 알림을 받고 로그로 원인을 좁힌 뒤 롤백했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(61, 61, 15, "읽기 트래픽은 캐시로, 쓰기는 큐로 나눠 받겠습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(62, 62, 15, "", "unanswered", "unanswered"), score_value: 0, score_max: 100, score_method_version: "d14.v1" },
     answer(40, 40, 4, "결제 승인 지연을 줄이려고 쿼리와 캐시 구조를 직접 바꿨습니다.", "draft"),
     answer(41, 41, 4, "", "draft"),
     answer(42, 42, 4, "", "draft"),
@@ -1407,6 +1454,8 @@ export function createFixtures(): MockDb {
     { ...evaluation(4, 12), ...aiMeta(IDS.job(13)), session_id: IDS.ses(5) },
     failedEvaluation(5, 13),
     failedEvaluation(6, 14),
+    { ...evaluation(60, 60), session_id: IDS.ses(15) },
+    { ...evaluation(61, 61), session_id: IDS.ses(15) },
     ...GRADED_SESSIONS.flatMap((sesN, s) =>
       [0, 1, 2].flatMap((i): AnswerEvaluation[] => {
         const n = 15 + s * 3 + i

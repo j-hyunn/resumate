@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * S-13 기업 JD 목록 — filter row, wide table / narrow card list, row menu (C-12 단계 이동 + C-05 삭제).
+ * S-13 자기소개서 목록 — filter row, wide table / narrow card list, row menu (C-12 단계 이동 + C-05 삭제).
  * Rows link to S-31; the ⋯ menu stops propagation (design-system 5.2).
  */
 import * as React from "react"
@@ -105,7 +105,7 @@ export function ApplicationList({ rows, failMove = false }: { rows: ApplicationL
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[34%]">기업 JD</TableHead>
+              <TableHead className="w-[34%]">자기소개서</TableHead>
               <TableHead>전형 단계</TableHead>
               <TableHead>마감</TableHead>
               <TableHead>기능 진행</TableHead>
@@ -203,10 +203,10 @@ function RowMenu({ name, controller, onOpen, onDelete }: { name: string; control
   return (
     <StageCardMenu
       controller={controller}
-      label={`${name} 메뉴`} // UQ-124: which 기업 JD
+      label={`${name} 메뉴`} // UQ-124: which 자기소개서
       extraItems={
         <>
-          <DropdownMenuItem onSelect={onOpen}>기업 JD 열기</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onOpen}>자기소개서 열기</DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onSelect={onDelete}>
             삭제
           </DropdownMenuItem>

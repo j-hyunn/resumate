@@ -429,6 +429,21 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 닫힌 기존 열린 항목: 4.8 R-ED-7(OD-C1)·R-ED-10(OD-C2)·R-ED-8(OD-C5), 4.11 #10(OD-C1), `docs/ui/screen-status.md` "기획 확인 필요 (누적)" 전부(P-331~334, S-02 부제, 2026-11-03 런 목록, Q53 B-4·B-5, v5.3 Q-10~Q-28, BYOK B-1~B-29, K-1~K-35), `_workspace/backend/slices.md`의 "기획 확인"·"사용자 확인 [가정]" 건수(S4~S9, R5-*), spec-gaps-summary C.
 
+### 3.19 사용자 확정 (2026-11-05, UI 36 런 기획 확인 — 사이클 ui36-questions)
+
+계기: OD-* UI 후속(UI 36 런, PR j-hyunn/resumate#48)이 남긴 기획 확인 5건. 원문 `_workspace/00_input/planning-decisions-ui36-questions.md`. 반영: UX v5.14(PRD·AI·DM 변경 없음), `docs/legal/` 2026-11-05 개정안 확장. 5건 모두 권장안.
+
+| ID | 결정 | 권고와 다름 |
+|----|------|-------------|
+| U36-1 | "자기소개서 삭제됨" 면접(OD-I6)은 모의 면접 메뉴 아래 `/interviews/{sessionId}/result`로 연다. S-33·S-20 주소 없음 | |
+| U36-2 | CR-23을 코드 전체에 적용: 화면 안 지원 건 이름 "기업 JD" → "자기소개서", 개별 서류 `cover_letter` → "자소서 문항 답변"(D-UX-23). 명세 변경 없음 | |
+| U36-3 | 답 없는 메시지 줄(OD-P11) = 구현 그대로: 흐린 작은 글씨 + 링크 버튼, 같은 방문의 중지 직후에도 보임, `nothing_to_retry` 토스트 + 입력창 복원 | |
+| U36-4 | C-22 = "커리어 추가" 버튼에 붙은 드롭다운 메뉴(구현 그대로), 디자인 P-21 닫힘 | |
+| U36-5 | 처리방침 1번 수집 항목·이용약관 2조에서도 폐기된 "정량 성과" 삭제 — 둘 다 2026-11-05 개정안, 재동의 없음 | |
+| U36-6 | (추가 확정) AI 기능 이름(C-18 기능 이름 열·`AI_FEATURE_NAMES`·FL-19 복귀)의 문항 서류 = "자소서 문항 답변"(구현 그대로) | |
+| U36-7 | (추가 확정) S-31 제목 "{이름} 자기소개서" — 이름에 이미 "자기소개서"가 있으면 뒤를 생략(구현 그대로) | |
+| U36-8 | (추가 확정) 법무 문서의 "자기소개서 초안·메모"는 그대로(처리 내용 설명이라 일반 용어 유지) | |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -604,18 +619,28 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 - **백엔드 확인 (코드 변경 없음, R-OD-17)**: OD-P10 중단된 턴 — 메시지 `failed` + 작업 `canceled`로 실패와 구분, 응답 자리는 시작 때 한 번 셈(지금 구현). 대화 상세 DTO(`services/writing-chat`)가 작업 상태를 함께 내려 화면이 중단·실패를 가르는지 확인 (#15) — **확인됨 (R11)**: 중단 경로는 명세대로였고, 상세 DTO에 작업 상태가 없어 메시지 `turnFailure {jobStatus, errorCode, retryAfter, quotaResetsAt}`를 서버에 추가했다(화면 연결은 UI)
 - **백엔드 (코드 영향 작음)**: OD-L1 `EnvKms` 주석을 "출시 KEK, 출시 후 KMS 전환"으로(#13) — **완료 (R11)**. 출시 후 과제: 외부 KMS 어댑터 + `wrapped_dek` 재포장
 - **UI** (resumate-ui)
-  1. OD-I1·OD-I2 S-22·C-17 점수 표시(0점 / 100, "답변이 없어 0점이에요", "합격 예측 아님"), 점수가 없으면(`pending_method`) 항목 등급·다음 연습 숨김
-  2. OD-I6 S-37 "자기소개서 삭제됨" 표시·"삭제된 자기소개서" 필터, S-22·S-33 읽기 전용(다시 채점·종합 다시 정리·새 면접·자기소개서 링크 없음), C-05 자기소개서 삭제 문구(남는 면접 수·지워지는 작성 중 세션 수), 커리어 삭제 "삭제된 자기소개서의 면접 기록 {n}개", 데이터 계층 `getApplicationDeletionImpact` → RPC
-  3. OD-C3 첫 저장 토스트 "프로젝트를 커리어에 추가했어요" / "산출물을 추가했어요"
-  4. OD-C6 새 페이지에서 `p_client_id` 생성·저장 요청에 실음
-  5. OD-P2 S-10 [반영]·[반영 (n)]·[모두 반영 (n)], S-44 채우기의 되돌리기 토스트 버튼 제거(`star-proposal-fill.ts` 등). S-44 본문 교체 확인은 유지
-  6. OD-P6 초안 6회 도달 때 고정 칩 3개(`quick-chips.ts`)
-  7. OD-P11 답 없는 마지막 사용자 메시지 아래 "답을 받지 못한 메시지예요 · 다시 보내기"
-  8. OD-B1 `ai-error-notice.tsx` `daily_quota_exhausted` 제목 등급별
-  9. OD-B4 S-10 패널 전송 거절 문구를 C-18 "AI 연결하면 사용할 수 있어요"로(다르면)
-  10. OD-L2·OD-L2a 고지 본문 상수를 `src/lib/mock/ai-providers.ts` 밖 실제 모듈로, AI C-7.1 사실(보관 기간·Claude 처리 지역)·"작성 중인 내용 포함" 반영, 무료 등급 문장·툴팁은 Gemini 무료만(R-OD-15). 국외 이전 고지 개정안(`docs/legal/cross-border-transfer.md` 2026-11-05)을 `policy-content.ts`·`policy_versions`에 반영 — 처리방침 6번(AI 공급자)과도 맞춤. 백엔드 #12와 같은 배포
-  11. OD-D1 UX 5.1i의 구현과 다른 문구 6건(K-2, K-3, K-28, B-7, Q-15, Q-25), 그 밖 C-14·S-39·S-24 탈퇴 문구에 남은 "기업 JD", C-18 잠금 설명 2곳
-  12. OD-D4 디자인 시스템에 v5.5 커리어 화면·추가/수정 모달 패턴 정리(P-15, C-24 폐기 반영)
-  13. OD-D9 mock `src/lib/data/applications.ts` `target_type: "insight"` → `application_project`
-  14. `docs/ui/screen-status.md` "기획 확인 필요 (누적)"을 3.18로 닫기
+  1. OD-I1·OD-I2 S-22·C-17 점수 표시(0점 / 100, "답변이 없어 0점이에요", "합격 예측 아님"), 점수가 없으면(`pending_method`) 항목 등급·다음 연습 숨김 — **반영 2026-11-05 (UI 36 런)**, 점수 값은 백엔드 #7·#8
+  2. OD-I6 S-37 "자기소개서 삭제됨" 표시·"삭제된 자기소개서" 필터, S-22·S-33 읽기 전용(다시 채점·종합 다시 정리·새 면접·자기소개서 링크 없음), C-05 자기소개서 삭제 문구(남는 면접 수·지워지는 작성 중 세션 수), 커리어 삭제 "삭제된 자기소개서의 면접 기록 {n}개", 데이터 계층 `getApplicationDeletionImpact` → RPC — **화면 반영 2026-11-05 (UI 36 런, mock)**. 실제 경로는 연결 대기(스냅샷 필드·`get_deletion_impact` RPC, 백엔드 #1~#6). 삭제된 세션 라우트 `/applications/deleted/…` `[UI-가정]`
+  3. OD-C3 첫 저장 토스트 "프로젝트를 커리어에 추가했어요" / "산출물을 추가했어요" — **반영 2026-11-05 (UI 36 런)**
+  4. OD-C6 새 페이지에서 `p_client_id` 생성·저장 요청에 실음 — 연결 대기: `career-v45-save.ts`를 백엔드 #9가 고침(UI 쪽 변경 없음)
+  5. OD-P2 S-10 [반영]·[반영 (n)]·[모두 반영 (n)], S-44 채우기의 되돌리기 토스트 버튼 제거(`star-proposal-fill.ts` 등). S-44 본문 교체 확인은 유지 — **반영 2026-11-05 (UI 36 런)**
+  6. OD-P6 초안 6회 도달 때 고정 칩 3개(`quick-chips.ts`) — **반영 2026-11-05 (UI 36 런)**
+  7. OD-P11 답 없는 마지막 사용자 메시지 아래 "답을 받지 못한 메시지예요 · 다시 보내기" — **화면 반영 2026-11-05 (UI 36 런)**. 실제 다시 보내기는 백엔드 #11, 중단·실패 구분은 #15 대기
+  8. OD-B1 `ai-error-notice.tsx` `daily_quota_exhausted` 제목 등급별 — **반영 2026-11-05 (UI 36 런)**
+  9. OD-B4 S-10 패널 전송 거절 문구를 C-18 "AI 연결하면 사용할 수 있어요"로(다르면) — **반영 2026-11-05 (UI 36 런)**: 실행 전 거절은 이미 C-18 문구였고, 실행 중 키 삭제가 C-18로 보이던 것을 C-20으로 고침
+  10. OD-L2·OD-L2a 고지 본문 상수를 `src/lib/mock/ai-providers.ts` 밖 실제 모듈로, AI C-7.1 사실(보관 기간·Claude 처리 지역)·"작성 중인 내용 포함" 반영, 무료 등급 문장·툴팁은 Gemini 무료만(R-OD-15). 국외 이전 고지 개정안(`docs/legal/cross-border-transfer.md` 2026-11-05)을 `policy-content.ts`·`policy_versions`에 반영 — 처리방침 6번(AI 공급자)과도 맞춤. 백엔드 #12와 같은 배포 — **반영 2026-11-05 (UI 36 런)**: `src/lib/ai-disclosures.ts`, 국외 이전·처리방침 6번 본문. `policy_versions`·`ai_disclosures` 행은 백엔드 대기
+  11. OD-D1 UX 5.1i의 구현과 다른 문구 6건(K-2, K-3, K-28, B-7, Q-15, Q-25), 그 밖 C-14·S-39·S-24 탈퇴 문구에 남은 "기업 JD", C-18 잠금 설명 2곳 — **반영 2026-11-05 (UI 36 런)**. CR-23 전체 교체(S-13~S-20 등 "기업 JD" 약 50곳)는 남음
+  12. OD-D4 디자인 시스템에 v5.5 커리어 화면·추가/수정 모달 패턴 정리(P-15, C-24 폐기 반영) — **반영 2026-11-05 (design-system v5.7)**
+  13. OD-D9 mock `src/lib/data/applications.ts` `target_type: "insight"` → `application_project` — **반영 2026-11-05 (UI 36 런)**
+  14. `docs/ui/screen-status.md` "기획 확인 필요 (누적)"을 3.18로 닫기 — **반영 2026-11-05 (UI 36 런)**
 - **운영·출시 전**: OD-L4 평가 세트 실행(세 공급자), OD-L2 공급자 약관 출시 전 재확인(AI C-7.1), OD-L3 법무 검토 권장, OD-I1 백필 실행(`backfill_interview_scores`, service_role로 반환 `{sessions, answers}`가 0이 될 때까지 — R11에서 RPC만 만들고 실행 안 함)
+
+### 4.13 UI 36 런 기획 확인 후속 (2026-11-05, U36-*)
+
+- **UI** (resumate-ui)
+  1. **반영 2026-11-05 (UI 37 런)** U36-1 `/interviews/[sessionId]/result` 라우트, `routes.ts` 빌더, S-37 행 링크, 옛 `/applications/{id}/interview/{sessionId}` 접근 시 이동(36 런 임시 `/applications/deleted/…` 대체)
+  2. **반영 2026-11-05 (UI 37 런)** U36-2 "기업 JD" → "자기소개서" 전체 교체(S-13~S-20·S-31·S-37·S-39·이동 경로·메타 설명), `DRAFT_TYPE_LABELS.cover_letter` → "자소서 문항 답변"
+  3. **반영 2026-11-05 (design-system v5.8)** U36-3·U36-4 코드 변경 없음(`[UI-가정]` 표시만 정리), design-system에 답 없는 메시지 줄 패턴·C-22 드롭다운 확정 표기
+  4. **반영 2026-11-05** U36-5 `policy-content.ts` 처리방침 1번·이용약관 2조 "정량 성과" 삭제
+  5. **반영 2026-11-05 (구현이 먼저, 코드 변경 없음)** U36-6·U36-7 — `[UI-가정]` 표시만 정리. U36-8은 할 일 없음
+- **백엔드**: 새 `cover_letter` 초안 기본 제목 "자소서 문항 답변 (날짜)"(`20261102000300` RPC), AI-12 `GATE_FEATURE_LABEL` cover_letter 이름(U36-2, spec-gaps UI36-10). U36-5 `policy_versions`에 `terms_of_service` `2026-11-05` 행(처리방침·국외 이전 행과 같은 배포, spec-gaps UI36-6)

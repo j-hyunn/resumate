@@ -48,7 +48,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AiErrorCode, AiJob, AiProviderName, AiRetryRefusalCode, ConnectionTier } from "@/types/db"
-import { errorCategoryOf, isInputCausedFailure, nextQuotaReset, SAME_ROW_RETRY_JOB_TYPES } from "@/lib/data/ai-errors"
+import { errorCategoryOf, isInputCausedFailure, SAME_ROW_RETRY_JOB_TYPES } from "@/lib/data/ai-errors"
 import { CONNECTION_TIER_LABELS, directionParticle } from "@/lib/data/labels"
 import { AI_PROVIDER_LABELS, AI_PROVIDERS } from "@/lib/mock/ai-providers"
 import { routes } from "@/lib/routes"
@@ -166,7 +166,7 @@ interface Copy {
  */
 export function aiErrorTitle(
   code: AiErrorCode,
-  opts: { provider?: string; retryAfter?: string | null; now?: number; reduceTarget?: string } = {},
+  opts: { provider?: string; retryAfter?: string | null; now?: number; reduceTarget?: string; tier?: ConnectionTier | null } = {},
 ): string {
   const p = opts.provider ?? "공급자"
   switch (code) {
@@ -175,7 +175,8 @@ export function aiErrorTitle(
       return n ? `요청이 몰려 잠시 쉬어야 해요. ${n}분 뒤 다시 시도해 주세요` : "요청이 몰려 잠시 쉬어야 해요. 잠시 후 다시 시도해 주세요"
     }
     case "daily_quota_exhausted":
-      return `오늘 ${p} 무료 한도를 다 썼어요.`
+      // OD-B1 (v5.13): title by tier; unknown tier → free (only Gemini free has a daily quota rule)
+      return opts.tier === "paid" ? `오늘 ${p} 일일 한도를 다 썼어요` : `오늘 ${p} 무료 한도를 다 썼어요`
     case "billing_required":
       return `${p} 계정의 결제 수단이나 크레딧을 확인해 주세요`
     case "key_invalid":
@@ -327,10 +328,10 @@ import { ExternalProviderLink } from "./external-link"
 
 
 export const AI_ERROR_PRESERVED = "입력과 지금까지 만든 결과는 그대로 있어요"
-export const AI_RETRY_TOKEN_NOTE = "다시 시도하면 토큰을 다시 써요"
+export const AI_RETRY_TOKEN_NOTE = "다시 시도하면 공급자 토큰을 다시 써요"
 
 /**
- * UQ-492: the token note follows the button's verb — "다시 보내기" → "다시 보내면 토큰을 다시 써요",
+ * UQ-492 / Q-25 (v5.13): the token note follows the button's verb — "다시 보내기" → "다시 보내면 공급자 토큰을 다시 써요",
  * "다시 채점" → "다시 채점하면 …", "다시 생성" → "다시 생성하면 …". [UI-가정] (02 C-20 gives only 다시 시도)
  */
 export function retryTokenNote(label: string): string {
@@ -342,9 +343,9 @@ export function retryTokenNote(label: string): string {
     const code = stem.charCodeAt(stem.length - 1) - 0xac00
     const coda = code >= 0 && code < 11172 ? code % 28 : 0
     // no final consonant or ㄹ (8) → "면", other finals → "으면"
-    return `${stem}${coda === 0 || coda === 8 ? "면" : "으면"} 토큰을 다시 써요`
+    return `${stem}${coda === 0 || coda === 8 ? "면" : "으면"} 공급자 토큰을 다시 써요`
   }
-  return `${verb}하면 토큰을 다시 써요`
+  return `${verb}하면 공급자 토큰을 다시 써요`
 }
 
 export interface AiErrorNoticeProps extends AiErrorInfo {
@@ -457,7 +458,8 @@ export function AiErrorNotice({
   const waitCode = code === "rate_limited" || code === "provider_unavailable"
   const waitSec = requestPath && waitCode && retryAfter && now ? Math.ceil((new Date(retryAfter).getTime() - now) / 1000) : 0
 
-  let title = aiErrorTitle(code, { provider: pName, retryAfter, now, reduceTarget })
+  const tier = jobTier ?? connection?.connection_tier ?? null
+  let title = aiErrorTitle(code, { provider: pName, retryAfter, now, reduceTarget, tier })
   if (consentCause && activeName && connection?.connection_tier)
     title = `${activeName}(${CONNECTION_TIER_LABELS[connection.connection_tier]}) 사용 동의가 필요해 작업을 멈췄어요. 입력은 저장돼 있어요`
   // [UI-가정] A14 request path: the wait goes to the countdown line, not the title
@@ -467,7 +469,7 @@ export function AiErrorNotice({
   // countdown); the visible block itself is not a live region.
   const announce = (
     <p className="sr-only" role="status">
-      {consentCause || (requestPath && code === "rate_limited") ? title : aiErrorTitle(code, { provider: pName, reduceTarget })}
+      {consentCause || (requestPath && code === "rate_limited") ? title : aiErrorTitle(code, { provider: pName, reduceTarget, tier })}
     </p>
   )
   const Icon = copy.icon
@@ -475,8 +477,8 @@ export function AiErrorNotice({
 
   // ① 시각 줄
   let timeLine: React.ReactNode = null
-  // [UI-가정] previews pass only the code → fall back to the Gemini rule (next KST 16:00)
-  const resets = code === "daily_quota_exhausted" ? (quotaResetsAt ?? (now ? nextQuotaReset(now) : null)) : null
+  // OD-B1 (v5.13): the reset line only when the job has `quota_resets_at` — otherwise the title alone
+  const resets = code === "daily_quota_exhausted" ? (quotaResetsAt ?? null) : null
   if (resets) {
     timeLine = (
       <p>

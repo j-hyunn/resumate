@@ -1,14 +1,15 @@
 "use client"
 
 /**
- * Session list shared by S-20 ("이 기업 JD의 세션 목록") and S-37 ("세션 목록").
+ * Session list shared by S-20 ("이 자기소개서의 세션 목록") and S-37 ("세션 목록").
  * Wide: Table (design-system 5.2). Narrow (<768): card list. Whole row is a link; the ⋯ row
- * menu (삭제 C-05, 기업 JD로 가기) stops propagation by sitting above the stretched link.
+ * menu (삭제 C-05, 자기소개서로 가기) stops propagation by sitting above the stretched link.
  * Evaluating rows show the C-03 축약형 from their running job (stage copy by job type, UQ-411).
  * S-37 ⋯ menu follows row.grading (04 §2.7.1 판정표, same as S-22): "실패한 답변 다시 채점" (채점 실패 행 +
  * 완료인데 실패 답변이 남은 행, Q53-6), "종합 평가 다시 정리" (Q53-5), 입력 원인만 남으면 메뉴 없음 (Q53-3).
  * Both are a new grading job on the active provider (regradeFailedAnswersAction).
  * 질문 0개인 그만둔 세션: 점수·공급자 자리에 "질문을 만들지 못함" (Q53-9).
+ * OD-I6 "자기소개서 삭제됨" 행: 스냅샷 이름(application_name, R-OD-12) + 표식, 누르면 S-22 읽기 전용, 메뉴는 "삭제"만.
  */
 import * as React from "react"
 import Link from "next/link"
@@ -44,7 +45,8 @@ import type { InterviewSessionRow } from "@/lib/data/interviews"
 import { formatDate, INTERVIEW_TYPE_LABELS } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { deleteInterviewSessionAction } from "./actions"
-import { NewResultDot, sessionHref, SessionStatusBadge } from "./session-status"
+import { isApplicationDeleted } from "@/lib/data/interview-session-view"
+import { ApplicationDeletedBadge, NewResultDot, sessionHref, SessionStatusBadge } from "./session-status"
 
 function RunningInline({ jobId }: { jobId: string }) {
   const router = useRouter()
@@ -98,7 +100,7 @@ export function SessionList({
   retryAfter = {},
 }: {
   rows: InterviewSessionRow[]
-  /** S-37: 기업 JD 이름 열 + 행 메뉴 "기업 JD로 가기" */
+  /** S-37: 자기소개서 이름 열 + 행 메뉴 "자기소개서로 가기" */
   showApplication: boolean
   /** S-37: remember the breadcrumb origin when leaving toward an application sub-screen */
   origin?: NavOrigin
@@ -157,8 +159,7 @@ export function SessionList({
   }
 
   const remember = (row: InterviewSessionRow) => {
-    // R11 최소 수정 (OD-I6): a detached session has no project to return to.
-    if (origin && row.application_project_id) setNavOrigin(origin, row.application_project_id)
+    if (origin && !isApplicationDeleted(row)) setNavOrigin(origin, row.application_project_id)
   }
 
   const menu = (row: InterviewSessionRow) => (
@@ -169,15 +170,14 @@ export function SessionList({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {/* R11 최소 수정 (OD-I6): no "기업 JD로 가기" for a detached session (project deleted, DM 2.7.2). */}
-        {showApplication && row.application_project_id ? (
+        {showApplication && !isApplicationDeleted(row) ? (
           <DropdownMenuItem asChild>
             <Link href={routes.application(row.application_project_id)} onClick={() => remember(row)}>
-              기업 JD로 가기
+              자기소개서로 가기
             </Link>
           </DropdownMenuItem>
         ) : null}
-        {showApplication && (row.grading.kind === "regrade" || row.grading.kind === "resummarize") ? (
+        {showApplication && !isApplicationDeleted(row) && (row.grading.kind === "regrade" || row.grading.kind === "resummarize") ? (
           // UQ-558: disabled with the remaining time until retry_after, like S-22
           <DropdownMenuItem onSelect={() => regrade(row)} disabled={waitSec(row) > 0}>
             <RotateCcw aria-hidden />
@@ -217,7 +217,7 @@ export function SessionList({
           <caption className="sr-only">{caption}</caption>
           <TableHeader>
             <TableRow>
-              {showApplication ? <TableHead className="text-sm font-medium text-muted-foreground">기업 JD</TableHead> : null}
+              {showApplication ? <TableHead className="text-sm font-medium text-muted-foreground">자기소개서</TableHead> : null}
               <TableHead className="text-sm font-medium text-muted-foreground">유형</TableHead>
               <TableHead className="text-sm font-medium text-muted-foreground">날짜</TableHead>
               {showApplication ? null : <TableHead className="text-sm font-medium text-muted-foreground">질문 수</TableHead>}
@@ -243,6 +243,7 @@ export function SessionList({
                       >
                         {row.application_name}
                       </Link>
+                      {isApplicationDeleted(row) ? <ApplicationDeletedBadge className="relative z-10 shrink-0" /> : null}
                     </span>
                   </TableCell>
                 ) : null}
@@ -304,6 +305,7 @@ export function SessionList({
                     >
                       {showApplication ? row.application_name : INTERVIEW_TYPE_LABELS[row.interview_type]}
                     </Link>
+                    {showApplication && isApplicationDeleted(row) ? <ApplicationDeletedBadge className="relative z-10 shrink-0" /> : null}
                   </p>
                   <p className="text-sm text-muted-foreground tabular-nums">
                     {showApplication ? `${INTERVIEW_TYPE_LABELS[row.interview_type]} · ` : ""}

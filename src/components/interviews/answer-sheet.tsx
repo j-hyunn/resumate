@@ -11,7 +11,7 @@
  * - v5.3: whole generation failure → "다시 시도" = same-row retry on the active provider (path ②,
  *   "처음부터 다시" when the job ran elsewhere); partial failure → "남은 질문 다시 만들기" = new job
  *   (path ①). Input-caused failures: no retry, go to S-20 "시작하기" (R-69 / R-76)
- * - v5.3 A8: abandoned session = read-only (text boxes, no C-06 / submit) + "이 기업 JD로 새 면접 시작"
+ * - v5.3 A8: abandoned session = read-only (text boxes, no C-06 / submit) + "이 자기소개서로 새 면접 시작"
  * - v5.3: question evidence chips (C-01, owner interview_question) before submit
  * - BYOK: writing / autosave work without a key; 제출 = AiRunButton(interview_submit) → C-18 inline
  *   when no key, C-20 key_invalid when the key is invalid (D-36)
@@ -389,7 +389,7 @@ export function AnswerSheet({
           <AlertTitle>{questions.length === 0 ? "질문을 만들지 못한 면접이에요" : "그만둔 면접이에요. 답변은 볼 수만 있어요"}</AlertTitle>
           <AlertDescription>
             <Button asChild size="sm" className="mt-1 max-md:h-8">
-              <Link href={routes.interviewPrep(applicationProjectId)}>이 기업 JD로 새 면접 시작</Link>
+              <Link href={routes.interviewPrep(applicationProjectId)}>이 자기소개서로 새 면접 시작</Link>
             </Button>
           </AlertDescription>
         </Alert>

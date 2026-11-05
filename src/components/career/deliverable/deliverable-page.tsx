@@ -30,7 +30,7 @@ import {
 import { ReturnBanner } from "@/components/common/return-banner"
 import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
-import { CRUMB_CURRENT } from "@/components/career/new-row-notice"
+import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
 import { saveProjectDeliverableAction } from "@/lib/data/career-v45-actions"
 import {
   PAGE_LIMITS,
@@ -117,8 +117,6 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     writePreserved(dirty ? { form, applied } : null)
   }, [dirty, form, applied, writePreserved])
 
-  // ---------- undo (D-UX-29): until the next body input ----------
-  const lastFill = React.useRef<{ before: string; after: string; chatId: string } | null>(null)
   const formRef = React.useRef(form)
   React.useEffect(() => {
     formRef.current = form
@@ -134,14 +132,13 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     if (saveState !== "saving") setSaveState("idle")
     setBodyError(body.length > PAGE_LIMITS.deliverableBody ? fieldTooLongCopy(PAGE_LIMITS.deliverableBody) : null)
     setPageError(null)
-    lastFill.current = null
     setForm((f) => ({ ...f, body }))
   }
 
   // ---------- 저장하기 (save_project_deliverable) ----------
   const panelRef = React.useRef<ReturnType<typeof useAiPanel> | null>(null)
   const doSave = React.useCallback(
-    async (overwrite = false): Promise<string | null> => {
+    async (overwrite = false, opts: { fromPanel?: boolean } = {}): Promise<string | null> => {
       const current = formRef.current
       if (isBlank(current.title)) {
         setTitleError(PAGE_SAVE_ERROR_COPY.deliverable_title_required)
@@ -218,11 +215,14 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       // only what this request sent: a fill made while saving stays for the next save (UQ-S44-12)
       const sent = applied
       setApplied((a) => a.filter((x) => !sent.includes(x)))
-      lastFill.current = null
       setSavedAt(r.updated_at)
       setSaveState("saved")
       if (!wasNew) preserved.clear()
       if (wasNew) replaceUrl(r.project_deliverable_id, projectId, panelRef.current?.chat?.id ?? null)
+      // OD-C3: the save that created the row → "산출물을 추가했어요" once; later saves = C-06 "저장됨 HH:MM" only.
+      // The panel's first-message save shows its own toast instead (UX S-44 [가정]).
+      const added = firstSaveToast("deliverable", { wasNew, fromPanel: Boolean(opts.fromPanel) })
+      if (added) toast(added)
       // 반영됨 (applied_at) on the open chat's draft; skipped → one line under the card
       const p = panelRef.current
       const openChat = p?.chat
@@ -270,7 +270,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       titleRef.current?.focus()
       return false
     },
-    savePage: () => doSave(),
+    savePage: () => doSave(false, { fromPanel: true }),
     onChatChange: (chatId) => {
       setDraftFailed(false)
       draftTurn.current = false
@@ -303,31 +303,16 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
   const hasUnappliedDraft = Boolean(openBody && !openBody.applied_at && !(filledEntry && filledEntry.rev === openBody.rev))
 
   const onFill = (fill: DeliverableFill) => {
-    const before = formRef.current.body
     setForm((f) => ({ ...f, body: fill.body }))
     setBodyError(null)
     if (saveState !== "saving") setSaveState("idle")
     setApplied((a) => [...a.filter((x) => x.writing_chat_id !== fill.chatId), { writing_chat_id: fill.chatId, rev: fill.rev, mode: fill.mode }])
-    lastFill.current = { before, after: fill.body, chatId: fill.chatId }
     const el = bodyRef.current
     flashElement(el)
     if (el) window.setTimeout(() => (el.scrollTop = fill.mode === "append" ? el.scrollHeight : 0), 0)
-    toast("본문에 채웠어요", {
-      duration: 8000,
-      action: {
-        label: "되돌리기",
-        onClick: () => {
-          const last = lastFill.current
-          if (!last || formRef.current.body !== last.after) {
-            toast("이미 본문을 고쳐서 되돌릴 수 없어요")
-            return
-          }
-          setForm((f) => ({ ...f, body: last.before }))
-          setApplied((a) => a.filter((x) => x.writing_chat_id !== last.chatId))
-          lastFill.current = null
-        },
-      },
-    })
+    // OD-P2 (UX v5.13): 본문 교체·덧붙이기·블록 반영 — an information toast only, no undo button
+    // (going back = "저장하지 않고 나가기")
+    toast("본문에 채웠어요")
   }
 
   const onBodyQuote = (quote: string) => {

@@ -153,11 +153,13 @@ export function ProviderStatusLine({
  * v5.3 동의 필요 둘째 줄 (02 S-40 공급자 카드 "동의 필요", R-67; design-system 5.7 (v3)): the key status
  * line stays, this line goes under it on the active card while `consent_required = true`.
  */
-export function ProviderConsentLine({ provider, tier }: { provider: AiProviderName; tier: ConnectionTier }) {
+export function ProviderConsentLine({ provider, tier, reconsent }: { provider: AiProviderName; tier: ConnectionTier; reconsent: boolean }) {
+  const name = `${AI_PROVIDER_LABELS[provider]}(${CONNECTION_TIER_LABELS[tier]})`
   return (
     <p className="flex items-start gap-1.5 text-sm">
       <ScrollText className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-      {AI_PROVIDER_LABELS[provider]}({CONNECTION_TIER_LABELS[tier]})의 데이터 사용 고지가 바뀌어 다시 동의해야 AI를 쓸 수 있어요
+      {/* Q-15 (v5.13, OD-D1): first consent vs. a changed disclosure */}
+      {reconsent ? `${name}의 데이터 사용 고지가 바뀌어 다시 동의해야 AI를 쓸 수 있어요` : `${name}로 AI를 쓰려면 데이터 사용 고지에 동의해 주세요`}
     </p>
   )
 }

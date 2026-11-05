@@ -536,7 +536,7 @@ export interface JobDescriptionWithRequirements extends JobDescription {
   requirements: JdRequirement[]
   /** getJdView.rawTextEditable (04 §2.6.1 조건 1~5): S-15 "공고 원문 고치기" */
   raw_text_editable: boolean
-  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 기업 JD 안내 (Q53-11) */
+  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 자기소개서 안내 (Q53-11) */
   raw_text_lock: JdRawTextRefusalCode | null
 }
 
@@ -677,8 +677,9 @@ async function mockStartInsight(
   const job = createMockJob(db, {
     job_type: "insight",
     application_project_id: applicationProjectId,
-    target_type: "insight",
-    target_id: insightId,
+    // OD-D9: same target as the real AI-02 job (the insight row links back via ai_job_id)
+    target_type: "application_project",
+    target_id: applicationProjectId,
     units,
     // a failed `prepare` extraction ends the job with the same cause, before any match (S-16, Q53-2)
     fail: extraction.failed ?? opts?.fail,

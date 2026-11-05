@@ -44,7 +44,7 @@ export function DataInsufficientGate({
   className,
 }: {
   feature: Exclude<ReadinessFeatureKey, "culture_fit_interview">
-  /** 인사이트 / 경력기술서 / 자기소개서 / 직무 면접 */
+  /** 인사이트 / 경력기술서 / 자소서 문항 답변 / 직무 면접 */
   featureLabel: string
   returnFeature: ReturnTargetFeature
   readiness: DataReadiness

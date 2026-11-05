@@ -20,7 +20,7 @@ import { routes } from "@/lib/routes"
 export const RETURN_FEATURE_LABELS: Record<ReturnTargetFeature, string> = {
   insight: "인사이트",
   career_description: "경력기술서",
-  cover_letter: "자기소개서",
+  cover_letter: "자소서 문항 답변", // D-UX-23 (U36-2)
   job_interview: "직무 면접",
 }
 

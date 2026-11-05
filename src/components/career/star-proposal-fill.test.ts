@@ -36,16 +36,16 @@ describe("planFill", () => {
   it("fills empty STAR fields with the value and appends legacy 'append' proposals to filled ones", () => {
     const plan = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["situation", "action"] })
     expect(plan.fills).toEqual([
-      { field: "situation", prev: null, next: "새 상황", rev: 1 },
-      { field: "action", prev: "기존 행동", next: "기존 행동\n덧붙일 행동", rev: 3 },
+      { field: "situation", next: "새 상황", rev: 1 },
+      { field: "action", next: "기존 행동\n덧붙일 행동", rev: 3 },
     ])
   })
 
-  it("RQ-5: a 'set' proposal on a filled field replaces the form value and keeps prev for undo", () => {
+  it("RQ-5: a 'set' proposal on a filled field replaces the form value (OD-P2: no undo, no prev kept)", () => {
     const d = draft()
     d.star.action = star("기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함", { rev: 4 })
     const plan = planFill({ draft: d, chatId: "c", values: base(), applied: [], fields: ["action"] })
-    expect(plan.fills).toEqual([{ field: "action", prev: "기존 행동", next: "기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함", rev: 4 }])
+    expect(plan.fills).toEqual([{ field: "action", next: "기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함", rev: 4 }])
     expect(applyFills(base(), plan.fills).action).toBe("기존 행동을 합쳐 다시 씀. 캐시 무효화 규칙을 직접 설계함")
   })
 
@@ -86,12 +86,19 @@ describe("planFill", () => {
     // row [반영] (overwriteClassification): the recommendation replaces what the user chose
     const over = planFill({ draft: draft(), chatId: "c", values: { ...base(), project_type: "new_build" }, applied: [], fields: ["project_type"], overwriteClassification: true })
     expect(over.skips).toEqual([])
-    expect(over.fills[0]).toMatchObject({ field: "project_type", prev: "new_build" })
+    expect(over.fills[0]).toEqual({ field: "project_type", next: "improvement", rev: 1 })
     const part = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["competencies"], competencyPick: ["execution"] })
-    expect(part.fills).toEqual([{ field: "competencies", prev: [], next: ["execution"], rev: 2 }])
+    expect(part.fills).toEqual([{ field: "competencies", next: ["execution"], rev: 2 }])
     const none = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["competencies"], competencyPick: [] })
     expect(none.fills).toEqual([])
     expect(none.skips).toEqual([])
+  })
+})
+
+describe("OD-P2: fills carry no undo data", () => {
+  it("a fill entry is only {field, next, rev}", () => {
+    const plan = planFill({ draft: draft(), chatId: "c", values: base(), applied: [], fields: ["situation", "start_month", "project_type", "competencies"] })
+    for (const f of plan.fills) expect(Object.keys(f).sort()).toEqual(["field", "next", "rev"])
   })
 })
 

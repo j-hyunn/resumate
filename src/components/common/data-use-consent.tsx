@@ -2,8 +2,8 @@
 
 /**
  * C-21 데이터 사용 고지·동의 (02 C-21, design-system 3.21). Body of S-41 ② and, read-only, the
- * S-40 "데이터 사용 고지 다시 보기" dialog. Copy per provider × tier comes from DISCLOSURE_FACTS
- * (placeholder until each provider's terms are confirmed, D-10).
+ * S-40 "데이터 사용 고지 다시 보기" dialog. Copy per provider × tier comes from `@/lib/ai-disclosures`
+ * (AI C-7.1 facts, version v2026-11-05 — OD-L2 / OD-L2a).
  *
  *   <DataUseConsent provider="gemini" tier="free" onBack={…} onNext={({ free_tier_acknowledged }) => …} />
  *   <DataUseConsent provider="gemini" tier="free" agreedAt={consent.agreed_at} />   // read-only
@@ -29,14 +29,15 @@ import { CONNECTION_TIER_LABELS, submitFailedMessage } from "@/lib/data/labels"
 import { getDataUseConsentStateAction, recordDataUseConsentAction } from "@/lib/data/actions"
 import { readPreviewState } from "@/lib/preview-state"
 import { markConsentGiven } from "./ai-connection-context"
-import { AI_PROVIDER_FULL_NAMES, AI_PROVIDER_LABELS, DISCLOSURE_FACTS } from "@/lib/mock/ai-providers"
+import { AI_PROVIDER_FULL_NAMES, AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
+import { DISCLOSURE_FACTS, SENT_DATA_ITEMS, usesInputsForTraining } from "@/lib/ai-disclosures"
 import { ExternalProviderLink } from "./external-link"
 import { AI_TRAINING_NOTICE } from "@/lib/data/labels"
 
 /** F-COM-03 v4 Resumate 원칙 — one constant shared with settings / policies (UQ-209) */
 export const RESUMATE_AI_PRINCIPLE = AI_TRAINING_NOTICE
 
-export const SENT_DATA_ITEMS = ["커리어 데이터", "공고 원문", "자소서 메모", "면접 답변", "AI 작성 대화"] as const
+export { SENT_DATA_ITEMS }
 
 const FREE_TIER_HEADLINE = "무료 등급에서는 입력한 내용이 Google 제품 개선에 쓰이고 사람이 검토할 수 있어요"
 // [UI-가정] 민감정보·회사 기밀 주의 문구 (C-07 G-2 wording reused)
@@ -121,7 +122,7 @@ export function DataUseConsent({
   const p = AI_PROVIDER_LABELS[provider]
   const tierLabel = CONNECTION_TIER_LABELS[tier]
   const facts = DISCLOSURE_FACTS[provider][tier]
-  const needsFreeAck = provider === "gemini" && tier === "free"
+  const needsFreeAck = usesInputsForTraining(provider, tier) // R-OD-15
   const readOnly = agreedAt !== undefined
   const [agree, setAgree] = React.useState(false)
   const [ack, setAck] = React.useState(false)
@@ -133,7 +134,7 @@ export function DataUseConsent({
     <div className={cn("max-w-prose-edit space-y-5", className)}>
       {reconsent ? (
         <Alert variant="info">
-          {/* [UI-가정] 3.21 재동의 문구 */}
+          {/* C-21 재동의 알림 (v5.13, OD-D1 B-7) */}
           <AlertTitle className="font-normal">데이터 사용 고지가 바뀌어 다시 동의가 필요해요</AlertTitle>
         </Alert>
       ) : null}

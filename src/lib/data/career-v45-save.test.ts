@@ -33,10 +33,13 @@ describe("save_project_page mapping", () => {
     const out = toSaveProjectPageInput({ project_id: null, client_id: "c1", values, expected_updated_at: null, applied_proposals: [{ writing_chat_id: CHAT, field: "action", rev: 2 }] })
     expect(out).toEqual({
       projectId: null,
+      clientId: "c1", // R11 OD-C6: a new page sends its id as p_client_id
       values: expect.objectContaining({ name: "결제 개선", experienceId: EXP, educationId: null, startMonth: "2024-03", endMonth: null, isCurrent: true, situation: null, action: "주도" }),
       appliedProposals: [{ writingChatId: CHAT, field: "action", rev: 2 }],
     })
     expect(out).not.toHaveProperty("expectedUpdatedAt")
+    // OD-C6: the idempotency key is create-only — an existing row never sends it
+    expect(toSaveProjectPageInput({ project_id: "p", client_id: "c1", values, expected_updated_at: null, applied_proposals: [] })).not.toHaveProperty("clientId")
     expect(toSaveProjectPageInput({ project_id: "p", values, expected_updated_at: "t1", applied_proposals: [] }).expectedUpdatedAt).toBe("t1")
   })
   it("maps the answer back, keeping skipped echoes without a chat id", () => {

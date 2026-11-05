@@ -115,7 +115,8 @@ export function DeliverableDraftCard({ panel, formBody, filled, skipLine, draftF
       key={`${chat?.id}:${applied}`}
       drafting={drafting}
       remaining={draft ? remaining : null}
-      freeTier={panel.connection?.connection_tier === "free"}
+      // R-OD-15: the free-tier data-use line is Gemini free only (OpenAI · Anthropic don't train on API data, AI C-7.1)
+      freeTier={panel.connection?.connection_tier === "free" && panel.connection?.active_provider === "gemini"}
       describe={describe}
     >
       {({ open }) => (
@@ -475,13 +476,14 @@ function ProposalView({
       )}
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
-        <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogContent className="sm:max-w-md" {...(confirm?.changed ? {} : { "aria-describedby": undefined })}>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               {confirm?.changed ? <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden /> : null}
               {confirm?.changed ? "초안을 만든 뒤 본문이 바뀌었어요" : "지금 본문을 AI 초안으로 바꿀까요?"}
             </AlertDialogTitle>
-            <AlertDialogDescription>{confirm?.changed ? "교체하면 바뀐 내용도 사라져요" : "저장하기 전에는 되돌릴 수 있어요"}</AlertDialogDescription>
+            {/* OD-P2 / R-OD-13 (UX v5.13): no "되돌릴 수 있어요" line — there is no undo; the plain replace asks the title only */}
+            {confirm?.changed ? <AlertDialogDescription>교체하면 바뀐 내용도 사라져요</AlertDialogDescription> : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>

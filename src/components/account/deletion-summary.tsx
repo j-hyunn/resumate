@@ -3,7 +3,7 @@
  * (`rounded-md bg-muted p-3 text-sm`, design-system 6 A1). Server- and client-safe.
  *
  * 02 S-25: 커리어 — 경력 N, 교육 N, 프로젝트 N, 상세 내용 N, 정량 성과 N, 스킬 N, AI 작성 대화 N /
- *          기업 JD N개 — 인사이트 N, 초안 N, 면접 세션 N, 전형 이력 /
+ *          자기소개서 N개 — 인사이트 N, 초안 N, 면접 세션 N, 전형 이력 /
  *          (v5) AI 연결 — 등록한 API 키 N개(즉시 파기), 토큰 사용 기록, AI 연결 동의 이력 (UQ-200)
  *          + "공급자 사이트에서도 키를 폐기하는 것을 권해요" (NFR-KEY-09) with provider dashboard links.
  */
@@ -40,7 +40,7 @@ export function DeletionSummary({ summary, runningAiJobs = 0 }: { summary: Accou
     <div className="space-y-3">
     <div className="space-y-3 rounded-md bg-muted p-4 text-sm leading-5 tabular-nums">
       <SummaryGroup title="커리어" rows={career} />
-      <SummaryGroup title={`기업 JD ${a.application_projects}개`} rows={apps} />
+      <SummaryGroup title={`자기소개서 ${a.application_projects}개`} rows={apps} />
       <SummaryGroup title="AI 연결" rows={ai} />
       <ul className="list-disc space-y-1 border-t pt-3 pl-4">
         {/* PRD NFR-KEY-06 · NFR-PRV-06 v4.1 (UQ-90 해소): 키는 즉시 파기, 사용 기록·동의 이력도 탈퇴 시 삭제 [가정] */}

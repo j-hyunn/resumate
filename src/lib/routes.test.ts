@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
-import { safeNextPath } from "./routes"
+import { MENU_ITEMS, menuKeyForPath, routes, safeNextPath } from "./routes"
 
 describe("safeNextPath (screens, QA-W5-08)", () => {
   it("keeps same-origin paths with their query and hash", () => {
@@ -33,5 +33,24 @@ describe("safeNextPath (screens, QA-W5-08)", () => {
       expect(contractSafeNextPath(input, "REFUSED")).toBe("REFUSED")
       expect(safeNextPath(input)).toBeNull()
     }
+  })
+})
+
+describe("U36-1 자기소개서 삭제됨 S-22 (모의 면접 메뉴 아래)", () => {
+  it("builds /interviews/{sessionId}/result", () => {
+    expect(routes.interviewDeletedResult("ses-1")).toBe("/interviews/ses-1/result")
+  })
+  it("keeps live sessions under the application", () => {
+    expect(routes.interviewResult("ap-1", "ses-1")).toBe("/applications/ap-1/interview/ses-1/result")
+    expect(routes.interviewSession("ap-1", "ses-1")).toBe("/applications/ap-1/interview/ses-1")
+  })
+  it("is under the 모의 면접 menu", () => {
+    expect(menuKeyForPath(routes.interviewDeletedResult("ses-1"))).toBe("interviews")
+  })
+})
+
+describe("CR-23 menu label", () => {
+  it("names the applications menu 자기소개서 관리", () => {
+    expect(MENU_ITEMS.find((m) => m.key === "applications")?.label).toBe("자기소개서 관리")
   })
 })

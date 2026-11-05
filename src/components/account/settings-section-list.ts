@@ -30,7 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     id: "withdraw",
     label: "회원 탈퇴",
-    description: "탈퇴하면 커리어와 기업 JD를 포함한 모든 데이터가 바로 삭제돼요.",
+    description: "탈퇴하면 커리어와 자기소개서를 포함한 모든 데이터가 바로 삭제돼요.", // CR-23 (v5.13 UI 후속)
     icon: UserX,
   },
 ]

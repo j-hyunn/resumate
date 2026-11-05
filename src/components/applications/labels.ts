@@ -26,7 +26,7 @@ export const IMPORTANCE_HIGH_LABEL = "핵심"
 
 export const DRAFT_TYPE_LABELS: Record<DraftType, string> = {
   career_description: "경력기술서",
-  cover_letter: "자기소개서",
+  cover_letter: "자소서 문항 답변", // D-UX-23 (U36-2): the application project itself is "자기소개서"
 }
 
 /** drafts.status (02 S-17 v5.3 초안 목록 상태). partially_failed는 화면에서 "{n}개 문항 생성 실패" */
@@ -48,7 +48,7 @@ export const SOURCE_ORIGIN_LABELS: Record<DraftSourceOrigin, string> = { ai: "AI
  */
 export const OMITTED_REASON_LABELS: Record<string, string> = {
   user_excluded: "포함 항목 설정에 따라 이번 초안에 넣지 않았어요",
-  low_relevance: "이 기업 JD와 관련이 적어 이번 초안에 넣지 않았어요",
+  low_relevance: "이 자기소개서와 관련이 적어 이번 초안에 넣지 않았어요",
 }
 /** a reason this screen doesn't know yet // [UI-가정] */
 export const OMITTED_REASON_FALLBACK = "이번 초안에 넣지 않았어요"

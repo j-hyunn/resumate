@@ -265,6 +265,31 @@ export function previewStarDraft(chat: ProjectChatView, state: string | null): P
   return { ...chat, structured_draft: d }
 }
 
+/**
+ * OD-P11 / R-OD-8 previews (S-10 · S-44): the open chat ends with a user message that has no answer.
+ * `unanswered` = no assistant row after it; `unanswered-canceled` = a `failed` reply whose job was `canceled`
+ * (the user stopped it); `reopen-failed` = a `failed` reply whose job `failed` (C-20 실패한 턴 on reopen).
+ */
+export function previewUnanswered<C extends WritingChatView>(chat: C, state: string | null): C {
+  if (state !== "unanswered" && state !== "unanswered-canceled" && state !== "reopen-failed") return chat
+  const lastSeq = chat.messages[chat.messages.length - 1]?.sequence ?? 0
+  const userNumber = chat.messages.filter((m) => m.role === "user").length + 1
+  const content = chat.project_deliverable_id ? "발표 뒤에 받은 질문도 정리하고 싶어요" : "결과는 배포 시간이 40분에서 10분으로 줄었어요"
+  const user = mockMessage("user", content, lastSeq + 1, userNumber)
+  const messages = [...chat.messages, user]
+  if (state !== "unanswered") {
+    const reply = { ...mockMessage("assistant", state === "unanswered-canceled" ? "결과를 정리해" : "", lastSeq + 2, null), status: "failed" as const }
+    messages.push({
+      ...reply,
+      turn_job:
+        state === "unanswered-canceled"
+          ? { status: "canceled", error_code: null, provider: "gemini", retry_after: null, quota_resets_at: null }
+          : { status: "failed", error_code: "provider_unavailable", provider: "gemini", retry_after: null, quota_resets_at: null },
+    })
+  }
+  return { ...chat, messages, message_count: chat.message_count + (state === "unanswered" ? 1 : 2) }
+}
+
 /** 교육 이름 = 교육 명(program_name), 비면 운영 기관 — the one shared rule (ED-2, UQ-735). */
 const educationDisplayName = (e: { program_name: string | null; institution_name: string | null }) =>
   displayName(e.program_name, e.institution_name)

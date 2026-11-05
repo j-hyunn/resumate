@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { CRUMB_CURRENT } from "./new-row-notice"
+import { CRUMB_CURRENT, FIRST_SAVE_TOAST, firstSaveToast } from "./new-row-notice"
 
 const read = (p: string) => readFileSync(join(process.cwd(), "src/components/career", p), "utf8")
 const PROJECT = read("project-page/project-page.tsx")
@@ -55,5 +55,40 @@ describe("새 행 표시", () => {
       expect(existing).toContain("상세")
       expect(added).not.toBe(existing)
     }
+  })
+})
+
+describe("OD-C3 첫 저장 토스트", () => {
+  it("문구는 UX v5.13 C-03 그대로", () => {
+    expect(FIRST_SAVE_TOAST.project).toBe("프로젝트를 커리어에 추가했어요")
+    expect(FIRST_SAVE_TOAST.deliverable).toBe("산출물을 추가했어요")
+  })
+
+  it("행을 만든 저장에서만, 패널 첫 메시지 저장이 아닐 때만", () => {
+    for (const kind of ["project", "deliverable"] as const) {
+      expect(firstSaveToast(kind, { wasNew: true, fromPanel: false })).toBe(FIRST_SAVE_TOAST[kind])
+      expect(firstSaveToast(kind, { wasNew: false, fromPanel: false })).toBeNull()
+      expect(firstSaveToast(kind, { wasNew: true, fromPanel: true })).toBeNull()
+    }
+  })
+
+  it.each([
+    { name: "S-10", src: PROJECT, wasNew: "const wasNew = !projectId", kind: "project" },
+    { name: "S-44", src: DELIVERABLE, wasNew: "const wasNew = !id", kind: "deliverable" },
+  ])("$name: wasNew는 행 ID 상태에서 나오고 토스트는 firstSaveToast를 거친다", ({ src, wasNew, kind }) => {
+    expect(src).toContain(wasNew)
+    expect(src).toContain(`firstSaveToast("${kind}", { wasNew, fromPanel: Boolean(`)
+    // the panel's first-message save is marked so the page doesn't toast twice
+    expect(src).toMatch(/savePage: \(\) => doSave(Ref\.current)?\((false, )?\{ fromPanel: true \}\)/)
+  })
+})
+
+describe("OD-P2 채우기 토스트에 되돌리기 없음", () => {
+  it.each([
+    { name: "S-10", src: PROJECT },
+    { name: "S-44", src: DELIVERABLE },
+  ])("$name", ({ src }) => {
+    expect(src).not.toContain("되돌리기")
+    expect(src).not.toMatch(/action:\s*\{\s*label:/)
   })
 })

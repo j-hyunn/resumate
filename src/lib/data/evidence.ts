@@ -205,7 +205,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       return {
         source_label: e.source_label ?? "내 메모",
         current_value: s?.user_note ?? null,
-        path: ["자기소개서", "문항 메모"],
+        path: ["자소서 문항 답변", "문항 메모"],
         href: s && e.application_project_id ? routes.draftQuestions(e.application_project_id, s.draft_id) : null,
         to_career: false,
         updated_at: s?.updated_at ?? null,

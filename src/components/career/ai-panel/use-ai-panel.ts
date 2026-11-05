@@ -47,10 +47,11 @@ import {
   type WritingChatSummary,
   type WritingChatView,
 } from "@/lib/data/career-v45-shared"
-import { quickChips, quickChipsVisible, type QuickChip } from "@/lib/data/quick-chips"
+import { quickChips, quickChipsVisible, type ChipRequestedAction, type QuickChip } from "@/lib/data/quick-chips"
 import { DELIVERABLE_SLOTS_BY_KIND, WRITING_KIND_LABELS } from "@/lib/data/labels"
 import { streamTurn, type PanelTurnErrorCode, type PanelTurnEvent } from "@/lib/data/writing-chat-turn-v45"
 import { PANEL_WIDTH } from "@/components/common/doc-inputs"
+import { dropTrailingFailedReply, reopenedTurn } from "./unanswered"
 import type { DocPanelPlacement } from "@/components/common/shell/doc-body"
 import type { AiReopenProps } from "@/components/common/shell/page-shell"
 
@@ -80,7 +81,7 @@ export interface TurnFailure {
   /** the user message the failed turn answers ("다시 보내기") */
   content: string
   requested_slot: string | null
-  requested_action: "compose_draft" | null
+  requested_action: ChipRequestedAction | null
   style: "shorter" | "more_detail_on_contribution" | null
   /**
    * AI-13 draft turn (`draft_started` arrived, or the request was compose_draft) — S-44 shows this failure on
@@ -92,7 +93,7 @@ export interface TurnFailure {
 
 export interface SendOptions {
   requested_slot?: string | null
-  requested_action?: "compose_draft" | null
+  requested_action?: ChipRequestedAction | null
   style?: "shorter" | "more_detail_on_contribution" | null
 }
 
@@ -204,7 +205,15 @@ export interface AiPanelController {
   /** AI-13 provisional blocks between draft_started and draft_done */
   provisionalBlocks: DeliverableDraftBlock[]
   draftStarted: boolean
+  /** the live failure of this visit, else a reopened chat's failed turn (job `failed`, R-OD-8) */
   failure: TurnFailure | null
+  /**
+   * OD-P11: the last user message has no answer and no turn runs (reopened / stopped / never answered) — the thread
+   * shows "답을 받지 못한 메시지예요 · 다시 보내기" under it. null otherwise.
+   */
+  unanswered: WritingChatMessageView | null
+  /** "다시 보내기" of `unanswered`: the reply turn again (`?retry=1`), no new user message */
+  resendUnanswered: () => void
   block: PanelBlock | null
   clearBlock: () => void
   /** "다시 시도" of connection_check_failed / first_save_failed / start_failed: resends the blocked message */
@@ -421,7 +430,8 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
             case "turn_started": {
               // the message is accepted: clear the input (a refusal before this keeps it)
               setInput((v) => (v.trim() === content.trim() ? "" : v))
-              const messages = retry ? working.messages : [...working.messages, ev.user_message]
+              // 다시 보내기: no new user message; the reused failed / stopped reply row (DM 7장 ①) leaves the list
+              const messages = retry ? dropTrailingFailedReply(working.messages) : [...working.messages, ev.user_message]
               apply({ ...working, messages, message_count: ev.message_count, title: working.title ?? content.replace(/\s+/g, " ").slice(0, 30) })
               break
             }
@@ -493,7 +503,18 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
               setProvisional([])
               setReply("")
               const b = ev.before_stream ? blockOf(ev.error_code) : null
-              if (b) {
+              const refusal = ev.before_stream ? (ev.error_code as string) : null
+              if (refusal === "turn_in_progress") {
+                // another tab is answering (409) — not a failure
+                setPhase("idle")
+                toast(PANEL_COPY.turnInProgress)
+              } else if (refusal === "nothing_to_retry") {
+                // U36-3 (UX v5.14): the server found nothing to answer again (R11 accepts a user-only last message,
+                // so this is the rare "already answered elsewhere" case): give the text back so it can be sent as new
+                setPhase("idle")
+                if (retry) setInput((v) => (v.trim() ? v : content))
+                toast(PANEL_COPY.nothingToRetry)
+              } else if (b) {
                 setBlock(b)
                 setPhase("idle")
                 if (b.kind === "writing_chat_closed") apply({ ...working, status: "closed" })
@@ -694,12 +715,41 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
     [send, newChat],
   )
 
+  // ---------- reopened chat: unanswered / failed last turn (OD-P11, R-OD-8) ----------
+  const reopened = React.useMemo(() => reopenedTurn(chat?.messages ?? [], { responding, liveFailure: failure !== null }), [chat, responding, failure])
+  const shownFailure: TurnFailure | null = React.useMemo(() => {
+    if (failure) return failure
+    if (reopened?.kind !== "failed") return null
+    const j = reopened.job
+    return { code: j.error_code ?? "provider_unavailable", provider: j.provider, retry_after: j.retry_after, quota_resets_at: j.quota_resets_at, content: reopened.user.content, requested_slot: null, requested_action: null, style: null }
+  }, [failure, reopened])
+  const unanswered = reopened?.kind === "unanswered" ? reopened.user : null
+
   const retry = React.useCallback(() => {
-    const f = failure
+    const f = shownFailure
     const current = chatRef.current
     if (!f || !current) return
     consentGuard(() => void runTurn(current, f.content, { requested_slot: f.requested_slot, requested_action: f.requested_action, style: f.style }, true))
-  }, [failure, consentGuard, runTurn])
+  }, [shownFailure, consentGuard, runTurn])
+
+  const resendUnanswered = React.useCallback(() => {
+    const current = chatRef.current
+    if (!unanswered || !current || responding) return
+    // key · consent · limit checks are the ordinary send's ("전송이 막힐 때")
+    if (locked || !connectionLoaded) {
+      setBlock({ kind: "ai_not_connected" })
+      return
+    }
+    if (connection?.key_status === "invalid") {
+      setBlock({ kind: "key_invalid" })
+      return
+    }
+    if (current.status === "closed") {
+      setBlock({ kind: "writing_chat_closed" })
+      return
+    }
+    consentGuard(() => void runTurn(current, unanswered.content, {}, true))
+  }, [unanswered, responding, locked, connectionLoaded, connection, consentGuard, runTurn])
 
   const stop = React.useCallback(() => abort.current?.abort(), [])
 
@@ -808,7 +858,9 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
     reply,
     provisionalBlocks,
     draftStarted,
-    failure,
+    failure: shownFailure,
+    unanswered,
+    resendUnanswered,
     block,
     clearBlock: () => setBlock(null),
     retryBlocked,

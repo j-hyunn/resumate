@@ -294,7 +294,7 @@ const COVER_LETTER_SEED: Array<Pick<DraftSection, "template_key" | "question_cla
 
 async function mockCreateCoverLetterDraft(applicationProjectId: string): Promise<Draft> {
   const db = await mockRequest()
-  const draft = newDraft(applicationProjectId, { draft_type: "cover_letter", title: "자기소개서", status: "composing", options: {} })
+  const draft = newDraft(applicationProjectId, { draft_type: "cover_letter", title: "자소서 문항 답변", status: "composing", options: {} })
   db.drafts.push(draft)
   COVER_LETTER_SEED.forEach((seed, i) => {
     db.draft_sections.push(newSection(draft.id, i + 1, { section_kind: "cover_letter_question", ...seed }))

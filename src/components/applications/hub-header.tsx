@@ -113,7 +113,12 @@ export function HubHeader({ ap, failMove = false, failSave = false }: { ap: Appl
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className={ap.name ? "text-2xl leading-8 font-bold" : "text-2xl leading-8 font-bold text-muted-foreground"}>{name}</h1>
+              <h1 className={ap.name ? "text-2xl leading-8 font-bold" : "text-2xl leading-8 font-bold text-muted-foreground"}>
+                {name}
+                {/* 02 L-01 (CR-23) 허브 제목 "{회사명 – 포지션명} 자기소개서". (v5.14, U36-7) 이름에 이미 "자기소개서"가 있으면
+                    (기본 이름 "새 자기소개서 (날짜)" 등) 붙이지 않음 */}
+                {name.includes("자기소개서") ? null : " 자기소개서"}
+              </h1>
               {ap.name_source === "ai" ? (
                 <Badge variant="ai">
                   <Sparkles aria-hidden />
@@ -130,7 +135,7 @@ export function HubHeader({ ap, failMove = false, failSave = false }: { ap: Appl
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="기업 JD 메뉴">
+              <Button variant="ghost" size="icon-sm" aria-label="자기소개서 메뉴">
                 <MoreHorizontal aria-hidden />
               </Button>
             </DropdownMenuTrigger>

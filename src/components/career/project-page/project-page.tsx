@@ -44,10 +44,10 @@ import {
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
-import { CRUMB_CURRENT } from "@/components/career/new-row-notice"
+import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
 import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type FillOptions, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
-import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillEntry, type FillPlan } from "@/components/career/star-proposal-fill"
+import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillPlan } from "@/components/career/star-proposal-fill"
 import { saveProjectPageAction } from "@/lib/data/career-v45-actions"
 import {
   PAGE_LIMITS,
@@ -246,7 +246,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   const panelRef = React.useRef<ReturnType<typeof useAiPanel> | null>(null)
 
   const doSave = React.useCallback(
-    async (opts: { overwrite?: boolean } = {}): Promise<string | null> => {
+    async (opts: { overwrite?: boolean; fromPanel?: boolean } = {}): Promise<string | null> => {
       const sent = valuesRef.current
       const sentApplied = appliedRef.current
       const local = validateProjectValues(sent)
@@ -313,9 +313,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
       }
       // success: the `{parent}:new` copy goes before the key switches to the row id (UQ-PA-21)
       preserved.clear()
-      saveGen.current += 1
-      undoToasts.current.forEach((t) => toast.dismiss(t))
-      undoToasts.current = []
       setProjectId(r.project_id)
       setUpdatedAt(r.updated_at)
       setBaseline(sent)
@@ -333,6 +330,10 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
         if (chats.length) panel.markApplied(chats)
       }
       if (wasNew) replaceUrl(r.project_id, chatIdRef.current)
+      // OD-C3: the save that created the row → "프로젝트를 커리어에 추가했어요" once; later saves = C-06 "저장됨 HH:MM" only.
+      // The panel's first-message save shows its own toast instead (UX S-10 [가정]).
+      const added = firstSaveToast("project", { wasNew, fromPanel: Boolean(opts.fromPanel) })
+      if (added) toast(added)
       notifyCareerSaved()
       void gate.recheck()
       return r.project_id
@@ -374,7 +375,7 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
       titleRef.current?.focus()
       return false
     },
-    savePage: () => doSaveRef.current(),
+    savePage: () => doSaveRef.current({ fromPanel: true }),
     onChatChange: (chatId) => {
       chatIdRef.current = chatId
       // [UI-가정] a new page keeps its URL until the row exists (the save replaces it with `?chat=` then)
@@ -397,20 +398,6 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
     if (f === "start_month" || f === "end_month") return document.getElementById("head-period")
     if (f === "project_type" || f === "experience_type" || f === "competencies") return document.getElementById(`head-${f}`)
     return document.getElementById(`star-field-${f}`)
-  }
-
-  const undoToasts = React.useRef<Array<string | number>>([])
-  const saveGen = React.useRef(0)
-  const undo = (fills: FillEntry[], cid: string, gen: number) => {
-    // after a save the fill is confirmed (⑤ 반영됨) — undo no longer applies (QA UQ-S10-6)
-    if (gen !== saveGen.current) return
-    setValues((v) => {
-      const next = { ...v } as Record<string, unknown>
-      // only while the field still holds the filled value (되돌리기 = 다음 입력 전까지)
-      for (const f of fills) if (same(next[f.field], f.next)) next[f.field] = f.prev
-      return next as unknown as ProjectPageValues
-    })
-    setApplied((a) => a.filter((x) => !(x.writing_chat_id === cid && fills.some((f) => f.field === x.field && f.rev === x.rev))))
   }
 
   const onFill = (cid: string, fields: readonly ProjectProposalField[], opts?: FillOptions): FillPlan => {
@@ -438,10 +425,9 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
     if (saveState !== "saving") setSaveState("idle")
     const label = plan.fills.length === 1 ? PROPOSAL_FIELD_LABELS[plan.fills[0].field] : plan.fills.map((f) => PROPOSAL_FIELD_LABELS[f.field]).join(", ")
     window.setTimeout(() => plan.fills.forEach((f) => flashElement(fieldElement(f.field))), 30)
-    // [UI-가정] 토스트 8초, 여러 섹션이면 이름을 이어 씀
-    const gen = saveGen.current
-    const tid = toast(`${label}에 채웠어요`, { duration: 8000, action: { label: "되돌리기", onClick: () => undo(plan.fills, cid, gen) } })
-    undoToasts.current.push(tid)
+    // OD-P2 (UX v5.13): an information toast only — no undo button (going back = "저장하지 않고 나가기").
+    // 여러 섹션이면 이름을 쉼표로 이어 씀 (구현 그대로)
+    toast(`${label}에 채웠어요`)
     setLive(`${label}에 채웠어요. 저장하기를 눌러야 저장돼요`)
     return plan
   }

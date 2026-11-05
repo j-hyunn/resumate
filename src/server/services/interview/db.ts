@@ -245,7 +245,16 @@ export type BegunEvaluation = {
 
 export type Applied = { applied: boolean };
 export type SavedQuestion = Applied & { savedCount: number; questionCount: number; sequence: number | null };
-export type CompletedEvaluation = Applied & { status: "completed" | "evaluation_failed" | null; notScoredAnswerIds: string[] };
+/**
+ * `complete_interview_evaluation` result. (R11 OD-I1) `scoreStatus` / `scoreValue` = the d14.v1 session score the
+ * RPC just wrote (`scored` / `not_scored`; `not_scored` also when the session ended `evaluation_failed`).
+ */
+export type CompletedEvaluation = Applied & {
+  status: "completed" | "evaluation_failed" | null;
+  notScoredAnswerIds: string[];
+  scoreStatus: "scored" | "not_scored" | null;
+  scoreValue: number | null;
+};
 
 export interface InterviewStore {
   beginQuestions(sessionId: string, jobId: string): Promise<BegunQuestions>;
@@ -369,6 +378,8 @@ export function createInterviewStore(writer: AiWriterSupabaseClient): InterviewS
         applied: r.applied === true,
         status: status === "completed" || status === "evaluation_failed" ? status : null,
         notScoredAnswerIds: strs(r.not_scored_answer_ids),
+        scoreStatus: r.score_status === "scored" || r.score_status === "not_scored" ? r.score_status : null,
+        scoreValue: typeof r.score_value === "number" ? r.score_value : null,
       };
     },
   };

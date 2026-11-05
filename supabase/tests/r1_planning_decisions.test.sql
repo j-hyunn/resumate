@@ -127,9 +127,9 @@ select is(public.get_data_readiness() #> '{features,insight}',
 reset role;
 
 -- ══ A19 / A20 save_provider_key consent rule ═══════════════════════════════
--- A consented gemini paid on v2026-10-29. A newer gemini paid disclosure without re-consent comes into effect.
+-- A consented gemini paid on v2026-11-05. A newer gemini paid disclosure without re-consent comes into effect.
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', 'v2026-10-29');
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', 'v2026-11-05');
 insert into public.ai_disclosures (provider, connection_tier, version, effective_at, requires_reconsent, document_path)
   values ('gemini', 'paid', 'v-r1-minor', now() - interval '2 minutes', false, '/policies/ai/gemini/paid/v-r1-minor');
 insert into public.ai_jobs (id, user_id, job_type, target_type, target_id, provider, model_tier, connection_tier, status, heartbeat_at)
@@ -142,7 +142,7 @@ select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemi
                                    'gm02', 'v-r1-minor', 'valid', 'aaaaaaaa-9999-0000-0000-000000000001') ->> 'status', 'valid',
           'A20: a newer disclosure without requires_reconsent does not block key replacement');
 select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', '\x0a', '\x0b', '\x0c', 'env-v1',
-                                   'gm03', 'v2026-10-29', 'valid', 'aaaaaaaa-9999-0000-0000-000000000001') ->> 'key_last4', 'gm03',
+                                   'gm03', 'v2026-11-05', 'valid', 'aaaaaaaa-9999-0000-0000-000000000001') ->> 'key_last4', 'gm03',
           'A20: the version the consent cites is accepted too');
 select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', '\x0a', '\x0b', '\x0c',
                    'env-v1', 'gm04', 'v-unknown', 'valid', 'aaaaaaaa-9999-0000-0000-000000000001')$$,

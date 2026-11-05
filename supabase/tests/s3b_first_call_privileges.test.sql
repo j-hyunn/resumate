@@ -23,12 +23,12 @@ select lives_ok($$select * from public.ai_disclosures$$, 'authenticated: read ai
 select lives_ok($$select * from public.ai_provider_keys_public$$, 'authenticated: read key view (empty)');
 select lives_ok($$select * from public.ai_data_use_consents$$, 'authenticated: read consents');
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-                  values ('gemini', 'free', 'v2026-10-29', true)$$, 'authenticated: record consent (guard trigger)');
+                  values ('gemini', 'free', 'v2026-11-05', true)$$, 'authenticated: record consent (guard trigger)');
 reset role;
 -- R1 A19: key save / check run as service_role with p_user_id (first call by that role).
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm01', 'v2026-10-29', 'valid',
+select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm01', 'v2026-11-05', 'valid',
                                                   'aaaaaaaa-9999-0000-0000-000000000001')$$, 'service_role: save_provider_key');
 reset role;
 set local role authenticated;
@@ -47,12 +47,12 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
-                  values ('openai', 'paid', 'v2026-10-29')$$, 'authenticated: second consent');
+                  values ('openai', 'paid', 'v2026-11-05')$$, 'authenticated: second consent');
 reset role;
 -- R1 A19: key save / check run as service_role with p_user_id (first call by that role).
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-10-29', 'limited',
+select lives_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-11-05', 'limited',
                                                   'aaaaaaaa-9999-0000-0000-000000000002', 'provider_unavailable')$$,
                 'service_role: save limited key');
 reset role;

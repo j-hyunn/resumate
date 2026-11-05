@@ -313,7 +313,8 @@ describe.skipIf(!ready)("W4 interview + board data functions (local stack)", asy
     await expect(data.saveInterviewAnswer(sheet.questions[0]!.answer!.id, "late")).rejects.toMatchObject({ code: "interview_already_submitted" })
 
     const result = await read(project, started.session_id)
-    expect(result).toMatchObject({ status: "completed", score_status: "pending_method", evaluation_provider: "anthropic", has_new_result: true, grading: { kind: "none" }, failed_answer_count: 0 })
+    // R11 최소 수정 (OD-I1): the DB writes the d14.v1 score at completion.
+    expect(result).toMatchObject({ status: "completed", score_status: "scored", score_method_version: "d14.v1", evaluation_provider: "anthropic", has_new_result: true, grading: { kind: "none" }, failed_answer_count: 0 })
     expect(result.questions.map((x) => x.intent)).toEqual(["가치 기준 확인", "실패 후 성장 확인", "갈등 해결 방식 확인"])
     expect(JSON.stringify(result)).not.toContain("본인 역할 구분")
     expect(result.questions.map((x) => x.answer?.status)).toEqual(["submitted", "submitted", "unanswered"])
@@ -416,7 +417,7 @@ describe.skipIf(!ready)("W4 interview + board data functions (local stack)", asy
     await expect(data.markResultViewed(sessionId)).resolves.toEqual({ changed: true })
   })
 
-  it("판정표 그 밖 → none: all blank goes straight to completed/not_scored with no job; in-progress stays none", async () => {
+  it("판정표 그 밖 → none: all blank goes straight to completed/scored 0 (d14.v1) with no job; in-progress stays none", async () => {
     const project = await newProject()
     queue.push({ json: KO_BACKEND.output }, { json: AI05 })
     const { session_id } = await data.startInterviewSession({ application_project_id: project, interview_type: "culture_fit", question_count: 3 })
@@ -424,7 +425,8 @@ describe.skipIf(!ready)("W4 interview + board data functions (local stack)", asy
     expect((await read(project, session_id)).grading).toEqual({ kind: "none" })
     await expect(data.submitInterviewSession(session_id)).resolves.toEqual({ job_id: null })
     const r = await read(project, session_id)
-    expect(r).toMatchObject({ status: "completed", score_status: "not_scored", grading: { kind: "none" }, unanswered_count: 3, has_new_result: true })
+    // R11 최소 수정 (OD-I1 / R-OD-1): all unanswered = session scored 0 (was not_scored).
+    expect(r).toMatchObject({ status: "completed", score_status: "scored", score_value: 0, grading: { kind: "none" }, unanswered_count: 3, has_new_result: true })
     await expect(data.regradeFailedAnswers(session_id)).resolves.toEqual({ refused: "interview_evaluation_not_retryable", cause: null })
   })
 

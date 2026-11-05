@@ -222,6 +222,8 @@ export async function startInterviewSession(input: {
         created_at: now,
         updated_at: now,
         application_project_id: input.application_project_id,
+        company_name_snapshot: null, // R11 최소 수정 (OD-I6 columns)
+        position_title_snapshot: null,
         insight_id: null,
         source_session_id: null,
         interview_type: input.interview_type,

@@ -77,7 +77,12 @@ select set_config('t.done', jsonb_build_object(
   'weak_requirement_ids', jsonb_build_array('a0000000-8888-0000-0000-000000000002'), 'insight_id', null,
   'career_snapshot_hash', 'ch', 'meta', current_setting('t.meta')::jsonb)::text, true);
 select set_config('t.eval', jsonb_build_object(
-  'result', jsonb_build_object('criteria', '[]'::jsonb, 'intent_reveal', '의도', 'model_answer', jsonb_build_object('text', 'x'),
+  'result', jsonb_build_object('criteria', jsonb_build_array(
+                                 jsonb_build_object('key', 'specificity', 'grade', 'fair'),
+                                 jsonb_build_object('key', 'intent_fit', 'grade', 'good'),
+                                 jsonb_build_object('key', 'structure', 'grade', 'good'),
+                                 jsonb_build_object('key', 'job_relevance', 'grade', 'not_applicable')),
+                               'intent_reveal', '의도', 'model_answer', jsonb_build_object('text', 'x'),
                                'score', jsonb_build_object('status', 'pending_method')),
   'hashes', jsonb_build_object('input_hash', 'ih', 'career_snapshot_hash', 'ch'),
   'meta', current_setting('t.meta')::jsonb,
@@ -370,7 +375,7 @@ select results_eq($$select r ->> 'status', r ->> 'score_status', (r ->> 'score_c
                   $$values ('evaluation_failed'::text, 'not_scored'::text, 1)$$, 'feedback missing -> evaluation_failed');
 reset role;
 select results_eq($$select e.status, a.score_status from public.answer_evaluations e join public.interview_answers a on a.id = e.answer_id$$,
-                  $$values ('succeeded'::text, 'pending_method'::text)$$, 'saved evaluation kept, answer score pending_method');
+                  $$values ('succeeded'::text, 'scored'::text)$$, 'saved evaluation kept, answer score d14.v1 (R11)');
 select results_eq($$select evaluation_provider, evaluation_model from public.interview_sessions
                      where id = 'a0000000-5e55-0000-0000-000000000001'$$,
                   $$values ('gemini'::text, 'gm-eval'::text)$$, 'evaluation provider / model recorded at begin');
@@ -397,14 +402,14 @@ select is(public.save_session_feedback('a0000000-5e55-0000-0000-000000000001', '
 select results_eq($$select r ->> 'status', r ->> 'score_status', (r ->> 'score_counted_count')::int, r -> 'not_scored_answer_ids'
                       from public.complete_interview_evaluation('a0000000-5e55-0000-0000-000000000001',
                         'a0000000-7777-0000-0000-000000000012', 1) r$$,
-                  $$values ('completed'::text, 'pending_method'::text, 1, '[]'::jsonb)$$, 'complete evaluation');
+                  $$values ('completed'::text, 'scored'::text, 1, '[]'::jsonb)$$, 'complete evaluation (R11 d14.v1)');
 reset role;
 update public.ai_jobs set status = 'succeeded' where id = 'a0000000-7777-0000-0000-000000000012';
 select results_eq($$select status, score_status, score_counted_count, completed_at is not null, evaluation_model,
                            (select count(*)::int from public.evidence_links el
                              where el.owner_type in ('answer_evaluation', 'session_feedback'))
                       from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000001'$$,
-                  $$values ('completed'::text, 'pending_method'::text, 1, true, 'gm2'::text, 3)$$,
+                  $$values ('completed'::text, 'scored'::text, 1, true, 'gm2'::text, 3)$$,
                   'completed session (evaluation_model overwritten by re-evaluation)');
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
@@ -655,7 +660,15 @@ select results_eq($$select r ->> 'status', (r ->> 'answered_count')::int, (r ->>
                   $$values ('completed'::text, 0, 3, '[]'::jsonb, false)$$, 'zero answers: completed right away');
 select results_eq($$select status, score_status, score_counted_count, completed_at is not null
                       from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000005'$$,
-                  $$values ('completed'::text, 'not_scored'::text, 0, true)$$, 'zero answers: session score not_scored');
+                  $$values ('completed'::text, 'scored'::text, 0, true)$$, 'zero answers: session scored 0 (R11 R-OD-1)');
+select results_eq($$select score_value, score_max, score_method_version, score_rationale, unanswered_count
+                      from public.interview_sessions where id = 'a0000000-5e55-0000-0000-000000000005'$$,
+                  $$values (0::numeric, 100::numeric, 'd14.v1'::text, '질문 3개 모두 미응답, 0점'::text, 3)$$,
+                  'zero answers: 0 / 100, d14.v1, rationale');
+select results_eq($$select count(*)::int, bool_and(score_status = 'unanswered' and score_value = 0 and score_max = 100
+                                                    and score_method_version = 'd14.v1' and score_rationale = '미응답 · 0점')
+                      from public.interview_answers where session_id = 'a0000000-5e55-0000-0000-000000000005'$$,
+                  $$values (3, true)$$, 'zero answers: every question 0 points "미응답 · 0점"');
 reset role;
 
 -- ══ 8. session delete: cascade, evidence, job cancel ══

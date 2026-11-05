@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { AiProvider, ConnectionTier, KeyStatus, WritingChatStatus } from "@/lib/contracts/enums";
+import { AI_ERROR_CODES, AI_JOB_STATUSES, type AiErrorCode, type AiJobStatus, type AiProvider, type ConnectionTier, type KeyStatus, type WritingChatStatus } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import {
   DELIVERABLE_DRAFT_LIMIT,
@@ -15,6 +15,7 @@ import {
   type StartWritingChatInput,
   type WritingChatConnection,
   type WritingChatDto,
+  type WritingChatTurnFailure,
 } from "@/lib/contracts/writing-chat";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
@@ -113,7 +114,32 @@ async function settleOrphanedStreaming(supabase: UserSupabaseClient, chat: ChatS
   for (const m of streaming) if (!m.aiJobId || !running.has(m.aiJobId)) m.status = "failed";
 }
 
-export function toWritingChatDto(chat: ChatSnapshot, extra: { connection: WritingChatConnection }): WritingChatDto {
+/**
+ * (v4.11 OD-P10 / R-OD-8) The turn job of every `failed` reply, so the screen can tell a stopped turn
+ * (job `canceled`) from a failed one (job `failed` + cause) after a reload. Runs after
+ * `settleOrphanedStreaming` so replies it just marked failed are included.
+ */
+export async function loadTurnFailures(supabase: UserSupabaseClient, chat: ChatSnapshot): Promise<Map<string, WritingChatTurnFailure>> {
+  const jobIds = [...new Set(chat.messages.filter((m) => m.role === "assistant" && m.status === "failed" && m.aiJobId).map((m) => m.aiJobId!))];
+  const out = new Map<string, WritingChatTurnFailure>();
+  if (jobIds.length === 0) return out;
+  const { data, error } = await supabase.from("ai_jobs").select("id, status, error_code, retry_after, quota_resets_at").in("id", jobIds);
+  if (error) throw mapDbError(error);
+  for (const r of data ?? []) {
+    if (!(AI_JOB_STATUSES as readonly string[]).includes(r.status)) continue;
+    out.set(r.id, {
+      jobStatus: r.status as AiJobStatus,
+      errorCode: r.error_code && (AI_ERROR_CODES as readonly string[]).includes(r.error_code) ? (r.error_code as AiErrorCode) : null,
+      retryAfter: r.retry_after,
+      quotaResetsAt: r.quota_resets_at,
+    });
+  }
+  return out;
+}
+
+type ChatDtoExtra = { connection: WritingChatConnection; failures?: ReadonlyMap<string, WritingChatTurnFailure> };
+
+export function toWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): WritingChatDto {
   const room = hasRoomForTurn(chat.messageCount);
   const open = chat.status === "active";
   const last = chat.messages[chat.messages.length - 1];
@@ -133,7 +159,7 @@ export function toWritingChatDto(chat: ChatSnapshot, extra: { connection: Writin
     lastAppliedAt: chat.lastAppliedAt,
     returnTarget: chat.returnTarget,
     createdAt: chat.createdAt,
-    messages: toMessageDtos(chat.messages),
+    messages: toMessageDtos(chat.messages, extra.failures),
     connection: extra.connection,
     needsReviewCount: needsReviewCount(chat.structuredDraft),
     applicableFields: applicableFields(chat.structuredDraft),
@@ -142,7 +168,7 @@ export function toWritingChatDto(chat: ChatSnapshot, extra: { connection: Writin
 }
 
 /** S-44 panel DTO of a deliverable chat (AI-13). Chips are the screen's (`deliverableChips`, R-PA-5). */
-export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: { connection: WritingChatConnection }): DeliverableWritingChatDto {
+export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): DeliverableWritingChatDto {
   const draft = chat.deliverableDraft;
   if (!draft || !chat.projectDeliverableId) throw internal(new Error("not a deliverable chat"));
   const room = hasRoomForTurn(chat.messageCount);
@@ -166,7 +192,7 @@ export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: { connect
     lastActivityAt: chat.lastActivityAt,
     lastAppliedAt: chat.lastAppliedAt,
     createdAt: chat.createdAt,
-    messages: toMessageDtos(chat.messages),
+    messages: toMessageDtos(chat.messages, extra.failures),
     connection: extra.connection,
     needsReviewCount: draft.facts.filter((f) => f.review === "needs_review").length,
     canSend: open && room && extra.connection.lock === null && !replyRunning,
@@ -180,8 +206,11 @@ export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: { connect
 export async function getWritingChat(supabase: UserSupabaseClient, userId: string, chatId: string, now: Date = new Date()): Promise<AnyWritingChatDto> {
   const chat = await loadChatSnapshot(supabase, chatId);
   if (!chat) throw new AppError("not_found", "요청한 대화를 찾을 수 없습니다.");
-  const [connection] = await Promise.all([readChatConnection(supabase, userId, now), settleOrphanedStreaming(supabase, chat)]);
-  return chat.projectDeliverableId ? toDeliverableWritingChatDto(chat, { connection }) : toWritingChatDto(chat, { connection });
+  const [connection, failures] = await Promise.all([
+    readChatConnection(supabase, userId, now),
+    settleOrphanedStreaming(supabase, chat).then(() => loadTurnFailures(supabase, chat)),
+  ]);
+  return chat.projectDeliverableId ? toDeliverableWritingChatDto(chat, { connection, failures }) : toWritingChatDto(chat, { connection, failures });
 }
 
 const SUMMARY_COLUMNS = "id, title, status, last_activity_at, last_applied_at, message_count" as const;

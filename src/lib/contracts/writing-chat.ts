@@ -14,7 +14,7 @@ import {
   type DeliverableDraft as DeliverableDraftType,
 } from "@/server/ai/schemas/deliverable-draft";
 import { COMPOSE_STYLES, DELIVERABLE_REQUESTED_ACTIONS, DELIVERABLE_SLOTS, WRITING_KINDS } from "@/server/ai/context-pack/deliverable-slots";
-import { AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
+import { AiErrorCodeSchema, AiJobStatusSchema, AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
 import {
   APPLY_PROPOSAL_FIELDS,
   CLASSIFICATION_FIELDS,
@@ -281,6 +281,21 @@ export const WritingChatRetryInput = z.object({ ...turnOptions });
 
 // ---------- DTOs ----------
 
+/**
+ * The turn job of a `failed` assistant reply (v4.11 OD-P10 / R-OD-8, DM §2.5 · §7): a stopped turn is
+ * message `failed` + job `canceled` (`errorCode = "canceled"`), a real failure is job `failed` with its cause.
+ * The screen shows the neutral "다시 보내기" for `canceled` and the C-11 failure copy otherwise
+ * (same rule as the S-36 view: `error_code !== "canceled"`).
+ */
+export const WritingChatTurnFailure = z.object({
+  jobStatus: AiJobStatusSchema,
+  /** null when the job row has no (known) code. */
+  errorCode: AiErrorCodeSchema.nullable(),
+  retryAfter: isoDateTime.nullable(),
+  quotaResetsAt: isoDateTime.nullable(),
+});
+export type WritingChatTurnFailure = z.infer<typeof WritingChatTurnFailure>;
+
 export const WritingChatMessageDto = z.object({
   id: uuid,
   sequence: z.number().int(),
@@ -295,6 +310,11 @@ export const WritingChatMessageDto = z.object({
   modelTier: ModelTierSchema.nullable(),
   connectionTier: ConnectionTierSchema.nullable(),
   aiJobId: uuid.nullable(),
+  /**
+   * (v4.11 OD-P10) Only on a `failed` assistant reply in the chat detail read (`getWritingChat`) whose turn job
+   * was found; null otherwise (user messages, done replies, SSE events).
+   */
+  turnFailure: WritingChatTurnFailure.nullable(),
   createdAt: isoDateTime,
 });
 export type WritingChatMessageDto = z.infer<typeof WritingChatMessageDto>;

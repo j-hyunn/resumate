@@ -46,11 +46,13 @@ describe("buildDeliverableChatContext — values", () => {
     expect(notice("저는 노조 활동을 했어요")).toEqual(["union"]);
   });
 
-  it("base_body_hash = sha256 of the exact form body", () => {
+  it("base_body_hash = sha256 of the whitespace-normalized form body (v4.11 OD-P5)", () => {
     const ctx = buildDeliverableChatContext(baseInput({ formSnapshot: { body: "본문\n" } }));
     expect(ctx.baseBodyHash).toBe(bodyHash("본문\n"));
     expect(ctx.baseBodyHash).toMatch(/^sha256:[0-9a-f]{64}$/);
-    expect(bodyHash("본문")).not.toBe(ctx.baseBodyHash);
+    // Trailing newline is normalized away; a content change still differs.
+    expect(bodyHash("본문")).toBe(ctx.baseBodyHash);
+    expect(bodyHash("본문2")).not.toBe(ctx.baseBodyHash);
   });
 
   it("only usable facts (ok / accepted) get citable aliases; numbering follows the stored list", () => {

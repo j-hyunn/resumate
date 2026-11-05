@@ -12,8 +12,10 @@ export const maxDuration = 60;
  * `POST /api/writing-chats/{id}/turns` — one AI writing chat turn (SSE): AI-12
  * on a project chat, AI-13 on a deliverable chat (picked by the chat row).
  * Body `{ content, requestedSlot?, requestedAction?, style?, formSnapshot? }`;
- * `?retry=1` = "다시 보내기" of the last failed reply (body optional, same
- * options without `content`, no new user message, message count unchanged).
+ * `?retry=1` = "다시 보내기": re-answers the last failed reply (reuses that
+ * row, message count unchanged) or, when the last message is a user message
+ * with no reply after it (OD-P11), adds the missing assistant row (counted
+ * once). Body optional, same options without `content`, no new user message.
  * `formSnapshot` (S-10 / S-44 form values, DM 2.5.1) is validated by the turn
  * service against the chat's target (`invalid_form_snapshot` 400) and is never
  * stored or logged. `requestedAction = compose_draft` at the draft limit → 409

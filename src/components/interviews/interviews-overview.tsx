@@ -128,8 +128,9 @@ export function InterviewsOverview({
                     </div>
                     <Button asChild variant="outline" className="shrink-0 max-md:h-8">
                       <Link
-                        href={routes.interviewSession(s.application_project_id, s.id)}
-                        onClick={() => setNavOrigin("interviews", s.application_project_id)}
+                        // R11 최소 수정 (OD-I6): an in-progress session always has its project (only completed ones are kept detached).
+                        href={routes.interviewSession(s.application_project_id!, s.id)}
+                        onClick={() => setNavOrigin("interviews", s.application_project_id!)}
                       >
                         이어서 쓰기
                       </Link>

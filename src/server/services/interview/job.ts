@@ -57,7 +57,9 @@ import { EVALUATION_JOB_TYPE, INTERVIEW_TARGET_TYPE, QUESTIONS_JOB_TYPE } from "
  *               call, no spacing, and the stage stays out of `progress`, which
  *               reads prepare → summarize → score → complete.
  *   summarize → AI-07 over the succeeded evaluations (skipped without a call when none)
- *   score     → D-14 pending: nothing
+ *   score     → no work: (R11 OD-I1) the DB writes d14.v1 scores in save_answer_evaluation
+ *               (question) and complete_interview_evaluation (session, unanswered = 0);
+ *               the stage stays so `progress` keeps its shape
  *   complete  → complete_interview_evaluation; `evaluation_failed` (all answers
  *               failed) ends the job failed with the answers' cause.
  *   Summary failure fails the job → the trigger marks `evaluation_failed`;
@@ -736,8 +738,9 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
     },
   };
 
-  // AI 4.3 / D-14: the score formula is pending, every score stays `pending_method` (set by the save RPCs).
-  const score: JobStep<Llm> = { stage: "score", callsProvider: false, run: async () => ({ method: null }) };
+  // R11 OD-I1 (D-14 d14.v1, AI 4.3): scores are the DB's — save_answer_evaluation writes each question's,
+  // complete_interview_evaluation the session's. Nothing to compute here; the step keeps the progress stages.
+  const score: JobStep<Llm> = { stage: "score", callsProvider: false, run: async () => ({ method: "d14.v1" }) };
 
   const complete: JobStep<Llm> = {
     stage: "complete",
@@ -755,7 +758,7 @@ export function createInterviewEvaluationJobDefinition<QC, EC>(deps: InterviewJo
         const code = Object.values(ev?.failed ?? {})[0] ?? "schema_invalid";
         throw new AiError(code, { retryable: false });
       }
-      return { status: r.status, notScored: r.notScoredAnswerIds.length };
+      return { status: r.status, notScored: r.notScoredAnswerIds.length, scoreStatus: r.scoreStatus, scoreValue: r.scoreValue };
     },
   };
 

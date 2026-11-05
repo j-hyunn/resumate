@@ -14,7 +14,7 @@ import { KEY_FAILURE_CAUSES } from "@/server/jobs/provider-context";
 import { encryptProviderKey, toByteaHex } from "@/server/keys/envelope";
 import { createEnvelopeKeySource } from "@/server/keys/key-source";
 import { EnvKms, KeyCryptoError } from "@/server/keys/kms";
-import { cancelInFlightJobs, withdrawAiDataUseConsent, consentStateOf, mayRunWithConsent, type ConsentRow, type DisclosureRow } from "./consent";
+import { cancelInFlightJobs, withdrawAiDataUseConsent, consentStateOf, mayRunWithConsent, needsFreeTierAck, type ConsentRow, type DisclosureRow } from "./consent";
 import { mapRunGate } from "./keys";
 
 const NOW = new Date("2026-11-15T00:00:00Z");
@@ -77,12 +77,29 @@ describe("consent rules (DM 2.11.5)", () => {
 });
 
 describe("contracts", () => {
-  it("free-tier consent needs the separate acknowledgement (F-AI-04 (3))", () => {
-    expect(RecordAiDataUseConsentInput.safeParse({ provider: "gemini", connectionTier: "free", disclosureVersion: "v1" }).success).toBe(false);
-    expect(
-      RecordAiDataUseConsentInput.safeParse({ provider: "gemini", connectionTier: "free", disclosureVersion: "v1", freeTierAcknowledged: true }).success,
-    ).toBe(true);
+  it("R11 QA-01: the contract no longer requires the free-tier ack (the disclosure row decides)", () => {
+    for (const provider of ["openai", "anthropic", "gemini"] as const) {
+      const r = RecordAiDataUseConsentInput.safeParse({ provider, connectionTier: "free", disclosureVersion: "v1", freeTierAcknowledged: false });
+      expect(r.success).toBe(true);
+    }
+    expect(RecordAiDataUseConsentInput.parse({ provider: "openai", connectionTier: "free", disclosureVersion: "v1" }).freeTierAcknowledged).toBe(false);
     expect(RecordAiDataUseConsentInput.safeParse({ provider: "openai", connectionTier: "paid", disclosureVersion: "v1" }).success).toBe(true);
+  });
+
+  it("R11 QA-01: needsFreeTierAck follows the consented disclosure row (v2026-11-05: Gemini free only)", () => {
+    const row = (provider: "openai" | "anthropic" | "gemini", tier: "free" | "paid", version: string, ack: boolean) => ({ provider, connection_tier: tier, version, requires_free_tier_ack: ack });
+    const rows = [
+      row("gemini", "free", "v2026-11-05", true),
+      row("openai", "free", "v2026-11-05", false),
+      row("anthropic", "free", "v2026-11-05", false),
+      row("openai", "free", "v2026-10-29", true),
+    ];
+    expect(needsFreeTierAck(rows, "gemini", "free", "v2026-11-05")).toBe(true);
+    expect(needsFreeTierAck(rows, "openai", "free", "v2026-11-05")).toBe(false);
+    expect(needsFreeTierAck(rows, "anthropic", "free", "v2026-11-05")).toBe(false);
+    // An older version's rule still applies to that version; an unknown version is left to the DB.
+    expect(needsFreeTierAck(rows, "openai", "free", "v2026-10-29")).toBe(true);
+    expect(needsFreeTierAck(rows, "gemini", "free", "nope")).toBe(false);
   });
 
   it("register input bounds; tier change needs a disclosure version", () => {

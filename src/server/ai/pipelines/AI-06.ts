@@ -37,7 +37,8 @@ import { matchQuote } from "../validation/quote";
  *   [수치 확인 필요]; facts outside the data only in suggestions_if_true
  * - consistency_notes: job, or culture fit with `ok` data only; each needs a
  *   factual career evidence (learnings never, C-9)
- * - score: always pending_method (D-AI-07 (a), D-14 대기)
+ * - score: never taken from the model. (R11 OD-I1) The DB computes the d14.v1 question score in
+ *   save_answer_evaluation from the stored criteria grades; a model score only raises `score_overridden`
  * Evidence item_keys: criteria.<key>, strengths.<n>, improvements.<n>,
  * model_answer, consistency_notes.<n> (answer quotes are interview_answer rows).
  */
@@ -308,6 +309,7 @@ export function validateEvaluation(output: Ai06Output, context: AnswerEvaluation
     }
   }
 
+  // The model's score slot is ignored (the DB writes d14.v1, R11 OD-I1); anything but the empty default is reported.
   if (output.score.status !== "pending_method" || output.score.value !== null) addToReport(report, { score_overridden: 1 });
   const intentReveal = prose(output.intent_reveal) || (context.question.intent ? prose(context.question.intent) : "");
 

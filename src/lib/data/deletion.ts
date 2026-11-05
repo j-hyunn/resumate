@@ -251,6 +251,8 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     return b
   }
   for (const e of evidence) {
+    // R11 최소 수정 (OD-I6): evidence of a detached interview session has no project bucket.
+    if (!e.application_project_id) continue
     const b = bucket(e.application_project_id)
     if (e.owner_type === "insight") b.insights.add(e.owner_id)
     if (e.owner_type === "draft_section") {

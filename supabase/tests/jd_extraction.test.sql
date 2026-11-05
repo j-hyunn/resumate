@@ -15,7 +15,7 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
 values ('a0000000-9999-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'gemini', 'free',
         '\x01', '\x02', '\x03', 'env-v1', 'ag01', 'valid');
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true);
+values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 update public.profiles set active_ai_provider = 'gemini' where id = 'a0000000-0000-0000-0000-000000000001';
 
 set local role authenticated;

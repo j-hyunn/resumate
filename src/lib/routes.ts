@@ -35,7 +35,7 @@ export const routes = {
   profile: () => "/career/profile", // S-04
   /**
    * S-08 with the C-22 add modal open for `kind` (`?new={kind}`, [UI-가정]) — S-09 새 경력 is that modal (OD-C2).
-   * The retired `/career/experiences/new` · `/career/educations/new` pages redirect here.
+   * The retired `/career/experiences/new` · `/career/educations/new` addresses redirect here (next.config.ts ← legacy-redirects.ts).
    */
   careerNew: (kind: "experience" | "education" | "project") => `/career?new=${kind}`, // S-08 (S-09 · S-34 · S-43 새 항목)
   skills: () => "/career/skills", // S-12
@@ -43,7 +43,7 @@ export const routes = {
   /** S-08 with one item selected in the right panel (`?item={kind}:{id}`, S-09 / S-34 / S-43) */
   careerItem: (kind: "experience" | "education" | "project", id: Id, query?: { edit?: "content" }) =>
     // `edit` [UI-가정] = open the S-43 edit on arrival (C-09 project_fields → 내용)
-    `/career?item=${kind}:${id}${query?.edit ? `&edit=${query.edit}` : ""}`, // S-08
+    `/career?item=${kind}:${encodeURIComponent(id)}${query?.edit ? `&edit=${query.edit}` : ""}`, // S-08 (id encoded, UQ-428)
   /**
    * S-10 새 프로젝트 (UX v5.6 URL [가정]): `?experience={id}` or `?education={id}`; `requirement_id` = S-16 관련 요건
    */

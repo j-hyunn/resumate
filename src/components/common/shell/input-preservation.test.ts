@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { createPreservationStore, type StorageLike } from "./input-preservation"
+import { createPreservationStore, isRestorable, type StorageLike } from "./input-preservation"
 
 function memory(initial: Record<string, string> = {}): StorageLike & { data: Record<string, string> } {
   const data = { ...initial }
@@ -26,7 +26,7 @@ describe("createPreservationStore (UQ-PA-1)", () => {
     expect(s.data[KEY]).toBeDefined()
   })
 
-  it("while the banner is unanswered, edits don't overwrite the copy", () => {
+  it("until the page restores the copy, edits don't overwrite it", () => {
     const s = memory({ [KEY]: JSON.stringify({ name: "이전" }) })
     const store = createPreservationStore(() => s, KEY)
     store.load()
@@ -35,7 +35,7 @@ describe("createPreservationStore (UQ-PA-1)", () => {
     expect(JSON.parse(s.data[KEY])).toEqual({ name: "이전" })
   })
 
-  it("이어서 편집 (resolve) → later writes go through; write(null) then removes this visit's copy", () => {
+  it("auto-restore (resolve) → later writes go through; write(null) then removes this visit's copy", () => {
     const s = memory({ [KEY]: JSON.stringify({ name: "이전" }) })
     const store = createPreservationStore(() => s, KEY)
     store.load()
@@ -48,7 +48,7 @@ describe("createPreservationStore (UQ-PA-1)", () => {
     expect(s.data[KEY]).toBeUndefined()
   })
 
-  it("버리기 / save (clear) always removes it", () => {
+  it("save / 저장하지 않고 나가기 (clear) always removes it", () => {
     const s = memory({ [KEY]: "{}" })
     const store = createPreservationStore(() => s, KEY)
     store.load()
@@ -83,5 +83,27 @@ describe("createPreservationStore (UQ-PA-1)", () => {
     store.write({ a: 1 })
     expect(() => store.flush()).not.toThrow()
     expect(() => store.clear()).not.toThrow()
+  })
+})
+
+describe("isRestorable (U40-2)", () => {
+  const T = "2026-11-05T01:02:03.456789+00:00"
+  it("restores a copy edited on the current row version", () => {
+    expect(isRestorable({ base_updated_at: T, values: {} }, T)).toBe(true)
+    // the same instant in another text form
+    expect(isRestorable({ base_updated_at: "2026-11-05T01:02:03.456Z" }, "2026-11-05T01:02:03.456+00:00")).toBe(true)
+  })
+  it("a new page's copy (base null) restores while the row still doesn't exist", () => {
+    expect(isRestorable({ base_updated_at: null }, null)).toBe(true)
+  })
+  it("drops a copy when the row was saved elsewhere since", () => {
+    expect(isRestorable({ base_updated_at: T }, "2026-11-05T09:00:00+00:00")).toBe(false)
+    expect(isRestorable({ base_updated_at: null }, T)).toBe(false)
+  })
+  it("drops copies written without a base (older code) or malformed", () => {
+    expect(isRestorable({ values: {} }, T)).toBe(false)
+    expect(isRestorable({ values: {} }, null)).toBe(false)
+    expect(isRestorable({ base_updated_at: 5 }, T)).toBe(false)
+    expect(isRestorable(null, T)).toBe(false)
   })
 })

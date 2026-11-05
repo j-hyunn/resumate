@@ -1522,11 +1522,11 @@ export function createFixtures(): MockDb {
   const evidence_links: EvidenceLink[] = [
     // det1 was updated 3 days ago (> snapshot 6 days ago) → "변경됨"
     ev(1, "insight", insightId, `requirement_matches.${IDS.req(1)}`, "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
-    ev(2, "insight", insightId, `requirement_matches.${IDS.req(1)}`, "achievement", IDS.ach(1), "metric", null, { source_label: "결제 승인 API p95 응답 시간" }),
+    ev(2, "insight", insightId, `requirement_matches.${IDS.req(1)}`, "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
     ev(3, "insight", insightId, `requirement_matches.${IDS.req(2)}`, "skill", IDS.skl(2), "name", null, { source_label: "Spring Boot", source_snapshot_at: daysAgo(1) }),
     ev(4, "insight", insightId, `requirement_matches.${IDS.req(3)}`, "project_detail", IDS.det(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 API 응답 속도 개선" }),
     ev(5, "insight", insightId, `requirement_matches.${IDS.req(5)}`, "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
-    ev(6, "insight", insightId, "strengths.0", "achievement", IDS.ach(1), "metric", null, { source_label: "결제 승인 API p95 응답 시간" }),
+    ev(6, "insight", insightId, "strengths.0", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
     ev(7, "insight", insightId, "strengths.0", "jd_requirement", IDS.req(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영" }),
     ev(8, "insight", insightId, "gaps.0", "jd_sentence", null, null, null, { source_label: "Kafka 등 메시지 큐 기반 비동기 처리 경험을 우대합니다.", source_locator: { sid: "S5" } }),
     ev(9, "insight", insightId, "gaps.0.actions.1", "project_detail", IDS.det(3), "action", "실패 건 재시도 큐를 설계했습니다", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
@@ -1536,10 +1536,10 @@ export function createFixtures(): MockDb {
       source_label: "레거시 결제 모듈 이관",
       source_deleted_at: daysAgo(2),
     }),
-    ev(12, "draft_section", IDS.dsec(1), "p1-b1", "achievement", IDS.ach(1), "metric", null, { source_label: "결제 승인 API p95 응답 시간" }),
+    ev(12, "draft_section", IDS.dsec(1), "p1-b1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
     ev(13, "draft_section", IDS.dsec(1), "p2-b1", "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
     ev(14, "draft_section", IDS.dsec(1), "e1-s", "experience", IDS.exp(1), "summary", "결제 승인·정산 플랫폼 백엔드 개발과 운영", { source_label: "그린페이먼츠", source_snapshot_at: daysAgo(1) }),
-    ev(15, "draft_section", IDS.dsec(2), "q1-p1", "achievement", IDS.ach(1), "metric", null, { source_label: "결제 승인 API p95 응답 시간" }),
+    ev(15, "draft_section", IDS.dsec(2), "q1-p1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
     // v5.3 S-33 질문 근거 칩 (A4 request 3): owner interview_question (session 1)
     ev(16, "interview_question", IDS.q(1), "question", "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
     ev(17, "interview_question", IDS.q(1), "target_requirements", "jd_requirement", IDS.req(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영" }),

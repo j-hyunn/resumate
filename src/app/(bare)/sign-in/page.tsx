@@ -70,7 +70,7 @@ async function Screen({ searchParams }: Props) {
           preview={preview}
           intro={
             <header className="text-center">
-              {/* [UI-가정] 2026-11-04 사용자 요청: 서비스 전용 제목, 부제 없음 (02 S-02의 "처음이면 바로 가입" 안내 생략) */}
+              {/* (UX v5.13 OD-S3) 서비스 전용 제목, 부제 없음 — 처음이면 바로 가입된다는 안내는 아래 약관 안내 문장이 대신한다 */}
               <h1 className="text-xl leading-7 font-bold">Resumate에서 커리어 준비를 시작해요</h1>
             </header>
           }

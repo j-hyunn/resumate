@@ -237,7 +237,7 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   project: "프로젝트",
   project_deliverable: "산출물",
   project_detail: "상세 내용",
-  achievement: "정량 성과",
+  achievement: "삭제된 근거", // 정량 성과 폐기 (CR-11, UQ-430): an old row only ever shows as deleted
   skill: "스킬",
   jd_requirement: "JD 요건",
   jd_sentence: "공고 원문",

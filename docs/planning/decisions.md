@@ -2,7 +2,7 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: 2026-11-05 (UI 38 런 기획 확인 U38-* — 3.20·4.14. 1장 결정 대기 0건)
+- 최종 갱신: 2026-11-05 (UI 40 런 기획 확인 U40-* — 3.21·4.15. 1장 결정 대기 0건)
 - 2026-11-05 입력(열린 결정 일괄): `_workspace/00_input/open-decisions-2026-11-04.md`(통합 목록 48행, 원본 질문 출처·닫힌 근거), `_workspace/00_input/planning-decisions-open-decisions.md`(사용자 확정 OD-*), 리뷰 `_workspace/03_spec-reviewer_review_open-decisions.md`. 반영 문서: PRD v4.13, UX v5.13, AI v4.11, DM v4.11, `docs/legal/cross-border-transfer.md` 개정안 2026-11-05
 - 2026-11-04 입력(STAR 합친 제안·-음 체·민감정보): `_workspace/backend/R8/01_plan.md`(사용자 확정 RQ-4~RQ-6). 반영 문서: PRD v4.11, UX v5.11, AI v4.9, DM v4.9
 - 2026-11-04 입력(AI 작성 대화 질문 품질): `_workspace/backend/R7/01_plan.md`(사용자 확정 RQ-1~RQ-3). 반영 문서: AI v4.8(PRD·UX·DM 변경 없음)
@@ -454,6 +454,15 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 | U38-2 | S-13 페이지 제목 = "자기소개서 관리"(메뉴 라벨과 같음). 명세를 구현에 맞춤 | |
 | U38-3 | S-16 `data_sufficiency = thin` 안내 = "입력된 커리어가 적어 판단 근거가 제한적이에요. 프로젝트·STAR·산출물을 더 채우면 더 정확해져요" | 다름(권고는 "프로젝트와 STAR를 더 채우면") |
 
+### 3.21 사용자 확정 (2026-11-05, UI 40 런 기획 확인 — 사이클 ui40-questions)
+
+계기: 40 런 UI QA(`_workspace/ui/40_ui-qa_review.md`) P-40-1·P-40-2. 원문 `_workspace/00_input/planning-decisions-ui40-questions.md`. 반영: UX v5.16(PRD·AI·DM 변경 없음).
+
+| ID | 결정 | 권고와 다름 |
+|----|------|-------------|
+| U40-1 | L-02 입력 보존(브라우저 저장소)을 로그아웃·탈퇴 때 지운다 | |
+| U40-2 | 보존본에 기준 `updated_at`을 적고, 다시 열 때 행이 그 사이 다른 곳에서 저장됐으면(또는 기준이 없으면) 복원하지 않고 버린다 | 다름(권고는 "복원한 뒤 첫 저장 때 충돌 다이얼로그") |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -660,4 +669,9 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 - **UI** (resumate-ui)
   1. **반영 2026-11-05 (구현 그대로, 코드 변경 없음)** U38-1·U38-2 — `[UI-가정]` 표시만 정리
   2. **반영 2026-11-05 (38 런)** U38-3 `insight-view.tsx` `thin` 안내 문구
+- **백엔드**: 없음
+
+### 4.15 UI 40 런 기획 확인 후속 (2026-11-05, U40-*)
+
+- **UI** (resumate-ui): U40-1 로그아웃·탈퇴에서 `resumate:l02:*` 지우기, U40-2 보존본 기준 버전 비교 — **반영 2026-11-05 (UI 40 런)**
 - **백엔드**: 없음

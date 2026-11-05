@@ -43,6 +43,7 @@ import {
   useLeaveGuard,
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
+import { isRestorable, type VersionedCopy } from "@/components/common/shell/input-preservation"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
 import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
@@ -206,10 +207,13 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   const parentHref = routes.careerItem(parentType, parentId)
 
   // 입력 보존: key = row id, or `{소속 id}:new` (1.3a)
-  const preserved = useInputPreservation<{ values: ProjectPageValues; applied: AppliedProjectProposal[] }>(preservationKey("project", projectId, data.parent.id))
+  // the copy carries the row version the edits started from (U40-2)
+  const preserved = useInputPreservation<{ values: ProjectPageValues; applied: AppliedProjectProposal[] } & VersionedCopy>(
+    preservationKey("project", projectId, data.parent.id),
+  )
   React.useEffect(() => {
-    preserved.write(dirty ? { values, applied } : null)
-  }, [dirty, values, applied, preserved])
+    preserved.write(dirty ? { values, applied, base_updated_at: updatedAt } : null)
+  }, [dirty, values, applied, updatedAt, preserved])
 
   // C-09 gate entry: the return target lives in the browser session; the first new chat carries it
   React.useEffect(() => {
@@ -346,15 +350,21 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
   })
 
   // 입력 보존: what a previous visit left unsaved comes back on its own (no restore banner) — the page is dirty,
-  // so 저장하기 is enabled and leaving asks first
-  const { stored: preservedStored, resolve: resolvePreserved } = preserved
+  // so 저장하기 is enabled and leaving asks first. U40-2: only when the row wasn't saved elsewhere since the copy
+  // was written (base_updated_at = the row's updated_at now); otherwise the copy is dropped and the saved row shows
+  const { stored: preservedStored, resolve: resolvePreserved, clear: clearPreserved } = preserved
+  const loadedUpdatedAt = data.updated_at
   React.useEffect(() => {
     if (!preservedStored) return
+    if (!isRestorable(preservedStored, loadedUpdatedAt)) {
+      clearPreserved()
+      return
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- apply the stored copy once, after hydration
     setValues(preservedStored.values)
     setApplied(preservedStored.applied)
     resolvePreserved()
-  }, [preservedStored, resolvePreserved])
+  }, [preservedStored, resolvePreserved, clearPreserved, loadedUpdatedAt])
 
   const guard = useLeaveGuard({ dirty, onSave: async () => Boolean(await doSaveRef.current()), onDiscard: preserved.clear })
 

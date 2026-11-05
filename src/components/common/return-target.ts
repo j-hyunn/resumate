@@ -25,7 +25,7 @@ export interface ReturnTargetInput {
   /** where "돌아가기" goes */
   href: string
   /**
-   * C-09 "경력이 없을 때" path (S-09 → S-36 → 복귀): the experience saved on the way,
+   * C-09 "경력이 없을 때" path (S-08 새 경력 → S-10 새 프로젝트 → 복귀, FL-13 D0 → D1): the experience saved on the way,
    * pre-selected as affiliation of the next AI writing chat. Set via recordGateExperience().
    */
   experience_id?: string
@@ -62,7 +62,7 @@ export function readCareerReturn(): StoredReturnTarget | null {
 }
 
 /**
- * UQ-4: S-09 calls this after saving an experience while a return target exists, so the
+ * UQ-4 / UQ-420: the S-08 추가 모달 calls this (via afterCareerItemSaved) after adding an experience while a return target exists, so the
  * C-10 banner (and useGateContinuation) can offer S-36 new_project with this affiliation.
  */
 export function recordGateExperience(experienceId: string): void {
@@ -70,6 +70,22 @@ export function recordGateExperience(experienceId: string): void {
   if (!t) return
   safeSession()?.setItem(RETURN_KEY, JSON.stringify({ ...t, experience_id: experienceId }))
   window.dispatchEvent(new Event("resumate:return-target"))
+}
+
+export const CAREER_SAVED_EVENT = "resumate:career-saved"
+
+/** Call after any successful career save so C-10 re-judges readiness. */
+export function notifyCareerSaved(): void {
+  window.dispatchEvent(new Event(CAREER_SAVED_EVENT))
+}
+
+/**
+ * S-08 추가·수정 모달 저장 성공 뒤 (UQ-420, FL-13 D0 → D1): an experience added while a return target exists is
+ * recorded first (the C-10 banner's next step = S-10 새 프로젝트 under it), then C-10 re-judges readiness.
+ */
+export function afterCareerItemSaved(item: { kind: string; id: string; created: boolean }): void {
+  if (item.created && item.kind === "experience" && readCareerReturn()) recordGateExperience(item.id)
+  notifyCareerSaved()
 }
 
 export function clearCareerReturn(): void {

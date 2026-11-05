@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import type { DataReadiness, ReadinessFeatureKey, ReturnTargetFeature } from "@/types/db"
 import { getDataReadinessAction } from "@/lib/data/actions"
 import { usePreviewState } from "./preview-state-client"
-import { readCareerReturn, type StoredReturnTarget } from "./return-target"
+import { CAREER_SAVED_EVENT, notifyCareerSaved, readCareerReturn, type StoredReturnTarget } from "./return-target"
 import { routes } from "@/lib/routes"
 
 export const RETURN_FEATURE_LABELS: Record<ReturnTargetFeature, string> = {
@@ -39,12 +39,8 @@ function directionParticle(word: string): string {
   return jong === 0 || jong === 8 ? "로" : "으로"
 }
 
-const SAVED_EVENT = "resumate:career-saved"
-
-/** Call after any successful career save so C-10 re-judges readiness. */
-export function notifyCareerSaved(): void {
-  window.dispatchEvent(new Event(SAVED_EVENT))
-}
+const SAVED_EVENT = CAREER_SAVED_EVENT
+export { notifyCareerSaved }
 
 /**
  * Next step of the FL-13 loop after a career save (UQ-4), v5.6 routes. Re-judged readiness says

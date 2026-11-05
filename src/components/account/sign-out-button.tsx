@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { routes } from "@/lib/routes"
+import { clearUserUnsavedInput } from "@/components/common/clear-user-storage"
 import { signOutAction } from "./actions"
 
 /**
@@ -26,6 +27,7 @@ export function SignOutButton() {
         } catch {
           // [UI-가정] sign-out failure is not surfaced; leave the signed-in screens regardless
         } finally {
+          clearUserUnsavedInput() // U40-1: before the redirect
           router.replace(routes.landing())
         }
       }}

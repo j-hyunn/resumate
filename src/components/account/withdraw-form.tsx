@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { deleteAccountConfirmedAction } from "@/lib/data/actions"
 import { routes } from "@/lib/routes"
+import { clearUserUnsavedInput } from "@/components/common/clear-user-storage"
 import { signOutAction } from "./actions"
 
 export const WITHDRAW_CONFIRM_LABEL = "모든 데이터가 즉시 삭제되고 되돌릴 수 없다는 것을 이해했어요"
@@ -37,6 +38,7 @@ export async function signOutToLanding(router: ReturnType<typeof useRouter>) {
   } catch {
     // [UI-가정] sign-out failure is not surfaced (same as S-24 로그아웃)
   }
+  clearUserUnsavedInput() // U40-1: 로그아웃·탈퇴 → before the redirect
   router.replace(routes.landing())
 }
 
@@ -81,7 +83,8 @@ export function WithdrawForm({
       return
     }
     if (res.error === "account_deletion_incomplete") {
-      // 탈퇴 마무리 상태 — 셸 밖 경로 (A7, G-38)
+      // 탈퇴 마무리 상태 — 셸 밖 경로 (A7, G-38). The deletion has started: drop unsaved input now (U40-1)
+      clearUserUnsavedInput()
       router.replace(routes.withdrawFinalize(sim ? "deletion-incomplete" : previewState))
       return
     }

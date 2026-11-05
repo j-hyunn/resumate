@@ -27,6 +27,7 @@ import { isPeriodReversed } from "@/lib/data/row-save"
 import { createCareerItemAction, updateCareerItemAction, type NewCareerItem } from "./actions"
 import { nn } from "./form-parts"
 import { educationTypeOnSave, enrollmentStatusOnSave } from "./education-derive"
+import { afterCareerItemSaved } from "@/components/common/return-target"
 
 export type AddCareerKind = "experience" | "education" | "project"
 
@@ -193,6 +194,7 @@ export function AddCareerDialog({
   onOpenChange,
   onCreated,
   onSaved,
+  onCloseAutoFocus,
 }: {
   /** add mode; null = closed */
   kind?: AddCareerKind | null
@@ -201,12 +203,15 @@ export function AddCareerDialog({
   onOpenChange: (open: boolean) => void
   onCreated?: (item: { kind: AddCareerKind; id: string }) => void
   onSaved?: () => void
+  /** where focus goes on close (default: the element focused before opening) */
+  onCloseAutoFocus?: (e: Event) => void
 }) {
   const formKind = editing?.kind ?? kind ?? null
   return (
     <Dialog open={formKind !== null} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
+        onCloseAutoFocus={onCloseAutoFocus}
         className="flex max-h-[calc(100dvh-2rem)] w-[602px] flex-col gap-4 rounded-[20px] p-5 sm:max-w-[602px] lg:h-[calc(100dvh-200px)] lg:max-h-[840px]"
       >
         {/* key: every open starts from an empty (or the row's) form */}
@@ -256,11 +261,13 @@ function AddCareerForm({
           )
         }
         toast.success("저장했어요")
+        afterCareerItemSaved({ kind, id: editing.row.id, created: false })
         return void onSaved?.()
       }
       const result = await createCareerItemAction(toItem(kind, values), { client_id: clientId })
       if (!result.ok) return void toast.error("추가하지 못했어요. 입력한 내용을 확인해 주세요")
       toast.success(ADDED[kind])
+      afterCareerItemSaved({ kind, id: result.id, created: true })
       onCreated?.({ kind, id: result.id })
     } catch {
       toast.error("추가하지 못했어요. 잠시 후 다시 시도해 주세요")

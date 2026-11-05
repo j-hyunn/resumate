@@ -97,7 +97,7 @@ export function ConsentForm({
     <form onSubmit={submit} noValidate className="space-y-6">
       <fieldset className="space-y-3">
         <legend className="sr-only">동의 항목</legend>
-        {/* [UI-가정] "모두 동의" convenience row */}
+        {/* "모두 동의" row (02 S-03 v5.8 PT-5 — 만 14세 확인 포함) */}
         <Label className="flex items-center gap-3 rounded-md border p-3 text-base font-semibold">
           <Checkbox
             checked={all ? true : some ? "indeterminate" : false}
@@ -181,7 +181,7 @@ export function ConsentForm({
       {showMissing && missing.length > 0 ? (
         <p id={MISSING_ERROR_ID} role="alert" className="flex items-start gap-1.5 text-sm text-destructive">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {/* [UI-가정] */}
+          {/* 오류 문구 (02 S-03 v5.8 PT-5) */}
           필수 항목에 모두 동의해야 시작할 수 있어요 ({missing.join(", ")})
         </p>
       ) : null}

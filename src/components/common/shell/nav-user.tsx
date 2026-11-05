@@ -21,6 +21,7 @@ import { Switch } from "@/components/ui/switch"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { routes } from "@/lib/routes"
+import { clearUserUnsavedInput } from "@/components/common/clear-user-storage"
 import { shellSignOutAction } from "@/lib/data/actions"
 import { useResolvedTheme, useTheme } from "../theme"
 import { UserAvatar } from "./user-avatar"
@@ -52,6 +53,7 @@ export function useAccountSignOut() {
     } catch {
       // [UI-가정] S-24와 같이 실패해도 로그인 전 화면으로 나간다
     } finally {
+      clearUserUnsavedInput() // U40-1: before the redirect
       router.replace(routes.landing())
     }
   }, [router])

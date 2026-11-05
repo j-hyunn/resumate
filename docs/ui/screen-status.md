@@ -93,7 +93,7 @@
 - 법무 본문(`policy-content.ts`·`docs/legal/`)의 "자기소개서 초안/메모"는 개별 서류를 가리키는데 D-UX-23 용어와 다르다. 법무 문서는 바꾸지 않았다
 
 ## 백엔드 연결 대기 (36 런, 2026-11-05)
-> **2026-11-05 main 병합(#47·#49 R11) 뒤 연결함**: 스냅샷 필드(`interview-rows.ts`, 서버 `sessionProjectName`), `get_deletion_impact('application_project')`(`getApplicationDeletionImpact` → `getApplicationProjectDeletionImpact` 액션), `detached_interview_sessions`, 대화 DTO `turnFailure` → `turn_job`, 다시 보내기 라우트(서버 쪽만 바뀜), `p_client_id`(`career-v45-save.ts`가 새 페이지의 `client_id`를 `clientId`로 보냄), `ai_disclosures v2026-11-05`(버전 문자열 일치). mock 자기소개서 삭제도 남는 세션의 `application_project_id`를 null로 둔다. **아직 대기**: 아래 표의 `policy_versions` 2026-11-05 행 3개, 자소서 초안 기본 제목, AI-12 `GATE_FEATURE_LABEL`(백엔드). 해시 정규화(#10)는 백엔드가 공통 함수로 처리. lint·typecheck·build 통과, vitest 146 파일 2381건 모두 통과(36 런의 로컬 통합 테스트 4건 실패 해소). 브라우저 미확인.
+> **2026-11-05 main 병합(#47·#49 R11) 뒤 연결함**: 스냅샷 필드(`interview-rows.ts`, 서버 `sessionProjectName`), `get_deletion_impact('application_project')`(`getApplicationDeletionImpact` → `getApplicationProjectDeletionImpact` 액션), `detached_interview_sessions`, 대화 DTO `turnFailure` → `turn_job`, 다시 보내기 라우트(서버 쪽만 바뀜), `p_client_id`(`career-v45-save.ts`가 새 페이지의 `client_id`를 `clientId`로 보냄), `ai_disclosures v2026-11-05`(버전 문자열 일치). mock 자기소개서 삭제도 남는 세션의 `application_project_id`를 null로 둔다. 아래 표의 `policy_versions` 2026-11-05 행 3개·자소서 초안 기본 제목·AI-12 `GATE_FEATURE_LABEL`도 **백엔드 R12(`20261113001300`)로 처리됨**(원격 미반영). 해시 정규화(#10)는 백엔드가 공통 함수로 처리. lint·typecheck·build 통과, vitest 146 파일 2381건 모두 통과(36 런의 로컬 통합 테스트 4건 실패 해소). 브라우저 미확인.
 
 | 화면 ID | 데이터 함수 | 필요한 계약 (문서 위치) |
 |---|---|---|

@@ -264,7 +264,7 @@ describe("reply", () => {
     expect(turn).toContain("1) situation (상황) reason=gate_required");
     expect(turn).toContain("2) action (행동) reason=gate_required");
     expect(turn).toContain("notices: sensitive");
-    expect(turn).toContain("gate_feature_label: 자기소개서");
+    expect(turn).toContain("gate_feature_label: 자소서 문항 답변");
     expect(turn).toContain("can_apply: false");
     expect(turn).toContain("ready_to_return: false");
     expect(turn).toContain("last_message: true");

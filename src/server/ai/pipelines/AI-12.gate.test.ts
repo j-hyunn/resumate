@@ -95,7 +95,7 @@ describe("R-31 gate requirements in AI-12", () => {
     const ready = ctx({ gate: { feature: "cover_letter", missing: [] } });
     expect(ready.focus.readyToReturn).toBe(true);
     expect(replyUserBlocks(ready).at(-1)!.text).toContain("ready_to_return: true");
-    expect(replyUserBlocks(ready).at(-1)!.text).toContain("gate_feature_label: 자기소개서");
+    expect(replyUserBlocks(ready).at(-1)!.text).toContain("gate_feature_label: 자소서 문항 답변");
   });
 
   it("V-9 context is built from the user's messages only (no requirement text)", () => {

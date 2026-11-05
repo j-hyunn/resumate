@@ -5,7 +5,7 @@
  * 이동 줄 "← {프로젝트명} › {산출물 제목} › 산출물 상세", 머리(제목 입력 + ⋯ 삭제) + G-2 안내, 왼쪽 마크다운 본문,
  * 오른쪽 Resumate AI 패널(AI-13 본문 초안 제안 카드). 새 산출물(`project_deliverable_id = null`)은 첫 저장 또는 첫 AI
  * 메시지 때 `save_project_deliverable`로 행을 만들고 URL을 바꾼다(replace, `?state=` 유지). 행이 생기기 전에는 이동 줄
- * 현재 위치가 "새 산출물 추가"이고 머리 맨 위에 새 행 안내(new-row-notice)가 붙는다(33 런).
+ * 현재 위치가 "새 산출물 추가"다(33 런). 머리 맨 위 새 행 안내 배너는 두지 않는다(사용자 결정 2026-11-05).
  */
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -30,7 +30,7 @@ import {
 import { ReturnBanner } from "@/components/common/return-banner"
 import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
-import { CRUMB_CURRENT, NewRowNotice, firstSaveToast } from "@/components/career/new-row-notice"
+import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
 import { saveProjectDeliverableAction } from "@/lib/data/career-v45-actions"
 import {
   PAGE_LIMITS,
@@ -360,8 +360,6 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       </ShellBanners>
 
       <DocHead className="space-y-2" label="산출물 정보">
-        {/* 새 산출물: 행이 아직 없고 "저장하기"가 추가 동작임을 머리 맨 위에서 알린다 (33 런) */}
-        {isNew ? <NewRowNotice kind="deliverable" /> : null}
         <div className="flex items-start gap-2">
           <DocTitleInput
             ref={titleRef}

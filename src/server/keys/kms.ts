@@ -54,8 +54,9 @@ export function bindingOf(context: Pick<KmsContext, "userId" | "provider" | "key
 }
 
 /**
- * ⚠️ PRE-LAUNCH STAND-IN — REPLACE WITH A CLOUD KMS BEFORE LAUNCH (decisions B-2,
- * DM 2.11.2 `[가정]`, deployment checklist in _workspace/backend/S3b notes).
+ * LAUNCH KEK (decisions B-2 / §4.12 OD-L1, DM-16 · 2.11.1 · 2.11.2 v4.11): the env-var KEK `env-v1` is the
+ * KEK we launch with. Moving to a cloud KMS comes AFTER launch (post-launch task: a KMS adapter with this
+ * interface + a re-wrap script over `wrapped_dek` by `kek_id`; deployment checklist in _workspace/backend/S3b notes).
  *
  * The KEK is a 32-byte master key from an encrypted environment variable
  * (`AI_KEY_KEK_BASE64`, id `AI_KEY_KEK_ID`). This keeps the database copy

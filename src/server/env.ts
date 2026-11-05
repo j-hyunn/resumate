@@ -54,9 +54,9 @@ export const ServerEnvSchema = PublicEnvSchema.extend({
   AI_DEV_PROVIDER: z.enum(AI_PROVIDERS).optional(),
   AI_DEV_API_KEY: z.string().min(1).optional(),
   AI_DEV_CONNECTION_TIER: z.enum(CONNECTION_TIERS).optional(),
-  // BYOK key-encryption key (DM 2.11.2, decisions B-2). PRE-LAUNCH STAND-IN:
-  // a 32-byte master key (base64) from an encrypted env var + its id/version
-  // written to ai_provider_keys.kek_id. Replace with a cloud KMS before launch
+  // BYOK key-encryption key (DM 2.11.2, decisions B-2 / OD-L1). The launch KEK
+  // (`env-v1`): a 32-byte master key (base64) from an encrypted env var + its
+  // id/version written to ai_provider_keys.kek_id. Cloud KMS comes after launch
   // (src/server/keys/kms.ts). Optional here so pages don't depend on it; key
   // registration and AI runs fail closed (internal_error) when it's missing.
   AI_KEY_KEK_BASE64: z

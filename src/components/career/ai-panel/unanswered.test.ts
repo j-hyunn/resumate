@@ -32,7 +32,7 @@ describe("OD-P11 reopenedTurn", () => {
     expect(r).toMatchObject({ kind: "failed", user: u, job: { status: "failed", error_code: "rate_limited" } })
   })
 
-  it("[UI-가정] a failed reply with unknown job status (real DTO, 연결 대기) → unanswered", () => {
+  it("a failed reply with unknown job status (no job row, turnFailure null) → unanswered", () => {
     const u = msg("user")
     expect(reopenedTurn([u, msg("assistant", { status: "failed" })], idle)).toEqual({ kind: "unanswered", user: u })
   })

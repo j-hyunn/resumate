@@ -61,18 +61,18 @@ export type ProviderInput = z.input<typeof ProviderInput>;
 export const ProviderTierInput = z.object({ provider, connectionTier });
 export type ProviderTierInput = z.input<typeof ProviderTierInput>;
 
-/** S-41 ② / C-21 consent (F-AI-04). Free tier needs the separate acknowledgement (F-AI-04 (3)). */
-export const RecordAiDataUseConsentInput = z
-  .object({
-    provider,
-    connectionTier,
-    disclosureVersion,
-    freeTierAcknowledged: z.boolean().default(false),
-  })
-  .refine((v) => v.connectionTier !== "free" || v.freeTierAcknowledged, {
-    message: "free tier requires the separate acknowledgement",
-    path: ["freeTierAcknowledged"],
-  });
+/**
+ * S-41 ② / C-21 consent (F-AI-04). (R11 OD-L2, R-OD-15) The separate free-tier acknowledgement is needed only
+ * when the consented disclosure row has `requires_free_tier_ack` (v2026-11-05: Gemini free only) — that is
+ * data, not shape, so the service checks it against the disclosure (`free_tier_acknowledgement_required`, 400)
+ * and the DB trigger enforces it again. The contract no longer requires it for every free tier.
+ */
+export const RecordAiDataUseConsentInput = z.object({
+  provider,
+  connectionTier,
+  disclosureVersion,
+  freeTierAcknowledged: z.boolean().default(false),
+});
 export type RecordAiDataUseConsentInput = z.input<typeof RecordAiDataUseConsentInput>;
 
 // ---------------- read models ----------------

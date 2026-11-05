@@ -17,6 +17,7 @@ import {
   jobsOfSession,
   QUESTIONS_JOB_TYPE,
   resolveSessionRun,
+  sessionProjectName,
   type InterviewJobRow,
 } from "@/server/services/interview/view"
 import type {
@@ -32,12 +33,12 @@ import type {
 } from "@/types/db"
 import { applicationDisplayName } from "./labels"
 import { hasNewResult } from "./interview-grading"
-import { deletedApplicationName, isDeletedApplicationSegment } from "./interview-session-view"
+import { isDeletedApplicationSegment } from "./interview-session-view"
 import type { InterviewSessionDetail, InterviewSessionRow, ListSessionsFilter } from "./interviews"
 
 /** Everything the UI type has except the two jsonb reports, which no screen reads (they stay null). */
 const SESSION_SELECT =
-  "id, user_id, created_at, updated_at, application_project_id, insight_id, source_session_id, interview_type, question_count, data_sufficiency, weak_requirement_ids, status, generation_status, answered_count, unanswered_count, submitted_at, completed_at, result_viewed_at, abandoned_at, last_activity_at, career_snapshot_hash, score_status, score_value, score_max, score_method_version, score_rationale, score_counted_count, question_provider, question_model, evaluation_provider, evaluation_model"
+  "id, user_id, created_at, updated_at, application_project_id, company_name_snapshot, position_title_snapshot, insight_id, source_session_id, interview_type, question_count, data_sufficiency, weak_requirement_ids, status, generation_status, answered_count, unanswered_count, submitted_at, completed_at, result_viewed_at, abandoned_at, last_activity_at, career_snapshot_hash, score_status, score_value, score_max, score_method_version, score_rationale, score_counted_count, question_provider, question_model, evaluation_provider, evaluation_model"
 
 /** The user-session column grant of interview_questions (S8 tables migration). */
 const QUESTION_SELECT =
@@ -99,26 +100,22 @@ function toRow(
   const decision = decisions.get(s.id)
   const finished = run.status === "evaluation_failed" || run.status === "completed"
   const tierOf = (type: string) => (sessionJobs.find((j) => j.job_type === type)?.model_tier ?? null) as ModelTier | null
-  // OD-I6 (DM v4.11 11.6 #1): application_project_id becomes nullable once the backend migration lands — the
-  // generated type still says string, so read it as nullable here.
-  // 연결 대기 (DM v4.11 11.6 #1~#6): company_name_snapshot / position_title_snapshot are not in SESSION_SELECT
-  // yet (the columns don't exist); add them to SESSION_SELECT when the migration and generated types land.
-  const apId = s.application_project_id as string | null
-  const snapshot = s as SessionRowData & { company_name_snapshot?: string | null; position_title_snapshot?: string | null }
-  const deleted = apId === null
+  // OD-I6 (DM v4.11, R11): a detached session has application_project_id null + snapshot names
+  const deleted = s.application_project_id === null
   return {
     ...s,
-    application_project_id: apId ?? "",
+    application_project_id: s.application_project_id ?? "",
     application_deleted: deleted,
-    company_name_snapshot: snapshot.company_name_snapshot ?? null,
-    position_title_snapshot: snapshot.position_title_snapshot ?? null,
+    company_name_snapshot: s.company_name_snapshot ?? null,
+    position_title_snapshot: s.position_title_snapshot ?? null,
     question_validation_report: null,
     question_usage: null,
     career_snapshot_hash: null, // QA-W5-10: server bookkeeping, no screen reads it
     // Effective values: a `generating` / `evaluating` row whose job ended reads as failed (view.ts).
     status: run.status,
     generation_status: run.generationStatus,
-    application_name: deleted ? deletedApplicationName(snapshot.company_name_snapshot, snapshot.position_title_snapshot) : (names.get(apId) ?? ""),
+    // OD-I6: detached session → snapshot name (server rule, view.ts sessionProjectName)
+    application_name: sessionProjectName(s, names, ""),
     running_job_id: run.activeJob?.jobId ?? null,
     question_model_tier: tierOf(QUESTIONS_JOB_TYPE) ?? (s.question_provider ? "default" : null),
     evaluation_model_tier: tierOf(EVALUATION_JOB_TYPE) ?? (s.evaluation_provider ? "default" : null),
@@ -132,7 +129,7 @@ function toRow(
 async function toRows(db: UserSupabaseClient, sessions: readonly SessionRowData[]): Promise<InterviewSessionRow[]> {
   const ids = sessions.map((s) => s.id)
   const [names, jobs, decisions, counts] = await Promise.all([
-    loadNames(db, sessions.map((s) => s.application_project_id)),
+    loadNames(db, sessions.flatMap((s) => (s.application_project_id ? [s.application_project_id] : []))),
     loadJobs(db, ids),
     // Only a submitted session can have a decision other than `none`.
     loadGradingDecisions(db, sessions.filter((s) => s.submitted_at !== null).map((s) => s.id)),

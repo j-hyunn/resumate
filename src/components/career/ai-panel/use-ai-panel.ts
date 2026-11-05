@@ -509,8 +509,8 @@ export function useAiPanel(opts: AiPanelOptions): AiPanelController {
                 setPhase("idle")
                 toast(PANEL_COPY.turnInProgress)
               } else if (refusal === "nothing_to_retry") {
-                // [UI-가정] the server found nothing to answer again (e.g. the route doesn't take a user-only last message
-                // yet — 연결 대기 DM v4.11 11.6 #11): give the text back so it can be sent as a new message
+                // U36-3 (UX v5.14): the server found nothing to answer again (R11 accepts a user-only last message,
+                // so this is the rare "already answered elsewhere" case): give the text back so it can be sent as new
                 setPhase("idle")
                 if (retry) setInput((v) => (v.trim() ? v : content))
                 toast(PANEL_COPY.nothingToRetry)

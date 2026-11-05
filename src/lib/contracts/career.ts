@@ -299,6 +299,14 @@ export const AppliedDeliverableProposal = z.object({ writingChatId: uuid, rev, m
  */
 export const SaveProjectPageInput = z.object({
   projectId: uuid.nullable(),
+  /**
+   * (R11 OD-C6, DM 2.5.1 · §7 ③ R-OD-9) Create-only idempotency key → `p_client_id`: the new page makes this
+   * id once (also for the first AI message, which saves the page first) and sends it with every create retry.
+   * Same user's row with that id → saved with the edit rules (no second row, re-sent proposals come back
+   * `skipped` `already_applied`); none → inserted with this id; someone else's id → `not_found`.
+   * Ignored when `projectId` is set.
+   */
+  clientId: uuid.optional(),
   values: ProjectPageValues,
   expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
   appliedProposals: z.array(AppliedProjectProposal).max(PAGE_SAVE_MAX_APPLIED).optional(),
@@ -312,6 +320,8 @@ export type SaveProjectPageInput = z.input<typeof SaveProjectPageInput>;
 export const SaveProjectDeliverableInput = z.object({
   projectDeliverableId: uuid.nullable(),
   projectId: uuid.nullable(),
+  /** (R11 OD-C6) Same create-only `p_client_id` rule as `SaveProjectPageInput.clientId` (ignored on edit). */
+  clientId: uuid.optional(),
   title: z.string().max(PAGE_TEXT_CAP),
   body: z.string().max(PAGE_TEXT_CAP * 2).nullable(),
   expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
@@ -434,7 +444,14 @@ export const AffectedApplicationProject = z.object({
 /** RPC `get_deletion_impact` jsonb for career rows (DM §4.2). Snake_case as the RPC returns it. */
 export const CareerDeletionImpact = z.object({
   cascade: DeletionCascadeCounts,
-  affected_results: z.object({ by_application_project: z.array(AffectedApplicationProject) }),
+  affected_results: z.object({
+    by_application_project: z.array(AffectedApplicationProject),
+    /**
+     * (R11 OD-I6, DM 2.7.2) Affected interview sessions kept after their application project was deleted
+     * (no project, so not in `by_application_project`). Screen: "삭제된 자기소개서의 면접 기록 {n}개".
+     */
+    detached_interview_sessions: count,
+  }),
 });
 /**
  * `entity_type = 'writing_chat'` (DM §4.2 v4.4): no result impact. `last_applied_at` non-null →
@@ -445,6 +462,17 @@ export const WritingChatDeletionImpact = z.object({
   last_applied_at: z.string().nullable(),
 });
 export type CareerDeletionImpact = z.infer<typeof CareerDeletionImpact>;
+
+/**
+ * (R11 OD-I6, DM 2.7.2) `get_deletion_impact('application_project', id)` jsonb — C-05 for 자기소개서 삭제.
+ * `cascade.interview_sessions` = sessions deleted with it (not `completed`; in-flight jobs get a cancel request),
+ * `kept.interview_sessions` = `completed` sessions kept read-only ("끝난 모의 면접 {n}개는 기록에 남아요").
+ */
+export const ApplicationProjectDeletionImpact = z.object({
+  cascade: z.object({ insights: count, drafts: count, interview_sessions: count, stage_events: count }),
+  kept: z.object({ interview_sessions: count }),
+});
+export type ApplicationProjectDeletionImpact = z.infer<typeof ApplicationProjectDeletionImpact>;
 export type WritingChatDeletionImpact = z.infer<typeof WritingChatDeletionImpact>;
 export const DeletionImpact = z.union([CareerDeletionImpact, WritingChatDeletionImpact]);
 export type DeletionImpact = z.infer<typeof DeletionImpact>;

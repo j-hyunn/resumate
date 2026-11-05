@@ -149,12 +149,16 @@ export type SubmitInterviewSessionResponse = {
  * `POST /api/interview-sessions/{id}/evaluation/retry` (다시 채점, S-22).
  * Only when the session is `evaluation_failed`, or `completed` with
  * `not_scored` answers; re-evaluates only the failed answers and the summary.
- * 409 `interview_evaluation_not_retryable` / connection codes; 404.
+ * 409 `interview_evaluation_not_retryable` / `interview_session_read_only` (R11 OD-I6) / connection codes; 404.
  */
 export type RetryInterviewEvaluationResponse = { sessionId: string; jobId: string; inProgress: boolean };
 
-/** 다시 채점 refusals (HTTP 409, DM 2.7.1). `input_only` has `details.cause`. */
-export const INTERVIEW_EVALUATION_REFUSAL_CODES = ["interview_evaluation_not_retryable", "interview_evaluation_input_only"] as const;
+/**
+ * 다시 채점 refusals (HTTP 409, DM 2.7.1). `input_only` has `details.cause`.
+ * (R11 OD-I6, DM 2.7.2) `interview_session_read_only`: the session's application project was deleted —
+ * also refused by submit / 질문 다시 만들기 (always before the connection gate, no job).
+ */
+export const INTERVIEW_EVALUATION_REFUSAL_CODES = ["interview_evaluation_not_retryable", "interview_evaluation_input_only", "interview_session_read_only"] as const;
 export type InterviewEvaluationRefusalCode = (typeof INTERVIEW_EVALUATION_REFUSAL_CODES)[number];
 
 /**
@@ -210,7 +214,10 @@ export type InterviewScoreView<S extends string> = {
 };
 export type SessionScoreView = InterviewScoreView<SessionScoreStatus> & {
   countedCount: number | null;
-  /** C-17: `not_scored` with `unansweredCount = questionCount` → "답변이 없어 평가할 내용이 없어요". */
+  /**
+   * C-17: `unansweredCount = questionCount` → "답변이 없어 평가할 내용이 없어요". (R11 OD-I1 / R-OD-1) Such a session is
+   * now `scored` with value 0 (d14.v1); sessions written before stay `not_scored` — both set this flag.
+   */
   noAnswers: boolean;
 };
 export type AnswerScoreView = InterviewScoreView<AnswerScoreStatus>;
@@ -246,9 +253,15 @@ export type InterviewJobFailure = AiFailure & {
 /** One row of S-37 / S-20 session lists. */
 export type InterviewSessionListItem = {
   id: string;
-  applicationProjectId: string;
-  /** application_projects display name ("회사명 – 포지션명" fallback). */
+  /** (R11 OD-I6) null = the application project was deleted; the kept `completed` session is read-only. */
+  applicationProjectId: string | null;
+  /**
+   * application_projects display name ("회사명 – 포지션명" fallback). (R11 OD-I6, DM §7 R-OD-12) For a detached
+   * session: the copied "{company_name_snapshot} – {position_title_snapshot}", one of them, or "삭제된 자기소개서".
+   */
   applicationProjectName: string;
+  /** (R11 OD-I6) "자기소개서 삭제됨": `applicationProjectId === null` — no 다시 채점 / 새 면접 / project link. */
+  readOnly: boolean;
   interviewType: InterviewType;
   questionCount: number;
   dataSufficiency: DataSufficiency;
@@ -322,8 +335,12 @@ export type InterviewAnswerView = {
 
 export type InterviewSessionHeader = {
   id: string;
-  applicationProjectId: string;
+  /** (R11 OD-I6) null = application project deleted (read-only session, S-22 / S-33). */
+  applicationProjectId: string | null;
+  /** Same name rule as the list item (snapshot names for a detached session). */
   applicationProjectName: string;
+  /** (R11 OD-I6) `applicationProjectId === null`. */
+  readOnly: boolean;
   interviewType: InterviewType;
   questionCount: number;
   dataSufficiency: DataSufficiency;
@@ -452,6 +469,8 @@ export type InterviewResultView = {
 export const ListInterviewSessionsInput = z
   .object({
     applicationProjectId: uuid.optional(),
+    /** (R11 OD-I6 / R-OD-12) S-37 "삭제된 자기소개서" filter: only sessions with `application_project_id is null`. */
+    detached: z.boolean().optional(),
     interviewType: InterviewTypeSchema.optional(),
     status: z.enum(INTERVIEW_SESSION_STATUSES).optional(),
     /** 실행 공급자 필터 [가정]: matches either shown provider. */

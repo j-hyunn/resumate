@@ -172,7 +172,7 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
 update public.profiles set active_ai_provider = 'gemini', display_name = 'A'
  where id = 'a0000000-0000-0000-0000-000000000001';
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true);
+values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
   ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-04', true),
   ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-04', true);

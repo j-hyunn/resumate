@@ -16,8 +16,8 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('a0000000-9999-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'ag01', 'valid'),
   ('a0000000-9999-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'valid');
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
-  ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true),
-  ('a0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29', false);
+  ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true),
+  ('a0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05', false);
 update public.profiles set active_ai_provider = 'gemini' where id = 'a0000000-0000-0000-0000-000000000001';
 
 create function w0t.sid(n int) returns uuid language sql immutable as

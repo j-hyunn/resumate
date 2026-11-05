@@ -1271,7 +1271,7 @@ export interface DeletionImpact {
     }>
     /**
      * OD-I6 / R-OD-5 (DM v4.11): completed sessions whose 자기소개서 was already deleted and that cite this item.
-     * 연결 대기 (DM v4.11 11.6 #1~#6): absent until the RPC returns it → treated as 0.
+     * R11: returned by get_deletion_impact (contracts CareerDeletionImpact).
      */
     detached_interview_sessions?: number
   }

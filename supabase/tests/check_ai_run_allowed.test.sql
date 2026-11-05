@@ -15,9 +15,9 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('aaaaaaaa-9999-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'invalid'),
   ('bbbbbbbb-9999-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'bg01', 'valid');
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true),
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29', false),
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-10-29', true);
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05', false),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.ai_jobs (id, user_id, job_type, target_type, target_id, provider, model_tier, connection_tier, status, heartbeat_at) values
   ('aaaaaaaa-7777-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'insight', 'application_project', gen_random_uuid(), 'gemini', 'default', 'free', 'running', now()),
   ('aaaaaaaa-7777-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'insight', 'application_project', gen_random_uuid(), 'openai', 'default', 'paid', 'running', now()),

@@ -4,8 +4,8 @@
  * (`@/lib/contracts/career`, camelCase). Unit-tested in career-v45-save.test.ts; `career-v45.ts` calls the
  * RPCs through `./page-save-v45`.
  *
- * - `client_id` of a new page is not sent: the RPCs create the row with their own id. A retry after a lost
- *   response can therefore create a second row ([가정] R5 wiring, spec-gaps R5-W-1).
+ * - `client_id` of a new page goes out as `clientId` → `p_client_id` (R11 OD-C6, DM 2.5.1): a retry after a lost
+ *   response finds the same row instead of creating a second one. Ignored on edit (row id set).
  * - `p_applied_proposals` is recorded by the RPC: `applied` / `skipped` come back as the RPC judged them.
  */
 import type { z } from "zod"
@@ -71,6 +71,7 @@ export function toSaveProjectPageInput(input: SaveProjectPageInput): z.input<typ
   const v = input.values
   return {
     projectId: input.project_id,
+    ...(!input.project_id && input.client_id ? { clientId: input.client_id } : {}),
     values: {
       name: v.name.trim(),
       experienceId: v.experience_id,
@@ -107,6 +108,7 @@ export function fromSaveProjectPageResult(r: ContractPageResult): Extract<SavePr
 export function toSaveProjectDeliverableInput(input: SaveProjectDeliverableInput): z.input<typeof ContractDeliverableInput> {
   return {
     projectDeliverableId: input.project_deliverable_id,
+    ...(!input.project_deliverable_id && input.client_id ? { clientId: input.client_id } : {}),
     projectId: input.project_id,
     title: input.title.trim(),
     body: input.body,

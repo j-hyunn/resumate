@@ -39,11 +39,15 @@ export type InterviewJobType = typeof QUESTIONS_JOB_TYPE | typeof EVALUATION_JOB
 
 /** interview_sessions columns every read selects (never hidden question columns). */
 export const SESSION_COLUMNS =
-  "id, application_project_id, interview_type, question_count, data_sufficiency, weak_requirement_ids, status, generation_status, answered_count, unanswered_count, submitted_at, completed_at, result_viewed_at, abandoned_at, last_activity_at, created_at, score_status, score_value, score_max, score_method_version, score_rationale, score_counted_count, question_provider, question_model, evaluation_provider, evaluation_model";
+  "id, application_project_id, company_name_snapshot, position_title_snapshot, interview_type, question_count, data_sufficiency, weak_requirement_ids, status, generation_status, answered_count, unanswered_count, submitted_at, completed_at, result_viewed_at, abandoned_at, last_activity_at, created_at, score_status, score_value, score_max, score_method_version, score_rationale, score_counted_count, question_provider, question_model, evaluation_provider, evaluation_model";
 
 export type SessionRow = {
   id: string;
-  application_project_id: string;
+  /** (R11 OD-I6) null = the application project was deleted (kept `completed` session, read-only). */
+  application_project_id: string | null;
+  /** (R11 OD-I6) JD company / position copied when the project was deleted (null while attached). */
+  company_name_snapshot: string | null;
+  position_title_snapshot: string | null;
   interview_type: string;
   question_count: number;
   data_sufficiency: string;
@@ -221,7 +225,8 @@ export function sessionScoreOf(row: Pick<SessionRow, "score_status" | "score_val
     methodVersion: row.score_method_version,
     rationale: row.score_rationale,
     countedCount: row.score_counted_count,
-    noAnswers: status === "not_scored" && row.question_count > 0 && row.unanswered_count === row.question_count,
+    // R11 OD-I1 / R-OD-1: an all-unanswered session is now `scored` 0 (d14.v1), older rows `not_scored` — both count.
+    noAnswers: (status === "scored" || status === "not_scored") && row.question_count > 0 && row.unanswered_count === row.question_count,
   };
 }
 
@@ -243,11 +248,31 @@ export function dataSufficiencyOf(v: unknown): DataSufficiency {
   return oneOf(DATA_SUFFICIENCIES, v) ?? "none";
 }
 
+/** (R11 OD-I6, DM §7 R-OD-12) Name of a detached session: both copies → "회사 – 포지션", one → that, none → this. */
+export const DETACHED_SESSION_FALLBACK_NAME = "삭제된 자기소개서";
+
+export function detachedSessionName(row: Pick<SessionRow, "company_name_snapshot" | "position_title_snapshot">): string {
+  const c = row.company_name_snapshot?.trim() || null;
+  const p = row.position_title_snapshot?.trim() || null;
+  if (c && p) return `${c} – ${p}`;
+  return c ?? p ?? DETACHED_SESSION_FALLBACK_NAME;
+}
+
+/**
+ * The name shown for a session: the project's display name (from `names`, keyed by project id) or, for a detached
+ * session, the snapshot name. `fallback` = attached session whose project row wasn't readable (race).
+ */
+export function sessionProjectName(row: Pick<SessionRow, "application_project_id" | "company_name_snapshot" | "position_title_snapshot">, names: ReadonlyMap<string, string>, fallback = "자기소개서"): string {
+  if (row.application_project_id === null) return detachedSessionName(row);
+  return names.get(row.application_project_id) ?? fallback;
+}
+
 export function toSessionHeader(row: SessionRow, projectName: string, run: ResolvedRun): InterviewSessionHeader {
   return {
     id: row.id,
     applicationProjectId: row.application_project_id,
     applicationProjectName: projectName,
+    readOnly: row.application_project_id === null,
     interviewType: interviewTypeOf(row.interview_type),
     questionCount: row.question_count,
     dataSufficiency: dataSufficiencyOf(row.data_sufficiency),
@@ -273,6 +298,7 @@ export function toListItem(row: SessionRow, projectName: string, jobs: readonly 
     id: row.id,
     applicationProjectId: row.application_project_id,
     applicationProjectName: projectName,
+    readOnly: row.application_project_id === null,
     interviewType: interviewTypeOf(row.interview_type),
     questionCount: row.question_count,
     dataSufficiency: dataSufficiencyOf(row.data_sufficiency),

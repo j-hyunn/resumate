@@ -37,7 +37,11 @@ import * as interviewActions from "@/server/actions/interview"
 import { interviewStartDeps } from "@/server/interview-routes"
 import { INTERVIEW_INSUFFICIENT_DATA_MESSAGE, restartInterviewSession as restartInterviewSessionService, startInterviewSession as startInterviewSessionService, submitInterviewSession as submitInterviewSessionService } from "@/server/services/interview/start"
 
-export interface InterviewSessionRow extends InterviewSession, DeletedApplicationFields {
+export interface InterviewSessionRow
+  extends Omit<InterviewSession, "application_project_id" | "company_name_snapshot" | "position_title_snapshot">,
+    DeletedApplicationFields {
+  /** "" for a detached (자기소개서 삭제됨) session — read `application_deleted` instead (OD-I6) */
+  application_project_id: string
   /**
    * application_projects.name for S-37 rows. OD-I6 자기소개서 삭제됨 → the snapshot name (R-OD-12,
    * deletedApplicationName). `application_deleted` / `*_snapshot` come from DeletedApplicationFields.
@@ -74,7 +78,7 @@ async function realStartDeps() {
 
 function row(db: MockDb, s: MockDb["interview_sessions"][number]): InterviewSessionRow {
   const ap = db.application_projects.find((a) => a.id === s.application_project_id)
-  // OD-I6 (mock): the store keeps the deleted project's id on a kept session (the row type has no null);
+  // OD-I6 (mock): a kept session may still hold the deleted project's id (older fixtures) or null;
   // "deleted" = that project is gone. The real branch reads application_project_id is null.
   const deleted = !ap
   const job = [...db.ai_jobs]
@@ -86,6 +90,7 @@ function row(db: MockDb, s: MockDb["interview_sessions"][number]): InterviewSess
       .find((j) => j.target_id === s.id && j.job_type === type && typeof j.params?.answer_id !== "string")
   return {
     ...s,
+    application_project_id: s.application_project_id ?? "",
     application_name: ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : deletedApplicationName(s.company_name_snapshot, s.position_title_snapshot),
     application_deleted: deleted,
     company_name_snapshot: s.company_name_snapshot ?? null,
@@ -162,7 +167,7 @@ export async function getInterviewSession(applicationProjectId: string, sessionI
       const s = db.interview_sessions.find(
         (x) =>
           x.id === sessionId &&
-          (isDeletedApplicationSegment(applicationProjectId) ? !apExists(x.application_project_id) : x.application_project_id === applicationProjectId),
+          (isDeletedApplicationSegment(applicationProjectId) ? !x.application_project_id || !apExists(x.application_project_id) : x.application_project_id === applicationProjectId),
       )
       if (!s) return null
       const questions = db.interview_questions
@@ -272,6 +277,8 @@ export async function startInterviewSession(input: {
         created_at: now,
         updated_at: now,
         application_project_id: input.application_project_id,
+        company_name_snapshot: null, // R11 최소 수정 (OD-I6 columns)
+        position_title_snapshot: null,
         insight_id: null,
         source_session_id: null,
         interview_type: input.interview_type,

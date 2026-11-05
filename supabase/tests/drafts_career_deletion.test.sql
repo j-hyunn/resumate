@@ -84,7 +84,8 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select is(public.get_deletion_impact('project_deliverable', 'a0000000-4444-0000-0000-000000000001') -> 'affected_results',
           '{"by_application_project": [
              {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
-              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}]}'::jsonb,
+              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}],
+            "detached_interview_sessions": 0}'::jsonb,
           'impact: deliverable -> Q5 (evidence)');
 select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000003') -> 'affected_results' -> 'by_application_project',
           '[{"name": "가 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,

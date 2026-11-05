@@ -70,10 +70,11 @@ export function NewResultDot({ className }: { className?: string }) {
  * OD-I6 자기소개서 삭제됨 → always S-22 (read-only) at `/interviews/{sessionId}/result` (U36-1, under 모의 면접).
  */
 export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status"> & DeletedApplicationFields): string {
-  if (isApplicationDeleted(s)) return routes.interviewDeletedResult(s.id)
+  if (isApplicationDeleted(s) || !s.application_project_id) return routes.interviewDeletedResult(s.id)
+  const projectId = s.application_project_id
   return s.status === "in_progress" || s.status === "abandoned"
-    ? routes.interviewSession(s.application_project_id, s.id)
-    : routes.interviewResult(s.application_project_id, s.id)
+    ? routes.interviewSession(projectId, s.id)
+    : routes.interviewResult(projectId, s.id)
 }
 
 /** OD-I6 표식 "자기소개서 삭제됨" (S-37 행, S-22 머리) */

@@ -329,8 +329,7 @@ export interface WritingChatMessageView {
    * Assistant `failed` rows only: how the turn's job ended (AI v4.11 R-OD-8 — the message status alone can't tell):
    * `canceled` = the user stopped it → "답을 받지 못한 메시지" (OD-P11); `failed` = a real failure → C-20 실패한 턴.
    * Absent / null = unknown.
-   * // 연결 대기 (DM v4.11 11.6 #11·#15): the chat detail DTO doesn't carry the job status / cause yet — the real
-   * path leaves this unset (the panel then shows the neutral "답을 받지 못한 메시지" line). The mock fills it.
+   * Real path: `WritingChatMessageDto.turnFailure` (R11, DM v4.11 11.6 #15); the mock fills it the same way.
    */
   turn_job?: TurnJobEnd | null
 }

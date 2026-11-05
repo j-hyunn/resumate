@@ -1217,6 +1217,8 @@ export function createFixtures(): MockDb {
   ): InterviewSession => ({
     ...base(IDS.ses(n), 10 - n, 0),
     application_project_id: IDS.ap(apN),
+    company_name_snapshot: null, // R11 최소 수정 (OD-I6 columns)
+    position_title_snapshot: null,
     insight_id: null,
     source_session_id: null,
     interview_type: type,

@@ -8,6 +8,7 @@ import {
   type ProjectSourceField,
   type StoredFact,
 } from "../schemas/deliverable-draft";
+import { BODY_HASH_PREFIX, normalizeBodyForHash } from "@/lib/body-hash";
 import { sha256Hex } from "../hash";
 import { detectSensitive, isDelegationRequest, type V9Message } from "../validation/v9";
 import {
@@ -184,9 +185,13 @@ export function normalizeFactAlias(raw: string): string {
   return m ? `F${Number(m[1])}` : raw.trim();
 }
 
-/** `base_body_hash` (DM 2.5.0): "sha256:" + hex of the exact UTF-8 body string (no normalization). */
+/**
+ * `base_body_hash` (DM 2.5.0, v4.11 OD-P5): "sha256:" + hex of the whitespace-normalized UTF-8 body. The
+ * normalization is the shared `normalizeBodyForHash` (src/lib/body-hash.ts) the screen also uses through
+ * `computeBodyHash`; this sync variant only swaps the digest primitive for `node:crypto`.
+ */
 export function bodyHash(body: string): string {
-  return `sha256:${sha256Hex(body)}`;
+  return `${BODY_HASH_PREFIX}${sha256Hex(normalizeBodyForHash(body))}`;
 }
 
 /** Code-point length (matches Postgres char_length used by the RPCs). */

@@ -31,6 +31,20 @@ const FREE: ProviderContext = { provider: "gemini", connectionTier: "free", keyS
 const KEY = "sk-ant-test-secret-key-0001";
 /** Id the in-memory chat gives the first appended message. */
 const FIRST_USER_MSG = "00000000-0000-4000-8000-000000000001";
+/** A user message whose reply row was never created (OD-P11). */
+const UNANSWERED = {
+  id: "00000000-0000-4000-8000-0000000000e2",
+  sequence: 2,
+  role: "user" as const,
+  content: "답 없는 질문",
+  status: "done" as const,
+  aiJobId: null,
+  provider: null,
+  model: null,
+  modelTier: null,
+  connectionTier: null,
+  createdAt: "",
+};
 
 const draftWith = (userMessageId: string) => ({
   schema_version: 3,
@@ -327,6 +341,60 @@ describe("AI-12 turn — draftStatus and orphaned replies (QA-S4-04 / 05)", () =
   });
 });
 
+describe("AI-12 turn — resend for an unanswered user message (v4.11 OD-P11)", () => {
+  const withUnanswered = (t: ReturnType<typeof setup>, messageCount = 1) => {
+    t.chats.chat.messages.push({ ...UNANSWERED });
+    t.chats.chat.messageCount = messageCount;
+  };
+
+  it("retry=1 answers the last user message: a new assistant row, the user message is not re-created", async () => {
+    const t = setup({ reply: [{ json: "늦은 응답" }], extract: [{ json: null }] });
+    withUnanswered(t);
+    const { prepared, events } = await runFull(t.deps, null);
+    expect(prepared.kind).toBe("ready");
+    expect(t.chats.calls).not.toContain("appendUserMessage");
+    expect(types(events)).toEqual(["turn_started", "reply_delta", "reply_done", "turn_done"]);
+    const started = events[0] as Extract<WritingChatTurnEvent, { type: "turn_started" }>;
+    expect(started.retry).toBe(true);
+    expect(started.userMessage.id).toBe(UNANSWERED.id);
+    // greeting + the one user message + the new reply; the reply slot counts once.
+    expect(t.chats.chat.messages.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(t.chats.chat.messages.at(-1)).toMatchObject({ role: "assistant", sequence: 3, status: "done" });
+    expect(t.chats.chat.messages.at(-1)!.id).not.toBe(UNANSWERED.id);
+    expect(t.chats.chat.messageCount).toBe(2);
+    expect(t.store.jobs.get(started.jobId)).toMatchObject({ status: "succeeded" });
+  });
+
+  it("a second resend after that reply failed reuses the failed row (no third message)", async () => {
+    const t = setup({ reply: [{ error: "stalled" }, { json: "다시" }], extract: [{ json: null }, { json: null }] });
+    withUnanswered(t);
+    await runFull(t.deps, null);
+    const failed = t.chats.chat.messages.at(-1)!;
+    expect(failed).toMatchObject({ role: "assistant", status: "failed" });
+    expect(t.chats.chat.messageCount).toBe(2);
+    await runFull(t.deps, null);
+    expect(t.chats.chat.messages.at(-1)).toMatchObject({ id: failed.id, status: "done" });
+    expect(t.chats.chat.messageCount).toBe(2);
+  });
+
+  it("in-progress turn check is unchanged", async () => {
+    const t = setup({ reply: [{ hang: true }], extract: [{ hang: true }] });
+    withUnanswered(t);
+    const first = await prepareTurn(t.deps, { chatId: CHAT, content: null, requestedSlot: null });
+    expect(first.kind).toBe("ready");
+    await expect(prepareTurn(t.deps, { chatId: CHAT, content: null, requestedSlot: null })).rejects.toMatchObject({ code: "turn_in_progress" });
+  });
+
+  it("limit is still enforced by begin_assistant_message: refused → job canceled, no call", async () => {
+    const t = setup({});
+    withUnanswered(t, 40);
+    await expect(prepareTurn(t.deps, { chatId: CHAT, content: null, requestedSlot: null })).rejects.toMatchObject({ code: "message_limit_reached" });
+    expect([...t.store.jobs.values()][0]).toMatchObject({ status: "canceled" });
+    expect(t.usage.records).toHaveLength(0);
+    expect(t.chats.chat.messages.at(-1)!.id).toBe(UNANSWERED.id);
+  });
+});
+
 describe("AI-12 turn — free tier (sequential, C-12)", () => {
   it("reply first, then extract after the call spacing", async () => {
     const t = setup({ context: FREE, reply: [{ json: "질문" }], extract: [{ json: draftWith(FIRST_USER_MSG) }] });
@@ -397,8 +465,18 @@ describe("AI-12 turn — gates and limits", () => {
   it("closed chat and nothing to resend are refused", async () => {
     const t = setup({ chat: { id: CHAT, userId: USER, status: "closed" } });
     await expect(prepareTurn(t.deps, { chatId: CHAT, content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "writing_chat_closed" });
+    // Only the greeting: nothing to resend.
     const u = setup({});
     await expect(prepareTurn(u.deps, { chatId: CHAT, content: null, requestedSlot: null })).rejects.toMatchObject({ code: "nothing_to_retry" });
+    // Last message is a finished reply: nothing to resend either.
+    const d = setup({});
+    d.chats.chat.messages.push(
+      { ...UNANSWERED, sequence: 2 },
+      { id: "00000000-0000-4000-8000-0000000000e3", sequence: 3, role: "assistant", content: "답", status: "done", aiJobId: null, provider: "anthropic", model: "m", modelTier: "default", connectionTier: "paid", createdAt: "" },
+    );
+    d.chats.chat.messageCount = 2;
+    await expect(prepareTurn(d.deps, { chatId: CHAT, content: null, requestedSlot: null })).rejects.toMatchObject({ code: "nothing_to_retry" });
+    expect(d.store.jobs.size).toBe(0);
     await expect(prepareTurn(u.deps, { chatId: "00000000-0000-4000-8000-0000000000ff", content: "x", requestedSlot: null })).rejects.toMatchObject({ code: "not_found" });
   });
 

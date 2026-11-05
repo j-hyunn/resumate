@@ -28,7 +28,7 @@ import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase
 import { createInterviewStore } from "./db";
 import { createInterviewEvaluationJobDefinition, createInterviewQuestionsJobDefinition, type InterviewJobDeps } from "./job";
 import { getAnswerSheet, getInterviewPrep, getInterviewResult, listInterviewSessions } from "./read";
-import { retryInterviewEvaluation, retryInterviewQuestions, startInterviewSession, submitInterviewSession, type InterviewStartDeps } from "./start";
+import { restartInterviewSession, retryInterviewEvaluation, retryInterviewQuestions, startInterviewSession, submitInterviewSession, type InterviewStartDeps } from "./start";
 import { abandonInterviewSession, deleteInterviewSession, saveInterviewAnswer } from "./write";
 
 /**
@@ -330,9 +330,13 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     const result = await getInterviewResult(user, { sessionId });
     expect(result.firstView).toBe(true);
     expect(result.session).toMatchObject({ status: "completed", unansweredCount: 1, evaluationProvider: { provider: "anthropic" } });
-    expect(result.score).toMatchObject({ status: "pending_method", countedCount: 2, noAnswers: false });
+    // R11 OD-I1: the DB writes the d14.v1 score at completion (unanswered = 0 points, counted = graded answers).
+    expect(result.score).toMatchObject({ status: "scored", methodVersion: "d14.v1", max: 100, countedCount: 2, noAnswers: false });
+    expect(result.score.value).toEqual(expect.any(Number));
     expect(result.items.map((i) => i.question.intent)).toEqual(["가치 기준 확인", "실패 후 성장 확인", "갈등 해결 방식 확인"]);
-    expect(result.items.map((i) => i.answer?.score.status)).toEqual(["pending_method", "pending_method", "unanswered"]);
+    expect(result.items.map((i) => i.answer?.score.status)).toEqual(["scored", "scored", "unanswered"]);
+    expect(result.items.map((i) => i.answer?.score.methodVersion)).toEqual(["d14.v1", "d14.v1", "d14.v1"]);
+    expect(result.items[2]!.answer!.score).toMatchObject({ value: 0, max: 100 });
     expect(result.items[0]!.evaluation).toMatchObject({ status: "succeeded", intentReveal: expect.any(String) });
     expect(result.items[0]!.evaluation!.criteria).toHaveLength(4);
     expect(result.items[0]!.evaluation!.modelAnswer!.evidence[0]).toMatchObject({ sourceType: "interview_answer" });
@@ -537,9 +541,40 @@ describe.skipIf(!ready)("interviews (local stack)", () => {
     });
   });
 
-  it("project delete cascades the sessions", async () => {
+  it("R11 OD-I6: project delete keeps the completed session read-only, with the snapshot name", async () => {
+    const before = await admin.from("interview_answers").select("id").eq("session_id", sessionId);
     await deleteApplicationProject(user, project);
     expect((await admin.from("interview_sessions").select("id").eq("application_project_id", project)).data).toEqual([]);
+    // The completed session stays (questions / answers too), detached from the deleted project.
+    expect((await admin.from("interview_answers").select("id").eq("session_id", sessionId)).data).toHaveLength(before.data!.length);
+
+    const list = await listInterviewSessions(user, {});
+    const item = list.sessions.find((x) => x.id === sessionId)!;
+    expect(item).toMatchObject({ applicationProjectId: null, readOnly: true, status: "completed" });
+    expect(item.applicationProjectName).not.toBe("");
+    // Earlier tests deleted their projects too, so other kept sessions may show up here; all are detached.
+    const detached = (await listInterviewSessions(user, { detached: true })).sessions;
+    expect(detached.map((x) => x.id)).toContain(sessionId);
+    expect(detached.every((x) => x.readOnly && x.applicationProjectId === null)).toBe(true);
+    expect((await listInterviewSessions(other, { detached: true })).sessions).toEqual([]);
+
+    const result = await getInterviewResult(user, { sessionId });
+    expect(result.session).toMatchObject({ applicationProjectId: null, readOnly: true, applicationProjectName: item.applicationProjectName });
+    expect(result.canRetryEvaluation).toBe(false);
+    expect((await getAnswerSheet(user, { sessionId })).session.readOnly).toBe(true);
+
+    // Read-only: refused before the connection gate and before any job.
+    // No AI connection: the read-only refusal still comes first (not ai_not_connected).
+    const h = harness(userId, user, null as unknown as ProviderContext);
+    const jobsBefore = (await admin.from("ai_jobs").select("id").eq("target_id", sessionId)).data!.length;
+    await expect(retryInterviewEvaluation(h.startDeps, sessionId)).rejects.toMatchObject({ code: "interview_session_read_only", status: 409 });
+    await expect(retryInterviewQuestions(h.startDeps, sessionId)).rejects.toMatchObject({ code: "interview_session_read_only", status: 409 });
+    await expect(submitInterviewSession(h.startDeps, sessionId)).rejects.toMatchObject({ code: "interview_session_read_only", status: 409 });
+    // R11 QA-03: "그만두고 새로 시작" on it is read-only too (not 404), whatever project id the caller sends.
+    await expect(restartInterviewSession(h.startDeps, sessionId, project, { interviewType: "culture_fit", questionCount: 3 })).rejects.toMatchObject({ code: "interview_session_read_only", status: 409 });
+    expect((await admin.from("ai_jobs").select("id").eq("target_id", sessionId)).data).toHaveLength(jobsBefore);
+
+    await deleteInterviewSession(user, { sessionId });
     expect((await admin.from("interview_answers").select("id").eq("session_id", sessionId)).data).toEqual([]);
   });
 });

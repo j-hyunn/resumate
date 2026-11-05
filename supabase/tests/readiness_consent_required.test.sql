@@ -53,7 +53,7 @@ grant execute on function pg_temp.gate_agrees(text) to authenticated;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('gemini', 'free', 'v2026-10-29', true);
+values ('gemini', 'free', 'v2026-11-05', true);
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb, 'B (consented) → false');
 reset role;
 
@@ -67,7 +67,7 @@ select pg_temp.gate_agrees('no consent row');
 
 -- 2. consent present for (gemini, free) → false.
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('gemini', 'free', 'v2026-10-29', true);
+values ('gemini', 'free', 'v2026-11-05', true);
 select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": "gemini", "key_status": "valid", "connection_tier": "free", "consent_required": false}'::jsonb,
           'consent present → consent_required false, other fields unchanged');
@@ -128,7 +128,7 @@ select is(public.get_data_readiness() -> 'ai_connection',
           'consent only for the free tier, key is paid → true');
 select pg_temp.gate_agrees('tier mismatch');
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
-values ('gemini', 'paid', 'v2026-10-29');
+values ('gemini', 'paid', 'v2026-11-05');
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           'paid-tier consent → false');
 select pg_temp.gate_agrees('paid-tier consent');

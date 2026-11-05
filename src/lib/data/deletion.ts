@@ -13,7 +13,6 @@ import { mockRequest } from "@/lib/mock/store"
 import { mockV45DeletionImpact, mockV45Delete } from "@/lib/mock/career-v45"
 import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
-import { loadDraftCounts } from "@/server/services/drafts/progress"
 import * as applicationActions from "@/server/actions/application"
 import * as draftActions from "@/server/actions/draft"
 import * as interviewActions from "@/server/actions/interview"
@@ -172,8 +171,8 @@ function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpa
       },
       affected_results: {
         ...impact.affected_results,
-        // 연결 대기 (DM v4.11 11.6 #1~#6, R-OD-5): read once the RPC returns it
-        detached_interview_sessions: detachedCount(impact.affected_results),
+        // R11 (DM v4.11 2.7.2, R-OD-5)
+        detached_interview_sessions: impact.affected_results.detached_interview_sessions,
       },
     }
   }
@@ -183,11 +182,6 @@ function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpa
     // v4.4 has no saved rows: `last_applied_at` set → "반영된 STAR는 남아요" (shown as 1 kept row).
     writing_chat: { message_count: impact.message_count, linked_saved_rows: impact.last_applied_at ? 1 : 0 },
   }
-}
-
-function detachedCount(results: object): number {
-  const n = (results as { detached_interview_sessions?: unknown }).detached_interview_sessions
-  return typeof n === "number" ? n : 0
 }
 
 /** C-05 v4.4 impact (S-09 / S-34 / S-43 / S-44 / S-10 패널). 연결 대기: the reworked delete dialog calls this. */
@@ -260,6 +254,8 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     return b
   }
   for (const e of evidence) {
+    // R11 최소 수정 (OD-I6): evidence of a detached interview session has no project bucket.
+    if (!e.application_project_id) continue
     const b = bucket(e.application_project_id)
     if (e.owner_type === "insight") b.insights.add(e.owner_id)
     if (e.owner_type === "draft_section") {
@@ -413,25 +409,15 @@ export async function getApplicationDeletionImpact(applicationProjectId: string)
         stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
       }
     },
-    // 연결 대기 (DM v4.11 11.6 #1~#6, OD-I6): switch to RPC get_deletion_impact('application_project', id)
-    // (`cascade.*`, `kept.interview_sessions`). Until the delete keeps completed sessions, every session is
-    // still deleted, so the real branch reports them all under "작성 중인 면접" and keeps 0.
+    // R11 (DM v4.11 2.7.2, OD-I6): RPC get_deletion_impact('application_project', id)
     async () => {
-      const { supabase } = await requireConsentedUser()
-      const head = { count: "exact", head: true } as const
-      const [insights, drafts, sessions, events] = await Promise.all([
-        supabase.from("insights").select("id", head).eq("application_project_id", applicationProjectId),
-        loadDraftCounts(supabase, [applicationProjectId]),
-        supabase.from("interview_sessions").select("id", head).eq("application_project_id", applicationProjectId),
-        supabase.from("application_stage_events").select("id", head).eq("application_project_id", applicationProjectId),
-      ])
-      for (const r of [insights, sessions, events]) if (r.error) throw mapDbError(r.error)
+      const r = unwrap(await applicationActions.getApplicationProjectDeletionImpact({ id: applicationProjectId }))
       return {
-        insights: insights.count ?? 0,
-        drafts: drafts.get(applicationProjectId) ?? 0,
-        interview_sessions: sessions.count ?? 0,
-        kept_interview_sessions: 0,
-        stage_events: events.count ?? 0,
+        insights: r.cascade.insights,
+        drafts: r.cascade.drafts,
+        interview_sessions: r.cascade.interview_sessions,
+        kept_interview_sessions: r.kept.interview_sessions,
+        stage_events: r.cascade.stage_events,
       }
     },
   )
@@ -454,10 +440,11 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   const own = db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId)
   // OD-I6 (DM v4.11): completed sessions stay as read-only records with the names copied at delete time.
-  // The mock row can't hold a null project id, so it keeps the (now missing) id — screens read that as deleted.
+  // Like the real FK (`on delete set null`), the kept session loses its project id.
   for (const s of own.filter((x) => x.status === "completed")) {
     s.company_name_snapshot = jd?.company_name ?? ap?.name ?? null
     s.position_title_snapshot = jd?.position_title ?? null
+    s.application_project_id = null
   }
   const sessionIds = own.filter((s) => s.status !== "completed").map((s) => s.id)
   db.application_projects = db.application_projects.filter((a) => a.id !== applicationProjectId)

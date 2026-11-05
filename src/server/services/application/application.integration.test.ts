@@ -9,7 +9,7 @@ import { resetServerEnvCache } from "@/server/env";
 import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext } from "@/server/jobs/provider-context";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
-import { createProject, saveExperience as createExperience } from "@/server/services/career";
+import { createProject, saveExperience as createExperience, getApplicationProjectDeletionImpact } from "@/server/services/career";
 import { startWritingChat } from "@/server/services/writing-chat/chat";
 import { loadGateRequirements } from "@/server/services/writing-chat/pipelines";
 import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
@@ -136,6 +136,14 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
       CreateApplicationProjectInput.parse({ id: projectB, rawText: "짧은 공고", companyName: "가나다랩", positionTitle: "데이터 엔지니어", deadline: "2026-12-01" }),
     );
     expect(created).toMatchObject({ name: "가나다랩 – 데이터 엔지니어", nameSource: "user", warnings: ["short_jd"] });
+  });
+
+  it("R11 OD-I6: deletion impact of an application project (cascade / kept counts); others → not_found", async () => {
+    await expect(getApplicationProjectDeletionImpact(user, projectA)).resolves.toEqual({
+      cascade: { insights: 0, drafts: 0, interview_sessions: 0, stage_events: expect.any(Number) },
+      kept: { interview_sessions: 0 },
+    });
+    await expect(getApplicationProjectDeletionImpact(otherUser, projectA)).rejects.toMatchObject({ code: "not_found", status: 404 });
   });
 
   it("other users cannot read or touch the project (RLS)", async () => {

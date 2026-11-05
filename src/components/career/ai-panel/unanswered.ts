@@ -6,8 +6,7 @@
  * - no assistant row after it (tab closed, connection lost, the row was never started)  → `unanswered`
  * - the last assistant row is `failed` and its job is `canceled` (the user stopped it)  → `unanswered`
  * - the last assistant row is `failed` and its job `failed` (a real failure)            → `failed` (C-20 실패한 턴)
- * - a `failed` assistant row whose job status is unknown (the real DTO doesn't carry it yet —
- *   // 연결 대기 (DM v4.11 11.6 #15))                                                     → `unanswered` [UI-가정]
+ * - a `failed` assistant row whose job status is unknown (no job row found — `turnFailure` null, R11) → `unanswered`
  * A `streaming` last row is a turn in progress (another tab) → nothing (the panel follows it, UX "진행 중인 턴이 있으면
  * 보이지 않는다"). "다시 보내기" re-runs the reply to `user` without a new user message (`?retry=1`).
  */

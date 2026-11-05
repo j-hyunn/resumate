@@ -22,6 +22,7 @@ import { getDataReadiness } from "@/server/services/career/rpc";
 import { createScriptedAdapter, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { getAiDisclosure, recordAiDataUseConsent, withdrawAiDataUseConsent } from "./consent";
+import { mapDbError } from "@/server/db/errors";
 import { createDbKeyStatusReporter, createDbProviderContextSource, createDbRunGate, deleteProviderKey, getAiConnection, setActiveAiProvider } from "./keys";
 import { recheckProviderKey, registerProviderKey, type KeyVerificationDeps } from "./verification";
 
@@ -161,9 +162,30 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
     resetServerEnvCache();
   });
 
+  it("R11 QA-01: free-tier ack only where the disclosure requires it — OpenAI / Claude free + false accepted, Gemini free + false refused", async () => {
+    for (const provider of ["openai", "anthropic"] as const) {
+      const d = await getAiDisclosure(user, provider, "free");
+      expect(d.requiresFreeTierAck).toBe(false);
+      const state = await recordAiDataUseConsent(user, { provider, connectionTier: "free", disclosureVersion: d.version, freeTierAcknowledged: false });
+      expect(state).toMatchObject({ needsConsent: false });
+      await withdrawAiDataUseConsent(user, { provider, connectionTier: "free" });
+    }
+    const g = await getAiDisclosure(user, "gemini", "free");
+    expect(g.requiresFreeTierAck).toBe(true);
+    await expect(recordAiDataUseConsent(user, { provider: "gemini", connectionTier: "free", disclosureVersion: g.version, freeTierAcknowledged: false })).rejects.toMatchObject({
+      code: "free_tier_acknowledgement_required",
+      status: 400,
+      details: { field: "freeTierAcknowledged" },
+    });
+    // The DB guard says the same thing when the service check is bypassed (direct insert).
+    const direct = await user.from("ai_data_use_consents").insert({ provider: "gemini", connection_tier: "free", disclosure_version: g.version, free_tier_acknowledged: false });
+    expect(mapDbError(direct.error!)).toMatchObject({ code: "free_tier_acknowledgement_required", status: 400 });
+    expect((await user.from("ai_data_use_consents").select("id").eq("provider", "gemini").eq("connection_tier", "free")).data).toEqual([]);
+  });
+
   it("refuses to register without a current consent (no job, no provider call)", async () => {
     await expect(
-      registerProviderKey(deps(), { provider: "anthropic", connectionTier: "paid", apiKey: fakeKey("anthropic", "A"), disclosureVersion: "v2026-10-29" }),
+      registerProviderKey(deps(), { provider: "anthropic", connectionTier: "paid", apiKey: fakeKey("anthropic", "A"), disclosureVersion: "v2026-11-05" }),
     ).rejects.toMatchObject({ code: "ai_consent_required", status: 409 });
     expect(verifiedKeys).toHaveLength(0);
     expect(await verificationJobs()).toHaveLength(0);
@@ -179,7 +201,7 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
       p_wrapped_dek: "\\x00",
       p_kek_id: "k",
       p_key_last4: "0000",
-      p_disclosure_version: "v2026-10-29",
+      p_disclosure_version: "v2026-11-05",
       p_verification_result: "valid",
       p_key_id: crypto.randomUUID(),
     });
@@ -366,7 +388,7 @@ describe.skipIf(!ready)("AI connection / BYOK keys (local stack)", () => {
 
   it("tier change: needs consent for the new tier, keeps the row id, withdraws the old tier's consent", async () => {
     const before = (await keyRow("gemini"))!;
-    await expect(recheckProviderKey(deps(), { provider: "gemini", connectionTier: "paid", disclosureVersion: "v2026-10-29" })).rejects.toMatchObject({
+    await expect(recheckProviderKey(deps(), { provider: "gemini", connectionTier: "paid", disclosureVersion: "v2026-11-05" })).rejects.toMatchObject({
       code: "ai_consent_required",
     });
     const version = await consent("gemini", "paid");

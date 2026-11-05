@@ -36,16 +36,16 @@ grant execute on function pg_temp.draft(text) to authenticated, app_ai_writer;
 
 -- ── privileges ──
 select is(array(select r from unnest(array['anon', 'authenticated', 'app_ai_writer', 'app_key_reader']) r
-                 where has_function_privilege(r, 'public.save_project_page(uuid, jsonb, timestamptz, jsonb)', 'execute')),
+                 where has_function_privilege(r, 'public.save_project_page(uuid, jsonb, timestamptz, jsonb, uuid)', 'execute')),
           array['authenticated'], 'save_project_page: authenticated only');
 select is(array(select r from unnest(array['anon', 'authenticated', 'app_ai_writer', 'app_key_reader']) r
-                 where has_function_privilege(r, 'public.save_project_deliverable(uuid, uuid, text, text, timestamptz, jsonb)',
+                 where has_function_privilege(r, 'public.save_project_deliverable(uuid, uuid, text, text, timestamptz, jsonb, uuid)',
                                               'execute')),
           array['authenticated'], 'save_project_deliverable: authenticated only');
-select is((select prosecdef from pg_proc where oid = 'public.save_project_page(uuid, jsonb, timestamptz, jsonb)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'public.save_project_page(uuid, jsonb, timestamptz, jsonb, uuid)'::regprocedure),
           false, 'save_project_page is security invoker');
 select is((select prosecdef from pg_proc
-            where oid = 'public.save_project_deliverable(uuid, uuid, text, text, timestamptz, jsonb)'::regprocedure),
+            where oid = 'public.save_project_deliverable(uuid, uuid, text, text, timestamptz, jsonb, uuid)'::regprocedure),
           false, 'save_project_deliverable is security invoker');
 select is((select prosecdef from pg_proc
             where oid = 'private.wc_mark_proposal_applied(uuid, text, uuid, text, integer, text)'::regprocedure),

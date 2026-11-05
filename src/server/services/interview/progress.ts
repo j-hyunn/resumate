@@ -14,11 +14,13 @@ export function countsTowardInterviews(status: string, savedQuestions: number): 
 
 /** Pure fold over session rows + per-session saved question counts (unit-tested). */
 export function foldInterviewProgress(
-  sessions: readonly { application_project_id: string; status: string; id: string }[],
+  sessions: readonly { application_project_id: string | null; status: string; id: string }[],
   savedQuestions: ReadonlyMap<string, number>,
 ): Map<string, InterviewProgress> {
   const out = new Map<string, InterviewProgress>();
   for (const row of sessions) {
+    // R11 OD-I6: a detached session (project deleted) belongs to no project's progress.
+    if (row.application_project_id === null) continue;
     const cur = out.get(row.application_project_id) ?? { interviewCount: 0, interviewInProgress: false };
     if (countsTowardInterviews(row.status, savedQuestions.get(row.id) ?? 0)) cur.interviewCount += 1;
     if (row.status === "in_progress") cur.interviewInProgress = true;

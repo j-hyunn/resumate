@@ -21,22 +21,34 @@ select is((select count(*)::int from public.ai_providers where dashboard_url lik
 
 select results_eq(
   $$select provider, connection_tier, version, requires_free_tier_ack, document_path
-      from public.ai_disclosures order by provider, connection_tier$$,
+      from public.ai_disclosures where version = 'v2026-10-29' order by provider, connection_tier$$,
   $$values ('anthropic', 'free', 'v2026-10-29', true, '/policies/ai/anthropic/free/v2026-10-29'),
            ('anthropic', 'paid', 'v2026-10-29', false, '/policies/ai/anthropic/paid/v2026-10-29'),
            ('gemini', 'free', 'v2026-10-29', true, '/policies/ai/gemini/free/v2026-10-29'),
            ('gemini', 'paid', 'v2026-10-29', false, '/policies/ai/gemini/paid/v2026-10-29'),
            ('openai', 'free', 'v2026-10-29', true, '/policies/ai/openai/free/v2026-10-29'),
            ('openai', 'paid', 'v2026-10-29', false, '/policies/ai/openai/paid/v2026-10-29')$$,
-  'ai_disclosures seed: 3 providers x 2 tiers, v2026-10-29');
-select is(private.current_ai_disclosure_version('gemini', 'free'), 'v2026-10-29', 'current disclosure version');
+  'ai_disclosures seed: 3 providers x 2 tiers, v2026-10-29 (kept unchanged by R11)');
+-- R11 OD-L2 / OD-L2a / R-OD-15: v2026-11-05, reconsent for anthropic only, free-tier ack for gemini free only.
+select results_eq(
+  $$select provider, connection_tier, requires_reconsent, requires_free_tier_ack, document_path, terms_checked_at,
+           effective_at = '2026-11-05 00:00:00+09'::timestamptz
+      from public.ai_disclosures where version = 'v2026-11-05' order by provider, connection_tier$$,
+  $$values ('anthropic', 'free', true, false, '/policies/ai/anthropic/free/v2026-11-05', '2026-11-05'::date, true),
+           ('anthropic', 'paid', true, false, '/policies/ai/anthropic/paid/v2026-11-05', '2026-11-05'::date, true),
+           ('gemini', 'free', false, true, '/policies/ai/gemini/free/v2026-11-05', '2026-11-05'::date, true),
+           ('gemini', 'paid', false, false, '/policies/ai/gemini/paid/v2026-11-05', '2026-11-05'::date, true),
+           ('openai', 'free', false, false, '/policies/ai/openai/free/v2026-11-05', '2026-11-05'::date, true),
+           ('openai', 'paid', false, false, '/policies/ai/openai/paid/v2026-11-05', '2026-11-05'::date, true)$$,
+  'ai_disclosures v2026-11-05: 6 rows, anthropic reconsent, gemini free ack');
+select is(private.current_ai_disclosure_version('gemini', 'free'), 'v2026-11-05', 'current disclosure version');
 select is(private.current_ai_disclosure_version('gemini', 'nope'), null, 'unknown tier → null');
 
 select throws_ok($$insert into public.ai_providers (provider, display_order) values ('mistral', 9)$$,
                  '23514', null, 'ai_providers provider CHECK');
-select throws_ok($$insert into public.ai_disclosures (provider, connection_tier, version, effective_at, document_path)
-                   values ('gemini', 'free', 'vX', now(), '/x')$$,
-                 '23514', null, 'free-tier disclosure must require the free-tier acknowledgement');
+select lives_ok($$insert into public.ai_disclosures (provider, connection_tier, version, effective_at, document_path)
+                   values ('openai', 'free', 'vX', '2099-06-01', '/x')$$,
+                 'R11 (R-OD-15): a free-tier row without the acknowledgement is allowed (CHECK dropped)');
 select throws_ok($$insert into public.ai_disclosures (provider, connection_tier, version, effective_at, document_path)
                    values ('gemini', 'paid', 'v2026-10-29', now(), '/x')$$,
                  '23505', null, 'unique (provider, tier, version)');
@@ -44,7 +56,7 @@ select throws_ok($$insert into public.ai_disclosures (provider, connection_tier,
 -- a future version is not current yet; a newer effective one becomes current
 insert into public.ai_disclosures (provider, connection_tier, version, effective_at, requires_reconsent, document_path)
 values ('openai', 'paid', 'v2099-01-01', '2099-01-01', true, '/policies/ai/openai/paid/v2099-01-01');
-select is(private.current_ai_disclosure_version('openai', 'paid'), 'v2026-10-29', 'future version not current');
+select is(private.current_ai_disclosure_version('openai', 'paid'), 'v2026-11-05', 'future version not current');
 
 -- anon reads ai_disclosures, not ai_providers
 set local role anon;
@@ -55,7 +67,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is((select count(*)::int from public.ai_providers), 3, 'authenticated reads ai_providers');
-select is((select count(*)::int from public.ai_disclosures), 7, 'authenticated reads ai_disclosures');
+select is((select count(*)::int from public.ai_disclosures), 14, 'authenticated reads ai_disclosures');
 select throws_ok($$update public.ai_providers set is_available = false$$, '42501', null, 'authenticated cannot write ai_providers');
 select throws_ok($$insert into public.ai_disclosures (provider, connection_tier, version, effective_at, document_path)
                    values ('gemini', 'paid', 'v9', now(), '/x')$$, '42501', null, 'authenticated cannot write ai_disclosures');
@@ -78,13 +90,13 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged, agreed_at)
-                   values ('gemini', 'free', 'v2026-10-29', true, '2000-01-01')$$,
+                   values ('gemini', 'free', 'v2026-11-05', true, '2000-01-01')$$,
                  '42501', null, 'agreed_at is not client-writable');
 select throws_ok($$insert into public.ai_data_use_consents (id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
-                   values (gen_random_uuid(), 'gemini', 'free', 'v2026-10-29', true)$$,
+                   values (gen_random_uuid(), 'gemini', 'free', 'v2026-11-05', true)$$,
                  '42501', null, 'id is not client-writable');
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-                  values ('gemini', 'free', 'v2026-10-29', true)$$,
+                  values ('gemini', 'free', 'v2026-11-05', true)$$,
                 'insert own free-tier consent with acknowledgement');
 reset role;
 update public.ai_data_use_consents set id = 'aaaaaaaa-5555-0000-0000-000000000001'
@@ -95,10 +107,10 @@ select ok((select agreed_at > now() - interval '1 minute' and withdrawn_at is nu
              from public.ai_data_use_consents where id = 'aaaaaaaa-5555-0000-0000-000000000001'),
           'server time, not withdrawn, user_id defaults to the caller');
 select throws_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
-                   values ('gemini', 'free', 'v2026-10-29')$$,
+                   values ('gemini', 'free', 'v2026-11-05')$$,
                  '23514', null, 'free tier without acknowledgement rejected (F-AI-04 (3))');
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
-                  values ('gemini', 'paid', 'v2026-10-29')$$, 'paid tier needs no acknowledgement');
+                  values ('gemini', 'paid', 'v2026-11-05')$$, 'paid tier needs no acknowledgement');
 select throws_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
                    values ('gemini', 'paid', 'v1999')$$,
                  'P0001', 'unknown_disclosure_version', 'unknown disclosure version rejected');
@@ -106,10 +118,10 @@ select throws_ok($$insert into public.ai_data_use_consents (provider, connection
                    values ('openai', 'paid', 'v2099-01-01')$$,
                  'P0001', 'disclosure_version_not_current', 'not-yet-effective disclosure rejected');
 select throws_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version)
-                   values ('mistral', 'paid', 'v2026-10-29')$$,
+                   values ('mistral', 'paid', 'v2026-11-05')$$,
                  'P0001', 'unknown_disclosure_version', 'unknown provider rejected');
 select throws_ok($$insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version)
-                   values ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'paid', 'v2026-10-29')$$,
+                   values ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'paid', 'v2026-11-05')$$,
                  '42501', null, 'cannot insert a consent for another user');
 
 reset role;  -- private helper: owner only
@@ -136,13 +148,13 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is_empty($$update public.ai_data_use_consents set withdrawn_at = null
                    where id = 'aaaaaaaa-5555-0000-0000-000000000001' returning id$$,
                 'a withdrawn consent cannot be re-activated (RLS using withdrawn_at is null)');
-select throws_ok($$update public.ai_data_use_consents set disclosure_version = 'v2026-10-29'$$,
+select throws_ok($$update public.ai_data_use_consents set disclosure_version = 'v2026-11-05'$$,
                  '42501', null, 'only withdrawn_at is updatable');
 select throws_ok($$delete from public.ai_data_use_consents$$, '42501', null, 'no delete');
 
 -- re-consent = new row; latest active row decides
 select lives_ok($$insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-                  values ('gemini', 'free', 'v2026-10-29', true)$$, 're-consent inserts a new row');
+                  values ('gemini', 'free', 'v2026-11-05', true)$$, 're-consent inserts a new row');
 reset role;  -- private helper: owner only
 select ok(private.ai_consent_allows_run('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free'),
           're-consent counts again');

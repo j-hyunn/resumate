@@ -17,9 +17,9 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('d0000000-9999-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'valid'),
   ('e0000000-9999-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'eg01', 'valid');
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
-  ('d0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true),
-  ('d0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29', false),
-  ('e0000000-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-10-29', true);
+  ('d0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true),
+  ('d0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05', false),
+  ('e0000000-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-11-05', true);
 update public.profiles set active_ai_provider = 'gemini'
  where id in ('d0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000002');
 
@@ -164,7 +164,7 @@ select throws_ok($$select public.retry_ai_job('d0000000-7777-0000-0000-000000000
                  'P0001', 'ai_consent_required', 'active provider consent withdrawn -> ai_consent_required');
 reset role;
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('d0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29', false);
+values ('d0000000-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05', false);
 select results_eq($$select status, run_generation, provider, error_code from public.ai_jobs
                      where id = 'd0000000-7777-0000-0000-000000000001'$$,
                   $$values ('failed'::text, 1, 'gemini'::text, 'rate_limited'::text)$$, 'rejected retries leave the job failed');

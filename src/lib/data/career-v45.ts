@@ -150,6 +150,16 @@ function messagesOf(list: WritingChatMessageDto[]): WritingChatMessageView[] {
     created_at: m.createdAt,
     user_number: m.userNumber,
     is_greeting: m.role === "assistant" && m.aiJobId === null && m.sequence === 0,
+    // R11 (DM v4.11 11.6 #15, R-OD-8): how a failed reply's job ended — canceled = stopped, else a real failure
+    turn_job: m.turnFailure
+      ? {
+          status: m.turnFailure.jobStatus === "canceled" ? "canceled" : "failed",
+          error_code: m.turnFailure.errorCode,
+          provider: m.provider,
+          retry_after: m.turnFailure.retryAfter,
+          quota_resets_at: m.turnFailure.quotaResetsAt,
+        }
+      : null,
   }))
 }
 

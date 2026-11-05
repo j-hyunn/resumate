@@ -82,7 +82,7 @@ git status                            # 작업 폴더가 원래대로인지 확�
 |------|---------|
 | `20261113002800_r13_drop_profile_legacy_columns.sql` | **`profiles.total_years_of_experience` · `desired_job_title` · `interested_industries`의 모든 사용자 값. 복구 불가** |
 
-- 사용자 확인이 필요하다(backend-context "Destructive migrations"). 확인 전에는 올리지 않는다.
+- ~~사용자 확인이 필요하다~~ **사용자 승인 2026-11-05** (`docs/planning/decisions.md` 3.23 R13-U1) — 백업 없이 2단에서 실행. 1단 배포가 운영에서 정상인 것을 확인한 뒤에만 올린다는 조건은 그대로다.
 - 값을 남겨야 할 이유가 있다면 push 전에 백업하라: `interested_industries`는 ⑤가 라벨 일치분만 `interested_industry`로 옮겼고, 나머지(0개·2개 이상·라벨 불일치)와 다른 두 컬럼은 **그대로 사라진다**.
 - drop 뒤 `database.types.ts`는 이미 최종 상태로 재생성돼 있다(별도 작업 없음).
 
@@ -121,7 +121,7 @@ supabase db push
 
 | 이름 | 용도 | 값 |
 |------|------|----|
-| `NEXT_PUBLIC_FEEDBACK_FORM_URL` | 설정 "개선 요청" 탭의 외부 폼 주소 (#14) | **미정** — `[결정 필요]` SD-Q1. 비어 있으면 화면이 "준비 중"으로 보인다. 정해지기 전에는 Vercel에 설정하지 않아도 된다 |
+| `NEXT_PUBLIC_FEEDBACK_FORM_URL` | 설정 "개선 요청" 탭의 외부 폼 주소 (#14) | **설정하지 않는다** — 사용자 확정 2026-11-05 (3.23 R13-U3): 주소 없이 "준비 중"으로 출시. 주소가 생기면 Vercel production·preview에 값만 넣는다(코드 변경 없음) |
 
 ## 함께 가야 하는 UI 변경
 
@@ -131,6 +131,6 @@ supabase db push
 
 → **UI 후속(S-24 탭 4개 재구현, S-04 폐기와 `/career/profile` 리다이렉트, S-42 공급자 탭·비용 2열, `/policies/ai_data_use` 페이지)을 1단과 같은 머지에 묶는 것이 안전하다.** 묶지 못하면 2단 drop은 UI 후속이 배포된 뒤로 더 미룬다.
 
-## 잠정값 — 법무 확인 뒤 조치
+## `ai_data_use` 문서 버전 — 확정
 
-`20261113002500`의 `ai_data_use` 행은 `version`·`effective_at`을 `2026-11-05`로 잠정 넣었다(DM 2.1.3은 "법무 확인 뒤" 값). 확정되면 **그 행을 고치지 말고 새 행을 추가한다**(`policy_versions`는 버전 이력 테이블이고 `requires_reconsent = false`라 게이트에 영향이 없다).
+`20261113002500`의 `ai_data_use` 행(`version`·`effective_at` = `2026-11-05`)을 **그대로 출시하기로 확정했다**(사용자 2026-11-05, decisions 3.23 R13-U2). 마이그레이션 변경 없음. 나중에 법무 확인으로 값이 바뀌면 **그 행을 고치지 말고 새 행을 추가한다**(`policy_versions`는 버전 이력이고 `requires_reconsent = false`라 게이트에 영향이 없다).

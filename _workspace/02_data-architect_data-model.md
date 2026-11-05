@@ -199,7 +199,7 @@ erDiagram
 약관 탭의 [전문 확인] 4개(개인정보 처리방침 · 이용 약관 · 국외 이전 약관 · **AI 데이터 처리**)가 **모두 같은 모양**(`/policies/{type}` 문서 페이지 + "버전 {version} · 시행일 {effective_at}")으로 열려야 한다.
 
 - **결정: `policy_versions`에 `policy_type = 'ai_data_use'` 행을 더한다.** CHECK 목록을 `terms` / `privacy` / `cross_border_transfer` / **`ai_data_use`**로 늘린다(비파괴). `document_path = '/policies/ai_data_use/{version}'`(**v4.12, R-SD-14** — 기존 3종과 같은 `/policies/{type}/{version}` 규칙을 그대로 따른다. 예외를 두지 않는다: 이 값은 링크가 아니라 기록용이고, 문서 페이지 주소는 버전 없는 `/policies/ai_data_use`다 — UX S-30의 괄호 설명과 같다), `requires_reconsent = false` 고정 `[가정]`.
-- **(v4.12a, D9) 잠정 값과 바꾸는 법**: 법무 확인 전이라 백엔드 R13(`20261113002500`)이 **`version = '2026-11-05'`, `effective_at = 2026-11-05 00:00 KST`, `document_path = '/policies/ai_data_use/2026-11-05'`**를 잠정으로 넣었다(같은 날 시행된 `ai_disclosures v2026-11-05`·다른 세 문서와 맞춤). **`[결정 필요]` 법무 확정 값**. 확정 값이 다르면 **그 행을 고치지 않고 새 버전 행을 추가한다** — `policy_versions`는 버전 이력이고(과거 행 보존 관행), `requires_reconsent = false`라 새 행이 동의 게이트·재동의에 영향을 주지 않는다.
+- **(v4.12a, D9) 잠정 값과 바꾸는 법**: 법무 확인 전이라 백엔드 R13(`20261113002500`)이 **`version = '2026-11-05'`, `effective_at = 2026-11-05 00:00 KST`, `document_path = '/policies/ai_data_use/2026-11-05'`**를 잠정으로 넣었다(같은 날 시행된 `ai_disclosures v2026-11-05`·다른 세 문서와 맞춤). ~~`[결정 필요]` 법무 확정 값~~ **확정 2026-11-05 (사용자, decisions 3.23 R13-U2) — 이 값 그대로 출시**. 법무 확인 뒤 값이 달라지면 **그 행을 고치지 않고 새 버전 행을 추가한다** — `policy_versions`는 버전 이력이고(과거 행 보존 관행), `requires_reconsent = false`라 새 행이 동의 게이트·재동의에 영향을 주지 않는다.
 - **`ai_disclosures`를 그대로 쓰지 않는 이유**: `ai_disclosures`는 **공급자 × 등급 6행**이라 "이 문서의 버전 하나"가 없다. 6행 중 무엇을 머리글에 보일지 화면이 정해야 하고(활성 공급자가 없으면 고를 수조차 없다), 버전 문자열 모양도 다른 세 문서(`2026-11-04`)와 `ai_disclosures`(`v2026-11-05`)가 다르다. 한편 **문서 본문의 공급자별 요약은 `ai_disclosures`에서 읽는다** — 페이지 = `policy_versions`의 머리글 + `ai_disclosures` 6행의 공급자·등급별 사실 표(AI C-7.1).
 - **동의 종류는 늘리지 않는다**: 이 문서는 **고지 문서**이고 동의는 키 연결 때 공급자별로 받는다(`ai_data_use_consents`, 2.11.5). 따라서 **`consents.consent_type`에 `ai_data_use`를 더하지 않는다**(UX가 물은 점). `policy_versions`에만 값이 는다.
 - 가입 필수 동의 게이트(`get_consent_status().needs_consent`)는 `terms`·`privacy_required`만 본다 — 새 `policy_type`이 게이트를 건드리지 않는다(A.2 재동의 판정 그대로).
@@ -1972,6 +1972,8 @@ private.compute_total_experience_months(
 ### 11.7 v4.12 백엔드 후속 — 새 설정 다이얼로그 (settings-dialog, SD-*)
 
 > 기존 마이그레이션 파일은 고치지 않고 새 파일을 더한다. ★ = 이미 구현된 코드·스키마를 바꿔야 함. 순서는 db-engineer가 정한다. **파괴적 변경이 있다**(#2 컬럼 drop) — 원격 반영 전 확인 표시.
+>
+> **(v4.12a) 사용자 확정 2026-11-05 (decisions 3.23)**: #2 ④ 컬럼 drop **승인**(2단 실행, 백업 없음), #10 `ai_data_use` 값 `2026-11-05` 확정, #14 폼 주소 없이 "준비 중"으로 출시.
 >
 > **(v4.12a) 구현 상태 — 2026-11-05**: 14개 항목 전부 백엔드 R13에서 구현·로컬 검증(PR #58, 마이그레이션 `20261113001500`~`20261113002800` 16개 — 계획 14개 + 탈퇴 RPC의 `profile_job_interests` 삭제 `…002750` + public 래퍼 `…002760`). **원격 미반영** — 2단 배포(#2 ④ drop은 별도 단계), 순서는 `_workspace/backend/R13/05_release.md`. UI 후속은 아직.
 

@@ -10,38 +10,35 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-export type GuideId = "G-1" | "G-2" | "G-3" | "G-4"
+/** G-3 정량 성과 권유 was retired with S-11 (UX v5.5, CR-11) */
+export type GuideId = "G-1" | "G-2" | "G-4"
 
-/** Spec copy (02 C-07). G-3/G-4 take extra content (action link / per-field example). */
-export const GUIDE_COPY: Record<"G-1" | "G-2" | "G-3", string> = {
+/** Spec copy (02 C-07). G-4 takes extra content (per-field example). */
+export const GUIDE_COPY: Record<"G-1" | "G-2", string> = {
   "G-1": "'우리 팀은'보다 '저는'으로 써 주세요. 팀이 한 일·배경은 상황에 써 주세요",
   "G-2": "건강·종교·노조 활동 같은 민감정보, 동료·고객의 개인정보, 회사 기밀은 쓰지 마세요",
-  "G-3": "수치를 정량 성과로 정리하면 AI가 숫자를 정확히 써요",
 }
 
 const GUIDE_ICON: Record<GuideId, LucideIcon> = {
   "G-1": UserRound,
   "G-2": ShieldAlert,
-  "G-3": Lightbulb,
   "G-4": Lightbulb,
 }
 
 /**
  * Help line under a field (gap-field). Not warning-styled.
- * G-4: pass the per-field example as children. G-3: pass the "+ 정량 성과" button as `action`.
+ * G-4: pass the per-field example as children.
  */
 export function InputGuide({
   id,
   guide,
   children,
-  action,
   className,
 }: {
   /** for aria-describedby */
   id?: string
   guide: GuideId
   children?: React.ReactNode
-  action?: React.ReactNode
   className?: string
 }) {
   const Icon = GUIDE_ICON[guide]
@@ -49,10 +46,7 @@ export function InputGuide({
   return (
     <p id={id} className={cn("flex items-start gap-1.5 text-sm leading-5 text-muted-foreground", className)}>
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
-      <span>
-        {text}
-        {action ? <> {action}</> : null}
-      </span>
+      <span>{text}</span>
     </p>
   )
 }

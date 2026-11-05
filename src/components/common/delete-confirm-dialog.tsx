@@ -36,10 +36,13 @@ import { AI_PROVIDER_LABELS, AI_PROVIDERS } from "@/lib/mock/ai-providers"
 import { ExternalProviderLink } from "./ai-error-notice"
 import type { ApplicationDeletionImpact } from "@/lib/data/deletion"
 
+export type CareerDeleteEntityType = Exclude<DeletionEntityType, "writing_chat" | "project_detail" | "achievement">
+
 export type DeleteTarget =
   | {
       kind: "career"
-      entity_type: Exclude<DeletionEntityType, "writing_chat">
+      /** 상세 내용·정량 성과 (DM v4.4 폐기, CR-2·CR-11) are no longer deletable items */
+      entity_type: CareerDeleteEntityType
       entity_id: string
       label: string
       /** project only (C-05 v5.6 lines): affiliated = STAR + chats, standalone = deliverables + their chats */
@@ -60,13 +63,11 @@ export interface DeleteOptions {
   affiliation_mode?: AffiliationMode
 }
 
-const ENTITY_NAMES: Record<Exclude<DeletionEntityType, "writing_chat">, string> = {
+const ENTITY_NAMES: Record<CareerDeleteEntityType, string> = {
   experience: "경력",
   education: "교육",
   project: "프로젝트",
   project_deliverable: "산출물",
-  project_detail: "상세 내용",
-  achievement: "정량 성과",
   skill: "스킬",
 }
 

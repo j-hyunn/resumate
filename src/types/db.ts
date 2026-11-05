@@ -1291,8 +1291,8 @@ export interface AccountDeletionSummary {
     experiences: number
     educations: number
     projects: number
-    project_details: number
-    achievements: number
+    /** DM v4.4: 상세 내용·정량 성과 폐기 → 산출물 (UX v5.5 S-25) */
+    project_deliverables: number
     skills: number
     writing_chats: number
   }

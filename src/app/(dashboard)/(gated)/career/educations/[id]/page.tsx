@@ -1,34 +1,23 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
-import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
-import { getPreviewState } from "@/lib/preview-state"
-import { getEducation } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
-import { EducationForm } from "@/components/career/education-form"
-import { careerPreviewView } from "@/components/career/screen-state"
-import { educationName } from "@/components/career/education-name"
 
-// S-34 교육 편집
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
+/**
+ * Retired S-34 교육 편집 page (UX v5.5: S-34 is the S-08 panel / add·edit modal, OD-C2). Old links land on S-08:
+ * `/career/educations/new` → the 새 교육 modal, `/career/educations/{id}` → that education selected. S-08 says
+ * "찾을 수 없는 항목이에요" for an unknown id.
+ */
+type Props = { params: Promise<{ id: string }> }
 
-export default function Page({ params, searchParams }: Props) {
-  return (
-    <ScreenSuspense>
-      <Screen params={params} searchParams={searchParams} />
-    </ScreenSuspense>
-  )
+async function Redirect({ params }: Props): Promise<null> {
+  const { id } = await params
+  redirect(id === "new" ? routes.careerNew("education") : routes.careerItem("education", id))
 }
 
-async function Screen({ params, searchParams }: Props) {
-  const { id } = await params
-  const state = getPreviewState(await searchParams)
-  const preview = careerPreviewView(state)
-  const row = preview ? null : await getEducation(id)
-  if (!preview && !row) notFound()
+export default function Page({ params }: Props) {
   return (
-    <>
-      <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: (row && educationName(row)) ?? "교육" }]} />
-      {preview ?? (row ? <EducationForm key={`${row.id}-${row.updated_at}`} education={row} /> : null)}
-    </>
+    <ScreenSuspense>
+      <Redirect params={params} />
+    </ScreenSuspense>
   )
 }

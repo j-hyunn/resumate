@@ -169,16 +169,13 @@ function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpa
         writing_chats: impact.cascade.writing_chats,
         project_deliverables: impact.cascade.project_deliverables,
       },
-      affected_results: {
-        ...impact.affected_results,
-        // R11 (DM v4.11 2.7.2, R-OD-5)
-        detached_interview_sessions: impact.affected_results.detached_interview_sessions,
-      },
+      // R11 (DM v4.11 2.7.2, R-OD-5): detached_interview_sessions comes with the RPC
+      affected_results: impact.affected_results,
     }
   }
   return {
     cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0, project_deliverables: 0 },
-    affected_results: { by_application_project: [] },
+    affected_results: { by_application_project: [], detached_interview_sessions: 0 },
     // v4.4 has no saved rows: `last_applied_at` set → "반영된 STAR는 남아요" (shown as 1 kept row).
     writing_chat: { message_count: impact.message_count, linked_saved_rows: impact.last_applied_at ? 1 : 0 },
   }
@@ -224,7 +221,7 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
       writing_chats: set.writing_chats.length + v45.writing_chats,
       project_deliverables: v45.project_deliverables,
     },
-    affected_results: { by_application_project: [] },
+    affected_results: { by_application_project: [], detached_interview_sessions: 0 },
   }
   if (entityType === "project_deliverable") return impact
   if (entityType === "writing_chat") {
@@ -253,9 +250,19 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     }
     return b
   }
+  const sessionOf = (e: (typeof evidence)[number]) =>
+    db.interview_questions.find((q) => q.id === e.owner_id)?.session_id ??
+    db.answer_evaluations.find((a) => a.id === e.owner_id)?.session_id ??
+    db.session_feedbacks.find((f) => f.id === e.owner_id)?.session_id
+  const detached = new Set<string>()
   for (const e of evidence) {
-    // R11 최소 수정 (OD-I6): evidence of a detached interview session has no project bucket.
-    if (!e.application_project_id) continue
+    // OD-I6 (DM v4.11 2.7.2): evidence of a kept session of a deleted 자기소개서 has no project bucket —
+    // it counts toward "삭제된 자기소개서의 면접 기록 {n}개" like the RPC's detached_interview_sessions.
+    if (!e.application_project_id) {
+      const sessionId = sessionOf(e)
+      if (sessionId) detached.add(sessionId)
+      continue
+    }
     const b = bucket(e.application_project_id)
     if (e.owner_type === "insight") b.insights.add(e.owner_id)
     if (e.owner_type === "draft_section") {
@@ -264,10 +271,7 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
       if (section) b.drafts.add(section.draft_id)
     }
     if (e.owner_type === "interview_question" || e.owner_type === "answer_evaluation" || e.owner_type === "session_feedback") {
-      const sessionId =
-        db.interview_questions.find((q) => q.id === e.owner_id)?.session_id ??
-        db.answer_evaluations.find((a) => a.id === e.owner_id)?.session_id ??
-        db.session_feedbacks.find((f) => f.id === e.owner_id)?.session_id
+      const sessionId = sessionOf(e)
       if (sessionId) b.sessions.add(sessionId)
     }
   }
@@ -285,6 +289,7 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     draft_sections: b.sections.size,
     interview_sessions: b.sessions.size,
   }))
+  impact.affected_results.detached_interview_sessions = detached.size
   return impact
 }
 
@@ -447,6 +452,7 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
     s.application_project_id = null
   }
   const sessionIds = own.filter((s) => s.status !== "completed").map((s) => s.id)
+  const requirementIds = new Set(db.jd_requirements.filter((r) => jdIds.includes(r.job_description_id)).map((r) => r.id))
   db.application_projects = db.application_projects.filter((a) => a.id !== applicationProjectId)
   db.application_stage_events = db.application_stage_events.filter((e) => e.application_project_id !== applicationProjectId)
   db.job_descriptions = db.job_descriptions.filter((j) => !jdIds.includes(j.id))
@@ -466,6 +472,18 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   for (const ev of db.answer_evaluations) if (keptIds.has(ev.session_id)) keptIds.add(ev.id)
   for (const f of db.session_feedbacks) if (keptIds.has(f.session_id)) keptIds.add(f.id)
   db.evidence_links = db.evidence_links.filter((e) => e.application_project_id !== applicationProjectId || keptIds.has(e.owner_id))
+  // Same as the real triggers (R11 application_projects_detach_interviews + evidence_mark_source_deleted, DM 2.7.2):
+  // the kept evidence loses its project id, and links to the deleted JD / requirements read as "원본 삭제됨".
+  for (const e of db.evidence_links) {
+    if (e.application_project_id === applicationProjectId) e.application_project_id = null
+    const jdSourceGone =
+      (e.source_type === "jd_requirement" && e.source_id !== null && requirementIds.has(e.source_id)) ||
+      (e.source_type === "jd_sentence" && e.source_id !== null && jdIds.includes(e.source_id))
+    if (jdSourceGone && !e.source_deleted_at) {
+      e.quote = null
+      e.source_deleted_at = now
+    }
+  }
 }
 
 /** C-05 초안 / 면접 세션: 하위 개수 */

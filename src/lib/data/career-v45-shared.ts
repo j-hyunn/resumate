@@ -22,6 +22,8 @@ import type {
   ExperienceType,
   PageSaveErrorCode,
   PageSaveSkipReason,
+  DraftClassificationFieldObject,
+  ProjectClassificationField,
   ProjectStarField,
   ProjectStructuredDraft,
   ProjectType,
@@ -32,6 +34,29 @@ import type {
   WritingKind,
 } from "@/types/db"
 import { directionParticle, objectParticle } from "./labels"
+
+/**
+ * 분류 추천 [무시] — the server's judgment (DM 11.5 #1 option (b), decisions 4.11 UI #3, R10), mirrored from
+ * `isDismissedClassification` in src/server/ai/schemas/structured-draft.ts (client-safe copy): [무시] is the user
+ * patch `set` null, stored as `{value: null, origin: 'ai', rev: prev + 1}`; a slot's first object has rev 1 and no AI
+ * path writes null, so "exists, value null (or empty competencies), rev ≥ 2" is only ever [무시]. The server also
+ * refuses AI patches on such a slot (`classification_dismissed`), so the field stays dismissed in this chat.
+ */
+export function isDismissedClassification(field: DraftClassificationFieldObject<unknown> | undefined | null): boolean {
+  if (!field) return false
+  const v = field.value
+  const filled = v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : typeof v === "string" ? v.trim() !== "" : true)
+  if (filled) return false
+  return (field.rev ?? 1) >= 2
+}
+
+const CLASSIFICATION_KEYS: readonly ProjectClassificationField[] = ["project_type", "experience_type", "competencies"]
+
+/** The classification fields of this chat's draft that the user dismissed ([무시]) — never proposed again. */
+export function dismissedClassifications(draft: ProjectStructuredDraft | null | undefined): ReadonlySet<ProjectClassificationField> {
+  if (!draft?.classification) return new Set()
+  return new Set(CLASSIFICATION_KEYS.filter((f) => isDismissedClassification(draft.classification[f])))
+}
 
 // ---------------------------------------------------------------------------
 // limits (DM 2.3 / 2.5 / 2.5.0, mirror CAREER_LIMITS in contracts/career.ts)
@@ -569,9 +594,9 @@ export function guessWritingKind(title: string): WritingKind | null {
 
 export const PANEL_COPY = {
   inputPlaceholder: "Resumate AI에게 물어보세요",
-  /** 409 turn_in_progress (another tab is answering) — the server's message (turn.ts) [UI-가정] */
+  /** 409 turn_in_progress (another tab is answering) — the server's message (turn.ts), UX v5.14 U36-3 */
   turnInProgress: "이전 메시지에 대한 응답을 만들고 있어요. 잠시 후 다시 보내 주세요",
-  /** 409 nothing_to_retry on "다시 보내기" — [UI-가정] copy (no spec row); the text goes back to the input */
+  /** 409 nothing_to_retry on "다시 보내기" — UX v5.14 U36-3; the text goes back to the input */
   nothingToRetry: "이 메시지는 다시 보낼 수 없어요. 입력창의 내용을 새로 보내 주세요",
   nameRequired: {
     project: "대화를 시작하려면 프로젝트명을 먼저 입력해 주세요",

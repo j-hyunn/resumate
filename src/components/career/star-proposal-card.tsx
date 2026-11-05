@@ -41,6 +41,7 @@ import {
   PAGE_SAVE_SKIP_COPY,
   PANEL_COPY,
   STAR_FIELDS_ORDER,
+  dismissedClassifications,
   isBlank,
   type AppliedProjectProposal,
   type ProjectPageValues,
@@ -60,7 +61,6 @@ import {
   type FillPlan,
   type FillSkipReason,
 } from "./star-proposal-fill"
-import { ignoreClassification, ignoredClassifications } from "./ignored-classification"
 
 /** 섹션 이름 (토스트·안내 문구) */
 export const PROPOSAL_FIELD_LABELS: Record<ProjectProposalField, string> = {
@@ -141,8 +141,9 @@ export function fillableFields(
   competencyPick: Competency[] | null,
   values: ProjectPageValues,
 ): ProjectProposalField[] {
-  const ignored = ignoredClassifications(chatId)
-  const candidates = PROPOSAL_FIELDS_ORDER.filter((f) => !ignored.has(f) && isFillable(draft, chatId, f, applied))
+  // [무시]한 분류 = the server judgment on the draft (value null, rev ≥ 2), not a browser memory
+  const dismissed: ReadonlySet<string> = dismissedClassifications(draft)
+  const candidates = PROPOSAL_FIELDS_ORDER.filter((f) => !dismissed.has(f) && isFillable(draft, chatId, f, applied))
   // the count = what [모두 반영] really fills now (form-value checks included, QA UQ-S10-4)
   return planFill({ draft, chatId, values, applied, fields: candidates, competencyPick }).fills.map((x) => x.field)
 }
@@ -162,8 +163,8 @@ export function StarProposalCard(props: StarProposalCardProps) {
   const draft = chat?.structured_draft as ProjectStructuredDraft | undefined
   // 혼합형 확인 줄: collapsed by default ("자세히" opens the sections)
   const [open, setOpen] = React.useState(false)
-  // re-render after [무시] (the ignored set lives in localStorage)
-  const [, bumpIgnored] = React.useState(0)
+  // [무시] clicked, server patch not back yet: hide the row right away (the patched draft then hides it for good)
+  const [dismissing, setDismissing] = React.useState<ReadonlySet<string>>(() => new Set())
   const [fillSkips, setFillSkips] = React.useState<FillPlan["skips"]>([])
   const [busy, setBusy] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
@@ -302,13 +303,15 @@ export function StarProposalCard(props: StarProposalCardProps) {
     const st = sectionState(f)
     return st !== "applied" && st !== "filled"
   }
-  // [무시]한 분류 (this chat, this browser) — never shown again, a later proposal included
-  const ignored = ignoredClassifications(chat.id)
+  // [무시]한 분류 — the server's judgment on this chat's draft (decisions 4.11 UI #3, DM 11.5 #1, R10): never shown
+  // again, and the server refuses a later AI proposal for the slot
+  const dismissed: ReadonlySet<string> = dismissedClassifications(draft)
+  const ignored = (f: ProjectProposalField) => dismissed.has(f) || dismissing.has(`${chat.id}:${f}`)
   const starRows = STAR_FIELDS_ORDER.filter((f) => !isBlank(draft.star[f]?.value ?? null) && pendingOnly(f))
   const periodRows = PERIOD_FIELDS.filter((f) => draft.project[f]?.value && pendingOnly(f))
   const classRows = CLASSIFICATION_FIELDS.filter((f) => {
     const v = draft.classification[f]?.value
-    return (Array.isArray(v) ? v.length > 0 : Boolean(v)) && pendingOnly(f) && !ignored.has(f)
+    return (Array.isArray(v) ? v.length > 0 : Boolean(v)) && pendingOnly(f) && !ignored(f)
   })
   const hasRows = starRows.length + periodRows.length + classRows.length > 0
   // nothing left to decide (all reflected, ignored, or no proposal yet): no confirmation line at all
@@ -540,11 +543,19 @@ export function StarProposalCard(props: StarProposalCardProps) {
                 pick={props.competencyPick}
                 onPickChange={props.onCompetencyPickChange}
                 onShowInForm={props.onShowInForm}
-                // 무시: remember it for this chat (never shown again) + clear the proposal on the server (user `set` null)
+                // 무시: user `set` null on the server — the slot becomes {value: null, rev + 1} = dismissed in this chat
                 onIgnore={(f) => {
-                  ignoreClassification(chat.id, f)
-                  bumpIgnored((n) => n + 1)
-                  void patch({ kind: "edit", section: "classification", field: f, value: null })
+                  const key = `${chat.id}:${f}`
+                  setDismissing((prev) => new Set(prev).add(key))
+                  void patch({ kind: "edit", section: "classification", field: f, value: null }).then((ok) => {
+                    // refused / failed: the proposal comes back (the patch error is shown by the panel)
+                    if (!ok)
+                      setDismissing((prev) => {
+                        const next = new Set(prev)
+                        next.delete(key)
+                        return next
+                      })
+                  })
                 }}
               />
             ) : null}

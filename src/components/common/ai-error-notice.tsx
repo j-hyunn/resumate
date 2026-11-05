@@ -23,6 +23,7 @@
  * - a retry is consent-gated too (consent_required → C-21 before the request)
  */
 import * as React from "react"
+import { isPreviewEnabled, readPreviewState } from "@/lib/preview-state"
 import Link from "next/link"
 import {
   Ban,
@@ -392,6 +393,23 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   className?: string
 }
 
+/**
+ * UQ-389 (C-20 OD-B1 preview): `?state=ai-failed-daily-quota-reset` → a reset time 3 hours after the current hour.
+ * Reads `window.location` through useSyncExternalStore (no useSearchParams, so no Suspense boundary is needed);
+ * always null in production and on the server.
+ */
+const noSubscribe = () => () => undefined
+function usePreviewQuotaReset(enabled: boolean, now: number): string | null {
+  const on = React.useSyncExternalStore(
+    noSubscribe,
+    () => enabled && isPreviewEnabled && readPreviewState(new URLSearchParams(window.location.search)) === "ai-failed-daily-quota-reset",
+    () => false,
+  )
+  if (!on || !now) return null
+  const hour = 60 * 60 * 1000
+  return new Date(Math.floor(now / hour) * hour + 3 * hour).toISOString()
+}
+
 export function AiErrorNotice({
   code,
   provider: providerProp,
@@ -421,6 +439,7 @@ export function AiErrorNotice({
 }: AiErrorNoticeProps) {
   const ctxConnection = useAiConnection()
   const now = useNow()
+  const previewReset = usePreviewQuotaReset(code === "daily_quota_exhausted" && !quotaResetsAt, now)
   const consent = useAiConsentGate()
   // key_missing: "먼저 readiness를 다시 읽는다" (02 C-20) — consent cause vs no key. Skeleton from the
   // first frame (UQ-403).
@@ -478,7 +497,8 @@ export function AiErrorNotice({
   // ① 시각 줄
   let timeLine: React.ReactNode = null
   // OD-B1 (v5.13): the reset line only when the job has `quota_resets_at` — otherwise the title alone
-  const resets = code === "daily_quota_exhausted" ? (quotaResetsAt ?? null) : null
+  // UQ-389: `?state=ai-failed-daily-quota-reset` (development only) fills a preview reset time so the line can be seen
+  const resets = code === "daily_quota_exhausted" ? (quotaResetsAt ?? previewReset) : null
   if (resets) {
     timeLine = (
       <p>

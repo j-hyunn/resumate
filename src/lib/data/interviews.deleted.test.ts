@@ -77,3 +77,12 @@ describe("OD-I1 all-unanswered submit (mock)", () => {
     for (const a of db.interview_answers.filter((a) => a.session_id === s.id)) expect(a).toMatchObject({ score_status: "unanswered", score_value: 0 })
   })
 })
+
+describe("UQ-382 다시 채점 on a deleted 자기소개서's session (mock)", () => {
+  it("refuses with interview_session_read_only like the server, no job", async () => {
+    const { regradeFailedAnswers } = await import("./ai-jobs")
+    const jobs = store.db!.ai_jobs.length
+    expect(await regradeFailedAnswers(IDS.ses(15))).toEqual({ refused: "interview_session_read_only", cause: null })
+    expect(store.db!.ai_jobs.length).toBe(jobs)
+  })
+})

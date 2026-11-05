@@ -78,8 +78,7 @@ async function realStartDeps() {
 
 function row(db: MockDb, s: MockDb["interview_sessions"][number]): InterviewSessionRow {
   const ap = db.application_projects.find((a) => a.id === s.application_project_id)
-  // OD-I6 (mock): a kept session may still hold the deleted project's id (older fixtures) or null;
-  // "deleted" = that project is gone. The real branch reads application_project_id is null.
+  // OD-I6: a kept session of a deleted 자기소개서 has application_project_id null (FK set null, mock delete too)
   const deleted = !ap
   const job = [...db.ai_jobs]
     .reverse()
@@ -206,9 +205,8 @@ export async function getInterviewSessionLocation(sessionId: string): Promise<{ 
       const db = await mockRequest()
       const s = db.interview_sessions.find((x) => x.id === sessionId)
       if (!s) return null
-      // mock: a kept session of a deleted 자기소개서 still carries the gone project's id (see `row`)
-      const live = db.application_projects.some((a) => a.id === s.application_project_id)
-      return { application_project_id: live ? s.application_project_id : null }
+      // mock delete sets a kept session's application_project_id to null like the FK (deletion.ts)
+      return { application_project_id: s.application_project_id }
     },
     async () => {
       if (!isUuid(sessionId)) return null
@@ -216,8 +214,8 @@ export async function getInterviewSessionLocation(sessionId: string): Promise<{ 
       const { data, error } = await supabase.from("interview_sessions").select("application_project_id").eq("id", sessionId).maybeSingle()
       if (error) throw mapDbError(error)
       if (!data) return null
-      // OD-I6 (DM v4.11 11.6 #1): nullable once the backend migration lands; the generated type still says string
-      return { application_project_id: (data.application_project_id as string | null) ?? null }
+      // OD-I6 (DM v4.11 11.6 #1): null = the session's 자기소개서 was deleted
+      return { application_project_id: data.application_project_id }
     },
   )
 }

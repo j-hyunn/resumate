@@ -1221,8 +1221,11 @@ export type AiRetryRefusalCode =
 export type AiGateRefusalCode = AiStartRefusalCode | AiRetryRefusalCode
 /** ⑥ create_application_project (Q53-1, 04 §2.11.7): HTTP 409 before the insert, no row */
 export type ApplicationCreateRefusalCode = "ai_consent_required" | "key_invalid"
-/** 다시 채점 route (Q53-3, 04 §2.7.1): HTTP 409. RPC variant of not_retryable: interview_evaluation_not_needed */
-export type InterviewEvaluationRefusalCode = "interview_evaluation_not_retryable" | "interview_evaluation_input_only"
+/**
+ * 다시 채점 route (Q53-3, 04 §2.7.1): HTTP 409. RPC variant of not_retryable: interview_evaluation_not_needed.
+ * (R11 OD-I6, DM 2.7.2) `interview_session_read_only`: the session's 자기소개서 was deleted (contracts INTERVIEW_EVALUATION_REFUSAL_CODES).
+ */
+export type InterviewEvaluationRefusalCode = "interview_evaluation_not_retryable" | "interview_evaluation_input_only" | "interview_session_read_only"
 /** RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1), in check order */
 export type JdRawTextRefusalCode =
   | "invalid_raw_text"
@@ -1271,9 +1274,9 @@ export interface DeletionImpact {
     }>
     /**
      * OD-I6 / R-OD-5 (DM v4.11): completed sessions whose 자기소개서 was already deleted and that cite this item.
-     * R11: returned by get_deletion_impact (contracts CareerDeletionImpact).
+     * R11: always returned by get_deletion_impact (contracts CareerDeletionImpact); 0 for writing_chat.
      */
-    detached_interview_sessions?: number
+    detached_interview_sessions: number
   }
   /** entity_type = 'writing_chat' only */
   writing_chat?: { message_count: number; linked_saved_rows: number }

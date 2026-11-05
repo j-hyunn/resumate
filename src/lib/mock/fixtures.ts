@@ -57,16 +57,6 @@ import { mockAiMeta, mockMessageMeta } from "./ai-meta"
 import { DISCLOSURE_VERSION, MOCK_MODELS, PRICE_TABLE_VERSION, mockDisclosures, mockPriceTables } from "./ai-providers"
 import { currentPeriodMonth, dateFromToday, daysAgo, minutesAgo, month } from "./time"
 
-/**
- * OD-I6 (DM v4.11 11.6 #1~#6): a kept session of a deleted 자기소개서 carries the company / position snapshot.
- * The generated row has no snapshot columns yet and `application_project_id` is still non-null, so the mock keeps
- * the deleted project's id on the row and "deleted" means that project is gone from `application_projects`.
- */
-export type MockInterviewSession = InterviewSession & {
-  company_name_snapshot?: string | null
-  position_title_snapshot?: string | null
-}
-
 export interface MockDb {
   user: { id: string; email: string }
   profiles: Profile[]
@@ -90,7 +80,7 @@ export interface MockDb {
   drafts: Draft[]
   draft_sections: DraftSection[]
   draft_section_sources: DraftSectionSource[]
-  interview_sessions: MockInterviewSession[]
+  interview_sessions: InterviewSession[]
   interview_questions: InterviewQuestion[]
   interview_answers: InterviewAnswer[]
   answer_evaluations: AnswerEvaluation[]
@@ -145,7 +135,7 @@ const POLICY_VERSION = "2026-04-01"
 
 /** 04 §2.7.1 판정표 fixture sessions: each answer's outcome. "target" = failed, cause unknown (다시 채점 대상) */
 const GRADED_SESSIONS = [7, 8, 9, 10, 11, 14] as const
-/** OD-I6: the deleted 자기소개서 of session 15 — IDS.ap(90) is not in application_projects */
+/** OD-I6: the deleted 자기소개서 of session 15 — IDS.ap(90) is not in application_projects; the session's id is null */
 export const DELETED_AP_N = 90
 const GRADED_OUTCOMES: Record<(typeof GRADED_SESSIONS)[number], Array<"ok" | "target" | "unanswered" | "input_too_long" | "safety_blocked">> = {
   7: ["input_too_long", "input_too_long", "unanswered"],
@@ -1263,7 +1253,7 @@ export function createFixtures(): MockDb {
       evaluation_provider: "gemini",
       evaluation_model: MOCK_MODELS.gemini.default,
     })
-  const interview_sessions: MockInterviewSession[] = [
+  const interview_sessions: InterviewSession[] = [
     session(1, 1, "job", "in_progress", { answered_count: 2, weak_requirement_ids: [IDS.req(4)], last_activity_at: minutesAgo(180) }),
     // OD-I1 d14.v1: good·good·fair·해당 없음 → (75·30 + 75·30 + 50·20) / 80 = 68.75 → 69 per answer
     session(2, 1, "culture_fit", "completed", {
@@ -1324,6 +1314,8 @@ export function createFixtures(): MockDb {
         score_counted_count: 3,
         last_activity_at: daysAgo(12),
       }),
+      // like the real FK (on delete set null) + R11 snapshot columns
+      application_project_id: null,
       company_name_snapshot: "한빛소프트",
       position_title_snapshot: "백엔드 개발자",
     },
@@ -1385,24 +1377,26 @@ export function createFixtures(): MockDb {
     score_method_version: null,
     score_rationale: null,
   })
+  // d14.v1 question rationale, same shape as private.interview_answer_score_d14v1 (good · good · fair · n/a → 69)
+  const SCORED_69_RATIONALE = "구체성 양호 · 의도 부합 양호 · 구조 보완 필요 · JD 연관성 해당 없음 → 69점"
   const interview_answers: InterviewAnswer[] = [
     answer(1, 1, 1, "APM에서 p95 지표를 보고 결제 승인 테이블의 풀 스캔 쿼리를 찾았습니다.", "draft"),
     answer(2, 2, 1, "변경 전후로 슬로 쿼리 로그를 비교했습니다.", "draft"),
     answer(3, 3, 1, "", "draft"),
     answer(4, 4, 1, "", "draft"),
     answer(5, 5, 1, "", "draft"),
-    { ...answer(6, 6, 2, "코드 리뷰 기준을 두고 의견이 갈렸을 때 데이터를 모아 팀 회의에서 함께 정했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
-    { ...answer(7, 7, 2, "배포 체크리스트를 빠뜨려 장애가 났고, 이후 자동화된 배포 검증을 도입했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
-    { ...answer(8, 8, 2, "투명한 공유입니다. 문제를 일찍 알리면 팀 전체의 비용이 줄어듭니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(6, 6, 2, "코드 리뷰 기준을 두고 의견이 갈렸을 때 데이터를 모아 팀 회의에서 함께 정했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
+    { ...answer(7, 7, 2, "배포 체크리스트를 빠뜨려 장애가 났고, 이후 자동화된 배포 검증을 도입했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
+    { ...answer(8, 8, 2, "투명한 공유입니다. 문제를 일찍 알리면 팀 전체의 비용이 줄어듭니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
     answer(9, 9, 3, "결제 승인 지연 장애 때 APM으로 병목 쿼리를 찾아 인덱스를 바꿨습니다.", "submitted"),
     answer(10, 10, 3, "트랜잭션 경계와 장애 시 재시도 정책을 먼저 정합니다.", "submitted"),
     answer(11, 11, 3, "개인 프로젝트로 ECS 배포를 직접 해 보며 익히겠습니다.", "submitted"),
     answer(12, 12, 5, "배포 파이프라인의 수동 단계를 줄이는 것부터 하겠습니다.", "submitted", "pending_method"),
     answer(13, 13, 5, "사내 배포 도구를 만들며 서버별 설정 차이를 정리하는 일이 가장 어려웠습니다.", "submitted"),
     answer(14, 14, 5, "사이드 프로젝트로 클러스터를 직접 운영해 보며 익히겠습니다.", "submitted"),
-    { ...answer(60, 60, 15, "장애 알림을 받고 로그로 원인을 좁힌 뒤 롤백했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
-    { ...answer(61, 61, 15, "읽기 트래픽은 캐시로, 쓰기는 큐로 나눠 받겠습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1" },
-    { ...answer(62, 62, 15, "", "unanswered", "unanswered"), score_value: 0, score_max: 100, score_method_version: "d14.v1" },
+    { ...answer(60, 60, 15, "장애 알림을 받고 로그로 원인을 좁힌 뒤 롤백했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
+    { ...answer(61, 61, 15, "읽기 트래픽은 캐시로, 쓰기는 큐로 나눠 받겠습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
+    { ...answer(62, 62, 15, "", "unanswered", "unanswered"), score_value: 0, score_max: 100, score_method_version: "d14.v1", score_rationale: "미응답 · 0점" },
     answer(40, 40, 4, "결제 승인 지연을 줄이려고 쿼리와 캐시 구조를 직접 바꿨습니다.", "draft"),
     answer(41, 41, 4, "", "draft"),
     answer(42, 42, 4, "", "draft"),

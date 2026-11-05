@@ -162,12 +162,15 @@ export const MATCH_STATUS_LABELS: Record<RequirementMatchStatus, string> = {
   no_evidence: "근거 없음",
 }
 
-/** C-17 항목 등급 — // [UI-가정] labels not in spec (design-system P-2) */
+/** 409 interview_session_read_only (R11 OD-I6, DM 2.7.2) — the server's message (src/server/db/errors.ts) */
+export const INTERVIEW_READ_ONLY_MESSAGE = "자기소개서가 삭제된 면접 기록은 볼 수만 있어요."
+
+/** C-17 항목 등급 (UX v5.13 C-17, OD-I2) — same words as the server score_rationale */
 export const GRADE_LABELS: Record<CriterionGrade, string> = {
-  excellent: "매우 좋음",
-  good: "좋음",
-  fair: "보통",
-  poor: "부족",
+  excellent: "우수",
+  good: "양호",
+  fair: "보완 필요",
+  poor: "미흡",
   not_applicable: "해당 없음",
 }
 
@@ -378,6 +381,30 @@ export function objectParticle(word: string): string {
   const last = word.charCodeAt(word.length - 1)
   if (last < 0xac00 || last > 0xd7a3) return "을(를)"
   return (last - 0xac00) % 28 === 0 ? "를" : "을"
+}
+
+/** 을/를 for a display name that may end in ")" or a digit (기본 이름 "새 자기소개서 (2026-11-05)"): digits are read in Korean */
+function nameObjectParticle(name: string): string {
+  const core = name.trim().replace(/[)\]'"\s]+$/, "")
+  const ch = core.slice(-1)
+  if (/[0-9]/.test(ch)) return "013678".includes(ch) ? "을" : "를"
+  return objectParticle(core)
+}
+
+/**
+ * C-05 자기소개서 삭제 object phrase with the U36-7 overlap rule (UX v5.14, same as the S-31 title): a name that
+ * already contains "자기소개서" doesn't get " 자기소개서" again. quoted → dialog first line, plain → toast.
+ */
+export function applicationObjectPhrase(name: string, { quoted }: { quoted: boolean }): string {
+  const shown = quoted ? `'${name}'` : name
+  return name.includes("자기소개서") ? `${shown}${nameObjectParticle(name)}` : `${shown} 자기소개서를`
+}
+
+/**
+ * 자기소개서 삭제 성공 토스트 (S-13 · S-31 · S-39 공통). UX v5.15 토스트 목록 (U38-1)
+ */
+export function applicationDeletedToast(name: string): string {
+  return `${applicationObjectPhrase(name, { quoted: false })} 삭제했어요`
 }
 
 /** ST-SAVE-FAILED 제출형 (design-system 4장, 리더 결정 UQ-128): "{대상}을(를) 저장하지 못했어요. 입력한 내용은 그대로 있어요" */

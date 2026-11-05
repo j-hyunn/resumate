@@ -82,12 +82,13 @@ describe.skipIf(!ready)("consent + profile services (local stack)", () => {
 
   it("reads and updates the profile through RLS", async () => {
     await expect(getProfile(user, { id: userId })).resolves.toMatchObject({ id: userId, displayName: null });
-    const updated = await updateProfile(user, { id: userId }, { displayName: "테스트", totalYearsOfExperience: 2 });
-    expect(updated).toMatchObject({ displayName: "테스트", totalYearsOfExperience: 2 });
+    const updated = await updateProfile(user, { id: userId }, { displayName: "테스트" });
+    expect(updated).toMatchObject({ displayName: "테스트" });
   });
 
+  // R13 (DM 2.1.1): display_name 길이 CHECK (50자) — the three old columns are dropped.
   it("a DB CHECK violation maps to invalid_input", async () => {
-    await expect(updateProfile(user, { id: userId }, { totalYearsOfExperience: 99 })).rejects.toMatchObject({
+    await expect(updateProfile(user, { id: userId }, { displayName: "가".repeat(51) })).rejects.toMatchObject({
       code: "invalid_input",
     });
   });

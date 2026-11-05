@@ -60,7 +60,7 @@ select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-000
 
 -- experience missing -> step 1 wins: form without suggested_project_id, but the hint is there.
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["project_fields", "profile"],
+          '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["project_fields"],
             "next_action": "form"}'::jsonb,
           'A18: experience missing -> form first (no suggested_project_id), project_fields hint present');
 
@@ -69,7 +69,7 @@ insert into public.experiences (id, company_name, start_month, job_rank)
 
 -- no AI connection (no key) -> project_fields step (form + the standalone project).
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields", "profile"],
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields"],
             "next_action": "form", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
           'A18: project_fields -> form + suggested_project_id, same without AI connection');
 select is(public.get_data_readiness() #> '{features,draft}', public.get_data_readiness() #> '{features,insight}',
@@ -88,7 +88,7 @@ update public.profiles set active_ai_provider = 'gemini' where id = 'aaaaaaaa-00
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields", "profile"],
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_fields"],
             "next_action": "form", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
           'A18: same value with a usable key');
 
@@ -108,7 +108,7 @@ select is(public.get_data_readiness() #>> '{features,insight,suggested_project_i
 insert into public.projects (id, experience_id, name)
   values ('aaaaaaaa-3333-0000-0000-000000000003', 'aaaaaaaa-1111-0000-0000-000000000001', 'P3');
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": false, "missing": ["complete_project"], "hints": ["project_star", "profile"],
+          '{"ready": false, "missing": ["complete_project"], "hints": ["project_star"],
             "next_action": "writing_chat", "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000003"}'::jsonb,
           'A18 v4.4: project_star step first');
 
@@ -122,7 +122,7 @@ select is(public.get_data_readiness() #>> '{features,insight,next_action}', 'for
 -- filling P2's description completes it -> ready.
 update public.projects set description = '내용' where id = 'aaaaaaaa-3333-0000-0000-000000000002';
 select is(public.get_data_readiness() #> '{features,insight}',
-          '{"ready": true, "missing": [], "hints": ["profile"]}'::jsonb,
+          '{"ready": true, "missing": [], "hints": []}'::jsonb,
           'A18: description filled -> ready, no project_fields');
 reset role;
 

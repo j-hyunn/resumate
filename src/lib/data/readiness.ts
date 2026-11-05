@@ -35,12 +35,6 @@ export function computeReadiness(db: MockDb): DataReadiness {
   const standaloneWithoutDescription = db.projects
     .filter((p) => !affiliated(p) && p.status === "draft" && !(p.description ?? p.summary)?.trim())
     .sort(byRecent)
-  const profile = db.profiles[0]
-  // v4.2: desired_job_title (non-blank) / total_years_of_experience / interested_industries
-  const profileFilled = Boolean(
-    profile?.desired_job_title?.trim() || profile?.total_years_of_experience != null || profile?.interested_industries?.length,
-  )
-
   const missing: Array<"complete_experience" | "complete_project"> = []
   if (completeExperiences.length < 1) missing.push("complete_experience")
   if (completeProjects.length < 1) missing.push("complete_project")
@@ -52,10 +46,10 @@ export function computeReadiness(db: MockDb): DataReadiness {
 
   /** next_action order (DM §6 v4.4): ① no experience → form ② STAR 미완 소속 → writing_chat / form ③ 내용 빈 독립 → form ④ create_project / form */
   const gated = (): ReadinessFeature => {
-    if (ready) return { ready: true, missing: [], hints: profileFilled ? [] : ["profile"] }
+    // (v4.12, SD-A18) ready면 hints는 빈 배열 — `profile` 힌트는 없어졌다 (DM 6-A)
+    if (ready) return { ready: true, missing: [], hints: [] }
     const hints: NonNullable<ReadinessFeature["hints"]> = []
     if (projectsWithoutCompleteStar.length > 0) hints.push("project_star")
-    if (!profileFilled) hints.push("profile")
     if (missing.includes("complete_experience")) return { ready: false, missing, hints, next_action: "form" }
     const star = projectsWithoutCompleteStar[0]
     if (star)
@@ -67,9 +61,10 @@ export function computeReadiness(db: MockDb): DataReadiness {
     return { ready: false, missing, hints, next_action: aiUsable ? "create_project" : "form" }
   }
 
+  // (v4.12, SD-6) `thin` = complete 경력·교육·프로젝트가 하나라도 있음 ("프로필 또는" 삭제, DM 6-A)
   const dataSufficiency = ready
     ? "ok"
-    : profileFilled || completeExperiences.length || completeEducations.length || completeProjects.length
+    : completeExperiences.length || completeEducations.length || completeProjects.length
       ? "thin"
       : "none"
 
@@ -86,7 +81,6 @@ export function computeReadiness(db: MockDb): DataReadiness {
       draft_experiences: db.experiences.filter((e) => e.status === "draft").length,
       draft_educations: db.educations.filter((e) => e.status === "draft").length,
       draft_projects: db.projects.filter((p) => p.status === "draft").length,
-      profile_filled: profileFilled,
     },
     draft_item_ids: {
       experiences: db.experiences.filter((e) => e.status === "draft").map((e) => e.id),
@@ -114,7 +108,7 @@ export async function getDataReadiness(): Promise<DataReadiness> {
 
 /**
  * DM §6 v4.4 readiness (counts `projects_without_complete_star` / `standalone_projects_without_description`,
- * hints `project_star` / `project_fields` / `profile`, next_action `writing_chat` / `form` / `create_project`,
+ * hints `project_star` / `project_fields`, next_action `writing_chat` / `form` / `create_project`,
  * no `suggested_mode`). 연결 대기: the reworked C-09 / C-10 read this shape.
  */
 export async function getDataReadinessV44(): Promise<DataReadinessV44> {
@@ -154,7 +148,6 @@ export function toLegacyReadiness(r: DataReadinessV44): DataReadiness {
       draft_experiences: r.counts.draft_experiences,
       draft_educations: r.counts.draft_educations,
       draft_projects: r.counts.draft_projects,
-      profile_filled: r.counts.profile_filled,
     },
     draft_item_ids: { ...r.draft_item_ids, project_details: [] },
     features: {

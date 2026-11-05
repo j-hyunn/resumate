@@ -95,7 +95,7 @@ export type ValidatedMatch = {
 };
 
 function isCareerFact(e: ValidatedEvidence): boolean {
-  // A10: profile wishes (희망 직무·관심 산업) are context, not a fact.
+  // (v4.12, SD-6) No profile source type left; only C-9 reflections are excluded.
   return isCareerSupportEvidence(e) && !isReflectionEvidence(e);
 }
 

@@ -76,7 +76,7 @@ describe("extract", () => {
     expect(llm.requests[0].outputSchema).not.toBeNull();
     expect(r.patch.ops[0]).toMatchObject({ op: "add_facts", facts: [{ source_message_ids: ["00000000-0000-4000-8000-000000000002"], review: "ok" }] });
     expect(r.processedThroughSequence).toBe(2);
-    expect(AI13_EXTRACT_PROMPT_VERSION).toMatch(/^ai-13\.extract\.v3\+common\.v2$/);
+    expect(AI13_EXTRACT_PROMPT_VERSION).toMatch(/^ai-13\.extract\.v3\+common\.v3$/);
   });
 
   it("nothing pending → no call", async () => {
@@ -98,8 +98,8 @@ describe("extract", () => {
 
 describe("reply", () => {
   it("R7 versions and question rules (quote, one element, categories, per-slot elements, follow-up cap)", () => {
-    expect(AI13_REPLY_PROMPT_VERSION).toMatch(/^ai-13\.reply\.v2\+common\.v2$/);
-    expect(AI13_COMPOSE_PROMPT_VERSION).toMatch(/^ai-13\.compose\.v2\+common\.v2$/);
+    expect(AI13_REPLY_PROMPT_VERSION).toMatch(/^ai-13\.reply\.v3\+common\.v3$/);
+    expect(AI13_COMPOSE_PROMPT_VERSION).toMatch(/^ai-13\.compose\.v2\+common\.v3$/);
     expect(AI13_REPLY_SYSTEM).toContain("따옴표로, 고치지 않고 짧게 인용해");
     expect(AI13_REPLY_SYSTEM).toContain("구체 요소 하나를 겨냥합니다");
     expect(AI13_REPLY_SYSTEM).toContain("일반적인 범주 2~4개");

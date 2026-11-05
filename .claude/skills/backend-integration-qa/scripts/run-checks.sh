@@ -42,7 +42,10 @@ if [ ! -d supabase ]; then
 elif ! command -v supabase >/dev/null 2>&1 && ! [ -x node_modules/.bin/supabase ]; then
   record "pgTAP" SKIP "Supabase CLI not installed"
 else
-  sb="supabase"; command -v supabase >/dev/null 2>&1 || sb="node_modules/.bin/supabase"
+  # Prefer the CLI pinned in package.json over a globally installed one: different
+  # builds emit different nullability for view columns in `gen types`, so a global
+  # CLI silently changes database.types.ts (QA-R13-08, 2026-11-05).
+  sb="node_modules/.bin/supabase"; [ -x "$sb" ] || sb="supabase"
   if ! "$sb" status >/dev/null 2>&1; then
     record "pgTAP" SKIP "local Supabase stack not running (supabase start; needs Docker)"
   elif [ -z "$(ls supabase/tests/*.sql 2>/dev/null)" ]; then

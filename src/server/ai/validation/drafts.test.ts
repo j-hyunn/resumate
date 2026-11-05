@@ -53,7 +53,7 @@ describe("buildSourceScope (AI-04 V-7)", () => {
     expect(scope.has(a(al, "project", IDS.prjSettle))).toBe(false); // sibling
     expect(scope.has(a(al, "skill", IDS.sklKotlin))).toBe(false); // standalone project's skill
     expect(scope.has(a(al, "project_deliverable", IDS.dlvSide1))).toBe(false);
-    expect(scope.has("PROFILE")).toBe(true);
+    expect(scope.has("PROFILE")).toBe(false); // (v4.12, SD-6)
   });
 
   it("standalone project source: its deliverables and skills", () => {
@@ -74,9 +74,9 @@ describe("buildSourceScope (AI-04 V-7)", () => {
     expect(scope.has(a(al, "project", IDS.prjEdu))).toBe(false);
   });
 
-  it("no sources: profile only (plus JD/notes when present)", () => {
+  it("no sources: nothing in scope (JD/notes when present) — (v4.12, SD-6) no profile", () => {
     const scope = buildSourceScope(al, []);
-    expect([...scope]).toEqual(["PROFILE"]);
+    expect([...scope]).toEqual([]);
   });
 });
 
@@ -86,6 +86,7 @@ describe("filterCareerRows", () => {
     expect(rows.projects.map((p) => p.id).sort()).toEqual([IDS.prjDraft, IDS.prjEdu, IDS.prjPay, IDS.prjSettle].sort());
     expect(rows.educations.map((e) => e.id)).toEqual([IDS.edu]);
     expect(rows.skills.map((s) => s.id)).not.toContain(IDS.sklManual);
-    expect(rows.profile).not.toBeNull();
+    // (v4.12, SD-2) the server-computed sum travels with any filtered selection.
+    expect(rows.totalExperience.totalMonths).toBeGreaterThan(0);
   });
 });

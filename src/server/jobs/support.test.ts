@@ -12,7 +12,7 @@ import { AiError, ProviderError } from "@/server/ai/errors";
 import { AI_STREAM_EVENT_TYPES as PIPELINE_EVENTS } from "@/server/ai/streaming/events";
 import { toAiUsageSummary } from "@/server/services/usage";
 import { signContinueToken, verifyContinueToken } from "./continue-token";
-import { estimateCostUsd, kstDate, kstPeriodMonth, USAGE_FEATURE_BY_JOB_TYPE } from "./cost";
+import { estimateCost, estimateCostUsd, kstDate, kstPeriodMonth, UNPRICED_COST, USAGE_FEATURE_BY_JOB_TYPE } from "./cost";
 import { isCronAuthorized } from "./cron";
 import {
   createDevEnvKeySource,
@@ -323,27 +323,60 @@ const haiku: PriceRow = {
   longContextOutputUsdPerMtok: 2.5,
 };
 
-describe("estimateCostUsd", () => {
-  it("sums the four token kinds at their prices", () => {
-    // 10k×2 + 50k×0.1 + 4k×2.5 + 2k×10 = 20000+5000+10000+20000 micro-USD = 0.055
+describe("estimateCost (AI C-13 입력 쪽 / 출력 쪽, v4.12 SD-A11)", () => {
+  it("splits the four token kinds: 캐시 쓰기는 입력 쪽, 출력은 출력 쪽", () => {
+    // 입력 10k×2 + 캐시 읽기 50k×0.1 + 캐시 쓰기 4k×2.5 = 35,000 micro-USD = 0.035
+    // 출력 2k×10 = 20,000 micro-USD = 0.02
+    const c = estimateCost(usage({ inputTokens: 10_000, cachedInputTokens: 50_000, cacheWriteTokens: 4_000, outputTokens: 2_000 }), sonnet);
+    expect(c).toEqual({ inputCostUsd: 0.035, outputCostUsd: 0.02, estimatedCostUsd: 0.055 });
+    // 합계는 반올림된 두 값의 합이다 (float 덧셈 오차 없이 — 0.055, not 0.05500000000000001)
+    expect(c.estimatedCostUsd).toBe(Math.round((c.inputCostUsd + c.outputCostUsd) * 1e6) / 1e6);
     expect(estimateCostUsd(usage({ inputTokens: 10_000, cachedInputTokens: 50_000, cacheWriteTokens: 4_000, outputTokens: 2_000 }), sonnet)).toBe(0.055);
   });
-  it("long-context prices once the whole prompt exceeds the threshold", () => {
+  it("reasoning_tokens are inside output_tokens — never added twice", () => {
+    const withReasoning = estimateCost(usage({ outputTokens: 2_000, reasoningTokens: 1_500 }), sonnet);
+    expect(withReasoning).toEqual(estimateCost(usage({ outputTokens: 2_000, reasoningTokens: null }), sonnet));
+    expect(withReasoning.outputCostUsd).toBe(0.02);
+  });
+  it("long-context prices once the whole prompt exceeds the threshold — 네 단가를 함께 바꾼다", () => {
     const at = usage({ inputTokens: 60_000, cachedInputTokens: 40_000, outputTokens: 1_000 }); // prompt = 100k → normal
-    expect(estimateCostUsd(at, haiku)).toBe((60_000 * 0.1 + 40_000 * 0.01 + 1_000 * 0.5) / 1e6);
+    expect(estimateCost(at, haiku)).toEqual({
+      inputCostUsd: (60_000 * 0.1 + 40_000 * 0.01) / 1e6,
+      outputCostUsd: (1_000 * 0.5) / 1e6,
+      estimatedCostUsd: (60_000 * 0.1 + 40_000 * 0.01 + 1_000 * 0.5) / 1e6,
+    });
     const over = usage({ inputTokens: 60_001, cachedInputTokens: 40_000, outputTokens: 1_000 });
-    expect(estimateCostUsd(over, haiku)).toBe(Math.round(60_001 * 0.5 + 40_000 * 0.05 + 1_000 * 2.5) / 1e6);
+    const c = estimateCost(over, haiku);
+    // 입력 쪽도 출력 쪽도 장문 단가 (입력만 / 출력만 바뀌는 경우는 없다)
+    expect(c.inputCostUsd).toBe(Math.round(60_001 * 0.5 + 40_000 * 0.05) / 1e6);
+    expect(c.outputCostUsd).toBe((1_000 * 2.5) / 1e6);
+    expect(c.estimatedCostUsd).toBe(Math.round(60_001 * 0.5 + 40_000 * 0.05 + 1_000 * 2.5) / 1e6);
   });
   it("missing long-context cache prices fall back to the normal cache prices; missing cache price to input", () => {
     const p = { ...haiku, longContextCachedInputUsdPerMtok: null, longContextCacheWriteUsdPerMtok: null };
     const u = usage({ inputTokens: 200_000, cachedInputTokens: 10_000, cacheWriteTokens: 1_000 });
-    expect(estimateCostUsd(u, p)).toBe(Math.round(200_000 * 0.5 + 10_000 * 0.01 + 1_000 * 0.125) / 1e6);
+    expect(estimateCost(u, p).inputCostUsd).toBe(Math.round(200_000 * 0.5 + 10_000 * 0.01 + 1_000 * 0.125) / 1e6);
     const noCache = { ...sonnet, cachedInputUsdPerMtok: null };
-    expect(estimateCostUsd(usage({ cachedInputTokens: 1_000_000 }), noCache)).toBe(2);
+    expect(estimateCost(usage({ cachedInputTokens: 1_000_000 }), noCache)).toEqual({ inputCostUsd: 2, outputCostUsd: 0, estimatedCostUsd: 2 });
   });
-  it("unavailable usage costs 0", () => {
-    expect(estimateCostUsd(usage({ usageSource: "unavailable" }), sonnet)).toBe(0);
+  it("unavailable usage costs 0 on all three values", () => {
+    expect(estimateCost(usage({ usageSource: "unavailable" }), sonnet)).toEqual(UNPRICED_COST);
   });
+  it("가격표에 없는 모델: 세 값 모두 0", () => {
+    expect(UNPRICED_COST).toEqual({ inputCostUsd: 0, outputCostUsd: 0, estimatedCostUsd: 0 });
+  });
+  it("세 값을 각각 numeric(12,6)에서 반올림하고 합을 다시 반올림하지 않는다", () => {
+    // 0.0000005 USD 단위가 섞여도 합계 = 반올림된 두 값의 합
+    const odd = { ...sonnet, inputUsdPerMtok: 1.5, outputUsdPerMtok: 2.5 };
+    const c = estimateCost(usage({ inputTokens: 1, outputTokens: 1 }), odd);
+    expect(c.inputCostUsd).toBe(0.000002); // 1.5 micro → 2 (round-half-up)
+    expect(c.outputCostUsd).toBe(0.000003); // 2.5 micro → 3
+    expect(c.estimatedCostUsd).toBe(0.000005);
+    expect(c.estimatedCostUsd).toBe(Math.round((c.inputCostUsd + c.outputCostUsd) * 1e6) / 1e6);
+  });
+});
+
+describe("KST helpers", () => {
   it("KST date / month boundaries", () => {
     expect(kstDate(new Date("2026-11-30T15:00:00Z"))).toBe("2026-12-01");
     expect(kstPeriodMonth(new Date("2026-10-31T14:59:59Z"))).toBe("2026-10-01");
@@ -365,11 +398,15 @@ describe("estimateCostUsd", () => {
       outcome: "failed",
       errorCode: "rate_limited",
       priceTableVersion: "v2026-10-28",
-      estimatedCostUsd: 0.00001,
+      inputCostUsd: 0.00001,
+      outputCostUsd: 0.000005,
+      estimatedCostUsd: 0.000015,
     });
     expect(row).not.toHaveProperty("period_month");
     expect(row).not.toHaveProperty("user_id");
     expect(row).toMatchObject({ input_tokens: 5, reasoning_tokens: 2, usage_source: "provider_reported", error_code: "rate_limited" });
+    // R13 (DM 2.9.2, SD-A11): 세 비용 값을 함께 insert 한다.
+    expect(row).toMatchObject({ input_cost_usd: 0.00001, output_cost_usd: 0.000005, estimated_cost_usd: 0.000015 });
   });
 });
 
@@ -446,37 +483,82 @@ describe("development AI env source", () => {
 
 // ---------------- usage meter summary (DM §2.9.5) ----------------
 
-describe("usage summary mapping", () => {
-  it("maps the RPC JSON to camelCase (numeric strings too)", () => {
+describe("usage summary mapping (DM 2.9.5 v4.12 providers[])", () => {
+  const bucket = (over: Record<string, unknown> = {}) => ({
+    input_tokens: 10,
+    cached_input_tokens: 1,
+    cache_write_tokens: 0,
+    output_tokens: 5,
+    input_cost_usd: "0.0100",
+    output_cost_usd: 0.0023,
+    estimated_cost_usd: "0.0123",
+    calls: 2,
+    failed_calls: 1,
+    ...over,
+  });
+
+  it("maps the RPC JSON to camelCase (numeric strings too) and keeps the stored feature values", () => {
     const s = toAiUsageSummary({
       period_month: "2026-10-01",
       as_of: "2026-10-28T09:00:00Z",
-      totals: { input_tokens: 10, cached_input_tokens: 1, cache_write_tokens: 0, output_tokens: 5, estimated_cost_usd: "0.0123", calls: 2, failed_calls: 1 },
-      by_feature: [{ feature: "insight", input_tokens: 10, output_tokens: 5, estimated_cost_usd: 0.0123, calls: 2 }],
-      by_provider: [{ provider: "gemini", connection_tier: "free", input_tokens: 10, output_tokens: 5, estimated_cost_usd: 0.0123, calls: 2 }],
+      totals: bucket(),
+      providers: [
+        {
+          provider: "gemini",
+          connection_tiers: ["free", "paid"],
+          totals: bucket(),
+          by_feature: [{ feature: "insight", ...bucket() }, { feature: "cover_letter", ...bucket() }],
+          price_table_versions: [{ version: "v2026-10-28", source_checked_at: "2026-10-28" }],
+        },
+      ],
       price_table_versions: [{ version: "v2026-10-28", source_checked_at: "2026-10-28" }],
     });
     expect(AiUsageSummarySchema.parse(s)).toEqual(s);
-    expect(s.totals).toMatchObject({ estimatedCostUsd: 0.0123, failedCalls: 1 });
-    expect(s.byProvider[0]).toMatchObject({ provider: "gemini", connectionTier: "free" });
+    expect(s.totals).toMatchObject({ inputCostUsd: 0.01, outputCostUsd: 0.0023, estimatedCostUsd: 0.0123, failedCalls: 1 });
+    expect(s.providers[0]).toMatchObject({ provider: "gemini", connectionTiers: ["free", "paid"] });
+    // 7행 묶음은 화면 상수다 — RPC 응답은 저장 값 8개를 그대로 돌려준다 (AI C-13.1, SD-4)
+    expect(s.providers[0]!.byFeature.map((f) => f.feature)).toEqual(["insight", "cover_letter"]);
     expect(s.previousMonth).toBeNull();
   });
+
   it("includes previous_month when present; empty month → zeros and []", () => {
     const s = toAiUsageSummary({
       period_month: "2026-10-01",
       as_of: "x",
       totals: {},
-      by_feature: [],
-      by_provider: [],
+      providers: [],
       price_table_versions: [],
       previous_month: { period_month: "2026-09-01", estimated_cost_usd: 1.5, input_tokens: 3, output_tokens: 4 },
     });
     expect(s.totals.calls).toBe(0);
+    expect(s.totals.inputCostUsd).toBe(0);
+    expect(s.providers).toEqual([]);
     expect(s.previousMonth).toEqual({ periodMonth: "2026-09-01", estimatedCostUsd: 1.5, inputTokens: 3, outputTokens: 4 });
   });
-  it("rejects an unknown feature (contract drift)", () => {
+
+  it("rejects an unknown feature and an unknown provider (contract drift)", () => {
+    const withFeature = (feature: string) => ({
+      period_month: "2026-10-01",
+      as_of: "x",
+      totals: {},
+      providers: [{ provider: "gemini", connection_tiers: ["free"], totals: {}, by_feature: [{ feature }], price_table_versions: [] }],
+      price_table_versions: [],
+    });
+    expect(() => toAiUsageSummary(withFeature("chat_message"))).toThrow();
+    expect(() => toAiUsageSummary({ ...withFeature("insight"), providers: [{ provider: "mistral", connection_tiers: [], totals: {}, by_feature: [], price_table_versions: [] }] })).toThrow();
+  });
+
+  it("the old by_feature / by_provider response is refused (응답 교체)", () => {
     expect(() =>
-      toAiUsageSummary({ period_month: "2026-10-01", as_of: "x", totals: {}, by_feature: [{ feature: "chat_message" }], by_provider: [], price_table_versions: [] }),
-    ).toThrow();
+      toAiUsageSummary({
+        period_month: "2026-10-01",
+        as_of: "x",
+        totals: {},
+        by_feature: [{ feature: "insight" }],
+        by_provider: [{ provider: "gemini", connection_tier: "free" }],
+        price_table_versions: [],
+        providers: [{ provider: "gemini", connection_tiers: ["free"], totals: {}, by_feature: [], price_table_versions: [] }],
+      }).providers,
+    ).not.toThrow();
   });
 });

@@ -12,7 +12,7 @@ import {
   rawSpan,
   truncateNormalized,
 } from "./deliverable-text";
-import { currentMonthInSeoul, formatDuration, formatMonth, mergedMonths, monthsInclusive, parseMonth, type YearMonth } from "./months";
+import { currentMonthInSeoul, formatDuration, formatMonth, monthsInclusive, parseMonth, type YearMonth } from "./months";
 
 /**
  * Career Context Pack (AI spec C-1, v4.5). Pure and deterministic: the same
@@ -26,7 +26,13 @@ import { currentMonthInSeoul, formatDuration, formatMonth, mergedMonths, monthsI
  * Inclusion: `complete` rows only; a non-complete parent (experience,
  * education, project) excludes its children even when they are complete.
  * Deliverables have no status and enter with a complete standalone parent
- * [가정]. `display_name`, contact info and `link_url` never enter (C-1, C-7).
+ * [가정]. Contact info and `link_url` never enter (C-1, C-7).
+ *
+ * (v4.12, SD-6) **No profile block.** No `profiles` value reaches any prompt,
+ * and the spec forbids leaving an empty block behind (0.v412). The only
+ * profile-shaped number left is the server-computed total experience
+ * (`computed_total_months`, SD-2), which comes from the DB function via
+ * `rows.totalExperience` (DM 6.2) and is the single number 연차 요건 판정 uses.
  *
  * Text format: one `<career_data>` block, nested tags per row with a `ref`
  * alias, `field: value` lines using the C-3 field names so the model can cite
@@ -134,36 +140,25 @@ export function buildCareerPack(rows: CareerRows, options: BuildCareerPackOption
   const periodOf = (start: string | null, end: string | null, ongoing: boolean) => {
     const s = parseMonth(start);
     const e = parseMonth(end);
-    if (!s) return { text: null as string | null, months: null as number | null, interval: null as { start: YearMonth; end: YearMonth } | null };
+    if (!s) return { text: null as string | null, months: null as number | null };
     const endYm = e ?? (ongoing ? asOf : null);
     const text = `${formatMonth(s)} ~ ${e ? formatMonth(e) : ongoing ? ONGOING : NO_END}`;
     const months = endYm ? monthsInclusive(s, endYm) : null;
     if (months !== null) addDurationNumbers(computedNumbers, months);
-    return { text, months, interval: endYm && months !== null ? { start: s, end: endYm } : null };
+    return { text, months };
   };
 
-  // --- profile ---
-  if (rows.profile) {
-    const p = rows.profile;
-    const industries = p.interested_industries.filter((s) => s.trim() !== "").join(", ");
-    const expIntervals = experiences
-      .map((e) => periodOf(e.start_month, e.end_month, e.is_current).interval)
-      .filter((i): i is { start: YearMonth; end: YearMonth } => i !== null);
-    const totalMonths = expIntervals.length ? mergedMonths(expIntervals) : null;
-    if (totalMonths !== null) addDurationNumbers(computedNumbers, totalMonths);
-    aliases.add(
-      entry("PROFILE", "profile", p.id, {
-        desired_job_title: p.desired_job_title,
-        total_years_of_experience: p.total_years_of_experience === null ? null : String(p.total_years_of_experience),
-        interested_industries: industries || null,
-      }, p.updated_at, "프로필"),
-    );
-    out.push(`<profile ref="PROFILE">`);
-    field("desired_job_title", p.desired_job_title);
-    field("total_years_of_experience", p.total_years_of_experience);
-    field("interested_industries", industries);
-    if (totalMonths !== null) field("computed_total_experience", `${formatDuration(totalMonths)} (${totalMonths}개월, ${formatMonth(asOf)} 기준)`);
-    out.push("</profile>");
+  // --- 경력 합계 (서버 계산, C-1 / SD-2) ---
+  // Not a user statement: the line says 서버 계산 so the model does not quote it
+  // as a career claim, and there is no `source_type` it could be cited as (C-3).
+  // V-5: the years / remaining months / total months are allowed numbers.
+  const total = rows.totalExperience;
+  addDurationNumbers(computedNumbers, total.totalMonths);
+  out.push(
+    `computed_total_months: 등록된 경력 기간 합계 ${formatDuration(total.totalMonths)} (총 ${total.totalMonths}개월, 기준 ${formatMonth(total.asOfMonth)}, 서버 계산)`,
+  );
+  if (total.openEndedExperienceCount > 0) {
+    out.push(`computed_open_ended_experiences: 기간 미입력 경력 ${total.openEndedExperienceCount}건(합계에 넣지 않음)`);
   }
 
   // Skill entries are added after rendering so `parents` lists every project that tags the skill (V-7 scope).
@@ -348,14 +343,9 @@ export function buildCareerPack(rows: CareerRows, options: BuildCareerPackOption
 
   // C-1 hash: content fields of included rows (no link_url, no computed durations;
   // is_current yes; classification yes — it can change results, not evidence).
+  // computed_total_months is deliberately absent: it changes with the reference
+  // month and would mark untouched data "데이터 변경됨" every month (DM 6.2).
   const snapshot = {
-    profile: rows.profile
-      ? {
-          desired_job_title: rows.profile.desired_job_title,
-          total_years_of_experience: rows.profile.total_years_of_experience,
-          interested_industries: rows.profile.interested_industries,
-        }
-      : null,
     experiences: experiences.map(({ id, company_name, start_month, end_month, is_current, job_rank, job_position, department, employment_type, summary }) => ({
       id, company_name, start_month, end_month, is_current, job_rank, job_position, department, employment_type, summary,
     })),

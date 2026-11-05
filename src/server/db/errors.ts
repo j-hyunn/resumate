@@ -90,6 +90,10 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_form_snapshot: { message: "작성 중인 내용이 너무 길거나 형식이 맞지 않아요. 글자 수를 확인해 주세요." },
   project_deliverable_not_found: { message: "산출물을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   writing_chat_draft_limit_reached: { message: "이 대화에서는 초안을 6번까지 만들 수 있어요. 새 대화에서 이어 해 주세요.", status: 409 },
+  // R13 (DM 2.1.1·2.1.2, §7): save_profile_basics. detail = 문제가 된 칸 이름 (→ details.field).
+  invalid_profile_option: { message: "고를 수 없는 값이에요. 다시 골라 주세요." },
+  too_many_job_interests: { message: "관심 직군·직무는 최대 2개까지 고를 수 있어요." },
+  duplicate_job_interest: { message: "이미 고른 직군·직무예요. 다른 쌍을 고르거나 지워 주세요." },
   // S5 application projects / JD (db notes "RPC 시그니처")
   application_project_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   job_description_not_found: { message: "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
@@ -279,7 +283,17 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
 };
 
 /** Raises whose `detail` names the offending field(s) (DM 2.5.1 R5-DB-8: comma-separated). */
-const FIELD_DETAIL_RAISES = new Set(["field_too_long", "invalid_period", "invalid_classification", "invalid_fields", "not_found"]);
+const FIELD_DETAIL_RAISES = new Set([
+  "field_too_long",
+  "invalid_period",
+  "invalid_classification",
+  "invalid_fields",
+  "not_found",
+  // R13: save_profile_basics names the offending 내 정보 칸 (UX S-24 ① 포커스 이동).
+  // `duplicate_job_interest` is NOT here: its detail is the pair's 1-based position, not a field name
+  // (see raiseDetails below — QA-R13-01).
+  "invalid_profile_option",
+]);
 
 /** RPC `detail` → response `details` (machine data the screen uses to focus a field / show a conflict). */
 function raiseDetails(message: string, detail: string | null): Record<string, unknown> | undefined {
@@ -288,6 +302,15 @@ function raiseDetails(message: string, detail: string | null): Record<string, un
   if (message === "interview_evaluation_input_only") return { cause: detail };
   // DM 2.5.1: the row's current updated_at (ISO, UTC) — the screen offers "새로 불러오기 / 내 내용으로 저장".
   if (message === "stale_write") return { current_updated_at: detail };
+  // R13 (QA-R13-01): save_profile_basics raises `duplicate_job_interest` with the pair's 1-based
+  // position in the submitted list. ONE shape for both paths — the RPC and the service's pre-check
+  // (src/server/services/profile/index.ts) — so the screen always has a field to focus and the row
+  // number to annotate: `{ field: "job_interests.{n}", sortOrder: n }`.
+  if (message === "duplicate_job_interest") {
+    const position = Number(detail);
+    if (!Number.isInteger(position) || position < 1) return undefined;
+    return { field: `job_interests.${position}`, sortOrder: position };
+  }
   if (FIELD_DETAIL_RAISES.has(message)) {
     const fields = detail.split(",").map((f) => f.trim()).filter(Boolean);
     return fields.length > 0 ? { field: fields[0], fields } : undefined;
@@ -317,6 +340,11 @@ export function mapDbError(error: DbError): AppError {
   // 22007 bad datetime syntax, 22008 datetime out of range (QA-S2-01; zod catches most first).
   if (code === "23514" || code === "22001" || code === "22P02" || code === "23502" || code === "22007" || code === "22008") {
     return new AppError("invalid_input", undefined, { cause: error });
+  }
+  // R13 (DM 2.1.2, R-SD-18): the RPC converts the pair constraint itself; this is the last net so a raw
+  // 23505 from `profile_job_interests` never reaches the screen as a generic conflict.
+  if (code === "23505" && /profile_job_interests/.test(`${message} ${error.details ?? ""}`)) {
+    return new AppError("duplicate_job_interest", RAISE_MESSAGES.duplicate_job_interest!.message, { status: 400, cause: error });
   }
   if (code === "23505") return new AppError("conflict", undefined, { cause: error });
   return new AppError("internal_error", undefined, { status: 500, cause: error });

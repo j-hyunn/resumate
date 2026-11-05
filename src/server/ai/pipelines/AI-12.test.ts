@@ -125,7 +125,7 @@ describe("extract — calls and errors", () => {
     expect(req.outputSchema).toMatchObject({ type: "object" });
     expect(llm.calls[0].model).toBe(llm.modelFor("light"));
     expect(r.promptVersion).toBe(AI12_EXTRACT_PROMPT_VERSION);
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v7\+common\.v2$/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v7\+common\.v3$/);
     expect(llm.records).toHaveLength(1);
     expect(llm.records[0]).toMatchObject({ modelTier: "light", outcome: "succeeded" });
   });
@@ -240,7 +240,7 @@ describe("reply", () => {
     expect(events.filter((e) => e.type === "delta").length).toBeGreaterThan(1);
     expect(events.at(-1)).toMatchObject({ type: "done", text: "그때 어떤 상황이었나요? 팀이나 서비스 배경을 알려 주세요." });
     expect(llm.requests[0]).toMatchObject({ tier: "default", outputSchema: null, callKey: "writing_chat.reply", promptVersion: AI12_REPLY_PROMPT_VERSION });
-    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v6\+common\.v2$/);
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v7\+common\.v3$/);
     expect(llm.calls[0].model).toBe(llm.modelFor("default"));
   });
 

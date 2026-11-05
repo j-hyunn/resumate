@@ -67,6 +67,10 @@ export interface PolicySection {
 }
 
 export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
+  // R13 (04 §2.1.3, D-UX-31): `/policies/ai_data_use`의 본문은 정적 문구가 아니라 `policy_versions`
+  // 머리글 + `ai_disclosures` 6행(공급자·등급별 요약)이다 — 페이지 구현은 resumate-ui 후속(S-30 네 번째 문서).
+  // 여기 빈 목록은 타입을 채우는 자리이고, 구현이 들어오면 이 항목은 필요 없어진다.
+  ai_data_use: [],
   terms: [
     {
       heading: "목적",

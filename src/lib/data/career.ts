@@ -268,10 +268,12 @@ export async function getProfile(): Promise<Profile> {
   )
 }
 
-export async function updateProfile(
-  patch: Partial<Pick<Profile, "display_name" | "desired_job_title" | "total_years_of_experience" | "interested_industries">>,
-  opts?: WriteOptions,
-): Promise<Profile> {
+/**
+ * R13 (DM 2.1.1): only `display_name` is left — `desired_job_title`,
+ * `total_years_of_experience`, `interested_industries` are dropped columns.
+ * 내 정보의 나머지 값은 `./profile` (`saveProfileBasics`, S-24 ① 계정 탭)으로 저장한다.
+ */
+export async function updateProfile(patch: Partial<Pick<Profile, "display_name">>, opts?: WriteOptions): Promise<Profile> {
   return previewOr(
     async () => {
       const db = await mockRequest()
@@ -284,15 +286,7 @@ export async function updateProfile(
     async () => {
       const { supabase, user } = await requireConsentedUser()
       requirePatch(patch)
-      const input = parseInput(
-        UpdateProfileInput,
-        defined({
-          displayName: patch.display_name,
-          desiredJobTitle: patch.desired_job_title,
-          totalYearsOfExperience: patch.total_years_of_experience,
-          interestedIndustries: patch.interested_industries,
-        }),
-      )
+      const input = parseInput(UpdateProfileInput, defined({ displayName: patch.display_name }))
       await profiles.updateProfile(supabase, user, input)
       return (await loadProfileRow(supabase, user.id)) as Profile
     },

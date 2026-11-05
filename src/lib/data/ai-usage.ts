@@ -12,7 +12,23 @@ import * as usageActions from "@/server/actions/usage"
 import { requireUser } from "@/server/auth/session"
 import { loadPriceTables } from "@/server/services/usage"
 
-/** S-42 기능별 표: 8 rows, fixed order (Should features excluded) */
+/**
+ * S-42 표시 7행 묶음 (AI C-13.1, DM 2.9.5 — SD-4·SD-A12). **표시 단계 상수**다:
+ * RPC·데이터 계층은 저장 값 8개를 그대로 돌려주고, 이 표만 `career_description` +
+ * `cover_letter`를 "자기소개서 작성 AI 채팅" 한 행으로 접는다. 묶음 정의의 유일한
+ * 원천은 AI 명세 C-13.1 표다.
+ */
+export const USAGE_FEATURE_DISPLAY_GROUPS: ReadonlyArray<{ label: string; features: readonly AiUsageFeature[] }> = [
+  { label: "프로젝트/산출물 작성 AI 채팅", features: ["writing_chat"] },
+  { label: "요건 추출", features: ["jd_extraction"] },
+  { label: "인사이트", features: ["insight"] },
+  { label: "자기소개서 작성 AI 채팅", features: ["career_description", "cover_letter"] },
+  { label: "면접 질문", features: ["interview_questions"] },
+  { label: "면접 채점", features: ["interview_evaluation"] },
+  { label: "연결 확인", features: ["key_verification"] },
+]
+
+/** @deprecated S-42 v5.17 전 기능별 표: 8 rows, fixed order (Should features excluded) */
 export const USAGE_FEATURE_ORDER: readonly AiUsageFeature[] = [
   "jd_extraction",
   "insight",
@@ -104,16 +120,97 @@ export async function getAiUsageSummary(periodMonth?: string, includePrevious = 
   )
 }
 
-/** Service DTO → the RPC's snake_case. S-42 shows `USAGE_FEATURE_ORDER` as 8 fixed rows, zeros included. */
+/**
+ * **(v4.12, SD-A10) 새 응답 모양** — `providers[]` 교차 집계 그대로 (DM 2.9.5).
+ * S-42 재구현(resumate-ui)이 이 함수를 쓴다. 7행 묶음은 쓰는 쪽에서
+ * `USAGE_FEATURE_DISPLAY_GROUPS`로 접는다.
+ */
+export async function getAiUsageSummaryV412(periodMonth?: string, includePrevious = false): Promise<RealAiUsageSummary> {
+  return previewOr(
+    async () => computeUsageSummaryV412(await mockRequest(), periodMonth ?? currentPeriodMonth(), includePrevious),
+    async () => unwrap(await usageActions.getAiUsageSummary({ periodMonth, includePrevious })),
+  )
+}
+
+/**
+ * `?state=` 미리보기용 `providers[]` 집계. mock 행(src/lib/mock, UI 소유)에 아직
+ * `input_cost_usd`·`output_cost_usd`가 없으면 두 열은 0이고 합계만 저장 값을 쓴다 `[가정]`
+ * (UI 요청: fixtures에 두 열 추가).
+ */
+export function computeUsageSummaryV412(db: MockDb, periodMonth: string, includePrevious = false): RealAiUsageSummary {
+  type Row = MockDb["ai_usage_records"][number] & { input_cost_usd?: number; output_cost_usd?: number }
+  const rows = db.ai_usage_records.filter((r) => r.period_month === periodMonth) as Row[]
+  const round = (n: number) => Math.round(n * 1_000_000) / 1_000_000
+  const totalsOf = (list: Row[]) => {
+    const sum = (pick: (r: Row) => number) => list.reduce((a, r) => a + pick(r), 0)
+    return {
+      inputTokens: sum((r) => r.input_tokens),
+      cachedInputTokens: sum((r) => r.cached_input_tokens),
+      cacheWriteTokens: sum((r) => r.cache_write_tokens),
+      outputTokens: sum((r) => r.output_tokens),
+      inputCostUsd: round(sum((r) => r.input_cost_usd ?? 0)),
+      outputCostUsd: round(sum((r) => r.output_cost_usd ?? 0)),
+      estimatedCostUsd: round(sum((r) => r.estimated_cost_usd)),
+      calls: list.length,
+      failedCalls: list.filter((r) => r.outcome === "failed").length,
+    }
+  }
+  const versionsOf = (list: Row[]) =>
+    [...new Set(list.map((r) => r.price_table_version))].map((version) => ({
+      version,
+      sourceCheckedAt: db.ai_price_tables.find((p) => p.version === version)?.source_checked_at ?? "",
+    }))
+  const providers = [...new Set(rows.map((r) => r.provider))].map((provider) => {
+    const list = rows.filter((r) => r.provider === provider)
+    return {
+      provider,
+      connectionTiers: [...new Set(list.map((r) => r.connection_tier))],
+      totals: totalsOf(list),
+      byFeature: [...new Set(list.map((r) => r.feature))].map((feature) => ({
+        feature,
+        ...totalsOf(list.filter((r) => r.feature === feature)),
+      })),
+      priceTableVersions: versionsOf(list),
+    }
+  })
+  const prevRows = includePrevious
+    ? (db.ai_usage_records.filter((r) => r.period_month === previousMonth(periodMonth)) as Row[])
+    : []
+  return {
+    periodMonth,
+    asOf: new Date().toISOString(),
+    totals: totalsOf(rows),
+    providers,
+    priceTableVersions: versionsOf(rows),
+    previousMonth: includePrevious
+      ? {
+          periodMonth: previousMonth(periodMonth),
+          estimatedCostUsd: totalsOf(prevRows).estimatedCostUsd,
+          inputTokens: totalsOf(prevRows).inputTokens,
+          outputTokens: totalsOf(prevRows).outputTokens,
+        }
+      : null,
+  }
+}
+
+/**
+ * @deprecated R13 shim: the 화면 타입(`AiUsageSummary`, 8행 `by_feature` + `by_provider`)을
+ * 새 `providers[]` 응답에서 만든다. `by_feature`는 공급자를 가로질러 더하고, `by_provider`는
+ * 공급자마다 한 행(등급은 그 달 기록의 첫 등급 — 새 응답은 등급으로 쪼개지 않는다) `[가정]`.
+ * S-42가 `getAiUsageSummaryV412`로 옮겨 가면 이 함수와 화면 타입을 함께 지운다.
+ */
 function toUiUsageSummary(r: RealAiUsageSummary): AiUsageSummary {
+  const rows = r.providers.flatMap((p) => p.byFeature)
   const feature = (f: AiUsageFeature) => {
-    const row = r.byFeature.find((x) => x.feature === f)
+    const list = rows.filter((x) => x.feature === f)
+    const sum = (pick: (x: (typeof list)[number]) => number) => list.reduce((a, x) => a + pick(x), 0)
     return {
       feature: f,
-      input_tokens: row?.inputTokens ?? 0,
-      output_tokens: row?.outputTokens ?? 0,
-      estimated_cost_usd: row?.estimatedCostUsd ?? 0,
-      calls: row?.calls ?? 0,
+      // 화면의 "입력 토큰" = 비캐시 + 캐시 읽기 + 캐시 쓰기 (UQ-203 / P-B2)
+      input_tokens: sum((x) => x.inputTokens + x.cachedInputTokens + x.cacheWriteTokens),
+      output_tokens: sum((x) => x.outputTokens),
+      estimated_cost_usd: sum((x) => x.estimatedCostUsd),
+      calls: sum((x) => x.calls),
     }
   }
   return {
@@ -129,13 +226,13 @@ function toUiUsageSummary(r: RealAiUsageSummary): AiUsageSummary {
       failed_calls: r.totals.failedCalls,
     },
     by_feature: USAGE_FEATURE_ORDER.map(feature),
-    by_provider: r.byProvider.map((p) => ({
+    by_provider: r.providers.map((p) => ({
       provider: p.provider,
-      connection_tier: p.connectionTier,
-      input_tokens: p.inputTokens,
-      output_tokens: p.outputTokens,
-      estimated_cost_usd: p.estimatedCostUsd,
-      calls: p.calls,
+      connection_tier: p.connectionTiers[0] ?? "paid",
+      input_tokens: p.totals.inputTokens + p.totals.cachedInputTokens + p.totals.cacheWriteTokens,
+      output_tokens: p.totals.outputTokens,
+      estimated_cost_usd: p.totals.estimatedCostUsd,
+      calls: p.totals.calls,
     })),
     price_table_versions: r.priceTableVersions.map((v) => ({ version: v.version, source_checked_at: v.sourceCheckedAt })),
     ...(r.previousMonth

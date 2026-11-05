@@ -10,12 +10,13 @@ import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
  * `replaceAliasesInText` swaps each alias token in prose for the entity's
  * display label (project name, requirement content …) or removes it when the
  * alias is unknown. An optional `.field` suffix (`PRJ-5.action`) goes with it.
- * v4.5: DET-n / ACH-n no longer exist; any left in prose are unknown and removed.
+ * v4.5: DET-n / ACH-n no longer exist; (v4.12, SD-6) neither does PROFILE; any
+ * left in prose are unknown and removed.
  * Tokens that literally occur in the user's own data (e.g. "S3" in an AWS
  * project, a ticket id "REQ-1") are left alone.
  */
 
-export const ALIAS_TOKEN_PATTERN = /\b(?:PROFILE|(?:EXP|EDU|PRJ|DLV|DET|ACH|SKL|REQ|ANS|NOTE|M)-\d+|S\d+)\b(?:\.[a-z_]+\b)?/g;
+export const ALIAS_TOKEN_PATTERN = /\b(?:(?:EXP|EDU|PRJ|DLV|DET|ACH|SKL|REQ|ANS|NOTE|M)-\d+|S\d+)\b(?:\.[a-z_]+\b)?/g;
 const BARE_TOKEN = /^[^.]+/;
 
 /** Label length in prose. */
@@ -42,8 +43,6 @@ export function aliasDisplayLabel(entry: AliasEntry): string | null {
   const f = entry.fields;
   const pick = (...values: Array<string | null | undefined>) => values.find((v) => v && v.trim() !== "")?.trim() ?? null;
   switch (entry.sourceType) {
-    case "profile":
-      return "프로필";
     case "skill": {
       const name = pick(f.name, entry.label);
       return name ? clip(name) : null;

@@ -1,4 +1,4 @@
-import { estimateCostUsd, kstDate, USAGE_FEATURE_BY_JOB_TYPE } from "./cost";
+import { estimateCost, kstDate, UNPRICED_COST, USAGE_FEATURE_BY_JOB_TYPE } from "./cost";
 import type { JobRecord, LlmCallRecord, PriceRow, UsageStore } from "./types";
 
 /**
@@ -9,7 +9,7 @@ import type { JobRecord, LlmCallRecord, PriceRow, UsageStore } from "./types";
  *
  * Never throws: a lost record must not make the job spend the user's tokens
  * again. Insert is tried twice, then logged (`ai_usage.record_failed`).
- * Unknown model price [가정]: cost 0 with price_table_version `unpriced`, logged.
+ * Unknown model price [가정]: 세 비용 값 모두 0 with price_table_version `unpriced`, logged.
  */
 
 export const UNPRICED_VERSION = "unpriced";
@@ -67,7 +67,9 @@ export function createUsageRecorder(opts: {
       outcome: record.outcome,
       errorCode: record.outcome === "failed" ? record.errorCode : null,
       priceTableVersion: price?.version ?? UNPRICED_VERSION,
-      estimatedCostUsd: price ? estimateCostUsd(record.usage, price) : 0,
+      // v4.12 (SD-A11): the three cost values are computed together and inserted together;
+      // an unpriced model records all three as 0 (never one of them).
+      ...(price ? estimateCost(record.usage, price) : UNPRICED_COST),
     };
 
     for (let t = 1; t <= RECORD_TRIES; t++) {

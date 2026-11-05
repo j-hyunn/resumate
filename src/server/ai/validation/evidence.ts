@@ -64,7 +64,12 @@ export type EvidenceCheck = { ok: true; evidence: ValidatedEvidence } | { ok: fa
 /** One evidence object through V-1 → V-2 → V-3 → V-8 → V-7. */
 export function checkEvidence(raw: ModelEvidence, ctx: EvidenceContext): EvidenceCheck {
   const sourceType = raw.source_type;
-  const rule = EVIDENCE_RULES[sourceType];
+  // V-1: a source type C-3 no longer has — e.g. `profile`, dropped in v4.12
+  // (SD-6) — can never match an alias in this call's pack (AI spec C-3: "모델이
+  // 그래도 프로필 근거를 달면 V-1로 제거된다"). Structured output usually keeps it
+  // out, but a model may still send one.
+  const rule = EVIDENCE_RULES[sourceType] as (typeof EVIDENCE_RULES)[EvidenceSourceType] | undefined;
+  if (!rule) return { ok: false, rule: "v1_ref" };
 
   // V-1: ref exists in this call's alias map, with the claimed source type.
   if (sourceType === "writing_chat_message" && !ctx.allowWritingChatMessage) return { ok: false, rule: "v1_ref" };
@@ -132,7 +137,7 @@ export type ItemInput = {
   scope?: ReadonlySet<string> | null;
   /**
    * Which source types count as support. Default: career sources (JD alone never
-   * supports a claim about the user). Profile wishes never count (A10).
+   * supports a claim about the user).
    */
   supportSourceTypes?: ReadonlySet<EvidenceSourceType>;
 };
@@ -209,14 +214,14 @@ export function validateItem(item: ItemInput, ctx: EvidenceContext): { outcome: 
  * V-7 scope from a selection (AI-03 포함 항목, AI-04 사용한 경력·프로젝트, v4.5):
  * the selected experiences/educations/projects, their descendants (a standalone
  * project's deliverables) and the skills of included projects, plus
- * always-allowed sources (profile, JD, notes, answers). Affiliated project STAR
+ * always-allowed sources (JD, notes, answers — (v4.12, SD-6) no profile).
+ * Affiliated project STAR
  * is on the PRJ-n itself (no DET-n / ACH-n since v4.5).
  */
 export function buildSelectionScope(aliases: AliasMap, selection: { refs: readonly string[] }): Set<string> {
   const selected = new Set(selection.refs);
   const scope = new Set<string>();
   const alwaysAllowed: ReadonlySet<EvidenceSourceType> = new Set<EvidenceSourceType>([
-    "profile",
     "jd_sentence",
     "jd_requirement",
     "user_note",

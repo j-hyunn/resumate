@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { loadCareerRows } from "./career-rows";
+import { TOTAL_EXPERIENCE_RPC } from "./total-experience";
 
-/** Records table/columns/filters; returns empty data. */
+/** Records table/columns/filters and rpc calls; returns empty data. */
 function fakeDb(error: unknown = null) {
   const calls: Array<{ table: string; columns: string; filters: Array<[string, unknown]>; single: boolean }> = [];
+  const rpcs: Array<{ name: string; args: Record<string, unknown> }> = [];
   const db = {
+    rpc(name: string, args: Record<string, unknown>) {
+      rpcs.push({ name, args });
+      return Promise.resolve({ data: { total_months: 94, open_ended_experience_count: 1, as_of_month: "2026-11-01" }, error });
+    },
     from(table: string) {
       const call = { table, columns: "", filters: [] as Array<[string, unknown]>, single: false };
       calls.push(call);
@@ -30,16 +36,25 @@ function fakeDb(error: unknown = null) {
       return builder;
     },
   };
-  return { db: db as unknown as AiWriterSupabaseClient, calls };
+  return { db: db as unknown as AiWriterSupabaseClient, calls, rpcs };
 }
 
 describe("loadCareerRows", () => {
-  it("lists columns explicitly (app_ai_writer column grants), never display_name, complete rows only", async () => {
+  it("lists columns explicitly (app_ai_writer column grants), never reads profiles, complete rows only", async () => {
     const { db, calls } = fakeDb();
-    const rows = await loadCareerRows(db);
-    expect(rows).toEqual({ profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] });
+    const rows = await loadCareerRows(db, { asOf: "2026-11-05" });
+    expect(rows).toEqual({
+      totalExperience: { totalMonths: 94, openEndedExperienceCount: 1, asOfMonth: { year: 2026, month: 11 } },
+      experiences: [],
+      educations: [],
+      projects: [],
+      deliverables: [],
+      skills: [],
+      projectSkills: [],
+    });
+    // (v4.12, SD-6) `profiles` is not among the tables read at all.
     expect(calls.map((c) => c.table).sort()).toEqual(
-      ["educations", "experiences", "profiles", "project_deliverables", "project_skills", "projects", "skills"].sort(),
+      ["educations", "experiences", "project_deliverables", "project_skills", "projects", "skills"].sort(),
     );
     for (const call of calls) {
       expect(call.columns).not.toContain("*");
@@ -53,13 +68,22 @@ describe("loadCareerRows", () => {
     }
     // Deliverables have no status; the pack keeps those of complete standalone projects.
     expect(calls.find((c) => c.table === "project_deliverables")?.filters).toEqual([]);
-    // QA-S3-06: profile rows carry updated_at for evidence source_snapshot_at.
-    expect(calls.find((c) => c.table === "profiles")?.columns).toBe(
-      "id, desired_job_title, total_years_of_experience, interested_industries, updated_at",
-    );
     for (const table of ["experiences", "educations", "projects"]) {
       expect(calls.find((c) => c.table === table)?.filters).toEqual([["status", "complete"]]);
     }
+  });
+
+  // (v4.12, SD-2 / DM 6.2) p_as_of has no default: the caller always passes it.
+  it("asks the DB function for the total experience with an explicit p_as_of", async () => {
+    const { db, rpcs } = fakeDb();
+    await loadCareerRows(db, { asOf: "2026-11-05" });
+    expect(rpcs).toEqual([{ name: TOTAL_EXPERIENCE_RPC, args: { p_as_of: "2026-11-05" } }]);
+  });
+
+  it("defaults p_as_of to today in KST", async () => {
+    const { db, rpcs } = fakeDb();
+    await loadCareerRows(db);
+    expect(rpcs[0].args.p_as_of).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("maps a query error to internal_error without exposing it", async () => {

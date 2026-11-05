@@ -289,6 +289,11 @@ export type UsageRecordRow = {
   outcome: UsageOutcome;
   errorCode: AiErrorCode | null;
   priceTableVersion: string;
+  /** DM 2.9.2 (v4.12, SD-A11): 입력 쪽 비용 (비캐시 + 캐시 읽기 + 캐시 쓰기). */
+  inputCostUsd: number;
+  /** DM 2.9.2 (v4.12, SD-A11): 출력 쪽 비용 (사고 토큰 포함). */
+  outputCostUsd: number;
+  /** = inputCostUsd + outputCostUsd (합계 컬럼). */
   estimatedCostUsd: number;
 };
 

@@ -70,7 +70,6 @@ export function baseInput(overrides: Partial<WritingChatTurnInput> = {}): Writin
     structuredDraft: {},
     lastExtractedSequence: 0,
     project: emptyProject(),
-    desiredJobTitle: "백엔드 개발자",
     gate: null,
     requestedSlot: null,
     isFinalReply: false,

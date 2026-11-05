@@ -201,7 +201,6 @@ describe("DataReadiness (DM §6 v4.4)", () => {
       draft_experiences: 0,
       draft_educations: 0,
       draft_projects: 1,
-      profile_filled: true,
     },
     draft_item_ids: { experiences: [], educations: [], projects: [ID] },
     features: {
@@ -221,6 +220,15 @@ describe("DataReadiness (DM §6 v4.4)", () => {
     expect(f.safeParse({ ready: false, missing: ["complete_project"], hints: ["complete_project_detail"], next_action: "form" }).success).toBe(false);
     expect(f.safeParse({ ready: false, missing: ["complete_project"], hints: ["project_fields"], next_action: "form", suggested_project_id: ID }).success).toBe(true);
     expect(DataReadiness.safeParse({ ...sample, counts: { ...sample.counts, projects_without_complete_star: undefined } }).success).toBe(false);
+  });
+  // R13 (DM 6-A, SD-A18): the response has no `profile_filled` key and no `profile` hint.
+  it("profile_filled is gone from counts and `profile` is not a hint", () => {
+    expect(Object.keys(DataReadiness.shape.counts.shape)).not.toContain("profile_filled");
+    expect(DataReadiness.safeParse({ ...sample, counts: { ...sample.counts, profile_filled: true } }).data?.counts).not.toHaveProperty(
+      "profile_filled",
+    );
+    const f = DataReadiness.shape.features.shape.draft;
+    expect(f.safeParse({ ready: false, missing: ["complete_project"], hints: ["profile"], next_action: "form" }).success).toBe(false);
   });
   it("a ready feature needs no next_action", () => {
     const f = DataReadiness.shape.features.shape.insight;

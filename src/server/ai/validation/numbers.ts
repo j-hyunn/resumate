@@ -12,7 +12,7 @@
 export const NUMBER_CHECK_TOKEN = "[수치 확인 필요]";
 
 /** Aliases look like numbers to a regex; blank them before extraction. */
-const ALIAS_PATTERN = /\b(?:PROFILE|EXP|EDU|PRJ|DET|ACH|SKL|REQ|ANS|NOTE|M)-\d+\b|\bS\d+\b/g;
+const ALIAS_PATTERN = /\b(?:EXP|EDU|PRJ|DLV|DET|ACH|SKL|REQ|ANS|NOTE|M)-\d+\b|\bS\d+\b/g;
 
 const NUMBER_PATTERN = /\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g;
 

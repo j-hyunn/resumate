@@ -163,11 +163,12 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
     expect(await listExperiences()).toEqual([]);
   });
 
-  it("profile: read and save only the four columns", async () => {
+  // R13 (DM 2.1.1): display_name is the only column this legacy path still writes.
+  it("profile: read and save display_name", async () => {
     const { getProfile, updateProfile } = await career();
     expect((await getProfile()).id).toBe(userId);
-    const saved = await updateProfile({ desired_job_title: "백엔드 개발자", total_years_of_experience: 7, interested_industries: ["핀테크"] });
-    expect(saved).toMatchObject({ desired_job_title: "백엔드 개발자", total_years_of_experience: 7, interested_industries: ["핀테크"] });
+    const saved = await updateProfile({ display_name: "홍길동" });
+    expect(saved).toMatchObject({ display_name: "홍길동" });
   });
 
   let experienceId = "";
@@ -321,7 +322,7 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
     // CR-4: the 2021–now job is listed once, under 2021, with its projects.
     expect(tree.years.flatMap((y) => y.entries).filter((e) => e.experience?.id === experienceId)).toHaveLength(1);
     expect(tree.years.find((y) => y.year === 2021)?.entries.find((e) => e.experience?.id === experienceId)?.projects.map((p) => p.id)).toEqual([projectId]);
-    expect(tree).toMatchObject({ is_empty: false, active_writing_chats: [], counts: { complete_project_details: 0 }, profile: { desired_job_title: "백엔드 개발자" } });
+    expect(tree).toMatchObject({ is_empty: false, active_writing_chats: [], counts: { complete_project_details: 0 }, profile: { display_name: "홍길동" } });
     await deleteCareerItem("experience", exp.id);
     await deleteCareerItem("education", edu.id);
     await deleteCareerItem("project", dated.id);

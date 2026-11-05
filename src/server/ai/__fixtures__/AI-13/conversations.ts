@@ -99,7 +99,6 @@ export function baseInput(overrides: Partial<DeliverableChatTurnInput> = {}): De
     formSnapshot: null,
     project: parentProject(),
     siblingTitles: ["결제 승인 설계 문서"],
-    desiredJobTitle: "백엔드 개발자",
     requestedSlot: null,
     requestedAction: null,
     style: null,

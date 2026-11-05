@@ -77,7 +77,8 @@ export type SourceScopeItem = {
  * AI-04 V-7 (C-3 v4.5): each source's project (affiliated STAR, or standalone
  * role/description/deliverables/skills) plus the parent experience/education
  * itself — but not sibling projects. A source with no project = the whole
- * experience/education. Profile, JD, and notes are always in scope.
+ * experience/education. JD and notes are always in scope ((v4.12, SD-6) the
+ * profile is not part of V-7 any more).
  */
 export function buildSourceScope(aliases: AliasMap, sources: readonly SourceScopeItem[]): Set<string> {
   const scope = buildSelectionScope(aliases, { refs: [] });

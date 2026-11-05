@@ -456,6 +456,9 @@ export function recordMockUsage(
       outcome: input.outcome,
       error_code: input.outcome === "failed" ? (input.error_code ?? null) : null,
       price_table_version: PRICE_TABLE_VERSION,
+      // R13 (04 §2.9.2, SD-A11): 입력 쪽 / 출력 쪽을 나눠 기록한다 (합계 = 두 값의 합).
+      input_cost_usd: price ? Math.round((input_tokens * price.input_usd_per_mtok) / 1_000_000 * 1_000_000) / 1_000_000 : 0,
+      output_cost_usd: price ? Math.round((output_tokens * price.output_usd_per_mtok) / 1_000_000 * 1_000_000) / 1_000_000 : 0,
       estimated_cost_usd: Math.round(cost * 1_000_000) / 1_000_000,
     })
   }

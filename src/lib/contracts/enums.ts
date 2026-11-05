@@ -27,8 +27,24 @@ export const REQUIRED_CONSENT_TYPES = ["terms", "privacy_required"] as const sat
 export const OPTIONAL_CONSENT_TYPES = ["service_improvement", "marketing"] as const satisfies readonly ConsentType[];
 
 /** policy_versions.policy_type CHECK. */
-export const POLICY_TYPES = ["terms", "privacy", "cross_border_transfer"] as const;
+/** (v4.12, D-UX-31·SD-A13) + `ai_data_use`: 고지 문서 4종. `consents.consent_type`은 늘리지 않는다 (DM 2.1.3). */
+export const POLICY_TYPES = ["terms", "privacy", "cross_border_transfer", "ai_data_use"] as const;
 export type PolicyType = (typeof POLICY_TYPES)[number];
+
+/**
+ * `profile_options.category` CHECK (DM 2.1.1, DM-22). Values are rows, only the
+ * category list is fixed. R13 (v4.12, SD-A2·SD-A4).
+ */
+export const PROFILE_OPTION_CATEGORIES = [
+  "job_search_status",
+  "company_type",
+  "industry",
+  "job_family",
+  "job_role",
+  "degree",
+  "graduation_status",
+] as const;
+export type ProfileOptionCategory = (typeof PROFILE_OPTION_CATEGORIES)[number];
 
 export function isRequiredConsentType(type: ConsentType): boolean {
   return (REQUIRED_CONSENT_TYPES as readonly string[]).includes(type);
@@ -118,7 +134,8 @@ export type ResultMode = (typeof RESULT_MODES)[number];
 /** get_data_readiness `missing` / `hints` / `next_action` values (DM §6 v4.4; `suggested_mode` removed). */
 export const READINESS_MISSING = ["complete_experience", "complete_project"] as const;
 /** v4.4: `project_star` = affiliated project without situation/action, `project_fields` = standalone without description. */
-export const READINESS_HINTS = ["project_star", "project_fields", "profile"] as const;
+/** (v4.12, SD-A18) `profile` removed: 내 정보는 어떤 게이트 판정에도 쓰지 않는다 (DM 6-A). */
+export const READINESS_HINTS = ["project_star", "project_fields"] as const;
 export const READINESS_NEXT_ACTIONS = ["writing_chat", "form", "create_project"] as const;
 export const DATA_SUFFICIENCIES = ["ok", "thin", "none"] as const;
 export type DataSufficiency = (typeof DATA_SUFFICIENCIES)[number];

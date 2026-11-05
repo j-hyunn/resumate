@@ -53,9 +53,6 @@ export function buildSummaryCareerPack(rows: CareerRows, options: { asOf?: YearM
     const f = e.fields;
     const pad = "  ".repeat(depthOf(e));
     switch (e.sourceType) {
-      case "profile":
-        out.push(line("PROFILE", [`희망 직무: ${f.desired_job_title ?? "-"}`, f.total_years_of_experience ? `총 경력(연): ${f.total_years_of_experience}` : null]));
-        break;
       case "experience":
         out.push(
           line(e.alias, [

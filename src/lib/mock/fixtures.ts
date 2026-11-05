@@ -1611,6 +1611,9 @@ export function createFixtures(): MockDb {
     outcome,
     error_code: outcome === "failed" ? "rate_limited" : null,
     price_table_version: PRICE_TABLE_VERSION,
+    // R13 (04 §2.9.2, SD-A11): 비용 두 열 신설. 미리보기 값은 입력 70% / 출력 30%로 쪼갠다 (UI 요청: 실제 값으로 다시)
+    input_cost_usd: Math.round(cost * 0.7 * 1_000_000) / 1_000_000,
+    output_cost_usd: cost - Math.round(cost * 0.7 * 1_000_000) / 1_000_000,
     estimated_cost_usd: cost,
   })
   const ai_usage_records: AiUsageRecord[] = [
@@ -1633,9 +1636,19 @@ export function createFixtures(): MockDb {
       {
         id: u,
         display_name: "김지우",
-        desired_job_title: "결제 백엔드 엔지니어",
-        total_years_of_experience: 7,
-        interested_industries: ["핀테크", "커머스"],
+        // R13 (04 §2.1.1): desired_job_title / total_years_of_experience / interested_industries 삭제.
+        // 새 내 정보 값은 전부 비어 있다 — 값 있는 미리보기와 쌍 목록(profile_job_interests)·코드 표
+        // (profile_options)는 UI 요청(S-24 재구현과 함께).
+        job_search_status: null,
+        interested_company_type: null,
+        interested_industry: null,
+        highest_education_school_name: null,
+        highest_education_degree: null,
+        highest_education_status: null,
+        highest_education_start_month: null,
+        highest_education_end_month: null,
+        highest_education_major: null,
+        highest_education_gpa: null,
         career_data_updated_at: daysAgo(1),
         active_ai_provider: "gemini",
         last_active_at: minutesAgo(5),

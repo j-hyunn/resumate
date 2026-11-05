@@ -19,7 +19,6 @@ function map(): AliasMap {
   m.add(entry("REQ-2", "jd_requirement", { "": "Kotlin 사용 경험" }));
   m.add(entry("SKL-1", "skill", { name: "Spring Boot" }));
   m.add(entry("EXP-1", "experience", {}, "예시페이"));
-  m.add(entry("PROFILE", "profile", {}));
   m.add(entry("S12", "jd_sentence", { "": "Kafka 등 메시지 큐 운영 경험이 있으면 좋습니다 그리고 이 문장은 꽤 깁니다" }));
   return m;
 }
@@ -33,7 +32,7 @@ describe("replaceAliasesInText (QA-S6-04)", () => {
     ["requirement", "REQ-2 요건은 부분 충족입니다.", "'Kotlin 사용 경험' 요건은 부분 충족입니다.", { replaced: 1, removed: 0 }],
     ["skill (unquoted)", "SKL-1 태그만 있습니다.", "Spring Boot 태그만 있습니다.", { replaced: 1, removed: 0 }],
     ["experience label", "EXP-1에서", "'예시페이'에서", { replaced: 1, removed: 0 }],
-    ["profile", "PROFILE 기준", "프로필 기준", { replaced: 1, removed: 0 }],
+    ["PROFILE is not an alias any more (v4.12, SD-6)", "PROFILE 기준", "PROFILE 기준", { replaced: 0, removed: 0 }],
     ["long sentence clipped", "S12 문장", "'Kafka 등 메시지 큐 운영 경험이 있으면 좋습니다 그리고 이 문장은…' 문장", { replaced: 1, removed: 0 }],
     ["unknown alias removed, parens tidied", "결제 경험(PRJ-99)이 있습니다.", "결제 경험이 있습니다.", { replaced: 0, removed: 1 }],
     ["several", "PRJ-3, REQ-2", "'정산 배치 재설계', 'Kotlin 사용 경험'", { replaced: 2, removed: 0 }],

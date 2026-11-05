@@ -44,6 +44,9 @@ begin
   insert into public.project_deliverables (id, user_id, project_id, sort_order, title, body) values (dlv, u, prj2, 1, 't', 'b');
   insert into public.skills (id, user_id, name) values (skl, u, 'Kafka');
   insert into public.project_skills (user_id, project_id, skill_id) values (u, prj2, skl);
+  -- R13 내 정보 쌍 (DM 2.1.2): 탈퇴 범위에 들어가는 user_id 테이블
+  insert into public.profile_job_interests (user_id, sort_order, job_family, job_role)
+    values (u, 1, 'engineering', 'backend');
   -- S3b keys / AI consent
   insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version)
     values (u, 'gemini', 'paid', coalesce(disclosure, 'v2026-11-05'));

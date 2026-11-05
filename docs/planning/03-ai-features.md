@@ -1,13 +1,51 @@
-# Resumate AI 기능 명세 v4.11
+# Resumate AI 기능 명세 v4.12 (리뷰 라운드 1·2 반영)
 
-> 작성: ai-feature-designer / 기준 입력: **(v4.11) `_workspace/00_input/planning-decisions-open-decisions.md`(열린 결정 일괄 확정 OD-*, 사용자 확정 2026-11-05 — 형제 문서 PRD v4.13 / UX v5.13 / DM v4.11)**, **(v4.10) `_workspace/00_input/planning-decisions-ui-panel-doc.md`(AI 패널·문서형 입력 UI 개정 UP-1~UP-13 — 사용자 확정 2026-11-04)**, **(v4.9) `_workspace/backend/R8/01_plan.md`(STAR 합친 제안·-음 체·민감정보 판정 R8 — 사용자 확정 RQ-4~RQ-6, 2026-11-04)**, **(v4.8) `_workspace/backend/R7/01_plan.md`(AI 작성 대화 질문 품질 개선 R7 — 사용자 확정 RQ-1~RQ-3, 2026-11-04)**, `docs/planning/01-prd.md` (**PRD v4.6**, BYOK), `docs/planning/02-user-flows.md` (**UX v5.6**; (v4.7, ED) 교육 이름 부분은 **UX v5.10**), `docs/planning/04-data-model.md` (**DM v4.5**; (v4.7, ED) 교육 라벨 부분은 **DM v4.8**), `_workspace/education-name/`(ED 사이클 요청·회신), `_workspace/career-redesign/dm_replies.md`, **`_workspace/project-add-figma/dm_replies.md`(DM v4.5 회신·이름 확정)**, `00_input/brief-2026-11-05.md`(리더 브리프), `00_input/planning-decisions-2026-11-05.md`(사용자 확정 A1~A24), `00_input/spec-gaps-summary.md`·`spec-gaps.md`(백엔드 구현 S0~S9 차이), `00_input/brief.md`(이전 피드백·결정), **`00_input/planning-decisions-career-redesign.md`(커리어 화면 재설계 CR-1~CR-14, 확정 2026-11-02 (사용자))**, **`00_input/planning-decisions-project-add-figma.md`(프로젝트 추가·산출물 상세 Figma 반영 PA-1~PA-4, 확정 2026-11-03 (사용자))**, `product-context.md`
-> 상태: **v4.11 — 열린 결정 일괄 확정(2026-11-05, OD-*, 확정 2026-11-05 (사용자))**: D-14 면접 점수 산식 `d14.v1` 확정(4.3, OD-I1 — 가중 30·30·20·20, 미응답 0점 포함, 서버 결정적 계산·AI 호출 없는 백필), 공급자·등급별 AI 고지 사실 표 C-7.1 신설과 새 고지 버전 `v2026-11-05`(OD-L2), AI 작성 대화 턴 계약 보강(답 없는 사용자 메시지 다시 보내기 OD-P11, 중단 처리 OD-P10), AI-13 초안 한도 칩 고정 3개(OD-P6)·`base_body_hash` 공백 정규화(OD-P5)·R5 구현값 반영(OD-P12·OD-P13), 슬라이스 구현값 `[가정]` 확정(OD-D6), 평가 세트 출시 전 체크리스트(OD-L4). 프롬프트·정본 스키마 모양·`prompt_version`·`schema_version` 변경 없음(점수 객체의 값만 서버가 채움). **v4.10 — AI 패널·문서형 입력 UI 개정 UP-1·UP-4·UP-5·UP-6·UP-9 반영(2026-11-04, 확정 2026-11-04 (사용자))**: S-10(AI-12) 빠른 버튼 칩은 시작 영역 전용(첫 사용자 메시지부터 숨김), S-44(AI-13) 칩은 대화 중에도 유지, 빠른 응답 버튼 삭제(UP-1). 제안 카드는 마지막 AI 턴 아래 확인 줄(UP-4). STAR 제안 직접 고치기 화면 삭제 — `user_edit` 객체 보호·호환은 그대로(UP-5). 분류 [반영]은 이미 고른 값도 덮어쓰고 [무시]는 사용자 `set` null(UP-6) — AI 추천 생성 규칙(빈 분류만, V-9i)은 그대로. STAR·본문 입력이 마크다운 편집기가 되어 C-1.1 정규화 대상 문법을 명시(UP-9). 프롬프트·정본 스키마·`prompt_version`·`schema_version` 변경 없음. **v4.9 — STAR 합친 제안·-음 체·민감정보 판정 RQ-4~RQ-6 반영(2026-11-04, 확정 2026-11-04 (사용자))**: AI-12 정리가 값이 있는 STAR 항목에도 **기존 내용 + 새 내용을 합쳐 다시 쓴 전체 문장**을 `op = "set"`으로 제안하고 [반영]은 그 항목을 **교체**한다(RQ-5 — `append`는 더 이상 내지 않음, 과거 초안 호환으로만 받음). V-9h 개정, 기존 사실 보존 검사 **V-9j 신설**, V-9c·d·e 출처에 그 필드의 기존 텍스트 포함. AI-12 STAR 제안·AI-13 사실·초안 본문 문장은 **"-음" 체**(RQ-4, 질문은 존댓말 그대로). 민감정보(V-9g·V-10f·C-7)는 **본인·가족 신상 맥락, 연락처, 실제 사람 이름 + 직함만** 막고 업무 도메인 단어는 걸지 않으며, 걸려도 **그 값만** 뺀다(RQ-6). 프롬프트 버전 `ai-12.extract.v6`·`ai-12.reply.v6`·`ai-13.extract.v3`·`ai-13.compose.v2`(`ai-13.reply.v2` 유지). 정본 스키마 모양·`schema_version` 그대로, RPC 1개 교체(비파괴). **v4.8 — AI 작성 대화 질문 품질 RQ-1~RQ-3 반영(2026-11-04, 확정 2026-11-04 (사용자))**: AI-12·AI-13 응답(reply) 질문 규칙을 "사용자가 말하거나 쓰지 않은 사실을 넣지 않는다 — 본인 말·폼 값은 따옴표로 그대로 인용 가능"으로 좁히고(RQ-1), 항목·슬롯별 구체 요소와 **항목당 꼬리 질문 최대 2번**(RQ-2)을 더했다. AI-12 응답 호출은 상태 대신 프로젝트 현재 값(`<project_state>`)을 받는다. 정리(extract)에 "구체 요소 보존" 한 줄. 프롬프트 버전 `ai-12.reply.v5`·`ai-12.extract.v5`·`ai-13.reply.v2`·`ai-13.extract.v2`(초안 compose 그대로). 출력 스키마·DB·API·화면 변경 없음. **v4.7 — 교육 표시 이름 결정 ED-3·ED-4 반영(2026-11-04, `00_input/planning-decisions-education-name.md`)**: 교육 별칭(`EDU-n`)의 **저장 라벨**(근거 칩 `source_label`, 서류 출처 "부모 › 프로젝트", 문장 속 별칭 치환)을 교육 표시 이름(앞뒤 공백 제거한 `program_name`, 비면 `institution_name`)으로 바꾼다. 모델 입력(경력 팩·요약 팩·AI-03 머리글·AI-12 `affiliation`)은 바이트 단위로 그대로이고 `prompt_version`은 올리지 않는다. 구현 반영됨(PR #29, 마이그레이션 `20261113000200` 백필). **v4.6 — 프로젝트 추가·산출물 상세 Figma 결정 PA-1·PA-3 반영(2026-11-03)**: 산출물 상세(S-44) AI 작성 대화 **AI-13 신설**(PA-1), S-10·S-44 페이지 단위 저장에 맞춘 "반영 = 폼 채우기, 확정 = 저장하기" 계약(PA-3, AI-12 개정). PA-2(산출물 분류 없음)·PA-4(머리 필드 표시)는 AI 동작 변경 없음. 이 판의 새 계약 이름(`form_snapshot`, `save_project_page`, `save_project_deliverable`, `p_applied_proposals`, `start_writing_chat`·`start_deliverable_writing_chat`, `writing_chats.project_deliverable_id`, `structured_draft.deliverable.body` 등)은 **DM v4.5에서 확정**됐고 이 문서는 그 이름을 쓴다(요청: `_workspace/project-add-figma/ai_requests.md`, 회신: `_workspace/project-add-figma/dm_replies.md`). 이름·제목이 비면 첫 AI 메시지를 보내지 않는다(리더 정렬 — 임시 이름 없음). v4.5 — 커리어 화면 재설계(CR-1~CR-24) 반영(2026-11-02). 사용자 확정은 "확정 2026-11-05 (사용자)"·"확정 2026-11-02 (사용자)"·"확정 2026-11-03 (사용자)"·"확정 2026-11-04 (사용자)"로 표기한다. `[가정]`·`[결정 필요]`·`[보류]` 태그 항목은 확정이 아니다.
+> 작성: ai-feature-designer / 기준 입력: **(v4.12) `_workspace/00_input/planning-decisions-settings-dialog.md`(새 설정 다이얼로그 SD-1~SD-6, 사용자 확정 2026-11-05 — 형제 문서 PRD v4.14), `_workspace/01_product-planner_prd.md`(**PRD v4.14**)**, **(v4.11) `_workspace/00_input/planning-decisions-open-decisions.md`(열린 결정 일괄 확정 OD-*, 사용자 확정 2026-11-05 — 형제 문서 PRD v4.13 / UX v5.13 / DM v4.11)**, **(v4.10) `_workspace/00_input/planning-decisions-ui-panel-doc.md`(AI 패널·문서형 입력 UI 개정 UP-1~UP-13 — 사용자 확정 2026-11-04)**, **(v4.9) `_workspace/backend/R8/01_plan.md`(STAR 합친 제안·-음 체·민감정보 판정 R8 — 사용자 확정 RQ-4~RQ-6, 2026-11-04)**, **(v4.8) `_workspace/backend/R7/01_plan.md`(AI 작성 대화 질문 품질 개선 R7 — 사용자 확정 RQ-1~RQ-3, 2026-11-04)**, `docs/planning/01-prd.md` (**PRD v4.6**, BYOK), `docs/planning/02-user-flows.md` (**UX v5.6**; (v4.7, ED) 교육 이름 부분은 **UX v5.10**), `docs/planning/04-data-model.md` (**DM v4.5**; (v4.7, ED) 교육 라벨 부분은 **DM v4.8**), `_workspace/education-name/`(ED 사이클 요청·회신), `_workspace/career-redesign/dm_replies.md`, **`_workspace/project-add-figma/dm_replies.md`(DM v4.5 회신·이름 확정)**, `00_input/brief-2026-11-05.md`(리더 브리프), `00_input/planning-decisions-2026-11-05.md`(사용자 확정 A1~A24), `00_input/spec-gaps-summary.md`·`spec-gaps.md`(백엔드 구현 S0~S9 차이), `00_input/brief.md`(이전 피드백·결정), **`00_input/planning-decisions-career-redesign.md`(커리어 화면 재설계 CR-1~CR-14, 확정 2026-11-02 (사용자))**, **`00_input/planning-decisions-project-add-figma.md`(프로젝트 추가·산출물 상세 Figma 반영 PA-1~PA-4, 확정 2026-11-03 (사용자))**, `product-context.md`
+> 상태: **v4.12 — 새 설정 다이얼로그(결정 사이클 `settings-dialog`, SD-2·SD-4·SD-6, 확정 2026-11-05 (사용자))**: 컨텍스트 팩의 **프로필 블록 삭제**(SD-6 — `profiles`의 어떤 값도 어떤 프롬프트에 넣지 않는다), 근거 `source_type` `profile`·별칭 `PROFILE` **폐기**, V-4 예외 문장 삭제, 연차 요건 판정을 서버 계산값 **`computed_total_months`** 하나로(SD-2), 사용량 기능 이름의 **저장 값 ↔ 화면 표기** 분리(C-13.1 신설, SD-4·SD-A12). **프롬프트 버전이 올라간다**(0.v412 목록). 정본 스키마 모양·`schema_version` 변경 없음. **v4.11 — 열린 결정 일괄 확정(2026-11-05, OD-*, 확정 2026-11-05 (사용자))**: D-14 면접 점수 산식 `d14.v1` 확정(4.3, OD-I1 — 가중 30·30·20·20, 미응답 0점 포함, 서버 결정적 계산·AI 호출 없는 백필), 공급자·등급별 AI 고지 사실 표 C-7.1 신설과 새 고지 버전 `v2026-11-05`(OD-L2), AI 작성 대화 턴 계약 보강(답 없는 사용자 메시지 다시 보내기 OD-P11, 중단 처리 OD-P10), AI-13 초안 한도 칩 고정 3개(OD-P6)·`base_body_hash` 공백 정규화(OD-P5)·R5 구현값 반영(OD-P12·OD-P13), 슬라이스 구현값 `[가정]` 확정(OD-D6), 평가 세트 출시 전 체크리스트(OD-L4). 프롬프트·정본 스키마 모양·`prompt_version`·`schema_version` 변경 없음(점수 객체의 값만 서버가 채움). **v4.10 — AI 패널·문서형 입력 UI 개정 UP-1·UP-4·UP-5·UP-6·UP-9 반영(2026-11-04, 확정 2026-11-04 (사용자))**: S-10(AI-12) 빠른 버튼 칩은 시작 영역 전용(첫 사용자 메시지부터 숨김), S-44(AI-13) 칩은 대화 중에도 유지, 빠른 응답 버튼 삭제(UP-1). 제안 카드는 마지막 AI 턴 아래 확인 줄(UP-4). STAR 제안 직접 고치기 화면 삭제 — `user_edit` 객체 보호·호환은 그대로(UP-5). 분류 [반영]은 이미 고른 값도 덮어쓰고 [무시]는 사용자 `set` null(UP-6) — AI 추천 생성 규칙(빈 분류만, V-9i)은 그대로. STAR·본문 입력이 마크다운 편집기가 되어 C-1.1 정규화 대상 문법을 명시(UP-9). 프롬프트·정본 스키마·`prompt_version`·`schema_version` 변경 없음. **v4.9 — STAR 합친 제안·-음 체·민감정보 판정 RQ-4~RQ-6 반영(2026-11-04, 확정 2026-11-04 (사용자))**: AI-12 정리가 값이 있는 STAR 항목에도 **기존 내용 + 새 내용을 합쳐 다시 쓴 전체 문장**을 `op = "set"`으로 제안하고 [반영]은 그 항목을 **교체**한다(RQ-5 — `append`는 더 이상 내지 않음, 과거 초안 호환으로만 받음). V-9h 개정, 기존 사실 보존 검사 **V-9j 신설**, V-9c·d·e 출처에 그 필드의 기존 텍스트 포함. AI-12 STAR 제안·AI-13 사실·초안 본문 문장은 **"-음" 체**(RQ-4, 질문은 존댓말 그대로). 민감정보(V-9g·V-10f·C-7)는 **본인·가족 신상 맥락, 연락처, 실제 사람 이름 + 직함만** 막고 업무 도메인 단어는 걸지 않으며, 걸려도 **그 값만** 뺀다(RQ-6). 프롬프트 버전 `ai-12.extract.v6`·`ai-12.reply.v6`·`ai-13.extract.v3`·`ai-13.compose.v2`(`ai-13.reply.v2` 유지). 정본 스키마 모양·`schema_version` 그대로, RPC 1개 교체(비파괴). **v4.8 — AI 작성 대화 질문 품질 RQ-1~RQ-3 반영(2026-11-04, 확정 2026-11-04 (사용자))**: AI-12·AI-13 응답(reply) 질문 규칙을 "사용자가 말하거나 쓰지 않은 사실을 넣지 않는다 — 본인 말·폼 값은 따옴표로 그대로 인용 가능"으로 좁히고(RQ-1), 항목·슬롯별 구체 요소와 **항목당 꼬리 질문 최대 2번**(RQ-2)을 더했다. AI-12 응답 호출은 상태 대신 프로젝트 현재 값(`<project_state>`)을 받는다. 정리(extract)에 "구체 요소 보존" 한 줄. 프롬프트 버전 `ai-12.reply.v5`·`ai-12.extract.v5`·`ai-13.reply.v2`·`ai-13.extract.v2`(초안 compose 그대로). 출력 스키마·DB·API·화면 변경 없음. **v4.7 — 교육 표시 이름 결정 ED-3·ED-4 반영(2026-11-04, `00_input/planning-decisions-education-name.md`)**: 교육 별칭(`EDU-n`)의 **저장 라벨**(근거 칩 `source_label`, 서류 출처 "부모 › 프로젝트", 문장 속 별칭 치환)을 교육 표시 이름(앞뒤 공백 제거한 `program_name`, 비면 `institution_name`)으로 바꾼다. 모델 입력(경력 팩·요약 팩·AI-03 머리글·AI-12 `affiliation`)은 바이트 단위로 그대로이고 `prompt_version`은 올리지 않는다. 구현 반영됨(PR #29, 마이그레이션 `20261113000200` 백필). **v4.6 — 프로젝트 추가·산출물 상세 Figma 결정 PA-1·PA-3 반영(2026-11-03)**: 산출물 상세(S-44) AI 작성 대화 **AI-13 신설**(PA-1), S-10·S-44 페이지 단위 저장에 맞춘 "반영 = 폼 채우기, 확정 = 저장하기" 계약(PA-3, AI-12 개정). PA-2(산출물 분류 없음)·PA-4(머리 필드 표시)는 AI 동작 변경 없음. 이 판의 새 계약 이름(`form_snapshot`, `save_project_page`, `save_project_deliverable`, `p_applied_proposals`, `start_writing_chat`·`start_deliverable_writing_chat`, `writing_chats.project_deliverable_id`, `structured_draft.deliverable.body` 등)은 **DM v4.5에서 확정**됐고 이 문서는 그 이름을 쓴다(요청: `_workspace/project-add-figma/ai_requests.md`, 회신: `_workspace/project-add-figma/dm_replies.md`). 이름·제목이 비면 첫 AI 메시지를 보내지 않는다(리더 정렬 — 임시 이름 없음). v4.5 — 커리어 화면 재설계(CR-1~CR-24) 반영(2026-11-02). 사용자 확정은 "확정 2026-11-05 (사용자)"·"확정 2026-11-02 (사용자)"·"확정 2026-11-03 (사용자)"·"확정 2026-11-04 (사용자)"로 표기한다. `[가정]`·`[결정 필요]`·`[보류]` 태그 항목은 확정이 아니다.
 > 범위: 설계 문서만 다룬다. 프롬프트 전문과 API 호출 코드는 쓰지 않는다.
-> 테이블·필드명은 `docs/planning/04-data-model.md` **v4.5**를 기준으로 한다((v4.11, OD-*) 이번 판에서 바뀐 이름·컬럼은 **DM v4.11**). 출력 스키마 예시의 JSON 키는 **모델 출력 형식**이며 저장 시 데이터 모델 이름으로 매핑된다(C-3, 4.3, AI-12 매핑표). **(v4.5) 커리어 재설계 이름은 DM v4.4 확정값을 쓴다**: `projects.situation`·`task`·`action`·`result`·`learnings`(DM-19, `project_details` 폐기), 독립 프로젝트 `role`·`description`·`link_url`, 분류 3종 `project_type`·`experience_type`·`competencies`, `projects.content_updated_at`, `project_deliverables`(`source_type = 'project_deliverable'`), ~~`apply_writing_chat_proposal`~~(회신: `_workspace/career-redesign/dm_replies.md` — v4.6/DM v4.5에서 폐기, 페이지 저장 RPC로 대체). 모델은 기능별 **등급(경량/기본/고성능)**으로 적고, 공급자별 모델은 C-10.1 매핑표 하나에서 정한다.
+> **짝 문서 기준 버전 (v4.12, 리뷰 라운드 1): PRD(01) v4.14 / UX(02) v5.17 / 데이터 모델(04) v4.12.** 테이블·필드명은 `docs/planning/04-data-model.md` **v4.5**를 기준으로 한다((v4.12, R-SD-10) 이번 사이클에서 바뀐 이름·컬럼·RPC는 **DM v4.12 확정값**을 쓴다 — `private.compute_total_experience_months`, `ai_usage_records.input_cost_usd`·`output_cost_usd`, `evidence_links`의 `profile` 행 처리). 출력 스키마 예시의 JSON 키는 **모델 출력 형식**이며 저장 시 데이터 모델 이름으로 매핑된다(C-3, 4.3, AI-12 매핑표). **(v4.5) 커리어 재설계 이름은 DM v4.4 확정값을 쓴다**: `projects.situation`·`task`·`action`·`result`·`learnings`(DM-19, `project_details` 폐기), 독립 프로젝트 `role`·`description`·`link_url`, 분류 3종 `project_type`·`experience_type`·`competencies`, `projects.content_updated_at`, `project_deliverables`(`source_type = 'project_deliverable'`), ~~`apply_writing_chat_proposal`~~(회신: `_workspace/career-redesign/dm_replies.md` — v4.6/DM v4.5에서 폐기, 페이지 저장 RPC로 대체). 모델은 기능별 **등급(경량/기본/고성능)**으로 적고, 공급자별 모델은 C-10.1 매핑표 하나에서 정한다.
 
 ---
 
 ## 0. 요약
+
+### 0.v412 v4.12에서 바뀐 것 (새 설정 다이얼로그, 2026-11-05, SD-2·SD-4·SD-6)
+
+계기: 사용자가 올린 새 설정 다이얼로그 화면 3장으로 결정 사이클 `settings-dialog`가 열리고 SD-1~SD-6이 확정됐다(`_workspace/00_input/planning-decisions-settings-dialog.md`, 형제 문서 PRD v4.14). 이 문서에 걸린 것은 **SD-6**(내 정보 값은 AI 프롬프트에 보내지 않음) · **SD-2**(총 경력 연차 삭제) · **SD-4·SD-A12**(사용량 기능 이름 표기) 세 가지다. 바뀐 문장에는 `(v4.12, SD-x)`를 붙였다. **AI 기능을 새로 설계하지 않았고, 자기소개서 작성의 채팅형 전환은 이 사이클 밖이다**(SD-4).
+
+| 영역 | v4.11 | v4.12 |
+|------|-------|-------|
+| 컨텍스트 팩의 프로필 블록 (SD-6) | `profiles.desired_job_title`·`total_years_of_experience`·`interested_industries`를 팩 첫 블록으로 넣고 `desired_job_title`·`total_years_of_experience`는 필수였다 | **블록 자체를 없앤다**(C-1). `profiles`의 어떤 값도 어떤 프롬프트에 넣지 않는다 — 기존 3필드와 `display_name`은 물론 설정 "내 정보"의 새 값(구직 상태·관심 기업군·관심 산업·관심 직군·관심 직무·최종 학력)도 전부. **이름만 남긴 빈 블록도 두지 않는다**(리더 판정: 빈 블록은 다음 사이클에 다시 채워질 자리가 되고, 팩 바이트열·캐시 프리픽스만 길어진다) |
+| 근거 `source_type` (SD-6) | `profile`(별칭 `PROFILE`) 있음 | **`profile` 폐기** — C-3 허용값 표, 별칭 치환 표의 `PROFILE` 행, V-4·V-7의 프로필 언급을 지운다. 모델이 그래도 프로필 근거를 달면 V-1로 제거된다 |
+| V-4 (SD-6) | "희망 정보는 경력 사실 근거로 세지 않는다 / `total_years_of_experience`는 연차 판정의 사실 근거로 유지" 예외 2줄 | **예외 없음.** 프로필 값이 입력에 없으므로 "유효한 근거가 하나도 없으면 근거 0개"라는 규칙 하나만 남는다 |
+| 연차 요건 판정 (SD-2) | `profiles.total_years_of_experience` + 경력 기간 | **서버 계산 `computed_total_months` 하나만**(C-1에 정의 신설: `complete` 경력만, 시작·종료월 포함, 겹치는 달은 합집합으로 1회, 재직 중은 기준월까지, 종료월 미입력은 합계에서 제외). AI-02 판정 기준·실패 유형 개정. A16(AI-01 `seniority` 연차 숫자 미검사)은 그대로 |
+| 기능별 프로필 입력 (SD-6) | AI-02·AI-03·AI-04(팩 경유), AI-05·AI-12·AI-13(전용 행)이 프로필 값을 받았다 | 전부 삭제. 딸린 서술도 지운다 — AI-05 컬처핏의 "희망 직무는 `general` 질문에도 쓸 수 있다"와 고유명사 검사의 "희망 직무에 있는 말 제외", AI-04 `future_plan`의 "성장 방향(프로필 희망 직무 근거)" → **JD 주요 업무 근거**로, AI-12·AI-13의 "질문 어휘 조정용 `desired_job_title`", `data_sufficiency` `thin` 정의의 "프로필 또는", 컬처핏 게이트의 "프로필·경력 데이터" |
+| 사용량 기능 이름 (SD-4·SD-A12) | `feature` 8값이 그대로 표시 단위 | 저장 값 8개는 **그대로**, 화면 표기만 **7행**으로 묶는다(**C-13.1 신설** — `career_description` + `cover_letter` → "자기소개서 작성 AI 채팅" 한 행 합산, `writing_chat` → "프로젝트/산출물 작성 AI 채팅"). 집계는 공급자 × 기능 교차(SD-A10) |
+
+**`prompt_version`이 올라가는 프롬프트 (v4.12)**
+
+프로필 값을 프롬프트 텍스트나 입력 블록으로 쓰던 호출을 전부 올린다. 표기 규칙은 C-4(`ai-{기능}.{호출}.v{n}+common.v{n}`)이고, v4.11까지의 버전이 이 문서에 적혀 있지 않은 기능은 **현행 `v{n}` → `v{n+1}`**로 적는다(호출 이름·현재 번호는 구현 상수).
+
+| 프롬프트 | 버전 | 올리는 이유 |
+|----------|------|-------------|
+| 공통 system 블록 | `common.v1` → **`common.v2`** | 근거 형식에서 `profile`(`PROFILE`) source_type을 없앴다(C-3). 접미사이므로 **모든 기능의 저장 `prompt_version` 문자열이 함께 바뀐다** |
+| AI-02 요건 매칭 | `ai-02.match.v2` → **`ai-02.match.v3`** | 판정 기준에서 A10 예외 문장과 "연차 요건은 `total_years_of_experience`와 경력 기간으로 판정"을 지우고 `computed_total_months` 규칙으로 바꿨다 |
+| AI-02 종합 | `ai-02.synthesize.v2` → **`ai-02.synthesize.v3`** | 두 단계가 같은 AI-02 system 블록을 쓴다(C-8 캐시 전제) — 단계 1 문구가 바뀌면 함께 올라간다 |
+| AI-03 경력기술서 초안 | 현행 → **+1** | 입력 팩과 허용 근거 범위(V-7)에서 프로필이 빠졌다 |
+| AI-04 자소서 문항 초안 | 현행 → **+1** | `future_plan` 작성 규칙의 성장 방향 근거를 JD 주요 업무로 바꾸고, V-7 범위에서 프로필을 지웠다 |
+| AI-05 면접 질문 | 현행 → **+1** | 프로필 입력 행 삭제, 컬처핏 `general` 질문의 희망 직무 허용 문장 삭제, 고유명사 검사 예외 축소 |
+| AI-12 응답(reply) | `ai-12.reply.v6` → **`ai-12.reply.v7`** | 질문 어휘 조정용 `desired_job_title` 입력 삭제 |
+| AI-13 응답(reply) | `ai-13.reply.v2` → **`ai-13.reply.v3`** | 같은 이유 |
+
+- **올리지 않는 호출**: `ai-01.extract`(프로필을 쓴 적 없음), `ai-12.extract`·`ai-13.extract`·`ai-13.compose`(프로필 입력 없음), AI-06·AI-07·AI-08·AI-11(프로필을 프롬프트 텍스트로 쓰지 않는다 — AI-06·AI-11이 쓰는 팩에서 블록이 빠지는 것은 사용자 데이터 쪽 변화라 호출 버전을 올릴 일이 아니다). 다만 위 `common.v2` 때문에 **저장되는 `prompt_version` 문자열은 모든 기능에서 달라진다**.
+- 그 결과 **동일 입력 재사용(C-6)이 v4.12 배포 시점에 한 번 전부 끊긴다**(해시에 `prompt_version`이 들어간다, C-6). 의도한 동작이다 — 프로필을 넣고 만든 과거 결과를 새 입력과 같다고 볼 수 없다. 기존 결과는 그대로 열람·편집할 수 있다.
+- 정본 스키마 **모양**과 `schema_version`은 바뀌지 않는다. `profile` source_type이 사라지는 것은 근거 객체의 **값 범위** 변화다.
+
+**프로필을 뺀 뒤 품질 (PRD 요청 5에 대한 회신)**
+
+- 품질이 흔들릴 수 있는 곳은 두 군데뿐이다: ① AI-05 컬처핏 `none`/`thin` 세션의 `general` 질문 어휘(직무에 맞는 용어·말투) ② AI-04 `future_plan`의 성장 방향 한 단락. 근거가 달리는 출력(판정·강점·불릿·피드백)은 v4.3(A10)부터 프로필을 근거로 쓸 수 없었으므로 변화가 없어야 한다.
+- 확인 방법: 6장 평가 세트를 `common.v2` 기준으로 다시 돌리고, 위 두 항목만 v4.11 결과와 **쌍으로** 사람 평가한다(가상 프로필 30쌍 중 컬처핏 `none`/`thin` 10쌍 + `future_plan` 10문항). 출시 전 체크리스트(6장)에 항목으로 넣었다.
+- **떨어질 경우 의견: 프로필 값을 되살리지 않는다.** 대체 신호가 이미 입력에 있다 — JD의 `position_title`과 `jd_requirements`가 "어떤 직무인가"를, 경력의 `job_position`·`job_rank`·`department`가 "무슨 일을 해 왔는가"를 말해 준다. 두 기능 모두 지원 프로젝트 안에서 도므로 JD는 항상 있다. SD-6이 허용한 "서비스 안 추천"은 **화면에서 기능을 권하는 용도**이고, 그 값을 프롬프트로 돌려보내면 경로만 바뀐 SD-6 위반이므로 대체 경로로 쓰지 않는다.
 
 ### 0.v411 v4.11에서 바뀐 것 (열린 결정 일괄 확정 OD-*, 2026-11-05)
 
@@ -106,7 +144,7 @@
 | 영역 | v4.2 | v4.3 |
 |------|------|------|
 | 실패 작업 다시 시도의 공급자 | 정하지 않음 | (A1 — 확정 2026-11-05 (사용자, A1 변경)) **"다시 시도"를 포함한 모든 다시 시도·재실행은 누른 시점의 활성 공급자·등급으로 돈다**(C-11.4). 같은 작업 행의 다시 시도(실패한 인사이트·면접 질문 생성·채점 작업)에서 활성 공급자·등급이 작업에 기록된 것과 다르면 완료 단계 결과(`step_outputs`)를 버리고 처음 단계부터, 같으면 완료 단계를 건너뛰고 잇는다. 연결 확인(키 없음 → "AI 연결 필요", 무효, 동의 필요 `ai_consent_required`)도 활성 공급자·등급 기준. 앞선 R-48 해석(같은 행 다시 시도 = 처음 공급자)은 폐기 |
-| 판단 근거 | 프로필 희망 정보도 근거로 셀 수 있었음 | 희망 직무·관심 산업은 판단 근거가 아니고 문맥 참고만(A10, C-3 V-4) |
+| 판단 근거 | 프로필 희망 정보도 근거로 셀 수 있었음 | 희망 직무·관심 산업은 판단 근거가 아니고 문맥 참고만(A10, C-3 V-4) — **(v4.12, SD-6으로 뒤집힘, R-SD-16) 이 행은 현행 규칙이 아니다**: 프로필 값은 **문맥 참고로도 보내지 않는다**(PRD 9.3 A10, C-1 프로필 블록 삭제). 아래 v4.3 표는 역사 기록이다 |
 | 저장 문장 | 예시에 별칭(`PRJ-3`)이 섞여 있었음 | 저장·표시 문장에 별칭을 쓰지 않는다. 표시 이름으로 바꾼다(C-3 저장 키·표시 규칙) |
 | 진행 단계 | `match`/`synthesize`/`validate` 등 | `prepare`, `synthesize_regen`, `complete` 추가(C-6) |
 | 대기·재시도 | 모든 대기를 `next_run_at`으로 예약 | 동기·스트리밍 경로는 요청 안에서 짧게 기다리거나 바로 실패(C-11.3, A14) |
@@ -198,7 +236,7 @@
 
 | 블록 | 원천 entity.field | 필수 | 크기 추정 (토큰) | 비고 |
 |------|-------------------|------|-------------------|------|
-| 프로필 | `profiles.desired_job_title`, `profiles.total_years_of_experience`, `profiles.interested_industries` | desired_job_title·total_years_of_experience 필수 | 50~100 | `profiles.display_name`은 **보내지 않는다** |
+| **경력 합계 (서버 계산)** | `computed_total_months` — 팩에 들어간 `complete` 경력 기간에서 서버가 계산한 개월 수(정의는 아래 전용 항목) | 필수 | 10~20 | (v4.12, SD-2·SD-6) **프로필 블록 자체를 없앴다** — `profiles`의 어떤 값도 어떤 프롬프트에 넣지 않는다: `display_name`·`desired_job_title`·`interested_industries`·`total_years_of_experience`는 물론 설정 "내 정보"의 새 값(구직 상태·관심 기업군·관심 산업·관심 직군·관심 직무·최종 학력)도 전부. 이름만 남긴 빈 블록도 두지 않는다(다음 사이클에 다시 채워질 자리가 되고 캐시 프리픽스만 길어진다). 연차 요건 판정에 쓰는 숫자는 이 계산값 하나다 |
 | 경력 (`EXP-n`) | `experiences.id`, `company_name`, `start_month`, `end_month`(팩에는 년-월), `is_current`, `job_rank`, `job_position`, `department`, `employment_type`, `summary`(화면 "근무 내용", CR-13) | id·company_name·start_month·(job_rank 또는 job_position) | 경력당 100~300 | 최근순. "직급 / 직책"을 한 줄로 합쳐 표시. (v4.5) 경력 단위 성과는 없다(CR-11) |
 | 교육 (`EDU-n`) | `educations.id`, `institution_name`, `education_type`(degree/course), `program_name`, `start_month`, `end_month`, `enrollment_status`(enrolled/graduated/completed/dropped_out/on_leave), `description`(화면 "교육 내용", CR-13) | id·institution_name·education_type·start_month | 교육당 50~150 | 경력 블록 다음. 교육 아래 프로젝트를 중첩. (v4.7, ED-4) 팩에는 원본 필드 `institution_name`·`program_name`을 그대로 넣는다(모델 입력 변경 없음). 별칭의 **저장 라벨**만 교육 표시 이름(아래 "짧은 별칭", ED-3) |
 | 소속 프로젝트 (`PRJ-n`, 경력·교육 안) | `projects.id`, `experience_id` / `education_id`, `name`, `start_month`, `end_month`, `is_current`(CR-22), **분류 3종** `project_type`·`experience_type`·`competencies` (CR-9), **STAR** `situation`(상황) / `task`(화면 "역할") / `action`(행동) / `result`(화면 "결과/성과") / `learnings`(화면 "배운 점") | id·name·situation·action | 프로젝트당 300~800 | 소속 경력/교육 아래 중첩. **분류는 `<classification>` 태그로 감싸 참고 정보임을 표시(C-1.2)**, **`learnings`는 `<reflection>` 태그**(C-9). (v4.5) `role`·`team_size`·`summary`·스킬 태그는 넣지 않는다(CR-10. `team_size`·`summary`는 DM v4.4에서 삭제, 소속 프로젝트의 `role`은 CHECK로 null) |
@@ -207,6 +245,16 @@
 | 스킬 (`SKL-n`) | `skills.id`, `skills.name`, `skills.is_manual`, `project_skills(project_id, skill_id)` | name | 전체 50~300 | (v4.5) 독립 프로젝트의 "사용 기술" 태그 + 직접 추가 스킬만. 소속 프로젝트에는 스킬 연결이 없다(CR-10) |
 
 - **(v4.5, CR-22) 프로젝트 기간 표기**: 팩에는 서버가 만든 기간 문자열을 넣는다 — `is_current = true`면 "YYYY.MM - 현재 (N년 N개월)"(이번 달까지 셈), 종료월이 있으면 "YYYY.MM - YYYY.MM (N년 N개월)", 체크 없이 종료월이 비면 "YYYY.MM -"(개월 수 없음, 모델이 기간을 추측하지 않게 "종료 미입력"으로 표시). 경력의 재직 중 표기와 같은 규칙이다. V-5 서버 계산 허용값에 진행 중 프로젝트의 개월 수(이번 달까지)를 넣고, 종료월이 빈 진행 중 아닌 프로젝트는 개월 수를 만들지 않는다. `career_snapshot_hash`에는 `is_current` 값을 넣고 계산된 개월 수는 넣지 않는다(C-1 해시 규칙과 같음).
+- **(v4.12, SD-2) `computed_total_months` — 서버가 계산하는 총 경력 개월 수**: 프로필의 총 경력 연차(`profiles.total_years_of_experience`)가 없어졌으므로, 연차 요건 판정에 쓰는 숫자는 이 계산값 하나다(PRD F-P2-04).
+  - **(v4.12, R-SD-6 — DM v4.12 확정) 계산 위치·시그니처**: 저장 컬럼도 팩 조립 쿼리 안의 인라인 SQL도 아니고 **전용 함수** `private.compute_total_experience_months(p_user_id uuid, p_as_of date)` → **`(total_months integer, open_ended_experience_count integer, as_of_month date)`** 하나다(DM 6.2, 공개 RPC 없음). 팩의 `computed_total_months` = 반환값의 `total_months`이고, **팩에 적는 "기간 미입력 경력 N건"의 N = 같은 호출의 `open_ended_experience_count`**다(따로 세지 않는다). `as_of_month`는 팩 머리 표기의 "기준 YYYY-MM"에 그대로 쓴다.
+  - **기준월은 인자다**: 함수는 안에서 `now()`를 읽지 않고 호출자가 넘긴 `p_as_of`의 달을 기준월로 쓴다(재직 중 경력을 그 달까지 센다). 같은 입력에 같은 결과가 나와야 테스트·재현·동일 입력 재사용 판정이 성립한다. `status = 'complete'` 필터도 **함수 안에서** 적용되며 팩 조립의 `complete` 필터와 같은 정의다(DM이 pgTAP로 고정).
+  - **대상**: 팩에 들어간 `status = 'complete'` **경력(`experiences`) 행만** 더한다. 교육·소속 프로젝트·독립 프로젝트의 기간은 더하지 않는다 — 교육 기간을 경력으로 세면 연차 요건 판정이 부풀려지고, 프로젝트 기간은 경력 기간 안에 이미 들어 있다.
+  - **셈 단위**: 월. 한 경력의 개월 수 = `end_month` − `start_month` + 1 (시작월·종료월을 **모두 포함**해서 센다. 예: 2024.03 ~ 2024.03 = 1개월, 2023.01 ~ 2023.12 = 12개월).
+  - **재직 중**: `is_current = true`면 **조립 기준월(그 호출이 도는 달)까지** 센다(C-1 기간 문자열과 같은 기준). `is_current = false`인데 `end_month`가 비어 있으면 **그 경력은 합계에서 뺀다** — 기간을 추측하지 않는다. 뺀 경력이 있으면 팩에 "기간 미입력 경력 N건(합계에 넣지 않음)" 한 줄을 함께 넣어, 모델이 합계가 실제보다 적을 수 있음을 알고 `partial` 쪽으로 판단하게 한다.
+  - **겹치는 기간**: 월 단위 **합집합**으로 센다. 두 경력이 같은 달에 걸쳐 있으면 그 달은 **한 번만** 센다(겸직·이직 월 중복으로 연차가 늘지 않게). 경력 사이의 공백 기간은 더하지 않는다. 즉 합계 = 어느 `complete` 경력에든 속하는 달의 개수다.
+  - **팩 표기**: 팩 머리에 한 줄 — "등록된 경력 기간 합계: N년 M개월 (총 X개월, 기준 YYYY-MM, 서버 계산)". **서버 계산값임을 문장에 밝힌다** — 사용자가 적어 넣은 수치가 아니므로 모델이 이것을 경력 서술처럼 인용하면 안 된다.
+  - **근거가 될 수 없다**: C-3에 대응하는 `source_type`이 없다(프로필 블록과 함께 사라졌다). 판정 이유 문장에는 근거 객체 없이 "등록된 경력 기간 합계 기준"으로 적는다.
+  - **해시·검증**: `career_snapshot_hash`에는 **넣지 않는다** — 기준월마다 바뀌는 계산값이라 넣으면 데이터를 고치지 않아도 매달 "데이터 변경됨"이 뜬다(재직 중 기간 문자열과 같은 이유). 대신 V-5의 "서버가 계산 가능한 값 목록"에 N·M·X를 넣어, 생성 문장에 이 숫자가 나와도 수치 가드에 걸리지 않게 한다.
 - **(CR-18) 소속 프로젝트의 기술 정보**: 소속 프로젝트에는 기술 태그가 없다(확정). 기술명은 STAR 본문에서 읽고, AI-02 판정·AI-03 스킬명 가드는 서술 텍스트 기준으로 동작한다. 평가 세트에서 "기술명이 STAR에만 있는 프로필"의 판정·초안 품질을 따로 본다.
 - **`status = 'complete'` 행만 넣는다**: `experiences`, `educations`, `projects`는 `status = 'draft' | 'complete'`를 가진다. 팩에는 `complete` 행만 넣고, `draft` 부모(경력·교육)에 속한 프로젝트는 `complete`여도 함께 제외한다(데이터 모델 v2 확정 — v1.1 확인 1). 산출물은 상태가 없고 **부모 독립 프로젝트가 `complete`일 때만** 들어간다 `[가정]`. 완료 항목이 `draft`로 돌아가면 다음 조립부터 빠지고 기존 결과의 해당 근거는 "변경됨"으로 표시된다.
 - **완료 판정 (v4.5, CR-2·CR-7·CR-11 — DM v4.4 확정)**: 소속 프로젝트 `complete` = 이름 + 상황 + 행동(v4.4의 "역할 + 완료 상세 내용 ≥ 1"과 상세 내용 제목 요건은 없어짐, 정량 성과 의존 없음) / 독립 프로젝트 `complete` = 이름 + 프로젝트 내용(`description`) — DM v4.4·PRD 채택, 산출물은 완료 조건이 아니다. 판정은 서버가 저장 때마다 한다.
@@ -222,9 +270,9 @@
   | AI-01 요건 추출 | JD 텍스트만 | 해당 없음 (지원 프로젝트 생성에 커리어 데이터 불필요) |
   | AI-02 인사이트, AI-03/AI-11 경력기술서, AI-04 자기소개서, AI-05 직무 면접 | D-01 (v4.5): `complete` 경력 1건 + `complete` 프로젝트 1건(소속 프로젝트 = 이름 + 상황 + 행동, 독립 프로젝트 = 이름 + `description` — 경력·교육·독립 어디 소속이든 셈). 교육만으로는 미충족 | 그 기능은 미실행 + `insufficient_data` → `get_data_readiness()`의 `next_action`에 따라: ① **`writing_chat`** + `suggested_project_id` + 힌트 `project_star` — 상황·행동이 비어 `draft`인 소속 프로젝트가 있으면 그 프로젝트 상세 페이지를 열고 패널에 게이트 진입 새 대화(`writing_chats.return_target`)를 만든다. **AI를 쓸 수 없으면(키 무효·동의 필요 등) 같은 경우가 `form` + `suggested_project_id` + `project_star`로 오고, 그 프로젝트 상세(S-10)의 STAR 입력란을 연다**(DM v4.4 판정 ②. (v4.6, PA-3) 섹션 편집은 없고 페이지 단위 입력 + "저장하기"). ② **`create_project`** — `complete` 경력은 있는데 채울 소속 프로젝트가 없으면 ~~"프로젝트 추가"(이름 + 소속 선택)로 작성 중 프로젝트를 먼저 만들고(CR-6)~~ (v4.6, PA-3) 화면이 소속 경력·교육을 정한 **빈 S-10**을 열고, **첫 저장 또는 첫 AI 메시지 때** 행을 만든다(AI-12 "대상·시작점"의 순차 경로 — 이름이 비면 보내지 않음). 그다음은 ①과 같다. ③ **`form`** — `complete_experience`가 부족하면 경력 추가·섹션 편집으로. (v4.5) `hints`의 `project_fields`는 **독립 프로젝트가 내용(`description`) 없이 `draft`일 때**로 재정의하고 `suggested_project_id`의 "프로젝트 내용" 섹션 편집을 연다(v4.3 A18의 "이름·역할이 빠진 프로젝트"는 이름이 생성 때 필수이고 역할이 없어져 생기지 않는다. 독립 프로젝트에는 AI 패널이 없다 — CR-19 확정). `suggested_mode`는 폐기, 힌트 `complete_project_detail`은 `project_star`(STAR 미완 소속 프로젝트)로 이름이 바뀐다(카운트 `projects_without_complete_star`, DM v4.4). 반영 후 준비도를 다시 계산해 충족되면 원래 기능 화면으로 복귀(실행은 사용자가 다시 누름 — 사용자 토큰이 쓰이므로 자동 실행하지 않음). 대화를 시작할 수 없으면(키 무효 등) 직접 입력(S-10 STAR 입력란 / 섹션 편집)으로 안내 |
   | AI-12·AI-13 AI 작성 대화, AI-08 필드 다듬기 | 없음 (커리어 데이터를 만드는 기능) | 해당 없음. AI-13은 게이트 진입 대상이 아니다(산출물은 완료 조건이 아님, `return_target` 없음) |
-  | AI-05 컬처핏 면접 | JD만 필수(`[가정]` 유지, U-5). 프로필·경력 데이터가 있으면 사용 | 차단하지 않음. `data_sufficiency`(아래)로 질문 구성과 안내를 바꾼다 |
+  | AI-05 컬처핏 면접 | JD만 필수(`[가정]` 유지, U-5). 경력 데이터가 있으면 사용 (v4.12, SD-6 — 프로필 삭제) | 차단하지 않음. `data_sufficiency`(아래)로 질문 구성과 안내를 바꾼다 |
 
-- **`data_sufficiency` 수준 (서버 계산)**: `ok` = D-01 충족 / `thin` = D-01 미달이지만 프로필 또는 `complete` 경력·교육·프로젝트가 있음 / `none` = 커리어 데이터 없음(JD만). 컬처핏 면접(4장)과 각 결과의 보완 안내 배너에 쓴다.
+- **`data_sufficiency` 수준 (서버 계산)**: `ok` = D-01 충족 / `thin` = D-01 미달이지만 `complete` 경력·교육·프로젝트가 있음 (v4.12, SD-6 — 프로필 값은 이 판정에도 쓰지 않는다) / `none` = 커리어 데이터 없음(JD만). 컬처핏 면접(4장)과 각 결과의 보완 안내 배너에 쓴다.
 - **데이터는 있으나 빈약한 경우**: 호출은 진행한다. 결과는 "근거 없음" 판정과 자리 표시가 많아지는 방향으로 자연스럽게 나오며, 출력의 `data_sufficiency` 필드(AI-02, AI-05)로 화면에 보완 안내를 띄운다.
 
 #### C-1.1 산출물 (`DLV-n`) 넣는 법 (v4.5, CR-8)
@@ -264,7 +312,6 @@
 
 | source_type | ref 형식 | field 허용값 | quote |
 |-------------|----------|--------------|-------|
-| `profile` | `PROFILE` | `desired_job_title`, `total_years_of_experience`, `interested_industries` | 선택 |
 | `experience` | `EXP-n` | `job_rank`, `job_position`, `department`, `summary`, `period` | `summary`이면 필수 |
 | `education` | `EDU-n` | `institution_name`, `program_name`, `education_type`, `enrollment_status`, `period`, `description` | `description`이면 필수. (v4.7, ED-3) 근거 칩 라벨(`source_label`)은 교육 표시 이름(C-1 "별칭의 저장 라벨"), `field` 허용값은 그대로 |
 | `project` | `PRJ-n` | (v4.5) 공통 `name`, `period` / **소속 프로젝트** `situation`, `task`, `action`, `result`, `learnings` / **독립 프로젝트** `role`(담당 업무), `description`(프로젝트 내용) | `name`·`period` 외에는 필수. **`learnings`는 회고 근거(C-9)**. 소속 프로젝트에 `role`·`description`, 독립 프로젝트에 STAR 필드를 달면 V-2 위반. 분류 3종(`project_type`·`experience_type`·`competencies`)과 `link_url`은 허용값이 아니다(C-1.2) |
@@ -276,6 +323,7 @@
 | `user_note` | `NOTE-n` | — | 필수 (자소서 문항 메모, F-DOC-09) |
 | `writing_chat_message` | `M-n` | — | 필수. **AI-12·AI-13 전용**(v4.6: AI-13 사실 목록·초안 블록의 출처 사용자 발화 포함)(정리 결과 필드의 출처 사용자 발화). `evidence_links.source_type`에는 넣지 않고 `writing_chats.structured_draft`에만 저장한다(데이터 모델 v3). 지원 프로젝트 기능에서는 쓰지 않는다 |
 
+- **(v4.12, SD-6) 폐기**: `profile`(`PROFILE`) — 프로필 값을 모델에 보내지 않으므로 근거 `source_type`에서 없앴다. 프로필을 근거로 단 모델 출력은 V-1(입력 팩에 `PROFILE`이 없음)으로 제거된다. 과거 `evidence_links`의 `profile` 행은 **(v4.12, SD-A19 확정 — R-SD-7)** 다음과 같이 둔다(v4.12 초판의 "`achievement`와 같이 '원본 삭제됨'으로 둔다"는 권고는 **폐기**한다): ① **기존 행과 `source_label`을 지우지 않고 남긴다** ② `source_deleted_at`을 **소급해 채우지 않는다** — 지워진 것은 원본 **데이터**가 아니라 원본 **화면**(S-04)이라 "원본 삭제됨"은 사실과 다르다 ③ `source_type` **CHECK 목록에서 `profile`을 빼지 않고**(빼면 기존 행이 제약을 위반한다) **insert 트리거가 새 행만 거부**한다(`invalid_evidence_source`, DM 2.8) ④ 화면의 근거 칩은 **라벨을 그대로 보이고 "원본으로 이동"만 비활성**이다(UX C-01·C-02). 새 결과에서는 이 출처가 생기지 않는다.
 - (v4.5) **폐기**: `project_detail`(`DET-n`) — STAR 필드는 `project`의 `field`로 옮김(CR-2). `achievement`(`ACH-n`) — 정량 성과·경력 단위 성과 삭제(CR-11). 기존 `evidence_links` 행은 DM v4.4 11.2대로 `project_detail.{field}` → `project.{field}`(`title` → `name`)로 이관하고, `achievement`는 "원본 삭제됨"으로 둔다 `[가정]`(DM).
 
 **서버 검증 규칙 (모델 출력 직후, 저장 전)**
@@ -285,11 +333,11 @@
 | V-1 | `ref`가 이번 호출의 입력 팩에 존재 | 해당 근거 제거 |
 | V-2 | `field`가 source_type의 허용값 (v4.5: `project`는 소속/독립 구분까지 확인) | 해당 근거 제거 |
 | V-3 | `quote`가 해당 원문 필드의 부분 문자열 (공백·문장부호 정규화 후 비교). (v4.5) 산출물 `body`는 **팩에 들어간 정규화 텍스트** 기준(잘려 빠진 부분 인용은 실패, C-1.1) | 근거 제거. 부분 일치(70% 이상 `[가정]`)면 원문의 가장 가까운 구간으로 교체하고 `quote_adjusted: true` |
-| V-4 | 근거가 **0개**가 된 판단 항목 (강점, 충족/부분 충족 판정, 지원 방향, 초안 블록, 피드백 항목). (v4.3, A10 — 확정 2026-11-05 (사용자)) **프로필의 희망 정보(`profile.desired_job_title`, `profile.interested_industries`)는 경력 사실 근거로 세지 않는다.** 판정·강점·포지셔닝의 근거가 될 수 없고 문맥 참고만 한다. 희망 정보 근거만 남은 판단 항목은 근거 0개로 본다(`profile.total_years_of_experience`는 연차 판정의 사실 근거로 유지). (v4.5) 분류 3종은 애초에 근거가 될 수 없다(V-2) | 항목을 출력하지 않는다(NFR-AI-01). 충족/부분 충족 판정은 `no_evidence`로 강등. 초안 블록은 "근거 확인 필요" 배지로 표시 (초안은 문장 구조상 블록 삭제가 어색하므로) |
+| V-4 | 근거가 **0개**가 된 판단 항목 (강점, 충족/부분 충족 판정, 지원 방향, 초안 블록, 피드백 항목). (v4.12, SD-6) **프로필 예외 문장은 없어졌다** — 프로필 값이 입력에 없고 `profile` source_type도 폐기됐으므로 "희망 정보는 사실 근거로 세지 않는다"·"`total_years_of_experience`는 연차 판정 근거로 유지"라는 예외를 둘 필요가 없다. 남는 규칙은 하나다: **그 항목에 유효한 근거가 하나도 없으면 근거 0개로 본다.** (v4.5) 분류 3종은 애초에 근거가 될 수 없다(V-2). 연차 판정에 쓰는 `computed_total_months`도 근거 객체가 아니므로 이 셈에 들어가지 않는다(C-1) | 항목을 출력하지 않는다(NFR-AI-01). 충족/부분 충족 판정은 `no_evidence`로 강등. 초안 블록은 "근거 확인 필요" 배지로 표시 (초안은 문장 구조상 블록 삭제가 어색하므로) |
 | V-5 | **수치 가드**: 생성 텍스트(초안, 지원 방향, 개선 답변 예시, 질문 문장)에 나온 숫자(%, 배, 명, 원, 건, 기간 등)가 **이번 호출에 넣은 사용자 서술 텍스트**·JD·답변·메모 중 어딘가에 같은 값으로 존재. (v4.5, CR-11) 구조화 정량 성과가 없어졌으므로 원천은 서술 텍스트다: 소속 프로젝트 `situation`·`task`·`action`·`result`(결과/성과 서술이 주 원천), 경력 `summary`, 교육 `description`, 독립 프로젝트 `role`·`description`, 산출물 본문 중 팩에 들어간 부분, 그리고 서버가 날짜에서 계산한 값. (v3) `learnings`에만 있는 숫자는 사실 수치로 인정하지 않는다 | 기본: 존재하지 않으면 해당 블록을 1회 재생성 요청. 그래도 실패하면 해당 숫자를 `[수치 확인 필요]`로 치환하고 표시. 연차·기간처럼 입력 날짜에서 계산되는 값은 서버가 계산 가능한 값 목록을 미리 만들어 허용. **기능별 예외(v4.3)는 아래 "V-5 비교 규칙과 예외"** |
 | V-8 | **(v3) 회고 근거 제한 (NFR-AI-06)**: `field = learnings` 근거(v4.5: `source_type = project`)는 C-9의 허용 용도에서만 유효하고, 판단 항목의 유일한 근거가 될 수 없다 | 허용 용도 밖이면 제거. 남은 사실 근거가 0개면 V-4 처리 |
 | V-6 | 스키마 일치 (structured output 사용으로 대부분 보장) | 1회 재시도 → 실패 시 작업 실패 처리 (C-6) |
-| V-7 | **근거 범위**: 근거 선택이 있는 생성(AI-03의 포함 항목, AI-04의 "사용한 경력·프로젝트")에서 본문 근거가 **선택된 경력·교육·프로젝트(소속 프로젝트는 STAR 필드, 독립 프로젝트는 담당 업무·내용·그 산출물·사용 기술)**, 프로필, JD, 문항 메모 안에 있음. (v4.5) v4.4의 `detail_refs`(상세 내용 범위)·성과 범위는 없어짐 | 범위 밖 근거 제거. 근거가 0개가 된 블록은 V-4와 같이 `evidence_check_needed` |
+| V-7 | **근거 범위**: 근거 선택이 있는 생성(AI-03의 포함 항목, AI-04의 "사용한 경력·프로젝트")에서 본문 근거가 **선택된 경력·교육·프로젝트(소속 프로젝트는 STAR 필드, 독립 프로젝트는 담당 업무·내용·그 산출물·사용 기술)**, JD, 문항 메모 안에 있음 (v4.12, SD-6 — 범위에서 프로필을 뺀다). (v4.5) v4.4의 `detail_refs`(상세 내용 범위)·성과 범위는 없어짐 | 범위 밖 근거 제거. 근거가 0개가 된 블록은 V-4와 같이 `evidence_check_needed` |
 
 - 검증 통계(항목 수, 제거된 근거 수, 강등 수, 수치 가드 위반 수)는 결과와 함께 `validation_report`로 저장한다. 7장 "근거 없는 주장 비율" 운영 지표의 원천이다. 원문은 들어가지 않는다.
 
@@ -320,7 +368,6 @@
   | `EXP-n` / `EDU-n` | (v4.7, ED-3 — 구현에 맞춰 명시) 회사명 / 교육 표시 이름(C-1 "별칭의 저장 라벨") (`'…'`, 40자까지). 라벨이 없으면 지운다 |
   | `REQ-n` / `Sn` | 요건 내용 / 공고 문장 (`'…'`, 40자까지) |
   | `SKL-n` | 스킬 이름 |
-  | `PROFILE` | "프로필" |
   | `Q-n` | "n번 질문" |
   | 그 밖·모르는 별칭 | 지운다 |
 
@@ -688,26 +735,32 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 | `model` | 실제 호출한 모델 ID |
 | `model_tier` | `light` / `default` / `heavy` |
 | `connection_tier` | `free` / `paid` (호출 시점의 사용자 등급 선택) |
-| `feature` | 미터 표시 기능 (A4-1): `jd_extraction` / `insight` / `career_description` / `cover_letter` / `interview_questions` / `interview_evaluation` / `writing_chat` / `key_verification`(연결 확인, A4-2) / (Should) `writing_assist`, `chat_reply`. AI-11 기본 선택과 자소서 글자 수 보정은 각각 `career_description`·`cover_letter`에 포함 |
+| `feature` | **저장 값** (A4-1, (v4.12, SD-4) 8값 그대로 — 화면 표기 7행과의 대응은 **C-13.1**): `jd_extraction` / `insight` / `career_description` / `cover_letter` / `interview_questions` / `interview_evaluation` / `writing_chat` / `key_verification`(연결 확인, A4-2) / (Should) `writing_assist`, `chat_reply`. AI-11 기본 선택과 자소서 글자 수 보정은 각각 `career_description`·`cover_letter`에 포함 |
 | `job_type`, `ai_job_id`, `call_key` | 작업과 단계(예: `insight.match.2`, `interview_evaluation.answer.3`, `writing_chat.turn.7.extract`, (v4.6) AI-13 초안 `writing_chat.turn.7.compose`). AI-13도 미터 `feature = writing_chat`("AI 작성 대화")로 묶는다 `[가정]` |
 | `application_project_id` | 관련 지원 프로젝트(삭제 시 null, 기록은 유지 `[가정]`) |
 | `input_tokens` | 캐시되지 않은 입력 토큰 |
 | `cached_input_tokens` | 캐시 읽기 입력 토큰(공급자가 보고할 때) |
 | `cache_write_tokens` | 캐시 쓰기 토큰(Claude) |
 | `output_tokens` | 출력 토큰(사고 토큰 포함) |
-| `reasoning_tokens` | 그중 사고 토큰(공급자가 따로 보고할 때, 표시용) |
+| `reasoning_tokens` | 그중 사고 토큰(공급자가 따로 보고할 때, 표시용). **(v4.12, R-SD-5) 비용에서는 출력 쪽이다** — `output_tokens`에 이미 포함된 값이라 비용 식에 다시 더하지 않고, 별도 단가도 없다(`output_cost_usd` 안에 들어 있다) |
 | `usage_source` | `provider_reported` / `unavailable`(실패 응답에 토큰 정보가 없을 때 0으로 기록) |
 | `outcome` | `succeeded` / `failed` + `error_code` |
 | `price_table_version` | 계산에 쓴 가격표 버전 |
-| `estimated_cost_usd` | 아래 식, 기록 시점 계산값(가격표가 바뀌어도 다시 계산하지 않음) |
+| **`input_cost_usd`** | **(v4.12 신설, SD-A11 — DM 2.9.2)** 입력 쪽 비용 = **비캐시 입력 + 캐시 읽기 + 캐시 쓰기**. 화면 "입력 비용" 열의 원천 |
+| **`output_cost_usd`** | **(v4.12 신설, SD-A11 — DM 2.9.2)** 출력 쪽 비용 = **출력 토큰**(사고 토큰 포함). 화면 "출력 비용" 열의 원천 |
+| `estimated_cost_usd` | 아래 식, 기록 시점 계산값(가격표가 바뀌어도 다시 계산하지 않음). **(v4.12) `input_cost_usd + output_cost_usd`와 같아야 한다** — 합계 컬럼으로 남는다(과거 행·분석 호환) |
 
-- **예상 비용** = `input_tokens × 입력 단가 + cached_input_tokens × 캐시 읽기 단가 + cache_write_tokens × 캐시 쓰기 단가 + output_tokens × 출력 단가` (모델·가격표 버전 기준). 무료 등급도 **유료 환산 값**을 계산하고 화면은 "청구되지 않을 수 있음"으로 표시한다(F-AI-07 (5)).
-  - **장문 구간 (v4.3)**: 그 호출의 입력(캐시 포함 전체 입력 토큰)이 `long_context_threshold_tokens`를 넘으면 네 단가를 모두 장문 단가로 바꾼다: 입력 `long_context_input_usd_per_mtok`, 캐시 읽기 `long_context_cached_input_usd_per_mtok`, 캐시 쓰기 `long_context_cache_write_usd_per_mtok`, 출력 `long_context_output_usd_per_mtok`. 장문 캐시 단가가 비어 있으면(null) 일반 캐시 단가를 쓴다. 장문 캐시 단가 2개는 DM v4.2 2.9.3의 가격표 컬럼이다(공급자 가격표에서 장문 구간에 캐시 단가도 바뀌는 모델이 있어 추가).
-  - 그날 유효한 가격표 버전에 없는 모델을 호출했으면 `price_table_version = 'unpriced'`, `estimated_cost_usd = 0`으로 기록한다 `[가정]`(매핑 모델 9개가 모두 가격표에 있어 정상 경로에서는 생기지 않는다).
+- **(v4.12, SD-A11 — R-SD-5) 예상 비용은 두 식으로 나눠 기록한다.** 화면이 "입력 비용 / 출력 비용" 두 열을 보이고, 토큰에서 역산할 수 없기 때문이다(장문 구간·캐시 단가가 섞인다). **기록 경로가 두 값을 나눠 계산해 넣고, 합계는 둘의 합이다.**
+  - `input_cost_usd` = `input_tokens × 입력 단가 + cached_input_tokens × 캐시 읽기 단가 + cache_write_tokens × 캐시 쓰기 단가` — **캐시 쓰기는 입력 쪽**이다(캐시를 만드는 비용은 그 호출이 보낸 입력에 붙는다. 출력 쪽에 넣으면 Claude 호출의 출력 비용이 모델 출력과 무관하게 뛴다).
+  - `output_cost_usd` = `output_tokens × 출력 단가` — 사고 토큰(`reasoning_tokens`)은 `output_tokens`에 이미 포함되므로 **출력 쪽에 한 번만** 들어가고, 따로 더하지 않는다.
+  - `estimated_cost_usd` = `input_cost_usd + output_cost_usd`. 반올림은 세 값 모두 저장 자리수(numeric(12,6))에서 하고, 두 값을 더한 뒤 다시 반올림하지 않는다(합이 어긋나지 않게).
+  - 무료 등급도 **유료 환산 값**을 세 값 모두 계산하고 화면은 "청구되지 않을 수 있음"으로 표시한다(F-AI-07 (5)).
+  - **장문 구간 (v4.3)**: 그 호출의 입력(캐시 포함 전체 입력 토큰)이 `long_context_threshold_tokens`를 넘으면 네 단가를 모두 장문 단가로 바꾼다: 입력 `long_context_input_usd_per_mtok`, 캐시 읽기 `long_context_cached_input_usd_per_mtok`, 캐시 쓰기 `long_context_cache_write_usd_per_mtok`, 출력 `long_context_output_usd_per_mtok`. 장문 캐시 단가가 비어 있으면(null) 일반 캐시 단가를 쓴다. **(v4.12) 단가 교체는 두 식에 똑같이 적용된다** — 장문 구간 판정은 호출 단위(캐시 포함 전체 입력 토큰)이고, 걸리면 `input_cost_usd`의 세 단가와 `output_cost_usd`의 출력 단가를 **함께** 장문 단가로 바꾼다. 입력만 또는 출력만 장문 단가를 쓰는 경우는 없다. 장문 캐시 단가 2개는 DM v4.2 2.9.3의 가격표 컬럼이다(공급자 가격표에서 장문 구간에 캐시 단가도 바뀌는 모델이 있어 추가).
+  - 그날 유효한 가격표 버전에 없는 모델을 호출했으면 `price_table_version = 'unpriced'`, **`input_cost_usd` · `output_cost_usd` · `estimated_cost_usd` 세 값 모두 0**으로 기록한다(v4.12 — 셋 중 하나만 0이 되는 경우는 없다) `[가정]`(매핑 모델 9개가 모두 가격표에 있어 정상 경로에서는 생기지 않는다).
 - **실패 호출**: 공급자가 토큰 수를 돌려주면 그대로 기록(F-AI-07 (7)). 토큰 정보가 없으면 0 + `usage_source = unavailable`. 스트리밍 중 끊긴 응답은 마지막으로 받은 usage가 있으면 그것을, 없으면 `unavailable`.
 - **동일 입력 재사용**(C-6)으로 호출하지 않은 경우는 기록하지 않는다.
 - 미터 반영은 호출 완료 후 1분 이내(PRD 6.4) — 호출 직후 동기 insert.
-- **미터 표시 범위 (UB-2 (b) 확정)**: **이번 달(달력 월 KST)만**, 기능별 합계와 공급자별 합계. 지난달 비교는 표시하지 않는다(기록은 13개월 보관하므로 사용자 결정이 바뀌면 화면만 추가).
+- **미터 표시 범위 (UB-2 (b) 확정)**: **이번 달(달력 월 KST)만**. (v4.12, SD-A10) 집계 단위는 **공급자 × 기능 교차**로 바뀐다 — 공급자 하나를 고르면 그 공급자의 기능별 7행을 보여 준다(기존 "기능별 합계 + 공급자별 합계" 두 표는 없어진다). 지난달 비교는 표시하지 않는다(기록은 13개월 보관하므로 사용자 결정이 바뀌면 화면만 추가).
 
 **가격표 (`ai_price_tables`, 데이터 모델 v4.2)**: `version`, `effective_from`, `provider`, `model`, `input_usd_per_mtok`, `cached_input_usd_per_mtok`, `cache_write_usd_per_mtok`, `output_usd_per_mtok`, `long_context_threshold_tokens`, `long_context_input_usd_per_mtok`, `long_context_cached_input_usd_per_mtok`, `long_context_cache_write_usd_per_mtok`, `long_context_output_usd_per_mtok`(장문 구간이 있는 모델만, 장문 캐시 2개는 v4.3 추가), `source_checked_at`(화면 "가격표 기준일").
 
@@ -729,6 +782,24 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 - **예정된 가격 변경은 버전을 미리 나눠 넣는다**: `v2026-12-01` — `gemini-4-argon` 입력 4.00 / 캐시 읽기 0.20 / 출력 20.00, `v2027-01-01` — `gemini-3.8-flash` 입력 1.50 / 캐시 읽기 0.15 / 출력 7.50. 나머지 행은 앞 버전 값 그대로.
 - 버전 규칙: `v{YYYY-MM-DD}` — 공급자 가격이 바뀌면 새 버전, 과거 기록은 당시 버전 값 유지(PRD 6.5).
 - C-10.1 매핑표의 OpenAI·Gemini `[가정]` 칸은 위 모델로 확정되었다(B-3). 모델 변경은 평가 세트 재통과가 필요한 운영자 매핑 변경이다.
+
+#### C-13.1 사용량 기능 이름 — 저장 값 ↔ 화면 표기 (v4.12, SD-4·SD-A12)
+
+`ai_usage_records.feature`에 **저장되는 값 8개는 그대로 둔다**. 기능 행을 묶는 이유는 자기소개서 작성이 채팅형으로 바뀌는 것이지만, 그 재설계는 **이 사이클 밖**(SD-4, 별도 사이클)이라 이번 판에서는 **화면 표기만** 새 설정 화면에 맞춘다.
+
+| 화면 표기 (7행, 표시 순서) | 저장 값 (`feature`) | 해당 AI 기능 | 비고 |
+|---------------------------|---------------------|--------------|------|
+| 프로젝트/산출물 작성 AI 채팅 | `writing_chat` | AI-12, AI-13 | 두 기능이 같은 값으로 기록된다(`call_key`로 구분, C-13) |
+| 요건 추출 | `jd_extraction` | AI-01 | |
+| 인사이트 | `insight` | AI-02 | 두 단계(`match`·`synthesize`) 호출 합계 |
+| 자기소개서 작성 AI 채팅 | `career_description` **+** `cover_letter` | AI-03, AI-11, AI-04 | **두 저장 값을 한 행으로 합산한다** — 입력·출력 토큰, 호출 수, 비용 모두 더한 값. 저장은 계속 두 값으로 나뉜다 |
+| 면접 질문 | `interview_questions` | AI-05 | |
+| 면접 채점 | `interview_evaluation` | AI-06, AI-07 | 답변별 평가 + 세션 종합 |
+| 연결 확인 | `key_verification` | C-10.5 키 확인 호출 | |
+
+- **합산은 표시 단계에서만** 한다. 기록·보관·분석은 8값 그대로이고, 묶음 규칙이 바뀌어도 과거 기록을 고치지 않는다. 묶음 정의는 이 표가 유일한 원천이고, **이 표를 보는 것은 화면(표시 단계)뿐이다** — (v4.12, R-SD-13 — DM v4.12 2.9.5와 일치) 조회 RPC `get_ai_usage_summary`는 `providers[].by_feature[]`로 **저장 값 8개를 그대로 돌려주고**, 7행으로 접는 일은 **화면 매핑 상수** 한 곳이 한다. **RPC·조회 SQL에는 묶음을 넣지 않는다**(다음 사이클에 묶음이 또 바뀌고, RPC가 묶으면 저장 8값과 표시 7행이 한 함수에 섞인다).
+- Should 범위의 `writing_assist`·`chat_reply`(AI-08·AI-09)는 아직 기록이 없어 7행에 없다. 그 기능이 생기면 행을 더한다(묶지 않는다).
+- 자기소개서 작성이 채팅형으로 바뀌는 사이클에서 `career_description`·`cover_letter`의 저장 값 자체를 정리할지 다시 본다 — 그때까지 이 표의 합산이 임시 다리다.
 
 ### C-14. 출력 길이·개수 상한 (v4.3, 구현이 정한 값 — (v4.11, OD-D6) v4.3 행은 확정 2026-11-05 (사용자). v4.6 이후 추가된 AI-12·AI-13 행의 `[가정]`은 그대로)
 
@@ -848,10 +919,10 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   | (v4.6, PA-3) 폼 스냅숏 | 턴 요청 본문 `{content, requested_slot?, requested_action?, style?, form_snapshot}`의 `form_snapshot` = `{name, start_month, end_month, is_current, project_type, experience_type, competencies, star: {situation, task, action, result, learnings}}`(DM v4.5 2.5.1 확정) — S-10 폼의 **저장 전 현재 값**. 서버는 필드 길이(DB 상한과 같음 — 이름 100자, STAR 2,000자)·형식만 검사하고 위반이면 턴을 **`invalid_form_snapshot`**(400) `[가정]`으로 거부한다. **저장하지 않는다**(DB 컬럼 없음, 호출 입력으로만 씀, 로그에 원문 없음). **저장하지 않은 폼 값을 공급자로 보내는 것의 고지·동의 범위는 D-DM-12 **확정 2026-11-03 (사용자): (a) 지금 범위 + 다음 고지 버전에 한 구절****(DM v4.5 — (a) 지금 범위 + 다음 고지 버전에 "작성 중인 내용 포함" 한 구절, 재동의 없음 **권고** / (b) 새 고지 + 재동의 / (c) 스냅숏을 보내지 않음). AI 설계 쪽도 (a)를 권고한다(이미 동의한 "커리어 데이터를 활성 공급자로 보냄"과 같은 데이터의 저장 전 판이고, (c)면 저장 전 편집을 무시한 질문·`set` 판단이 다시 생김). 스냅숏은 사용자 데이터이므로 `<project_form>` 데이터 블록으로 넣고 안의 지시문은 따르지 않는다(C-4). 스냅숏이 없으면(구버전 화면 등) DB 값 | 필수 | (위 행에 포함) |
   | 게이트 진입 컨텍스트 | `writing_chats.return_target`(있을 때만) + `get_data_readiness()`의 `missing` — `focus_slots` 계산에 우선 반영 | 조건부 | 50~150 |
   | 이번 턴 목표 슬롯 | 서버가 계산한 `focus_slots`(1~2개, `requested_slot`이 있으면 맨 앞, 게이트 진입이면 부족 슬롯 우선, D-01 충족 시 `ready_to_return`) + 미해결 되묻기 목록 | 필수 | 50 |
-  | 프로필 | `profiles.desired_job_title` (질문 어휘 조정용) | 선택 | 20 |
   | 지원 프로젝트 요건 (**게이트 진입 시에만**, R-31) | `return_target.application_project_id`의 `jd_requirements.content`, `category`, `importance` 중 `importance = 'high'` 요건과 근거가 약해 보이는 요건(최대 8개, 서버가 선별) | 조건부 | 0.3k~0.6k |
 
   - **요건 목록의 용도 제한 (PRD F-AP-06 (2))**: 질문 주제 선택(예: "결제·정산 쪽 이야기가 있었나요?")에만 쓴다. **출처가 아니다** — 요건 문구는 제안의 값·인용이 될 수 없고(V-9a·V-9b), "Kafka를 쓰셨나요?"처럼 요건의 기술명을 사용자 경험인 것처럼 묻지 않는다. V-9d는 요건 목록이 아니라 사용자 발화와만 대조한다.
+  - **(v4.12, SD-6) 프로필 행 삭제**: v4.11까지 "질문 어휘 조정용 `profiles.desired_job_title`"을 선택 입력으로 넣었으나, 프로필 값은 어떤 프롬프트에도 넣지 않는다. 질문 어휘는 대상 프로젝트의 이름·소속·STAR 현재 값(`<project_state>`)에서만 잡는다 — 같은 프로젝트를 놓고 하는 대화라 어휘 근거가 이미 입력에 있다.
   - 다른 프로젝트의 내용, 같은 프로젝트의 다른 대화 기록, JD 원문, 산출물은 넣지 않는다. v4.4의 "소속 후보"·`DET-n` 목록은 없어진다(소속은 프로젝트에 이미 있다).
 - 처리 방식: **턴마다 2개 호출을 병렬로** 실행한다(v4.4와 같음).
   1. **정리(extract)** — 이번 사용자 발화를 제안에 반영할 **패치**를 구조화 출력으로 만든다. 모든 패치 값에 출처 발화 ID와 인용(`source_quotes`)을 단다.
@@ -1077,9 +1148,8 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   | 부모 독립 프로젝트 | `projects.name`, 기간(C-1 표기), `role`(담당 업무), `description`(프로젝트 내용, ≤ 5,000자), 사용 기술(`project_skills` → `skills.name`). **DB 값**(S-43은 C-24 섹션 저장이라 저장 전 상태가 없음). `link_url`은 넣지 않는다(C-1과 같음). 별칭 `PRJ` 하나 | 필수(name) | 0.1k~4k |
   | 형제 산출물 제목 | 같은 프로젝트의 다른 `project_deliverables.title`(최대 20개, 이 산출물 제외) — **출처가 아니다**. 이미 다른 산출물에 있는 주제(예: 같은 프로젝트의 "회고"가 이미 있음)를 알고 질문·구성을 겹치지 않게 하는 데만 쓴다 | 선택 | 0~0.5k |
   | 이번 턴 목표 | 서버가 계산한 `focus_slots`(1~2개) + `writing_kind` + 미해결 되묻기 + 초안 남은 횟수 + (초안 턴) `style`, `replace_allowed` | 필수 | 50 |
-  | 프로필 | `profiles.desired_job_title`(어휘 조정용, 근거 아님) | 선택 | 20 |
 
-  - **넣지 않는 것**: 형제 산출물 본문, 다른 프로젝트·경력·교육, 경력 팩, JD·지원 프로젝트, 같은 산출물의 다른 대화 기록. 이유: 산출물 하나를 쓰는 데 필요 없는 사실이 들어오면 "다른 데서 한 일"이 이 산출물 글에 섞이는 날조 경로가 생긴다. 부모 프로젝트는 같은 작업의 사용자 서술이라 출처로 허용한다.
+  - **넣지 않는 것**: 형제 산출물 본문, 다른 프로젝트·경력·교육, 경력 팩, JD·지원 프로젝트, 같은 산출물의 다른 대화 기록, **(v4.12, SD-6) 프로필 값 전부**(v4.11의 어휘 조정용 `desired_job_title` 행 삭제 — 어휘는 부모 독립 프로젝트와 현재 본문에서 잡는다). 이유: 산출물 하나를 쓰는 데 필요 없는 사실이 들어오면 "다른 데서 한 일"이 이 산출물 글에 섞이는 날조 경로가 생긴다. 부모 프로젝트는 같은 작업의 사용자 서술이라 출처로 허용한다.
 - 처리 방식:
   - **질문 턴**(초안 요청이 아닌 사용자 발화): AI-12와 같이 **정리(extract) + 응답(reply) 병렬**. 정리는 이번 발화에서 **사실(fact)**을 뽑아 `facts[]` 패치로 낸다(필드 패치가 아니라 슬롯이 붙은 사실 문장). 응답은 다음 질문을 스트리밍한다.
   - **초안 턴**(`requested_action = compose_draft` 또는 정리 결과 `intent = compose_draft`): ① 정리(이번 발화의 사실 + `intent`) → ② **초안 작성(compose)** — 사실 목록 + 현재 본문 + 부모 프로젝트로 본문 초안을 **블록 단위 구조화 출력**으로 스트리밍 → ③ 서버 V-10 검증 → 제안 저장. 응답 호출은 부르지 않고, AI 메시지는 서버 고정 문구("초안을 만들었어요. 확인하고 반영 방식을 골라 주세요." / 검증으로 뺀 문장이 있으면 "확인되지 않은 문장 N개는 뺐어요" 추가)로 저장한다 `[가정]` — 초안 턴의 비용·지연을 줄이고, AI가 초안을 말로 다시 요약하며 새 사실을 섞는 경로를 없앤다. 사용자 발화가 초안 요청과 새 정보를 함께 담으면 ①의 새 사실이 ②에 들어간다(같은 턴 안 순차).
@@ -1246,7 +1316,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   |------|--------------|------|-------------------|
   | JD | `job_descriptions.sentences` (서버 분할, C-2) | 필수 | 1.5k~3k (상한 8k) |
   | JD | `job_descriptions.company_name`, `job_descriptions.position_title` (사용자 입력값) | 선택 | 20 |
-  | 프로필 | — | 넣지 않음 | — |
+  | 프로필 | — | 넣지 않음 (v4.12, SD-6 — 처음부터 넣지 않았고 그대로다) | — |
 
   경력 데이터는 넣지 않는다. 추출은 JD만의 작업이고, 사용자 데이터에 맞춰 요건이 왜곡되는 것을 막기 위해서다.
 - 처리 방식: 단일 호출. 서버 전처리(문장 분할) → 모델 추출 → 서버 검증(문장 ID 존재, 요건마다 `source_sids` 1개 이상).
@@ -1331,7 +1401,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 - 응답 모드: **비동기 작업** (무료 등급은 배치 순차, C-12). 진행 단계(C-6): `prepare` → `match`(배치 진행 `done/total`, 예: 1/2 → 2/2) → `synthesize`(필요할 때만 `synthesize_regen`) → `validate` → 완료. 단계별 화면 문구는 UX C-03 기준. 단계 1 결과가 나오면 **요건별 판정 표를 먼저 보여 줄 수 있다**(부분 결과 표시, ux-planner 판단). 10초 안에 첫 진행 표시(PRD 6.3).
 - 프롬프트 전략:
   - 역할: 경력직 채용 서류 검토 경험이 많은 커리어 코치. 판단은 "입력된 데이터 기준"이라고 전제.
-  - 판정 기준(단계 1): `met` = 요건을 직접 뒷받침하는 **소속 프로젝트의 행동(A)·결과/성과(R)**, 또는 (v4.5) **독립 프로젝트의 내용·산출물 본문**이 있음(본인 기여, C-1.1). 상황(S)·역할(T)·담당 업무만 근거이거나(팀 맥락·범위 설명일 수 있음) 스킬 태그만 근거이거나 주어가 "우리/팀"인 문장만 근거이면 최대 `partial`. 분류 3종은 판정 근거가 아니다(C-1.2). 배운 점(`learnings`)은 판정 근거로 쓰지 않는다(V-8). (v4.3, A10) 프로필의 희망 직무·관심 산업도 판정·강점·포지셔닝의 근거로 쓰지 않는다 — "이 사람이 무엇을 원하는가"의 문맥 참고일 뿐 경험의 사실이 아니다. `partial` = 관련 경험은 있으나 범위·깊이·연차·본인 기여 중 하나가 불명확하거나 부족. `no_evidence` = 관련 데이터를 찾지 못함. 스킬 태그만 있고 프로젝트 서술이 없으면 최대 `partial`. 연차 요건은 `profiles.total_years_of_experience`와 경력 기간으로 판정. 경계 사례 3개를 few-shot으로 넣는다.
+  - 판정 기준(단계 1): `met` = 요건을 직접 뒷받침하는 **소속 프로젝트의 행동(A)·결과/성과(R)**, 또는 (v4.5) **독립 프로젝트의 내용·산출물 본문**이 있음(본인 기여, C-1.1). 상황(S)·역할(T)·담당 업무만 근거이거나(팀 맥락·범위 설명일 수 있음) 스킬 태그만 근거이거나 주어가 "우리/팀"인 문장만 근거이면 최대 `partial`. 분류 3종은 판정 근거가 아니다(C-1.2). 배운 점(`learnings`)은 판정 근거로 쓰지 않는다(V-8). (v4.12, SD-6) **프로필 값은 입력에 없다** — v4.11의 "희망 직무·관심 산업은 근거가 아니라 문맥 참고"(A10) 문장은 지운다. 보낼 값이 없으므로 예외를 둘 대상이 없다. `partial` = 관련 경험은 있으나 범위·깊이·연차·본인 기여 중 하나가 불명확하거나 부족. `no_evidence` = 관련 데이터를 찾지 못함. 스킬 태그만 있고 프로젝트 서술이 없으면 최대 `partial`. **(v4.12, SD-2) 연차 요건은 서버가 넣은 `computed_total_months`만으로 판정한다**((v4.12, R-SD-6) 그 값은 `private.compute_total_experience_months(p_user_id, p_as_of)`의 `total_months`다 — C-1) — 요건의 `min_years`(AI-01 `seniority`)와 이 개월 수를 견준다. 모자라면 `partial`(관련 경험은 있고 기간만 부족)이고, 요건이 요구하는 영역의 경험 자체가 없으면 `no_evidence`다. 모델이 경력 기간을 다시 세지 않고 이 값을 그대로 쓴다. 기간 미입력으로 합계에서 빠진 경력이 있으면(C-1 — 같은 호출의 `open_ended_experience_count` > 0) 합계 부족만으로 `no_evidence`로 내리지 않고 `partial`에 둔다. 판정 이유에는 "등록된 경력 기간 합계 기준"을 밝힌다(근거 객체는 달 수 없다). 경계 사례 3개를 few-shot으로 넣는다.
   - 근거 인용: `met`/`partial`은 경력 근거 1개 이상 필수(quote 포함). 모든 판정은 `requirement_ref`로 JD 요건과 연결.
   - 보완점(단계 2): `no_evidence`·`partial` 요건에서 고른다. 대응 방안은 세 종류로 제한: `add_data`(관련 경험이 있으면 입력 — F-P2-09 링크), `reframe`(기존 경험을 이 요건 관점으로 설명하는 방법, 근거 필수), `prepare_answer`(면접에서 질문받을 때의 대비 포인트). "공부하세요" 같은 일반론은 금지.
   - 지원 방향: 포지셔닝 1~2문장(근거 필수), 어필 프로젝트 우선순위(최대 5개, 각각 관련 요건과 이유).
@@ -1411,7 +1481,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   - 대응 방안 중 일반론(근거·구체 행동 없는 문장) 0건.
 - 실패 유형·가드레일:
   - 스킬 태그나 상황·과제만으로 `met` 판정 → 판정 기준 + 서버 규칙(근거에 소속 프로젝트 `action`/`result` 또는 독립 프로젝트 `description`/산출물 `body`가 없으면 `partial`로 강등, v4.5).
-  - 연차 요건 오판 → 연차는 서버가 경력 기간으로 계산한 값을 팩에 함께 넣는다(`computed_total_months`).
+  - 연차 요건 오판 → (v4.12, SD-2) 연차는 서버가 `complete` 경력 기간에서 계산한 `computed_total_months` 하나로만 판정한다(정의는 C-1). 사용자가 적는 총 경력 연차 값이 없어졌으므로 "프로필 연차와 경력 기간이 어긋난다"는 실패 유형 자체가 사라진다. 남는 위험은 기간 미입력 경력으로 합계가 과소해지는 것이고, 팩의 "기간 미입력 경력 N건" 줄과 "합계 부족만으로 `no_evidence`로 내리지 않는다" 규칙으로 막는다.
   - 같은 프로젝트를 모든 강점에 반복 → 지시 + 강점 간 근거 중복이 전부 같으면 경고 로그(품질 모니터링).
   - 단계 1 배치 일부 실패 → 해당 배치만 재시도, 그래도 실패하면 작업 실패(부분 인사이트는 저장하지 않음 — (v4.11, OD-D6) 확정 2026-11-05 (사용자)).
 - 비용·지연 (일반: 경력 팩 6~7k, 요건 12~15개 → 2배치. (v4.5) 산출물이 많아 팩이 상한 근처(약 20k)면 단계 1 입력이 배치당 +13k라 회당 약 +$0.08):
@@ -1565,7 +1635,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 
   | 원천 | entity.field | 필수 | 크기 추정 (토큰) |
   |------|--------------|------|-------------------|
-  | 경력 팩 | C-1 전체 (`complete` 행만, 산출물 C-1.1 예산). 선택 모드가 `user`이면 선택된 경력·교육·프로젝트(소속 프로젝트 STAR, 독립 프로젝트 내용·산출물·사용 기술) + 프로필만 | 필수 | 7k (3k~22k) / user 모드 2k~6k |
+  | 경력 팩 | C-1 전체 (`complete` 행만, 산출물 C-1.1 예산). 선택 모드가 `user`이면 선택된 경력·교육·프로젝트(소속 프로젝트 STAR, 독립 프로젝트 내용·산출물·사용 기술)만 (v4.12, SD-6 — 프로필 블록 없음) | 필수 | 7k (3k~22k) / user 모드 2k~6k |
   | JD 요건 | `jd_requirements.*` + `job_descriptions.sentences` 중 회사·직무 소개 문장(`extraction.other_sids`) | 필수 | 1.5k~2.5k |
   | 문항 | `draft_sections.question_text`, `char_limit`, `count_basis`, `template_key` (`section_kind = 'cover_letter_question'`) | 필수 | 50~150 |
   | 문항 메모 | `draft_sections.user_note` (≤300자, F-DOC-09). 근거 표시명 "내 메모" | 선택 | 0~300 |
@@ -1574,8 +1644,8 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   | 인사이트 | `insights.result.strengths`, `strategy.positioning` | **선택 — 참고 신호** | 0.5k~1k |
 - 처리 방식: **문항당 1회 호출, 출력이 2단 구조**(① 근거 선택 `sources` → ② 본문 `paragraphs`). 선택과 작성이 같은 판단 맥락을 공유하고, 호출이 한 번이라 비용·지연이 작으며, 스트리밍에서 선택이 본문보다 먼저 도착한다(PRD 6.3).
   - **선택 모드 `ai`(기본)**: 모델이 문항 유형별 규칙(아래)에 따라 프로젝트 0~2개를 고른다. 각 선택에 이유·관련 요건·근거 인용을 단다. (v4.5) 프로젝트당 STAR가 1개라 v3의 `detail_refs`(쓸 상세 내용 고르기)는 폐기한다. 분류 3종(특히 역량)은 후보를 먼저 살피는 참고 신호로만 쓴다(C-1.2). 소속 경력은 프로젝트에서 자동 포함(독립 프로젝트는 경력 없음). 다른 문항이 주 근거로 쓴 프로젝트는 피하고, 더 맞는 대안이 없을 때만 중복하며 `reuse_reason`을 쓴다(F-DOC-08 (3) `[가정]`).
-  - **선택 모드 `user`(사용자가 바꾼 뒤 재생성)**: 모델은 선택을 바꾸지 않는다. `sources`에 사용자 목록을 그대로 돌려주며 이유만 쓴다. 사용자가 고른 프로젝트가 문항과 관련이 약하면 억지로 연결하지 않고 `notes_for_user`에 알린다(예: "'사내 위키 개편' 프로젝트는 이 문항과 관련이 약해 한 문장만 사용했습니다" — 별칭이 아니라 프로젝트명). 사용자가 프로젝트를 모두 제외하면 메모·JD·프로필만으로 쓰고 사례 자리는 자리 표시로 남긴다.
-  - **서버 검증**: V-1~V-5 + **V-7 근거 범위**(본문 근거는 `sources`의 경력·교육·프로젝트(소속 프로젝트 STAR, 독립 프로젝트 담당 업무·내용·산출물·사용 기술), 프로필, JD, 메모 안에서만). `user` 모드에서 모델이 목록 밖 프로젝트를 `sources`에 넣으면 제거.
+  - **선택 모드 `user`(사용자가 바꾼 뒤 재생성)**: 모델은 선택을 바꾸지 않는다. `sources`에 사용자 목록을 그대로 돌려주며 이유만 쓴다. 사용자가 고른 프로젝트가 문항과 관련이 약하면 억지로 연결하지 않고 `notes_for_user`에 알린다(예: "'사내 위키 개편' 프로젝트는 이 문항과 관련이 약해 한 문장만 사용했습니다" — 별칭이 아니라 프로젝트명). 사용자가 프로젝트를 모두 제외하면 메모·JD만으로 쓰고 (v4.12, SD-6) 사례 자리는 자리 표시로 남긴다.
+  - **서버 검증**: V-1~V-5 + **V-7 근거 범위**(본문 근거는 `sources`의 경력·교육·프로젝트(소속 프로젝트 STAR, 독립 프로젝트 담당 업무·내용·산출물·사용 기술), JD, 메모 안에서만 — (v4.12, SD-6) 프로필 삭제). `user` 모드에서 모델이 목록 밖 프로젝트를 `sources`에 넣으면 제거.
     - (v4.3, 구현 반영) V-7 세부: 선택한 프로젝트의 소속 경력 자체(근무 내용 등)는 범위 안(v4.5: 경력 단위 성과는 없어짐), 같은 경력의 다른 프로젝트는 범위 밖. 선택한 독립 프로젝트의 산출물은 범위 안. 프로젝트 없이 경력·교육만 고른 선택은 그 하위 전체. 프로젝트에 붙지 않은 직접 추가 스킬은 범위 밖.
     - (v4.3, 구현 반영) 근거 선택 규칙: `ai` 모드에서 근거 인용이 하나도 남지 않은 선택은 버린다(V-4). `primary`는 1개(첫 번째)로 맞춘다. 문항 유형별 개수 상한을 넘으면 뒤에서 자르고, 하한 미달(`job_competency`·`experience_story` 0개)은 `validation_report`에만 남긴다. 모델이 적은 소속 경력이 실제와 다르면 실제 소속으로 고친다. `user` 모드는 사용자 목록을 그대로 두고 모델 출력에서 이유·요건·근거만 가져온다.
     - (v4.3) 문항 유형: `template_key`가 있으면 그것이 `question_class`이고 모델 분류는 무시한다. 회고 허용(V-8)도 이 유형으로 판정한다.
@@ -1590,7 +1660,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   |----------------|-----------|-----------|--------------------------|
   | `motivation` 지원 동기 | 프로젝트 0~1개 (지원 이유와 연결되는 경험이 있을 때만) | 메모의 지원 이유 → JD의 회사·직무 문장과 연결 → (선택 시) 관련 경험 한 단락 | 메모가 없으면 개인적 이유 자리에 `[지원 동기 입력 필요]`. 회사에 대한 외부 지식(매출, 서비스명 등)은 JD 문장에 없으면 쓰지 않는다 |
   | `job_competency` 직무 역량 | 프로젝트 1~2개 (필수). `importance: high` 요건과의 연결 우선 | 핵심 역량 한 문장(두괄식) → 사례(상황·행동·결과, 본인 기여 주어) → JD 요건과의 연결 | 수치가 없으면 `[수치 입력 필요]` |
-  | `future_plan` 입사 후 포부 | 프로젝트 0~1개 (현재 역량의 출발점으로. v4.5: 배운 점이 있는 프로젝트 우선 `[가정]`) | 기여할 수 있는 영역(JD 주요 업무 근거) → (v3) 지금까지의 배운 점(회고로 표현) → 성장 방향(프로필 희망 직무·스킬 근거) → 구체 계획(메모 근거) | 메모가 없으면 구체 목표·학습 계획 자리에 `[계획 입력 필요]` |
+  | `future_plan` 입사 후 포부 | 프로젝트 0~1개 (현재 역량의 출발점으로. v4.5: 배운 점이 있는 프로젝트 우선 `[가정]`) | 기여할 수 있는 영역(JD 주요 업무 근거) → (v3) 지금까지의 배운 점(회고로 표현) → 성장 방향((v4.12, SD-6) **JD의 주요 업무 문장 + 스킬 근거** — 프로필 희망 직무를 쓰지 않는다. 지원 프로젝트 안의 기능이라 JD는 항상 있다) → 구체 계획(메모 근거) | 메모가 없으면 구체 목표·학습 계획 자리에 `[계획 입력 필요]` |
   | `null` 사용자 추가 문항 | 모델이 문항 의도를 위 세 유형 또는 `experience_story`(경험 서술형: 갈등·실패·성과 등)로 분류해 해당 규칙 적용. `experience_story`는 프로젝트 1~2개 | 분류 결과를 `question_class`로 출력 | 위와 같음 |
 - 모델: **기본 등급**, 낮은 사고 설정. 이유: 서술형 한국어 품질과 근거 선택 판단이 핵심.
 - 응답 모드: **스트리밍 (문항 단위)**. 이벤트 순서 (v4.3 정정): `sources_selected`(선택 카드 먼저 표시: 경력명 › 프로젝트명 + 이유 한 줄. (v4.7, ED-3) 부모가 교육이면 교육 표시 이름 › 프로젝트명) → `block_started`/`block_delta`/`block_completed`(문단) → (보정 시) `adjusting_length` → `validated` → `done`.
@@ -1717,7 +1787,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 | 항목 | 동작 |
 |------|------|
 | 시작 | 차단하지 않는다. 시작 화면과 결과 화면에 "커리어 정리를 하면 내 경험을 짚는 질문이 늘어나요" 안내(`data_sufficiency` = `thin`/`none`) |
-| 질문 | 사용자 사실을 가정하지 않는다. `anchor`가 `experience`가 아닌 질문의 문장에는 회사명·프로젝트명·직급·연차를 쓰지 않는다(서버가 경력 팩 고유명사·숫자 포함 여부 검사). 프로필의 희망 직무는 `general` 질문에도 쓸 수 있다 |
+| 질문 | 사용자 사실을 가정하지 않는다. `anchor`가 `experience`가 아닌 질문의 문장에는 회사명·프로젝트명·직급·연차를 쓰지 않는다(서버가 경력 팩 고유명사·숫자 포함 여부 검사). (v4.12, SD-6) **프로필의 희망 직무를 쓸 수 있다는 문장은 삭제한다** — 프로필 값이 입력에 없다. `general` 질문의 직무 어휘는 JD의 `position_title`·요건에서 잡는다 |
 | 평가 | 답변 텍스트만 근거로 평가. 경력 데이터와의 일관성 메모(`consistency_notes`)는 생략 |
 | 개선 답변 예시 | 사용자 답변에 있는 사실만 재구성한다. 구체 사례가 없으면 `[사례 입력 필요]` 자리 표시 + "이런 사례가 있다면 넣으세요" 제안(`suggestions_if_true`). 경력 데이터를 지어내지 않는다 |
 | 다음 연습 | `add_data`(답변에서 말한 경험을 커리어 정리에 기록하면 직무 면접·서류에도 쓰인다)를 우선 추천 |
@@ -1731,7 +1801,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
   | 원천 | entity.field | 필수 | 크기 추정 (토큰) |
   |------|--------------|------|-------------------|
   | 경력 팩 | C-1 전체 (`complete` 행만, 산출물 C-1.1 예산). 컬처핏 `none`이면 비어 있음. (v4.5) 컬처핏은 소속 프로젝트의 경험 유형 분류를 주제 선택 참고로 쓴다(C-1.2) | 직무: 필수 / 컬처핏: 있으면 사용 | 7k (0~22k) |
-  | 프로필 | `profiles.desired_job_title`, `total_years_of_experience` | 선택 | 50 |
+  | (v4.12, SD-6) 프로필 | — | 넣지 않음 | — |
   | JD 요건 | `jd_requirements.*` | 필수 | 1k~1.5k |
   | JD 조직·업무 방식 문장 | `job_descriptions.sentences` 중 `extraction.other_sids` (컬처핏 `jd` 앵커용) | 컬처핏: 필수 / 직무: 넣지 않음 | 0.3k~0.8k |
   | 세션 설정 | `interview_sessions.interview_type`, `question_count`, `data_sufficiency` (F-ST-04 팝업으로 들어오면 `interview_type`이 미리 선택되어 있을 뿐 AI 입력은 같다) | 필수 | 20 |
@@ -1740,7 +1810,7 @@ A1(변경): **"다시 시도"를 포함한 모든 다시 시도·재실행은 �
 - 처리 방식: 단일 호출 + 서버 검증(유형별 구성 규칙, 중복 규칙, 수치 가드 V-5, 금지 주제, 컬처핏 `anchor` 검증).
   - (v4.3, 구현 반영) **질문 단위 검사로 바꾼다.** 질문은 스트림에서 완성되는 즉시 저장되므로 세트 전체를 다시 만들 수 없다. 서버는 질문을 받을 때마다 검사한다: 규칙 위반(중복, 금지 주제, 사실 전제(4.1, A11), 근거, 질문 문장 V-5)이거나, 이 질문을 받으면 남은 칸으로 유형별 최소 개수(4.1 표)를 채울 수 없으면 그 질문을 버린다.
   - 버린 만큼 **1회 다시 만든다**(저장된 질문과 위반 이유를 입력에 넣어 중복 방지). 재생성 호출은 구성 규칙을 완화해 받고 `validation_report`에 경고를 남긴다(`composition_relaxed` / `composition_unmet`). 그래도 질문 수가 모자라면 `schema_invalid`(자동 재시도 없음)로 끝나고 저장된 질문은 남는다 — 화면은 "남은 질문 다시 만들기"(새 작업, 현재 활성 공급자 — C-11.4 경우 ②).
-  - 금지 주제·컬처핏 고유명사·회고 인용 검사는 규칙 기반이다 ~~`[가정]`~~ ((v4.11, OD-D6) 구현값 확정 2026-11-05 (사용자) — 단어 목록은 구현 상수, 평가 세트로 보정): 금지 주제는 단어 목록("장애 대응"처럼 직무어는 제외), 컬처핏 `experience`가 아닌 질문은 경력 팩의 회사·기관·전공·프로젝트명·직급·직책·부서(JD·희망 직무에 있는 말 제외)와 JD에 없는 숫자를 쓰면 버린다. 회고 근거는 질문 문장이 "배웠다고 정리하셨는데"류일 때만 남긴다. 평가 세트로 보정한다.
+  - 금지 주제·컬처핏 고유명사·회고 인용 검사는 규칙 기반이다 ~~`[가정]`~~ ((v4.11, OD-D6) 구현값 확정 2026-11-05 (사용자) — 단어 목록은 구현 상수, 평가 세트로 보정): 금지 주제는 단어 목록("장애 대응"처럼 직무어는 제외), 컬처핏 `experience`가 아닌 질문은 경력 팩의 회사·기관·전공·프로젝트명·직급·직책·부서((v4.12, SD-6) **JD에 있는 말만 제외** — "희망 직무에 있는 말" 예외는 프로필이 입력에서 빠지면서 삭제)와 JD에 없는 숫자를 쓰면 버린다. 회고 근거는 질문 문장이 "배웠다고 정리하셨는데"류일 때만 남긴다. 평가 세트로 보정한다.
   - 모델이 낸 `data_sufficiency`는 쓰지 않고 서버 판정값(세션)을 쓴다. 컬처핏 `ok`에서 `experience` 앵커 50% 미만은 경고만 남긴다(목표치).
 - 모델: **기본 등급**, 낮은 사고 설정. 이유: 경력직 검증 질문의 날카로움이 체감 품질을 좌우한다.
 - 응답 모드: **비동기 작업**(`job_type = 'interview_questions'`). 서버가 모델 출력을 스트리밍으로 받아 질문이 완성될 때마다 `interview_questions`에 저장하고 `ai_jobs.progress = {stage: "generate", done: n, total: N}`를 갱신한다. 화면은 저장된 질문을 차례로 목록에 채우고, **답변 입력은 전체 생성 완료 후 연다**(PRD 6.3 `[가정]`). 사용자는 기다리지 않고 나갔다 와도 된다. 목표: 첫 질문 10초 이내(예상 6~10초), 전체 30초 이내(예상 20~35초 — 7문항은 초과 가능).
@@ -2005,7 +2075,7 @@ v2에서 면접 결과는 **점수**로 제공하며 ~~산정 방식은 D-14(사
   - **무료 등급 경로 테스트**: Gemini 무료 키로 C-12 순차 경로·백오프·원인 2 안내(초기화 시각)를 통합 테스트.
   - 재평가 조건: 매핑 모델 변경, 공급자 모델 지원 종료, 프롬프트 버전 변경.
   - 내부 평가는 **운영자 키**로 하며 사용자 키를 쓰지 않는다(NFR-KEY-08).
-  - **(v4.11, OD-L4 — 확정 2026-11-05 (사용자)) 출시 전 체크리스트**: ① 위 평가 세트 전부를 세 공급자로 돌려 통과(UB-3) ② C-10.1 모델 매핑·가격표를 공급자 공지와 대조 ③ C-7.1 고지 사실 재확인(약관 주소·보관 기간·지역) ④ Gemini 무료 등급 호출 간격 6초 `[가정]` 실측. 매핑·가격표·6초·품질 임계값(각 카드의 `[가정]` 수치)은 **가정 유지**하고 공급자 공지나 평가 결과가 나올 때 갱신한다(그때 버전·변경 이력에 남김).
+  - **(v4.11, OD-L4 — 확정 2026-11-05 (사용자)) 출시 전 체크리스트**: ① 위 평가 세트 전부를 세 공급자로 돌려 통과(UB-3) ② C-10.1 모델 매핑·가격표를 공급자 공지와 대조 ③ C-7.1 고지 사실 재확인(약관 주소·보관 기간·지역) ④ Gemini 무료 등급 호출 간격 6초 `[가정]` 실측 **⑤ (v4.12, SD-6) 프로필 입력을 뺀 뒤의 품질 회귀 확인** — `common.v2` 기준으로 평가 세트를 다시 돌리고 AI-05 컬처핏 `general` 질문 어휘와 AI-04 `future_plan` 성장 방향을 v4.11 결과와 쌍으로 사람 평가(0.v412 "프로필을 뺀 뒤 품질"). 매핑·가격표·6초·품질 임계값(각 카드의 `[가정]` 수치)은 **가정 유지**하고 공급자 공지나 평가 결과가 나올 때 갱신한다(그때 버전·변경 이력에 남김).
 - **(v3) AI 작성 대화 평가 세트**: 가상 사용자 대화 20건 이상(AI-12 품질 기준의 사용자 유형). (v4.5, CR-20) 대화마다 사람이 붙인 분류 정답(종류·경험 유형·역량)과 "이미 분류를 고른 프로젝트" 사례를 넣어 추천 품질·덮어쓰기 0건을 본다. 목표: 날조 0%, 누락 15% 이하, 본인/팀 혼동 0건, 민감정보 반영 0건. 정리 모델·응답 모델 교체(D-AI-11) 때마다 재실행.
 - **(v4.6, PA-1) 산출물 작성 대화 평가 세트**: 가상 대화 15건 이상(종류 5개 × 3건, AI-13 품질 기준의 사용자 유형). 목표: 날조 0%, 수치·기술명 일치 100%, 본인/팀 혼동 0건, 교체 손실 10% 이하, 덧붙이기 중복 5% 이하, 자리 표시·민감정보·인젝션 0건. 세 공급자 모두 통과가 출시 조건(UB-3). 초안 모델 교체·프롬프트 버전 변경 때마다 재실행.
 - **(v3, v4.5 개정) STAR 프로필**: 평가용 가상 프로필을 **프로젝트당 STAR 1개 + 배운 점 + 분류 3종** 구조로 다시 만들고, 배운 점에만 수치·주장이 있는 함정 데이터를 넣어 V-8(회고 근거 제한)을 검증한다. (v4.5) 프로필 절반에는 **독립 프로젝트 + 산출물**(긴 마크다운, 표·코드 블록 포함, 예산을 넘는 긴 산출물 1건, 산출물 안 회고 문장에만 있는 수치 1건, 인젝션 문구 1건)을 넣어 C-1.1 정규화·잘림·V-3·V-5를 검증한다. 분류 값만으로 강점·판정이 만들어진 사례 0건을 함께 본다(C-1.2).
@@ -2131,5 +2201,7 @@ v4에서 AI 비용은 **사용자가 자기 키로 부담**한다(운영자 비�
 | v4.10 | 2026-11-04 | **AI 패널·문서형 입력 UI 개정 UP-1·UP-4·UP-5·UP-6·UP-9 반영**(`_workspace/00_input/planning-decisions-ui-panel-doc.md`, 사용자 확정 2026-11-04; 코드는 워크트리 `ai-chat-response-error-3f096a`에 선구현). 기준 PRD v4.11 / UX v5.11 / DM v4.9. (1) **UP-1**: AI-12 칩 계산 규칙에 노출 범위 추가 — S-10 칩은 시작 영역 전용(첫 사용자 메시지 보내는 순간부터 숨김), AI-13 S-44 칩은 대화 중 유지 확인. 빠른 응답 "잘 모르겠어요 / 건너뛸게요" 버튼 삭제 — 사용자가 직접 쓰면 AI 처리 그대로(AI-12·AI-13 질문 규칙에 주석). (2) **UP-4**: AI-12 STAR 제안 카드·AI-13 본문 초안 카드 = 마지막 AI 턴 아래 확인 줄, 세부는 [자세히], [나중에]·아이콘 없음, 반영한 섹션 숨김·남은 제안 없으면 카드 숨김(상태 ①②③ 의미·저장 계약 그대로). (3) **UP-5**: AI-12 "직접 고치기"·"직접 수정" 표식 삭제 — `user_edit` 객체 보호·호환과 사용자 패치 경로는 그대로. (4) **UP-6**: AI-12 분류 반영 — 행별 [반영]은 이미 고른 분류도 덮어씀(`classification_already_set` 화면 건너뜀 폐지, [반영 (n)]은 빈 분류만), [무시] = 사용자 `set` null + 이 대화에서 다시 안 보임. AI 추천 생성 규칙(빈 분류만, V-9i)은 그대로. (5) **UP-9**: C-1.1 정규화에 편집기 문법 목록(목록·번호·제목·굵게·기울임·취소선 `~~`·인라인 코드·코드 블록·인용 `>`·링크·표)과 이스케이프 규칙(서식 기호는 백슬래시, 태그 시작 `<`만 `&lt;` → 정규화 때 백슬래시 제거·`&lt;` 복원, 리더 판정 R-UP-1) 명시. (6) **UP-14**(리뷰 R-UP-3 → 사용자 확정 2026-11-04): 합친 `set` 제안은 블록 서식 유지·인라인 강조 없음, V-3·V-9c/d/e·V-9j는 마크다운을 걷어낸 평문 비교(0.v410·C-1.1·V-9j·`star_patches` 주석, 구현 후속 ★). UP-2·3·7·8·10·11·12·13은 AI 명세 해당 문구 없음. 정본 스키마·`schema_version`·DB 변경 없음(UP-14 구현 때 `prompt_version`만 올림) |
 | v4.11 | 2026-11-05 | **열린 결정 일괄 확정 (2026-11-05, OD-*)**(`_workspace/00_input/planning-decisions-open-decisions.md`, 사용자 확정 2026-11-05). 기준 PRD v4.13 / UX v5.13 / DM v4.11. (1) **OD-I1** 4.3을 "점수 자리"에서 **산식 `d14.v1`**로: 가중치 `specificity` 30·`intent_fit` 30·`structure` 20·`job_relevance` 20, 등급 점수 100/75/50/25, `not_applicable` 재분배, 정수 반올림·만점 100, 세션 = 모든 질문 평균(미응답 0점 포함, 채점 실패 제외·`score_counted_count` 제외 `[가정]`, 모두 미응답 = 0점, 응답했으나 `scored` 0개면 `not_scored` `[가정]` — (v4.11, R-OD-2)), 미응답 질문 행 `score_value = 0` `[가정]`, 서버 `score` 단계 결정적 계산, AI 호출 없는 백필. 4.2·0.2 원칙 4·C-6·AI-06·AI-07·6장 정렬 ★. (2) **OD-L2** C-7.1 공급자·등급별 고지 사실 표 신설(출처 URL·확인일 2026-11-05, 출시 전 재확인), 새 버전 `v2026-11-05`, "작성 중인(저장하지 않은) 내용 포함", 재동의 판단(Gemini·OpenAI `false`, Anthropic 추론 지역 `global` → (v4.11, OD-L2a) 확정: Claude 2행 "추론 global(여러 국가), 저장 미국" + `requires_reconsent = true`). (3) **OD-P3** AI-12·AI-13 빈 이름 인사 "이 프로젝트"/"이 산출물". **OD-P4** 슬롯 키는 종류 안에서만. **OD-P5** `base_body_hash` 공백 정규화 ★. **OD-P6** 초안 6회 칩 고정 3개 ★. **OD-P10** 중단 처리. **OD-P11** 답 없는 사용자 메시지 다시 보내기(지금 라우트는 마지막이 사용자 메시지면 `nothing_to_retry` → ★ 확장). **OD-P12** `ask_from_project`, 초안 턴 `draft_flags`. **OD-P13** V-10 30% 내용 단위, R5-AI-3~5. (4) **OD-D9** AI-01 진행 문구 "공고 요건 정리 중". **OD-L4** 출시 전 체크리스트(6장). **OD-D6** C-14 v4.3 행·금지 주제 목록·인사이트 배치 실패 확정. (5) 다른 행 정합: OD-P2(반영 되돌리기 없음)·OD-I2(점수 없을 때 등급 숨김) 문장 맞춤. 프롬프트·정본 스키마·`prompt_version`·`schema_version` 변경 없음 |
 | v4.11 | 2026-11-05 | **리뷰 R-OD 반영** (`_workspace/03_spec-reviewer_review_open-decisions.md`, 버전 유지). (1) **R-OD-2** 4.3·AI-07·필드 표: 모두 미응답 세션 = `scored` 0점(`score_counted_count = 0`, 제출 완료 경로가 기록), `not_scored`는 응답 답변이 있는데 모두 채점 실패일 때만, 채점 실패 답변은 평균·`score_counted_count`에서 제외. (2) **R-OD-8** AI-12 OD-P10·OD-P11(지금 코드 기준): 중단 = 메시지 `failed` + 작업 `canceled` → "답을 받지 못한 메시지", 실패 = 메시지 `failed` + 작업 `failed` → "실패한 턴" C-20(화면이 작업 상태로 구분). `message_count`는 응답 자리 시작 때 1회, 빼지 않음, 다시 보내기는 같은 행 재사용. 메시지 상태 추가 없음. UX C-04 문구는 "더 늘리지 않는다"로 정렬 요청. (3) **R-OD-11** 점수 산식 참조 DM A.13 → A.12. (4) **OD-L2a** C-7.1 Anthropic 행 처리 지역 "추론 global(여러 국가), 저장 미국", Claude 2행 `requires_reconsent = true`(Gemini·OpenAI 4행 `false`), `[결정 필요]` 해소 — (a) 채택, `inference_geo` 보내지 않음. (5) **R-OD-15** 시작 인사 무료 등급 문장·`requires_free_tier_ack`는 Gemini 무료만(C-7.1·AI-12·AI-13). |
+| v4.12 | 2026-11-05 | **새 설정 다이얼로그 (결정 사이클 `settings-dialog`, 사용자 확정 SD-1~SD-6 — `_workspace/00_input/planning-decisions-settings-dialog.md`)**. 기준 PRD v4.14. 바뀐 문장에 `(v4.12, SD-x)` 표시. (1) **SD-6 — 프로필 값을 어떤 프롬프트에도 보내지 않는다**: C-1 컨텍스트 팩의 **프로필 블록 삭제**(빈 블록도 남기지 않음), C-3 근거 `source_type` **`profile`(`PROFILE`) 폐기**와 별칭 치환 표 행 삭제, **V-4 재작성**(희망 정보·`total_years_of_experience` 예외 2줄 삭제 → 근거 0개 규칙만), **V-7** 근거 범위에서 프로필 삭제, `data_sufficiency` `thin` 정의와 컬처핏 게이트 행 정리. 기능 카드: AI-02 판정 기준의 A10 문장 삭제, AI-04 경력 팩 `user` 모드·서버 검증·`future_plan` 성장 방향 근거를 **JD 주요 업무**로, AI-05 프로필 입력 행 삭제 + 컬처핏 `general` 질문의 희망 직무 허용 문장 삭제 + 고유명사 검사 예외 축소, AI-12·AI-13 "질문 어휘 조정용 `desired_job_title`" 행 삭제, AI-01은 변화 없음(원래 넣지 않음). (2) **SD-2 — 총 경력 연차 삭제**: 연차 요건 판정을 **`computed_total_months` 하나**로 하고 C-1에 정의 신설(`complete` 경력만 / 시작·종료월 포함 / 겹치는 달은 월 합집합으로 1회 / 재직 중은 조립 기준월까지 / 종료월 미입력은 합계 제외 + "기간 미입력 경력 N건" 표기 / 해시 제외·V-5 허용값 포함 / 근거 객체 아님), AI-02 판정 기준·실패 유형 개정. A16은 그대로. (3) **SD-4·SD-A12 — 사용량 기능 이름**: **C-13.1 신설**(저장 값 8개 유지 ↔ 화면 표기 7행, `career_description` + `cover_letter` → "자기소개서 작성 AI 채팅" 합산, `writing_chat` → "프로젝트/산출물 작성 AI 채팅"), C-13 `feature` 행·표시 범위를 공급자 × 기능 교차(SD-A10)로. **F-DOC-\*·AI-03·AI-04 설계는 바꾸지 않았다**(채팅형 전환은 별도 사이클). (4) **`prompt_version` 상향**: `common.v1` → `common.v2`(모든 기능의 저장 문자열 변경), `ai-02.match.v3`·`ai-02.synthesize.v3`, AI-03·AI-04·AI-05 생성 호출 +1, `ai-12.reply.v7`, `ai-13.reply.v3`. 동일 입력 재사용은 배포 시점에 한 번 전부 끊긴다(의도). 정본 스키마 모양·`schema_version` 변경 없음. (5) 6장 출시 전 체크리스트에 ⑤ 프로필 제거 후 품질 회귀 확인 추가, 0.v412에 품질 의견(되살리지 않고 JD·경력 필드로 대체). **(6) 정합성 리뷰 라운드 1 수정 (2026-11-05, `_workspace/03_spec-reviewer_review_settings-dialog.md` — 판 번호는 v4.12 유지)**: **R-SD-5** C-13 기록 형식에 `input_cost_usd`·`output_cost_usd` 2컬럼 추가 + **비용 분할 식**(입력 쪽 = 비캐시 입력 + 캐시 읽기 + **캐시 쓰기**, 출력 쪽 = 출력 토큰, 합 = `estimated_cost_usd`, 장문 단가는 두 식에 함께 적용, `unpriced`면 세 값 모두 0), 사고 토큰(`reasoning_tokens`)은 **출력 쪽**이며 `output_tokens`에 포함되어 다시 더하지 않음. **R-SD-6** C-1 `computed_total_months`의 계산 위치·시그니처를 DM 확정값 `private.compute_total_experience_months(p_user_id, p_as_of)` → `(total_months, open_ended_experience_count, as_of_month)`로 적고 기준월이 인자임을 명시(팩의 "기간 미입력 경력 N건" = `open_ended_experience_count`), data-architect 요청 2 해소. **R-SD-7** C-3 각주의 "원본 삭제됨" 권고를 **SD-A19 확정**(기존 행 유지·백필 없음·CHECK 유지 + insert 트리거·이동 비활성)으로 교체, 요청 4 해소. **R-SD-13** C-13.1 묶음 원천 문장을 "화면(표시 단계)만"으로(조회 RPC·SQL은 저장 8값 그대로). **R-SD-16** 0.v43 변경표 A10 행에 SD-6 뒤집힘 표시. **R-SD-10** 머리글에 짝 문서 기준 버전 PRD v4.14 · UX v5.17 · DM v4.12. **(리뷰 라운드 2) R-SD-19** ux-planner 요청 3을 SD-A19 확정 내용으로 교체(칩 라벨 유지·"원본으로 이동"만 비활성·"원본 삭제됨" 아님)해 C-3 각주와 한 말로 맞춤. **R-SD-20** data-architect 요청 1·5를 "(해소 — DM v4.12 2.1.5 / 2.9.5)"로 내리고 확정 내용을 한 줄씩 옮김. 출력 스키마·`prompt_version`·`schema_version` 변경 없음 |
 
 ---
+

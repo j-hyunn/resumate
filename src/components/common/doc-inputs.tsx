@@ -71,9 +71,9 @@ export function highlightRange(field: HTMLElement | null, range: { start: number
     // server offsets point into the saved string, not into a re-serialized one
     const quote = "quote" in range ? range.quote : (rawValueOf(field) ?? editor.getMarkdown()).slice(range.start, range.end)
     const at = findTextRange(editor, plainQuote(quote))
-    field.scrollIntoView({ block: "center", behavior: "smooth" })
     if (at) editor.chain().focus(undefined, { scrollIntoView: false }).setTextSelection(at).run()
     else editor.commands.focus(undefined, { scrollIntoView: false })
+    scrollHighlightIntoView(field, editor, at)
     flashElement(field)
     return Boolean(at)
   }
@@ -95,6 +95,34 @@ export function highlightRange(field: HTMLElement | null, range: { start: number
   if (found) textarea.setSelectionRange(start, end)
   flashElement(textarea)
   return found
+}
+
+/** The nearest scrolling ancestor (for a `grow` field: the left input column of `DocBody`). */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const overflow = getComputedStyle(p).overflowY
+    if ((overflow === "auto" || overflow === "scroll") && p.scrollHeight > p.clientHeight) return p
+  }
+  return null
+}
+
+/**
+ * Bring the highlighted part into view. A field that does not fit its scroller (S-44 본문 — `grow`, no height cap)
+ * must scroll to the selected range; centring the whole field would leave the range off screen.
+ */
+function scrollHighlightIntoView(field: HTMLElement, editor: NonNullable<ReturnType<typeof editorOf>>, at: { from: number; to: number } | null): void {
+  const scroller = at ? scrollParent(field) : null
+  if (scroller && field.getBoundingClientRect().height > scroller.clientHeight) {
+    try {
+      const top = editor.view.coordsAtPos((at as { from: number }).from).top
+      const box = scroller.getBoundingClientRect()
+      scroller.scrollTo({ top: scroller.scrollTop + (top - box.top) - box.height / 2, behavior: "smooth" })
+      return
+    } catch {
+      // coordsAtPos / scrollTo need layout (jsdom, not laid out yet) — fall back to the field
+    }
+  }
+  field.scrollIntoView({ block: "center", behavior: "smooth" })
 }
 
 /** markdown → the text a reader sees (marks, list / heading / quote markers removed), first line only */

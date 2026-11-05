@@ -317,7 +317,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     setApplied((a) => [...a.filter((x) => x.writing_chat_id !== fill.chatId), { writing_chat_id: fill.chatId, rev: fill.rev, mode: fill.mode }])
     const el = bodyRef.current
     flashElement(el)
-    if (el) window.setTimeout(() => (el.scrollTop = fill.mode === "append" ? el.scrollHeight : 0), 0)
+    // the body field has no inner scroll (grow): scroll the page column to its end (덧붙이기) / its start (교체)
+    if (el) window.setTimeout(() => el.scrollIntoView({ block: fill.mode === "append" ? "end" : "start", behavior: "smooth" }), 0)
     // OD-P2 (UX v5.13): 본문 교체·덧붙이기·블록 반영 — an information toast only, no undo button
     // (going back = "저장하지 않고 나가기")
     toast("본문에 채웠어요")
@@ -335,8 +336,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
     const el = bodyRef.current
     const t = window.setTimeout(() => {
       rangeDone.current = true
+      // highlightRange scrolls to the range itself (the field is taller than the column)
       if (!highlightRange(el, range)) toast("지금 본문에서 그 문장을 찾지 못했어요")
-      el?.scrollIntoView({ block: "center" })
     }, 120)
     return () => window.clearTimeout(t)
   }, [range])
@@ -443,6 +444,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
               aria-label="본문"
               aria-invalid={bodyError ? true : undefined}
               aria-describedby={bodyError ? "dlv-body-error" : undefined}
+              // 높이는 화면에 고정되지 않는다: 내용에 따라 자라고 왼쪽 입력 영역(DocBody)이 스크롤한다 (5.9 S-44 본문)
+              grow
               className="min-h-[24rem]"
               value={form.body}
               onValueChange={setBody}

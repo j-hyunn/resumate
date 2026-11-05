@@ -35,6 +35,12 @@ export interface DocTextareaProps {
   maxLength?: number
   /** an edit or a paste ran into `maxLength` (typing blocked / the paste cut) — the page shows the error */
   onLimitReached?: () => void
+  /**
+   * 높이 고정 해제 (S-44 본문): no 400px cap and no scroll inside the field — the field grows with its content and
+   * the page column (`DocBody`) scrolls instead (design-system 5.9 "S-44 본문 한 칸"). Pass a `min-h-…` in
+   * `className` so a short body still looks like a writing area.
+   */
+  grow?: boolean
   className?: string
   onFocus?: () => void
   onBlur?: () => void
@@ -44,9 +50,12 @@ export interface DocTextareaProps {
   "aria-invalid"?: boolean | "true" | "false"
 }
 
-// up to 400px tall, then it scrolls inside; thin thumb, no track / gutter, shown only while scrolling (+1s)
 const EDITOR_CLASS =
-  "doc-md -mx-2 max-h-[400px] min-h-[5.25rem] overflow-y-auto scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent data-scrolling:scrollbar-thumb-muted-foreground/30 w-full rounded-md bg-transparent px-2 py-1.5 text-base leading-[1.75] outline-none hover:bg-accent/50 focus-visible:bg-transparent aria-invalid:ring-2 aria-invalid:ring-destructive"
+  "doc-md -mx-2 min-h-[5.25rem] w-full rounded-md bg-transparent px-2 py-1.5 text-base leading-[1.75] outline-none hover:bg-accent/50 focus-visible:bg-transparent aria-invalid:ring-2 aria-invalid:ring-destructive"
+// default height: up to 400px tall, then it scrolls inside; thin thumb, no track / gutter, only while scrolling
+// (+1s). `grow` fields (S-44 본문) drop this: no cap, no scroll inside the field.
+const CAPPED_CLASS =
+  "max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-transparent scrollbar-track-transparent data-scrolling:scrollbar-thumb-muted-foreground/30"
 
 const LIMIT_KEY = new PluginKey("docMaxLength")
 /** meta on transactions the limit must let through (content replaced from outside) */
@@ -135,7 +144,7 @@ export function rawValueOf(el: HTMLElement | null): string | null {
 }
 
 export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(function DocTextarea(
-  { value, onValueChange, id, placeholder, maxLength, onLimitReached, className, onFocus, onBlur, ...aria },
+  { value, onValueChange, id, placeholder, maxLength, onLimitReached, grow, className, onFocus, onBlur, ...aria },
   ref,
 ) {
   // the last markdown this editor emitted / was given — a `value` that differs came from outside (AI fill, restore)
@@ -146,14 +155,14 @@ export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(funct
   })
 
   const attributes = React.useMemo(() => {
-    const a: Record<string, string> = { role: "textbox", "aria-multiline": "true", class: cn(EDITOR_CLASS, className) }
+    const a: Record<string, string> = { role: "textbox", "aria-multiline": "true", class: cn(EDITOR_CLASS, grow ? undefined : CAPPED_CLASS, className) }
     if (id) a.id = id
     if (aria["aria-label"]) a["aria-label"] = aria["aria-label"]
     if (aria["aria-labelledby"]) a["aria-labelledby"] = aria["aria-labelledby"]
     if (aria["aria-describedby"]) a["aria-describedby"] = aria["aria-describedby"]
     if (aria["aria-invalid"] === true || aria["aria-invalid"] === "true") a["aria-invalid"] = "true"
     return a
-  }, [id, className, aria["aria-label"], aria["aria-labelledby"], aria["aria-describedby"], aria["aria-invalid"]]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, grow, className, aria["aria-label"], aria["aria-labelledby"], aria["aria-describedby"], aria["aria-invalid"]]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const editor = useEditor({
     immediatelyRender: false,

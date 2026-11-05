@@ -33,13 +33,17 @@ describe("새 행 표시", () => {
     expect(decl[0]).not.toMatch(/location|pathname|searchParams|usePathname/)
   })
 
-  it.each(PAGES)("$name: 안내는 isNew일 때만 그린다", ({ src, kind }) => {
-    expect(src).toContain(`{isNew ? <NewRowNotice kind="${kind}" /> : null}`)
+  it("S-10 project-page: 안내는 isNew일 때만 그린다", () => {
+    expect(PROJECT).toContain('{isNew ? <NewRowNotice kind="project" /> : null}')
   })
 
-  it.each(PAGES)("$name: 안내는 ShellBanners가 아니라 머리에 있다", ({ src }) => {
+  it("S-10 project-page: 안내는 ShellBanners가 아니라 머리에 있다", () => {
     // C-10·관련 요건·입력 보존 배너와 자리를 공유하면 겹침·순서 문제가 생긴다
-    expect(src.indexOf("<NewRowNotice")).toBeGreaterThan(src.indexOf("</ShellBanners>"))
+    expect(PROJECT.indexOf("<NewRowNotice")).toBeGreaterThan(PROJECT.indexOf("</ShellBanners>"))
+  })
+
+  it("S-44 deliverable-page: 새 행 안내 배너를 그리지 않는다 (사용자 결정 2026-11-05)", () => {
+    expect(DELIVERABLE).not.toContain("<NewRowNotice")
   })
 
   it.each(PAGES)("$name: 이동 줄 현재 위치도 isNew로 갈린다", ({ src, kind }) => {

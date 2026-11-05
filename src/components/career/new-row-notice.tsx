@@ -1,5 +1,6 @@
 /**
- * 새 행 안내 (S-10 새 프로젝트 · S-44 새 산출물) — A2 영역 컴포넌트.
+ * 새 행 안내 (S-10 새 프로젝트) — A2 영역 컴포넌트. S-44 새 산출물은 이동 줄 문구(CRUMB_CURRENT)만 쓰고 안내 배너는
+ * 두지 않는다(사용자 결정 2026-11-05).
  *
  * "+ 프로젝트 추가" / "+ 산출물 추가"로 들어온 빈 페이지가 기존 행 상세와 머리글까지 똑같아서 "아무것도 추가되지
  * 않고 기존 상세로 넘어왔다"고 읽히는 문제를 표시로 푼다(33 런 브리프, 사용자 결정 2026-11-04: 화면 전환 구조와
@@ -19,14 +20,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 export type NewRowKind = "project" | "deliverable"
 
 /** [UI-가정] 문구 (명세에 없음) — "저장하기"가 추가 동작임을 한 줄로 말한다 */
-const COPY: Record<NewRowKind, { title: string; body: string }> = {
+const COPY: Record<"project", { title: string; body: string }> = {
   project: {
     title: "아직 추가되지 않았어요",
     body: '새 프로젝트를 쓰는 중이에요. 위 "저장하기"를 누르면 이 프로젝트가 커리어에 추가돼요',
-  },
-  deliverable: {
-    title: "아직 추가되지 않았어요",
-    body: '새 산출물을 쓰는 중이에요. 위 "저장하기"를 누르면 이 산출물이 프로젝트에 추가돼요',
   },
 }
 
@@ -44,7 +41,7 @@ export const CRUMB_CURRENT: Record<NewRowKind, { new: string; existing: string }
  * 첫 포커스는 제목이지만 `preventScroll`로 준다(UQ-333) — 머리 상자가 스크롤되는 낮은 창에서도 이 안내가 보인다.
  * `role="note"`: 화면을 열 때 바로 읽히는 정적 안내라 `alert`의 즉시 알림을 쓰지 않는다.
  */
-export function NewRowNotice({ kind }: { kind: NewRowKind }) {
+export function NewRowNotice({ kind }: { kind: "project" }) {
   const copy = COPY[kind]
   return (
     <Alert role="note" variant="info" className="border-dashed border-info">

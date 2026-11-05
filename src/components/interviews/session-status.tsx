@@ -11,7 +11,6 @@ import { routes } from "@/lib/routes"
 import {
   APPLICATION_DELETED_BADGE,
   isApplicationDeleted,
-  sessionApplicationSegment,
   type DeletedApplicationFields,
 } from "@/lib/data/interview-session-view"
 
@@ -68,10 +67,10 @@ export function NewResultDot({ className }: { className?: string }) {
 /**
  * Row target (S-20 / S-37 → S-22 / S-33): writing in progress or abandoned → 답변지,
  * submitted (evaluating / completed / evaluation_failed) → 결과.
- * OD-I6 자기소개서 삭제됨 → always S-22 (read-only) under the "deleted" segment ([UI-가정] route).
+ * OD-I6 자기소개서 삭제됨 → always S-22 (read-only) at `/interviews/{sessionId}/result` (U36-1, under 모의 면접).
  */
 export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status"> & DeletedApplicationFields): string {
-  if (isApplicationDeleted(s)) return routes.interviewResult(sessionApplicationSegment(s), s.id)
+  if (isApplicationDeleted(s)) return routes.interviewDeletedResult(s.id)
   return s.status === "in_progress" || s.status === "abandoned"
     ? routes.interviewSession(s.application_project_id, s.id)
     : routes.interviewResult(s.application_project_id, s.id)

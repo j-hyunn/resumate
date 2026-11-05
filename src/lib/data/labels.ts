@@ -112,7 +112,7 @@ export const AI_USAGE_FEATURE_LABELS: Record<AiUsageFeature, string> = {
   jd_extraction: "요건 추출",
   insight: "인사이트",
   career_description: "경력기술서",
-  cover_letter: "자기소개서",
+  cover_letter: "자소서 문항 답변", // 02 S-42 (D-UX-23)
   interview_questions: "면접 질문",
   interview_evaluation: "면접 채점",
   writing_chat: "AI 작성 대화",
@@ -412,7 +412,8 @@ export const AI_FEATURE_NAMES = {
   requirements: "요건 정리",
   insight: "인사이트",
   career_description: "경력기술서",
-  cover_letter: "자기소개서",
+  // [UI-가정] U36-2: 02 C-18 기능 이름 열 "자기소개서(문항 답변)" — D-UX-23 이름으로 ("자기소개서"는 지원 건과 겹침)
+  cover_letter: "자소서 문항 답변",
   draft_source_ranking: "AI 근거 선택",
   interview_questions: "면접 질문 생성",
   interview_evaluation: "면접 채점",

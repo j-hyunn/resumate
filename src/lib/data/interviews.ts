@@ -150,8 +150,9 @@ export interface InterviewSessionDetail extends InterviewSessionRow {
 }
 
 /**
- * S-33 / S-22. `applicationProjectId` = DELETED_APPLICATION_SEGMENT ("deleted") reads a session whose
- * application project was deleted (OD-I6, [UI-가정] route); a live project id never finds such a session.
+ * S-33 / S-22. `applicationProjectId` = DELETED_APPLICATION_SEGMENT ("deleted", a data-layer key, not a URL) reads a
+ * session whose application project was deleted (OD-I6, S-22 at `/interviews/{sessionId}/result`); a live project id
+ * never finds such a session.
  */
 export async function getInterviewSession(applicationProjectId: string, sessionId: string): Promise<InterviewSessionDetail | null> {
   return previewOr(
@@ -185,6 +186,33 @@ export async function getInterviewSession(applicationProjectId: string, sessionI
       if ((!isUuid(applicationProjectId) && !isDeletedApplicationSegment(applicationProjectId)) || !isUuid(sessionId)) return null
       const { supabase } = await requireConsentedUser()
       return loadInterviewSessionDetail(supabase, isDeletedApplicationSegment(applicationProjectId) ? null : applicationProjectId, sessionId)
+    },
+  )
+}
+
+/**
+ * U36-1: where a session's S-22 lives, from the session id alone — `application_project_id` null = 자기소개서
+ * 삭제됨 (→ `/interviews/{sessionId}/result`), else its 자기소개서 (→ `/applications/{id}/interview/…`). Null when the
+ * session isn't this user's.
+ */
+export async function getInterviewSessionLocation(sessionId: string): Promise<{ application_project_id: string | null } | null> {
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const s = db.interview_sessions.find((x) => x.id === sessionId)
+      if (!s) return null
+      // mock: a kept session of a deleted 자기소개서 still carries the gone project's id (see `row`)
+      const live = db.application_projects.some((a) => a.id === s.application_project_id)
+      return { application_project_id: live ? s.application_project_id : null }
+    },
+    async () => {
+      if (!isUuid(sessionId)) return null
+      const { supabase } = await requireConsentedUser()
+      const { data, error } = await supabase.from("interview_sessions").select("application_project_id").eq("id", sessionId).maybeSingle()
+      if (error) throw mapDbError(error)
+      if (!data) return null
+      // OD-I6 (DM v4.11 11.6 #1): nullable once the backend migration lands; the generated type still says string
+      return { application_project_id: (data.application_project_id as string | null) ?? null }
     },
   )
 }

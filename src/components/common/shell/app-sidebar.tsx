@@ -2,7 +2,7 @@
 
 /**
  * L-01 left menu (design-system 5.1), built on the shadcn sidebar-08 block: inset variant,
- * brand header, NavMain (커리어 · 기업 JD 관리 · 모의 면접 · 지원 현황, fixed order),
+ * brand header, NavMain (커리어 · 자기소개서 관리 · 모의 면접 · 지원 현황, fixed order),
  * NavSecondary pinned to the bottom, NavUser in the footer.
  * Unlike the block it collapses to an icon rail (collapsible="icon") — labels become tooltips
  * and count badges become a dot on the icon. Below lg (1024px) it renders as a left Sheet drawer.

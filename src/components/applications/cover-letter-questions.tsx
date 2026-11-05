@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * S-18 자기소개서 문항 설정 (F-DOC-02, F-DOC-09). 문항 카드: 문항 · 글자 수 · 공백 기준 · 메모(300자).
+ * S-18 자소서 문항 설정 (F-DOC-02, F-DOC-09). 문항 카드: 문항 · 글자 수 · 공백 기준 · 메모(300자).
  * 자동 저장(C-06). 추가 / 삭제(최소 1). "초안 생성" → S-19에서 문항 순서대로 스트리밍.
  */
 import * as React from "react"
@@ -175,7 +175,7 @@ export function CoverLetterQuestions({
         {!ready && !locked ? (
           <DataInsufficientGate
             feature="draft"
-            featureLabel="자기소개서"
+            featureLabel="자소서 문항 답변"
             returnFeature="cover_letter"
             readiness={readiness}
             applicationProjectId={apId}

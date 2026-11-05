@@ -33,7 +33,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
 function returnLink(id: string, from: string | undefined, draft: string | undefined) {
   if (from === "insight") return { href: routes.applicationInsight(id), label: "인사이트로 돌아가기" }
   if (from === "drafts") return { href: routes.applicationDrafts(id), label: "서류 초안으로 돌아가기" }
-  if (from === "questions" && draft) return { href: routes.draftQuestions(id, draft), label: "자기소개서 문항으로 돌아가기" }
+  if (from === "questions" && draft) return { href: routes.draftQuestions(id, draft), label: "자소서 문항 설정으로 돌아가기" }
   if (from === "interview") return { href: routes.interviewPrep(id), label: "면접 준비로" }
   return null
 }
@@ -115,7 +115,7 @@ async function Screen({ params, searchParams }: Props) {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <PageCrumbs
-        items={[{ label: "기업 JD 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "JD·요건" }]}
+        items={[{ label: "자기소개서 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "JD·요건" }]}
         applicationProjectId={id}
       />
       <PageHeader

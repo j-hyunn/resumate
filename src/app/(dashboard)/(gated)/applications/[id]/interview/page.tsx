@@ -58,7 +58,7 @@ async function Screen({ params, searchParams }: Props) {
   const crumbs = (
     <PageCrumbs
       items={[
-        { label: "기업 JD 관리", href: routes.applications() },
+        { label: "자기소개서 관리", href: routes.applications() },
         { label: name, href: routes.application(id) },
         { label: "면접 준비" },
       ]}
@@ -138,14 +138,14 @@ async function Screen({ params, searchParams }: Props) {
       />
       <section className="space-y-3" aria-labelledby="prep-sessions-title">
         <h2 id="prep-sessions-title" className="text-lg leading-7 font-semibold">
-          이 기업 JD의 세션 목록
+          이 자기소개서의 세션 목록
         </h2>
         <SessionList
           rows={sessions}
           showApplication={false}
-          caption="이 기업 JD의 면접 세션 목록"
+          caption="이 자기소개서의 면접 세션 목록"
           // [UI-가정] 세션 0개 문구는 명세에 없음
-          emptyText="아직 이 기업 JD로 연습한 면접이 없어요"
+          emptyText="아직 이 자기소개서로 연습한 면접이 없어요"
         />
       </section>
     </div>

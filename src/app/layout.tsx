@@ -15,7 +15,7 @@ const pretendard = localFont({
 
 export const metadata: Metadata = {
   title: { default: "Resumate", template: "%s · Resumate" },
-  description: "커리어를 정리하고, 기업 JD마다 인사이트·서류·면접을 준비하고, 지원 현황을 관리하세요",
+  description: "커리어를 정리하고, 자기소개서마다 인사이트·서류·면접을 준비하고, 지원 현황을 관리하세요",
 }
 
 export const viewport: Viewport = {

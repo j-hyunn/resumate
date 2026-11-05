@@ -308,7 +308,7 @@ export function DevStateGallery({
           </p>
           <SessionScore session={scoredSession} startNewAction={<Button size="sm" variant="link">새 면접 시작하기</Button>} />
           <Button variant="outline" onClick={() => setDeleteTarget({ kind: "application_project", entity_id: demoApplication.id, label: demoApplication.name })}>
-            C-05 기업 JD 삭제 확인 열기
+            C-05 자기소개서 삭제 확인 열기
           </Button>
           <DeleteConfirmDialog
             target={deleteTarget}

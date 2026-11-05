@@ -10,7 +10,7 @@ import { getPreviewState } from "@/lib/preview-state"
 
 /**
  * S-37 모의 면접 (전체 세션).
- * ?state=: loading · error · unauth · empty (세션 없음) · no-jd (기업 JD 없음) · BYOK: ai-locked (새 면접 →
+ * ?state=: loading · error · unauth · empty (세션 없음) · no-jd (자기소개서 없음) · BYOK: ai-locked (새 면접 →
  * C-18 inline, 목록 열람 그대로) · key-invalid (새 면접 → C-20 key_invalid) · key-check (주의 배지)
  */
 type Props = {

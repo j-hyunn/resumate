@@ -2,8 +2,8 @@
 
 /**
  * S-37 모의 면접 — 전체 세션 (02 S-37, FL-17, design-system 5.2 / 6 A4).
- * 새 면접(AiRunButton: C-18 / C-19 → C-16) · 작성 중(맨 위 고정) · 필터(기업 JD / 유형 / 상태 / 실행 공급자) · 세션 목록(최신순) ·
- * "그만둔 면접" 묶음(접힘). Two empty states: 기업 JD 없음 / 세션 없음.
+ * 새 면접(AiRunButton: C-18 / C-19 → C-16) · 작성 중(맨 위 고정) · 필터(자기소개서 / 유형 / 상태 / 실행 공급자) · 세션 목록(최신순) ·
+ * "그만둔 면접" 묶음(접힘). Two empty states: 자기소개서 없음 / 세션 없음.
  * OD-I6: "자기소개서 삭제됨" 행은 목록에 남고, 필터 "자기소개서"에 "삭제된 자기소개서" 항목 하나로 묶는다 [가정]
  * (조건 = application_project_id is null → view model application_deleted, R-OD-12). 그런 세션만 남고 자기소개서가
  * 0개여도 목록은 보인다.
@@ -75,12 +75,12 @@ export function InterviewsOverview({
         <PageHeader title="모의 면접" />
         <EmptyState
           icon={MessagesSquare}
-          title="기업 JD를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
+          title="자기소개서를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
           actions={
             <Button asChild className="max-md:h-8">
               <Link href={routes.applicationNew()}>
                 <Plus aria-hidden />
-                기업 JD 추가
+                자기소개서 추가
               </Link>
             </Button>
           }
@@ -111,15 +111,15 @@ export function InterviewsOverview({
       <PageHeader title="모의 면접" actions={sessions.length > 0 && applications.length > 0 ? newButton : undefined} />
       {picker}
       {applications.length === 0 ? (
-        // OD-I6: only kept sessions of deleted 자기소개서 remain — the 기업 JD 없음 guidance, list below
+        // OD-I6: only kept sessions of deleted 자기소개서 remain — the 자기소개서 없음 guidance, list below
         <EmptyState
           icon={MessagesSquare}
-          title="기업 JD를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
+          title="자기소개서를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
           actions={
             <Button asChild className="max-md:h-8">
               <Link href={routes.applicationNew()}>
                 <Plus aria-hidden />
-                기업 JD 추가
+                자기소개서 추가
               </Link>
             </Button>
           }
@@ -170,11 +170,11 @@ export function InterviewsOverview({
             </h2>
             <div className="flex flex-wrap gap-2" role="group" aria-label="필터">
               <Select value={apFilter} onValueChange={setApFilter}>
-                <SelectTrigger size="sm" className="w-full max-md:h-8 sm:w-64" aria-label="기업 JD 필터">
+                <SelectTrigger size="sm" className="w-full max-md:h-8 sm:w-64" aria-label="자기소개서 필터">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>모든 기업 JD</SelectItem>
+                  <SelectItem value={ALL}>모든 자기소개서</SelectItem>
                   {applications.map((ap) => (
                     <SelectItem key={ap.id} value={ap.id}>
                       {applicationDisplayName(ap.name, ap.name_source, ap.created_at)}

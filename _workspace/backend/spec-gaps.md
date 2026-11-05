@@ -742,3 +742,5 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - **UI36-7 확인** 모든 답이 비어 있는 제출이 `score_status = scored`, `score_value = 0`(d14.v1)으로 저장되는지. mock 채점 완료(`ai-jobs.ts`)는 아직 `pending_method`를 남김 — 실제 산식 배포 뒤 mock도 맞출지 결정.
 - **UI36-8 참고** 로컬 통합 테스트 `src/lib/data/interviews.integration.test.ts` 2건, `src/server/services/interview/interview.integration.test.ts` 2건이 공유 로컬 스택(이미 d14.v1·OD-I6 마이그레이션 적용)에서 옛 기대값(`pending_method`·세션 전부 삭제)으로 실패 — od-backend가 갱신.
 - **UI36-9 참고(A2)** 서버가 `ai_consent_required`를 `key_missing`으로 바꿔 내려 동의 거절이 C-21 대신 C-18로 보임(기존 동작).
+- **UI36-6 확장 (U36-5, 2026-11-05)** `policy_versions` 2026-11-05 행에 `terms_of_service`도 추가(이용약관 2조 "정량 성과" 삭제). 세 문서 모두 재동의 없음(`requires_reconsent = false`). decisions.md 4.13.
+- **UI36-10 (U36-2, 2026-11-05)** CR-23·D-UX-23 화면 용어: 새 `cover_letter` 초안 기본 제목 "자기소개서 (날짜)"(`supabase/migrations/20261102000300_s7_cover_letter_user_rpcs.sql:103`) → "자소서 문항 답변 (날짜)", AI-12 `GATE_FEATURE_LABEL`·r4 writing_chats 마이그레이션 :193의 cover_letter 기능 이름. 화면은 반영됨(UI 37 런).

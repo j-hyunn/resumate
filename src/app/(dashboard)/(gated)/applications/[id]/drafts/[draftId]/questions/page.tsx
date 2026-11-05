@@ -13,7 +13,7 @@ import { routes } from "@/lib/routes"
 import { extractFirstPreviewFail, jdRunState } from "../../../../_lib/jd-state"
 import { gateChatFailurePreview, gateReadinessPreview } from "../../../../_lib/gate-preview"
 
-// S-18 자기소개서 문항 설정. ?state=: loading · error · unauth · not-found · save-failed · ai-locked · key-invalid · key-check
+// S-18 자소서 문항 설정 (D-UX-23). ?state=: loading · error · unauth · not-found · save-failed · ai-locked · key-invalid · key-check
 //   · v5.3: consent-required · insufficient-project-fields · extract-failed · extract-failed-input · extract-failed-wait (요건 선행 추출 실패)
 //   · insufficient · insufficient-no-experience · insufficient-key-invalid · insufficient-chat-failed · wait-jd
 type Props = { params: Promise<{ id: string; draftId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
@@ -36,17 +36,17 @@ async function Screen({ params, searchParams }: Props) {
   const crumbs = (
     <PageCrumbs
       items={[
-        { label: "기업 JD 관리", href: routes.applications() },
+        { label: "자기소개서 관리", href: routes.applications() },
         { label: name, href: routes.application(id) },
         { label: "서류 초안", href: routes.applicationDrafts(id) },
-        { label: "자기소개서 문항" },
+        { label: "자소서 문항 설정" },
       ]}
       applicationProjectId={id}
     />
   )
   const header = (
     <PageHeader
-      title="자기소개서 문항"
+      title="자소서 문항 설정"
       description="기본 3문항으로 시작해요. 문항 문구·글자 수·메모를 고치고, 문항을 추가하거나 지울 수 있어요(최소 1개)"
     />
   )

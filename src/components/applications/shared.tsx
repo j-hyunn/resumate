@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Small A3 client helpers: polling refresh, C-03 축약형 for a job id, C-05 기업 JD 삭제 hook,
+ * Small A3 client helpers: polling refresh, C-03 축약형 for a job id, C-05 자기소개서 삭제 hook,
  * return-param restore on entry (C-10 → original screen).
  */
 import * as React from "react"
@@ -35,7 +35,7 @@ export function JobInline({ jobId, label, className }: { jobId: string; label?: 
   return <AiProgressInline progress={progress} jobType={job?.job_type ?? null} label={label} className={className} />
 }
 
-/** C-05 기업 JD 삭제 (FL-06): impact counts + 확인 체크 → delete → toast → `after()` */
+/** C-05 자기소개서 삭제 (FL-06): impact counts + 확인 체크 → delete → toast → `after()` */
 export function useDeleteApplication({ after }: { after?: () => void } = {}) {
   const router = useRouter()
   const [target, setTarget] = React.useState<{ id: string; name: string } | null>(null)
@@ -48,7 +48,7 @@ export function useDeleteApplication({ after }: { after?: () => void } = {}) {
         if (!target) return
         await deleteApplicationAction(target.id)
         // [UI-가정] 삭제 완료 토스트 문구
-        toast.success(`${target.name} 기업 JD를 삭제했어요`)
+        toast.success(`${target.name} 자기소개서를 삭제했어요`)
         setTarget(null)
         if (after) after()
         else router.refresh()

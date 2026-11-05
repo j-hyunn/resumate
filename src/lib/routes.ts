@@ -67,7 +67,7 @@ export const routes = {
    */
   writingChatRedirect: (id: Id) => `/career/writing-chats/${id}`, // → S-10 / S-44
 
-  // 기업 JD 관리 — A3
+  // 자기소개서 관리 — A3
   applications: () => "/applications", // S-13
   applicationNew: (query?: { from?: "board" }) => withQuery("/applications/new", query), // S-14
   application: (id: Id) => `/applications/${id}`, // S-31
@@ -91,6 +91,12 @@ export const routes = {
   interviewResult: (id: Id, sessionId: Id) =>
     `/applications/${id}/interview/${sessionId}/result`, // S-22
   interviews: () => "/interviews", // S-37
+  /**
+   * S-22 of a "자기소개서 삭제됨" session (OD-I6, U36-1): under 모의 면접, keyed by the session only (its
+   * application_project_id is null). No S-33 / S-20 address for such a session. A live session opened here is
+   * redirected to `interviewResult`; `/applications/{id}/interview/{sessionId}[/result]` of a deleted one comes here.
+   */
+  interviewDeletedResult: (sessionId: Id) => `/interviews/${sessionId}/result`, // S-22 (자기소개서 삭제됨)
   board: () => "/board", // S-39
 
   // 설정 — A1
@@ -124,12 +130,12 @@ export type MenuKey = "career" | "applications" | "interviews" | "board"
 
 export const MENU_ITEMS: ReadonlyArray<{ key: MenuKey; label: string; href: string }> = [
   { key: "career", label: "커리어", href: routes.career() },
-  { key: "applications", label: "기업 JD 관리", href: routes.applications() },
+  { key: "applications", label: "자기소개서 관리", href: routes.applications() },
   { key: "interviews", label: "모의 면접", href: routes.interviews() },
   { key: "board", label: "지원 현황", href: routes.board() },
 ]
 
-/** Active-menu rule (L-01): application sub-screens (S-14~S-22, S-31, S-33) → 기업 JD 관리 */
+/** Active-menu rule (L-01): application sub-screens (S-14~S-22, S-31, S-33) → 자기소개서 관리; `/interviews/{id}/result` (자기소개서 삭제됨 S-22) → 모의 면접 */
 export function menuKeyForPath(pathname: string): MenuKey | null {
   if (pathname.startsWith("/career")) return "career"
   if (pathname.startsWith("/applications")) return "applications"

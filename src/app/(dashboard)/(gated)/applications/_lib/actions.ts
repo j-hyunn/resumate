@@ -1,7 +1,7 @@
 "use server"
 
 /**
- * A3 server actions (기업 JD 관리). Thin wrappers over src/lib/data/* and the area shim
+ * A3 server actions (자기소개서 관리). Thin wrappers over src/lib/data/* and the area shim
  * (src/lib/data/drafts.ts). Screens refresh with router.refresh() after a write.
  */
 import type { AiErrorCode, AiProviderName, ApplicationProject, DraftOptions, DraftSection, JobDescription } from "@/types/db"

@@ -254,7 +254,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
                   id="result-delete"
                   value="delete_results"
                   title="관련 결과도 함께 삭제"
-                  description="인사이트는 해당 버전, 경력기술서는 문서 전체, 자기소개서는 해당 문항의 생성 결과만(문항·글자 수·메모는 남음), 모의 면접은 세션 전체가 삭제돼요"
+                  description="인사이트는 해당 버전, 경력기술서는 문서 전체, 자소서 문항 답변은 해당 문항의 생성 결과만(문항·글자 수·메모는 남음), 모의 면접은 세션 전체가 삭제돼요"
                 />
               </RadioGroup>
               <p className="flex items-start gap-1.5 text-sm text-muted-foreground">

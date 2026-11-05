@@ -536,7 +536,7 @@ export interface JobDescriptionWithRequirements extends JobDescription {
   requirements: JdRequirement[]
   /** getJdView.rawTextEditable (04 §2.6.1 조건 1~5): S-15 "공고 원문 고치기" */
   raw_text_editable: boolean
-  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 기업 JD 안내 (Q53-11) */
+  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 자기소개서 안내 (Q53-11) */
   raw_text_lock: JdRawTextRefusalCode | null
 }
 

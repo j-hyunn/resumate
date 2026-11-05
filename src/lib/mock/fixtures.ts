@@ -704,9 +704,9 @@ export function createFixtures(): MockDb {
     ap(5, "스텔라랩스 – Senior Backend Engineer", "ai", "closed", null, -30, 15, 15),
     ap(6, null, null, "before_apply", null, null, 0, 0),
     // Q53-2 · 9: 입력 원인으로 요건 추출 실패 + 요건 0개 → 공고 원문 고치기 (JD 7, 세션 6 · 12)
-    ap(7, "새 기업 JD (2026-10-29)", "default", "before_apply", null, 14, 1, 1),
+    ap(7, "새 자기소개서 (2026-10-29)", "default", "before_apply", null, 14, 1, 1),
     // Q53-11: 추출은 성공했는데 요건 0개, 이 원문으로 만든 결과 없음
-    ap(8, "새 기업 JD (2026-10-30)", "default", "before_apply", null, 14, 1, 1),
+    ap(8, "새 자기소개서 (2026-10-30)", "default", "before_apply", null, 14, 1, 1),
   ]
 
   const stageEvent = (
@@ -1028,7 +1028,7 @@ export function createFixtures(): MockDb {
       application_project_id: IDS.ap(1),
       insight_id: null,
       draft_type: "cover_letter",
-      title: "자기소개서",
+      title: "자소서 문항 답변",
       status: "composing",
       options: {},
       edited_at: null,

@@ -51,7 +51,7 @@ async function Screen({ params, searchParams }: Props) {
   const crumbs = (
     <PageCrumbs
       items={[
-        { label: "기업 JD 관리", href: routes.applications() },
+        { label: "자기소개서 관리", href: routes.applications() },
         { label: name, href: routes.application(id) },
         { label: "서류 초안", href: routes.applicationDrafts(id) },
         { label: typeLabel },

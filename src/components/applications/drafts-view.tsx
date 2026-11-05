@@ -2,9 +2,9 @@
 
 /**
  * S-17 서류 초안 목록·경력기술서 설정 (FL-03).
- * - 목록: 이 기업 JD의 초안(종류·상태·편집일) → S-19 / S-18, 삭제(C-05)
+ * - 목록: 이 자기소개서의 초안(종류·상태·편집일) → S-19 / S-18, 삭제(C-05)
  * - 새 서류: 경력기술서(포함 항목 = AI에게 맡기기 기본 / 직접 고르기, C-11 트리, 출처 배지) → 생성 → S-19 스트리밍
- *            자기소개서 → 기본 3문항 시드(AI 없음) → S-18
+ *            자소서 문항 답변 → 기본 3문항 시드(AI 없음) → S-18
  * - C-09 게이트(draft.ready), ST-LIMIT, ST-WAIT-JD, C-10 복귀 시 포함 항목 복원
  */
 import * as React from "react"
@@ -53,7 +53,7 @@ import { ProviderResultTag } from "@/components/common/provider-badge"
 import { initialDraftEntry, markDraftEntered } from "./draft-entry"
 
 /**
- * Q53-7: opening a "작성 중" row shows the 경력기술서 settings in the panel below, even when 자기소개서 is
+ * Q53-7: opening a "작성 중" row shows the 경력기술서 settings in the panel below, even when 자소서 문항 답변 is
  * selected there. Row and panel are sibling client components under a server page.
  */
 const OPEN_COMPOSING_EVENT = "resumate:open-composing-draft"
@@ -371,7 +371,7 @@ export function NewDraftPanel({
       setSelection(projectsOf(ids))
     }
   })
-  // C-10 → back from the 자기소개서 gate: restore the chosen kind and clear the target (A3 UQ-63)
+  // C-10 → back from the 자소서 문항 답변 gate: restore the chosen kind and clear the target (A3 UQ-63)
   useRestoreReturnParams(apId, "cover_letter", () => setKind("cover_letter"))
 
   // Q53-4: 자동 실행이 없는 진입도 기본 선택은 "AI에게 맡기기" (체크 없는 트리 + 아래 안내)
@@ -476,7 +476,7 @@ export function NewDraftPanel({
 
   const includedIds = allProjects.filter((p) => p.id in selection.projects).map((p) => p.id)
   const order = insightPriorities?.length ? [...insightPriorities.filter((i) => includedIds.includes(i)), ...includedIds.filter((i) => !insightPriorities.includes(i))] : includedIds
-  const featureLabel = kind === "career_description" ? "경력기술서" : "자기소개서"
+  const featureLabel = kind === "career_description" ? "경력기술서" : "자소서 문항 답변"
 
   const generate = async () => {
     if (previewWrite.stop()) return
@@ -538,7 +538,7 @@ export function NewDraftPanel({
       <h2 className="text-lg leading-7 font-semibold">새 서류 만들기</h2>
       <RadioGroup value={kind} onValueChange={(v) => setKind(v as Kind)} className="grid gap-3 sm:grid-cols-2" aria-label="서류 종류">
         <KindOption value="career_description" title="경력기술서" description="경력별 → 프로젝트별 역할·행동·결과로 정리해요" />
-        <KindOption value="cover_letter" title="자기소개서" description="기본 3문항(지원 동기 / 직무 역량 / 입사 후 포부 및 성장 계획)으로 시작해요" />
+        <KindOption value="cover_letter" title="자소서 문항 답변" description="기본 3문항(지원 동기 / 직무 역량 / 입사 후 포부 및 성장 계획)으로 시작해요" />
       </RadioGroup>
 
       {gate ?? (entryStep ? (

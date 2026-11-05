@@ -39,7 +39,7 @@ async function Screen({ params, searchParams }: Props) {
   const ap = await getApplicationProject(id)
   if (!ap) notFound()
   const name = applicationDisplayName(ap.name, ap.name_source, ap.created_at)
-  const crumbs = <PageCrumbs items={[{ label: "기업 JD 관리", href: routes.applications() }, { label: name }]} applicationProjectId={id} />
+  const crumbs = <PageCrumbs items={[{ label: "자기소개서 관리", href: routes.applications() }, { label: name }]} applicationProjectId={id} />
   if (state === "error" || state === "unauth")
     return (
       <div className="mx-auto max-w-6xl">
@@ -171,7 +171,7 @@ async function Screen({ params, searchParams }: Props) {
               }
             >
               {drafts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">경력기술서나 자기소개서 초안을 만들어 보세요</p>
+                <p className="text-sm text-muted-foreground">경력기술서나 자소서 문항 답변 초안을 만들어 보세요</p>
               ) : (
                 <ul className="space-y-1 text-sm">
                   {drafts.slice(0, 3).map((d) => (
@@ -205,7 +205,7 @@ async function Screen({ params, searchParams }: Props) {
               }
             >
               {sessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">이 기업 JD로 직무·컬처핏 면접을 연습할 수 있어요</p>
+                <p className="text-sm text-muted-foreground">이 자기소개서로 직무·컬처핏 면접을 연습할 수 있어요</p>
               ) : (
                 <div className="space-y-1.5 text-sm">
                   {inProgress ? (

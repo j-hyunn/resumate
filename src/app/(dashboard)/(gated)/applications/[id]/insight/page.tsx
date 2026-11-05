@@ -40,7 +40,7 @@ async function Screen({ params, searchParams }: Props) {
   const name = applicationDisplayName(ap.name, ap.name_source, ap.created_at)
   const crumbs = (
     <PageCrumbs
-      items={[{ label: "기업 JD 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "인사이트" }]}
+      items={[{ label: "자기소개서 관리", href: routes.applications() }, { label: name, href: routes.application(id) }, { label: "인사이트" }]}
       applicationProjectId={id}
     />
   )

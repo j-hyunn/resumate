@@ -5,11 +5,11 @@ import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { AnswerSheet } from "@/components/interviews/answer-sheet"
 import { getApplicationProject, getJobDescription } from "@/lib/data/applications"
 import { getLatestJobFor } from "@/lib/data/ai-jobs"
-import { getInterviewSession } from "@/lib/data/interviews"
+import { getInterviewSession, getInterviewSessionLocation } from "@/lib/data/interviews"
 import { getEvidenceForOwners } from "@/lib/data/evidence"
 import { applicationDisplayName } from "@/lib/data/labels"
-import { isDeletedApplicationSegment } from "@/lib/data/interview-session-view"
-import { getPreviewState, previewErrorCode, previewRetryRefusal } from "@/lib/preview-state"
+import { DELETED_APPLICATION_SEGMENT } from "@/lib/data/interview-session-view"
+import { getPreviewState, previewErrorCode, previewRetryRefusal, withPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 import { getAiConnection } from "@/lib/data/ai-connection"
 
@@ -24,7 +24,8 @@ import { getAiConnection } from "@/lib/data/ai-connection"
  * retry-refused-* / retry-connection-changed / retry-not-retryable (전체 실패 같은 행 다시 시도 거부).
  * Q53-9: input-failed / ai-failed-input → "공고 원문 고치기" (S-15) · input-failed-has-requirements → "공고 확인하기" ·
  * abandoned-no-questions · raw-edited-stale / raw-edited-no-job (S-15 "이전 실패 안내"). 미리보기는 저장소를 바꾸지 않는다.
- * OD-I6: /applications/deleted/interview/[sessionId] (자기소개서 삭제됨, [UI-가정] 라우트) → S-22.
+ * OD-I6 / U36-1: a 자기소개서 삭제됨 session (old id, or the run 36 temporary `deleted` segment) → S-22 at
+ * `/interviews/{sessionId}/result` (no S-33 for such a session).
  */
 type Props = {
   params: Promise<{ id: string; sessionId: string }>
@@ -43,8 +44,9 @@ async function Screen({ params, searchParams }: Props) {
   const { id, sessionId } = await params
   const state = getPreviewState(await searchParams)
   if (state === "not-found") notFound()
-  // 02 S-33 v5.13 OD-I6: a kept session of a deleted 자기소개서 is completed → always S-22 (read-only)
-  if (isDeletedApplicationSegment(id)) redirect(routes.interviewResult(id, sessionId))
+  // 02 S-33 v5.13 OD-I6 / U36-1: a kept session of a deleted 자기소개서 is completed → always S-22 (read-only)
+  if (id === DELETED_APPLICATION_SEGMENT || (await getInterviewSessionLocation(sessionId))?.application_project_id === null)
+    redirect(withPreviewState(routes.interviewDeletedResult(sessionId), state))
 
   const ap = await getApplicationProject(id)
   if (!ap) notFound()
@@ -52,7 +54,7 @@ async function Screen({ params, searchParams }: Props) {
   const crumbs = (
     <PageCrumbs
       items={[
-        { label: "기업 JD 관리", href: routes.applications() },
+        { label: "자기소개서 관리", href: routes.applications() },
         { label: name, href: routes.application(id) },
         { label: "면접 준비", href: routes.interviewPrep(id) },
         { label: "면접 답변지" },

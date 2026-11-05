@@ -422,7 +422,7 @@ export function InterviewPrep({
         </section>
       )}
       {blockedByInProgress && !jobGate ? (
-        // [UI-가정] 기업 JD당 작성 중 세션 1개(unique) — 새로 시작 불가 안내 문구
+        // [UI-가정] 자기소개서당 작성 중 세션 1개(unique) — 새로 시작 불가 안내 문구
         <p className="text-sm text-muted-foreground">작성 중인 면접을 이어 쓰거나 그만두면 새로 시작할 수 있어요</p>
       ) : null}
 

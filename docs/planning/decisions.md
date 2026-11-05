@@ -429,6 +429,18 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 닫힌 기존 열린 항목: 4.8 R-ED-7(OD-C1)·R-ED-10(OD-C2)·R-ED-8(OD-C5), 4.11 #10(OD-C1), `docs/ui/screen-status.md` "기획 확인 필요 (누적)" 전부(P-331~334, S-02 부제, 2026-11-03 런 목록, Q53 B-4·B-5, v5.3 Q-10~Q-28, BYOK B-1~B-29, K-1~K-35), `_workspace/backend/slices.md`의 "기획 확인"·"사용자 확인 [가정]" 건수(S4~S9, R5-*), spec-gaps-summary C.
 
+### 3.19 사용자 확정 (2026-11-05, UI 36 런 기획 확인 — 사이클 ui36-questions)
+
+계기: OD-* UI 후속(UI 36 런, PR j-hyunn/resumate#48)이 남긴 기획 확인 5건. 원문 `_workspace/00_input/planning-decisions-ui36-questions.md`. 반영: UX v5.14(PRD·AI·DM 변경 없음), `docs/legal/` 2026-11-05 개정안 확장. 5건 모두 권장안.
+
+| ID | 결정 | 권고와 다름 |
+|----|------|-------------|
+| U36-1 | "자기소개서 삭제됨" 면접(OD-I6)은 모의 면접 메뉴 아래 `/interviews/{sessionId}/result`로 연다. S-33·S-20 주소 없음 | |
+| U36-2 | CR-23을 코드 전체에 적용: 화면 안 지원 건 이름 "기업 JD" → "자기소개서", 개별 서류 `cover_letter` → "자소서 문항 답변"(D-UX-23). 명세 변경 없음 | |
+| U36-3 | 답 없는 메시지 줄(OD-P11) = 구현 그대로: 흐린 작은 글씨 + 링크 버튼, 같은 방문의 중지 직후에도 보임, `nothing_to_retry` 토스트 + 입력창 복원 | |
+| U36-4 | C-22 = "커리어 추가" 버튼에 붙은 드롭다운 메뉴(구현 그대로), 디자인 P-21 닫힘 | |
+| U36-5 | 처리방침 1번 수집 항목·이용약관 2조에서도 폐기된 "정량 성과" 삭제 — 둘 다 2026-11-05 개정안, 재동의 없음 | |
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -619,3 +631,12 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
   13. OD-D9 mock `src/lib/data/applications.ts` `target_type: "insight"` → `application_project` — **반영 2026-11-05 (UI 36 런)**
   14. `docs/ui/screen-status.md` "기획 확인 필요 (누적)"을 3.18로 닫기 — **반영 2026-11-05 (UI 36 런)**
 - **운영·출시 전**: OD-L4 평가 세트 실행(세 공급자), OD-L2 공급자 약관 출시 전 재확인(AI C-7.1), OD-L3 법무 검토 권장, OD-I1 백필 실행
+
+### 4.13 UI 36 런 기획 확인 후속 (2026-11-05, U36-*)
+
+- **UI** (resumate-ui)
+  1. **반영 2026-11-05 (UI 37 런)** U36-1 `/interviews/[sessionId]/result` 라우트, `routes.ts` 빌더, S-37 행 링크, 옛 `/applications/{id}/interview/{sessionId}` 접근 시 이동(36 런 임시 `/applications/deleted/…` 대체)
+  2. **반영 2026-11-05 (UI 37 런)** U36-2 "기업 JD" → "자기소개서" 전체 교체(S-13~S-20·S-31·S-37·S-39·이동 경로·메타 설명), `DRAFT_TYPE_LABELS.cover_letter` → "자소서 문항 답변"
+  3. **반영 2026-11-05 (design-system v5.8)** U36-3·U36-4 코드 변경 없음(`[UI-가정]` 표시만 정리), design-system에 답 없는 메시지 줄 패턴·C-22 드롭다운 확정 표기
+  4. **반영 2026-11-05** U36-5 `policy-content.ts` 처리방침 1번·이용약관 2조 "정량 성과" 삭제
+- **백엔드**: 새 `cover_letter` 초안 기본 제목 "자소서 문항 답변 (날짜)"(`20261102000300` RPC), AI-12 `GATE_FEATURE_LABEL` cover_letter 이름(U36-2, spec-gaps UI36-10). U36-5 `policy_versions`에 `terms_of_service` `2026-11-05` 행(처리방침·국외 이전 행과 같은 배포, spec-gaps UI36-6)

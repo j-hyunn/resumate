@@ -105,8 +105,9 @@ export const APPLICATION_DELETED_BADGE = "자기소개서 삭제됨"
 export const DELETED_APPLICATION_NAME = "삭제된 자기소개서"
 
 /**
- * [UI-가정] 라우트: S-22 / S-33은 /applications/[id]/interview/[sessionId]/… 아래에 있는데 삭제된 세션은
- * application_project_id가 없다. 같은 라우트를 쓰고 [id] 자리에 이 값을 넣는다 (lib/routes.ts는 그대로).
+ * Data-layer key (not a URL segment): `listInterviewSessions({ application_project_id: "deleted" })` and
+ * `getInterviewSession("deleted", id)` read sessions whose 자기소개서 was deleted. Their S-22 is
+ * `routes.interviewDeletedResult(sessionId)` (U36-1).
  */
 export const DELETED_APPLICATION_SEGMENT = "deleted"
 
@@ -137,9 +138,4 @@ export interface DeletedApplicationFields {
 
 export function isApplicationDeleted(s: DeletedApplicationFields): boolean {
   return s.application_deleted === true
-}
-
-/** The [id] segment of S-22 / S-33 links for a session */
-export function sessionApplicationSegment(s: Pick<InterviewSession, "application_project_id"> & DeletedApplicationFields): string {
-  return isApplicationDeleted(s) ? DELETED_APPLICATION_SEGMENT : s.application_project_id
 }

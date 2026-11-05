@@ -62,7 +62,7 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 export interface ShellBadges {
   /** 커리어: 작성 중 AI 대화가 있으면 점 [가정] */
   career_active_chat: boolean
-  /** 기업 JD 관리: 진행 중 AI 작업 수 */
+  /** 자기소개서 관리: 진행 중 AI 작업 수 */
   applications_running_jobs: number
   /** 모의 면접: 작성 중 세션 수 */
   interviews_in_progress: number

@@ -4,6 +4,8 @@
 - 디자인 시스템: v5.7 (2026-11-05 OD-D4: 커리어 항목 추가·수정 모달 공통 규칙·C-24 폐기·되돌리기 삭제) · v5 (v4 = 사용자 지정 브랜드 토큰 2026-11-03, v5 = L-02·S-10·S-44·AI 패널·제안 카드 2026-11-03, v5.3 = C-23 소속 선택 전용 2026-11-04, v5.4 = 알림·경고 모달 공통 모양, v5.6 = S-02 헤더·카드 없는 배치 + L-02 새 행 안내(UQ-331~333) 2026-11-04, v5.5 = AI 패널·제안 확인 줄·문서형 마크다운 편집기·포커스·32px 2026-11-04) · 최종 갱신: 2026-11-04
 - 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
 
+> UI 36 런 기획 확인 확정 후속 (2026-11-05, 37 런, decisions.md 3.19·4.13 U36-1~U36-5, UX v5.14, 보고 `_workspace/ui/37_frontend-engineer_u36_report.md`): ① "자기소개서 삭제됨" 면접 = `/interviews/{sessionId}/result`(`routes.interviewDeletedResult`, S-22 본문은 `result-screen.tsx`로 공유), 옛 `/applications/{id}/interview/{sessionId}[/result]`·36 런 임시 경로는 새 주소로 이동, 아직 있는 자기소개서의 세션은 원래 S-22로 ② CR-23 전체 적용: 메뉴·이동 경로 "자기소개서 관리", 화면 안 "기업 JD" 0곳(contracts 주석 2곳만), `cover_letter` = "자소서 문항 답변"(S-17·S-18 "자소서 문항 설정"·C-05·S-42·AI 기능 이름) ③ 처리방침 1번·이용약관 2조 "정량 성과" 삭제 ④ design-system v5.8(답 없는 메시지 줄, P-21 해소). lint·typecheck·build 통과, vitest 2358건 중 4건 실패(36 런과 같은 로컬 통합 테스트). **UI QA 미실행 · 브라우저 미확인**.
+
 > 열린 결정 일괄 확정 UI 후속 (2026-11-05, 36 런, decisions.md 4.12 UI 1~14, UX 5.1i): 기록 `_workspace/ui/36_brief_od-ui-followups.md`, 보고 `36_frontend-engineer-A2_report.md`·`36_frontend-engineer-A4_report.md`. ① S-22·C-17 가중 100점 표시(`interview-session-view.ts`): "{n}점 / 100"·"미응답 n개(0점으로 반영)", 모두 미응답이면 "답변이 없어 0점이에요", `not_scored`는 답이 있는데 채점 0개일 때만, `pending_method` 동안 항목 등급·다음 연습 숨김 ② OD-I6 "자기소개서 삭제됨" 세션: S-37 표시·필터·메뉴는 삭제만, S-22·S-33 읽기 전용, 라우트 `/applications/deleted/interview/{id}/result` `[UI-가정]` ③ C-05 K-2·K-3 문구, 자기소개서 삭제 "작성 중인 면접 {N}" + "끝난 모의 면접 {M}개는 기록에 남아요", 커리어 삭제 "삭제된 자기소개서의 면접 기록 {n}개" ④ S-10·S-44 첫 저장 토스트, 채우기 되돌리기 삭제, 초안 6회 고정 칩 3개, 답 없는 메시지 "답을 받지 못한 메시지예요 · 다시 보내기", 실행 중 키 삭제만 C-20 `key_missing` ⑤ C-20 일일 한도 제목 등급별·초기화 줄은 `quota_resets_at`이 있을 때만·"공급자 토큰", C-19 유료 툴팁, S-40 첫 동의/재동의 줄, C-18 설명 2곳, S-18 문항 삭제 "답변" ⑥ C-21 고지 사실을 `src/lib/ai-disclosures.ts`(AI C-7.1, `v2026-11-05`, Claude "추론 global · 저장 미국")로 옮김, 무료 등급 문장·강조 고지·툴팁은 Gemini 무료만(R-OD-15) ⑦ 국외 이전 고지·처리방침 6번 2026-11-05 개정안을 `policy-content.ts`에 반영(`policy_versions` 행은 백엔드 대기) ⑧ C-14·S-39·S-24 "기업 JD" 잔여 → "자기소개서" ⑨ mock 인사이트 작업 `target_type: application_project`, mock 자기소개서 삭제가 끝난 세션을 남김. lint·typecheck·build 통과. vitest 143 파일 중 로컬 통합 테스트 2 파일 4건 실패 — 공유 로컬 Supabase에 병렬 세션 od-backend의 `d14.v1`·OD-I6 마이그레이션이 이미 적용되어 옛 기대값(`pending_method`·세션 전부 삭제)과 다름(서버 테스트는 od-backend가 갱신). **UI QA 미실행 · 브라우저 미확인**(범위 밖).
 
 > AI 패널·문서형 입력 UI 개정 (2026-11-04, 결정 UP-1~UP-13 `_workspace/00_input/planning-decisions-ui-panel-doc.md`, decisions.md 3.17·4.11): 코드를 먼저 고치고 문서를 맞췄다(미커밋). S-10·S-44: 칩(S-10 첫 보냄부터 숨김, S-44 유지)·빠른 응답 삭제, Prompt Input 입력줄([+] 첨부 비활성 · n/40 · C-19 · 보내기), 바닥 따라가기, 제안 = 마지막 AI 턴 아래 확인 줄([자세히], [나중에]·아이콘 없음, 반영 계열 primary, 반영한 섹션 숨김), STAR 직접 고치기 삭제, 분류 [무시]·[반영] 덮어쓰기, S-10 도움말·[AI에게 물어보기] 삭제, 머리 2행·역량 팝오버 [적용], TipTap 마크다운 편집기(표·코드 블록·링크, 400px 안쪽 스크롤), STAR 글자 수 라벨 줄 + 2,000자 하드 상한 오류, S-44 글자 수 삭제, 입력 보존 자동 복원·브라우저 뒤로 이탈 확인, 본문 42rem 제한 해제. **공통 primitive 변경(button·select·input·textarea·input-group·item): 입력 포커스 테두리·링 변화 없음, 좁은 화면 44px → 32px** — 이 primitive를 쓰는 모든 "QA 통과" 행이 영향을 받는다(디자인 위험 DR-1~DR-12, design-system 8.5). UI QA·브라우저 확인 전.
@@ -77,13 +79,18 @@
 ## 기획 확인 필요 (누적)
 - **2026-11-05 닫힘 (decisions.md 3.18, 사이클 open-decisions)**: 이 절에 쌓였던 항목 전부(P-331~P-334, S-02 부제, 2026-11-03 프로젝트 추가 런 목록 — S-10·S-44·AI-13·L-01↔L-02·디자인 P-15~P-20, Q53 B-4·B-5, v5.3 Q-10~Q-28, BYOK B-1~B-29, K-1~K-35)는 OD-*로 정해졌고, UI 후속은 36 런에서 반영했다. 이전 목록은 git 이력(`dd97d21` 판)과 각 QA 보고서에 남아 있다.
 
-### 36 런(2026-11-05)에서 새로 생긴 것
+### 36 런(2026-11-05)에서 새로 생긴 것 — **6건 중 5건 닫힘 2026-11-05 (decisions.md 3.19, U36-1~U36-5)**. 남은 것은 37 런 항목 아래
 - (A4) "자기소개서 삭제됨" 세션 라우트가 명세에 없음 → `/applications/deleted/interview/{sessionId}/result`(S-33은 S-22로, S-20은 404) `[UI-가정]`
 - (A4) S-37 필터·열 머리·빈 상태, S-13~S-20 제목·이동 경로에 남은 "기업 JD": CR-23 전체 교체(약 50곳)는 4.12 범위 밖 — 별도 후속. `DRAFT_TYPE_LABELS.cover_letter = "자기소개서"`도 D-UX-23("자소서 문항 답변")과 다름
 - (A4) 자기소개서 삭제 토스트 "자기소개서를 삭제했어요"는 명세 행 없음 `[UI-가정]`
 - (A2) "다시 보내기" 줄의 모양, 같은 방문에서 사용자가 중지한 직후에도 보이는지, `nothing_to_retry` 토스트 문구
 - (디자인 P-21) C-22 명세 "작은 다이얼로그(좁은 화면은 시트)" vs 코드 `DropdownMenu`
 - (리더) 법무 문서의 "정량 성과" 잔여: 처리방침 1번 항목·이용약관 2조(이번에는 국외 이전·처리방침 6번만 고침)
+
+### 37 런(2026-11-05)에서 새로 생긴 것
+- AI 기능·복귀 이름에서 `cover_letter`를 "자소서 문항 답변"으로 했다 `[UI-가정]`. 명세 C-18 표는 "자기소개서(문항 답변)", 기능 이름 목록은 "자기소개서"로 되어 있다
+- S-31 제목의 이름에 이미 "자기소개서"가 있으면(기본 이름 "새 자기소개서 (날짜)") 뒤에 붙이는 "자기소개서"를 생략했다 `[UI-가정]`
+- 법무 본문(`policy-content.ts`·`docs/legal/`)의 "자기소개서 초안/메모"는 개별 서류를 가리키는데 D-UX-23 용어와 다르다. 법무 문서는 바꾸지 않았다
 
 ## 백엔드 연결 대기 (36 런, 2026-11-05)
 | 화면 ID | 데이터 함수 | 필요한 계약 (문서 위치) |
@@ -95,7 +102,9 @@
 | S-10·S-44 | `career-v45.ts` `messagesOf` `turn_job` | 대화 상세 DTO에 실패 응답의 작업 상태(`canceled`/`failed`·원인) (#15) |
 | S-10·S-44 | `career-v45-save.ts` | `p_client_id` (#9) — 백엔드가 이 파일을 고침, UI 변경 없음 |
 | S-44 | `career-v45-shared.ts` 해시 | `base_body_hash` 공백 정규화 공통 함수 (#10) — 백엔드 |
-| S-30 | `policy_versions` | `cross_border_transfer`·`privacy` `2026-11-05` 행 (본문은 `policy-content.ts`에 반영됨) |
+| S-30 | `policy_versions` | `cross_border_transfer`·`privacy`·`terms_of_service` `2026-11-05` 행 (본문은 `policy-content.ts`에 반영됨, U36-5) |
+| S-17·S-19 | 자소서 생성 RPC 기본 제목 | 새 `cover_letter` 초안 기본 제목 "자기소개서 (날짜)" → "자소서 문항 답변 (날짜)" (`20261102000300_s7_cover_letter_user_rpcs.sql:103`, U36-2) |
+| S-10 | AI-12 `GATE_FEATURE_LABEL` | `cover_letter` 복귀 기능 이름 "자기소개서" (r4 writing_chats 마이그레이션 :193, U36-2) |
 | C-21 | `ai_disclosures` | `v2026-11-05` 6행, Claude `requires_reconsent = true` (#12). 화면 상수는 반영됨 |
 
 ## [UI-가정] 요약

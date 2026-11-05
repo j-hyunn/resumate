@@ -8,7 +8,7 @@ import { routes } from "@/lib/routes"
  * md 3열) + 주 버튼 "시작하기". 일러스트·스크린샷 없음(G-12). Static, no data.
  */
 
-// 02 S-01 v5: "커리어를 정리하고 / 기업 JD를 모아 지원 현황 보드로 관리하고 / 원하면 내 AI 키를 연결해 인사이트·서류·면접까지"
+// 02 S-01 v5: "커리어를 정리하고 / 자기소개서를 모아 지원 현황 보드로 관리하고 / 원하면 내 AI 키를 연결해 인사이트·서류·면접까지"
 const VALUE_PROPS: ReadonlyArray<{ icon: LucideIcon; title: string; body: string }> = [
   {
     icon: Layers,
@@ -18,7 +18,7 @@ const VALUE_PROPS: ReadonlyArray<{ icon: LucideIcon; title: string; body: string
   },
   {
     icon: KanbanSquare,
-    title: "기업 JD를 모아 지원 현황 보드로 관리하고",
+    title: "자기소개서를 모아 지원 현황 보드로 관리하고",
     body: "지원한 공고를 모아 두고, 전형 단계를 보드에서 옮기며 한눈에 관리해요",
   },
   {

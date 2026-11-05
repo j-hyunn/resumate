@@ -14,7 +14,7 @@ import { routes } from "@/lib/routes"
 import type { ApplicationStage } from "@/types/db"
 import { listApplicationProjects as listApplicationsForScreen } from "@/lib/data/applications"
 
-// S-13 기업 JD 목록 (메뉴: 기업 JD 관리). ?state=: empty · loading · error · not-found · move-failed
+// S-13 자기소개서 목록 (메뉴: 자기소개서 관리). ?state=: empty · loading · error · not-found · move-failed
 type Props = { params: Promise<Record<string, never>>; searchParams: Promise<Record<string, string | string[] | undefined>> }
 
 export default function Page({ params, searchParams }: Props) {
@@ -39,7 +39,7 @@ async function Screen({ searchParams }: Props) {
 
   const header = (
     <PageHeader
-      title="기업 JD 관리"
+      title="자기소개서 관리"
       actions={
         <>
           <Button variant="outline" asChild>
@@ -51,7 +51,7 @@ async function Screen({ searchParams }: Props) {
           <Button asChild>
             <Link href={routes.applicationNew()}>
               <Plus aria-hidden />
-              기업 JD 추가
+              자기소개서 추가
             </Link>
           </Button>
         </>
@@ -68,13 +68,13 @@ async function Screen({ searchParams }: Props) {
       return (
         <EmptyState
           icon={Briefcase}
-          title="아직 기업 JD가 없어요"
-          description="지원하려는 공고를 붙여넣어 첫 기업 JD를 추가해 보세요. 커리어 정리 전에도 추가할 수 있어요"
+          title="아직 자기소개서가 없어요"
+          description="지원하려는 공고를 붙여넣어 첫 자기소개서를 추가해 보세요. 커리어 정리 전에도 추가할 수 있어요"
           actions={
             <Button asChild>
               <Link href={routes.applicationNew()}>
                 <Plus aria-hidden />
-                기업 JD 추가
+                자기소개서 추가
               </Link>
             </Button>
           }
@@ -88,7 +88,7 @@ async function Screen({ searchParams }: Props) {
         <AutoRefresh active={rows.some((r) => r.interview_status.kind === "generating" || (r.insight_status.kind === "generating" && !r.insight_job_id))} />
         {rows.length === 0 ? (
           // [UI-가정] 필터 결과 없음 문구
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">이 전형 단계의 기업 JD가 없어요</p>
+          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">이 전형 단계의 자기소개서가 없어요</p>
         ) : (
           <ApplicationList rows={rows} failMove={state === "move-failed"} />
         )}
@@ -98,7 +98,7 @@ async function Screen({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <PageCrumbs items={[{ label: "기업 JD 관리" }]} />
+      <PageCrumbs items={[{ label: "자기소개서 관리" }]} />
       {header}
       {body}
     </div>

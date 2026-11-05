@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * S-14 기업 JD 추가 (FL-10). 공고 원문(필수·교체 불가, U-6) + 이름(선택, 비우면 AI가 채움) + 마감일.
+ * S-14 자기소개서 추가 (FL-10). 공고 원문(필수·교체 불가, U-6) + 이름(선택, 비우면 AI가 채움) + 마감일.
  * 만들기 → stage = 'before_apply', AI-01 요건 추출 자동(키 있음) → S-31, or back to S-39 with an "열기" toast
  * when entered from the board. 키 없음: 추출 없이 저장 (D-30).
  * Q53-1: 동의 필요·키 무효면 행을 만들기 전에 막는다. 동의 필요 → C-21, 동의 뒤 그 만들기를 이어서 보내
@@ -138,7 +138,7 @@ export function ApplicationNewForm({
       if (fromBoard) {
         // S-39로 돌아가 "지원 전" 열 맨 위에 카드 + "열기" 토스트
         // [UI-가정] 토스트 문구
-        toast.success("기업 JD를 추가했어요", { action: {
+        toast.success("자기소개서를 추가했어요", { action: {
             label: "열기",
             // UQ-123: opened from the board flow → breadcrumb starts with "지원 현황"
             onClick: () => {
@@ -229,7 +229,7 @@ export function ApplicationNewForm({
           <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             {/* 02 S-14 공고 원문 안내 (U-6, 예외 Q53-2) */}
-            공고 원문은 만든 뒤에 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요. 다른 공고는 새 기업 JD로 추가해 주세요
+            공고 원문은 만든 뒤에 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요. 다른 공고는 새 자기소개서로 추가해 주세요
           </p>
         </div>
 
@@ -255,7 +255,7 @@ export function ApplicationNewForm({
         <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
           <CircleAlert className="size-4 shrink-0" aria-hidden />
           {/* ST-SAVE-FAILED — 입력은 그대로 */}
-          {submitFailedMessage("기업 JD")}
+          {submitFailedMessage("자기소개서")}
         </p>
       ) : null}
 
@@ -310,8 +310,8 @@ function NameFields({
       <p id="ap-name-help" className="text-sm text-muted-foreground">
         {/* v5.3 S-14 이름 규칙 — // [UI-가정] 안내 문구 */}
         {noExtraction
-          ? `둘 다 입력하면 이름을 "회사명 – 포지션명"으로, 아니면 "새 기업 JD (${today})"로 만들어요`
-          : `둘 다 입력하면 이름을 "회사명 – 포지션명"으로 만들어요. 아니면 공고에서 찾은 회사명·포지션명으로 채우고, 찾지 못하면 "새 기업 JD (${today})"로 만들어요`}
+          ? `둘 다 입력하면 이름을 "회사명 – 포지션명"으로, 아니면 "새 자기소개서 (${today})"로 만들어요`
+          : `둘 다 입력하면 이름을 "회사명 – 포지션명"으로 만들어요. 아니면 공고에서 찾은 회사명·포지션명으로 채우고, 찾지 못하면 "새 자기소개서 (${today})"로 만들어요`}
       </p>
     </div>
   )
@@ -320,7 +320,7 @@ function NameFields({
 /** 'YYYY-MM-DD' in KST */
 
 // ---------------------------------------------------------------------------
-// S-14 form draft (A3 UQ-230, UX S-14 입력 보존). sessionStorage, 진입 경로(기업 JD 관리 / 보드)별. 키 교체로 떠날 때만 남고
+// S-14 form draft (A3 UQ-230, UX S-14 입력 보존). sessionStorage, 진입 경로(자기소개서 관리 / 보드)별. 키 교체로 떠날 때만 남고
 // (keepsFormDraftOnLeave), 만들기 성공 시 삭제.
 // Nothing goes to the URL; storage failures are ignored (input still works).
 // ---------------------------------------------------------------------------

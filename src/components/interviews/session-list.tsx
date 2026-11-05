@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Session list shared by S-20 ("이 기업 JD의 세션 목록") and S-37 ("세션 목록").
+ * Session list shared by S-20 ("이 자기소개서의 세션 목록") and S-37 ("세션 목록").
  * Wide: Table (design-system 5.2). Narrow (<768): card list. Whole row is a link; the ⋯ row
  * menu (삭제 C-05, 자기소개서로 가기) stops propagation by sitting above the stretched link.
  * Evaluating rows show the C-03 축약형 from their running job (stage copy by job type, UQ-411).
@@ -100,7 +100,7 @@ export function SessionList({
   retryAfter = {},
 }: {
   rows: InterviewSessionRow[]
-  /** S-37: 기업 JD 이름 열 + 행 메뉴 "자기소개서로 가기" */
+  /** S-37: 자기소개서 이름 열 + 행 메뉴 "자기소개서로 가기" */
   showApplication: boolean
   /** S-37: remember the breadcrumb origin when leaving toward an application sub-screen */
   origin?: NavOrigin
@@ -217,7 +217,7 @@ export function SessionList({
           <caption className="sr-only">{caption}</caption>
           <TableHeader>
             <TableRow>
-              {showApplication ? <TableHead className="text-sm font-medium text-muted-foreground">기업 JD</TableHead> : null}
+              {showApplication ? <TableHead className="text-sm font-medium text-muted-foreground">자기소개서</TableHead> : null}
               <TableHead className="text-sm font-medium text-muted-foreground">유형</TableHead>
               <TableHead className="text-sm font-medium text-muted-foreground">날짜</TableHead>
               {showApplication ? null : <TableHead className="text-sm font-medium text-muted-foreground">질문 수</TableHead>}

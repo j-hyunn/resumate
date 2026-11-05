@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
   answerScoreView,
   DELETED_APPLICATION_NAME,
-  DELETED_APPLICATION_SEGMENT,
   deletedApplicationName,
   isApplicationDeleted,
-  sessionApplicationSegment,
   sessionScoreView,
   showsCriterionGrades,
   showsNextPractice,
@@ -79,10 +77,8 @@ describe("OD-I6 자기소개서 삭제됨 (R-OD-12 name, route segment)", () => 
     expect(deletedApplicationName(null, undefined)).toBe(DELETED_APPLICATION_NAME)
   })
 
-  it("rows without the flag are not deleted; deleted rows route under the deleted segment", () => {
+  it("rows without the flag are not deleted", () => {
     expect(isApplicationDeleted({})).toBe(false)
     expect(isApplicationDeleted({ application_deleted: true })).toBe(true)
-    expect(sessionApplicationSegment({ application_project_id: "ap-1" })).toBe("ap-1")
-    expect(sessionApplicationSegment({ application_project_id: "", application_deleted: true })).toBe(DELETED_APPLICATION_SEGMENT)
   })
 })

@@ -174,12 +174,12 @@ export function JdLockedNotice({ cause, hasResults = false }: { cause: AiErrorCo
         <p>
           {hasResults
             ? // [UI-가정] Q53-11 `succeeded` + 요건 0개 + 이 원문으로 만든 결과 있음
-              "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 기업 JD로 추가해 주세요"
-            : "이 공고는 요건이 정리되어 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 기업 JD로 추가하고, 커리어가 길면 줄인 뒤 다시 실행해 주세요"}
+              "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요"
+            : "이 공고는 요건이 정리되어 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가하고, 커리어가 길면 줄인 뒤 다시 실행해 주세요"}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={routes.applicationNew()}>새 기업 JD 추가</Link>
+            <Link href={routes.applicationNew()}>새 자기소개서 추가</Link>
           </Button>
           {hasResults ? null : (
             <Button asChild variant="outline" size="sm">

@@ -753,3 +753,5 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - **UI36-9 참고(A2)** 서버가 `ai_consent_required`를 `key_missing`으로 바꿔 내려 동의 거절이 C-21 대신 C-18로 보임(기존 동작).
 - **UI36-6 확장 (U36-5, 2026-11-05)** `policy_versions` 2026-11-05 행에 `terms_of_service`도 추가(이용약관 2조 "정량 성과" 삭제). 세 문서 모두 재동의 없음(`requires_reconsent = false`). decisions.md 4.13.
 - **UI36-10 (U36-2, 2026-11-05)** CR-23·D-UX-23 화면 용어: 새 `cover_letter` 초안 기본 제목 "자기소개서 (날짜)"(`supabase/migrations/20261102000300_s7_cover_letter_user_rpcs.sql:103`) → "자소서 문항 답변 (날짜)", AI-12 `GATE_FEATURE_LABEL`·r4 writing_chats 마이그레이션 :193의 cover_letter 기능 이름. 화면은 반영됨(UI 37 런).
+
+- **UI36-6·UI36-10 처리됨 (R12, 2026-11-05)**: `20261113001300` — policy_versions 2026-11-05 ×3, cover_letter 기본 제목, AI-12 게이트 이름. 덤으로 `writing_chat_free_tier`를 Gemini 무료로 좁힘(R-OD-15). `_workspace/backend/R12/04_summary.md`

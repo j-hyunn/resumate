@@ -67,6 +67,8 @@ export async function saveProjectPage(supabase: UserSupabaseClient, input: z.out
     p_values: toPageValues(input.values),
     ...(input.expectedUpdatedAt ? { p_expected_updated_at: input.expectedUpdatedAt } : {}),
     ...(applied && applied.length > 0 ? { p_applied_proposals: applied } : {}),
+    // R11 OD-C6: create-only idempotency key (the RPC ignores it on edit; we don't send it then).
+    ...(input.projectId === null && input.clientId ? { p_client_id: input.clientId } : {}),
   });
   if (error) throw mapDbError(error);
   const parsed = SaveProjectPageRpcResult.safeParse(data);
@@ -94,6 +96,7 @@ export async function saveProjectDeliverable(
     p_body: nullableArg(input.body),
     ...(input.expectedUpdatedAt ? { p_expected_updated_at: input.expectedUpdatedAt } : {}),
     ...(applied && applied.length > 0 ? { p_applied_proposals: applied } : {}),
+    ...(input.projectDeliverableId === null && input.clientId ? { p_client_id: input.clientId } : {}),
   });
   if (error) throw mapDbError(error);
   const parsed = SaveProjectDeliverableRpcResult.safeParse(data);

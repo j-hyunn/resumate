@@ -42,6 +42,7 @@ import {
   resolveSessionRun,
   SESSION_COLUMNS,
   sessionScoreOf,
+  sessionProjectName,
   answerScoreOf,
   toListItem,
   toSessionHeader,
@@ -170,17 +171,24 @@ function toAnswerView(row: AnswerRow): InterviewAnswerView {
 
 // ---------------- S-37 / S-20 lists ----------------
 
+/** Attached sessions' project ids (R11 OD-I6: detached sessions have none). */
+function projectIdsOf(rows: readonly Pick<SessionRow, "application_project_id">[]): string[] {
+  return rows.flatMap((r) => (r.application_project_id ? [r.application_project_id] : []));
+}
+
 async function listItems(user: UserSupabaseClient, rows: SessionRow[]) {
   // Q53-6: the S-37 menu uses S-22's decision. Only finished sessions can have one other than `none`.
   const finished = rows.filter((r) => r.submitted_at !== null).map((r) => r.id);
-  const [names, jobs, decisions] = await Promise.all([loadProjectNames(user, rows.map((r) => r.application_project_id)), loadJobsFor(user, rows.map((r) => r.id)), loadGradingDecisions(user, finished)]);
-  return rows.map((r) => toListItem(r, names.get(r.application_project_id) ?? "자기소개서", jobs, decisions.get(r.id)?.decision));
+  const [names, jobs, decisions] = await Promise.all([loadProjectNames(user, projectIdsOf(rows)), loadJobsFor(user, rows.map((r) => r.id)), loadGradingDecisions(user, finished)]);
+  return rows.map((r) => toListItem(r, sessionProjectName(r, names), jobs, decisions.get(r.id)?.decision));
 }
 
 /** S-37 모의 면접 — 전체 세션 (F-P3-15). Filters by project / type / effective status / execution provider. */
 export async function listInterviewSessions(user: UserSupabaseClient, input: ListInterviewSessionsInput = {}): Promise<InterviewSessionList> {
   let q = user.from("interview_sessions").select(SESSION_COLUMNS);
   if (input.applicationProjectId) q = q.eq("application_project_id", input.applicationProjectId);
+  // R11 OD-I6 / R-OD-12: "삭제된 자기소개서" filter (sessions kept after their project was deleted).
+  if (input.detached) q = q.is("application_project_id", null);
   if (input.interviewType) q = q.eq("interview_type", input.interviewType);
   const [sessions, projects] = await Promise.all([q.order("created_at", { ascending: false }).limit(500), user.from("application_projects").select("id", { count: "exact", head: true })]);
   if (sessions.error) throw mapDbError(sessions.error);
@@ -225,11 +233,15 @@ export async function getInterviewPrep(user: UserSupabaseClient, input: { applic
 
 export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionId: string }): Promise<AnswerSheetView> {
   const row = await loadSession(user, input.sessionId);
+  const projectId = row.application_project_id;
   const [{ questions, answers }, jobs, names, jd] = await Promise.all([
     loadQuestionsAndAnswers(user, row.id),
     loadJobsFor(user, [row.id]),
-    loadProjectNames(user, [row.application_project_id]),
-    user.from("job_descriptions").select("raw_text_edited_at").eq("application_project_id", row.application_project_id).maybeSingle(),
+    loadProjectNames(user, projectIdsOf([row])),
+    // R11 OD-I6: a detached session has no JD any more.
+    projectId
+      ? user.from("job_descriptions").select("raw_text_edited_at").eq("application_project_id", projectId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
   if (jd.error) throw mapDbError(jd.error);
   const chips = await loadEvidenceChips(user, { ownerType: "interview_question", ownerIds: questions.map((q) => q.id) });
@@ -240,7 +252,7 @@ export async function getAnswerSheet(user: UserSupabaseClient, input: { sessionI
   const inProgress = run.status === "in_progress";
   const questionJobActive = run.activeJob?.jobType === QUESTIONS_JOB_TYPE;
   return {
-    session: toSessionHeader(row, names.get(row.application_project_id) ?? "자기소개서", run),
+    session: toSessionHeader(row, sessionProjectName(row, names), run),
     items: questions.map((q) => {
       const a = answerByQuestion.get(q.id);
       return { question: toQuestionView(q, chips.get(q.id)), answer: a ? toAnswerView(a) : null };
@@ -384,7 +396,7 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
   const [{ questions, answers }, jobs, names, reveals, evaluations, feedbacks, decisions] = await Promise.all([
     loadQuestionsAndAnswers(user, row.id),
     loadJobsFor(user, [row.id]),
-    loadProjectNames(user, [row.application_project_id]),
+    loadProjectNames(user, projectIdsOf([row])),
     user.rpc("get_interview_question_reveals", { p_session_id: row.id }),
     user.from("answer_evaluations").select("id, answer_id, status, error_code, result, provider, model").eq("session_id", row.id),
     user.from("session_feedbacks").select("id, status, result, provider, model").eq("session_id", row.id).limit(1),
@@ -424,7 +436,7 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
     };
   });
 
-  const header = toSessionHeader(row, names.get(row.application_project_id) ?? "자기소개서", run);
+  const header = toSessionHeader(row, sessionProjectName(row, names), run);
   const evaluationActive = run.activeJob?.jobType === EVALUATION_JOB_TYPE;
   const grading = decisions.get(row.id)?.decision ?? NO_GRADING_DECISION;
   return {
@@ -437,7 +449,8 @@ export async function getInterviewResult(user: UserSupabaseClient, input: { sess
     activeJob: evaluationActive ? run.activeJob : null,
     lastFailure: run.status === "evaluation_failed" ? run.failure : null,
     grading,
-    canRetryEvaluation: !evaluationActive && (grading.kind === "regrade" || grading.kind === "resummarize"),
+    // R11 OD-I6: the DB decision is already `none` for a detached session; the flag keeps it explicit.
+    canRetryEvaluation: !header.readOnly && !evaluationActive && (grading.kind === "regrade" || grading.kind === "resummarize"),
     firstView,
   };
 }

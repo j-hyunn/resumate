@@ -64,9 +64,12 @@ export function NewResultDot({ className }: { className?: string }) {
  * submitted (evaluating / completed / evaluation_failed) → 결과.
  */
 export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status">): string {
+  // R11 최소 수정 (OD-I6): a detached (project-deleted) session has no project segment yet — the S-22 read-only
+  // route for it is UI follow-up work; until then the empty segment keeps the type (the page answers not found).
+  const projectId = s.application_project_id ?? ""
   return s.status === "in_progress" || s.status === "abandoned"
-    ? routes.interviewSession(s.application_project_id, s.id)
-    : routes.interviewResult(s.application_project_id, s.id)
+    ? routes.interviewSession(projectId, s.id)
+    : routes.interviewResult(projectId, s.id)
 }
 
 /** "3시간 전" — rendered on server and client at slightly different times */

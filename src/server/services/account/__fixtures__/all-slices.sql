@@ -46,7 +46,7 @@ begin
   insert into public.project_skills (user_id, project_id, skill_id) values (u, prj2, skl);
   -- S3b keys / AI consent
   insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version)
-    values (u, 'gemini', 'paid', coalesce(disclosure, 'v2026-10-29'));
+    values (u, 'gemini', 'paid', coalesce(disclosure, 'v2026-11-05'));
   insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id, key_last4, status)
     values (gen_random_uuid(), u, 'gemini', 'paid', '\x00', '\x00', '\x00', 'env-v1', 'ab12', 'valid');
   -- S3a jobs / usage

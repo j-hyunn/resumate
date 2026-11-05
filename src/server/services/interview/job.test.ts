@@ -130,7 +130,8 @@ class FakeInterviewDb implements InterviewStore {
     const ok = [...this.evaluations.values()].some((s) => s === "succeeded") && this.feedback === "succeeded";
     this.status = ok ? "completed" : "evaluation_failed";
     const notScored = [...this.answers.entries()].filter(([id, a]) => a.status === "submitted" && this.evaluations.get(id) !== "succeeded").map(([id]) => id);
-    return { applied: true, status: this.status as "completed" | "evaluation_failed", notScoredAnswerIds: notScored };
+    // R11 OD-I1: the RPC returns the d14.v1 session score it wrote; the job only passes it on.
+    return { applied: true, status: this.status as "completed" | "evaluation_failed", notScoredAnswerIds: notScored, scoreStatus: ok ? ("scored" as const) : ("not_scored" as const), scoreValue: ok ? 75 : null };
   }
   existing(): ExistingQuestion[] {
     return [...this.questions.entries()]

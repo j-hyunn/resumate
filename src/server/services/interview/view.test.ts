@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { executionProviderOf, executionProvidersOf, groupSessions, resolveSessionRun, sessionScoreOf, toListItem, type InterviewJobRow, type SessionRow } from "./view";
+import { DETACHED_SESSION_FALLBACK_NAME, detachedSessionName, executionProviderOf, executionProvidersOf, groupSessions, resolveSessionRun, sessionProjectName, sessionScoreOf, toListItem, toSessionHeader, type InterviewJobRow, type SessionRow } from "./view";
+import { foldInterviewProgress } from "./progress";
 
 const job = (over: Partial<InterviewJobRow>): InterviewJobRow => ({
   id: "j1",
@@ -20,6 +21,8 @@ const job = (over: Partial<InterviewJobRow>): InterviewJobRow => ({
 const session = (over: Partial<SessionRow> = {}): SessionRow => ({
   id: "s1",
   application_project_id: "p1",
+  company_name_snapshot: null,
+  position_title_snapshot: null,
   interview_type: "job",
   question_count: 5,
   data_sufficiency: "ok",
@@ -139,5 +142,41 @@ describe("toListItem grading (Q53-6)", () => {
   it("carries the decision; none by default", () => {
     expect(toListItem(session(), "p", []).grading).toEqual({ kind: "none" });
     expect(toListItem(session(), "p", [], { kind: "resummarize" }).grading).toEqual({ kind: "resummarize" });
+  });
+});
+
+describe("detached sessions (R11 OD-I6)", () => {
+  it("name rule: both snapshots → 회사 – 포지션, one → that, none → 삭제된 자기소개서", () => {
+    expect(detachedSessionName({ company_name_snapshot: "토스", position_title_snapshot: "백엔드" })).toBe("토스 – 백엔드");
+    expect(detachedSessionName({ company_name_snapshot: " 토스 ", position_title_snapshot: null })).toBe("토스");
+    expect(detachedSessionName({ company_name_snapshot: null, position_title_snapshot: "백엔드" })).toBe("백엔드");
+    expect(detachedSessionName({ company_name_snapshot: "  ", position_title_snapshot: null })).toBe(DETACHED_SESSION_FALLBACK_NAME);
+  });
+
+  it("sessionProjectName uses the project name while attached, the snapshot once detached", () => {
+    const names = new Map([["p1", "토스 지원"]]);
+    expect(sessionProjectName(session(), names)).toBe("토스 지원");
+    expect(sessionProjectName(session({ application_project_id: null, company_name_snapshot: "토스", position_title_snapshot: "백엔드" }), names)).toBe("토스 – 백엔드");
+    expect(sessionProjectName(session({ application_project_id: "gone" }), names)).toBe("자기소개서");
+  });
+
+  it("list item and header carry readOnly", () => {
+    const detached = session({ application_project_id: null, status: "completed", submitted_at: "x", company_name_snapshot: "토스", position_title_snapshot: null });
+    expect(toListItem(detached, "토스", [])).toMatchObject({ applicationProjectId: null, readOnly: true });
+    expect(toListItem(session(), "P", [])).toMatchObject({ applicationProjectId: "p1", readOnly: false });
+    const run = resolveSessionRun(detached, []);
+    expect(toSessionHeader(detached, "토스", run)).toMatchObject({ applicationProjectId: null, readOnly: true });
+  });
+
+  it("interview progress skips detached sessions", () => {
+    const out = foldInterviewProgress(
+      [
+        { id: "a", application_project_id: "p1", status: "completed" },
+        { id: "b", application_project_id: null, status: "completed" },
+      ],
+      new Map(),
+    );
+    expect([...out.keys()]).toEqual(["p1"]);
+    expect(out.get("p1")).toEqual({ interviewCount: 1, interviewInProgress: false });
   });
 });

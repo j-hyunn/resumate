@@ -32,8 +32,8 @@ import { addToReport } from "../validation/draft-blocks";
  * - no content about unanswered questions: a strength / weakness / non-retry
  *   practice that names an unanswered question is dropped; `unanswered_note`
  *   is server text ("미응답 N문항")
- * - criteria_summary and the session score (pending_method, counted /
- *   unanswered counts) are server values
+ * - criteria_summary is a server value; the session score is never taken from the model —
+ *   (R11 OD-I1) complete_interview_evaluation writes the d14.v1 session score in the DB
  * - Q-n / REQ-n in prose become "n번 질문" / requirement text
  */
 
@@ -217,6 +217,7 @@ export function validateSessionFeedback(output: Ai07Output, ctx: SessionContext)
   }
   if (!headline) headline = "답변별 평가를 바탕으로 다음 연습 방향을 정리했습니다.";
 
+  // The model's session score is ignored (the DB writes d14.v1, R11 OD-I1); anything but the empty default is reported.
   if (output.session_score.status !== "pending_method" || output.session_score.value !== null) addToReport(report, { score_overridden: 1 });
   const unansweredList = [...unanswered].sort((a, b) => a - b);
   return {

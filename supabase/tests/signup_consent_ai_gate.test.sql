@@ -51,7 +51,7 @@ reset role;
 -- 3. A key cannot be stored without C-21 (F-AI-04 (4)), so sign-up alone never reaches a connected state.
 set local role service_role;
 select throws_ok($$select public.save_provider_key('f0000000-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03',
-                     'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+                     'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'consent_required', 'key save without C-21 refused');
 reset role;
 select is((select count(*)::int from public.ai_provider_keys where user_id = 'f0000000-0000-0000-0000-000000000001'),
@@ -103,7 +103,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"f0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 insert into public.ai_data_use_consents (provider, connection_tier, disclosure_version, free_tier_acknowledged)
-values ('gemini', 'free', 'v2026-10-29', true);
+values ('gemini', 'free', 'v2026-11-05', true);
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           'readiness: consent_required false after C-21');
 select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',

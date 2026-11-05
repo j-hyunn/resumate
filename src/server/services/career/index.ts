@@ -2,7 +2,7 @@
 export { createProject, saveDeliverable, saveEducation, saveExperience, saveProject } from "./save";
 export { saveProjectDeliverable, saveProjectPage } from "./page-save";
 export { addManualSkill, addProjectSkill, removeProjectSkill, updateSkill } from "./skills";
-export { deleteCareerItem, getDataReadiness, getDeletionImpact, reorderProjectDeliverables } from "./rpc";
+export { deleteCareerItem, getApplicationProjectDeletionImpact, getDataReadiness, getDeletionImpact, reorderProjectDeliverables } from "./rpc";
 export {
   getCareerList,
   getDeliverable,

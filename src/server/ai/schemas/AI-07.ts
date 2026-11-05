@@ -5,8 +5,8 @@ import { CRITERIA_KEYS, INTERVIEW_TYPES, NEXT_PRACTICE_TYPES } from "./interview
  * AI-07 세션 종합 피드백 model output, schema_version 2 (card "출력 스키마").
  * `next_practice[]` items share one closed shape (C-10.2: no oneOf);
  * fields that don't apply to a type are null / []. `session_score` and
- * `unanswered_note` are overwritten by the server (counts are server values,
- * score is pending_method). `criteria_summary` is server-built, not output.
+ * `unanswered_note` are overwritten by the server (counts are server values;
+ * (R11 OD-I1) the session score is the DB's d14.v1). `criteria_summary` is server-built, not output.
  */
 export const AI07_OUTPUT_SCHEMA_VERSION = 2;
 

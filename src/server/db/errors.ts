@@ -162,6 +162,8 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
   // W0 Q53-3 begin_interview_evaluation / 다시 채점 route (DM 2.7.1)
   interview_evaluation_input_only: { message: "남은 실패는 입력이 원인이라 다시 채점할 수 없어요. 새 면접에서 다시 답해 주세요.", status: 409 },
+  // R11 OD-I6 (DM 2.7.2): a session kept after its application project was deleted is read-only.
+  interview_session_read_only: { message: "자기소개서가 삭제된 면접 기록은 볼 수만 있어요.", status: 409 },
   // S8 interviews (db notes)
   interview_in_progress: { message: "이 자기소개서에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
   session_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
@@ -307,6 +309,11 @@ export function mapDbError(error: DbError): AppError {
   if (code === "42501" && message === "not_authenticated") return new AppError("unauthenticated", undefined, { cause: error });
   if (code === "PGRST116") return new AppError("not_found", undefined, { cause: error });
   if (code === "42501") return new AppError("forbidden", undefined, { cause: error });
+  // R11 (migration 20261113001200): the consent guard raises 23514 with this name when the disclosure row
+  // requires the free-tier acknowledgement — same code the service's pre-check gives (services/ai-connection/consent.ts).
+  if (code === "23514" && message === "free_tier_acknowledgement_required") {
+    return new AppError("free_tier_acknowledgement_required", "무료 등급 안내를 확인하고 체크해 주세요.", { status: 400, cause: error, details: { field: "freeTierAcknowledged" } });
+  }
   // 22007 bad datetime syntax, 22008 datetime out of range (QA-S2-01; zod catches most first).
   if (code === "23514" || code === "22001" || code === "22P02" || code === "23502" || code === "22007" || code === "22008") {
     return new AppError("invalid_input", undefined, { cause: error });

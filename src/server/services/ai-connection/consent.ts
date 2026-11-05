@@ -157,13 +157,29 @@ export async function getAiDisclosure(supabase: UserSupabaseClient, provider: Ai
 }
 
 /**
+ * (R11 OD-L2, R-OD-15) Whether a consent to this disclosure needs the separate free-tier acknowledgement:
+ * only when the disclosure row says so (v2026-11-05: Gemini free). An unknown version is left to the DB
+ * insert guard (`unknown_disclosure_version`). Pure.
+ */
+export function needsFreeTierAck(rows: readonly Pick<DisclosureRow, "provider" | "connection_tier" | "version" | "requires_free_tier_ack">[], provider: AiProvider, tier: ConnectionTier, version: string): boolean {
+  return rows.some((r) => r.provider === provider && r.connection_tier === tier && r.version === version && r.requires_free_tier_ack);
+}
+
+const freeTierAckRequired = () =>
+  new AppError("free_tier_acknowledgement_required", "무료 등급 안내를 확인하고 체크해 주세요.", { status: 400, details: { field: "freeTierAcknowledged" } });
+
+/**
  * S-41 ② consent (F-AI-04 (6)). The DB trigger enforces the current version and
- * the server time; free tier needs the separate acknowledgement (CHECK).
+ * the server time, and (R11, migration 20261113001200) the free-tier acknowledgement when the disclosure row
+ * requires it; we check that first so the screen gets a field-specific code instead of a bare 23514.
  */
 export async function recordAiDataUseConsent(
   supabase: UserSupabaseClient,
   input: { provider: AiProvider; connectionTier: ConnectionTier; disclosureVersion: string; freeTierAcknowledged: boolean },
 ): Promise<AiConsentState> {
+  if (!input.freeTierAcknowledged && input.connectionTier === "free" && needsFreeTierAck(await loadDisclosures(supabase, input.provider), input.provider, input.connectionTier, input.disclosureVersion)) {
+    throw freeTierAckRequired();
+  }
   const { error } = await supabase.from("ai_data_use_consents").insert({
     provider: input.provider,
     connection_tier: input.connectionTier,

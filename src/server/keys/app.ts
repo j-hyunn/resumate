@@ -17,8 +17,8 @@ import { createEnvKms, KeyCryptoError, type KmsAdapter } from "./kms";
 /**
  * Production wiring of BYOK key handling (Next-side; services stay Next-free).
  *
- * KMS: `EnvKms` from AI_KEY_KEK_BASE64 / AI_KEY_KEK_ID — the B-2 PRE-LAUNCH
- * STAND-IN. Replace with a cloud KMS adapter before launch (kms.ts).
+ * KMS: `EnvKms` from AI_KEY_KEK_BASE64 / AI_KEY_KEK_ID — the launch KEK
+ * (B-2 / OD-L1). A cloud KMS adapter replaces it after launch (kms.ts).
  */
 
 let kms: KmsAdapter | undefined;

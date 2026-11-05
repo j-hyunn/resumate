@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import {
+  ApplicationProjectDeletionImpact,
   CareerDeletionImpact,
   DataReadiness,
   DeleteCareerItemResult,
@@ -45,6 +46,18 @@ export async function getDeletionImpact<T extends DeletableEntityType>(
   if (error) throw mapDbError(error);
   const schema = input.entityType === "writing_chat" ? WritingChatDeletionImpact : CareerDeletionImpact;
   return parseRpc(schema, data) as DeletionImpactFor<T>;
+}
+
+/**
+ * (R11 OD-I6, DM 2.7.2) C-05 impact of deleting an application project (자기소개서): what goes with it and how
+ * many finished interview sessions stay read-only. Not a career item (`delete_career_item` refuses it); the
+ * delete itself stays `deleteApplicationProject` (table delete + the DB detach trigger). Someone else's / a
+ * missing project → `not_found` (404).
+ */
+export async function getApplicationProjectDeletionImpact(supabase: UserSupabaseClient, applicationProjectId: string): Promise<ApplicationProjectDeletionImpact> {
+  const { data, error } = await supabase.rpc("get_deletion_impact", { p_entity_type: "application_project", p_entity_id: applicationProjectId });
+  if (error) throw mapDbError(error);
+  return parseRpc(ApplicationProjectDeletionImpact, data);
 }
 
 /**

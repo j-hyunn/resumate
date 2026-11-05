@@ -199,10 +199,19 @@ function lastOf<T>(items: readonly T[]): T | undefined {
   return items[items.length - 1];
 }
 
-/** The user message a "다시 보내기" answers: the last message is a failed (or orphaned streaming) reply. */
-function retryTarget(chat: ChatSnapshot): ChatMessage | null {
+/**
+ * The user message a "다시 보내기" answers:
+ *   - the last message is a failed (or orphaned streaming) reply → the user message before it (the reply row is reused);
+ *   - (v4.11 OD-P11, DM §7) the last message is a user message with no reply after it (the reply row was never
+ *     created — e.g. the turn died between append and begin) → that user message itself. It is not re-created;
+ *     `begin_assistant_message` inserts a new assistant row after it (its `last.role = 'user'` branch).
+ * Anything else (last is a done reply, only the greeting, empty chat) → null = `nothing_to_retry`.
+ */
+export function retryTarget(chat: Pick<ChatSnapshot, "messages">): ChatMessage | null {
   const last = lastOf(chat.messages);
-  if (!last || last.role !== "assistant" || last.status === "done") return null;
+  if (!last) return null;
+  if (last.role === "user") return last;
+  if (last.role !== "assistant" || last.status === "done") return null;
   const user = [...chat.messages].reverse().find((m) => m.role === "user" && m.sequence < last.sequence);
   return user ?? null;
 }

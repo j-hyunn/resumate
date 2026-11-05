@@ -60,7 +60,18 @@ async function assertConnected(deps: Pick<InterviewStartDeps, "providerContext" 
   if (context.keyStatus === "invalid") throw keyInvalid();
 }
 
-type SessionCore = { id: string; application_project_id: string; status: string; generation_status: string; submitted_at: string | null };
+type SessionCore = { id: string; application_project_id: string | null; status: string; generation_status: string; submitted_at: string | null };
+
+/**
+ * R11 OD-I6 (DM 2.7.2): a session whose application project was deleted (kept `completed`, project id null)
+ * is read-only — refused before the connection gate and before any job. `begin_interview_evaluation` /
+ * `save_answer_evaluation` / `complete_interview_evaluation` raise the same code as the last line.
+ * Returns the project id the job needs.
+ */
+export function requireWritableSession(session: Pick<SessionCore, "application_project_id">): string {
+  if (session.application_project_id === null) throw mapDbError({ code: "P0001", message: "interview_session_read_only" });
+  return session.application_project_id;
+}
 
 async function loadSessionCore(user: UserSupabaseClient, sessionId: string): Promise<SessionCore> {
   const { data, error } = await user
@@ -175,7 +186,8 @@ export async function restartInterviewSession(
   input: { interviewType: InterviewType; questionCount: 3 | 5 | 7 },
 ): Promise<StartInterviewOutcome> {
   const session = await loadSessionCore(deps.user, sessionId);
-  if (session.application_project_id !== applicationProjectId) throw sessionNotFound();
+  // R11 QA-03 (OD-I6): a detached session is read-only (409), not "not found"; before any check or write.
+  if (requireWritableSession(session) !== applicationProjectId) throw sessionNotFound();
   if (input.interviewType === "job") {
     const readiness = await (deps.getReadiness ?? getDataReadiness)(deps.user);
     if (!readiness.features.job_interview.ready) return { kind: "insufficient_data", readiness: readiness.features.job_interview };
@@ -189,19 +201,21 @@ export async function restartInterviewSession(
 /** `POST /api/interview-sessions/{id}/questions/retry` — only while generation failed (S-33). */
 export async function retryInterviewQuestions(deps: InterviewStartDeps, sessionId: string): Promise<RetryInterviewQuestionsResponse> {
   const session = await loadSessionCore(deps.user, sessionId);
+  const applicationProjectId = requireWritableSession(session);
   const run = resolveSessionRun(session, await loadSessionJobs(deps.user, sessionId));
   if (run.activeJob?.jobType === QUESTIONS_JOB_TYPE) return { sessionId, jobId: run.activeJob.jobId, inProgress: true };
   if (session.status !== "in_progress" || run.generationStatus !== "failed") {
     throw new AppError("interview_generation_not_failed", "다시 만들 질문이 없어요.", { status: 409 });
   }
   await assertConnected(deps);
-  const started = await startQuestionsJob(deps, { id: sessionId, applicationProjectId: session.application_project_id });
+  const started = await startQuestionsJob(deps, { id: sessionId, applicationProjectId });
   return { sessionId, jobId: started.jobId, inProgress: started.inProgress };
 }
 
 /** `POST /api/interview-sessions/{id}/submit` — key needed (v5: 제출 = 채점). */
 export async function submitInterviewSession(deps: InterviewStartDeps, sessionId: string): Promise<SubmitInterviewSessionResponse> {
   const session = await loadSessionCore(deps.user, sessionId);
+  const applicationProjectId = requireWritableSession(session);
   await assertConnected(deps);
   const { data, error } = await deps.user.rpc("submit_interview_session", { p_session_id: sessionId });
   if (error) throw mapDbError(error);
@@ -210,7 +224,7 @@ export async function submitInterviewSession(deps: InterviewStartDeps, sessionId
   let jobId: string | null = null;
   if (r.evaluation_needed) {
     // If this fails the session reads `evaluation_failed` (no job) and 다시 채점 starts one.
-    jobId = (await startEvaluationJob(deps, { id: sessionId, applicationProjectId: session.application_project_id })).jobId;
+    jobId = (await startEvaluationJob(deps, { id: sessionId, applicationProjectId })).jobId;
   }
   return { sessionId, status, jobId, answeredCount: r.answered_count ?? 0, unansweredCount: r.unanswered_count ?? 0 };
 }
@@ -223,6 +237,7 @@ export async function submitInterviewSession(deps: InterviewStartDeps, sessionId
  */
 export async function retryInterviewEvaluation(deps: InterviewStartDeps, sessionId: string): Promise<RetryInterviewEvaluationResponse> {
   const session = await loadSessionCore(deps.user, sessionId);
+  const applicationProjectId = requireWritableSession(session);
   const run = resolveSessionRun(session, await loadSessionJobs(deps.user, sessionId));
   if (run.activeJob?.jobType === EVALUATION_JOB_TYPE) return { sessionId, jobId: run.activeJob.jobId, inProgress: true };
   const decision = (await loadGradingDecisions(deps.user, [sessionId])).get(sessionId)?.decision;
@@ -233,6 +248,6 @@ export async function retryInterviewEvaluation(deps: InterviewStartDeps, session
     throw new AppError("interview_evaluation_not_retryable", "다시 채점할 답변이 없어요.", { status: 409 });
   }
   await assertConnected(deps);
-  const started = await startEvaluationJob(deps, { id: sessionId, applicationProjectId: session.application_project_id });
+  const started = await startEvaluationJob(deps, { id: sessionId, applicationProjectId });
   return { sessionId, jobId: started.jobId, inProgress: started.inProgress };
 }

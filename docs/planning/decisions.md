@@ -594,15 +594,15 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 기획만 고쳤다(PRD v4.13 / UX v5.13 / AI v4.11 / DM v4.11). 코드·마이그레이션은 그대로이며 아래를 고쳐야 한다. 백엔드 상세는 [04-data-model.md](04-data-model.md) 11.6(#1~#15), 화면 문구는 UX v5.13(구현과 다른 문구 목록은 UX 5.1i). 백엔드는 `resumate-backend`, 화면은 `resumate-ui`로 처리한다. ★ = 이미 만든 코드를 고쳐야 함.
 
-- **백엔드 ★** (DM 11.6)
+- **백엔드 ★** (DM 11.6) — **상태 (2026-11-05, 백엔드 R11): 1~6 구현됨·로컬 검증(pgTAP·Vitest 통과), 원격 미반영.** 마이그레이션 `20261113000500`~`001200`, 상세 `_workspace/backend/R11/04_summary.md`
   1. OD-I6 자기소개서 삭제 뒤 끝난 면접 보존: `interview_sessions.application_project_id` null 허용 + FK `on delete set null (application_project_id)`, `company_name_snapshot`·`position_title_snapshot`, CHECK(null이면 `completed`만), `evidence_links.application_project_id` null 허용, `application_projects` BEFORE DELETE 트리거(복사 → 근거 분리 → 비완료 세션 삭제·작업 취소), 읽기 전용 가드 `interview_session_read_only`(409), `get_deletion_impact` `application_project`(`cascade`·`kept`)·커리어 `detached_interview_sessions`, `services/interview/read.ts` left join·복사 이름·읽기 전용 플래그. pgTAP. **FK 동작이 바뀌므로 원격 반영 전 확인** (#1~#6)
   2. OD-I1 점수 `d14.v1`: `save_answer_evaluation`·`complete_interview_evaluation`·응답 0개 제출 경로가 같은 헬퍼로 계산(가중 30·30·20·20, 등급 100/75/50/25, `not_applicable` 재배분, 미응답 0점, 채점 실패 답변 제외, 모두 미응답 = 0점, 답한 질문을 하나도 채점 못 하면 `not_scored`), `score_rationale` 서버 문구, 백필 RPC `backfill_interview_scores`(service_role, 배포 직후 0이 될 때까지) (#7·#8)
   3. OD-C6 `save_project_page`·`save_project_deliverable`에 `p_client_id uuid default null`(첫 AI 메시지로 만드는 경로 포함), `career-v45-save.ts`·zod·pgTAP (#9)
   4. OD-P5 `base_body_hash` 공백 정규화 공통 함수(서버 `deliverable-chat.ts`·화면 `career-v45-shared.ts`), 테스트 (#10)
   5. OD-P11 턴 라우트 `retryTarget`이 "마지막이 사용자 메시지·답 없음"도 다시 응답(지금은 409 `nothing_to_retry`), 사용자 메시지는 새로 만들지 않음 (#11)
   6. OD-L2·OD-L2a `ai_disclosures` `v2026-11-05` 6행 마이그레이션 — Claude 2행 `requires_reconsent = true`, Gemini 무료만 `requires_free_tier_ack`. pgTAP(Claude 동의 사용자 재동의) (#12)
-- **백엔드 확인 (코드 변경 없음, R-OD-17)**: OD-P10 중단된 턴 — 메시지 `failed` + 작업 `canceled`로 실패와 구분, 응답 자리는 시작 때 한 번 셈(지금 구현). 대화 상세 DTO(`services/writing-chat`)가 작업 상태를 함께 내려 화면이 중단·실패를 가르는지 확인 (#15)
-- **백엔드 (코드 영향 작음)**: OD-L1 `EnvKms` 주석을 "출시 KEK, 출시 후 KMS 전환"으로(#13). 출시 후 과제: 외부 KMS 어댑터 + `wrapped_dek` 재포장
+- **백엔드 확인 (코드 변경 없음, R-OD-17)**: OD-P10 중단된 턴 — 메시지 `failed` + 작업 `canceled`로 실패와 구분, 응답 자리는 시작 때 한 번 셈(지금 구현). 대화 상세 DTO(`services/writing-chat`)가 작업 상태를 함께 내려 화면이 중단·실패를 가르는지 확인 (#15) — **확인됨 (R11)**: 중단 경로는 명세대로였고, 상세 DTO에 작업 상태가 없어 메시지 `turnFailure {jobStatus, errorCode, retryAfter, quotaResetsAt}`를 서버에 추가했다(화면 연결은 UI)
+- **백엔드 (코드 영향 작음)**: OD-L1 `EnvKms` 주석을 "출시 KEK, 출시 후 KMS 전환"으로(#13) — **완료 (R11)**. 출시 후 과제: 외부 KMS 어댑터 + `wrapped_dek` 재포장
 - **UI** (resumate-ui)
   1. OD-I1·OD-I2 S-22·C-17 점수 표시(0점 / 100, "답변이 없어 0점이에요", "합격 예측 아님"), 점수가 없으면(`pending_method`) 항목 등급·다음 연습 숨김
   2. OD-I6 S-37 "자기소개서 삭제됨" 표시·"삭제된 자기소개서" 필터, S-22·S-33 읽기 전용(다시 채점·종합 다시 정리·새 면접·자기소개서 링크 없음), C-05 자기소개서 삭제 문구(남는 면접 수·지워지는 작성 중 세션 수), 커리어 삭제 "삭제된 자기소개서의 면접 기록 {n}개", 데이터 계층 `getApplicationDeletionImpact` → RPC
@@ -618,4 +618,4 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
   12. OD-D4 디자인 시스템에 v5.5 커리어 화면·추가/수정 모달 패턴 정리(P-15, C-24 폐기 반영)
   13. OD-D9 mock `src/lib/data/applications.ts` `target_type: "insight"` → `application_project`
   14. `docs/ui/screen-status.md` "기획 확인 필요 (누적)"을 3.18로 닫기
-- **운영·출시 전**: OD-L4 평가 세트 실행(세 공급자), OD-L2 공급자 약관 출시 전 재확인(AI C-7.1), OD-L3 법무 검토 권장, OD-I1 백필 실행
+- **운영·출시 전**: OD-L4 평가 세트 실행(세 공급자), OD-L2 공급자 약관 출시 전 재확인(AI C-7.1), OD-L3 법무 검토 권장, OD-I1 백필 실행(`backfill_interview_scores`, service_role로 반환 `{sessions, answers}`가 0이 될 때까지 — R11에서 RPC만 만들고 실행 안 함)

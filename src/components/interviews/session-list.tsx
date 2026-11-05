@@ -157,7 +157,8 @@ export function SessionList({
   }
 
   const remember = (row: InterviewSessionRow) => {
-    if (origin) setNavOrigin(origin, row.application_project_id)
+    // R11 최소 수정 (OD-I6): a detached session has no project to return to.
+    if (origin && row.application_project_id) setNavOrigin(origin, row.application_project_id)
   }
 
   const menu = (row: InterviewSessionRow) => (
@@ -168,7 +169,8 @@ export function SessionList({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {showApplication ? (
+        {/* R11 최소 수정 (OD-I6): no "기업 JD로 가기" for a detached session (project deleted, DM 2.7.2). */}
+        {showApplication && row.application_project_id ? (
           <DropdownMenuItem asChild>
             <Link href={routes.application(row.application_project_id)} onClick={() => remember(row)}>
               기업 JD로 가기

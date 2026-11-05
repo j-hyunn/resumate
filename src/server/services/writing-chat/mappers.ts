@@ -1,6 +1,6 @@
 import { AI_PROVIDERS, CONNECTION_TIERS, MODEL_TIERS, WRITING_CHAT_STATUSES, type AiProvider, type ConnectionTier, type ModelTier, type WritingChatMessageRole, type WritingChatMessageStatus, type WritingChatStatus } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
-import { parseDeliverableDraft, parseStructuredDraft, ReturnTarget, type WritingChatMessageDto } from "@/lib/contracts/writing-chat";
+import { parseDeliverableDraft, parseStructuredDraft, ReturnTarget, type WritingChatMessageDto, type WritingChatTurnFailure } from "@/lib/contracts/writing-chat";
 import type { ChatMessage, ChatSnapshot } from "./types";
 
 /** writing_chats / writing_chat_messages rows ↔ service types (DM §2.5 v4.5). */
@@ -97,7 +97,7 @@ export function toChatSnapshot(row: ChatRow, messages: MessageRow[]): ChatSnapsh
   };
 }
 
-export function toMessageDto(m: ChatMessage, userNumber: number | null): WritingChatMessageDto {
+export function toMessageDto(m: ChatMessage, userNumber: number | null, turnFailure: WritingChatTurnFailure | null = null): WritingChatMessageDto {
   return {
     id: m.id,
     sequence: m.sequence,
@@ -110,12 +110,13 @@ export function toMessageDto(m: ChatMessage, userNumber: number | null): Writing
     modelTier: m.role === "assistant" ? m.modelTier : null,
     connectionTier: m.role === "assistant" ? m.connectionTier : null,
     aiJobId: m.aiJobId,
+    turnFailure: m.role === "assistant" && m.status === "failed" ? turnFailure : null,
     createdAt: m.createdAt,
   };
 }
 
 /** "내 답변 #n": user messages numbered among themselves. */
-export function toMessageDtos(messages: ChatMessage[]): WritingChatMessageDto[] {
+export function toMessageDtos(messages: ChatMessage[], failures: ReadonlyMap<string, WritingChatTurnFailure> = new Map()): WritingChatMessageDto[] {
   let n = 0;
-  return messages.map((m) => toMessageDto(m, m.role === "user" ? ++n : null));
+  return messages.map((m) => toMessageDto(m, m.role === "user" ? ++n : null, m.aiJobId ? (failures.get(m.aiJobId) ?? null) : null));
 }

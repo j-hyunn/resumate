@@ -335,8 +335,9 @@ select set_eq(
         'mark_inactivity_notice_sent(uuid,timestamp with time zone)',
         'list_inactive_accounts_due(timestamp with time zone,integer)',
         'purge_inactive_account(uuid,text,timestamp with time zone)',
-        'list_incomplete_account_deletions(integer)'],
-  'service_role-only public functions = sweep / claim_due (S3a) + the 3 S9 retention purges (R4: unlinked chat purge retired) + R1 server-only RPCs (A19 key save / check, A7 deletion state) + inactive account deletion cron RPCs');
+        'list_incomplete_account_deletions(integer)',
+        'backfill_interview_scores(integer)'],
+  'service_role-only public functions = sweep / claim_due (S3a) + the 3 S9 retention purges (R4: unlinked chat purge retired) + R1 server-only RPCs (A19 key save / check, A7 deletion state) + inactive account deletion cron RPCs + R11 score backfill');
 
 -- QA-S9-04 (b): public functions the user session can execute, catalog-wide. Grows only with a user-session RPC
 -- in DM §5 / §7.

@@ -68,10 +68,10 @@ reset role;
 
 -- Seed consents for A (gemini free + paid, openai paid) and B (gemini free).
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-10-29', true),
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', 'v2026-10-29', false),
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29', false),
-  ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-10-29', true);
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', 'v2026-11-05', false),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05', false),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', 'v2026-11-05', true);
 
 -- save_provider_key ---------------------------------------------------------------------------------
 select ok((select prosecdef from pg_proc where oid = 'public.save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)'::regprocedure),
@@ -81,32 +81,32 @@ select ok((select prosecdef from pg_proc where oid = 'public.save_provider_key(u
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
 
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'mistral', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'mistral', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'invalid_provider', 'invalid provider');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'pro', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'pro', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'invalid_connection_tier', 'invalid tier');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'key_invalid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'key_invalid', gen_random_uuid())$$,
                  'P0001', 'invalid_verification_result', 'key_invalid is never stored (R-38)');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid(), 'rate_limited')$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid(), 'rate_limited')$$,
                  'P0001', 'invalid_failure_cause', 'valid with a failure cause rejected');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'limited', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'limited', gen_random_uuid())$$,
                  'P0001', 'invalid_failure_cause', 'limited without a cause rejected');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'limited', gen_random_uuid(), 'billing_required')$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'limited', gen_random_uuid(), 'billing_required')$$,
                  'P0001', 'invalid_failure_cause', 'limited with billing_required rejected (not stored, R-38)');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', null)$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', null)$$,
                  'P0001', 'invalid_key_id', 'key id required');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'anthropic', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'anthropic', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'consent_required', 'no consent → consent_required (F-AI-04 (4))');
 select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v1999', 'valid', gen_random_uuid())$$,
                  'P0001', 'consent_required', 'stale disclosure version → consent_required');
 select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', null, 'valid', gen_random_uuid())$$,
                  'P0001', 'consent_required', 'null disclosure version → consent_required');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abc', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abc', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  '23514', null, 'key_last4 length enforced');
 select is((select count(*)::int from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 0, 'nothing stored after the refusals');
 
 -- first key, valid → stored, becomes active
-select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x0a0b', '\x0c', '\x0d', 'env-v1', 'gm01', 'v2026-10-29', 'valid',
+select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x0a0b', '\x0c', '\x0d', 'env-v1', 'gm01', 'v2026-11-05', 'valid',
                                    'aaaaaaaa-9999-0000-0000-000000000001') - 'last_verified_at',
           '{"id": "aaaaaaaa-9999-0000-0000-000000000001", "provider": "gemini", "connection_tier": "free", "key_last4": "gm01",
             "status": "valid", "last_failure_cause": null, "last_failure_at": null, "is_active": true, "replaced": false}'::jsonb,
@@ -117,7 +117,7 @@ select is((select active_ai_provider from public.profiles where id = 'aaaaaaaa-0
           'first key becomes active (F-AI-01 (5))');
 
 -- second provider, limited → needs_check, not active (active already set)
-select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-10-29', 'limited',
+select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa01', 'v2026-11-05', 'limited',
                                    'aaaaaaaa-9999-0000-0000-000000000002', 'daily_quota_exhausted')
             - 'last_failure_at',
           '{"id": "aaaaaaaa-9999-0000-0000-000000000002", "provider": "openai", "connection_tier": "paid", "key_last4": "oa01",
@@ -129,11 +129,11 @@ select is((select active_ai_provider from public.profiles where id = 'aaaaaaaa-0
           'second key does not switch the active provider');
 
 -- replacement must keep the id
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm02', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm02', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'key_id_mismatch', 'replacement with a new id rejected (AAD binding)');
 
 -- replacement with a tier change: same row, new ciphertext, old-tier consent withdrawn
-select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', '\x1a1b', '\x1c', '\x1d', 'env-v2', 'gm02', 'v2026-10-29', 'valid',
+select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'paid', '\x1a1b', '\x1c', '\x1d', 'env-v2', 'gm02', 'v2026-11-05', 'valid',
                                    'aaaaaaaa-9999-0000-0000-000000000001') ->> 'replaced', 'true', 'replacement reports replaced');
 reset role;
 select results_eq(
@@ -155,13 +155,13 @@ update public.ai_provider_keys set last_failure_cause = 'rate_limited', last_fai
 -- R1 A19: the key RPCs run as service_role (server-only role) with p_user_id.
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa02', 'v2026-10-29', 'valid',
+select is(public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa02', 'v2026-11-05', 'valid',
                                    'aaaaaaaa-9999-0000-0000-000000000002') ->> 'status', 'valid', 'replacing a needs_check key with a valid one');
 select results_eq($$select last_failure_cause, last_failure_at is null, last_verified_at is not null
                       from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'openai'$$,
                   $$values (null::text, true, true)$$, 'new valid key clears failure fields');
 -- tier change back to free without a current free consent → refused, key unchanged
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm03', 'v2026-10-29', 'valid',
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'gm03', 'v2026-11-05', 'valid',
                                                    'aaaaaaaa-9999-0000-0000-000000000001')$$,
                  'P0001', 'consent_required', 'tier change needs a consent for the new tier');
 select is((select key_last4 from public.ai_provider_keys where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and provider = 'gemini'), 'gm02',
@@ -190,7 +190,7 @@ select is_empty($$select id from public.ai_provider_keys_public$$, 'B sees none 
 select is_empty($$delete from public.ai_provider_keys returning id$$, 'B cannot delete A''s keys');
 select throws_ok($$select public.set_active_ai_provider('openai')$$, 'P0001', 'key_not_found', 'B cannot activate a provider it has no key for');
 -- B can't call the key RPCs at all (A19), not even for itself.
-select throws_ok($$select public.save_provider_key('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'bbbb', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'bbbb', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  '42501', null, 'authenticated cannot execute save_provider_key (A19)');
 select throws_ok($$select public.record_provider_key_check('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'valid')$$,
                  '42501', null, 'authenticated cannot execute record_provider_key_check (A19)');
@@ -198,15 +198,15 @@ reset role;
 -- server role with B's id: B's rows only.
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select throws_ok($$select public.save_provider_key('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'bbbb', 'v2026-10-29', 'valid',
+select throws_ok($$select public.save_provider_key('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'bbbb', 'v2026-11-05', 'valid',
                                                    'aaaaaaaa-9999-0000-0000-000000000001')$$,
                  '23505', null, 'B cannot reuse A''s key id (PK)');
 select throws_ok($$select public.record_provider_key_check('bbbbbbbb-0000-0000-0000-000000000002', 'gemini', 'valid')$$, 'P0001', 'key_not_found', 'B''s id cannot check A''s key');
-select throws_ok($$select public.save_provider_key(gen_random_uuid(), 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key(gen_random_uuid(), 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  'P0001', 'user_not_found', 'save: unknown user id');
 select throws_ok($$select public.record_provider_key_check(gen_random_uuid(), 'gemini', 'valid')$$,
                  'P0001', 'user_not_found', 'check: unknown user id');
-select throws_ok($$select public.save_provider_key(null, 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key(null, 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  '42501', 'not_authenticated', 'save: null user id');
 select throws_ok($$select public.record_provider_key_check(null, 'gemini', 'valid')$$, '42501', 'not_authenticated', 'check: null user id');
 reset role;
@@ -275,11 +275,11 @@ select is((select count(*)::int from public.ai_provider_keys_public), 1, 'gemini
 -- re-register after the active key is gone → becomes active again ("first" = no active provider)
 reset role;
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-10-29');
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', 'v2026-11-05');
 -- R1 A19: the key RPCs run as service_role (server-only role) with p_user_id.
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select is((public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa03', 'v2026-10-29', 'valid',
+select is((public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'openai', 'paid', '\x01', '\x02', '\x03', 'env-v1', 'oa03', 'v2026-11-05', 'valid',
                                     'aaaaaaaa-9999-0000-0000-000000000003') ->> 'is_active')::boolean, true,
           'registering while no provider is active activates the new key');
 reset role;
@@ -331,7 +331,7 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select throws_ok($$select * from public.ai_provider_keys$$, '42501', null, 'app_ai_writer: no table access to keys');
 select throws_ok($$select id from public.ai_provider_keys_public$$, '42501', null, 'app_ai_writer: no view access');
 select throws_ok($$select active_ai_provider from public.profiles$$, '42501', null, 'app_ai_writer: no active_ai_provider column');
-select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-10-29', 'valid', gen_random_uuid())$$,
+select throws_ok($$select public.save_provider_key('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'abcd', 'v2026-11-05', 'valid', gen_random_uuid())$$,
                  '42501', null, 'app_ai_writer cannot save keys');
 select throws_ok($$select public.record_provider_key_check('aaaaaaaa-0000-0000-0000-000000000001', 'gemini', 'valid')$$, '42501', null, 'app_ai_writer cannot run user check RPC');
 

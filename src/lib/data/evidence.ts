@@ -184,17 +184,18 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
     }
     case "jd_requirement": {
       const r = db.jd_requirements.find((x) => x.id === sid)
-      return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["JD 요건"], href: routes.applicationJd(e.application_project_id), to_career: false, updated_at: null }
+      // R11 최소 수정 (OD-I6): no project (detached interview evidence) → no link.
+      return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["JD 요건"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
     }
     case "jd_sentence":
-      return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: routes.applicationJd(e.application_project_id), to_career: false, updated_at: null }
+      return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
     case "interview_answer": {
       const a = db.interview_answers.find((x) => x.id === sid)
       return {
         source_label: e.source_label ?? "내 답변",
         current_value: a?.answer_text ?? null,
         path: ["모의 면접", "내 답변"],
-        href: a ? routes.interviewResult(e.application_project_id, a.session_id) : null,
+        href: a && e.application_project_id ? routes.interviewResult(e.application_project_id, a.session_id) : null,
         to_career: false,
         updated_at: a?.updated_at ?? null,
       }
@@ -205,7 +206,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? "내 메모",
         current_value: s?.user_note ?? null,
         path: ["자기소개서", "문항 메모"],
-        href: s ? routes.draftQuestions(e.application_project_id, s.draft_id) : null,
+        href: s && e.application_project_id ? routes.draftQuestions(e.application_project_id, s.draft_id) : null,
         to_career: false,
         updated_at: s?.updated_at ?? null,
       }

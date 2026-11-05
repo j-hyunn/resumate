@@ -7,8 +7,8 @@ import { CRITERIA_GRADES, CRITERIA_KEYS } from "./interview-common";
  * AI-06 답변별 평가 model output, schema_version 2 (card "출력 스키마").
  * `criteria` is an array of 4 (one per key); the "all four keys, once each"
  * rule is checked after zod (accept → one V-6 retry). `score` is in the
- * schema because the card has it, but the server always overwrites it with
- * `pending_method` (D-AI-07 (a), D-14 대기).
+ * schema because the card has it, but it is never used: (R11 OD-I1) the DB
+ * computes the d14.v1 score from the criteria grades (`score_overridden` report).
  *
  * `consistency_notes[]` has no item shape in the card; [가정] `{ text,
  * answer_quotes, evidence }` (evidence = the registered career fact the

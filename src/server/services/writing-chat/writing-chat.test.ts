@@ -18,7 +18,9 @@ import { SLOT_IDS } from "@/server/ai/context-pack/focus-slots";
 import { STAR_FIELDS as AI_STAR_FIELDS } from "@/server/ai/schemas/structured-draft";
 import { mapDbError } from "@/server/db/errors";
 import { createSseResponse, type SseEvent } from "@/server/sse";
-import { toPatchTarget } from "./chat";
+import { loadTurnFailures, toPatchTarget, toWritingChatDto } from "./chat";
+import type { UserSupabaseClient } from "@/server/db/types";
+import { MemoryChatDb } from "@/test/writing-chat-fakes";
 import { SaveProjectDeliverableInput, SaveProjectDeliverableRpcResult, SaveProjectPageInput, SaveProjectPageRpcResult } from "@/lib/contracts/career";
 import { toPageValues } from "@/server/services/career/page-save";
 import { applicableFields, chipsFor, diffDrafts, needsReviewCount } from "./draft";
@@ -98,6 +100,66 @@ describe("mappers", () => {
       { ...base, id: U1, sequence: 4, role: "user" },
     ]);
     expect(dtos.map((d) => d.userNumber)).toEqual([null, 1, null, 2]);
+  });
+});
+
+describe("turn failure in the chat detail (v4.11 OD-P10 / R-OD-8)", () => {
+  const JOB_CANCELED = "00000000-0000-4000-8000-0000000000a1";
+  const JOB_FAILED = "00000000-0000-4000-8000-0000000000a2";
+  const JOB_DONE = "00000000-0000-4000-8000-0000000000a3";
+  const msg = { content: "", aiJobId: null, provider: null, model: null, modelTier: null, connectionTier: null, createdAt: "" };
+  const assistant = { ...msg, role: "assistant" as const, provider: "anthropic" as const, model: "m", modelTier: "default" as const, connectionTier: "paid" as const };
+  function chatWithReplies() {
+    const chat = new MemoryChatDb({ id: "00000000-0000-4000-8000-0000000000c1", userId: U1 }, () => new Date(0)).chat;
+    chat.messages.push(
+      { ...msg, id: "00000000-0000-4000-8000-0000000000b2", sequence: 2, role: "user", status: "done" },
+      { ...assistant, id: "00000000-0000-4000-8000-0000000000b3", sequence: 3, status: "failed", aiJobId: JOB_CANCELED },
+      { ...msg, id: "00000000-0000-4000-8000-0000000000b4", sequence: 4, role: "user", status: "done" },
+      { ...assistant, id: "00000000-0000-4000-8000-0000000000b5", sequence: 5, status: "done", aiJobId: JOB_DONE },
+      { ...msg, id: "00000000-0000-4000-8000-0000000000b6", sequence: 6, role: "user", status: "done" },
+      { ...assistant, id: "00000000-0000-4000-8000-0000000000b7", sequence: 7, status: "failed", aiJobId: JOB_FAILED },
+    );
+    return chat;
+  }
+  function fakeSupabase(rows: Record<string, unknown>[]) {
+    const asked: string[][] = [];
+    const client = {
+      from: (table: string) => {
+        expect(table).toBe("ai_jobs");
+        return { select: () => ({ in: async (_col: string, ids: string[]) => (asked.push(ids), { data: rows.filter((r) => ids.includes(r.id as string)), error: null }) }) };
+      },
+    } as unknown as UserSupabaseClient;
+    return { client, asked };
+  }
+  const connection = { provider: null, connectionTier: null, keyStatus: null, lock: "ai_not_connected" as const };
+
+  it("failed replies carry their job status: canceled (stopped) vs failed (+ cause); others null", async () => {
+    const chat = chatWithReplies();
+    const { client, asked } = fakeSupabase([
+      { id: JOB_CANCELED, status: "canceled", error_code: "canceled", retry_after: null, quota_resets_at: null },
+      { id: JOB_FAILED, status: "failed", error_code: "rate_limited", retry_after: "2026-11-05T10:01:00Z", quota_resets_at: null },
+      { id: JOB_DONE, status: "succeeded", error_code: null, retry_after: null, quota_resets_at: null },
+    ]);
+    const failures = await loadTurnFailures(client, chat);
+    // Only failed replies' jobs are read.
+    expect(asked).toEqual([[JOB_CANCELED, JOB_FAILED]]);
+    const dto = toWritingChatDto(chat, { connection, failures });
+    const byId = new Map(dto.messages.map((m) => [m.id, m.turnFailure]));
+    expect(byId.get("00000000-0000-4000-8000-0000000000b3")).toEqual({ jobStatus: "canceled", errorCode: "canceled", retryAfter: null, quotaResetsAt: null });
+    expect(byId.get("00000000-0000-4000-8000-0000000000b7")).toEqual({ jobStatus: "failed", errorCode: "rate_limited", retryAfter: "2026-11-05T10:01:00Z", quotaResetsAt: null });
+    expect(byId.get("00000000-0000-4000-8000-0000000000b5")).toBeNull();
+    expect(byId.get("00000000-0000-4000-8000-0000000000b2")).toBeNull();
+  });
+
+  it("no failed replies → no query; a missing job row → turnFailure null", async () => {
+    const chat = new MemoryChatDb({ id: "00000000-0000-4000-8000-0000000000c1", userId: U1 }, () => new Date(0)).chat;
+    const none = fakeSupabase([]);
+    expect((await loadTurnFailures(none.client, chat)).size).toBe(0);
+    expect(none.asked).toEqual([]);
+    const withFailed = chatWithReplies();
+    const missing = fakeSupabase([]);
+    const dto = toWritingChatDto(withFailed, { connection, failures: await loadTurnFailures(missing.client, withFailed) });
+    expect(dto.messages.every((m) => m.turnFailure === null)).toBe(true);
   });
 });
 

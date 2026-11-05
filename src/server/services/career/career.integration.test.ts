@@ -8,6 +8,8 @@ import {
   SaveEducationInput,
   SaveExperienceInput,
   SaveProjectInput,
+  SaveProjectDeliverableInput,
+  SaveProjectPageInput,
 } from "@/lib/contracts/career";
 import type { Database } from "@/server/db/database.types";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
@@ -29,6 +31,8 @@ import {
   saveEducation,
   saveExperience,
   saveProject,
+  saveProjectDeliverable,
+  saveProjectPage,
 } from "./index";
 
 /**
@@ -271,6 +275,25 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     }
   });
 
+  it("R11 OD-C6: page save with the same clientId twice → one row with that id; someone else's id → not_found", async () => {
+    const clientId = newId();
+    const input = SaveProjectPageInput.parse({ projectId: null, clientId, values: { name: "멱등 페이지", experienceId } });
+    const first = await saveProjectPage(alice, input);
+    expect(first.projectId).toBe(clientId);
+    const again = await saveProjectPage(alice, input);
+    expect(again.projectId).toBe(clientId);
+    expect((await admin.from("projects").select("id").eq("name", "멱등 페이지")).data).toHaveLength(1);
+    await expect(saveProjectPage(bob, SaveProjectPageInput.parse({ projectId: null, clientId, values: { name: "남의 id", experienceId } }))).rejects.toMatchObject({ code: "not_found" });
+
+    const dlvId = newId();
+    const dlv = SaveProjectDeliverableInput.parse({ projectDeliverableId: null, projectId: standaloneId, clientId: dlvId, title: "멱등 산출물", body: null });
+    expect((await saveProjectDeliverable(alice, dlv)).projectDeliverableId).toBe(dlvId);
+    expect((await saveProjectDeliverable(alice, dlv)).projectDeliverableId).toBe(dlvId);
+    expect((await admin.from("project_deliverables").select("id").eq("title", "멱등 산출물")).data).toHaveLength(1);
+    await alice.from("project_deliverables").delete().eq("id", dlvId);
+    await alice.from("projects").delete().eq("id", clientId);
+  });
+
   it("deletion v4.4: deliverable (no cascade), project (deliverables + skills), experience takes its projects (CR-15)", async () => {
     const detail = await getStandaloneProjectDetail(alice, standaloneId);
     const dlv = detail!.deliverables[0]!.id;
@@ -287,6 +310,8 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     });
     const impact = await getDeletionImpact(alice, { entityType: "experience", entityId: experienceId });
     expect(impact.cascade).toMatchObject({ projects: 1 });
+    // R11 OD-I6: the career impact always carries the detached-session count.
+    expect(impact.affected_results.detached_interview_sessions).toBe(0);
     await expect(deleteCareerItem(bob, { entityType: "project", entityId: projectId, resultMode: "keep_results" })).rejects.toMatchObject({ code: "not_found" });
     const res = await deleteCareerItem(alice, { entityType: "experience", entityId: experienceId, resultMode: "keep_results" });
     expect(res).toMatchObject({ entity_type: "experience", affiliation_mode: "delete_projects", cascade: { projects: 1 } });

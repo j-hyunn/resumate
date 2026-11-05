@@ -401,7 +401,7 @@ export function applicationObjectPhrase(name: string, { quoted }: { quoted: bool
 }
 
 /**
- * 자기소개서 삭제 성공 토스트 (S-13 · S-31 · S-39 공통). // [UI-가정] 문구는 명세에 없음(C-05 → FL-06 "토스트"만) — 기획 확인
+ * 자기소개서 삭제 성공 토스트 (S-13 · S-31 · S-39 공통). UX v5.15 토스트 목록 (U38-1)
  */
 export function applicationDeletedToast(name: string): string {
   return `${applicationObjectPhrase(name, { quoted: false })} 삭제했어요`

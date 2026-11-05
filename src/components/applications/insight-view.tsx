@@ -352,9 +352,8 @@ function InsightResultView({
       {r.data_sufficiency.level === "thin" ? (
         <Alert variant="info">
           <Info aria-hidden />
-          {/* [UI-가정] data_sufficiency = thin 안내 문구 (spec has none). "정량 성과" removed with CR-11 (v5.5): career
-              input is now 프로젝트 + STAR (S-10) */}
-          <AlertTitle className="font-normal">입력된 커리어가 적어 판단 근거가 제한적이에요. 프로젝트와 STAR를 더 채우면 더 정확해져요</AlertTitle>
+          {/* data_sufficiency = thin 안내 (UX v5.15 S-16, U38-3) */}
+          <AlertTitle className="font-normal">입력된 커리어가 적어 판단 근거가 제한적이에요. 프로젝트·STAR·산출물을 더 채우면 더 정확해져요</AlertTitle>
         </Alert>
       ) : null}
 

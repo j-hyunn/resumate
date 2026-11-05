@@ -99,7 +99,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? educationName(x) ?? "",
         current_value: value,
         path: [year(x.start_month), educationName(x)].filter(Boolean) as string[],
-        href: routes.education(x.id),
+        href: routes.careerItem("education", x.id), // S-08 패널 (S-34, C-02 v5.5)
         to_career: true,
         updated_at: x.updated_at,
       }

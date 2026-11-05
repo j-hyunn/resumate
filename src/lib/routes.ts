@@ -35,11 +35,9 @@ export const routes = {
   profile: () => "/career/profile", // S-04
   /**
    * S-08 with the C-22 add modal open for `kind` (`?new={kind}`, [UI-가정]) — S-09 새 경력 is that modal (OD-C2).
-   * The retired `/career/experiences/new` page redirects here.
+   * The retired `/career/experiences/new` · `/career/educations/new` pages redirect here.
    */
   careerNew: (kind: "experience" | "education" | "project") => `/career?new=${kind}`, // S-08 (S-09 · S-34 · S-43 새 항목)
-  educationNew: () => "/career/educations/new", // S-34
-  education: (id: Id) => `/career/educations/${id}`, // S-34
   skills: () => "/career/skills", // S-12
   // --- v5.6 L-02 (S-10 · S-44, PA-1·PA-3). A2 moves the S-10 / S-44 pages into `(page)`; ids only in queries ---
   /** S-08 with one item selected in the right panel (`?item={kind}:{id}`, S-09 / S-34 / S-43) */

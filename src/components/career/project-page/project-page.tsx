@@ -45,6 +45,7 @@ import {
 } from "@/components/common/shell/page-shell"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
 import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
+import { useNewRowRemount } from "@/components/career/new-row-remount"
 import { deleteAffiliatedProjectAction } from "@/components/career/actions"
 import { StarProposalCard, PROPOSAL_FIELD_LABELS, fillableFields, hasProposals, type FillOptions, type ProposalFocusRequest } from "@/components/career/star-proposal-card"
 import { applyFills, isFilledNow, markDraftApplied, mergeApplied, planFill, type FillPlan } from "@/components/career/star-proposal-fill"
@@ -154,7 +155,16 @@ export interface ProjectPageProps {
   requirementNotice?: React.ReactNode
 }
 
-export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPageProps) {
+/**
+ * 새 행 페이지가 Next 16의 숨은 트리(`<Activity>`)로 되살아나는 것을 막는 겉면 — 자세한 이유는
+ * `../new-row-remount.tsx`. "+ 프로젝트 추가"로 다시 들어오면 방금 만든 프로젝트가 아니라 빈 새 프로젝트가 열린다.
+ */
+export function ProjectPage(props: ProjectPageProps) {
+  const { key, markRow } = useNewRowRemount()
+  return <ProjectPageBody key={key} {...props} markRow={markRow} />
+}
+
+function ProjectPageBody({ data, initialFocus, requirementNotice, markRow }: ProjectPageProps & { markRow: (rowId: string) => void }) {
   const router = useRouter()
   const previewState = data.preview?.state ?? null
   const [projectId, setProjectId] = React.useState(data.project_id)
@@ -237,9 +247,11 @@ export function ProjectPage({ data, initialFocus, requirementNotice }: ProjectPa
 
   const replaceUrl = React.useCallback(
     (id: string, chatId: string | null) => {
+      // 이 트리가 행을 들고 있다는 표시 — 새 행 주소로 다시 들어오면 버려진다 (new-row-remount.tsx)
+      markRow(id)
       window.history.replaceState(null, "", withState(routes.projectPage(id, chatId ? { chat: chatId } : undefined), previewState))
     },
-    [previewState],
+    [previewState, markRow],
   )
 
   // ---------- save ----------

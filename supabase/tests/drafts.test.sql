@@ -88,7 +88,7 @@ insert into t_res values ('cl1', public.create_cover_letter_draft('a0000000-aaaa
                                                                   'a0000000-cccc-0000-0000-000000000001'));
 select is((select v ->> 'created' from t_res where k = 'cl1'), 'true', 'create: created');
 select is((select v ->> 'status' from t_res where k = 'cl1'), 'composing', 'create: composing');
-select ok((select v ->> 'title' from t_res where k = 'cl1') ~ '^자기소개서 \(\d{4}-\d{2}-\d{2}\)$', 'create: default title');
+select ok((select v ->> 'title' from t_res where k = 'cl1') ~ '^자소서 문항 답변 \(\d{4}-\d{2}-\d{2}\)$', 'create: default title');
 select results_eq($$select sort_order, template_key, question_text, char_limit, count_basis, status, section_kind,
                            source_selection_mode, generation_no
                       from public.draft_sections where draft_id = 'a0000000-cccc-0000-0000-000000000001' order by sort_order$$,

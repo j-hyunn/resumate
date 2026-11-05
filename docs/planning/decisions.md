@@ -643,4 +643,4 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
   3. **반영 2026-11-05 (design-system v5.8)** U36-3·U36-4 코드 변경 없음(`[UI-가정]` 표시만 정리), design-system에 답 없는 메시지 줄 패턴·C-22 드롭다운 확정 표기
   4. **반영 2026-11-05** U36-5 `policy-content.ts` 처리방침 1번·이용약관 2조 "정량 성과" 삭제
   5. **반영 2026-11-05 (구현이 먼저, 코드 변경 없음)** U36-6·U36-7 — `[UI-가정]` 표시만 정리. U36-8은 할 일 없음
-- **백엔드**: 새 `cover_letter` 초안 기본 제목 "자소서 문항 답변 (날짜)"(`20261102000300` RPC), AI-12 `GATE_FEATURE_LABEL` cover_letter 이름(U36-2, spec-gaps UI36-10). U36-5 `policy_versions`에 `terms_of_service` `2026-11-05` 행(처리방침·국외 이전 행과 같은 배포, spec-gaps UI36-6)
+- **백엔드** — **반영 2026-11-05 (R12, `20261113001300`, 원격 미반영)**: 새 `cover_letter` 초안 기본 제목 "자소서 문항 답변 (날짜)"(`20261102000300` RPC), AI-12 `GATE_FEATURE_LABEL` cover_letter 이름(U36-2, spec-gaps UI36-10). U36-5 `policy_versions`에 `terms_of_service` `2026-11-05` 행(처리방침·국외 이전 행과 같은 배포, spec-gaps UI36-6)

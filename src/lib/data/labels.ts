@@ -412,7 +412,7 @@ export const AI_FEATURE_NAMES = {
   requirements: "요건 정리",
   insight: "인사이트",
   career_description: "경력기술서",
-  // [UI-가정] U36-2: 02 C-18 기능 이름 열 "자기소개서(문항 답변)" — D-UX-23 이름으로 ("자기소개서"는 지원 건과 겹침)
+  // UX v5.14 U36-6: C-18 기능 이름 = "자소서 문항 답변" ("자기소개서"는 지원 건 이름, CR-23)
   cover_letter: "자소서 문항 답변",
   draft_source_ranking: "AI 근거 선택",
   interview_questions: "면접 질문 생성",

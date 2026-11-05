@@ -39,7 +39,7 @@ import { isAiRejected, notifyAiRejected } from "@/components/common/ai-rejection
 import { regradeFailedAnswersAction } from "@/lib/data/actions"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { gradingInputCauseCopy } from "@/lib/data/interview-grading"
-import { actionFailedMessage, countsAsInterview } from "@/lib/data/labels"
+import { actionFailedMessage, countsAsInterview, INTERVIEW_READ_ONLY_MESSAGE } from "@/lib/data/labels"
 import { setNavOrigin, type NavOrigin } from "@/components/common/return-target"
 import type { InterviewSessionRow } from "@/lib/data/interviews"
 import { formatDate, INTERVIEW_TYPE_LABELS } from "@/lib/data/labels"
@@ -139,7 +139,13 @@ export function SessionList({
       // 낡은 메뉴 (S-22 "버튼이 없을 때"): 다시 읽어 메뉴를 치운다. [UI-가정] 문구
       if ("refused" in next) {
         const { title, body } = gradingInputCauseCopy(next.cause)
-        toast(next.refused === "interview_evaluation_input_only" ? `${title} ${body}` : "다시 채점할 답변이 없어요")
+        toast(
+          next.refused === "interview_evaluation_input_only"
+            ? `${title} ${body}`
+            : next.refused === "interview_session_read_only"
+              ? INTERVIEW_READ_ONLY_MESSAGE
+              : "다시 채점할 답변이 없어요",
+        )
       }
       router.refresh()
     } catch {
@@ -234,12 +240,12 @@ export function SessionList({
               <TableRow key={row.id} interactive className="relative h-12 text-base">
                 {showApplication ? (
                   <TableCell className="max-w-[18rem]">
-                    <span className="flex items-center gap-2">
-                      {row.has_new_result ? <NewResultDot /> : null}
+                    <span className="flex min-w-0 items-center gap-2">
+                      {row.has_new_result ? <NewResultDot className="shrink-0" /> : null}
                       <Link
                         href={sessionHref(row)}
                         onClick={() => remember(row)}
-                        className="truncate font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                        className="min-w-0 truncate font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
                       >
                         {row.application_name}
                       </Link>
@@ -252,7 +258,7 @@ export function SessionList({
                     INTERVIEW_TYPE_LABELS[row.interview_type]
                   ) : (
                     <span className="flex items-center gap-2">
-                      {row.has_new_result ? <NewResultDot /> : null}
+                      {row.has_new_result ? <NewResultDot className="shrink-0" /> : null}
                       <Link
                         href={sessionHref(row)}
                         onClick={() => remember(row)}
@@ -296,12 +302,12 @@ export function SessionList({
             <Card interactive className="relative gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 space-y-0.5">
-                  <p className="flex items-center gap-2">
-                    {row.has_new_result ? <NewResultDot /> : null}
+                  <p className="flex min-w-0 items-center gap-2">
+                    {row.has_new_result ? <NewResultDot className="shrink-0" /> : null}
                     <Link
                       href={sessionHref(row)}
                       onClick={() => remember(row)}
-                      className="truncate font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                      className="min-w-0 truncate font-medium after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
                     >
                       {showApplication ? row.application_name : INTERVIEW_TYPE_LABELS[row.interview_type]}
                     </Link>

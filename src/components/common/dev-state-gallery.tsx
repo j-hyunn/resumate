@@ -158,6 +158,7 @@ export function DevStateGallery({
             "ai-failed-timeout",
             "ai-failed-rate-limited",
             "ai-failed-daily-quota",
+            "ai-failed-daily-quota-reset",
             "ai-failed-billing",
             "ai-failed-key-invalid",
             "ai-failed-model",
@@ -178,6 +179,8 @@ export function DevStateGallery({
               inputHref="/applications/new"
             />
           ))}
+          <h3 className="text-sm font-semibold">block · daily_quota_exhausted + 초기화 줄 (quota_resets_at 있음, OD-B1)</h3>
+          <AiErrorNotice code="daily_quota_exhausted" provider="gemini" quotaResetsAt={at(3 * 60 * 60)} onRetry={() => undefined} />
           <h3 className="text-sm font-semibold">block · 시스템·입력</h3>
           <AiErrorNotice code="safety_blocked" provider="gemini" onRetry={() => undefined} inputHref="/applications/new" inputLabel="입력으로 이동" />
           <AiErrorNotice code="schema_invalid" onRetry={() => undefined} />

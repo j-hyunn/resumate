@@ -17,6 +17,7 @@ import { ensureJdRequirementsInDb } from "./applications"
 import { applicationDisplayName } from "./labels"
 import { isPreviewRequest } from "./source"
 import { isAppError } from "@/lib/contracts/errors"
+import { INTERVIEW_EVALUATION_REFUSAL_CODES } from "@/lib/contracts/interview"
 import { getSiteOrigin } from "@/server/auth/site-url"
 import { requireConsentedUser, requireUser } from "@/server/auth/session"
 import { interviewStartDeps } from "@/server/interview-routes"
@@ -546,7 +547,8 @@ export async function regradeFailedAnswers(sessionId: string): Promise<AiJobView
       if (view) return view
       return { refused: "interview_evaluation_not_retryable", cause: null }
     } catch (err) {
-      if (isAppError(err) && (err.code === "interview_evaluation_input_only" || err.code === "interview_evaluation_not_retryable")) {
+      // UQ-382: interview_session_read_only (R11 OD-I6) — the 자기소개서 was deleted in another tab
+      if (isAppError(err) && (INTERVIEW_EVALUATION_REFUSAL_CODES as readonly string[]).includes(err.code)) {
         return { refused: err.code as InterviewEvaluationRefusalCode, cause: (err.details?.cause as AiErrorCode | undefined) ?? null }
       }
       throw err
@@ -555,6 +557,8 @@ export async function regradeFailedAnswers(sessionId: string): Promise<AiJobView
   const db = await mockRequest()
   const session = db.interview_sessions.find((s) => s.id === sessionId)
   if (!session) return { refused: "interview_evaluation_not_retryable", cause: null }
+  // same guard as the server (DM 2.7.2): a session whose 자기소개서 was deleted is read-only
+  if (session.application_project_id === null) return { refused: "interview_session_read_only", cause: null }
   const decision = gradingDecisionOf(db, session)
   const refused = gradingRefusal(decision)
   if (refused) return { refused, cause: decision.kind === "input_only" ? decision.cause : null }

@@ -46,7 +46,7 @@ import { AiFeatureFailureLine } from "@/components/common/ai-feature-status"
 import type { AiFeatureStatusView } from "@/lib/data/ai-feature-status"
 import type { ApplicationSummary } from "@/lib/data/applications"
 import type { ApplicationStage, StageOutcome } from "@/types/db"
-import { applicationDisplayName, STAGE_LABELS, STAGE_ORDER } from "@/lib/data/labels"
+import { applicationDeletedToast, applicationDisplayName, STAGE_LABELS, STAGE_ORDER } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { deleteApplicationProjectAction } from "./actions"
@@ -311,8 +311,8 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
         onConfirm={async () => {
           if (!deleteTarget) return
           await deleteApplicationProjectAction(deleteTarget.entity_id)
-          // [UI-가정] 삭제 완료 토스트 문구 (FL-06 "출발 화면으로 + 토스트")
-          toast("자기소개서를 삭제했어요")
+          // FL-06 "출발 화면으로 + 토스트" — S-13 · S-31과 같은 문구 (UQ-383)
+          toast.success(applicationDeletedToast(deleteTarget.label ?? ""))
           router.refresh()
         }}
       />

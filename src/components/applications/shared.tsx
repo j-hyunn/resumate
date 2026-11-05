@@ -11,6 +11,7 @@ import { AiProgressInline, useAiJob } from "@/components/common/ai-progress"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
 import { consumeReturnParams } from "@/components/common/return-target"
 import type { ReturnTargetFeature } from "@/types/db"
+import { applicationDeletedToast } from "@/lib/data/labels"
 import { deleteApplicationAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** Re-render the server page every `intervalMs` while `active` (mock stand-in for Realtime). */
@@ -47,8 +48,7 @@ export function useDeleteApplication({ after }: { after?: () => void } = {}) {
       onConfirm={async () => {
         if (!target) return
         await deleteApplicationAction(target.id)
-        // [UI-가정] 삭제 완료 토스트 문구
-        toast.success(`${target.name} 자기소개서를 삭제했어요`)
+        toast.success(applicationDeletedToast(target.name))
         setTarget(null)
         if (after) after()
         else router.refresh()

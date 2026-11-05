@@ -41,7 +41,7 @@ import type { InterviewSessionDetail } from "@/lib/data/interviews"
 import { isApplicationDeleted, showsCriterionGrades, showsNextPractice } from "@/lib/data/interview-session-view"
 import { ApplicationDeletedBadge } from "./session-status"
 import type { AiConnection, AiErrorCode, AiJobProgress, CriterionGrade, CriterionKey, InterviewType } from "@/types/db"
-import { formatDate, GRADE_LABELS, INTERVIEW_TYPE_LABELS, actionFailedMessage } from "@/lib/data/labels"
+import { formatDate, GRADE_LABELS, INTERVIEW_READ_ONLY_MESSAGE, INTERVIEW_TYPE_LABELS, actionFailedMessage } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { markInterviewResultViewedAction, regradeFailedAnswersAction } from "@/lib/data/actions"
@@ -167,6 +167,8 @@ export function ResultView({
       if ("refused" in next) {
         // 낡은 버튼 (S-22 "버튼이 없을 때"): 세션을 다시 읽어 버튼을 치운다. input_only면 다시 읽은 화면이 원인을 보인다
         if (next.refused === "interview_evaluation_not_retryable") toast(REGRADE_NOT_NEEDED)
+        // UQ-382: 다른 탭에서 자기소개서를 지운 뒤의 낡은 화면 — 서버 문구 + 다시 읽기(읽기 전용 화면으로)
+        else if (next.refused === "interview_session_read_only") toast(INTERVIEW_READ_ONLY_MESSAGE)
         router.refresh()
         return null
       }
@@ -649,7 +651,13 @@ function AnswerCard({
       </div>
       <p className="text-base leading-[1.75] font-medium">{q.question_text}</p>
       {/* C-17 고지는 질문 점수 옆에도 [가정](위치) */}
-      {answer?.score_status === "scored" ? <ScoreDisclaimer /> : null}
+      {answer?.score_status === "scored" ? (
+        <div className="space-y-1">
+          {/* C-17 per-question row (v5.13 OD-I1): "{score_value}점 / 100" + score_rationale */}
+          {answer.score_rationale ? <p className="text-sm text-muted-foreground">{answer.score_rationale}</p> : null}
+          <ScoreDisclaimer />
+        </div>
+      ) : null}
 
       {unanswered ? (
         // [UI-가정] 미응답 카드 문구

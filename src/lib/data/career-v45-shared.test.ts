@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { blankProjectValues, blocksToMarkdown, bodyHash, isBlank, toProjectFormSnapshot, toProjectPValues } from "./career-v45-shared"
-import type { DeliverableDraftBlock } from "@/types/db"
+import { blankProjectValues, blocksToMarkdown, bodyHash, dismissedClassifications, isBlank, isDismissedClassification, toProjectFormSnapshot, toProjectPValues } from "./career-v45-shared"
+import type { DeliverableDraftBlock, ProjectStructuredDraft } from "@/types/db"
 
 const b = (x: Partial<DeliverableDraftBlock>): DeliverableDraftBlock => ({ block_id: "b", type: "paragraph", basis: "new", source_fact_ids: [], source_body_quotes: [], source_project_fields: [], review: "ok", ...x })
 
@@ -48,5 +48,34 @@ describe("greetings (UQ-S10-11)", () => {
     expect(projectGreeting(snap("x"), { gateFeatureLabel: "인사이트" })).toMatch(/^인사이트를 쓰려면/)
     expect(deliverableGreeting({ title: "", body: "" }, null)).toMatch(/^이 산출물을 함께 써/)
     expect(deliverableGreeting({ title: "SDK 회고", body: "" }, "retrospective", "회고")).toMatch(/^'SDK 회고'를 회고로 정리/)
+  })
+})
+
+describe("isDismissedClassification / dismissedClassifications (R10, DM 11.5 #1 — server judgment mirror)", () => {
+  const base = { origin: "ai" as const, source_message_ids: [], review: "ok" as const, reviewed_at: null, applied_at: null, reason: null }
+  it("value null with rev ≥ 2 is [무시]; first object (rev 1 / absent) and filled values are not", () => {
+    expect(isDismissedClassification({ ...base, value: null, rev: 2 })).toBe(true)
+    expect(isDismissedClassification({ ...base, value: [], rev: 3 })).toBe(true)
+    expect(isDismissedClassification({ ...base, value: null, rev: 1 })).toBe(false)
+    expect(isDismissedClassification({ ...base, value: null })).toBe(false)
+    expect(isDismissedClassification({ ...base, value: "work", rev: 4 })).toBe(false)
+    expect(isDismissedClassification({ ...base, value: ["problem_solving"], rev: 2 })).toBe(false)
+    expect(isDismissedClassification(undefined)).toBe(false)
+  })
+  it("collects the dismissed fields of a draft", () => {
+    const draft: ProjectStructuredDraft = {
+      schema_version: 3,
+      project: {},
+      star: {},
+      classification: {
+        project_type: { ...base, value: null, rev: 2 },
+        experience_type: { ...base, value: "problem_solving" as never, rev: 2 },
+        competencies: { ...base, value: [], rev: 1 },
+      },
+      clarifications: [],
+      sensitive_flags_count: 0,
+    }
+    expect([...dismissedClassifications(draft)]).toEqual(["project_type"])
+    expect(dismissedClassifications(null).size).toBe(0)
   })
 })

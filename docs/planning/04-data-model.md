@@ -1,7 +1,7 @@
-# Resumate 데이터 모델 v4.11
+# Resumate 데이터 모델 v4.12
 
-> 작성: data-architect / 기준 입력: **v4.11: `_workspace/00_input/planning-decisions-open-decisions.md`(열린 결정 48행, 확정 2026-11-05 (사용자) — DM 소관 OD-I6·I1·C6·L1·L2·P5·P11·P12·P13·D5·D6·D7), 배경 `_workspace/00_input/open-decisions-2026-11-04.md`, 함께 고친 문서 PRD v4.13·UX v5.13·AI v4.11, 구현 확인 `supabase/migrations/20261103000100_s8_interview_tables.sql`·`20261031000300_s5_application_project_fks.sql`·`20261109101500_r4_account_deletion.sql`, `src/server/services/application/write.ts`·`src/app/api/writing-chats/[id]/turns/route.ts`·`src/server/services/writing-chat/turn.ts`**, **v4.10: `_workspace/00_input/planning-decisions-ui-panel-doc.md`(UP-1~UP-13, 확정 2026-11-04 (사용자)), 구현(미커밋, 워크트리 `ai-chat-response-error-3f096a`) `src/components/career/star-proposal-fill.ts`·`ignored-classification.ts`·`src/components/common/doc-markdown-editor.tsx`, 마이그레이션 `20261113000300_r8_star_merged_proposal`(사용자 `set` null 경로 확인)**, **v4.9: `_workspace/backend/R8/01_plan.md`(STAR 합친 제안 RQ-5, 확정 2026-11-04 (사용자)), AI v4.9**, **v4.8: `_workspace/00_input/planning-decisions-education-name.md`(ED-1~ED-7, 확정 2026-11-04 (사용자)), 구현 PR #29·마이그레이션 `20261113000200_ui32_education_display_labels`, `_workspace/backend/UI32/06_db-engineer_notes.md`** / v4.5: `docs/planning/01-prd.md` PRD v4.6, `docs/planning/02-user-flows.md` 화면 명세 v5.6, `docs/planning/03-ai-features.md` AI 명세 v4.6, `_workspace/00_input/planning-decisions-project-add-figma.md`(PA-1~PA-4, 확정 2026-11-03 (사용자)), 요청 `_workspace/project-add-figma/{prd,ux,ai}_requests.md`, 리더 정렬 3건(2026-11-03)** / v4.4: `docs/planning/01-prd.md` PRD v4.5, `docs/planning/02-user-flows.md` 화면 명세 v5.5, `docs/planning/03-ai-features.md` AI 명세 v4.5, `_workspace/00_input/planning-decisions-career-redesign.md`(CR-1~CR-14)** / 이전: `_workspace/01_product-planner_prd.md` (PRD v4.3, BYOK), `_workspace/02_ux-planner_flows.md` (화면 명세 v5.3), `_workspace/02_ai-feature-designer_ai-spec.md` (AI 명세 v4.3), `_workspace/00_input/brief-2026-11-05.md` (백엔드 구현 반영 부분 재실행), `planning-decisions-2026-11-05.md` (사용자 확정 A1~A24), `spec-gaps-summary.md`, `product-context.md`
-> 상태: **v4.11 — 열린 결정 일괄 확정(결정 사이클 open-decisions, 확정 2026-11-05 (사용자))**: 지원 프로젝트를 지워도 끝난(`completed`) 면접 기록은 남긴다 — `interview_sessions.application_project_id` null 허용 + 복합 FK `on delete set null (application_project_id)`, 복사 컬럼 `company_name_snapshot`·`position_title_snapshot`, 지원 프로젝트 `BEFORE DELETE` 트리거가 복사·비완료 세션 삭제, 남은 세션 읽기 전용(2.7.2, OD-I6 ★). D-14 점수 산식 `d14.v1`(가중 30·30·20·20, 미응답 0점) 서버 계산·백필 RPC `backfill_interview_scores`(A.12 점수 산식, OD-I1 ★ — (v4.11, R-OD-11) 위치 참조 A.12로). 페이지 저장 멱등 키 `p_client_id`(2.5.1, OD-C6 ★). `base_body_hash` 공백 정규화(2.5.0, OD-P5 ★). 답 없는 사용자 메시지 다시 보내기(7장, OD-P11 ★). 출시 KEK = env KEK `env-v1`(DM-16·2.11.1·2.11.2, OD-L1). AI 고지 `v2026-11-05`(2.11.6, OD-L2 ★). R5 구현 세부 확정(2.5·2.5.0·2.5.1·7장, OD-P12·P13). 백엔드 후속 ★는 11.6. 이전: **v4.10 — AI 패널·문서형 입력 UI 개정(결정 사이클 ui-panel-doc, UP-5·UP-6·UP-9, 확정 2026-11-04 (사용자))**: 분류 추천 행 [반영]은 사용자가 이미 고른 분류도 덮어쓴다(화면 판정, 기간은 빈 칸만 그대로), [무시] = 사용자 패치 `set` null(슬롯 유지, `rev` + 1) — 서버 "무시됨" 표식은 후속(11.5), 화면은 STAR 제안 직접 고치기(사용자 `edit` 패치)를 보내지 않는다(RPC 경로는 유지), STAR·본문은 문서형 편집기의 마크다운 문자열 그대로 저장(2.2). **테이블·컬럼·CHECK·RPC 변경 없음**. 이전: **v4.9 — STAR 합친 제안(RQ-5, 확정 2026-11-04 (사용자))**: 값이 있는 STAR 필드의 `op = set` = 기존 내용과 합친 교체 제안, `append`는 과거 초안 호환만, `apply_structured_draft_patch`의 `set → append` 낮춤 삭제(새 마이그레이션 1개, 비파괴). 저장 모양·`schema_version` 그대로(2.5·3.3, 10장). **v4.8 — 교육 표시 이름 반영(ED-2·ED-3·ED-6, 확정 2026-11-04 (사용자))**: 교육 표시 이름 = trim한 `program_name`(화면 "교육 명") → 비면 trim한 `institution_name`(화면 "운영 기관") → 둘 다 비면 null(화면 "이름 없는 교육")(2.3 educations). 교육 `education_type`·`enrollment_status`는 화면 입력이 아니고 앱이 정한다(2.3, (v4.8, ED-7), 설명만). 커리어 목록 응답 `name`(2.4·7장), 근거·출처 저장 라벨 `source_label`(2.7·2.8, 기존 행 백필), DB 헬퍼 `private.education_display_name`·`private.trim_js_whitespace`. 테이블·컬럼 변경 없음. 구현 PR #29 반영(11.4). 이전: **v4.8 — 독립 프로젝트 생성 시점 변경(D-UX-28, 확정 2026-11-04 (사용자))**: 독립 프로젝트 행은 C-23 이름 다이얼로그가 아니라 S-43 새 독립 프로젝트의 첫 저장 때 만든다(같은 사용자 세션 insert, 이름 + 프로젝트 정보를 한 번에). **스키마·RPC 변경 없음**. 이전 **v4.6 — 처리방침·이용약관 확정과 장기 미접속 파기 반영(PT-1·PT-3, 확정 2026-11-04 (사용자))**: `policy_versions` `2026-11-04`(4.5·A.2), 접속 기록 최대 1년·장기 미접속 파기(4.4·4.6), `last_active_at`·`inactivity_notice_sent_at` 용도 확정(A.1). 구현 PR #24·#25 반영. 이전: **v4.5 — 프로젝트 추가·산출물 상세 Figma 결정 반영(PA-1~PA-4)**: `writing_chats.project_deliverable_id`(산출물 대화, PA-1), S-10·S-44 **페이지 저장 RPC** `save_project_page`·`save_project_deliverable`(만들기·고치기 한 번에, 기대 버전 `p_expected_updated_at` → `stale_write`, 반영됨 기록 `p_applied_proposals`를 같은 트랜잭션에서, 기록 실패는 저장을 막지 않음 — PA-3), **`apply_writing_chat_proposal` 폐기**(반영 = 화면 폼 채우기), 산출물 대화 시작 `start_deliverable_writing_chat`, `structured_draft` 필드 `rev`·산출물 대화 모양(`target = project_deliverable`), V-9h·분류·기간의 DB 거부를 낮춤으로 완화, 초안 6회 `writing_chat_draft_limit_reached`, 삭제 영향에 산출물 대화. PA-2·PA-4는 스키마 변경 없음. 회신은 `_workspace/project-add-figma/dm_replies.md`, 백엔드 후속 ★는 11.3. / **v4.4 — 커리어 화면 재설계 반영(`_workspace/00_input/planning-decisions-career-redesign.md`, CR-1~CR-14, 확정 2026-11-02 (사용자))**: 기준 입력 PRD v4.5·UX v5.5·AI v4.5와 요청 `_workspace/career-redesign/{prd,ux,ai}_requests.md`. STAR를 `projects` 컬럼으로 합치고 `project_details`·`achievements` 폐기(DM-19), 소속 / 독립 프로젝트 구성 CHECK(DM-20), 분류 3종·`description`·`link_url`·`project_deliverables` 신설, `writing_chats`를 프로젝트 필수·`active`/`closed`·반영 RPC `apply_writing_chat_proposal`로 개정, 미연결 대화 90일 정리 폐기, 근거 `project_deliverable`, readiness `create_project`. 회신은 `_workspace/career-redesign/dm_replies.md`, 백엔드 후속은 11장. / **v4.3b — 가입 필수 동의에서 `cross_border_transfer` 제외(spec-gaps ⑲, A.2)** / **v4.3a — 요건 0개로 성공한 JD의 공고 원문 수정(Q53-11, 2.6.1)** / **v4.3 — UI v5.3 QA 사용자 결정 반영(`_workspace/00_input/planning-decisions-v53-qa.md`, Q53-1~9)**: 입력 원인으로 요건 추출에 실패한 JD의 공고 원문 수정(Q53-2, 2.6.1), 생성 RPC 게이트(Q53-1), 답변별 실패 원인·종합만 다시 정리(Q53-3·5), 경력기술서 중단(Q53-7), 실패 세션과 새 면접, 입력 원인 실패 세션의 새 결과 표식(Q53-10)(2.7.1). UX v5.4와 맞췄다. ★ 표시는 이미 구현된 백엔드도 고쳐야 한다. / **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
+> 작성: data-architect / 기준 입력: **v4.12: `_workspace/00_input/planning-decisions-settings-dialog.md`(SD-1~SD-6 확정 2026-11-05 (사용자), 리더 판단 SD-A1~SD-A19 `[가정]` — 3.1절 SD-A17·A18·A19 포함), 리뷰 라운드 2 `_workspace/03_spec-reviewer_review_settings-dialog.md`(R-SD-18·R-SD-22·R-SD-23), 함께 고친 문서 PRD v4.14·UX v5.17·AI v4.12, 요청 `_workspace/settings-dialog/{ux,ai}_requests.md`와 세 문서 끝 "다른 팀원에게 요청", 값 목록 초안 PRD 9.7**, **v4.11: `_workspace/00_input/planning-decisions-open-decisions.md`(열린 결정 48행, 확정 2026-11-05 (사용자) — DM 소관 OD-I6·I1·C6·L1·L2·P5·P11·P12·P13·D5·D6·D7), 배경 `_workspace/00_input/open-decisions-2026-11-04.md`, 함께 고친 문서 PRD v4.13·UX v5.13·AI v4.11, 구현 확인 `supabase/migrations/20261103000100_s8_interview_tables.sql`·`20261031000300_s5_application_project_fks.sql`·`20261109101500_r4_account_deletion.sql`, `src/server/services/application/write.ts`·`src/app/api/writing-chats/[id]/turns/route.ts`·`src/server/services/writing-chat/turn.ts`**, **v4.10: `_workspace/00_input/planning-decisions-ui-panel-doc.md`(UP-1~UP-13, 확정 2026-11-04 (사용자)), 구현(미커밋, 워크트리 `ai-chat-response-error-3f096a`) `src/components/career/star-proposal-fill.ts`·`ignored-classification.ts`·`src/components/common/doc-markdown-editor.tsx`, 마이그레이션 `20261113000300_r8_star_merged_proposal`(사용자 `set` null 경로 확인)**, **v4.9: `_workspace/backend/R8/01_plan.md`(STAR 합친 제안 RQ-5, 확정 2026-11-04 (사용자)), AI v4.9**, **v4.8: `_workspace/00_input/planning-decisions-education-name.md`(ED-1~ED-7, 확정 2026-11-04 (사용자)), 구현 PR #29·마이그레이션 `20261113000200_ui32_education_display_labels`, `_workspace/backend/UI32/06_db-engineer_notes.md`** / v4.5: `docs/planning/01-prd.md` PRD v4.6, `docs/planning/02-user-flows.md` 화면 명세 v5.6, `docs/planning/03-ai-features.md` AI 명세 v4.6, `_workspace/00_input/planning-decisions-project-add-figma.md`(PA-1~PA-4, 확정 2026-11-03 (사용자)), 요청 `_workspace/project-add-figma/{prd,ux,ai}_requests.md`, 리더 정렬 3건(2026-11-03)** / v4.4: `docs/planning/01-prd.md` PRD v4.5, `docs/planning/02-user-flows.md` 화면 명세 v5.5, `docs/planning/03-ai-features.md` AI 명세 v4.5, `_workspace/00_input/planning-decisions-career-redesign.md`(CR-1~CR-14)** / 이전: `_workspace/01_product-planner_prd.md` (PRD v4.3, BYOK), `_workspace/02_ux-planner_flows.md` (화면 명세 v5.3), `_workspace/02_ai-feature-designer_ai-spec.md` (AI 명세 v4.3), `_workspace/00_input/brief-2026-11-05.md` (백엔드 구현 반영 부분 재실행), `planning-decisions-2026-11-05.md` (사용자 확정 A1~A24), `spec-gaps-summary.md`, `product-context.md`
+> 상태: **v4.12 — 새 설정 다이얼로그(결정 사이클 `settings-dialog`, 사용자 확정 SD-1~SD-6 + 리더 판단 SD-A1~SD-A19, 2026-11-05) · 리뷰 라운드 1·2 반영**: 기준 PRD v4.14 · UX v5.17 · AI v4.12. 바뀐 문장에 `(v4.12, {결정 ID})` 표시. (1) **`profiles` 내 정보 개정**(2.1.1 ★) — `total_years_of_experience`(SD-2)·`desired_job_title`(SD-A17) **삭제**, 새 컬럼 `job_search_status`·`interested_company_type`·**`interested_industry`**(현행 `interested_industries text[]` → 단일 선택)·최종 학력 6칸(`highest_education_*`), 관심 직군·직무 쌍은 **별도 테이블 `profile_job_interests`**(최대 3쌍 `[가정]`), 값 목록은 **참조 코드 테이블 `profile_options`**(DM-22). 섹션 저장 RPC **`save_profile_basics`**(기대 버전 `stale_write`). (2) 최종 학력은 `educations`와 **동기화하지 않는다**(SD-5, 2.1.1). (3) **`get_data_readiness().profile_filled`·`hints: "profile"` 삭제**(SD-A18 ★, 6장). (4) **`computed_total_months`는 저장 컬럼이 아니라 계산값** — 전용 함수 `private.compute_total_experience_months`(6.2 신설, AI C-1), `career_snapshot_hash`에 넣지 않는다. (5) **`get_ai_usage_summary` 응답 교체**(SD-A10 ★, 2.9.5) — `by_feature`·`by_provider` → **공급자 × 기능 교차**, `ai_usage_records`에 **`input_cost_usd`·`output_cost_usd` 신설 ★**(화면 비용 열 2개), 7행 묶음은 **표시 단계에서만**(SD-4·SD-A12). (6) `policy_versions.policy_type`에 **`ai_data_use` 추가**(D-UX-31, 2.1.3). (7) 선택 동의 토글 2개는 기존 `consents` 그대로(SD-A15, 2.1.4). (8) `evidence_links`의 `source_type = 'profile'`은 **기존 행 유지·새 행 차단**(SD-A19, 2.8). (9) 개선 요청은 **테이블 없음**(SD-3, 2.1.6). 백엔드 후속 ★는 11.7. **리뷰 라운드 1 반영**(판 번호 유지): R-SD-9 허용 출처 5종을 **모든 소유자**에 적용(2.8·11.7 #11 — 트리거와 RPC 목록 일치), R-SD-14 `document_path`를 `/policies/ai_data_use/{version}`으로(2.1.3·11.7 #10·9장 — 기존 `/policies/{type}/{version}` 규칙 유지). **리뷰 라운드 2 반영**(판 번호 v4.12 유지): **R-SD-18** — `profile_job_interests`의 중복 쌍 제약을 **`unique nulls not distinct (user_id, job_family, job_role)`**로 확정(기본 `NULLS DISTINCT`로는 "같은 직군 + 직무 비움" 쌍 2개가 통과한다)하고 저장 RPC 오류에 **`duplicate_job_interest`**(400)를 추가(2.1.2·7장·11.7 #3·#5 — 화면 문구는 ux-planner에게 요청). **R-SD-22** — 가격표 `version` 문자열을 AI C-13의 **`v{YYYY-MM-DD}`**(첫 버전 `v2026-10-28`)로 맞춤(2.9.3·2.9.5 응답 예시·11.7 #8). **R-SD-23** — `private.compute_total_experience_months`의 `p_as_of`에서 **기본값을 없애 필수 인자로** 하고 모든 호출자가 명시해 넘기도록 함(6.2·11.7 #7, 결정성 보장). 이전: **v4.11 — 열린 결정 일괄 확정(결정 사이클 open-decisions, 확정 2026-11-05 (사용자))**: 지원 프로젝트를 지워도 끝난(`completed`) 면접 기록은 남긴다 — `interview_sessions.application_project_id` null 허용 + 복합 FK `on delete set null (application_project_id)`, 복사 컬럼 `company_name_snapshot`·`position_title_snapshot`, 지원 프로젝트 `BEFORE DELETE` 트리거가 복사·비완료 세션 삭제, 남은 세션 읽기 전용(2.7.2, OD-I6 ★). D-14 점수 산식 `d14.v1`(가중 30·30·20·20, 미응답 0점) 서버 계산·백필 RPC `backfill_interview_scores`(A.12 점수 산식, OD-I1 ★ — (v4.11, R-OD-11) 위치 참조 A.12로). 페이지 저장 멱등 키 `p_client_id`(2.5.1, OD-C6 ★). `base_body_hash` 공백 정규화(2.5.0, OD-P5 ★). 답 없는 사용자 메시지 다시 보내기(7장, OD-P11 ★). 출시 KEK = env KEK `env-v1`(DM-16·2.11.1·2.11.2, OD-L1). AI 고지 `v2026-11-05`(2.11.6, OD-L2 ★). R5 구현 세부 확정(2.5·2.5.0·2.5.1·7장, OD-P12·P13). 백엔드 후속 ★는 11.6. 이전: **v4.10 — AI 패널·문서형 입력 UI 개정(결정 사이클 ui-panel-doc, UP-5·UP-6·UP-9, 확정 2026-11-04 (사용자))**: 분류 추천 행 [반영]은 사용자가 이미 고른 분류도 덮어쓴다(화면 판정, 기간은 빈 칸만 그대로), [무시] = 사용자 패치 `set` null(슬롯 유지, `rev` + 1) — 서버 "무시됨" 표식은 후속(11.5), 화면은 STAR 제안 직접 고치기(사용자 `edit` 패치)를 보내지 않는다(RPC 경로는 유지), STAR·본문은 문서형 편집기의 마크다운 문자열 그대로 저장(2.2). **테이블·컬럼·CHECK·RPC 변경 없음**. 이전: **v4.9 — STAR 합친 제안(RQ-5, 확정 2026-11-04 (사용자))**: 값이 있는 STAR 필드의 `op = set` = 기존 내용과 합친 교체 제안, `append`는 과거 초안 호환만, `apply_structured_draft_patch`의 `set → append` 낮춤 삭제(새 마이그레이션 1개, 비파괴). 저장 모양·`schema_version` 그대로(2.5·3.3, 10장). **v4.8 — 교육 표시 이름 반영(ED-2·ED-3·ED-6, 확정 2026-11-04 (사용자))**: 교육 표시 이름 = trim한 `program_name`(화면 "교육 명") → 비면 trim한 `institution_name`(화면 "운영 기관") → 둘 다 비면 null(화면 "이름 없는 교육")(2.3 educations). 교육 `education_type`·`enrollment_status`는 화면 입력이 아니고 앱이 정한다(2.3, (v4.8, ED-7), 설명만). 커리어 목록 응답 `name`(2.4·7장), 근거·출처 저장 라벨 `source_label`(2.7·2.8, 기존 행 백필), DB 헬퍼 `private.education_display_name`·`private.trim_js_whitespace`. 테이블·컬럼 변경 없음. 구현 PR #29 반영(11.4). 이전: **v4.8 — 독립 프로젝트 생성 시점 변경(D-UX-28, 확정 2026-11-04 (사용자))**: 독립 프로젝트 행은 C-23 이름 다이얼로그가 아니라 S-43 새 독립 프로젝트의 첫 저장 때 만든다(같은 사용자 세션 insert, 이름 + 프로젝트 정보를 한 번에). **스키마·RPC 변경 없음**. 이전 **v4.6 — 처리방침·이용약관 확정과 장기 미접속 파기 반영(PT-1·PT-3, 확정 2026-11-04 (사용자))**: `policy_versions` `2026-11-04`(4.5·A.2), 접속 기록 최대 1년·장기 미접속 파기(4.4·4.6), `last_active_at`·`inactivity_notice_sent_at` 용도 확정(A.1). 구현 PR #24·#25 반영. 이전: **v4.5 — 프로젝트 추가·산출물 상세 Figma 결정 반영(PA-1~PA-4)**: `writing_chats.project_deliverable_id`(산출물 대화, PA-1), S-10·S-44 **페이지 저장 RPC** `save_project_page`·`save_project_deliverable`(만들기·고치기 한 번에, 기대 버전 `p_expected_updated_at` → `stale_write`, 반영됨 기록 `p_applied_proposals`를 같은 트랜잭션에서, 기록 실패는 저장을 막지 않음 — PA-3), **`apply_writing_chat_proposal` 폐기**(반영 = 화면 폼 채우기), 산출물 대화 시작 `start_deliverable_writing_chat`, `structured_draft` 필드 `rev`·산출물 대화 모양(`target = project_deliverable`), V-9h·분류·기간의 DB 거부를 낮춤으로 완화, 초안 6회 `writing_chat_draft_limit_reached`, 삭제 영향에 산출물 대화. PA-2·PA-4는 스키마 변경 없음. 회신은 `_workspace/project-add-figma/dm_replies.md`, 백엔드 후속 ★는 11.3. / **v4.4 — 커리어 화면 재설계 반영(`_workspace/00_input/planning-decisions-career-redesign.md`, CR-1~CR-14, 확정 2026-11-02 (사용자))**: 기준 입력 PRD v4.5·UX v5.5·AI v4.5와 요청 `_workspace/career-redesign/{prd,ux,ai}_requests.md`. STAR를 `projects` 컬럼으로 합치고 `project_details`·`achievements` 폐기(DM-19), 소속 / 독립 프로젝트 구성 CHECK(DM-20), 분류 3종·`description`·`link_url`·`project_deliverables` 신설, `writing_chats`를 프로젝트 필수·`active`/`closed`·반영 RPC `apply_writing_chat_proposal`로 개정, 미연결 대화 90일 정리 폐기, 근거 `project_deliverable`, readiness `create_project`. 회신은 `_workspace/career-redesign/dm_replies.md`, 백엔드 후속은 11장. / **v4.3b — 가입 필수 동의에서 `cross_border_transfer` 제외(spec-gaps ⑲, A.2)** / **v4.3a — 요건 0개로 성공한 JD의 공고 원문 수정(Q53-11, 2.6.1)** / **v4.3 — UI v5.3 QA 사용자 결정 반영(`_workspace/00_input/planning-decisions-v53-qa.md`, Q53-1~9)**: 입력 원인으로 요건 추출에 실패한 JD의 공고 원문 수정(Q53-2, 2.6.1), 생성 RPC 게이트(Q53-1), 답변별 실패 원인·종합만 다시 정리(Q53-3·5), 경력기술서 중단(Q53-7), 실패 세션과 새 면접, 입력 원인 실패 세션의 새 결과 표식(Q53-10)(2.7.1). UX v5.4와 맞췄다. ★ 표시는 이미 구현된 백엔드도 고쳐야 한다. / **v4.2 — 백엔드 구현 반영(2026-11-05)**: 사용자 확정 12건(A3, A5, A6, A8, A17~A24)과 구현이 정한 쓰기 경로·내부 컬럼·RPC 세부(spec-gaps B DM 전체)를 문서에 옮겼다. 구현이 정한 값(C)은 `[가정]`으로 둔다(4.5). ★ 표시 확정은 이미 구현된 백엔드도 후속 슬라이스에서 고쳐야 한다. / **v4.1a** (BYOK 리뷰 라운드 2: R-38 잔여, R-45) / **v4.1** (BYOK 리뷰 라운드 1: R-38, R-40, R-43, UB-2 (b) 반영) / **v4 (BYOK)** — 사용자 API 키·활성 공급자·공급자별 데이터 사용 동의·토큰 사용 미터 반영, 운영자 사용량 원장 삭제. 이전: v3.2a (확인 패스 R-35 반영) / v3.2 (리뷰 라운드 2 반영: R-27, R-28, R-29, R-13 잔여 / 사용자 결정 2026-10-24 반영: U-2, U-5, U-8, U-9 등, 8장). **문서만 작성했다. 마이그레이션·SQL은 적용하지 않았다.** `[가정]`·`[결정 필요]`·`[보류]` 항목은 확정이 아니다.
 > 이 문서의 테이블·컬럼명이 **확정명**이다. 문서 간 이름 차이(old → new)는 3.5~3.7 이름 확정 표에 정리했다. 버전별 변경은 10장.
 > 표기: "프로젝트"(`projects`)는 커리어의 업무 단위로, 경력·교육 아래 **소속 프로젝트**(STAR 1개 = `projects`의 컬럼)와 소속 없는 **독립 프로젝트**(프로젝트 정보·내용·산출물)가 있다. "산출물"은 `project_deliverables`. 지원 건 단위는 문서·데이터에서 **"지원 프로젝트"**(`application_projects`), 메뉴 라벨 **"자기소개서 관리"**(v4.4, CR-12. 이전 "기업 JD 관리"), 화면 표기 **"자기소개서"**(v4.4 후속 CR-23 확정 — 이전 화면 표기 "기업 JD". 내부 이름 `application_projects`·`job_descriptions`·"지원 프로젝트"는 그대로), JD 원문(`job_descriptions.raw_text`)은 화면에서 **"공고 원문"**(PRD D-20, UX D-UX-10). v3의 "상세 내용"(`project_details`)은 v4.4에서 폐기했다. "AI 작성 대화"(`writing_chats`)는 커리어 채팅(`chat_threads`, Should)과 다르다.
 
@@ -14,6 +14,7 @@
 | DM-1 | 모든 사용자 데이터 테이블은 `user_id ... references auth.users(id) on delete cascade` | 탈퇴 시 전체 파기의 안전망. **v4.2**: 실제 탈퇴는 RPC가 public 데이터를 명시적으로 지운 뒤 서버가 auth 사용자를 지운다(6.1 F-COM-05, 4.5) |
 | DM-2 | 부모–자식은 복합 FK `(parent_id, user_id)` | 소유자 혼합 차단 |
 | DM-3 | 열거값은 `text + CHECK` | 기획 중 값 변경이 잦다 |
+| **DM-22 (v4.12, SD-A4·SD-Q2)** | **설정 "내 정보"의 선택 값 목록만 예외로 참조 코드 테이블 `profile_options`에 둔다**(DM-3의 `text + CHECK`를 쓰지 않는다). 저장은 안정적인 **코드 키**, 화면 문구는 코드 테이블의 `label` | ① 값이 7종 카테고리 합계 약 40개이고 **표시 문자열이 바뀔 전제**다(PRD 9.7 — "코드가 아니라 표시 문자열 + 안정적인 키로 관리"). ② 값 하나 추가·문구 수정마다 CHECK 재작성 마이그레이션이 필요해진다. ③ 관심 직군·직무는 **상하 관계**(직군 안의 직무)가 있어 CHECK로는 쌍 유효성을 검사할 수 없다. ④ 대가: 화면이 라벨을 함께 읽어야 하고(한 번의 추가 조회), 카테고리가 상수라 FK를 걸 수 없어 **검증 트리거 1개**가 필요하다(2.1.1) |
 | DM-4 | 년-월은 `date`(1일 고정) | 정렬·기간·연도 묶음 계산 |
 | DM-5 | AI 결과는 jsonb + `schema_version`, 재생성은 새 행(자소서 문항은 덮어쓰기) | |
 | DM-6 | 근거는 `evidence_links`에만 | 삭제 시 인용문 일괄 삭제 |
@@ -55,6 +56,9 @@
 erDiagram
   auth_users ||--|| profiles : "1:1"
   auth_users ||--o{ consents : agrees
+  auth_users ||--o{ profile_job_interests : "관심 직군·직무 쌍 (v4.12, 최대 2)"
+  profile_options ||..o{ profile_job_interests : "코드 검증 (트리거, FK 아님)"
+  profile_options ||..o| profiles : "내 정보 코드 검증 (트리거)"
   auth_users ||--o{ experiences : "커리어"
   auth_users ||--o{ educations : "커리어"
   auth_users ||--o{ projects : "커리어"
@@ -104,15 +108,120 @@ erDiagram
 - 실선 = FK, 점선 = soft reference 또는 set null 참조. 커리어 → 지원 프로젝트 방향 FK 없음(v2와 같음).
 - **v4.5 (PA-1)**: 산출물 대화는 `project_id`(부모 독립 프로젝트) + `project_deliverable_id`(대상 산출물)를 함께 가진다. 대상은 `project_deliverable_id`가 있으면 산출물, 없으면 프로젝트(2.5).
 - **v4.4 (CR-2·CR-8·CR-11)**: `project_details`·`achievements`는 없다. STAR는 `projects`의 컬럼이다(DM-19). 산출물 `project_deliverables` 신설.
-- 비사용자 테이블(`policy_versions`, `ai_price_tables`, `ai_disclosures`, `ai_providers`, `account_deletion_logs`)과 Should 테이블(`chat_threads`, `chat_messages`, `result_ratings`, `ai_suggestions`)은 생략.
+- **v4.12 (SD-A2·A3)**: 내 정보 값은 `profiles`의 컬럼 + `profile_job_interests`(쌍 최대 3)이고, 값 목록은 참조 테이블 `profile_options`다. 코드 검증은 FK가 아니라 트리거다(2.1.1). **`educations`와는 선이 없다**(SD-5).
+- 비사용자 테이블(`policy_versions`, **`profile_options`**(v4.12), `ai_price_tables`, `ai_disclosures`, `ai_providers`, `account_deletion_logs`)과 Should 테이블(`chat_threads`, `chat_messages`, `result_ratings`, `ai_suggestions`)은 생략.
 
 ---
 
 ## 2. 테이블 정의
 
 ### 2.1 계정·동의
-- `profiles`: v2와 같음. **v4.4**: `career_data_updated_at` 트리거 대상은 **6개 테이블**(experiences, educations, projects, **project_deliverables**, skills, project_skills). `project_details`·`achievements`는 테이블과 함께 빠졌다.
-- `consents` / `policy_versions`: v2와 같음. 국외 이전 항목에 AI 작성 대화 추가(NFR-PRV-03 v3)는 정책 버전 갱신 → 재동의로 처리, 스키마 영향 없음.
+- `profiles`: 전체 정의는 A.1. **v4.4**: `career_data_updated_at` 트리거 대상은 **6개 테이블**(experiences, educations, projects, **project_deliverables**, skills, project_skills). `project_details`·`achievements`는 테이블과 함께 빠졌다. **(v4.12, SD-A2) 설정 "내 정보" 필드 개정은 2.1.1**(삭제 2개·신설 다수) — 새 필드는 `career_data_updated_at` 트리거 대상이 **아니다**(커리어 데이터가 아니다).
+- `consents` / `policy_versions`: 전체 정의는 A.2. 국외 이전 항목에 AI 작성 대화 추가(NFR-PRV-03 v3)는 정책 버전 갱신 → 재동의로 처리, 스키마 영향 없음. **(v4.12, D-UX-31) `policy_versions.policy_type`에 `ai_data_use` 추가**(2.1.3), **선택 동의 토글 2개는 변경 없음**(2.1.4).
+
+#### 2.1.1 설정 "내 정보" 필드 (v4.12, SD-2·SD-A2·SD-A4·SD-A17, PRD F-P1-01 ★)
+
+설정 다이얼로그 계정 탭의 "내 정보"가 쓰는 값이다(S-04 폐기, 입력 자리는 여기 하나). **전부 nullable·선택 입력**이고 **어떤 게이트·완료 판정에도 쓰지 않는다**(PRD F-P1-01 (4), 6장 `profile_filled` 삭제). **AI 프롬프트에 보내지 않는다**(SD-6, 2.1.5).
+
+**삭제하는 컬럼 (파괴적 ★)**
+
+| 컬럼 | 결정 | 이유 |
+|------|------|------|
+| `total_years_of_experience` smallint | **삭제** (v4.12, SD-2) | 화면 입력·AI 입력에서 모두 빠졌다. 연차 요건 판정은 서버 계산 `computed_total_months` 하나로 한다(6.2, AI C-1) |
+| `desired_job_title` text | **삭제** (v4.12, SD-A17) | 새 화면에 자유 입력 칸이 없고 관심 직군·직무 쌍이 그 자리를 대신한다. SD-6으로 AI에도 가지 않으므로 읽기 전용으로 남길 이유도 없다 |
+| `interested_industries text[]` | **단일 선택 `interested_industry text`로 교체** (v4.12, SD-A4) | 화면이 셀렉트 한 칸이다. 배열을 두고 화면에서 1개로 제한하면 "2개 들어 있는 행"을 화면이 어떻게 보일지 영구히 분기해야 한다 |
+
+**신설·개정 컬럼** (`profiles`, 전부 null 허용)
+
+| 컬럼 | 타입 | 제약 / 상한 | 설명 |
+|------|------|-------------|------|
+| `job_search_status` | text | `profile_options` 카테고리 `job_search_status`의 코드 (검증 트리거) | 구직 상태. 값 목록 PRD 9.7 (1) `[결정 필요: 값 목록]` SD-Q2 |
+| `interested_company_type` | text | 같음, 카테고리 `company_type` | 관심 기업군. PRD 9.7 (2) |
+| `interested_industry` | text | 같음, 카테고리 `industry` | 관심 산업. **단일 선택**. PRD 9.7 (3) |
+| `highest_education_school_name` | text | **≤ 100자** | 최종 학력 — 학교 명 |
+| `highest_education_degree` | text | `profile_options` 카테고리 `degree` | 학위. PRD 9.7 (6) |
+| `highest_education_status` | text | `profile_options` 카테고리 `graduation_status` | 졸업 상태. PRD 9.7 (7) |
+| `highest_education_start_month` | date | 1일 고정 (DM-4) | 기간 시작 연월 |
+| `highest_education_end_month` | date | 1일 고정, `CHECK (end IS NULL OR start IS NULL OR end >= start)` | 기간 종료 연월. 재학·휴학이면 비울 수 있다(상태와 교차 검증하지 않는다 — 졸업 상태는 자유롭게 고르는 값이다) |
+| `highest_education_major` | text | **≤ 100자** | 전공 |
+| `highest_education_gpa` | text | **≤ 20자**, 자유 입력 | 학점. 값 목록을 만들지 않는다(예: `3.8/4.5`, `상위 10%`) — PRD 9.7 열어 둔 점, UX 요청 1 |
+
+- **최종 학력을 평면 컬럼으로 두는 이유**: 칸이 6개로 고정이고(화면 섹션 하나), 기간 정렬 CHECK·길이 CHECK를 그대로 쓸 수 있다. jsonb로 두면 같은 6칸에 `schema_version`과 앱 검증이 따라붙는다. 반복되지 않는 단일 묶음이라 별도 테이블도 두지 않는다.
+- **이름 접두사 `highest_education_`**: 커리어의 `educations`와 읽는 사람이 헷갈리지 않게 한 눈에 "설정 전용 최종 학력"으로 읽히는 접두사를 쓴다(아래 동기화 금지 규칙).
+- **`educations`와의 관계 (v4.12, SD-5 — 한 줄로 못 박는다)**: **`profiles.highest_education_*`와 `educations`는 서로 무관한 별개 값이다** — FK도, 트리거도, 백필도, 양방향 동기화도 두지 않고, 두 값이 달라도 DB·서버는 경고하지 않는다(화면 안내 문구만, UX F-P1-01a).
+- **관심 직군·직무 쌍**: `profiles`에 두지 않고 **별도 테이블 `profile_job_interests`**(2.1.2).
+
+**값 목록을 코드 테이블로 두는 결정 (DM-22)** — 참조 테이블 `profile_options` (비사용자, `user_id` 없음)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `category` | text | PK 일부. CHECK in (`job_search_status`, `company_type`, `industry`, `job_family`, `job_role`, `degree`, `graduation_status`) — **카테고리 목록만 CHECK**로 고정하고 값은 행으로 둔다 |
+| `code` | text | PK 일부. 안정적인 키(snake_case, 예: `employed_open_to_offers`, `startup_seed_series_a`, `it_software_platform`, `bachelor`, `graduated`). **표시 문구가 바뀌어도 코드는 바꾸지 않는다** |
+| `parent_code` | text | null. **카테고리 `job_role`만** 상위 직군 코드를 가진다(`(job_family, parent_code)` 행을 가리킨다, 검증 트리거). 그 밖 카테고리는 null |
+| `label` | text | 화면 표시 문구(PRD 9.7) |
+| `sort_order` | integer | 화면 표시 순서 |
+| `is_active` | boolean | not null default true. **행을 지우지 않고 `false`로 내린다** — 이미 그 값을 고른 사용자 행이 깨지지 않게. 셀렉트 목록은 `is_active`만 보이고, 비활성 값을 가진 사용자에게는 저장된 값을 계속 보여 준다 |
+
+- PK `(category, code)`. 인덱스 `(category, sort_order)`. RLS: select 인증 사용자 전체, 쓰기 운영자만.
+- **FK를 걸지 않는 이유와 대신 두는 것**: `profiles.job_search_status`가 가리키는 카테고리는 **상수**라 FK 컬럼으로 넣을 수 없다(`(category, code)` 중 category를 컬럼으로 또 저장하면 테이블이 지저분해진다). 대신 `profiles`·`profile_job_interests`의 **저장 트리거 `private.validate_profile_options()`** 하나가 각 컬럼을 해당 카테고리에서 찾고 없으면 `invalid_profile_option`(400)으로 거부한다. `is_active = false`인 코드는 **새로 고를 때만** 거부하고(앱이 목록에서 주지 않음) 이미 저장된 같은 값을 다시 저장하는 것은 통과시킨다 `[가정]`.
+- **시드**: PRD 9.7 초안 7종(구직 상태 7 · 기업군 9 · 산업 11 · 직군 8 · 직무 52 · 학위 8 · 졸업 상태 6)을 시드 마이그레이션으로 넣는다. **값 목록은 `[결정 필요]` SD-Q2**이므로 이 문서는 코드 키를 열거하지 않는다 — 확정된 라벨에서 `snake_case` 키를 만들고, 그 매핑 표를 시드 마이그레이션에 둔다(백엔드 후속 11.7).
+
+**마이그레이션 방향·순서 (문서만. SQL은 쓰지 않는다)**
+
+| 순서 | 내용 | 파괴성 |
+|------|------|--------|
+| ① | `profile_options` 생성 + 시드, `profile_job_interests` 생성, `profiles`에 새 컬럼 추가(전부 null 허용), 검증 트리거 | 비파괴 |
+| ② | **`interested_industries` → `interested_industry` 백필**: 배열 원소가 **정확히 1개**이고 그 문자열이 새 `industry` 코드의 `label`과 **글자 그대로** 같을 때만 그 코드를 넣는다. 그 밖(0개·2개 이상·대응 없는 문자열)은 **null로 두고 사용자가 다시 고른다** — 임의 매핑 표를 만들어 뜻을 추측하지 않는다. 백필 결과 건수를 로그로 남긴다 | 비파괴(읽기만) |
+| ③ | 읽는 코드 제거: `get_data_readiness`의 `profile_filled`(6장), 컨텍스트 팩 조회의 `profiles`(2.1.5), 서버·화면의 `desired_job_title`·`total_years_of_experience`·`interested_industries` 참조 | 코드만 |
+| ④ | **`drop column total_years_of_experience, desired_job_title, interested_industries`** | **파괴적 ★** — ③ 배포가 끝난 뒤 별도 마이그레이션. 값은 복구되지 않는다(PRD·UX·AI 모두 쓰지 않기로 확정했고, 보존 요구가 없다) |
+
+#### 2.1.2 profile_job_interests (v4.12 신설, SD-A3 `[가정]`)
+
+관심 직군·직무 **쌍**을 담는다(**최대 2쌍** — 확정 2026-11-05 (사용자, SD-Q3 (가)), D-DM-14 닫힘).
+
+| 컬럼 | 타입 | 제약 |
+|------|------|------|
+| `user_id` | uuid | not null, FK `auth.users(id) on delete cascade` (DM-1). **PK `(user_id, sort_order)`** |
+| `sort_order` | smallint | not null, `CHECK (sort_order between 1 and 2)` — **상한을 PK·CHECK로 강제**해 트리거 없이 2쌍을 넘기지 못한다 (v4.12, SD-Q3 (가)) |
+| `job_family` | text | not null. `profile_options` 카테고리 `job_family`의 코드 |
+| `job_role` | text | null. 카테고리 `job_role`의 코드이고 **`parent_code = job_family`**여야 한다(검증 트리거). 직군만 고르고 직무를 비워 둔 상태를 허용한다(화면에서 직군을 먼저 고른다) |
+| `created_at` | timestamptz | `updated_at` 없음(쌍은 고치지 않고 전체를 다시 쓴다) |
+
+- **`unique nulls not distinct (user_id, job_family, job_role)`** — 같은 쌍을 두 번 담지 않는다 (v4.12, 리뷰 라운드 2 R-SD-18: `nulls not distinct`를 **반드시** 붙인다). Postgres unique의 기본값 `NULLS DISTINCT`로 두면 `job_role`이 null인 행끼리는 서로 다른 값으로 취급되어 **"같은 직군 + 직무 비움" 쌍 2개가 제약을 통과한다** — 직무를 비운 상태는 위 표에서 명시적으로 허용한 상태이므로 그대로 두면 UX S-24 ①의 "DB도 막는다"가 깨진다. 부분 unique 2개(`unique (user_id, job_family, job_role) where job_role is not null` + `unique (user_id, job_family) where job_role is null`)도 같은 결과지만 **쓰지 않는다**: `nulls not distinct`는 PG 15+ 문법이고 Supabase Postgres는 15 이상이므로 제약 하나로 끝나고, 위반 오류가 한 제약 이름으로 모여 RPC의 오류 매핑이 단순해진다.
+- **중복 쌍은 RPC가 insert 전에 거부한다 — 오류 코드 `duplicate_job_interest`(400)** (v4.12, 리뷰 라운드 2 R-SD-18): 쌍 목록은 저장마다 전체 덮어쓰기이므로 **한 요청 안에 중복이 들어올 수 있다**. `save_profile_basics`가 받은 목록에서 `(job_family, job_role)` 중복(**null 직무끼리도 같은 값으로 본다** — 위 제약과 같은 판정)을 delete·insert 전에 찾아 `duplicate_job_interest`로 거부한다(7장 오류 목록). 제약은 동시 저장 등의 마지막 방어선이고, 제약 위반(23505)이 올라와도 **같은 코드로 변환해** 올린다(raw 23505를 화면에 올리지 않는다). 화면 문구는 UX S-24 ① 오류 표가 정한다.
+- RLS: select/insert/update/delete 전부 본인(`user_id = auth.uid()`). AI 역할(`app_ai_writer`)에는 **권한을 주지 않는다**(2.1.5).
+- **쌍 전체 덮어쓰기** (UX 요청 1): 저장 RPC가 한 트랜잭션에서 `delete … where user_id = auth.uid()` → 받은 목록을 `sort_order` 1..n으로 insert 한다. 부분 수정 API는 두지 않는다.
+- **별도 테이블로 둔 이유 (jsonb를 쓰지 않는 근거)**: ① 쌍의 **상하 관계 검증**(직무가 그 직군의 것인지)을 코드 테이블 조회로 한 곳에서 할 수 있다 — jsonb면 같은 검사를 앱이 들고 있어야 한다. ② 최대 3쌍·중복 금지·순서가 **PK와 unique로** 끝난다(jsonb면 CHECK 식이 길고 읽기 어렵다). ③ "서비스 안 추천"(PRD F-P1-01 (6))이 생기면 조인·집계 대상이 된다. ④ 대가: 내 정보 조회가 2쿼리가 되고, 저장이 delete + insert다 — 섹션 단위 저장(UX)과 모양이 맞아 문제가 되지 않는다.
+
+#### 2.1.3 AI 데이터 처리 문서의 버전 원천 (v4.12, D-UX-31·SD-A13)
+
+약관 탭의 [전문 확인] 4개(개인정보 처리방침 · 이용 약관 · 국외 이전 약관 · **AI 데이터 처리**)가 **모두 같은 모양**(`/policies/{type}` 문서 페이지 + "버전 {version} · 시행일 {effective_at}")으로 열려야 한다.
+
+- **결정: `policy_versions`에 `policy_type = 'ai_data_use'` 행을 더한다.** CHECK 목록을 `terms` / `privacy` / `cross_border_transfer` / **`ai_data_use`**로 늘린다(비파괴). `document_path = '/policies/ai_data_use/{version}'`(**v4.12, R-SD-14** — 기존 3종과 같은 `/policies/{type}/{version}` 규칙을 그대로 따른다. 예외를 두지 않는다: 이 값은 링크가 아니라 기록용이고, 문서 페이지 주소는 버전 없는 `/policies/ai_data_use`다 — UX S-30의 괄호 설명과 같다), `requires_reconsent = false` 고정 `[가정]`.
+- **`ai_disclosures`를 그대로 쓰지 않는 이유**: `ai_disclosures`는 **공급자 × 등급 6행**이라 "이 문서의 버전 하나"가 없다. 6행 중 무엇을 머리글에 보일지 화면이 정해야 하고(활성 공급자가 없으면 고를 수조차 없다), 버전 문자열 모양도 다른 세 문서(`2026-11-04`)와 `ai_disclosures`(`v2026-11-05`)가 다르다. 한편 **문서 본문의 공급자별 요약은 `ai_disclosures`에서 읽는다** — 페이지 = `policy_versions`의 머리글 + `ai_disclosures` 6행의 공급자·등급별 사실 표(AI C-7.1).
+- **동의 종류는 늘리지 않는다**: 이 문서는 **고지 문서**이고 동의는 키 연결 때 공급자별로 받는다(`ai_data_use_consents`, 2.11.5). 따라서 **`consents.consent_type`에 `ai_data_use`를 더하지 않는다**(UX가 물은 점). `policy_versions`에만 값이 는다.
+- 가입 필수 동의 게이트(`get_consent_status().needs_consent`)는 `terms`·`privacy_required`만 본다 — 새 `policy_type`이 게이트를 건드리지 않는다(A.2 재동의 판정 그대로).
+
+#### 2.1.4 선택 동의 토글 2개 (v4.12, SD-A15 — 변경 없음, 확인)
+
+- **기존 `consents`의 `service_improvement`(이용 패턴 기록 활용)·`marketing`(기능 업데이트, 소식 받기)에 그대로 붙는다.** 새 동의 종류·새 컬럼·새 테이블 없음.
+- **토글 켜기** = `consents`에 **새 행 insert**(`consent_type`, `agreed = true`, `policy_version` = 그 시점 시행 중인 `privacy` 버전 `[가정]`, `agreed_at = now()`, `withdrawn_at = null`, `user_agent_hash`).
+- **토글 끄기** = 그 종류의 **가장 최근 유효 행**(`withdrawn_at is null`)에 `withdrawn_at = now()` **update**. 행을 지우지 않는다(RLS update는 선택 동의의 `withdrawn_at`만 허용, A.2 그대로).
+- **현재 토글 상태** = 그 종류의 가장 최근 행이 `agreed = true AND withdrawn_at is null`이면 켜짐. 껐다 켜면 새 행이 또 쌓인다(동의 이력이 그대로 남는 것이 의도).
+- **필수 동의 기록은 약관 탭에 표시하지 않는다** (v4.12, SD-A14 — **확정 2026-11-05 (사용자, SD-Q3 (다))**): 약관 탭은 문서 4종과 선택 동의 2종만 읽는다. `terms`·`privacy_required` 동의 행을 **읽는 화면 경로는 없앤다**(데이터·RLS는 그대로 두고 동의 게이트·탈퇴 요약이 계속 쓴다). 동의 이력을 사용자가 서비스 안에서 볼 길이 사라지므로 **출시 전 법무 확인 권장**(PIPA 열람). 아래는 확정 전 서술이다.
+- ~~남길 경우의 읽기 경로~~: 약관 탭이 `terms`·`privacy_required`의 **항목·동의 날짜**를 읽는 경로. 읽기 = `consents`의 그 사용자 행 select(본인 RLS) + `policy_versions` join. 데이터·RPC를 지우지 않는다. 사용자가 SD-A14를 확정해 표시를 없애더라도 **데이터는 그대로 둔다**(PIPA 동의 이력).
+
+#### 2.1.5 `profiles`는 AI 입력 경로가 아니다 (v4.12, SD-6 — AI 요청 1)
+
+- **컨텍스트 팩 조립 쿼리는 `profiles`를 읽지 않는다.** 빠지는 컬럼: `desired_job_title`·`interested_industries`·`total_years_of_experience`(이 셋은 컬럼 자체가 2.1.1로 삭제·교체)·`display_name`(원래 보내지 않았고 조회에서도 뺀다).
+- **`profiles`·`profile_job_interests`에 어떤 컬럼을 더하든 AI 입력과는 무관하다.** 내 정보 값(구직 상태·관심 기업군·관심 산업·관심 직군·직무·최종 학력)은 **어떤 프롬프트에도 들어가지 않는다** — 화면 표시와 (서비스 안) 추천에만 쓴다. 다음 사이클에 "AI에도 넣자"가 조용히 생기지 않게 **이 줄을 데이터 모델에 둔다**(AI 요청 1).
+- **권한으로도 막는다**: `app_ai_writer`에게 `profiles`의 내 정보 컬럼과 `profile_job_interests` **select 권한을 주지 않는다**(5장 컬럼 단위 grant 관행). `profiles`에서 AI 실행 경로가 읽는 것은 `active_ai_provider`(게이트)와 `career_data_updated_at`뿐이다.
+
+#### 2.1.6 개선 요청 — 테이블 없음 (v4.12, SD-3, PRD F-COM-11)
+
+- 설정 "개선 요청" 탭은 **외부 폼으로 나가는 링크 하나**다. 서비스가 **내용을 받지도, 보낸 내역을 보여 주지도 않는다**.
+- 따라서 **테이블·컬럼·RPC를 두지 않는다.** 폼 주소는 **설정 상수(env 또는 앱 상수)**이고 DB에 두지 않는다 — 주소 하나를 위해 참조 테이블을 만들 이유가 없고, 주소가 정해지기 전에는 화면이 "준비 중"이다(`[결정 필요]` SD-Q1).
+- 탈퇴·삭제 정책에 영향 없음(서비스 안에 데이터가 없다).
 
 ### 2.2 커리어 — 공통 규칙
 
@@ -763,7 +872,7 @@ update_failed_jd_raw_text(
 
 | 항목 | v4.4 (CR-2·CR-8·CR-10·CR-11) |
 |------|----|
-| `source_type` | CHECK → `profile`, `experience`, `education`, `project`, **`project_deliverable`**(v4.4 신설), `skill`, `jd_requirement`, `jd_sentence`, `interview_answer`, `user_note`. **v4.4 삭제**: `project_detail`, `achievement` |
+| `source_type` | CHECK → `profile`(**v4.12, SD-A19: 기존 행만 — CHECK 목록에 남기고 새 행은 트리거가 막는다, 아래**), `experience`, `education`, `project`, **`project_deliverable`**(v4.4 신설), `skill`, `jd_requirement`, `jd_sentence`, `interview_answer`, `user_note`. **v4.4 삭제**: `project_detail`, `achievement` |
 | `source_field` — `project` | 공통 `name`, `period` / **소속 프로젝트** `situation`, `task`, `action`, `result`, `learnings` / **독립 프로젝트** `role`, `description`. **v4.4 삭제**: `team_size`, `summary`. 분류 3종(`project_type`·`experience_type`·`competencies`)과 `link_url`은 허용값이 아니다(AI C-1.2). insert 트리거가 프로젝트 종류와 필드가 맞지 않으면(소속에 `role`/`description`, 독립에 STAR) `invalid_evidence_source`로 거부 `[가정]`(AI V-2의 DB 방어) |
 | `source_field` — `project_deliverable` | `title`, `body` |
 | `source_field` — 그 밖 | `education`: `institution_name`, `program_name`, `education_type`, `enrollment_status`, `period`, `description` (변경 없음) |
@@ -773,7 +882,17 @@ update_failed_jd_raw_text(
 | `writing_chat_message` | **넣지 않는다**(DM-15). 출처는 `structured_draft` 안에만 |
 | `source_label` (v4.8, ED-3) | 근거 칩의 저장 시점 출처 이름(≤ 300자). 컨텍스트 팩 별칭의 label을 저장 RPC가 옮긴다. **`education` 근거 = 교육 표시 이름**(2.3, `EDU-n` 별칭의 저장 라벨 — 이전 `institution_name` 원문). 둘 다 비면 라벨 없음(null) — 화면 대체 문구 "이름 없는 교육"은 저장하지 않는다. 같은 `input_hash`로 재사용되는 이전 결과의 근거는 저장 당시 라벨을 그대로 가진다. 모델 입력은 바뀌지 않는다(ED-4). 기존 행은 마이그레이션 `20261113000200`이 백필: `source_type = 'education'`이고 원본 교육이 살아 있으며 표시 이름이 null이 아닌 행만 다시 계산, **원본이 삭제된 행은 그대로**, 행 삭제 없음. 다른 `source_type`(프로젝트 라벨은 부모 이름 없음)은 손대지 않는다 |
 
-- 삭제 트리거(원본 삭제 표시) 대상 테이블: `profiles`(해당 없음), `experiences`, `educations`, `projects`, **`project_deliverables`**(v4.4), `skills`. `project_details`·`achievements`는 테이블과 함께 빠진다.
+- **`source_type = 'profile'` 처리 (v4.12, SD-A19, AI 요청 4)**
+
+| 항목 | 결정 |
+|------|------|
+| CHECK 목록 | **`profile`을 빼지 않는다 → 그대로 둔다.** 과거 AI 결과에 이 값을 가진 행이 있고, CHECK에서 빼면 **기존 행이 제약을 위반**해 마이그레이션이 실패하거나(`validate`) 이후 모든 update가 막힌다 |
+| 새 행 차단 | **insert 트리거**가 `source_type = 'profile'`이면 `invalid_evidence_source`(400)로 거부한다(기존 "원본·소유자 검사" 트리거에 한 줄). 부분 제약(`CHECK … NOT VALID`)도 같은 효과지만, 거부 코드를 다른 근거 오류와 같게 주려면 트리거 쪽이 낫다. 새 결과에서는 이 출처가 **생기지 않는다**(SD-6으로 프로필 값이 프롬프트에 없으므로 모델이 낼 수도 없다 — 트리거는 방어선이다) |
+| 기존 행 | **지우지 않고 그대로 둔다.** `source_deleted_at`을 소급해 채우지도 않는다 — 원본 **데이터**가 지워진 것이 아니라 **원본 화면**(S-04)이 없어진 것이라 "원본 삭제됨"은 사실과 다르다. AI 요청 4의 권고(`achievement`처럼 "원본 삭제됨")는 **SD-A19로 대체됐다**(리더 판단, 2026-11-05) |
+| 라벨·화면 | 칩 라벨·`source_label`은 **저장된 값 그대로** 보인다(UX C-01·C-02). **"원본으로 이동"만 비활성**(SD-A19) — 갈 화면이 없다. 비활성 판정은 `source_type = 'profile'` 하나로 화면이 한다(새 컬럼·플래그 없음) |
+| 소유자별 허용 출처 | 아래 표의 "커리어 6종"에서 **`profile`을 뺀다**(새 결과 기준 5종: `experience`·`education`·`project`·`project_deliverable`·`skill`). **소유자를 가리지 않는다** — 인사이트·경력기술서·직무 면접 질문·평가·종합·자기소개서 문항의 저장 RPC 허용 목록이 모두 5종이고, insert 트리거의 거부 기준과 같다. 과거 행의 집계·읽기는 그대로 |
+
+- 삭제 트리거(원본 삭제 표시) 대상 테이블: `profiles`(해당 없음 — v4.12도 그대로. 내 정보 값이 바뀌어도 과거 근거를 "변경됨"으로 만들지 않는다), `experiences`, `educations`, `projects`, **`project_deliverables`**(v4.4), `skills`. `project_details`·`achievements`는 테이블과 함께 빠진다.
 - 칩 라벨(UX C-01): `project` = "프로젝트 · {필드 표시명}", `project_deliverable` = "산출물 › {제목}".
 - **v4.5: 근거 규칙 변경 없음.** 산출물 대화(AI-13)의 출처(사실·블록 출처)는 `structured_draft` 안에만 두고 `evidence_links`에 넣지 않는다(DM-15). 저장된 산출물 본문은 지금처럼 `project_deliverable` 근거 원본이며, 저장 RPC가 본문을 바꾸면 `updated_at`이 올라 기존 근거가 "변경됨"이 된다.
 
@@ -785,7 +904,7 @@ update_failed_jd_raw_text(
 | `user_note` | `source_id` = 메모가 있는 문항의 **`draft_sections.id`**. 같은 지원 프로젝트가 아니면 거부, 문항이 없으면 "원본 삭제됨". 인용은 저장 시점 문장 |
 | `interview_answer` | `source_id` = **`interview_answers.id`**, 같은 지원 프로젝트의 답변만. **`source_field`는 null**(CHECK). 답변 삭제 시 "원본 삭제됨" 트리거. AI-06 등급·강점의 답변 인용도 이 근거 행으로 남는다(`criteria.<key>`, `strengths.<n>`) |
 | `jd_sentence` | `source_locator {sid, start, end}`는 그 문장 범위 안의 부분 구간 허용(오프셋 JS UTF-16) |
-| 소유자별 허용 출처 | **v4.4**: 인사이트 = 커리어 6종(`profile`, `experience`, `education`, `project`, `project_deliverable`, `skill`) + `jd_requirement`·`jd_sentence`. 경력기술서 = 커리어 6종만. 직무 면접 질문·경력기술서·`job_competency` 문항은 **`source_type = 'project' AND source_field = 'learnings'`** 근거를 RPC가 거부(V-8 DB 방어, v3 `project_detail.learnings`에서 변경) |
+| 소유자별 허용 출처 | **v4.4**: 커리어 출처는 **(v4.12, SD-A19) 모든 소유자에서 ~~6종~~ 5종**(~~`profile`~~, `experience`, `education`, `project`, `project_deliverable`, `skill`) — 인사이트 = 커리어 5종 + `jd_requirement`·`jd_sentence`, **경력기술서 = 커리어 5종만**(~~6종~~), 직무 면접 질문·평가·종합·자기소개서 문항도 같은 5종 기준이다(각 소유자에 더 붙는 출처는 그 절의 규칙대로 — `interview_answer`·`user_note` 등). **insert 트리거와 저장 RPC 허용 목록이 같은 5종을 쓴다**(둘이 어긋나면 트리거만 거부하는 모순이 생긴다). 직무 면접 질문·경력기술서·`job_competency` 문항은 **`source_type = 'project' AND source_field = 'learnings'`** 근거를 RPC가 거부(V-8 DB 방어, v3 `project_detail.learnings`에서 변경) |
 | 쓰기 주체 | **결과 저장 RPC 안에서만**(소유·세대 검사). `app_ai_writer`의 직접 INSERT 권한 없음(5장, A24) |
 ### 2.9 AI 작업·사용량 미터 (v4 BYOK)
 
@@ -876,12 +995,18 @@ update_failed_jd_raw_text(
 | `outcome` | text | not null, CHECK in (`succeeded`, `failed`) | 실패도 토큰이 보고되면 집계(F-AI-07 (7)) |
 | `error_code` | text | null | `outcome = 'failed'`일 때 `ai_jobs.error_code`와 같은 값 |
 | `price_table_version` | text | not null | 계산에 쓴 가격표 |
-| `estimated_cost_usd` | numeric(12,6) | not null | AI C-13 식. 기록 시점 값, 가격표가 바뀌어도 다시 계산하지 않음. 무료 등급도 유료 환산 값 |
+| **`input_cost_usd`** | numeric(12,6) | **v4.12 신설 ★**, not null default 0 | 입력 쪽 비용(비캐시 입력 + 캐시 읽기 + 캐시 쓰기). 화면 "입력 비용" 열(SD-A11) |
+| **`output_cost_usd`** | numeric(12,6) | **v4.12 신설 ★**, not null default 0 | 출력 쪽 비용(사고 토큰 포함). 화면 "출력 비용" 열 |
+| `estimated_cost_usd` | numeric(12,6) | not null | AI C-13 식. 기록 시점 값, 가격표가 바뀌어도 다시 계산하지 않음. 무료 등급도 유료 환산 값. **(v4.12) `input_cost_usd + output_cost_usd`와 같아야 한다** — 기존 컬럼은 합계로 남긴다(과거 행·분석 호환) |
 
 - 공통 컬럼 중 `updated_at` 없음(불변).
 - 동일 입력 재사용으로 호출하지 않은 경우는 기록하지 않는다.
 - RLS: select 본인. insert는 `app_ai_writer`(작업 실행 경로)만. **`app_ai_writer`도 본인 행 select**(v4.2, 구현 반영: 무료 등급 호출 간격용 마지막 `occurred_at` 조회, `insert … returning`). update·delete 없음(보관 정리·탈퇴만).
-- 인덱스: `(user_id, period_month, feature)`, `(user_id, period_month, provider)`.
+- 인덱스: `(user_id, period_month, feature)`, `(user_id, period_month, provider)`. **(v4.12, SD-A10)** 교차 집계가 주 조회가 되므로 **`(user_id, period_month, provider, feature)`를 더하고** 앞의 두 개는 둔다(월 합계·공급자 합계가 여전히 이 인덱스로 돈다).
+- **입력·출력 비용 분리 (v4.12, SD-A11 ★)**: 새 화면의 표는 **입력 비용 / 출력 비용**을 열로 나눠 보이는데(SD-A11, UX 요청 4), 현행은 합계 `estimated_cost_usd` 하나뿐이라 **조회 시점에 나눌 수 없다**(기록 시점 가격표로 계산한 값이고, 장문 구간·캐시 단가가 섞여 토큰 수로 역산할 수 없다). 그래서 **기록 시점에 두 값을 따로 저장한다**.
+  - 기록 경로(공급자 호출 후 insert)가 AI C-13 식을 입력 쪽·출력 쪽으로 나눠 계산해 세 값을 함께 넣는다.
+  - **기존 행 백필** `[가정]`: `price_table_version`·`model`·토큰 수가 모두 남아 있으므로 그 가격표 행으로 **다시 계산해 채운다**(`price_table_version = 'unpriced'`면 둘 다 0). 계산 결과 합계가 저장된 `estimated_cost_usd`와 어긋나면 **`estimated_cost_usd`는 고치지 않고** 입력·출력만 넣는다(과거 기록의 합계는 당시 값이 맞다). 백필하지 않는 쪽(둘 다 0)도 가능하지만 지난달 표가 비어 보인다.
+  - 화면 "토큰 수 보조 표기"(SD-A11)는 기존 토큰 컬럼 그대로다.
 - **보관: 13개월** `[가정]`(월 선택 조회와 1년 추세 여유). v4.2: 13개월 = **이번 KST 달을 포함한 13개 달**(`period_month < 이번 KST 달 1일 − 12개월`이면 삭제), 매일 보관 크론이 같은 기준으로 지운다 `[가정]`(4.5). 키를 지워도 남는다(콘텐츠 없음). 탈퇴 시 삭제.
 - 가격표에 없는 모델의 호출은 `price_table_version = 'unpriced'`, `estimated_cost_usd = 0`으로 기록 `[가정]`.
 - 지원 프로젝트 삭제와 겹쳐 FK 위반이 나면 `application_project_id = null`로 다시 넣는다(4.1 "기록 유지"와 같은 결과).
@@ -891,7 +1016,7 @@ update_failed_jd_raw_text(
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | `id` | uuid | PK, `user_id` 없음 |
-| `version` | text | 가격표 버전(예: `2026-10-26.1`). `unique (version, provider, model)` |
+| `version` | text | 가격표 버전(예: **`v2026-10-28`** — v4.12, 리뷰 라운드 2 R-SD-22). `unique (version, provider, model)` |
 | `effective_from` | date | 적용 시작일. 기록 시 `effective_from <= 오늘`인 최신 버전 사용 |
 | `provider` | text | `openai` / `gemini` / `anthropic` |
 | `model` | text | 모델 ID |
@@ -905,6 +1030,7 @@ update_failed_jd_raw_text(
 | `long_context_cache_write_usd_per_mtok` | numeric(10,4) null | **v4.2 (구현 반영)**: 장문 구간 캐시 쓰기 단가(Claude Haiku 등) |
 | `source_checked_at` | date | 공급자 가격 페이지 확인일(화면 "기준일") |
 
+- **버전 문자열 규칙은 AI C-13의 `v{YYYY-MM-DD}`를 그대로 쓴다** (v4.12, 리뷰 라운드 2 R-SD-22). 시드의 첫 버전은 AI C-13과 같은 **`v2026-10-28`**이고 예정 버전은 `v2026-12-01`·`v2027-01-01`이다. 이전 판에 있던 두 자리 접미사 모양(`{YYYY-MM-DD}.{n}`)은 폐기한다 — 화면이 "가격표 {version} · 기준일 {source_checked_at}"을 그대로 보이므로(UX S-42) 시드 값과 응답 예시가 AI 쪽 모양과 한 글자도 달라서는 안 된다. 같은 날 가격표를 두 번 고쳐야 하면 접미사를 붙이지 않고 새 날짜 버전을 쓴다.
 - 비용 계산: 입력이 `long_context_threshold_tokens`를 넘으면 `long_context_*` 단가를 쓰고, 장문 캐시 단가가 null이면 일반 캐시 단가를 쓴다(AI C-13 식 반영 대상).
 
 - RLS: select 인증 사용자 전체. 쓰기 운영자만. 행은 고치지 않고 새 버전을 추가한다(과거 기록의 기준 보존).
@@ -921,23 +1047,47 @@ update_failed_jd_raw_text(
 | 동일 입력 재사용 | `input_hash`(공급자·모델 포함) 인덱스 |
 | 서버 남용 방지 요청 제한 | DB 밖(앱·엣지 미들웨어). 사용자에게 "한도"로 노출하지 않음 `[가정: 수치]` |
 
-#### 2.9.5 월 집계 RPC `get_ai_usage_summary(period_month date default 이번 달 KST, include_previous boolean default false)`
+#### 2.9.5 월 집계 RPC `get_ai_usage_summary(period_month date default 이번 달 KST, include_previous boolean default false)` — **(v4.12, SD-A10·D-UX-30) 응답 교체 ★**
 
-- security invoker(본인 RLS). 반환:
+- security invoker(본인 RLS). 시그니처는 그대로, **응답 모양이 바뀐다**: 현행 `by_feature`(교차 없는 기능별) + `by_provider`(교차 없는 공급자별)를 **공급자 × 기능 교차 집계 `providers[]`로 대체**한다. 화면이 공급자 탭 하나를 고르면 그 공급자의 기능별 표를 보이기 때문이다(UX S-42).
 
 ```json
 {
-  "period_month": "2026-10-01",
-  "as_of": "2026-10-26T09:00:00Z",
-  "totals": { "input_tokens": 0, "cached_input_tokens": 0, "cache_write_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0, "calls": 0, "failed_calls": 0 },
-  "by_feature": [ { "feature": "insight", "input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0, "calls": 0 } ],
-  "by_provider": [ { "provider": "gemini", "connection_tier": "free", "input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0, "calls": 0 } ],
-  "price_table_versions": [ { "version": "2026-10-26.1", "source_checked_at": "2026-10-26" } ]
+  "period_month": "2026-11-01",
+  "as_of": "2026-11-05T09:00:00Z",
+  "totals": { "input_tokens": 0, "cached_input_tokens": 0, "cache_write_tokens": 0, "output_tokens": 0,
+              "input_cost_usd": 0, "output_cost_usd": 0, "estimated_cost_usd": 0, "calls": 0, "failed_calls": 0 },
+  "providers": [
+    {
+      "provider": "gemini",
+      "connection_tiers": ["free"],
+      "totals": { "input_tokens": 0, "cached_input_tokens": 0, "cache_write_tokens": 0, "output_tokens": 0,
+                  "input_cost_usd": 0, "output_cost_usd": 0, "estimated_cost_usd": 0, "calls": 0, "failed_calls": 0 },
+      "by_feature": [
+        { "feature": "insight", "input_tokens": 0, "cached_input_tokens": 0, "cache_write_tokens": 0, "output_tokens": 0,
+          "input_cost_usd": 0, "output_cost_usd": 0, "estimated_cost_usd": 0, "calls": 0, "failed_calls": 0 }
+      ],
+      "price_table_versions": [ { "version": "v2026-10-28", "source_checked_at": "2026-10-28" } ]
+    }
+  ],
+  "price_table_versions": [ { "version": "v2026-10-28", "source_checked_at": "2026-10-28" } ]
 }
 ```
-- `by_provider`는 공급자·등급별로 나눠 무료 등급을 "청구되지 않을 수 있음(유료 환산)"으로 표시할 수 있게 한다(F-AI-07 (5)).
-- `price_table_versions`는 그 달 기록에 쓰인 버전 목록(화면 "가격표 버전·기준일").
-- **v4.1 (UB-2 (b) `[가정]`)**: 기본 응답은 **요청한 달의 기능별(`by_feature`) + 공급자별(`by_provider`)** 과 합계만이다. 지난달 비교는 기본 응답에서 뺐고, `include_previous = true`일 때만 `"previous_month": {period_month, estimated_cost_usd, input_tokens, output_tokens}`를 더한다(화면이 쓰지 않으면 인자를 넘기지 않으면 된다). 다른 달은 `period_month` 인자로 조회한다.
+
+| 항목 | 규칙 |
+|------|------|
+| `providers[]` | **그 달에 기록이 있는 공급자만**(기록 없는 공급자는 행 없음 — 화면은 탭을 보이고 빈 상태를 쓴다, UX). 정렬은 `ai_providers.display_order` `[가정]` |
+| `providers[].by_feature` | **저장되는 `feature` 값 그대로**(그 공급자·그 달에 기록이 있는 값만). 화면 7행 묶음을 **RPC가 하지 않는다**(아래) |
+| `providers[].connection_tiers` | 그 달 기록에 나타난 등급 목록(`["free"]`, `["paid"]`, 또는 둘 다 — 달 중간에 등급을 바꾸면 둘이 된다). 무료 등급 안내(F-AI-07 (5))의 **현재 상태**는 활성 키의 `connection_tier`를 보고 판단한다(`ai_provider_keys_public`, 같은 화면이 이미 읽는다) — 지난 기록의 등급과 현재 등급은 다를 수 있다 |
+| `providers[].price_table_versions` | 그 공급자 기록에 쓰인 가격표 버전·기준일(UX 요청 4). 최상위 `price_table_versions`는 그 달 전체 목록(기존 그대로, 화면 하단 안내) |
+| 비용 열 | `input_cost_usd`·`output_cost_usd`를 **저장 컬럼에서 그대로 더한다**(2.9.2 신설). `estimated_cost_usd`는 합계로 함께 돌려준다 |
+| `include_previous` | **그대로 유지**(v4.1 UB-2 (b)): `true`면 `"previous_month": {period_month, estimated_cost_usd, input_tokens, output_tokens}`. 화면이 쓰지 않으면 넘기지 않는다 |
+| 삭제 | 최상위 `by_feature`·`by_provider` **삭제**. 합계 토큰 카드가 없어졌어도(SD-A11) `totals`는 남긴다 — 기간 한 줄·실패 호출 수·`include_previous` 비교의 원천이고 화면이 쓰지 않으면 무시하면 된다 |
+
+- **7행 묶음은 표시 단계에서만 한다 (v4.12, SD-4·SD-A12)**: `career_description` + `cover_letter` → "자기소개서 작성 AI 채팅" 한 행 합산은 **화면이** 한다. RPC·SQL에 묶음을 넣지 않는다 — 묶음 정의의 유일한 원천은 **AI 명세 C-13.1 표**이고(AI 요청 5), 자기소개서 작성이 채팅형으로 바뀌는 다음 사이클에 묶음이 또 바뀐다(SD-4). RPC가 묶으면 그때 DB 함수를 고쳐야 하고, 저장 8값과 표시 7행이 한 함수 안에서 섞인다.
+  - 따라서 **저장되는 `feature` 값 8개는 그대로다**(2.9.2 CHECK 변경 없음, SD-4).
+  - 화면은 C-13.1 매핑 상수 하나로 `by_feature` 행을 7행으로 접고, 매핑에 없는 값(Should 범위 `writing_assist`·`chat_reply`)은 **표에 보이지 않는다** — `totals`에는 들어 있으므로 합이 어긋날 수 있다 `[가정]`(지금은 그 기능이 없어 기록이 생기지 않는다).
+- **읽는 곳**: S-24 AI 연결 탭의 사용량 영역(S-42), 데이터 계층 `getAiUsageSummary`. 백엔드 후속 11.7 — RPC 교체 + 타입 재생성 + 화면 매핑 상수.
 
 ### 2.10 Should·운영
 - `chat_threads`/`chat_messages`(AI-09): v2와 같음. AI 작성 대화와 **별도 테이블**. `chat_messages`(assistant)에도 AI 출력 공통 메타(v4 `provider`·`model_tier` 포함).
@@ -1199,6 +1349,7 @@ update_failed_jd_raw_text(
 | 스킬 | `project_skills` | v2와 같음 | 트리거 |
 | **AI 작성 대화** | 메시지 | 프로젝트 `source_writing_chat_id` null(`updated_at` 그대로), 저장된 STAR·산출물 본문 유지 | 없음(근거 원본 아님) |
 | 지원 프로젝트 | v2 목록 + **`application_stage_events`**. **(v4.11, OD-I6 ★)** 면접 세션은 `completed`가 아닌 것만(진행 중 작업 취소 요청) | `ai_usage_records`(`application_project_id`만 null). **(v4.11, OD-I6)** `completed` 면접 세션과 그 질문·답변·평가·종합·근거는 **남는다** — `application_project_id` null, 회사명·포지션명 복사, 읽기 전용(2.7.2) | owner와 함께. 남는 세션의 JD 출처 근거는 "원본 삭제됨"(2.8 기존 규칙) |
+| **내 정보 (v4.12, SD-A2)** | 개별 삭제 대상이 **아니다** — 값을 비우는 것은 저장(`save_profile_basics`)으로 한다. 쌍 목록은 저장마다 전체 덮어쓰기(2.1.2). 탈퇴 시 `profiles`·`profile_job_interests` 삭제(4.5 순서에 포함) | — | 없음(근거 원본 아님. 과거 `profile` 근거 행은 2.8 — **지우지 않는다**) |
 | **API 키** (v4) | — (행 hard delete, 복구 불가) | `profiles.active_ai_provider` null(FK), 그 공급자 현재 동의에 `withdrawn_at`. **기존 AI 결과·사용 기록은 유지**(D-36). 진행 중 작업은 `key_missing`으로 종료, 입력 보존 | — |
 
 - v4.4 폐기 행: 상세 내용(`project_details`), 성과(`achievements`).
@@ -1236,6 +1387,7 @@ update_failed_jd_raw_text(
 | 데이터 | 보유 |
 |--------|------|
 | 커리어(교육·프로젝트 STAR·산출물 포함), 지원 프로젝트·결과·전형 이력, 근거, 동의 이력 | 탈퇴 또는 개별 삭제까지 |
+| **내 정보**(`profiles` 내 정보 컬럼 + `profile_job_interests`) (v4.12) | 탈퇴까지(사용자가 값을 비우면 그 즉시 없어진다 — 이력을 남기지 않는다) |
 | AI 작성 대화 (v4.4: 모두 프로젝트에 묶임, v4.5: 산출물 대화는 산출물에도 묶임) | 프로젝트 삭제(경력·교육 삭제로 인한 연쇄 포함)·**산출물 삭제(v4.5)**·대화 삭제·탈퇴까지 (D-27 (a), **U-9 확정**). **자동 삭제 없음**(v4.4, CR-6 — D-DM-08 90일 폐기) |
 | `ai_jobs` | 90일 / `ai_usage_records` **13개월** `[가정]`(D-DM-09) / `account_deletion_logs` 3년 비식별 / 백업 ≤ 30일 |
 | **API 키** (v4) | 키 삭제 또는 탈퇴 즉시 hard delete. 백업 안의 암호문은 백업 보관(≤ 30일) 뒤 소멸하며, KEK 없이는 복원 불가(NFR-KEY-02·06. KEK는 DB 밖 — 출시 = 환경 변수 `env-v1`, 출시 후 KMS, v4.11 OD-L1) |
@@ -1251,7 +1403,7 @@ update_failed_jd_raw_text(
 
 | 항목 | 값 |
 |------|----|
-| 순서 | `delete_account` RPC가 한 트랜잭션에서 `user_id`가 있는 public 테이블 전체와 `profiles`를 **명시적으로** 지운다(대화는 id 순서로 먼저 잠근 뒤 메시지 삭제) → 서버가 `auth.users`를 지운다. `auth.users` 연쇄는 안전망(`profiles`에서는 아무것도 연쇄되지 않음) |
+| 순서 | **(v4.12)** 삭제 대상에 **`profile_job_interests`**가 포함된다(`user_id` 있는 사용자 테이블). `profile_options`는 참조 테이블이라 대상이 아니다. `delete_account` RPC가 한 트랜잭션에서 `user_id`가 있는 public 테이블 전체와 `profiles`를 **명시적으로** 지운다(대화는 id 순서로 먼저 잠근 뒤 메시지 삭제) → 서버가 `auth.users`를 지운다. `auth.users` 연쇄는 안전망(`profiles`에서는 아무것도 연쇄되지 않음) |
 | 진행 중 작업 | 취소 표시 없이 행째 삭제. 실행기는 heartbeat lost로 멈추고 키 복호화도 거부된다 |
 | 파기 증빙 | `account_deletion_logs.subject_hash` = HMAC-SHA256(서버 비밀값, `"account:" + user id`), 소문자 hex 64자 CHECK, unique. 로그 행은 RPC 마지막에 한 번 insert(`requested_at`·`db_deleted_at` 함께). 같은 hash로 다시 부르면 첫 행 유지(멱등). 재가입 추적에는 쓰지 않는다. 비밀값이 없으면 아무것도 지우지 않고 실패 |
 | auth 삭제 실패 | public 데이터는 이미 없고 세션은 남는다. 같은 RPC는 멱등으로 통과하고 auth 삭제만 다시 한다(이미 없는 auth 사용자는 성공). 재진입 경로는 UX FL-07·S-25(A7), 서버 판정(`get_account_deletion_state`)은 6.1 |
@@ -1317,6 +1469,8 @@ D-11에 더한 규칙이다(PRD NFR-PRV-06, 처리방침 3번). 화면은 없고
 | **evidence_links** | 본인 | **v4.2: 결과 저장 RPC 안에서만**. `app_ai_writer` 직접 INSERT 없음(A24) | 삭제 트리거만(원본 삭제 표시) | 연쇄·결과 삭제만 |
 | **ai_provider_keys** (v4) / 뷰 **`ai_provider_keys_public`** (security invoker, 메타 컬럼만) | 본인, **메타 컬럼만**(암호 컬럼 grant 없음, `user_id`도 없음). 화면·서버는 뷰 `ai_provider_keys_public` 사용 | RPC `save_provider_key`(**v4.2: 서버 전용 역할**) | RPC(`save_provider_key` 교체·`record_provider_key_check` = **서버 전용 역할**, `mark_provider_key_invalid`·`record_provider_key_success` = `app_ai_writer`) | RPC `delete_provider_key`(사용자 세션) |
 | **ai_data_use_consents** (v4) | 본인 | 사용자 세션 | `withdrawn_at`만 | 연쇄만 |
+| **profile_job_interests** (v4.12) | 본인 | RPC `save_profile_basics`(invoker) — 직접 insert grant도 두지만 쓰지 않는다 `[가정]` | 없음(전체 덮어쓰기) | 본인(RPC 안의 delete) |
+| **profile_options** (v4.12, 참조) | 인증 사용자 전체 | 운영자 | 운영자 | 운영자 |
 | **ai_usage_records** (v4) | 본인. v4.2: `app_ai_writer`도 본인 행 | `app_ai_writer` | 없음 | 보관 정리·탈퇴만 |
 | `ai_price_tables` / `ai_disclosures` / `ai_providers` (v4) | 인증 사용자(`ai_disclosures`는 anon 포함) | 운영자 | 운영자 | 운영자 |
 | 그 밖 | v2와 같음 | | | |
@@ -1326,6 +1480,7 @@ D-11에 더한 규칙이다(PRD NFR-PRV-06, 처리방침 3번). 화면은 없고
   - 직접 쓰기: **`ai_jobs`**(상태·진행·`step_outputs` 등, 전이 트리거 적용), **`ai_usage_records` insert**. 그 밖 테이블에는 직접 insert/update 권한이 없다.
   - **RPC로만 쓰기**: 대화(`apply_structured_draft_patch`, `begin_assistant_message`, `finish_assistant_message` 등), JD 추출(`begin/apply/fail_jd_extraction`), 결과(`begin_*`·`complete_*`·`fail_*`), 근거(결과 RPC 안), 키 상태(`mark_provider_key_invalid`, `record_provider_key_success`), 실행 게이트(`check_ai_run_allowed`). 모든 쓰기 RPC는 security definer + 소유 검사 + 실행 세대(`run_generation`) 검사.
   - **`evidence_links` 직접 INSERT 권한 제거 (확정 2026-11-05 (사용자), A24 ★)**: 쓰는 코드가 없고, 직접 INSERT는 세대 검사를 거치지 않는다. 모든 근거는 소유·세대 검사 RPC로만 저장한다. 기존 컬럼 grant는 후속 마이그레이션에서 회수.
+  - **(v4.12, SD-6) `profiles`의 내 정보 컬럼과 `profile_job_interests`·`profile_options`에 select 권한을 주지 않는다** — AI 실행 경로가 `profiles`에서 읽는 것은 `active_ai_provider`·`career_data_updated_at`뿐이다(2.1.5). 기존 `desired_job_title`·`interested_industries`·`total_years_of_experience` 컬럼 grant는 컬럼과 함께 사라진다.
   - **`ai_provider_keys` 테이블 권한 없음**(암호문은 `app_key_reader`의 `get_provider_key_secret`으로만, 2.11.2).
 - **서버 전용 역할 (v4.2, A19 ★)**: `save_provider_key`·`record_provider_key_check` 실행 권한. 서버가 세션 확인 뒤 `p_user_id`를 넘긴다. `authenticated`·`anon` execute 없음.
 - **`app_key_reader` (v4 신설 역할)**: `get_provider_key_secret(ai_job_id)` 실행 권한만. 테이블 권한 없음. 작업 실행 서버만 이 역할로 연결한다.
@@ -1336,7 +1491,7 @@ D-11에 더한 규칙이다(PRD NFR-PRV-06, 처리방침 3번). 화면은 없고
 
 ---
 
-## 6. 데이터 최소 기준 판정 — `get_data_readiness()` (v4.4)
+## 6. 데이터 최소 기준 판정 — `get_data_readiness()` (v4.4, **v4.12 응답 축소 ★**)
 
 ```json
 {
@@ -1344,8 +1499,7 @@ D-11에 더한 규칙이다(PRD NFR-PRV-06, 처리방침 3번). 화면은 없고
     "complete_experiences": 1, "complete_educations": 1,
     "complete_projects": 0, "projects_without_complete_star": 1,
     "standalone_projects_without_description": 0,
-    "draft_experiences": 0, "draft_educations": 0, "draft_projects": 1,
-    "profile_filled": true
+    "draft_experiences": 0, "draft_educations": 0, "draft_projects": 1
   },
   "draft_item_ids": { "experiences": [], "educations": [], "projects": ["uuid"] },
   "features": {
@@ -1368,7 +1522,7 @@ v4.4 다른 예:
   - `counts`: `complete_project_details`·`draft_project_details` **삭제**. `projects_without_complete_detail` → **`projects_without_complete_star`**(상황·행동이 비어 `draft`인 소속 프로젝트, 부모 경력·교육이 `complete`인 것만). **`standalone_projects_without_description`** 신설(프로젝트 내용이 비어 `draft`인 독립 프로젝트).
   - `draft_item_ids.project_details` **삭제**.
   - `suggested_mode` **삭제**(대화 모드가 하나). `next_action` 값에 **`create_project`** 추가.
-  - `hints`: `complete_project_detail` → **`project_star`**(이름 변경), **`project_fields` 의미 변경**(아래), `profile` 그대로.
+  - `hints`: `complete_project_detail` → **`project_star`**(이름 변경), **`project_fields` 의미 변경**(아래), ~~`profile` 그대로~~ **(v4.12, SD-A18) `profile` 삭제**(아래).
 - `next_action` / `suggested_project_id`는 `ready = false`일 때만 온다. `next_action` ∈ `writing_chat` / `create_project` / `form`. `ready = true`면 둘 다 생략.
 - **기능 키 매핑 (readiness ↔ `writing_chats.return_target.feature`)**: 변경 없음.
 
@@ -1379,7 +1533,20 @@ v4.4 다른 예:
   | `job_interview` | `job_interview` |
   | `culture_fit_interview` | (복귀 없음 — 게이트 없음) |
 - **D-01 v4.4** (PRD 9.1 D-01 `[가정]`): `complete_experiences ≥ 1` **그리고** `complete_projects ≥ 1`. complete 프로젝트 = **소속 프로젝트(이름 + 상황 + 행동, 부모 경력·교육이 `complete`) 또는 독립 프로젝트(이름 + 프로젝트 내용)**. 독립 프로젝트도 센다(AI 권고·PRD D-01 v4.5). **교육만 있고 경력이 없으면 미충족**(`missing: ["complete_experience"]`, 변경 없음).
-- `missing` 값: `complete_experience`, `complete_project`. `hints` 값: **`project_star`**(STAR 미완으로 `draft`인 소속 프로젝트가 있음 — 화면 문구용), **`project_fields`**(아래), `profile`(참고).
+- `missing` 값: `complete_experience`, `complete_project`. `hints` 값: **`project_star`**(STAR 미완으로 `draft`인 소속 프로젝트가 있음 — 화면 문구용), **`project_fields`**(아래). ~~`profile`(참고)~~ **(v4.12, SD-A18) 삭제**.
+
+### 6-A. `profile_filled` 삭제 (v4.12, SD-A18 ★)
+
+**결정: `counts.profile_filled`와 `hints`의 `profile` 값을 응답에서 없앤다.** 내 정보는 **어떤 게이트 판정에도 쓰지 않는다**(PRD F-P1-01 (4) — 전부 선택 입력이고 완료 조건이 아니다). 판정에 쓰지 않는 플래그를 응답에 남기면 다음 사이클에 다시 게이트로 끌려 들어간다.
+
+| 항목 | 내용 |
+|------|------|
+| 삭제 이유(직접) | 현행 정의가 `desired_job_title` / `total_years_of_experience` / `interested_industries`에 걸려 있고 **세 컬럼이 모두 사라진다**(2.1.1). 새 내 정보 값으로 의미를 바꿔 쓸 수도 있지만, 그러면 쓰는 곳 없는 플래그를 유지 비용만 내고 들고 있게 된다 |
+| 합의 | PRD 요청 4 권고 = 삭제 / AI 회신 2 = "AI 쪽에서 보는 곳 없음, 삭제 권고에 동의" / UX 요청 2 = "없애거나 게이트에서 떼라" → **삭제** |
+| **응답 모양 변경** | `counts`에서 `profile_filled` 키가 **없어진다**(값이 `false`가 되는 것이 아니다). `features.*.hints` 배열에 `"profile"`이 **들어가지 않는다** — "ready여도 `hints: ["profile"]`을 붙인다"는 규칙(아래 세부 규칙)도 함께 삭제한다 |
+| 읽는 곳 — UX | 데이터 부족 게이트·배너(C-09·C-10) 문구가 `profile` 힌트를 쓰지 않는지 확인(UX v5.17 기준 쓰지 않음). S-04가 폐기됐으므로 "기본 프로필을 채우세요"로 보내는 경로 자체가 없다 |
+| 읽는 곳 — 백엔드 ★ | ① RPC `get_data_readiness` 교체(두 값 제거), ② `database.types.ts` 재생성, ③ 서버·화면에서 `profile_filled`·`hints.includes('profile')` 참조 제거, ④ pgTAP에서 해당 단정 삭제. **키가 사라지므로 타입 재생성 전 화면이 깨질 수 있다** — 같은 배포로 묶는다 |
+| `data_sufficiency` | AI C-1 정의와 맞춘다: `thin` = D-01 미충족이지만 **complete 경력·교육·프로젝트가 하나라도 있음**(~~"프로필 또는"~~ 삭제, v4.12 SD-6 — 프로필은 AI 입력이 아니라 데이터 양의 근거가 될 수 없다), `none` = 그조차 없음, `ok` = D-01 충족. 컬처핏 면접 예외는 그대로 |
 - **`project_fields` (A18 ★ → v4.4 의미 변경)**: v4.2의 "이름·역할이 빠진 프로젝트"는 생기지 않는다(이름은 만들 때 필수, 소속 프로젝트에 `role` 없음). v4.4에서는 **프로젝트 내용이 비어 `draft`인 독립 프로젝트**가 판정 4단계에서 대상이 될 때 `hints`에 넣고 `next_action = "form"` + `suggested_project_id`(그 독립 프로젝트, 최근 수정순 1건)를 준다. 화면은 S-43 "프로젝트 내용" 섹션 편집을 연다(독립 프로젝트에는 AI 패널이 없음, D-AI-15 (a)).
 - **`next_action` 판정 순서 (v4.4)** — "AI 사용 가능" = 활성 공급자 있음 + `key_status <> 'invalid'`(`needs_check`는 사용 가능, `consent_required`는 판정에 쓰지 않음 — v4.2와 같음):
   1. `missing`에 `complete_experience` → `form`, `suggested_project_id` 없음.
@@ -1387,10 +1554,10 @@ v4.4 다른 예:
   3. `standalone_projects_without_description > 0` → `form` + `suggested_project_id` + `hints`에 `project_fields`.
   4. 그 밖(채울 프로젝트가 없음) → **AI 사용 가능이면 `create_project`**, **아니면 `form`**(제안 없음, 화면이 프로젝트 추가로 안내). **v4.5 (PA-3)**: `create_project`의 화면 경로는 "소속 고르기 → 빈 S-10(행 없음) + 패널"이다(이름 다이얼로그 없음, 경로는 UX). 행은 첫 저장 또는 첫 AI 메시지 직전 자동 저장 때 생기고, 게이트에서 왔으면 `start_writing_chat`의 `p_return_target`으로 복귀 대상이 들어간다(UX DM-9). 값·판정은 변경 없음.
 - **세부 규칙 (v4.2 유지분)**
-  - `missing`·`hints`는 항상 둔다(ready면 `missing: []`). `hints: ["profile"]`은 ready여도 붙인다(참고용). 세 기능(insight / draft / job_interview)은 같은 객체.
+  - `missing`·`hints`는 항상 둔다(ready면 `missing: []`). ~~`hints: ["profile"]`은 ready여도 붙인다(참고용).~~ **(v4.12, SD-A18) 삭제**. 세 기능(insight / draft / job_interview)은 같은 객체.
   - 카운트·`suggested_project_id`는 포함 규칙(소속 경력·교육이 draft면 제외)을 적용해 센다.
-  - **`profile_filled`** = `desired_job_title`(공백 아님) / `total_years_of_experience` / `interested_industries`(비지 않음) 중 하나라도 있음(v4.2 그대로).
-- `data_sufficiency` (AI C-1 정의): `ok` = D-01 충족 / `thin` = 미충족이지만 프로필 또는 complete 경력·교육·프로젝트 존재 / `none` = 없음.
+  - ~~**`profile_filled`** = `desired_job_title`(공백 아님) / `total_years_of_experience` / `interested_industries`(비지 않음) 중 하나라도 있음(v4.2 그대로).~~ **(v4.12, SD-A18) 삭제** — 6.1a.
+- `data_sufficiency` (AI C-1 정의): `ok` = D-01 충족 / `thin` = 미충족이지만 **complete 경력·교육·프로젝트 존재**(v4.12, SD-6 — "프로필 또는" 삭제) / `none` = 없음.
 - `draft_item_ids`는 경력·교육·프로젝트 ID만(v4.4).
 - 같은 판정을 AI Route Handler가 다시 확인(v2와 같음). AI-12·**AI-13(v4.5)**·AI-08은 판정 대상 아님. 산출물은 완료 조건이 아니라 readiness 값에 변경 없음.
 - **v4 AI 연결 상태**: 반환 최상위에 `"ai_connection": {"active_provider": "gemini" | null, "key_status": "valid" | "invalid" | "needs_check" | null, "connection_tier": "free" | "paid" | null}`를 더한다. 활성 공급자가 없거나 `key_status = 'invalid'`이면 AI 사용 불가로 보고 `writing_chat`·`create_project` 대신 **`form`**을 준다(키 없으면 섹션 직접 입력 안내, PRD 3.3, v4.4 판정 순서 2·4). AI 기능 자체의 잠금(F-AI-06)은 화면이 `ai_connection`으로 판단한다.
@@ -1413,7 +1580,7 @@ v4.4 다른 예:
 
 | 기능 ID | 테이블 (R / W) | RPC·함수 |
 |---------|----------------|----------|
-| F-P1-01 기본 프로필 | R/W `profiles` | — |
+| F-P1-01 내 정보 (v4.12, SD-A2) | R/W `profiles`(2.1.1), `profile_job_interests`(2.1.2); R `profile_options` | **`save_profile_basics`**(v4.12 신설 ★, 7장) |
 | F-P1-02 경력 | R/W `experiences` | `delete_career_item` |
 | F-P1-03 프로젝트 (v4.5) | R/W `projects`(이름·기간·분류 3종 `project_type`·`experience_type`·`competencies`·STAR). **소속 프로젝트는 S-10 페이지 저장으로 만들기·고치기**(PA-3), 독립 프로젝트는 이름만으로 `draft` 생성(CR-6) | **`save_project_page`**, `delete_career_item` |
 | ~~F-P1-04 정량 성과~~ | v4.4 폐기(CR-11) — `achievements` 없음 | — |
@@ -1480,6 +1647,49 @@ v4.4 다른 예:
   - RPC: **`get_account_deletion_state(p_user_id)`** → `active`(`profiles` 있음) / `deletion_incomplete`(`profiles` 없음 + 로그 있음) / `profile_missing`(둘 다 없음). 실행 주체는 **서버 전용 역할**(security definer, A19와 같은 방식으로 서버가 세션의 user id를 넘김) — 사용자는 `account_deletion_logs`를 select할 수 없고 HMAC 서버 비밀값을 브라우저에 두지 않는다. hash 계산은 `delete_account`와 같은 함수·같은 비밀값을 쓴다.
   - 호출 시점: 로그인 직후·대시보드 레이아웃의 세션 확인에서 **`profiles` 행이 없을 때만** 부른다(정상 사용자는 매 요청 HMAC 계산 없음). `deletion_incomplete`면 동의 게이트보다 먼저 S-25 "탈퇴 마무리"(UX FL-07·S-25, A7)로 보낸다. 거기서 `delete_account`를 다시 부르면 멱등으로 통과하고 auth 삭제만 다시 한다(4.5).
 
+## 6.2 총 경력 개월 수 `computed_total_months` (v4.12, SD-2, AI C-1 ★)
+
+프로필의 총 경력 연차가 없어졌으므로(2.1.1) 연차 요건 판정에 쓰는 숫자는 이 값 하나다(PRD F-P2-04, AI AI-02). **저장 컬럼이 아니다** — 컨텍스트 팩을 조립하는 시점에 계산한다.
+
+| 질문(AI 요청 2) | 결정 |
+|------|------|
+| ① 계산 위치 | **전용 함수**(AI 권고 채택). 팩 조립 쿼리 안에 월 합집합 SQL을 인라인으로 두지 않는다 — 같은 숫자가 `get_data_readiness`나 화면에서 필요해지는 순간 정의가 갈라진다. 함수 하나를 팩 조립이 호출한다 |
+| ② `complete` 필터 | **같은 함수 안에서** `status = 'complete'`를 적용한다(팩 조립의 필터와 **값은 같고 적용 지점은 다르다**). 팩이 넘기는 경력 id 목록을 받지 않는다 — 인자가 길어지고 팩과 함수가 서로의 필터를 믿어야 한다. 대신 **팩 조립과 이 함수가 같은 `complete` 정의를 쓴다**는 것을 pgTAP로 고정한다(경력 1건을 `draft`로 내리면 팩에서도 합계에서도 빠진다) |
+| ③ 기간 미입력 건수 | **같은 호출이 함께 돌려준다**(아래 반환값 `open_ended_experience_count`). 팩의 "기간 미입력 경력 N건(합계에 넣지 않음)" 한 줄이 이 값이다 |
+
+**시그니처**
+
+```
+private.compute_total_experience_months(
+  p_user_id uuid,
+  p_as_of   date          -- 기본값 없음 (필수 인자, v4.12 리뷰 라운드 2 R-SD-23)
+) returns record  -- (total_months integer, open_ended_experience_count integer, as_of_month date)
+```
+
+- `private` 스키마, **stable**, **security definer**(호출자는 AI 실행 역할 `app_ai_writer`와 사용자 세션 둘 다 — `p_user_id`를 받되 definer 안에서 `auth.uid()`와 다르고 호출자가 `app_ai_writer`도 아니면 거부 `[가정]`).
+- `p_as_of`는 **조립 기준일**(KST 오늘). 테스트와 재현을 위해 인자로 받는다(함수 안에서 `now()`를 읽지 않는다).
+- **기본값을 두지 않고 필수 인자로 한다** (v4.12, 리뷰 라운드 2 R-SD-23): `default (now() at time zone 'Asia/Seoul')::date`는 **호출 시점에 평가**되므로 인자를 생략한 호출은 함수가 안에서 `now()`를 읽은 것과 결과가 같아진다 — "같은 입력에 같은 결과"(동일 입력 재사용·pgTAP)가 조용히 깨진다. **모든 호출자가 `p_as_of`를 명시해 넘긴다**: 컨텍스트 팩 조립은 그 실행의 기준일(KST 오늘), pgTAP은 고정 날짜. 수동 조회도 `(now() at time zone 'Asia/Seoul')::date`를 직접 적는다.
+- **공개 RPC는 지금 두지 않는다** — 이 숫자를 보이는 화면이 없다(사용량·내 정보 어디에도 없다). 필요해지면 `get_total_experience_months()` 얇은 래퍼를 더한다 `[가정]`.
+
+**계산 규칙** (AI C-1과 한 글자도 다르지 않게 둔다)
+
+| 규칙 | 내용 |
+|------|------|
+| 대상 | `experiences` 중 `user_id` 본인 · `status = 'complete'` **행만**. 교육·소속 프로젝트·독립 프로젝트 기간은 **더하지 않는다** |
+| 셈 단위 | **월**. 한 경력 = `start_month` … `end_month` **양 끝 포함**(2024.03~2024.03 = 1개월) |
+| 재직 중 | `is_current = true`면 **`p_as_of`의 달까지** 센다 |
+| 종료월 미입력 | `is_current = false`이고 `end_month is null`이면 **그 경력을 합계에서 뺀다**(기간을 추측하지 않는다) + `open_ended_experience_count`에 1 |
+| 겹치는 기간 | **월 단위 합집합** — 어느 `complete` 경력에든 속하는 **달의 개수**. 겸직·이직 월 중복으로 연차가 늘지 않는다. 경력 사이 공백은 더하지 않는다 |
+| 구현 모양 | 경력별 `generate_series(start_month, 종료월, interval '1 month')` → `distinct` 달 수 세기(월이 많지 않아 비용이 낮고 읽기 쉽다). `daterange` 합집합(`range_agg`)도 같은 결과지만 "양 끝 포함" 경계를 매번 +1개월로 옮겨야 해 읽기 어렵다 |
+
+**해시·검증**
+
+- **`career_snapshot_hash`에 넣지 않는다** (v4.12, AI 요청 3): 기준월마다 바뀌는 계산값이라 해시에 들어가면 **사용자가 데이터를 고치지 않아도 매달 "데이터 변경됨"**이 뜨고 동일 입력(`input_hash`) 재사용이 끊긴다(진행 중 기간 문자열과 같은 함정, v4.3에서 이미 정리). 해시에는 `start_month`·`end_month`·`is_current` 원본 값만 들어간다.
+- `input_hash`도 같다(팩 텍스트를 해시하지 않고 원본 값 기준 — 기존 규칙 그대로). **대가**: 달이 바뀌어 재직 중 경력의 합계가 1개월 늘어도 같은 `input_hash`로 이전 결과를 재사용한다 `[가정]` — 연차 판정이 한 달 차이로 뒤집히는 경우는 드물고, 뒤집혀야 하면 사용자가 "다시 생성"을 누른다.
+- V-5(수치 가드)의 "서버가 계산 가능한 값" 목록에 이 값(년·개월·총 개월)을 넣는다 — AI 명세 몫, 데이터 쪽 작업 없음.
+
+---
+
 ## 7. API 경계 초안 (v3 변경분, v4.4 커리어 재설계, v4.5 페이지 저장·산출물 대화 반영)
 
 | 작업 | 방식 | 읽기/쓰기 | 화면 |
@@ -1509,11 +1719,15 @@ v4.4 다른 예:
 | 모의 면접 전체 세션 | Server Component | R: interview_sessions(+ application_projects.name), 필터 `application_project_id`, `interview_type`, `status`. **(v4.11, OD-I6 ★)** 지원 프로젝트를 left join으로 읽고, `application_project_id is null`인 세션(= "자기소개서 삭제됨")은 이름 자리에 `company_name_snapshot`·`position_title_snapshot`을 쓴다. ~~이 세션은 `application_project_id` 필터로는 고를 수 없다(필터 "전체"에만 나옴, 별도 필터 값은 UX 결정).~~ **(v4.11, OD-I6 / R-OD-12)** 프로젝트 id 필터로는 고를 수 없고, UX S-37의 "삭제된 자기소개서" 필터 값 = 조건 `application_project_id is null`("전체"에도 나옴). 이름 대체: 복사 컬럼 둘 다 있으면 "{company_name_snapshot} – {position_title_snapshot}", 한쪽만 있으면 그 값, 둘 다 null이면 "삭제된 자기소개서"(UX S-22와 같음, 문구 UX). 정렬·개수는 그대로 `(user_id, created_at desc)` | S-37 |
 | **지원 프로젝트 삭제 영향 / 삭제 (v4.11, OD-I6 ★)** | 영향: RPC `get_deletion_impact('application_project', id)`(2.7.2) → `{cascade: {insights, drafts, interview_sessions, stage_events}, kept: {interview_sessions}}`. 삭제: Server Action — 진행 중 작업 취소 요청 후 `application_projects` delete(지금 `services/application/write.ts`), `BEFORE DELETE` 트리거가 남길 세션 복사·나머지 세션 삭제를 같은 문장 안에서 한다 | W: `application_projects`(연쇄), `interview_sessions`(복사 컬럼·`application_project_id` null), `evidence_links`(남는 세션 근거의 `application_project_id` null) | C-05(S-13 ⋯ 메뉴) |
 | 탈퇴 범위 | RPC `get_account_deletion_summary` (v4: 키·동의·사용 기록 수 포함) | | S-25 |
+| **내 정보 조회 (v4.12, SD-A2)** | Server Component (설정 다이얼로그가 열릴 때) | R: `profiles`(내 정보 컬럼 + `updated_at`), `profile_job_interests`(`sort_order` 순), `profile_options`(`is_active` 목록 — 셀렉트 라벨). 저장된 값이 `is_active = false`인 코드면 그 행도 함께 읽어 라벨을 보인다(2.1.1) | S-24 ① 계정 탭 |
+| **내 정보 저장 (v4.12 ★, SD-A2, UX 요청 3)** | Server Action → RPC **`save_profile_basics(p_values jsonb, p_job_interests jsonb, p_expected_updated_at timestamptz)`** (사용자 세션, 동기, AI·키 불필요). **섹션 단위 저장** — 이름 + 셀렉트 + 쌍 목록 + 최종 학력을 **한 트랜잭션**에서. 쌍 목록은 **전체 덮어쓰기**(delete → insert, 2.1.2). **기대 버전**: `p_expected_updated_at`이 `profiles.updated_at`과 다르면 **`stale_write`**(409) — S-10·S-44 페이지 저장(DM-21)과 **같은 모양**이다(다른 탭·다른 기기에서 먼저 저장한 경우) | W: `profiles`, `profile_job_interests`. 응답 `{updated_at}`. 오류 `stale_write` · `invalid_profile_option`(2.1.1 검증 트리거) · `field_too_long` · `invalid_period`(최종 학력 종료 < 시작) · `too_many_job_interests`(4쌍 이상) · **`duplicate_job_interest`**(400 — 같은 `(job_family, job_role)` 쌍이 두 번, **직무를 비운 쌍끼리도 중복**으로 본다. 받은 목록을 insert 전에 검사하고 제약 위반(23505)도 같은 코드로 변환한다. v4.12, 리뷰 라운드 2 R-SD-18) | S-24 ① 계정 탭 "저장" |
+| **약관 탭 (v4.12, SD-A13·A14·A15)** | Server Component + Server Action | R: `policy_versions` **4종**(`terms`·`privacy`·`cross_border_transfer`·**`ai_data_use`** — 2.1.3), `consents` **선택 동의 2종의 현재 상태만**(필수 동의 기록 표시는 두지 않는다 — 확정 2026-11-05 (사용자, SD-Q3 (다)), 2.1.4). W: 토글 켜기 = `consents` insert / 끄기 = 그 행 `withdrawn_at` update(2.1.4) | S-24 ③ 약관 탭 |
+| **AI 데이터 처리 문서 (v4.12, D-UX-31)** | Server Component (`/policies/ai_data_use`) | R: `policy_versions where policy_type = 'ai_data_use'`(머리글 버전·시행일) + `ai_disclosures` 6행(공급자·등급별 요약, 2.1.3). 다른 세 문서와 같은 모양 | S-30 |
 | **AI 연결 화면** (v4) | Server Component | R: `ai_providers`, `ai_disclosures`, `ai_provider_keys`(메타), `ai_data_use_consents`, `profiles.active_ai_provider` | S-24 > AI 연결 |
 | **키 등록·교체** (v4) | Server Action: 동의 insert → 원문으로 `key_verification` 작업(동기, 키 원문은 요청 메모리에만) → 성공 시 서버에서 키 행 id를 정하고 봉투 암호화 → **서버 전용 역할**로 RPC `save_provider_key(p_user_id, p_key_id, …)` (v4.2, A19) | W: `ai_data_use_consents`, `ai_jobs`, `ai_usage_records`, `ai_provider_keys`, `profiles` | AI 연결 |
 | **다시 확인 / 등급 변경** (v4) | Server Action → `key_verification` 작업(`get_provider_key_secret`) → **서버 전용 역할**로 `record_provider_key_check(p_user_id, …)`. 등급 변경은 검증 통과 시 같은 행 id로 재암호화해 `save_provider_key`(2.11.3) | W: `ai_jobs`, `ai_usage_records`, `ai_provider_keys`, `ai_data_use_consents` | AI 연결 |
 | **키 삭제 / 활성 공급자 변경** (v4) | Server Action → `delete_provider_key` / `set_active_ai_provider` | W: `ai_provider_keys`, `profiles`, `ai_data_use_consents` | AI 연결 |
-| **사용량 미터** (v4) | Server Component → RPC `get_ai_usage_summary(period_month)` | R: `ai_usage_records`, `ai_price_tables` | 사용량 미터 화면 |
+| **사용량 미터** (v4, **v4.12 응답 교체 ★**) | Server Component → RPC `get_ai_usage_summary(period_month)` — **응답이 공급자 × 기능 교차**(2.9.5). 화면 7행 묶음(`career_description` + `cover_letter`)은 **화면 매핑 상수**(AI C-13.1)로 접는다 | R: `ai_usage_records`(`input_cost_usd`·`output_cost_usd` 포함), `ai_price_tables`, `ai_provider_keys_public`(현재 등급) | S-24 ② AI 연결 탭 안 사용량 영역(S-42) |
 | **AI 실행 공통** (v4) | 모든 AI Route Handler: 활성 공급자·키 상태·동의 확인(**v4.2: 2.11.5 통일 규칙 — 동의 후 시행된 `requires_reconsent` 버전이 있을 때만 재동의**) → `ai_jobs`(provider·tier 기록, 실행 중 고정) → 단계마다 `check_ai_run_allowed` + `get_provider_key_secret` → 공급자 호출 → `ai_usage_records` insert → 결과는 소유·세대 검사 RPC로 저장 → 성공이면 `record_provider_key_success`, 키 원인 최종 실패면 `mark_provider_key_invalid` → 실패 시 `error_code`·`quota_resets_at`·`retry_after` | | 전체 |
 | **실패 작업 다시 시도** (v4.2) | **경우 (1) 같은 행**: `POST /api/ai-jobs/{id}/retry`, 같은 행 `failed → queued`, **다시 시도 시점의 활성 공급자·등급으로**(A1 변경) — 작업 행 `provider`·`model`·`model_tier`·`connection_tier` 갱신, 다르면 `step_outputs` 비우고 그 작업이 저장한 결과 행(면접 질문·답변 평가·종합 등) 모두 다시 열어 덮어씀, 같으면 `step_outputs` 유지·실패한 행만 다시 엶(R-63). 결과 행 다시 열기는 `retry_ai_job` 안에서(R-70). 거부 코드는 2.11.7 경로 ②(활성 공급자 기준) — 다시 시도 대상 아님 409 `ai_job_not_retryable`(요청 범위 작업 유형, 입력 원인 실패 `input_too_long`/`safety_blocked`/`insufficient_data`/`not_a_jd`, `failed`가 아닌 행 — 연결 게이트보다 먼저, R-69), 키 없음 409 `key_missing`, 무효 409 `key_invalid`, 동의 필요 409 `ai_consent_required`, 준비 중 연결이 바뀜 409 `ai_connection_changed`(서버가 한 번 다시 읽은 뒤에도 어긋날 때만, 행 `failed` 유지). 진행 중이면 202 `inProgress`로 그 작업을 따라감. 판정 순서는 2.11.7. **경우 (2) 새 작업**: 인사이트 "다시 생성"(F-P2-07, 인사이트 생성 라우트를 다시 불러 새 `insight` 작업·새 버전, R-65), 요청 범위 작업의 다시 생성, 면접 "다시 채점"·"남은 질문 다시 만들기"는 각 생성·시작 라우트를 다시 불러 새 작업 행을 만들고 현재 활성 공급자로 돈다(거부 코드는 인사이트·면접 = 2.11.7 경로 ①, 요청 범위 작업 = 경로 ⑤, R-75). 두 경우 모두 활성 공급자, 구분은 2.9.1 | W: ai_jobs | 전체 |
 | **공고 원문 수정** (v4.3, Q53-2) | Server Action(사용자 세션): 문장 분할·해시 → RPC `update_failed_jd_raw_text`. 재추출은 별도 요청(기존 추출 라우트) | W: `job_descriptions`, `application_projects.last_activity_at` | S-15 (S-16·S-33에서 이동) |
@@ -1527,6 +1741,9 @@ v4.4 다른 예:
 
 | ID | 질문 | 권고 | 담당 / 상태 |
 |----|------|------|-------------|
+| ~~**D-DM-13**~~ **닫힘 (확정 2026-11-05, 사용자 SD-Q2 — 9.7 초안 그대로)** | 내 정보 값 목록(구직 상태 / 관심 기업군 / 관심 산업 / 관심 직군 / 관심 직무 / 학위 / 졸업 상태)과 **코드 키** | PRD 9.7 초안을 `profile_options` 시드로 넣는다. 라벨 확정 뒤 **라벨 → `snake_case` 코드 키 매핑 표**를 시드 마이그레이션에 둔다. 값 추가·문구 변경은 행 insert·update, 폐지는 `is_active = false`(행 삭제 없음) | **사용자 확인 대기** (product-planner가 라벨, data-architect가 키). 데이터 모양은 어느 값 목록이든 같다 |
+| ~~**D-DM-14**~~ **닫힘 (확정 2026-11-05, 사용자 SD-Q3 (가) — 최대 2쌍)** | 관심 직군·직무 쌍 상한 | **2쌍** — `profile_job_interests`의 PK `(user_id, sort_order)` + `CHECK (sort_order between 1 and 2)`. 아직 구현 전이라 데이터 영향 없음 | 확정. 줄이는 방향(3 → 2)은 기존 행을 지워야 하므로 파괴적 |
+| ~~**D-DM-15**~~ **닫힘 (확정 2026-11-05, 사용자 — 백필한다)** | `ai_usage_records`의 과거 행에 `input_cost_usd`·`output_cost_usd` 백필 | **백필한다**(2.9.2) — 가격표 버전·모델·토큰이 남아 있어 다시 계산할 수 있고, 백필하지 않으면 이번 달 이전 표의 비용 열이 0으로 보인다. 합계 `estimated_cost_usd`는 고치지 않는다 | **data-architect 권고, 백엔드 확인**(13개월 분량 재계산 비용) |
 | **D-DM-12** **확정 2026-11-03 (사용자): (a) 지금 범위 + 다음 고지 버전에 한 구절** (v4.5 신규) | 저장하지 않은 폼 값(`form_snapshot`)을 AI 공급자로 보내는 것을 지금 데이터 사용 고지·동의 범위로 볼까 (리더 정렬 2로 AI가 스냅숏을 읽게 됨. UX D-UX-26이 걱정한 점) | (a) **지금 범위로 본다** — 스냅숏은 사용자가 커리어 화면에 직접 쓴 값이고 저장 뒤 보내던 같은 필드다. 새 동의·`requires_reconsent` 없음, 고지 문구에 "작성 중인 내용 포함" 한 구절만 다음 고지 버전에 넣는다 (b) 새 고지 버전 + 재동의(`requires_reconsent = true`) — 모든 사용자가 AI 기능 전에 C-21을 다시 거친다 (c) 스냅숏을 보내지 않고 저장된 값만 읽는다(정렬 2 되돌림) | **권고 (a)**. 데이터 저장 모델은 어느 쪽이든 같다(스냅숏은 저장하지 않음, 2.5.1). (b)는 사용자 전원에게 재동의 부담이 생기고, (c)는 리더 정렬과 PA-3 흐름("채우고 바로 다음 질문")을 깬다. 법무 확인(D-39)과 함께 | **사용자 확인 대기** (product-planner·법무) |
 | **PA-1~PA-4** (v4.5) | 산출물 AI 패널 / 산출물 분류 없음 / 페이지 단위 저장 / 머리 필드 통일 | PA-1 `writing_chats.project_deliverable_id`·산출물 모양·시작 RPC, PA-2 변경 없음, PA-3 `save_project_page`·`save_project_deliverable`·`apply_writing_chat_proposal` 폐기, PA-4 변경 없음(필드 그대로) | **확정 2026-11-03 (사용자)** |
 | 리더 정렬 1~3 (v4.5) | 이름 없는 첫 메시지 / AI가 읽는 값 / 반영됨 기록 시점 | 1 = 보내지 않음(임시 이름 없음), 2 = `form_snapshot` 우선 + 첫 메시지는 폼 전체를 먼저 저장해 행 생성, 3 = 저장 트랜잭션 안에서 기록, 기록 실패는 저장을 막지 않음 | 리더 결정(2026-11-03), 2.5·2.5.1·7장 반영 |
@@ -1579,6 +1796,7 @@ v4.4 다른 예:
 
 ## 9. 테이블 목록 (v3)
 
+- **(v4.12)** MVP 사용자 테이블 **29**: 위 28개 + **`profile_job_interests`**(2.1.2). 참조·운영은 **6**: 아래 5개 + **`profile_options`**(2.1.1). `profiles`는 컬럼만 바뀐다(삭제 3 / 신설 10).
 - MVP 사용자 테이블 **28** (v4: `usage_events` 삭제, `ai_provider_keys`·`ai_data_use_consents`·`ai_usage_records` 추가 / **v4.4: `project_details`·`achievements` 삭제, `project_deliverables` 추가**): profiles, consents, experiences, **educations**, projects, **project_deliverables**, skills, project_skills, **writing_chats**, **writing_chat_messages**, application_projects, **application_stage_events**, job_descriptions, jd_requirements, insights, drafts, draft_sections, draft_section_sources, interview_sessions, interview_questions, interview_answers, answer_evaluations, session_feedbacks, evidence_links, ai_jobs, **ai_usage_records**, **ai_provider_keys**, **ai_data_use_consents**
 - Should 4: chat_threads, chat_messages, result_ratings, ai_suggestions
 - 참조·운영 5: policy_versions, **ai_price_tables**, **ai_disclosures**, **ai_providers**, account_deletion_logs (v4: `usage_limits` 삭제)
@@ -1591,6 +1809,7 @@ v4.4 다른 예:
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| **v4.12** | 2026-11-05 | **새 설정 다이얼로그 (결정 사이클 `settings-dialog`, 사용자 확정 SD-1~SD-6 + 리더 판단 SD-A1~SD-A19 — `_workspace/00_input/planning-decisions-settings-dialog.md`)**. 기준 PRD v4.14 · UX v5.17 · AI v4.12. 바뀐 문장에 `(v4.12, {결정 ID})` 표시. **(1) `profiles` 내 정보 개정 (2.1.1 ★)**: `total_years_of_experience`(SD-2)·`desired_job_title`(SD-A17) **삭제**, `interested_industries text[]` → **`interested_industry text` 단일 선택**(SD-A4, 백필은 1원소·라벨 일치만), 신설 `job_search_status`·`interested_company_type`·최종 학력 6칸(`highest_education_school_name`·`_degree`·`_status`·`_start_month`·`_end_month`·`_major`·`_gpa`, 상한 100·100·20자). 전부 nullable·게이트 아님. **(2) 값 목록은 참조 코드 테이블 `profile_options`**(DM-22 신설 — 카테고리 7종 CHECK + 코드 행, `is_active`로 폐지, FK 대신 검증 트리거 `invalid_profile_option`). **(3) 관심 직군·직무 쌍은 별도 테이블 `profile_job_interests`**(2.1.2 신설, PK `(user_id, sort_order)` + `CHECK 1..3` `[가정]`, 전체 덮어쓰기, jsonb를 쓰지 않는 근거 4개). **(4) 최종 학력은 `educations`와 무관**(SD-5 — FK·트리거·동기화·경고 없음). **(5) `get_data_readiness().profile_filled`와 `hints: "profile"` 삭제**(SD-A18 ★, 6-A — 응답에서 키가 사라진다, `data_sufficiency` `thin`에서 "프로필 또는" 삭제). **(6) `computed_total_months`는 저장 컬럼이 아니라 전용 함수** `private.compute_total_experience_months(p_user_id, p_as_of)` → `(total_months, open_ended_experience_count, as_of_month)`(6.2 신설, 월 합집합·재직 중 = 기준월·종료월 미입력 제외 + 건수, `career_snapshot_hash`·`input_hash`에 넣지 않음, 공개 RPC 없음). **(7) `get_ai_usage_summary` 응답 교체 ★**(SD-A10·D-UX-30, 2.9.5): `by_feature`·`by_provider` → **`providers[]`(공급자 × 기능 교차)** + `connection_tiers`·공급자별 가격표 버전, `include_previous` 유지. **`ai_usage_records`에 `input_cost_usd`·`output_cost_usd` 신설 ★**(SD-A11 비용 열 2개, 과거 행 백필 `[가정]` D-DM-15), 인덱스 `(user_id, period_month, provider, feature)` 추가. **표시 7행 묶음(`career_description` + `cover_letter`)은 화면이 한다** — 저장 `feature` 8값 유지(SD-4·SD-A12, 원천은 AI C-13.1). **(8) `policy_versions.policy_type`에 `ai_data_use` 추가**(D-UX-31·SD-A13, 2.1.3 — `ai_disclosures`를 머리글 원천으로 쓰지 않는 이유, `consents.consent_type`은 늘리지 않음). **(9) 선택 동의 토글 2개는 기존 `consents` 그대로**(SD-A15, 2.1.4 — 켜기 = 새 행, 끄기 = `withdrawn_at`), **필수 동의 기록 읽기 경로 유지**(SD-A14 / SD-Q3 (다) 미확정). **(10) `evidence_links.source_type = 'profile'`**: CHECK 목록 유지 + **insert 트리거로 새 행 차단**, 기존 행·라벨 유지, `source_deleted_at` 백필 없음, 화면은 "원본으로 이동"만 비활성(SD-A19 — AI 요청 4의 "원본 삭제됨" 권고를 대체), 허용 출처 커리어 6종 → **5종**. **(11) `prompt_version` 문자열 변경**(AI v4.12): 과거 결과 행을 **마이그레이션으로 고치지 않는다**, `input_hash` 재사용이 배포 시점에 한 번 전부 끊긴다(의도). **(12) 개선 요청은 테이블 없음**(SD-3, 2.1.6 — 폼 주소는 앱 상수). **(13) `profiles`는 AI 입력 경로가 아니다**(SD-6, 2.1.5 — 컨텍스트 팩이 `profiles`를 읽지 않고 `app_ai_writer`에 grant도 주지 않는다). 새 `[결정 필요]` D-DM-13·14·15, 테이블 수 29 + 참조 6(9장), 백엔드 후속 ★는 **11.7**. 회신은 `_workspace/settings-dialog/dm_replies.md`. **리뷰 라운드 1 반영**(판 번호 v4.12 유지): **R-SD-9** — 2.8 "소유자별 허용 출처"의 커리어 5종을 인사이트뿐 아니라 **경력기술서·직무 면접 질문·평가·종합·자기소개서 문항 전부**에 적용하고 "insert 트리거와 저장 RPC가 같은 목록"을 명시(11.7 #11도 같은 표현으로). **R-SD-14** — 새 `ai_data_use` 행의 `document_path`를 **`/policies/ai_data_use/{version}`**으로 고쳐 기존 3종의 `/policies/{type}/{version}` 규칙에 맞춤(예외 없음, 문서 페이지 주소는 버전 없는 `/policies/ai_data_use` — 2.1.3·11.7 #10·9장). **리뷰 라운드 2 반영**(판 번호 v4.12 유지): **R-SD-18** — `profile_job_interests`의 중복 쌍 제약을 **`unique nulls not distinct (user_id, job_family, job_role)`**로 확정(기본 `NULLS DISTINCT`로는 "같은 직군 + 직무 비움" 쌍 2개가 통과한다)하고 저장 RPC 오류에 **`duplicate_job_interest`**(400)를 추가(2.1.2·7장·11.7 #3·#5 — 화면 문구는 ux-planner에게 요청). **R-SD-22** — 가격표 `version` 문자열을 AI C-13의 **`v{YYYY-MM-DD}`**(첫 버전 `v2026-10-28`)로 맞춤(2.9.3·2.9.5 응답 예시·11.7 #8). **R-SD-23** — `private.compute_total_experience_months`의 `p_as_of`에서 **기본값을 없애 필수 인자로** 하고 모든 호출자가 명시해 넘기도록 함(6.2·11.7 #7, 결정성 보장). |
 | v1 | 2026-10-23 | 최초 작성. PRD v1·UX v1·AI v1 통합 |
 | v2 | 2026-10-23 | PRD v2·UX v3·AI v2. `application_projects`(JD 1:1), 결과 소유 키 `application_project_id`, `draft_section_sources`, 면접 일괄 방식·점수 슬롯, D-17 사용량, `app_ai_writer` |
 | v3 | 2026-10-23 | **PRD v3·UX v4·AI v3.** (1) **`educations` 신설**, `projects.education_id` + 소속 최대 1 CHECK, `projects.summary`, `contribution`·`team_context` 삭제. (2) **`project_details` 신설**(STAR + `learnings`, 여러 개), 프로젝트 완료 = complete 상세 내용 ≥ 1(트리거 재계산). (3) **`achievements.project_detail_id`**가 `project_id` 대체(D-24 (b)). (4) 연도 보기는 저장하지 않음(앱 계산, 기존 `start_month` 인덱스). (5) **`writing_chats` / `writing_chat_messages` 신설**, `structured_draft`(필드별 출처 메시지), 저장·폼 전환은 사용자 세션 RPC(`app_ai_writer`는 커리어 쓰기 없음 유지), `source_writing_chat_id`(projects, project_details, achievements), 대화만 삭제·프로젝트 연쇄·미연결 대화 90일(D-DM-08). (6) **지원 현황**: `application_projects.stage`·`stage_outcome`·`stage_changed_at`, `application_status` 삭제, **`application_stage_events` 신설**, `move_application_stage`·`set_application_outcome` RPC. (7) 사용량 `writing_chat`, `ai_jobs.job_type` `writing_chat_turn`. (8) 근거 `source_type` `education`·`project_detail`, STAR `source_field`. (9) `draft_sections.section_kind` `education`, `draft_section_sources.education_id`·`project_detail_ids`. (10) `get_data_readiness` v3, `get_deletion_impact`·`delete_career_item` 대상 확장(`affiliation_mode`로 일반화), `get_account_deletion_summary` 신설 |
@@ -1747,6 +1966,30 @@ v4.4 다른 예:
 
 - UI 후속(resumate-ui): S-37 "자기소개서 삭제됨" 표시·S-22·S-33 읽기 전용, C-05 문구(남는 수·지워지는 수), 새 페이지 `p_client_id` 생성, 답 없는 메시지 "다시 보내기", 해시 공통 함수, 고지 상수 이동 — 문구는 UX v5.13.
 
+### 11.7 v4.12 백엔드 후속 — 새 설정 다이얼로그 (settings-dialog, SD-*)
+
+> 기존 마이그레이션 파일은 고치지 않고 새 파일을 더한다. ★ = 이미 구현된 코드·스키마를 바꿔야 함. 순서는 db-engineer가 정한다. **파괴적 변경이 있다**(#2 컬럼 drop) — 원격 반영 전 확인 표시.
+
+| # | 결정 | 대상 | 내용 | 마이그레이션 영향 |
+|---|------|------|------|-------------------|
+| 1 ★ | SD-A2·A4·SD-Q2 | `profile_options` 신설 | 참조 테이블(PK `(category, code)`, `parent_code`, `label`, `sort_order`, `is_active`) + RLS(select 인증 전체, 쓰기 운영자) + **시드**(PRD 9.7 7종, 라벨 → `snake_case` 코드 매핑 표를 파일에 주석으로 남김) + 인덱스 `(category, sort_order)` | 새 마이그레이션(비파괴) |
+| 2 ★ | SD-2·SD-A17·SD-A4 | `profiles` | **① 추가**: `job_search_status`·`interested_company_type`·`interested_industry`·`highest_education_*` 7컬럼(길이·기간 CHECK 포함) → **② 백필**: `interested_industries` 1원소 + 라벨 일치만 `interested_industry`로(건수 로그) → **③ 읽는 코드 제거 배포** → **④ `drop column total_years_of_experience, desired_job_title, interested_industries`**. ④는 **별도 마이그레이션**이고 **파괴적 ★** — 원격 반영 전 확인. `database.types.ts` 재생성 2회(①·④) | 마이그레이션 3개(①·②, ④) |
+| 3 ★ | SD-A3 | `profile_job_interests` 신설 | 테이블 + PK `(user_id, sort_order)` + `CHECK (sort_order between 1 and 2)`(v4.12, SD-Q3 (가) 확정 — 최대 2쌍) + **`unique nulls not distinct (user_id, job_family, job_role)`**(v4.12, R-SD-18 — 기본 `NULLS DISTINCT`로 두면 "직군만 고른" 쌍 2개가 통과한다. PG 15+ 문법) + FK cascade + RLS 본인. pgTAP: 같은 직군 + 직무 null 두 행 거부 | 새 마이그레이션 |
+| 4 ★ | DM-22 | 검증 트리거 | `private.validate_profile_options()` — `profiles`의 4컬럼(구직 상태·기업군·산업·학위·졸업 상태)과 `profile_job_interests`의 `(job_family, job_role)` 상하 관계를 카테고리별로 확인, 없으면 `invalid_profile_option`. pgTAP: 없는 코드, 다른 카테고리의 코드, 직군과 맞지 않는 직무, `is_active = false` 신규 선택 거부·기존 값 재저장 통과 | 새 마이그레이션 |
+| 5 ★ | SD-A2 (UX 요청 3) | RPC `save_profile_basics(p_values jsonb, p_job_interests jsonb, p_expected_updated_at)` | 섹션 단위 저장(security invoker). 한 트랜잭션에서 `profiles` update + 쌍 delete·insert. `stale_write`·`invalid_profile_option`·`field_too_long`·`invalid_period`·`too_many_job_interests`·**`duplicate_job_interest`**(v4.12, R-SD-18 — 받은 목록 안의 중복을 insert 전에 검사, null 직무끼리도 중복, 23505도 같은 코드로 변환). api zod 계약 + 데이터 계층(`src/lib/data/profile.ts` `[가정]`) | 새 RPC |
+| 6 ★ | SD-A18 | RPC `get_data_readiness` | `counts.profile_filled` 제거, `hints`에서 `profile` 제거, `data_sufficiency` `thin` 정의 교체(6-A). **타입 재생성과 화면 참조 제거를 같은 배포로** 묶는다(키가 사라진다). pgTAP 단정 삭제 | RPC 교체 |
+| 7 ★ | SD-2 (AI 요청 2) | 함수 `private.compute_total_experience_months` | 6.2 시그니처·규칙대로 신설(stable, security definer, `app_ai_writer` execute). **`p_as_of`에 기본값을 두지 않는다 — 모든 호출자가 명시해 넘긴다**(v4.12, R-SD-23: 기본값은 호출 시점 `now()` 평가라 결정성이 깨진다). 컨텍스트 팩 조립이 호출해 팩 머리 줄과 "기간 미입력 경력 N건"을 만든다. **`career_snapshot_hash`·`input_hash` 계산에는 넣지 않는다**. pgTAP: 양 끝 포함, 겹치는 두 경력, 재직 중, 종료월 미입력(제외 + 건수), `draft` 제외, 다른 사용자 격리 | 새 함수 + 팩 조립 코드 |
+| 8 ★ | SD-A10·A11 (D-UX-30) | `ai_usage_records` + RPC `get_ai_usage_summary` | ⓞ **가격표 시드·응답의 `version` 문자열은 `v{YYYY-MM-DD}`**(첫 버전 `v2026-10-28` — v4.12 R-SD-22, AI C-13과 같은 모양) ① `input_cost_usd`·`output_cost_usd` 컬럼 추가(not null default 0) + 기록 경로가 두 값을 나눠 계산해 insert ② 과거 행 백필(**확정 2026-11-05 (사용자)** — 가격표로 재계산, 배치. D-DM-15 닫힘) ③ 인덱스 `(user_id, period_month, provider, feature)` ④ **RPC 교체 — 응답이 `providers[]` 교차 집계**(2.9.5) ⑤ 타입 재생성 ⑥ 데이터 계층·S-42 화면이 새 모양으로. pgTAP: 두 공급자·두 등급이 섞인 달, 기록 없는 공급자 제외, `include_previous` | 새 마이그레이션 + RPC 교체 |
+| 9 | SD-4·SD-A12 | 표시 묶음 | **DB·RPC 작업 없음.** 화면 매핑 상수 한 곳(AI C-13.1 표)에서 `career_description` + `cover_letter`를 한 행으로 접는다. 저장 `feature` CHECK 변경 없음 | 없음 |
+| 10 ★ | D-UX-31·SD-A13 | `policy_versions` | `policy_type` CHECK에 `ai_data_use` 추가 + 그 문서 행 1건 insert(`document_path = '/policies/ai_data_use/{version}'` — **(v4.12, R-SD-14)** 기존 3종과 같은 `/policies/{type}/{version}` 규칙, `requires_reconsent = false`, `version`·`effective_at`은 법무 확인 뒤). **`consents.consent_type` CHECK는 건드리지 않는다.** `/policies/ai_data_use` 페이지가 `policy_versions` 머리글 + `ai_disclosures` 6행 요약을 읽는다 | 새 마이그레이션(비파괴) |
+| 11 ★ | SD-A19 | `evidence_links` | insert 트리거에 `source_type = 'profile'` → `invalid_evidence_source` 한 줄 추가. **CHECK 목록은 그대로**(기존 행 보호), `source_deleted_at` 백필 **없음**, 행 삭제 **없음**. **모든 결과 저장 RPC**(인사이트·경력기술서·직무 면접 질문·평가·종합·자기소개서 문항)의 "허용 출처 커리어 6종"을 **5종**으로 — 트리거와 같은 목록을 쓴다(한쪽만 고치면 모순). pgTAP: 기존 `profile` 행이 select·update에서 살아 있음, 새 insert 거부 | RPC·트리거 교체 |
+| 12 | SD-6 | `app_ai_writer` grant | 내 정보 컬럼·`profile_job_interests`·`profile_options` select 권한을 **주지 않는다**(2.1.5·5장). 컨텍스트 팩 조립 쿼리에서 `profiles` 조회 제거 — 삭제될 컬럼 참조가 남아 있으면 #2 ④에서 깨진다 | 코드 + grant 정리 |
+| 13 | AI v4.12 | `prompt_version` | **마이그레이션 없음.** 과거 결과 행의 `prompt_version`·`input_hash`를 고치지 않는다 — 과거 결과는 당시 버전 그대로가 맞다. 배포 시점에 동일 입력 재사용이 한 번 전부 끊긴다(의도, 첫 생성 비용이 한 번 늘어난다) | 없음 |
+| 14 | SD-3 | 개선 요청 | **DB 작업 없음.** 폼 주소는 앱 상수·env(`[결정 필요]` SD-Q1 — 정해지기 전 화면은 "준비 중") | 없음 |
+
+- UI 후속(resumate-ui): S-24 계정 탭 내 정보(섹션 저장·`stale_write`·코드 라벨 조회), S-04 폐기와 `/career/profile` 리다이렉트, 약관 탭 4문서·선택 동의 토글, S-42 공급자 탭 + 교차 집계 표(비용 열 2개·토큰 보조 표기·7행 묶음 상수), 근거 칩 `profile`의 "원본으로 이동" 비활성 — 문구는 UX v5.17.
+- **원격 반영 순서 주의**: #2 ④(컬럼 drop)는 #6·#12 배포가 끝난 뒤에만 올린다. `get_data_readiness`·컨텍스트 팩이 아직 옛 컬럼을 읽는 상태에서 drop하면 AI 실행과 커리어 화면이 함께 멈춘다.
+
 ## 부록 A. v2에서 바뀌지 않은 테이블의 전체 정의
 
 > 본문에서 "v2와 같음"으로 줄인 테이블의 컬럼 정의다. v3 변경분(본문 2장)은 여기에 이미 반영했다. 공통 컬럼(`id`, `user_id`, `created_at`, `updated_at`)과 AI 출력 공통 메타는 생략.
@@ -1755,22 +1998,34 @@ v4.4 다른 예:
 | 컬럼 | 타입 | 제약 / 설명 |
 |------|------|-------------|
 | `id` | uuid | PK, FK `auth.users(id) on delete cascade` (`user_id` 없음) |
-| `display_name` | text | null, ≤ 50자, AI에 보내지 않음 |
-| `desired_job_title` | text | null, ≤ 100자 |
-| `total_years_of_experience` | smallint | null, 0..50 |
-| `interested_industries` | text[] | not null default `'{}'` |
+| `display_name` | text | null, ≤ 50자, AI에 보내지 않음 (화면 "이름") |
+| ~~`desired_job_title`~~ | ~~text~~ | **(v4.12, SD-A17) 삭제** — 2.1.1, 자유 입력 칸이 없어졌다 |
+| ~~`total_years_of_experience`~~ | ~~smallint~~ | **(v4.12, SD-2) 삭제** — 연차는 6.2 계산값으로 |
+| ~~`interested_industries`~~ | ~~text[]~~ | **(v4.12, SD-A4) 삭제** — 단일 선택 `interested_industry`로 교체(2.1.1, 백필 규칙 포함) |
+| `job_search_status` | text | **v4.12 신설**, null, `profile_options` 카테고리 `job_search_status`(검증 트리거) |
+| `interested_company_type` | text | **v4.12 신설**, null, 카테고리 `company_type` |
+| `interested_industry` | text | **v4.12 신설**, null, 카테고리 `industry` |
+| `highest_education_school_name` | text | **v4.12 신설**, null, ≤ 100자 |
+| `highest_education_degree` | text | **v4.12 신설**, null, 카테고리 `degree` |
+| `highest_education_status` | text | **v4.12 신설**, null, 카테고리 `graduation_status` |
+| `highest_education_start_month` | date | **v4.12 신설**, null, 1일 고정 |
+| `highest_education_end_month` | date | **v4.12 신설**, null, 1일 고정, `CHECK (… >= start)` |
+| `highest_education_major` | text | **v4.12 신설**, null, ≤ 100자 |
+| `highest_education_gpa` | text | **v4.12 신설**, null, ≤ 20자, 자유 입력 |
 | `career_data_updated_at` | timestamptz | 커리어 테이블 변경 시 트리거 갱신(v4.4: 6개, 2.1) |
 | `active_ai_provider` | text | **v4**: null, CHECK in (`openai`, `gemini`, `anthropic`), 복합 FK `(id, active_ai_provider) → ai_provider_keys(user_id, provider) on delete set null (active_ai_provider)` |
 | `last_active_at`, `inactivity_notice_sent_at` | timestamptz | 장기 미접속(D-11). **(v4.6, PT-3)** `last_active_at` = 마지막 접속(`touch_last_active()`가 갱신, 기존 계정은 `greatest(coalesce(auth.users.last_sign_in_at, created_at), created_at)`으로 백필), `inactivity_notice_sent_at` = 파기 사전 안내를 보낸 시각(메일 서버가 받은 뒤 기록, 접속하면 null로 되돌림). 4.6 |
-- RLS: select/update 본인, insert 가입 트리거, delete 없음.
+- RLS: select/update 본인, insert 가입 트리거, delete 없음. **(v4.12)** 내 정보 컬럼의 update는 사용자 세션 RPC `save_profile_basics`로 한다(직접 update grant는 남기지만 화면은 쓰지 않는다 `[가정]`), 검증 트리거는 어느 경로든 돈다.
+- **(v4.12, SD-5·SD-6)** `highest_education_*`는 **설정 전용 값**이고 `educations`와 어떤 연결도 없다(2.1.1). 내 정보 값은 **AI 프롬프트에 가지 않는다**(2.1.5).
 
 ### A.2 consents / policy_versions
 | 테이블 | 컬럼 |
 |--------|------|
 | consents | `consent_type` CHECK in (`terms`, `privacy_required`, `cross_border_transfer`, `service_improvement`, `marketing`), `policy_version`, `agreed` boolean, `agreed_at`, `withdrawn_at`, `user_agent_hash`. 동의 1회 = 1행, 철회는 `withdrawn_at`, 재동의는 새 행. RLS select/insert 본인, update는 선택 동의의 `withdrawn_at`만. **`cross_border_transfer`는 필수가 아니다**(v4.3b, 2026-11-02, F-COM-02·D-39): 가입 때 받지 않고, 기존 행과 S-30 고지를 위해 값만 남는다. AI 공급자 국외 이전 동의는 키 연결 때 공급자별로 받는다(C-21, `ai_data_use_consents`) |
-| policy_versions | `policy_type`(terms/privacy/cross_border_transfer), `version`, `effective_at`, `requires_reconsent`, `document_path`. 비사용자, 전체 select. 현재 값 4.5 — `2026-11-04` 3종 확정 2026-11-04 (사용자, PT-1) |
+| policy_versions | `policy_type`(terms/privacy/cross_border_transfer/**`ai_data_use`** — v4.12, D-UX-31·SD-A13, 2.1.3), `version`, `effective_at`, `requires_reconsent`, `document_path`. 비사용자, 전체 select. 현재 값 4.5 — `2026-11-04` 3종 확정 2026-11-04 (사용자, PT-1). **v4.12**: `ai_data_use` 1행 추가(`document_path = '/policies/ai_data_use/{version}'` — **(v4.12, R-SD-14)** `/policies/{type}/{version}` 규칙 유지, `requires_reconsent = false` `[가정]`, 버전·시행일은 법무 확인 뒤) |
 
 - **재동의 판정 (확정 2026-11-05 (사용자), A3 — 현행 유지)**
+  - **(v4.12, SD-A15·SD-A14)** 선택 동의 토글의 행 변화는 **2.1.4**에 정리했다. 필수 동의 기록은 약관 탭에 **표시하지 않는다**(확정 2026-11-05 (사용자, SD-Q3 (다))). `consent_type`에 **새 값을 더하지 않는다**(`ai_data_use`는 고지 문서이고 동의는 `ai_data_use_consents`, 2.1.3).
   - **선택 동의**(`service_improvement`, `marketing`)는 정책 버전이 바뀌어도 다시 묻지 않는다. 이전 선택 동의는 버전과 무관하게 유효(철회 전까지). 동의 게이트(`get_consent_status().needs_consent`)에 영향 없음. 선택 동의는 `privacy` 버전을 따른다 `[가정]`.
   - **필수 동의**(`terms`, `privacy_required`)는 동의한 버전보다 뒤이고 지금 시행 중인 버전 중 **하나라도 `requires_reconsent = true`면** 재동의 필요(중간 버전을 건너뛴 경우도 잡는다). AI 고지 재동의(2.11.5)와 같은 모양이다.
   - **`cross_border_transfer` (v4.3b, 2026-11-02)**: 필수 동의에서 뺐다. 근거는 PRD F-COM-02(AI 공급자 고지·동의는 키 연결 시점)와 D-39(공급자별 고지·동의, 2026-10-28 사용자 확정)이다. 동의 게이트에 영향이 없고(`required = false`, `needs_consent = false`), 새 버전이 시행돼도 재동의를 묻지 않는다. AI 실행 게이트는 이 행을 보지 않고 `ai_data_use_consents`만 본다(2.11.5, 2.11.7). D-39의 법무 확인은 아직 열려 있다.
@@ -1842,7 +2097,7 @@ v4.4 다른 예:
 | answer_evaluations | `session_id`, `answer_id`(unique), `status` CHECK in (`pending`, `succeeded`, `failed`), **`error_code`**(v4.3, 실패 원인, null = 원인 없음·성공, Q53-3, 2.7.1), `result` jsonb(criteria, strengths, improvements, intent_reveal, model_answer, consistency_notes, answer_quotes) + AI 메타. v4.2: `consistency_notes` 원소는 result에 `{text, answer_quotes}`, 근거는 `evidence_links`(`consistency_notes.<n>`) |
 | session_feedbacks | `session_id`(unique), `status` CHECK in (`pending`, `succeeded`, `failed`), `result` jsonb(headline, overall_strengths, overall_weaknesses, next_practice, criteria_summary, unanswered_note) + AI 메타 |
 
-### A.14 evidence_links (v3 반영 전체)
+### A.14 evidence_links (v3 반영 전체, **v4.12: `source_type = 'profile'` 처리는 2.8**)
 `application_project_id`(복합 FK cascade. **v4.11, OD-I6 ★: null 허용** — 지원 프로젝트 삭제 뒤 남은 면접 세션의 질문·평가·종합 근거만 null, CHECK로 그 세 `owner_type`에 한정, 2.7.2), `owner_type` CHECK in (`insight`, `draft_section`, `interview_question`, `answer_evaluation`, `session_feedback`, `chat_message`), `owner_id`(soft), `item_key`(초안 `block_id`, 그 밖 점 경로), `sort_order`, `source_type`(본문 2.8 목록), `source_id`(soft), `source_locator`, `source_field`, `quote`(원본 삭제 시 null), `quote_adjusted`, `source_snapshot_at`, `source_deleted_at`, `source_label`(≤ 300자, 저장 시점 출처 이름 — v4.7 교육 = 교육 표시 이름, 2.8). 인덱스 `(owner_type, owner_id)`, `(user_id, source_type, source_id)`, `(application_project_id)`. v4.2: insert 트리거(저장 직전 원본 삭제 → "원본 삭제됨"), `user_note`·`interview_answer` 출처 규칙, 직접 INSERT 권한 없음(2.8, 5장).
 
 ### A.15 ai_jobs (v4 반영 전체)

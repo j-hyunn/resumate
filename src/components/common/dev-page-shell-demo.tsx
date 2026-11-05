@@ -396,6 +396,7 @@ function DeliverableDemo({ data }: { data: DeliverablePageData }) {
           <DocTextarea
             ref={bodyRef}
             aria-label="본문"
+            grow
             className="min-h-[24rem]"
             value={form.body}
             onValueChange={(body) => {

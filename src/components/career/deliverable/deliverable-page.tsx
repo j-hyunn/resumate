@@ -32,6 +32,7 @@ import { ReturnBanner } from "@/components/common/return-banner"
 import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
 import { CRUMB_CURRENT, firstSaveToast } from "@/components/career/new-row-notice"
+import { useNewRowRemount } from "@/components/career/new-row-remount"
 import { saveProjectDeliverableAction } from "@/lib/data/career-v45-actions"
 import {
   PAGE_LIMITS,
@@ -68,7 +69,24 @@ function replaceUrl(deliverableId: string | null, projectId: string, chatId: str
   window.history.replaceState(window.history.state, "", url.pathname + url.search)
 }
 
-export function DeliverablePage({ data, range = null }: { data: DeliverablePageData; range?: { start: number; end: number } | null }) {
+/**
+ * 새 행 페이지가 Next 16의 숨은 트리(`<Activity>`)로 되살아나는 것을 막는 겉면 — 자세한 이유는
+ * `../new-row-remount.tsx`. "+ 산출물 추가"로 다시 들어오면 방금 만든 산출물이 아니라 빈 새 산출물이 열린다.
+ */
+export function DeliverablePage(props: { data: DeliverablePageData; range?: { start: number; end: number } | null }) {
+  const { key, markRow } = useNewRowRemount()
+  return <DeliverablePageBody key={key} {...props} markRow={markRow} />
+}
+
+function DeliverablePageBody({
+  data,
+  range = null,
+  markRow,
+}: {
+  data: DeliverablePageData
+  range?: { start: number; end: number } | null
+  markRow: (rowId: string) => void
+}) {
   const router = useRouter()
   const projectId = data.project.id
   const [id, setId] = React.useState<string | null>(data.project_deliverable_id)
@@ -220,7 +238,10 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       setSavedAt(r.updated_at)
       setSaveState("saved")
       if (!wasNew) preserved.clear()
-      if (wasNew) replaceUrl(r.project_deliverable_id, projectId, panelRef.current?.chat?.id ?? null)
+      if (wasNew) {
+        markRow(r.project_deliverable_id)
+        replaceUrl(r.project_deliverable_id, projectId, panelRef.current?.chat?.id ?? null)
+      }
       // OD-C3: the save that created the row → "산출물을 추가했어요" once; later saves = C-06 "저장됨 HH:MM" only.
       // The panel's first-message save shows its own toast instead (UX S-44 [가정]).
       const added = firstSaveToast("deliverable", { wasNew, fromPanel: Boolean(opts.fromPanel) })
@@ -239,7 +260,7 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       setSkips(r.skipped.map((x) => ({ chatId: x.writing_chat_id, line: PAGE_SAVE_SKIP_COPY[x.reason] })))
       return r.project_deliverable_id
     },
-    [id, clientId, projectId, updatedAt, applied, previewState, preserved],
+    [id, clientId, projectId, updatedAt, applied, previewState, preserved, markRow],
   )
 
   // 입력 보존: what a previous visit left unsaved comes back on its own (no restore banner) — the page is dirty,
@@ -283,7 +304,10 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
       setDraftFailed(false)
       draftTurn.current = false
       const rowId = idRef.current
-      if (rowId) replaceUrl(rowId, projectId, chatId)
+      if (rowId) {
+        markRow(rowId)
+        replaceUrl(rowId, projectId, chatId)
+      }
     },
     onTurnEvent: (ev) => {
       if (ev.type === "turn_started") {

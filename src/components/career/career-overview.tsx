@@ -252,9 +252,13 @@ function AddCareerMenu({
   const newParam = searchParams.get("new")
   const requestedKind = newParam === "experience" || newParam === "education" || newParam === "project" ? newParam : null
   const [handledNew, setHandledNew] = React.useState<string | null>(null)
+  // opened by the URL there is no trigger to return focus to: on close, focus goes to "커리어 추가" (A-14, UQ-429)
+  const [openedByUrl, setOpenedByUrl] = React.useState(false)
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
   if (requestedKind && requestedKind !== handledNew) {
     setHandledNew(requestedKind)
     setAdding(requestedKind)
+    setOpenedByUrl(true)
   }
   React.useEffect(() => {
     if (!newParam) return
@@ -271,7 +275,7 @@ function AddCareerMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button className="w-full">
+          <Button ref={triggerRef} className="w-full">
             <CirclePlus aria-hidden />
             커리어 추가
           </Button>
@@ -279,7 +283,14 @@ function AddCareerMenu({
         <DropdownMenuContent align="start" className="w-72">
           <DropdownMenuLabel>어떤 커리어를 추가할까요?</DropdownMenuLabel>
           {options.map((o) => (
-            <DropdownMenuItem key={o.kind} onSelect={() => setAdding(o.kind)} className="flex flex-col items-start gap-0.5">
+            <DropdownMenuItem
+              key={o.kind}
+              onSelect={() => {
+                setOpenedByUrl(false)
+                setAdding(o.kind)
+              }}
+              className="flex flex-col items-start gap-0.5"
+            >
               <span className="font-medium">{o.label}</span>
               <span className="text-xs text-muted-foreground">{o.hint}</span>
               {o.kind === "project" ? (
@@ -293,6 +304,12 @@ function AddCareerMenu({
       <AddCareerDialog
         kind={adding}
         onOpenChange={(open) => !open && setAdding(null)}
+        onCloseAutoFocus={(e) => {
+          if (!openedByUrl) return
+          e.preventDefault()
+          setOpenedByUrl(false)
+          triggerRef.current?.focus()
+        }}
         onCreated={(item) => {
           setAdding(null)
           onCreated(item)

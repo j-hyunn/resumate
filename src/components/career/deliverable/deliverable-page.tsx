@@ -27,6 +27,7 @@ import {
   useLeaveGuard,
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
+import { isRestorable, type VersionedCopy } from "@/components/common/shell/input-preservation"
 import { ReturnBanner } from "@/components/common/return-banner"
 import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AiPanel, useAiPanel } from "@/components/career/ai-panel"
@@ -49,7 +50,8 @@ import { deleteDeliverableAction } from "../actions"
 import { DRAFT_CARD_ID, DeliverableDraftCard, type DeliverableFill } from "../deliverable-draft-card"
 
 type Form = { title: string; body: string }
-type Preserved = { form: Form; applied: AppliedDeliverableProposal[] }
+/** the copy carries the row version the edits started from (U40-2) */
+type Preserved = { form: Form; applied: AppliedDeliverableProposal[] } & VersionedCopy
 
 /** S-44 G-2 안내 1줄 (CR-8, spec verbatim) */
 const NOTICE = "산출물은 인사이트·서류·면접에서 AI가 근거로 써요. 민감정보·회사 기밀·다른 사람의 개인정보는 쓰지 마세요"
@@ -114,8 +116,8 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
   }, [id, clearNewCopy])
   const { write: writePreserved } = preserved
   React.useEffect(() => {
-    writePreserved(dirty ? { form, applied } : null)
-  }, [dirty, form, applied, writePreserved])
+    writePreserved(dirty ? { form, applied, base_updated_at: updatedAt } : null)
+  }, [dirty, form, applied, updatedAt, writePreserved])
 
   const formRef = React.useRef(form)
   React.useEffect(() => {
@@ -241,15 +243,21 @@ export function DeliverablePage({ data, range = null }: { data: DeliverablePageD
   )
 
   // 입력 보존: what a previous visit left unsaved comes back on its own (no restore banner) — the page is dirty,
-  // so 저장하기 is enabled and leaving asks first
-  const { stored: preservedStored, resolve: resolvePreserved } = preserved
+  // so 저장하기 is enabled and leaving asks first. U40-2: only when the row wasn't saved elsewhere since the copy
+  // was written; otherwise the copy is dropped and the saved row shows
+  const { stored: preservedStored, resolve: resolvePreserved, clear: clearPreserved } = preserved
+  const loadedUpdatedAt = data.updated_at
   React.useEffect(() => {
     if (!preservedStored) return
+    if (!isRestorable(preservedStored, loadedUpdatedAt)) {
+      clearPreserved()
+      return
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect -- apply the stored copy once, after hydration
     setForm(preservedStored.form)
     setApplied(preservedStored.applied)
     resolvePreserved()
-  }, [preservedStored, resolvePreserved])
+  }, [preservedStored, resolvePreserved, clearPreserved, loadedUpdatedAt])
 
   const guard = useLeaveGuard({ dirty, onSave: async () => Boolean(await doSave()), onDiscard: preserved.clear })
 

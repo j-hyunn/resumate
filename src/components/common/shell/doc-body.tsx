@@ -57,7 +57,7 @@ export function DocBody({
   sheetLabel,
   className,
 }: {
-  /** left column content (STAR / 본문) — DocBody gives it the scroll container and the 42rem text width */
+  /** left column content (STAR / 본문) — DocBody gives it the scroll container; it uses the full column width (UP-12) */
   left: React.ReactNode
   /** the panel (e.g. <AiPanel …/>) */
   aside: React.ReactNode

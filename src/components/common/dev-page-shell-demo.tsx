@@ -78,12 +78,12 @@ function ProjectDemo({ data }: { data: ProjectPageData }) {
   const save = useSaveUi(data.preview)
   const titleRef = React.useRef<HTMLInputElement | null>(null)
   const dirty = JSON.stringify(values) !== JSON.stringify(baseline)
-  const preserved = useInputPreservation<{ values: ProjectPageValues; applied: AppliedProjectProposal[] }>(
+  const preserved = useInputPreservation<{ values: ProjectPageValues; applied: AppliedProjectProposal[]; base_updated_at: string | null }>(
     preservationKey("project", projectId, data.parent.id),
   )
   React.useEffect(() => {
-    preserved.write(dirty ? { values, applied } : null)
-  }, [dirty, values, applied, preserved])
+    preserved.write(dirty ? { values, applied, base_updated_at: updatedAt } : null)
+  }, [dirty, values, applied, updatedAt, preserved])
 
   const uiState: SaveUiState = save.state === "saving" || save.state === "failed" || save.state === "invalid" || save.state === "stale" ? save.state : dirty ? "dirty" : save.savedAt ? "saved" : "idle"
 
@@ -311,10 +311,10 @@ function DeliverableDemo({ data }: { data: DeliverablePageData }) {
   const titleRef = React.useRef<HTMLInputElement | null>(null)
   const bodyRef = React.useRef<HTMLTextAreaElement | null>(null)
   const dirty = form.title !== baseline.title || form.body !== baseline.body
-  const preserved = useInputPreservation<{ form: typeof form; applied: AppliedDeliverableProposal[] }>(preservationKey("deliverable", id, data.project.id))
+  const preserved = useInputPreservation<{ form: typeof form; applied: AppliedDeliverableProposal[]; base_updated_at: string | null }>(preservationKey("deliverable", id, data.project.id))
   React.useEffect(() => {
-    preserved.write(dirty ? { form, applied } : null)
-  }, [dirty, form, applied, preserved])
+    preserved.write(dirty ? { form, applied, base_updated_at: updatedAt } : null)
+  }, [dirty, form, applied, updatedAt, preserved])
   const uiState: SaveUiState = save.state === "saving" || save.state === "failed" || save.state === "invalid" || save.state === "stale" ? save.state : dirty ? "dirty" : save.savedAt ? "saved" : "idle"
 
   const doSave = async (overwrite = false): Promise<string | null> => {

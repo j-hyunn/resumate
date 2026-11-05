@@ -12,8 +12,8 @@
  *
  * Everything that leaves the page in-app goes through `guard.navigate(href)` (logo, account menu, ←, 이동 경로)
  * or is caught by the document click capture (any other `<a>`: C-10 "돌아가기", C-02 …). Browser close /
- * reload → `beforeunload`. Browser back / forward → the same dialog (popstate caught before Next's router, the
- * entry restored with history.forward(), then 나가기 = history.back()).
+ * reload → `beforeunload`. Browser back / forward → the same dialog (popstate caught before Next's router, this
+ * entry restored, then 나가기 = one step in the pressed direction; leave-guard.ts).
  */
 import * as React from "react"
 import Link from "next/link"
@@ -44,6 +44,7 @@ import { useToasterPosition } from "./shell-parts"
 import { createPreservationStore } from "./input-preservation"
 import { registerOutageSlot } from "./page-shell-outage"
 import { OverflowScroller } from "./overflow-scroller"
+import { createBypass, createClickGuard, createPopStateGuard, stampEntry } from "./leave-guard"
 
 // ---------------------------------------------------------------------------
 // LeaveGuard — 페이지 단위 이탈 확인 (1.3a 이탈 확인, UX-7)
@@ -63,7 +64,7 @@ export interface LeaveGuardController {
   saveAndLeave: () => Promise<void>
   /**
    * StaleWriteDialog "새로 불러오기" (QA UQ-PA-18): drop unsaved edits + [반영] memory (`onDiscard`, i.e. the
-   * input preservation) and read the page again — no browser leave prompt, no restore banner afterwards.
+   * input preservation) and read the page again — no browser leave prompt, nothing restored afterwards.
    */
   reloadDiscarding: () => void
 }
@@ -84,27 +85,17 @@ export function usePageLeave(): (target: LeaveTarget) => void {
   )
 }
 
-function isGuardableClick(e: MouseEvent): string | null {
-  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null
-  const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null
-  if (!a || a.target === "_blank" || a.hasAttribute("download") || a.dataset.leaveGuard === "skip") return null
-  const url = new URL(a.href, window.location.href)
-  if (url.origin !== window.location.origin) return null
-  // same page (hash / query only to this path) isn't a leave
-  if (url.pathname === window.location.pathname && url.search === window.location.search) return null
-  return url.pathname + url.search + url.hash
-}
-
 /**
  * @param dirty unsaved edits (direct input + AI [반영] fills)
  * @param onSave the page's "저장하기"; resolve true when saved (false = failure / validation error → stay)
  * @param onDiscard "저장하지 않고 나가기" (clear the input preservation)
+ * The popstate / click / bypass logic lives in leave-guard.ts (unit-tested, UQ-423).
  */
 export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; onSave: () => Promise<boolean>; onDiscard?: () => void }): LeaveGuardController {
   const router = useRouter()
   const [pending, setPending] = React.useState<LeaveTarget | null>(null)
   const [saving, setSaving] = React.useState(false)
-  const bypass = React.useRef(false)
+  const [bypass] = React.useState(() => createBypass())
   const dirtyRef = React.useRef(dirty)
   React.useEffect(() => {
     dirtyRef.current = dirty
@@ -112,79 +103,61 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
 
   const go = React.useCallback(
     (target: LeaveTarget) => {
-      bypass.current = true
+      // the page may stay (an in-page callback): re-arm after the navigation started
+      bypass.open()
       if (typeof target === "function") target()
       else router.push(target)
-      // the page may stay (an in-page callback): re-arm after the navigation started
-      window.setTimeout(() => {
-        bypass.current = false
-      }, 1500)
     },
-    [router],
+    [router, bypass],
   )
 
   const navigate = React.useCallback(
     (target: LeaveTarget) => {
-      if (!dirtyRef.current || bypass.current) return go(target)
+      if (!dirtyRef.current || bypass.active) return go(target)
       setPending(() => target)
     },
-    [go],
+    [go, bypass],
   )
 
   // browser close / reload: the browser's own confirm (no custom copy possible)
   React.useEffect(() => {
     if (!dirty) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (bypass.current) return
+      if (bypass.active) return
       e.preventDefault()
       e.returnValue = ""
     }
     window.addEventListener("beforeunload", onBeforeUnload)
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
-  }, [dirty])
+  }, [dirty, bypass])
 
-  // browser back / forward: a capture listener on window runs before the router's own popstate listener. With
-  // unsaved edits it stops the router, steps forward again to this page's entry and asks; 나가기 = history.back().
+  // browser back / forward (UQ-422 direction: Navigation API index, else this entry's own stamp; unknown = let go)
   React.useEffect(() => {
-    // direction from the Navigation API entry index where available (Chromium); otherwise assume 뒤로
-    const entryIndex = () => (window as Window & { navigation?: { currentEntry?: { index: number } | null } }).navigation?.currentEntry?.index
-    let index = entryIndex()
-    let restoring = false
-    const onPopState = (e: PopStateEvent) => {
-      if (restoring) {
-        restoring = false
-        e.stopImmediatePropagation()
-        return
-      }
-      const now = entryIndex()
-      const forward = index !== undefined && now !== undefined && now > index
-      if (!dirtyRef.current || bypass.current) {
-        index = now
-        return
-      }
-      e.stopImmediatePropagation()
-      restoring = true
-      if (forward) window.history.back()
-      else window.history.forward()
-      setPending(() => () => (forward ? window.history.forward() : window.history.back()))
-    }
+    const navigationIndex = () => (window as Window & { navigation?: { currentEntry?: { index: number } | null } }).navigation?.currentEntry?.index
+    const initial = navigationIndex() ?? stampEntry(window.history)
+    const onPopState = createPopStateGuard(
+      {
+        isBlocked: () => dirtyRef.current && !bypass.active,
+        navigationIndex,
+        history: window.history,
+        ask: (leave) => setPending(() => leave),
+      },
+      initial,
+    )
     window.addEventListener("popstate", onPopState, true)
     return () => window.removeEventListener("popstate", onPopState, true)
-  }, [])
+  }, [bypass])
 
   // any other in-app <a> (C-10 돌아가기, C-02, links in the panel …)
   React.useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (!dirtyRef.current || bypass.current) return
-      const href = isGuardableClick(e)
-      if (!href) return
-      e.preventDefault()
-      e.stopPropagation()
-      setPending(() => href)
-    }
+    const onClick = createClickGuard({
+      isBlocked: () => dirtyRef.current && !bypass.active,
+      here: () => window.location,
+      ask: (href) => setPending(() => href),
+    })
     document.addEventListener("click", onClick, true)
     return () => document.removeEventListener("click", onClick, true)
-  }, [])
+  }, [bypass])
 
   const cancel = React.useCallback(() => setPending(null), [])
   const leaveWithoutSaving = React.useCallback(() => {
@@ -204,10 +177,10 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
   }, [pending, onSave, go])
 
   const reloadDiscarding = React.useCallback(() => {
-    bypass.current = true
+    bypass.hold()
     onDiscard?.()
     window.location.reload()
-  }, [onDiscard])
+  }, [onDiscard, bypass])
 
   return { dirty, navigate, pending, saving, cancel, leaveWithoutSaving, saveAndLeave, reloadDiscarding }
 }
@@ -580,13 +553,13 @@ export function preservationKey(kind: "project" | "deliverable", rowId: string |
 }
 
 export interface InputPreservation<T> {
-  /** what a previous visit left unsaved — the restore banner shows while this is set */
+  /** what a previous visit left unsaved — set once after hydration; the page restores it (`resolve`) or drops it (`clear`) */
   stored: T | null
-  /** debounced write of the current unsaved state; `null` = nothing unsaved now. Ignored until the banner is answered */
+  /** debounced write of the current unsaved state; `null` = nothing unsaved now. Ignored while `stored` is unresolved */
   write: (value: T | null) => void
-  /** after a successful save / "저장하지 않고 나가기" / "버리기" / "새로 불러오기" */
+  /** after a successful save / "저장하지 않고 나가기" / "새로 불러오기" / a stale copy (U40-2) */
   clear: () => void
-  /** "이어서 편집": the page applied `stored` (its next writes keep it) */
+  /** auto-restore (UP-11): the page applied `stored` after hydration (its next writes keep it) */
   resolve: () => void
   /** @deprecated alias of `resolve` */
   dismiss: () => void

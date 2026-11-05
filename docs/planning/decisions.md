@@ -704,9 +704,32 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 ### 4.16 새 설정 다이얼로그 후속 (2026-11-05, SD-*)
 
-- **백엔드** (resumate-backend): 데이터 모델 [11.7](04-data-model.md) 14개 항목. 핵심 — `profile_options` 신설·시드 ①, `profiles` 컬럼 7개 추가 + 백필 + **`total_years_of_experience`·`desired_job_title`·`interested_industries` drop ★(파괴적)** ②, `profile_job_interests` 신설 ③, 옵션 검증 트리거 ④, RPC `save_profile_basics` ⑤, `get_data_readiness`에서 `profile_filled`·`profile` 힌트 제거 ★ ⑥, 함수 `private.compute_total_experience_months` ⑦, `ai_usage_records` 비용 2컬럼 + `get_ai_usage_summary` `providers[]` 교차 집계 ★ ⑧, `policy_versions`에 `ai_data_use` ⑩, `evidence_links` insert 트리거 + 저장 RPC 허용 출처 6종 → 5종 ★ ⑪, `app_ai_writer`에서 내 정보 권한 미부여 + 컨텍스트 팩의 `profiles` 조회 제거 ⑫
+- **백엔드** (resumate-backend): 데이터 모델 [11.7](04-data-model.md) 14개 항목. 핵심 — `profile_options` 신설·시드 ①, `profiles` 컬럼 ~~7개~~ **10개**((v4.12a) 구현 기준 — 최종 학력 7컬럼 포함) 추가 + 백필 + **`total_years_of_experience`·`desired_job_title`·`interested_industries` drop ★(파괴적)** ②, `profile_job_interests` 신설 ③, 옵션 검증 트리거 ④, RPC `save_profile_basics` ⑤, `get_data_readiness`에서 `profile_filled`·`profile` 힌트 제거 ★ ⑥, 함수 `private.compute_total_experience_months` ⑦, `ai_usage_records` 비용 2컬럼 + `get_ai_usage_summary` `providers[]` 교차 집계 ★ ⑧, `policy_versions`에 `ai_data_use` ⑩, `evidence_links` insert 트리거 + 저장 RPC 허용 출처 6종 → 5종 ★ ⑪, `app_ai_writer`에서 내 정보 권한 미부여 + 컨텍스트 팩의 `profiles` 조회 제거 ⑫
   - **반영 순서 주의**: ②의 컬럼 drop은 ⑥·⑫ 배포가 끝난 뒤에만 올린다. 먼저 올리면 AI 실행과 커리어 화면이 함께 멈춘다
-  - 프롬프트 8종의 `prompt_version`이 올라간다(AI v4.12). 과거 결과 행은 고치지 않고, 배포 시점에 동일 입력 재사용이 한 번 끊긴다
+  - 프롬프트 ~~8종~~ **10종**의 `prompt_version`이 올라간다(AI v4.12 → **v4.12a**에서 구현 번호로 정정: `common.v3`·`ai-02.match.v5`·`ai-02.synthesize.v5`·`ai-03.generate.v4`·`ai-04.generate.v4`·`ai-04.adjust.v4`·`ai-05.generate.v4`·**`ai-06.evaluate.v4`**·`ai-12.reply.v7`·`ai-13.reply.v3`). 과거 결과 행은 고치지 않고, 배포 시점에 동일 입력 재사용이 한 번 끊긴다
+  - **구현 2026-11-05 (백엔드 R13, PR #58)** — 14개 항목 전부, 로컬 검증. **원격 미반영**(2단 배포, `_workspace/backend/R13/05_release.md`). 계획 밖 2건: 탈퇴 RPC가 `profile_job_interests`를 지움, `computed_total_months`의 public 래퍼(DM v4.12a 6.2)
 - **UI** (resumate-ui): S-24를 탭 4개로 재구현(계정 / AI 연결 / 약관 / 개선 요청), 계정 탭 내 정보 섹션 저장 + 오류 6종, **S-04 폐기**와 `/career/profile` 리다이렉트, 위험 구역(로그아웃·회원 탈퇴), AI 연결 탭에 S-40 + S-42 통합(라디오 행·플랜 안내 문구·공급자 탭·교차 집계 표), 약관 탭 4문서 + 선택 동의 토글 2개, `/policies/ai_data_use` 페이지, 근거 칩 `profile`의 "원본으로 이동" 비활성. 문구는 UX v5.17
-- **남은 사용자 결정**: **SD-Q1(개선 요청 폼 주소) 1건뿐**. SD-Q2 · SD-Q3 (가)(나)(다) · D-DM-13 · D-DM-14 · D-DM-15는 2026-11-05에 모두 확정했다(3.22 후속 확정 표)
+- **남은 사용자 결정**: **SD-Q1(개선 요청 폼 주소)** + **(v4.12a, D9) `policy_versions.ai_data_use`의 법무 확정 `version`·`effective_at`**(구현 잠정 `2026-11-05`, 확정 값이 다르면 새 행 추가 — DM 2.1.3). SD-Q2 · SD-Q3 (가)(나)(다) · D-DM-13 · D-DM-14 · D-DM-15는 2026-11-05에 모두 확정했다(3.22 후속 확정 표)
 - **출시 전 확인**: SD-Q3 (다)로 약관 탭에서 동의 이력 열람 경로가 사라지므로 **법무 확인 권장**(PIPA)
+
+### 4.17 백엔드 R13 구현 피드백 — 기획 정정 (2026-11-05, D1~D10)
+
+- **출처**: 백엔드 R13(PR #58) backend-qa 2라운드 `_workspace/backend/R13/03_backend-qa_report.md` "기획 문서 정정" 10건 (`spec-gaps.md` R13-AI-1·2·3, R13-API-1·2·3, R13-DB-1·2·3). **새 결정 없음** — 문장이 확정 결정·구현과 어긋나던 자리만 고쳤다(리더 직접, v4.9 선례).
+- **판**: DM **v4.12a** (D1·D2·D3·D4·D5·D9·D10) · AI **v4.12a** (D4·D6·D7) · UX **v5.17a** (D1·D3·D8). PRD는 바뀌지 않음. 바뀐 문장에 `(v4.12a, Dn)` / `(v5.17a, Dn)`.
+
+| ID | 정정 | 문서 |
+|----|------|------|
+| D1 | 관심 직군·직무 쌍 상한 잔여 문장 → **2쌍**(`too_many_job_interests` = 3쌍 이상, `sort_order` 1~2) | DM 머리글·2.1.2·7장·변경이력, UX S-24 ① |
+| D2 | `profile_job_interests` RLS = select·insert·delete 본인, **update 없음** | DM 2.1.2 (5장과 일치) |
+| D3 | 최종 학력 "6칸" = 화면 6칸 · **컬럼 7개** | DM 2.1.1·머리글, UX S-24 ① |
+| D4 | `computed_total_months`: 화면용 RPC 없음 / **서버 경로용 public 래퍼** `public.compute_total_experience_months(p_as_of)` | DM 6.2, AI C-1 |
+| D5 | `app_ai_writer`의 `profiles` grant = `id`·`career_data_updated_at`·`updated_at`, `active_ai_provider`는 사용자 세션·definer 게이트가 읽음 | DM 2.1.5·5장 |
+| D6 | 프롬프트 버전 표를 구현 현행값 기준으로(`common.v3`·`ai-02.*.v5`) | AI 0.v412 |
+| D7 | AI-06도 올림(`ai-06.evaluate.v4`) — system에 A10 프로필 문장이 있었다 | AI 0.v412 |
+| D8 | "저장 오류 5종" → 6종 | UX S-24 ① |
+| D9 | `ai_data_use` 잠정 값 `2026-11-05` + 확정 시 새 행 추가 규칙. **법무 확정은 열린 결정** | DM 2.1.3 |
+| D10 | 최종 학력 연월 `'YYYY-MM'` 전송, `p_values` 섹션 전체 덮어쓰기 | DM 2.1.1·7장 |
+
+- **백엔드·UI 후속**: **없음** — 구현이 이미 정정 후 문장대로다. 열린 것은 D9 법무 확정 값 하나(4.16 "남은 사용자 결정").
+- **R13 `[가정]` 중 기획이 아직 다루지 않은 것**(필요하면 다음 사이클): R13-AI-4 연차 요건 비교가 `min_years` 숫자 대신 `<jd>`의 `seniority` 라벨 줄(입력에 숫자가 없다) · R13-AI-5 폐기 출처를 단 항목은 근거만 빠지지 않고 항목째 버려진다(zod enum이 먼저 거름) · R13-DB-4 `profile_options` 코드 키 원천 = 시드 마이그레이션 주석 · R13-DB-5 탈퇴 테이블 목록에 `profile_job_interests`.
+

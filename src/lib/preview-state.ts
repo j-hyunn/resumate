@@ -26,6 +26,8 @@ export const PREVIEW_STATES = [
   // C-20 원인 7종 + 시스템·입력 (ST-AI-FAILED 대체)
   "ai-failed-rate-limited",
   "ai-failed-daily-quota",
+  // C-20 daily_quota_exhausted with the reset line (OD-B1: only when quota_resets_at is known) — UQ-389
+  "ai-failed-daily-quota-reset",
   "ai-failed-billing",
   "ai-failed-key-invalid",
   "ai-failed-model",
@@ -128,6 +130,7 @@ export function previewErrorCode(
     case "ai-failed-rate-limited":
       return "rate_limited"
     case "ai-failed-daily-quota":
+    case "ai-failed-daily-quota-reset":
       return "daily_quota_exhausted"
     case "ai-failed-billing":
       return "billing_required"

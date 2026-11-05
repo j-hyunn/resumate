@@ -36,3 +36,8 @@
 - 보안 advisor: 기존 항목뿐(authenticated SECURITY DEFINER RPC 22건, `account_deletion_logs` 정책 없음 INFO, 유출 비밀번호 보호 꺼짐, MFA 옵션 부족). 이번 반영으로 새로 생긴 항목 없음
 - 성능 advisor: INFO만(인덱스 없는 FK 51, 미사용 인덱스 46 — 데이터가 거의 없어 생기는 항목)
 - 남은 것: PR #50 머지(R12 코드). Vercel 배포 상태 확인은 머지 뒤
+
+## 2차 반영 (2026-11-05, R12 QA 수정 — 사용자 요청 "올리고 머지")
+- `supabase db push --dry-run` → `20261113001400_r12_free_tier_greeting_copy.sql` 1개(비파괴, `private.writing_chat_greeting`·`private.writing_chat_deliverable_greeting` `create or replace`) → `supabase db push --linked` 적용
+- 확인: `list_migrations` 마지막 `20261113001400 r12_free_tier_greeting_copy`(로컬과 일치). security advisors — 새 항목 없음(기존 수용 항목: `account_deletion_logs` 정책 없음 INFO, authenticated SECURITY DEFINER 22개, Auth 비밀번호·MFA 경고 — 이번 함수는 private 스키마라 해당 없음)
+- 이후 PR #51 머지(운영 배포)

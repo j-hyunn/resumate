@@ -5,7 +5,7 @@
  * Loads impact counts itself (get_deletion_impact etc.) and returns the chosen options.
  * Never delete without it (patterns.md §8).
  */
-import { actionFailedMessage, objectParticle } from "@/lib/data/labels"
+import { actionFailedMessage, applicationObjectPhrase, objectParticle } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2 } from "lucide-react"
 import {
@@ -205,7 +205,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           <AlertDialogTitle>{name} 삭제</AlertDialogTitle>
           <AlertDialogDescription>
             {target.kind === "application_project"
-              ? `'${target.label}' 자기소개서를 삭제할까요?` // K-2 (v5.13)
+              ? `${applicationObjectPhrase(target.label, { quoted: true })} 삭제할까요?` // K-2 (v5.13) + U36-7 overlap rule
               : target.kind === "draft"
                 ? `'${target.label}'${objectParticle(target.label)} 삭제할까요?` // K-3 (v5.13)
               : target.kind === "interview_session"
@@ -315,7 +315,7 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
         )
     }
     // OD-I6 / R-OD-5: completed sessions left after their 자기소개서 was deleted (0 → no line)
-    const detached = impact.data.affected_results.detached_interview_sessions ?? 0
+    const detached = impact.data.affected_results.detached_interview_sessions
     if (detached > 0) lines.push(`삭제된 자기소개서의 면접 기록 ${detached}개`)
     byAp = impact.data.affected_results.by_application_project
   }

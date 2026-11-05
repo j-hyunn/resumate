@@ -1269,6 +1269,11 @@ export interface DeletionImpact {
       draft_sections: number
       interview_sessions: number
     }>
+    /**
+     * OD-I6 / R-OD-5 (DM v4.11): completed sessions whose 자기소개서 was already deleted and that cite this item.
+     * 연결 대기 (DM v4.11 11.6 #1~#6): absent until the RPC returns it → treated as 0.
+     */
+    detached_interview_sessions?: number
   }
   /** entity_type = 'writing_chat' only */
   writing_chat?: { message_count: number; linked_saved_rows: number }

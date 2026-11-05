@@ -730,3 +730,15 @@ UI 쪽에서 처리: W2-①②③④⑧⑨, W3-1, W3-4(표시만, 시간은 그�
 - **R5-W-1** 화면은 새 페이지마다 `client_id`를 만들어 재시도에 재사용한다(UQ-PA-3, 같은 행 보장). `save_project_page`·`save_project_deliverable`은 만들기 때 id를 받지 않아 실제 경로에서는 `client_id`를 쓰지 않는다 → 저장 응답이 유실된 뒤 다시 저장하면 행이 둘 생길 수 있다. 한 RPC 한 트랜잭션이라 "만들기 성공 + 나머지 실패"(`created`)는 더 생기지 않는다. 기획 판단: RPC에 `p_client_id`를 둘지, 지금처럼 둘지. `[가정]`
 - **R5-W-2** `base_body_hash` 계산은 서버 기준(정규화 없음, UTF-8 sha256)으로 맞췄다 — 화면의 CRLF → LF 정규화([UI-가정])를 뺐다. textarea 값은 LF라 실제 차이는 없다. (S-44·AI-13 기획 질문 "`base_body_hash` 정규화"의 답)
 - **R5-W-3** 저장 결과 `skipped[]`의 `writing_chat_id`·`field`가 null(모양이 틀린 항목의 `invalid_entry`)이면 화면 계약(문자열)에 맞춰 빈 문자열로 넘긴다.
+
+## UI 36 런 (리더, 2026-11-05) — 열린 결정 일괄 확정(OD-*) UI 후속의 백엔드 요청
+상세 표: `docs/ui/screen-status.md` "백엔드 연결 대기 (36 런)". 보고 `_workspace/ui/36_frontend-engineer-A2_report.md`·`36_frontend-engineer-A4_report.md`.
+- **UI36-1 (DM 11.6 #1~#6)** `interview-rows.ts` `SESSION_SELECT`에 `company_name_snapshot`·`position_title_snapshot` 추가, `application_project_id` null 허용 뒤 캐스트 제거. 화면은 null = "자기소개서 삭제됨"으로 읽음(라우트 `[id] = "deleted"`).
+- **UI36-2 (#1~#6)** `deletion.ts` `getApplicationDeletionImpact` 실제 분기 → RPC `get_deletion_impact('application_project')`: `interview_sessions` = `cascade.interview_sessions`(완료 아닌 세션), `kept_interview_sessions` = `kept.interview_sessions`. 지금은 완료 세션도 지워지므로 kept 0.
+- **UI36-3 (R-OD-5)** 커리어 `get_deletion_impact`가 `affected_results.detached_interview_sessions`를 내면 `toDeletionImpact`가 그대로 읽음(없으면 0).
+- **UI36-4 (#11)** 턴 라우트 `retryTarget`: 마지막이 답 없는 사용자 메시지면 재응답(지금 409 `nothing_to_retry` → 화면은 토스트 + 입력 복원).
+- **UI36-5 (#15)** 대화 상세 DTO에 실패 응답 메시지의 작업 상태(`canceled`/`failed`, 원인) → `career-v45.ts` `messagesOf`가 `turn_job`을 채우면 됨.
+- **UI36-6** `policy_versions`에 `cross_border_transfer`·`privacy` `2026-11-05` 행(본문은 `policy-content.ts`·`docs/legal/`에 반영됨).
+- **UI36-7 확인** 모든 답이 비어 있는 제출이 `score_status = scored`, `score_value = 0`(d14.v1)으로 저장되는지. mock 채점 완료(`ai-jobs.ts`)는 아직 `pending_method`를 남김 — 실제 산식 배포 뒤 mock도 맞출지 결정.
+- **UI36-8 참고** 로컬 통합 테스트 `src/lib/data/interviews.integration.test.ts` 2건, `src/server/services/interview/interview.integration.test.ts` 2건이 공유 로컬 스택(이미 d14.v1·OD-I6 마이그레이션 적용)에서 옛 기대값(`pending_method`·세션 전부 삭제)으로 실패 — od-backend가 갱신.
+- **UI36-9 참고(A2)** 서버가 `ai_consent_required`를 `key_missing`으로 바꿔 내려 동의 거절이 C-21 대신 C-18로 보임(기존 동작).

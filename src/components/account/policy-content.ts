@@ -26,10 +26,11 @@ export {
 
 /**
  * NFR-PRV-03 (D-10): data sent to the LLM API provider abroad. v4.6 D-DM-12 (a): the notice
- * now names unsaved in-progress form values sent with AI 작성 대화 turns.
+ * now names unsaved in-progress form values sent with AI 작성 대화 turns. Cross-border notice
+ * 2026-11-05 (OD-L2a): Anthropic inference may run outside the US.
  */
 export const CROSS_BORDER_ITEMS = [
-  "커리어 데이터(경력·교육·프로젝트·산출물·정량 성과·스킬)",
+  "커리어 데이터(경력·교육·프로젝트·산출물·스킬)", // 2026-11-05: 폐기된 "정량 성과" 삭제 (CR-11)
   "AI 작성 대화 내용(작성 중이어서 아직 저장하지 않은 내용 포함)",
   "공고 원문(JD)",
   "자기소개서 메모",
@@ -271,7 +272,7 @@ export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
         "AI 기능은 선택이에요. 본인 AI 키를 연결하고 AI 기능을 실행할 때만, 실행에 필요한 데이터가 이용자가 고른 공급자에게 전송돼요. 키를 연결하지 않으면 국외로 전송되지 않아요. 키를 연결할 때 공급자·등급별로 알리고 별도 동의를 받아요.",
       ],
       items: [
-        "이전받는 자(국가): OpenAI, L.L.C.(미국) · Google LLC(미국 등 Google 데이터센터 소재 국가) · Anthropic, PBC(미국) 중 이용자가 연결한 공급자",
+        "이전받는 자(국가): OpenAI, L.L.C.(미국) · Google LLC(미국 등 Google 데이터센터 소재 국가) · Anthropic, PBC(미국 저장, 응답 생성은 미국 외 여러 국가에서 처리될 수 있음) 중 이용자가 연결한 공급자",
         `이전 항목: ${CROSS_BORDER_ITEMS.join(", ")}. 이메일과 표시 이름은 보내지 않아요`,
         "목적: 이용자가 실행한 AI 기능의 결과 생성",
         "시기와 방법: AI 기능을 실행할 때마다 암호화된 통신(TLS)으로 공급자 API에 전송",
@@ -341,7 +342,7 @@ export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
       items: [
         "OpenAI, L.L.C. — 미국 · 연락처 privacy@openai.com · 정책 openai.com/policies/privacy-policy",
         "Google LLC (Gemini API) — 미국 등 Google 데이터센터 소재 국가 · 연락처 support.google.com/policies/contact/general_privacy_form · 정책 ai.google.dev/gemini-api/terms",
-        "Anthropic, PBC — 미국 · 연락처 privacy@anthropic.com · 정책 anthropic.com/legal/privacy",
+        "Anthropic, PBC — 미국(저장). 응답 생성(추론)은 Anthropic 기본 설정에 따라 미국 외 여러 국가에서 처리될 수 있음 · 연락처 privacy@anthropic.com · 정책 anthropic.com/legal/privacy",
       ],
       notes: [
         "AI 기능은 선택이에요. 키를 연결하지 않으면 전송되지 않고, 연결한 활성 공급자 1곳으로만 전송해요. 키를 연결할 때 공급자·등급별로 알리고 별도 동의를 받아요.",

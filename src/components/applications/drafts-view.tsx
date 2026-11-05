@@ -220,7 +220,7 @@ export function DraftList({
       <DeleteConfirmDialog
         open={target !== null}
         onOpenChange={(o) => !o && setTarget(null)}
-        target={target ? { kind: "draft", entity_id: target.id, label: DRAFT_TYPE_LABELS[target.draft_type] } : null}
+        target={target ? { kind: "draft", entity_id: target.id, label: target.title?.trim() || DRAFT_TYPE_LABELS[target.draft_type], draft_type: target.draft_type } : null}
         onConfirm={async () => {
           if (!target) return
           await deleteDraftAction(target.id)

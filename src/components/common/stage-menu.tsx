@@ -347,7 +347,7 @@ export function StageSubMenu({ controller }: { controller: StageMoveController }
 
 /**
  * Card / row ⋯ menu (ghost icon-sm + MoreHorizontal, aria-label="카드 메뉴"):
- * 단계 이동 · 결과 기록(closed) · `extraItems` (기업 JD 열기, 삭제 …, owned by the screen).
+ * 단계 이동 · 결과 기록(closed) · `extraItems` (자기소개서 열기, 삭제 …, owned by the screen).
  * Keyboard: focus the trigger → Enter opens, arrows choose (C-12).
  */
 export function StageCardMenu({
@@ -500,7 +500,7 @@ function InterviewPromptBody({
         {session ? (
           // v5.3 C-14 (3.13 v3): 유형 · n/N 작성 · 마지막 활동 + generation_status line
           <div className="space-y-1.5 rounded-md bg-muted p-3 text-sm">
-            <p className="font-medium">이 기업 JD에 작성 중인 면접이 있어요</p>
+            <p className="font-medium">이 자기소개서에 작성 중인 면접이 있어요</p>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <Badge variant="outline">{INTERVIEW_TYPE_LABELS[session.interview_type]}</Badge>
               <span className="tabular-nums">

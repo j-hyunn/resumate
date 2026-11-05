@@ -12,13 +12,19 @@ import type { DeliverableSlot, DraftReview, ProjectStarField, WritingKind } from
 import { DELIVERABLE_SLOTS_BY_KIND } from "./labels"
 import { PAGE_LIMITS, STAR_FIELDS_ORDER, isBlank } from "./career-v45-shared"
 
+/**
+ * AI-13 turn `requested_action` (AI v4.11 OD-P12): `compose_draft` = 초안 만들기, `ask_from_project` = "프로젝트 내용을
+ * 바탕으로 물어봐 줘" (the server asks the first empty slot from the parent project's description). Deliverable chats only.
+ */
+export type ChipRequestedAction = "compose_draft" | "ask_from_project"
+
 /** What a chip does when pressed. `message` sends `label` as the user message (counted, A5). */
 export type QuickChip =
   | {
       kind: "message"
       label: string
       requested_slot: string | null
-      requested_action: "compose_draft" | null
+      requested_action: ChipRequestedAction | null
       style: "shorter" | "more_detail_on_contribution" | null
     }
   /** AI-13 "새 대화 시작" (draft limit): opens a new chat, sends nothing */
@@ -27,7 +33,7 @@ export type QuickChip =
 const msg = (
   label: string,
   requested_slot: string | null,
-  extra?: { requested_action?: "compose_draft"; style?: "shorter" | "more_detail_on_contribution" },
+  extra?: { requested_action?: ChipRequestedAction; style?: "shorter" | "more_detail_on_contribution" },
 ): QuickChip => ({ kind: "message", label, requested_slot, requested_action: extra?.requested_action ?? null, style: extra?.style ?? null })
 
 // ---------------------------------------------------------------------------
@@ -136,8 +142,8 @@ function deliverableRowChips(row: DeliverableChipRow, state: DeliverableChipStat
   switch (row) {
     case "draft_unavailable":
       // [UI-가정] "다음 슬롯 안내" carries the first empty slot (null while the kind is unknown → the server picks);
-      // "부모 description 기반 질문" has no slot (UQ-PA-13)
-      return [msg(C.whatToWrite, missing), msg(C.myPartFirst, "contribution"), msg(C.fromProject, null)]
+      // "부모 description 기반 질문" = `requested_action = ask_from_project`, no slot (AI v4.11 OD-P12 · R5-AI-2)
+      return [msg(C.whatToWrite, missing), msg(C.myPartFirst, "contribution"), msg(C.fromProject, null, { requested_action: "ask_from_project" })]
     case "draft_available":
       return [msg(C.composeDraft, null, { requested_action: "compose_draft" }), msg(C.askMissing, missing), msg(C.moreDetail, "contribution")]
     case "draft_exists":
@@ -150,28 +156,22 @@ function deliverableRowChips(row: DeliverableChipRow, state: DeliverableChipStat
 }
 
 /**
- * AI-13 at `draft_count = 6`: "초안 칩 자리를 '빠진 부분 물어봐 줘'·'새 대화 시작'으로 바꾼다".
- * // [UI-가정] positional: the compose chips become those two in order, duplicates drop, and "새 대화 시작"
- * is appended when the row had only one compose chip (max 3).
+ * AI-13 at `draft_count ≥ 6` (AI v4.11 OD-P6, 확정 2026-11-05): the chips are the **fixed three**, whatever the row —
+ * "빠진 부분 물어봐 줘" (first empty slot, no action) · "프로젝트 내용을 바탕으로 물어봐 줘" (`ask_from_project`) ·
+ * "새 대화 시작" (`new_chat`: opens a new chat, sends nothing). No `compose_draft` chip (the server refuses it at 6).
  */
-function withDraftLimit(chips: QuickChip[], state: DeliverableChipState): QuickChip[] {
+export function draftLimitChips(state: DeliverableChipState): QuickChip[] {
   const C = DELIVERABLE_CHIP_COPY
-  const replacements: QuickChip[] = [msg(C.askMissing, firstEmptyDeliverableSlot(state)), { kind: "new_chat", label: C.newChat }]
-  const out: QuickChip[] = []
-  let next = 0
-  for (const chip of chips) {
-    const isCompose = chip.kind === "message" && chip.requested_action === "compose_draft"
-    const use = isCompose ? replacements[next++] : chip
-    if (!use || out.some((c) => c.label === use.label)) continue
-    out.push(use)
-  }
-  if (!out.some((c) => c.kind === "new_chat")) out.push(replacements[1])
-  return out.slice(0, 3)
+  return [
+    msg(C.askMissing, firstEmptyDeliverableSlot(state)),
+    msg(C.fromProject, null, { requested_action: "ask_from_project" }),
+    { kind: "new_chat", label: C.newChat },
+  ]
 }
 
 export function deliverableQuickChips(state: DeliverableChipState): QuickChip[] {
-  const chips = deliverableRowChips(deliverableChipRow(state), state)
-  return state.draft_count >= PAGE_LIMITS.maxDrafts ? withDraftLimit(chips, state) : chips
+  if (state.draft_count >= PAGE_LIMITS.maxDrafts) return draftLimitChips(state)
+  return deliverableRowChips(deliverableChipRow(state), state)
 }
 
 // ---------------------------------------------------------------------------

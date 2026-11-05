@@ -4,6 +4,9 @@
  * S-37 모의 면접 — 전체 세션 (02 S-37, FL-17, design-system 5.2 / 6 A4).
  * 새 면접(AiRunButton: C-18 / C-19 → C-16) · 작성 중(맨 위 고정) · 필터(기업 JD / 유형 / 상태 / 실행 공급자) · 세션 목록(최신순) ·
  * "그만둔 면접" 묶음(접힘). Two empty states: 기업 JD 없음 / 세션 없음.
+ * OD-I6: "자기소개서 삭제됨" 행은 목록에 남고, 필터 "자기소개서"에 "삭제된 자기소개서" 항목 하나로 묶는다 [가정]
+ * (조건 = application_project_id is null → view model application_deleted, R-OD-12). 그런 세션만 남고 자기소개서가
+ * 0개여도 목록은 보인다.
  */
 import * as React from "react"
 import Link from "next/link"
@@ -25,9 +28,12 @@ import { applicationDisplayName, INTERVIEW_TYPE_LABELS, SESSION_STATUS_LABELS } 
 import { routes } from "@/lib/routes"
 import { JdPickerDialog } from "./jd-picker-dialog"
 import { RelativeTime } from "./session-status"
+import { DELETED_APPLICATION_NAME, isApplicationDeleted } from "@/lib/data/interview-session-view"
 import { SessionList } from "./session-list"
 
 const ALL = "all"
+/** filter value of "삭제된 자기소개서" (not an id) */
+const DELETED = "deleted"
 const STATUS_FILTERS: InterviewSessionStatus[] = ["in_progress", "evaluating", "completed", "evaluation_failed"]
 
 export function InterviewsOverview({
@@ -63,7 +69,7 @@ export function InterviewsOverview({
   )
   const picker = <JdPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} applications={applications} />
 
-  if (applications.length === 0) {
+  if (applications.length === 0 && sessions.length === 0) {
     return (
       <div className="mx-auto max-w-6xl space-y-8">
         <PageHeader title="모의 면접" />
@@ -84,13 +90,16 @@ export function InterviewsOverview({
   }
 
   const inProgress = sessions.filter((s) => s.status === "in_progress")
+  const apMatches = (s: InterviewSessionRow) =>
+    apFilter === ALL || (apFilter === DELETED ? isApplicationDeleted(s) : !isApplicationDeleted(s) && s.application_project_id === apFilter)
+  const hasDeleted = sessions.some(isApplicationDeleted)
   const matches = (s: InterviewSessionRow) =>
-    (apFilter === ALL || s.application_project_id === apFilter) &&
+    apMatches(s) &&
     (typeFilter === ALL || s.interview_type === typeFilter) &&
     (statusFilter === ALL || s.status === statusFilter) &&
     (providerFilter === ALL || s.question_provider === providerFilter || s.evaluation_provider === providerFilter)
   const active = sessions.filter((s) => s.status !== "abandoned" && matches(s))
-  const abandoned = sessions.filter((s) => s.status === "abandoned" && (apFilter === ALL || s.application_project_id === apFilter) && (typeFilter === ALL || s.interview_type === typeFilter) && (providerFilter === ALL || s.question_provider === providerFilter || s.evaluation_provider === providerFilter))
+  const abandoned = sessions.filter((s) => s.status === "abandoned" && apMatches(s) && (typeFilter === ALL || s.interview_type === typeFilter) && (providerFilter === ALL || s.question_provider === providerFilter || s.evaluation_provider === providerFilter))
   const filtered = apFilter !== ALL || typeFilter !== ALL || statusFilter !== ALL || providerFilter !== ALL
   // [가정] 02 S-37 필터 "실행 공급자": only providers that ran at least one session
   const usedProviders = AI_PROVIDER_ORDER.filter((p) =>
@@ -99,8 +108,23 @@ export function InterviewsOverview({
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <PageHeader title="모의 면접" actions={sessions.length > 0 ? newButton : undefined} />
+      <PageHeader title="모의 면접" actions={sessions.length > 0 && applications.length > 0 ? newButton : undefined} />
       {picker}
+      {applications.length === 0 ? (
+        // OD-I6: only kept sessions of deleted 자기소개서 remain — the 기업 JD 없음 guidance, list below
+        <EmptyState
+          icon={MessagesSquare}
+          title="기업 JD를 먼저 추가하면 그 공고에 맞춘 면접을 연습할 수 있어요"
+          actions={
+            <Button asChild className="max-md:h-8">
+              <Link href={routes.applicationNew()}>
+                <Plus aria-hidden />
+                기업 JD 추가
+              </Link>
+            </Button>
+          }
+        />
+      ) : null}
 
       {sessions.length === 0 ? (
         <EmptyState icon={MessagesSquare} title="새 면접으로 첫 연습을 시작해 보세요" actions={newButton} />
@@ -156,6 +180,7 @@ export function InterviewsOverview({
                       {applicationDisplayName(ap.name, ap.name_source, ap.created_at)}
                     </SelectItem>
                   ))}
+                  {hasDeleted ? <SelectItem value={DELETED}>{DELETED_APPLICATION_NAME}</SelectItem> : null}
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as InterviewType | typeof ALL)}>

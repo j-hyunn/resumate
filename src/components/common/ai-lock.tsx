@@ -41,10 +41,10 @@ export type AiLockEntry =
 
 /** Entry-point table (02 C-18): 기능 설명 1줄 + 기본 대안 */
 export const AI_LOCK_ENTRIES: Record<AiLockEntry, { description: string; alternative?: string }> = {
-  writing_chat: { description: "질문에 답하면 AI가 프로젝트와 상세 내용으로 정리해 줘요", alternative: "직접 입력" },
+  writing_chat: { description: "질문에 답하면 AI가 STAR(상황·역할·행동·결과/성과·배운 점)에 넣을 내용을 제안해요", alternative: "직접 입력" }, // C-18 (v5.13)
   requirements: { description: "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요" },
   insight: { description: "이 공고와 내 커리어를 비교해 충족 요건·강점·보완점을 정리해요", alternative: "커리어 정리하기" },
-  draft: { description: "커리어를 바탕으로 경력기술서·자기소개서 초안을 써 드려요" },
+  draft: { description: "커리어를 바탕으로 경력기술서·자소서 문항 답변 초안을 써 드려요" }, // C-18 (v5.13, D-UX-23)
   interview_new: { description: "공고와 커리어에 맞춘 면접 질문을 만들고 답변을 채점해요", alternative: "지난 세션 보기" },
   interview_submit: { description: "제출하면 연결한 AI로 채점해요. 작성한 답변은 저장돼 있어요", alternative: "계속 작성" },
   usage: { description: "AI를 연결하면 Resumate에서 쓴 토큰과 예상 비용을 여기서 볼 수 있어요" },

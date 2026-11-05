@@ -78,6 +78,10 @@ export const PAGE_PREVIEW_STATES = [
   "chat-closed-other-tab",
   "invalid-form-snapshot",
   "start-failed",
+  // OD-P11 / R-OD-8: the open chat ends with an unanswered user message (no reply / stopped reply / failed reply)
+  "unanswered",
+  "unanswered-canceled",
+  "reopen-failed",
   "ai-stream",
   "draft-streaming",
   "draft-failed",
@@ -215,7 +219,7 @@ export async function getProjectPage(id: string, opts: ReadOpts = {}): Promise<P
         : opts.previewState === "chat-closed"
           ? list.find((c) => c.status === "closed")
           : list.find((c) => c.status === "active") ?? list[0]
-      const open = pick ? mock.previewStarDraft(pick as ProjectChatView, opts.previewState ?? null) : null
+      const open = pick ? mock.previewUnanswered(mock.previewStarDraft(pick as ProjectChatView, opts.previewState ?? null), opts.previewState ?? null) : null
       return {
         kind: "ok",
         data: {
@@ -319,6 +323,7 @@ export async function getDeliverablePage(id: string, opts: ReadOpts = {}): Promi
         open = { ...open, structured_draft: d }
       }
       if (open && opts.previewState === "chat-closed") open = { ...open, status: "closed", message_count: 40 }
+      if (open) open = mock.previewUnanswered(open, opts.previewState ?? null)
       return {
         kind: "ok",
         data: {

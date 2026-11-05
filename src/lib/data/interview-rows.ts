@@ -32,6 +32,7 @@ import type {
 } from "@/types/db"
 import { applicationDisplayName } from "./labels"
 import { hasNewResult } from "./interview-grading"
+import { deletedApplicationName, isDeletedApplicationSegment } from "./interview-session-view"
 import type { InterviewSessionDetail, InterviewSessionRow, ListSessionsFilter } from "./interviews"
 
 /** Everything the UI type has except the two jsonb reports, which no screen reads (they stay null). */
@@ -56,7 +57,8 @@ type SessionRowData = Omit<InterviewSession, "question_validation_report" | "que
 
 type ProjectNameRow = { id: string; name: string | null; name_source: string | null; created_at: string }
 
-async function loadNames(db: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, string>> {
+async function loadNames(db: UserSupabaseClient, rawIds: readonly (string | null)[]): Promise<Map<string, string>> {
+  const ids = rawIds.filter((id): id is string => typeof id === "string")
   if (ids.length === 0) return new Map()
   const { data, error } = await db.from("application_projects").select("id, name, name_source, created_at").in("id", [...new Set(ids)])
   if (error) throw mapDbError(error)
@@ -97,15 +99,26 @@ function toRow(
   const decision = decisions.get(s.id)
   const finished = run.status === "evaluation_failed" || run.status === "completed"
   const tierOf = (type: string) => (sessionJobs.find((j) => j.job_type === type)?.model_tier ?? null) as ModelTier | null
+  // OD-I6 (DM v4.11 11.6 #1): application_project_id becomes nullable once the backend migration lands — the
+  // generated type still says string, so read it as nullable here.
+  // 연결 대기 (DM v4.11 11.6 #1~#6): company_name_snapshot / position_title_snapshot are not in SESSION_SELECT
+  // yet (the columns don't exist); add them to SESSION_SELECT when the migration and generated types land.
+  const apId = s.application_project_id as string | null
+  const snapshot = s as SessionRowData & { company_name_snapshot?: string | null; position_title_snapshot?: string | null }
+  const deleted = apId === null
   return {
     ...s,
+    application_project_id: apId ?? "",
+    application_deleted: deleted,
+    company_name_snapshot: snapshot.company_name_snapshot ?? null,
+    position_title_snapshot: snapshot.position_title_snapshot ?? null,
     question_validation_report: null,
     question_usage: null,
     career_snapshot_hash: null, // QA-W5-10: server bookkeeping, no screen reads it
     // Effective values: a `generating` / `evaluating` row whose job ended reads as failed (view.ts).
     status: run.status,
     generation_status: run.generationStatus,
-    application_name: names.get(s.application_project_id) ?? "",
+    application_name: deleted ? deletedApplicationName(snapshot.company_name_snapshot, snapshot.position_title_snapshot) : (names.get(apId) ?? ""),
     running_job_id: run.activeJob?.jobId ?? null,
     question_model_tier: tierOf(QUESTIONS_JOB_TYPE) ?? (s.question_provider ? "default" : null),
     evaluation_model_tier: tierOf(EVALUATION_JOB_TYPE) ?? (s.evaluation_provider ? "default" : null),
@@ -131,7 +144,10 @@ async function toRows(db: UserSupabaseClient, sessions: readonly SessionRowData[
 /** S-37 / S-20 list, newest first. `status` filters on the effective status. */
 export async function loadInterviewSessionRows(db: UserSupabaseClient, filter: ListSessionsFilter = {}): Promise<InterviewSessionRow[]> {
   let q = db.from("interview_sessions").select(SESSION_SELECT)
-  if (filter.application_project_id) q = q.eq("application_project_id", filter.application_project_id)
+  if (filter.application_project_id)
+    q = isDeletedApplicationSegment(filter.application_project_id)
+      ? q.filter("application_project_id", "is", null) // OD-I6 "삭제된 자기소개서"
+      : q.eq("application_project_id", filter.application_project_id)
   if (filter.interview_type) q = q.eq("interview_type", filter.interview_type)
   const { data, error } = await q.order("created_at", { ascending: false }).limit(500)
   if (error) throw mapDbError(error)
@@ -170,9 +186,13 @@ function evaluationErrorOf(
   return { error_code: code, provider, retry_after: job?.retry_after ?? null, quota_resets_at: job?.quota_resets_at ?? null }
 }
 
-/** S-33 / S-22. Null when the session isn't this user's or isn't under this application project. */
-export async function loadInterviewSessionDetail(db: UserSupabaseClient, applicationProjectId: string, sessionId: string): Promise<InterviewSessionDetail | null> {
-  const { data, error } = await db.from("interview_sessions").select(SESSION_SELECT).eq("id", sessionId).eq("application_project_id", applicationProjectId).maybeSingle()
+/**
+ * S-33 / S-22. Null when the session isn't this user's or isn't under this application project.
+ * `applicationProjectId` null = a session whose application project was deleted (OD-I6, application_project_id is null).
+ */
+export async function loadInterviewSessionDetail(db: UserSupabaseClient, applicationProjectId: string | null, sessionId: string): Promise<InterviewSessionDetail | null> {
+  const base = db.from("interview_sessions").select(SESSION_SELECT).eq("id", sessionId)
+  const { data, error } = await (applicationProjectId === null ? base.filter("application_project_id", "is", null) : base.eq("application_project_id", applicationProjectId)).maybeSingle()
   if (error) throw mapDbError(error)
   if (!data) return null
   const session = data as unknown as SessionRowData

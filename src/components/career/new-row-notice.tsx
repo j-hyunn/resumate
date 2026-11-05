@@ -36,6 +36,22 @@ export const CRUMB_CURRENT: Record<NewRowKind, { new: string; existing: string }
   deliverable: { new: "새 산출물 추가", existing: "산출물 상세" },
 }
 
+/** OD-C3 (UX v5.13 C-03 토스트 목록·S-10·S-44): 첫 저장(행 생성) 성공 때 한 번만 보이는 토스트 */
+export const FIRST_SAVE_TOAST: Record<NewRowKind, string> = {
+  project: "프로젝트를 커리어에 추가했어요",
+  deliverable: "산출물을 추가했어요",
+}
+
+/**
+ * Which toast a successful page save shows. `wasNew` = the page had no row id **in state** before this save
+ * (not the URL — see new-row-notice.test.ts). A save the AI panel ran for its first message (`fromPanel`) shows
+ * the panel's own "대화를 시작하려고 … 저장했어요" instead (UX `[가정]`: one toast only). Later saves → null
+ * (C-06 "저장됨 HH:MM" only).
+ */
+export function firstSaveToast(kind: NewRowKind, opts: { wasNew: boolean; fromPanel: boolean }): string | null {
+  return opts.wasNew && !opts.fromPanel ? FIRST_SAVE_TOAST[kind] : null
+}
+
 /**
  * 머리 맨 위 안내. 점선 테두리 + `info` 톤으로 기존 행 화면과 눈에 띄게 구분된다(토큰만 사용).
  * 테두리는 variant 기본 `border-info/20` 대신 `border-info`(UQ-332): 20% 알파 점선은 `bg-info-subtle` 위에서 거의

@@ -97,4 +97,21 @@ describe("streamTurn real AI-13 events", () => {
     const events = await collect("deliverable", new Response(JSON.stringify({ error: { code: "writing_chat_draft_limit_reached" } }), { status: 409, headers: { "content-type": "application/json" } }))
     expect(events).toEqual([expect.objectContaining({ type: "error", error_code: "writing_chat_draft_limit_reached", before_stream: true })])
   })
+
+  // OD-B4 (UX v5.13 C-18 / C-20): key_missing before the run = C-18 block; during the run = C-20 failed turn
+  it("key_missing from the gate (SSE error before turn_started) is a before_stream refusal", async () => {
+    const events = await collect("project", sse([{ type: "error", code: "key_missing" }]))
+    expect(events).toEqual([expect.objectContaining({ type: "error", error_code: "key_missing", before_stream: true })])
+  })
+
+  it("key_missing after turn_started (key deleted during the run) is a failed turn, not a block", async () => {
+    const events = await collect(
+      "project",
+      sse([
+        { type: "turn_started", jobId: MSG.id, userMessage: MSG, assistantMessageId: MSG.id, provider: "gemini", connectionTier: "free", messageCount: 1, retry: false },
+        { type: "error", code: "key_missing" },
+      ]),
+    )
+    expect(events[1]).toMatchObject({ type: "error", error_code: "key_missing", before_stream: false, provider: "gemini" })
+  })
 })

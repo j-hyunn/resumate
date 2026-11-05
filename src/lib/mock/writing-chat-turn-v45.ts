@@ -123,14 +123,17 @@ export async function* mockPanelTurn(req: MockRequest, signal: AbortSignal): Asy
   const userSeq = req.next_sequence
   const userNumber = Math.floor(req.message_count / 2) + 1
   const user = message("user", req.body.content, userSeq, userNumber)
-  yield { type: "turn_started", user_message: user, assistant_message_id: crypto.randomUUID(), message_count: req.message_count + 1, retry: req.retry, provider: "gemini" }
+  // 다시 보내기 (retry): the user message is already counted (OD-P11 / DM 7장) — only the reply adds one
+  // [UI-가정] mock: a reused stopped / failed reply row (DM ①) is counted as new too (the request doesn't say which case)
+  const counted = req.retry ? req.message_count : req.message_count + 1
+  yield { type: "turn_started", user_message: user, assistant_message_id: crypto.randomUUID(), message_count: counted, retry: req.retry, provider: "gemini" }
 
   if (req.turn_error) {
     await sleep(900, signal)
     return yield refusal(req.turn_error, false)
   }
 
-  const finalCount = req.message_count + 2
+  const finalCount = counted + 1
   const closed = finalCount >= PAGE_LIMITS.messageLimit
 
   if (req.target === "project") {

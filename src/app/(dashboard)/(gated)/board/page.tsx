@@ -79,17 +79,17 @@ async function Screen({ searchParams }: Props) {
       {total === 0 ? (
         <EmptyState
           icon={KanbanSquare}
-          title="기업 JD를 추가하면 여기서 전형 단계를 관리할 수 있어요"
+          title="자기소개서를 추가하면 여기서 전형 단계를 관리할 수 있어요"
           actions={
             <>
               <Button asChild className="max-md:h-8">
                 <Link href={routes.applicationNew({ from: "board" })}>
                   <Plus aria-hidden />
-                  기업 JD 추가
+                  자기소개서 추가
                 </Link>
               </Button>
               <Button asChild variant="outline" className="max-md:h-8">
-                <Link href={routes.applications()}>기업 JD 관리로</Link>
+                <Link href={routes.applications()}>자기소개서 관리로</Link>
               </Button>
             </>
           }

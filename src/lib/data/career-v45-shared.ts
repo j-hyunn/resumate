@@ -325,6 +325,23 @@ export interface WritingChatMessageView {
   user_number: number | null
   /** greeting (ai_job_id null, not counted, no number) */
   is_greeting: boolean
+  /**
+   * Assistant `failed` rows only: how the turn's job ended (AI v4.11 R-OD-8 — the message status alone can't tell):
+   * `canceled` = the user stopped it → "답을 받지 못한 메시지" (OD-P11); `failed` = a real failure → C-20 실패한 턴.
+   * Absent / null = unknown.
+   * // 연결 대기 (DM v4.11 11.6 #11·#15): the chat detail DTO doesn't carry the job status / cause yet — the real
+   * path leaves this unset (the panel then shows the neutral "답을 받지 못한 메시지" line). The mock fills it.
+   */
+  turn_job?: TurnJobEnd | null
+}
+
+/** The end state of a failed assistant row's job (view model, R-OD-8). */
+export interface TurnJobEnd {
+  status: "failed" | "canceled"
+  error_code: AiErrorCode | null
+  provider: AiProviderName | null
+  retry_after: string | null
+  quota_resets_at: string | null
 }
 
 /** One opened chat (writing_chats v4.5 row fields the panel reads + its messages). */
@@ -434,7 +451,7 @@ export type PatchDraftResult<D> = { ok: true; structured_draft: D } | { ok: fals
 export interface TurnRequestBody {
   content: string
   requested_slot: string | null
-  requested_action: "compose_draft" | null
+  requested_action: "compose_draft" | "ask_from_project" | null
   style: "shorter" | "more_detail_on_contribution" | null
   form_snapshot: FormSnapshot
 }
@@ -553,6 +570,10 @@ export function guessWritingKind(title: string): WritingKind | null {
 
 export const PANEL_COPY = {
   inputPlaceholder: "Resumate AI에게 물어보세요",
+  /** 409 turn_in_progress (another tab is answering) — the server's message (turn.ts) [UI-가정] */
+  turnInProgress: "이전 메시지에 대한 응답을 만들고 있어요. 잠시 후 다시 보내 주세요",
+  /** 409 nothing_to_retry on "다시 보내기" — [UI-가정] copy (no spec row); the text goes back to the input */
+  nothingToRetry: "이 메시지는 다시 보낼 수 없어요. 입력창의 내용을 새로 보내 주세요",
   nameRequired: {
     project: "대화를 시작하려면 프로젝트명을 먼저 입력해 주세요",
     deliverable: "대화를 시작하려면 산출물 제목을 먼저 입력해 주세요",

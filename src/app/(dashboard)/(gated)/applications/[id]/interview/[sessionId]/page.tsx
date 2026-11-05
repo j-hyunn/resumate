@@ -8,6 +8,7 @@ import { getLatestJobFor } from "@/lib/data/ai-jobs"
 import { getInterviewSession } from "@/lib/data/interviews"
 import { getEvidenceForOwners } from "@/lib/data/evidence"
 import { applicationDisplayName } from "@/lib/data/labels"
+import { isDeletedApplicationSegment } from "@/lib/data/interview-session-view"
 import { getPreviewState, previewErrorCode, previewRetryRefusal } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 import { getAiConnection } from "@/lib/data/ai-connection"
@@ -23,6 +24,7 @@ import { getAiConnection } from "@/lib/data/ai-connection"
  * retry-refused-* / retry-connection-changed / retry-not-retryable (전체 실패 같은 행 다시 시도 거부).
  * Q53-9: input-failed / ai-failed-input → "공고 원문 고치기" (S-15) · input-failed-has-requirements → "공고 확인하기" ·
  * abandoned-no-questions · raw-edited-stale / raw-edited-no-job (S-15 "이전 실패 안내"). 미리보기는 저장소를 바꾸지 않는다.
+ * OD-I6: /applications/deleted/interview/[sessionId] (자기소개서 삭제됨, [UI-가정] 라우트) → S-22.
  */
 type Props = {
   params: Promise<{ id: string; sessionId: string }>
@@ -41,6 +43,8 @@ async function Screen({ params, searchParams }: Props) {
   const { id, sessionId } = await params
   const state = getPreviewState(await searchParams)
   if (state === "not-found") notFound()
+  // 02 S-33 v5.13 OD-I6: a kept session of a deleted 자기소개서 is completed → always S-22 (read-only)
+  if (isDeletedApplicationSegment(id)) redirect(routes.interviewResult(id, sessionId))
 
   const ap = await getApplicationProject(id)
   if (!ap) notFound()

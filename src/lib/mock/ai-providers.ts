@@ -7,6 +7,7 @@
  * / "GPT-5 계열" in the spec without fixed IDs → mock IDs. // [UI-가정]
  * URLs: public provider pages, unverified for the mock. // [UI-가정]
  */
+import { DISCLOSURE_TERMS_CHECKED_AT, DISCLOSURE_VERSION as CURRENT_DISCLOSURE_VERSION } from "@/lib/ai-disclosures"
 import type {
   AiDisclosure,
   AiPriceTable,
@@ -147,7 +148,8 @@ export function mockPriceTables(): AiPriceTable[] {
   ]
 }
 
-export const DISCLOSURE_VERSION = "2026-10-26"
+/** mock ai_disclosures rows use the real current version (`@/lib/ai-disclosures`) */
+export { DISCLOSURE_VERSION } from "@/lib/ai-disclosures"
 
 /** ai_disclosures (one per provider × tier) */
 export function mockDisclosures(): AiDisclosure[] {
@@ -160,36 +162,17 @@ export function mockDisclosures(): AiDisclosure[] {
         id: `00000000-0000-4d07-8000-${String(n).padStart(12, "0")}`,
         provider,
         connection_tier: tier,
-        version: DISCLOSURE_VERSION,
-        effective_at: "2026-10-26T00:00:00.000Z",
-        requires_reconsent: false,
+        version: CURRENT_DISCLOSURE_VERSION,
+        effective_at: "2026-11-05T00:00:00.000Z",
+        // OD-L2a: Claude rows changed the processing region → re-consent
+        requires_reconsent: provider === "anthropic",
         requires_free_tier_ack: provider === "gemini" && tier === "free",
-        document_path: `disclosures/${provider}/${tier}/${DISCLOSURE_VERSION}.md`,
-        terms_checked_at: "2026-10-26",
+        document_path: `disclosures/${provider}/${tier}/${CURRENT_DISCLOSURE_VERSION}.md`,
+        terms_checked_at: DISCLOSURE_TERMS_CHECKED_AT,
       })
     }
   }
   return out
 }
 
-/**
- * C-21 고지 본문 values per provider × tier (학습 사용·사람 검토·보관 기간). Final text depends on
- * each provider's terms (D-10) → placeholders. // [UI-가정]
- */
-export const DISCLOSURE_FACTS: Record<
-  AiProviderName,
-  Record<ConnectionTier, { country: string; training: string; human_review: string; retention: string; terms_url: string }>
-> = {
-  gemini: {
-    free: { country: "국외(미국 등)", training: "Google 제품 개선에 쓰일 수 있어요", human_review: "사람이 검토할 수 있어요", retention: "공급자 정책에 따라요", terms_url: "https://ai.google.dev/gemini-api/terms" },
-    paid: { country: "국외(미국 등)", training: "제품 개선에 쓰지 않아요", human_review: "남용 감시 목적 외에는 없어요", retention: "공급자 정책에 따라요", terms_url: "https://ai.google.dev/gemini-api/terms" },
-  },
-  anthropic: {
-    free: { country: "국외(미국)", training: "학습에 쓰지 않아요", human_review: "안전 검토 목적 외에는 없어요", retention: "공급자 정책에 따라요", terms_url: "https://www.anthropic.com/legal/commercial-terms" },
-    paid: { country: "국외(미국)", training: "학습에 쓰지 않아요", human_review: "안전 검토 목적 외에는 없어요", retention: "공급자 정책에 따라요", terms_url: "https://www.anthropic.com/legal/commercial-terms" },
-  },
-  openai: {
-    free: { country: "국외(미국)", training: "API 데이터는 학습에 쓰지 않아요", human_review: "남용 감시 목적 외에는 없어요", retention: "공급자 정책에 따라요", terms_url: "https://openai.com/policies/business-terms" },
-    paid: { country: "국외(미국)", training: "API 데이터는 학습에 쓰지 않아요", human_review: "남용 감시 목적 외에는 없어요", retention: "공급자 정책에 따라요", terms_url: "https://openai.com/policies/business-terms" },
-  },
-}
+// C-21 고지 본문 facts moved to `@/lib/ai-disclosures` (decisions 4.12 UI 10, OD-L2).

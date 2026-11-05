@@ -1,7 +1,7 @@
-# Resumate 디자인 시스템 v5.6
+# Resumate 디자인 시스템 v5.7
 
-> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤)
-> 기준 기획: **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 중 이번 범위 밖 화면 — S-08 목록·S-09·S-34·C-22·C-24·C-25 — 의 시각 규칙은 아직 이 문서에 없다, 8.4 P-15) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
+> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤 / v5.7: 2026-11-05, 커리어 화면(S-08 목록·S-09·S-34·S-43 패널)·커리어 항목 추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제 — OD-D4·OD-C1·OD-C2·OD-P2)
+> 기준 기획: **v5.7 개정분(커리어 화면·추가·수정 모달·C-24 폐기·되돌리기 삭제)은 PRD v4.13 · 플로우(UX) v5.13 · AI v4.11 · 데이터 모델 v4.11**(결정 원천 `docs/planning/decisions.md` 3.18 OD-C1·OD-C2·OD-P2·OD-D4, 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx`가 기준). **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 화면 — S-08 목록·S-09·S-34·S-43 패널·C-22·C-25 — 의 시각 규칙은 (v5.7)에서 코드 기준으로 정리했다: 5.6.1, 6장 A2. C-24는 폐기, 8.4 P-15 해소) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`, v5.7은 `(v5.7)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
 
@@ -471,7 +471,7 @@ v4 후속(UQ-708~722)으로 더한 variant·prop — 색이 필요하면 아래�
 | 단계·탭처럼 현재 위치를 가진 ghost 버튼 | `Button variant="ghost"` + `aria-current` |
 | 토글 선택 | `Toggle`·`ToggleGroupItem` 기본값(`data-[state=on]` 초록, outline이면 테두리도 primary) |
 
-예외(전용 모양 유지): 근거 칩(C-01·C-15), 공급자 배지(C-19), 초안 편집기 블록 hover, 보드 카드 손잡이, 채팅 사용자 말풍선 버튼(S-36 폐기 — (v5.5) 패널 말풍선은 아래 표), 빈 긴 글 자리 글자 "내용을 입력해주세요"(C-24, muted 글자 + 포커스 링). 본문 텍스트 링크(브레드크럼·동의·정책 뒤로 가기 등)는 줄 단위 항목이 아니므로 `underline` + `hover:text-foreground`를 허용한다.
+예외(전용 모양 유지): 근거 칩(C-01·C-15), 공급자 배지(C-19), 초안 편집기 블록 hover, 보드 카드 손잡이, 채팅 사용자 말풍선 버튼(S-36 폐기 — (v5.5) 패널 말풍선은 아래 표), 빈 긴 글 자리 글자 "내용을 입력해주세요"(S-09·S-34·S-43 빈 섹션 — 누르면 수정 모달. (v5.7) C-24는 폐기됐고 이 글자만 남음, muted 글자 + 포커스 링). 본문 텍스트 링크(브레드크럼·동의·정책 뒤로 가기 등)는 줄 단위 항목이 아니므로 `underline` + `hover:text-foreground`를 허용한다.
 
 (v5, UQ-BR-14·15) **L-02·AI 패널과 라디오 카드의 예외** — 아래는 위 규칙과 다른 모양을 일부러 둔다. 목록에 없는 것은 위 표를 따른다.
 
@@ -537,7 +537,7 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `w-sidebar` | 16rem (256px), 아이콘 레일 3.5rem | 왼쪽 메뉴 (`--sidebar-width: 16rem`, 5.1 메뉴 크기) |
 | `h-topbar` | `h-16` (64px) | 상단 바(사이드바 토글 · 이동 경로), 본문 패널 안에서 `sticky top-0` |
 | `max-w-prose-edit` | `max-w-[42rem]` (672px, 16px 한글 약 42자) | 긴 글 편집·읽기 열 (S-35 필드, S-19 문서, S-33 답변, 대화 메시지 열, S-30). (v5.5) L-02 문서형 페이지에는 쓰지 않는다 |
-| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(S-04, S-09, S-10, S-34, S-14, S-20, S-24) |
+| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(S-04, S-14, S-20, S-24). (v5.7) S-09·S-34는 S-08 패널, S-10은 L-02라 쓰지 않는다 |
 | `max-w-page` | `max-w-6xl` (1152px) | 목록·허브 화면(S-08, S-13, S-31, S-37) |
 | 전체 폭 | 제한 없음 | S-39 보드, S-36 대화(2단) |
 | `w-side-panel` | `w-80` (320px) / `2xl:w-96` | S-19 오른쪽 패널 |
@@ -1126,7 +1126,7 @@ div.flex flex-wrap items-center gap-2
 플로우 v5.6에서 범위가 줄었고, v5.9(D-UX-28 변경)에서 한 번 더 줄었다. 경력·교육의 "+ 프로젝트 추가"는 이 다이얼로그 없이 S-10 새 페이지로 바로 가고, C-22 "프로젝트"는 경력·교육과 같은 추가 모달(`AddCareerDialog` kind="project", "개인 프로젝트 추가", "추가하기" 때 생성)을 연다. C-23(`AddProjectDialog`)은 **C-09·S-16에서 소속을 고를 때만** 쓰고, 행을 만들지 않는다.
 
 ```
-Dialog sm:max-w-md (좁은 화면은 Sheet side="bottom", C-22와 같게)
+Dialog sm:max-w-md (좁은 화면도 Dialog — (v5.7) 코드 기준. 커리어 항목 추가·수정 모달 5.6.1과 같게 시트로 바꾸지 않음)
   DialogTitle section-title: "어디에 프로젝트를 추가할까요?"
   소속 목록: RadioGroup 카드형(2장 radio-group 규칙), 묶음 머리 label "경력" / "교육" (text-sm text-muted-foreground),
      항목 = 이름(font-medium) + meta 기간. 맨 아래 "소속 없음(독립 프로젝트)" 항목은 Separator 아래에 따로.
@@ -1138,6 +1138,7 @@ Dialog sm:max-w-md (좁은 화면은 Sheet side="bottom", C-22와 같게)
 - "계속"은 요청이 없으므로 로딩·실패 표시가 없다. 누르면 다이얼로그를 닫고, 경력·교육이면 S-10 새 페이지로, "소속 없음"이면 C-22와 같은 독립 프로젝트 추가 모달로 간다(그 모달이 "추가하기" 때 행을 만들고 S-43으로 이동).
 - v5의 ① "새 독립 프로젝트" 제목, 프로젝트명 입력 칸, "만들기" 버튼과 그 로딩·실패 규칙은 없어졌다(v5.3).
 - 시각 규칙은 v3까지의 다이얼로그 규칙(5.6)과 같다. 새 토큰·variant는 없다.
+- (v5.7, 코드 기준) 소속 카드 = `Label` 감싸개 `flex items-start gap-3 rounded-lg border p-3 text-base font-normal` + `RadioGroupItem mt-1`, 고른 카드 `has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary-subtle`(1.3 라디오 카드 예외). 제목 `text-lg font-semibold`, 이름 `font-medium truncate`, 기간 `text-sm text-muted-foreground tabular-nums`. "소속 없음"을 고른 뒤 "계속"하면 이 다이얼로그를 닫고 나서 5.6.1 모달(kind="project")을 연다 — 다이얼로그를 겹치지 않는다(5.6).
 
 ### 3.24 S-10 STAR 제안 카드 (`StarProposalCard`, v5 신설 · v5.5 확인 줄)
 
@@ -1229,7 +1230,7 @@ section#star-proposal-classification.space-y-3 bg-muted/40 px-4 py-3
 
 **[반영] 직후**
 
-- 왼쪽 칸에 `animate-field-flash`(줄인 모션이면 왼쪽 2px `ai` 테두리 2초). 칸이 화면 밖이어도 스크롤하지 **않는다**(대화를 읽던 흐름을 끊지 않음) `[가정]`. Sonner "{섹션}에 채웠어요" 액션 "되돌리기"(8초 `[가정]`) + `aria-live` 명세 문구. 채운 섹션은 세부 목록에서 빠지고 설명이 바뀐다.
+- 왼쪽 칸에 `animate-field-flash`(줄인 모션이면 왼쪽 2px `ai` 테두리 2초). 칸이 화면 밖이어도 스크롤하지 **않는다**(대화를 읽던 흐름을 끊지 않음) `[가정]`. Sonner "{섹션}에 채웠어요"(액션 버튼 없음 — (v5.7) OD-P2로 "되돌리기" 삭제. 채우기 전으로 돌아가는 길은 L-02 이탈 확인의 "저장하지 않고 나가기"뿐) + `aria-live` 명세 문구. 채운 섹션은 세부 목록에서 빠지고 설명이 바뀐다.
 - "AI 응답 중"·"정리 중"에는 모든 [반영]·[반영 (n)]·[수락]·[무시]가 `disabled`다.
 - 닫힌 대화(40 / `closed`)의 [모두 반영 (n)]은 입력 영역 자리 상자에 있다(5.10, primary — R-C10).
 
@@ -1315,9 +1316,9 @@ section#draft-card(aria-label="본문 초안"): rounded-xl border bg-card text-c
 - 비활성 이유는 버튼 위 안내 줄(`caption text-muted-foreground`, `Info size-3.5`)로 보인다. 툴팁만 두지 않는다(A-7, 비활성 버튼은 포커스가 안 된다): [뒤에 덧붙이기] 비활성 → "덧붙일 새 내용이 없어요(지금 본문을 다시 정리한 초안이에요)" / 모두 비활성 → "검토가 필요한 문장을 수락하거나 빼 주세요" / 검토 안 한 블록이 남음 → "검토하지 않은 문장 N개는 넣지 않아요".
 - 20,000자 초과로 못 채움: 안내 줄 자리에 `text-sm text-warning-subtle-foreground` + `TriangleAlert` 명세 문구.
 - **교체 확인** `AlertDialog sm:max-w-md`:
-  - 기본: 제목 "지금 본문을 AI 초안으로 바꿀까요?", 설명 `body text-muted-foreground` "저장하기 전에는 되돌릴 수 있어요", 버튼 `취소`(outline) · `바꾸기`(default — 덮어쓰기 규칙, 2장).
-  - **기준 본문이 바뀜**(`base_body_hash` 불일치): 제목 앞 `TriangleAlert size-5 text-warning`, 제목 "초안을 만든 뒤 본문이 바뀌었어요", 설명 "교체하면 바뀐 내용도 사라져요", 버튼 `취소`(outline) · `그래도 바꾸기`(default). 기본형과 아이콘·제목이 달라 한눈에 구분된다. destructive는 쓰지 않는다(삭제가 아니고 저장 전 되돌릴 수 있음) `[가정]`.
-- **채운 직후**: 왼쪽 본문 칸 `animate-field-flash` + 바뀐 부분 맨 앞으로 커서를 두지 않고 스크롤만(덧붙이기는 끝, 교체·넣기는 처음) `[가정]` + Sonner 중립 토스트 "본문에 채웠어요" 액션 "되돌리기"(8초 `[가정]`, 되돌리기는 다음 본문 입력 전까지만 유효 — 그 뒤 누르면 토스트가 "이미 본문을 고쳐서 되돌릴 수 없어요"로 바뀐다 `[가정]`).
+  - 기본: 제목 "지금 본문을 AI 초안으로 바꿀까요?", 버튼 `취소`(outline) · `바꾸기`(default — 덮어쓰기 규칙, 2장). (v5.7, R-OD-13) 설명 "저장하기 전에는 되돌릴 수 있어요"는 삭제 — 되돌리기가 없어 사실이 아니다. 명세가 대체 문구를 정하지 않았으므로 기본형은 설명 줄을 그리지 않는다.
+  - **기준 본문이 바뀜**(`base_body_hash` 불일치): 제목 앞 `TriangleAlert size-5 text-warning`, 제목 "초안을 만든 뒤 본문이 바뀌었어요", 설명 "교체하면 바뀐 내용도 사라져요", 버튼 `취소`(outline) · `그래도 바꾸기`(default). 기본형과 아이콘·제목이 달라 한눈에 구분된다. destructive는 쓰지 않는다(삭제가 아니고, 저장 전이라 "저장하지 않고 나가기"로 버릴 수 있음) `[가정]`. 교체 확인 자체는 유지(OD-P2).
+- **채운 직후**: 왼쪽 본문 칸 `animate-field-flash` + 바뀐 부분 맨 앞으로 커서를 두지 않고 스크롤만(덧붙이기는 끝, 교체·넣기는 처음) `[가정]` + Sonner 중립 토스트 "본문에 채웠어요"(액션 버튼 없음 — (v5.7) OD-P2로 "되돌리기"와 "이미 본문을 고쳐서 되돌릴 수 없어요" 바뀜 토스트 삭제).
 - 초안 턴 중(질문 턴 포함 AI 응답 중)에는 반영 버튼·블록 버튼 모두 `disabled`.
 
 ---
@@ -1435,7 +1436,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 
 ### 5.3 편집기
 
-- **폼 화면**(S-04, S-14. (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — 8.4 P-15): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
+- **폼 화면**(S-04, S-14. (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — (v5.7) 6장 A2 "커리어 v5.13", 편집은 5.6.1 모달): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
   - 필드 2열: 넓은 화면에서 짧은 값(기간, 고용 형태)만 `grid sm:grid-cols-2 gap-4`. 긴 글은 항상 한 열.
 - **긴 글 편집**(S-33 답변. (v5) S-35는 폐기 — S-10 STAR는 5.9 `DocTextarea`): 본문 열 `max-w-prose-edit`. 필드마다 `label`(예: "행동 (A) *") + 안내 `meta` + `Textarea prose`(16px/1.75, `min-h-32`) + C-07 + 글자 수. 필드 사이 `space-y-6`. 포커스 이동(C-02 "원본으로 이동")된 필드는 `ring-2 ring-ring` + `animate-field-flash` 1회.
 - **초안 편집기**(S-19): 넓은 화면(≥1280) `grid grid-cols-[minmax(0,1fr)_20rem] gap-8`: 왼쪽 문서(`max-w-prose-edit mx-auto`, 블록마다 hover 시 `bg-accent/50 rounded-md`, 블록 아래 칩 줄 C-01·C-08), 오른쪽 `sticky top-20` 패널(C-11, 자리 표시 목록, 글자 수). 1280 미만은 패널을 머리의 `Button variant="outline" size="sm"` "근거·출처"로 여는 `Sheet side="right"`.
@@ -1500,12 +1501,50 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 |------|---------|
 | 되돌릴 수 없는 결정(삭제, 덮어쓰기, 결과 지우기) | `AlertDialog` |
 | 짧은 선택·작은 폼(정량 성과 S-11, C-13, C-14, C-16, 저장 확인) | `Dialog` |
+| (v5.7) 커리어 항목 하나를 한 번에 채워 추가·수정(경력·교육·독립 프로젝트 — S-08 패널에서) | 큰 `Dialog` 폼 — 5.6.1 `AddCareerDialog`. 섹션 인라인 편집(구 C-24)은 쓰지 않는다 |
 | 참고 정보를 보면서 원래 화면을 유지(C-02, S-19/S-36 보조 패널, 좁은 화면 필터) | `Sheet side="right"` (좁은 화면 필터는 `side="bottom"`) |
 | 다른 화면으로 가는 일 | 페이지 이동(모달로 화면을 대신하지 않음) |
 
 - 모달 안 주 버튼은 오른쪽 끝, 좁은 화면에서 `flex-col-reverse` 전체 폭.
 - (v5.4) **알림·경고 모달 공통 모양**(`AlertDialog`, `components/ui/alert-dialog.tsx` 기본값 — 사용처에서 덮어쓰지 않는다): `rounded-2xl p-6 shadow-lg`, 테두리 없음, 기본 폭 `sm:max-w-md`. 제목 `text-xl font-bold`(왼쪽 정렬) + 오른쪽 위 X 닫기(`size-8`, `text-muted-foreground`, 누르면 취소와 같다). **X는 바닥 줄에 취소 버튼(`AlertDialogCancel`)이 없을 때만 보인다** — 취소가 있으면 자동으로 숨는다(`showCloseButton={false}`로 항상 끌 수도 있음). 본문 `text-base text-foreground`. 아래 버튼 줄은 구분선·바탕 없이 오른쪽 정렬, 버튼 높이 `h-11 px-5`. 보조 버튼 = `Button variant="muted-ghost"`(회색 글자, 채움 없음 — `AlertDialogCancel` 기본값), 주 버튼 = `default`(초록 채움), 경고 모달의 주 버튼 = `destructive`(빨강 채움).
 - 다이얼로그 위에 다이얼로그 금지(C-11 다시 생성 확인은 패널 위 AlertDialog — 패널은 Sheet라 허용).
+
+#### 5.6.1 커리어 항목 추가·수정 모달 (`AddCareerDialog`, v5.7 신설 — OD-C1·OD-C2)
+
+경력·교육·독립 프로젝트의 **추가와 "✎ 수정"을 맡는 하나의 모달**이다(플로우 v5.13 S-08 "커리어 항목 추가·수정 모달", 구현 `components/career/add-career-dialog.tsx`, Figma `1009:2`). 진입: 추가는 C-22 메뉴·C-23 "소속 없음" → "계속"·C-09 "경력 먼저 입력하기", 수정은 S-09·S-34·S-43 패널 각 섹션의 "✎ 수정"과 빈 섹션의 "내용을 입력해주세요". 수정은 행 값으로 채워 연다. 아래 값은 코드가 쓰는 그대로다 — 새 토큰·variant는 없다.
+
+```
+Dialog (showCloseButton={false} — X는 머리 줄에 직접 둔다)
+  DialogContent: flex flex-col gap-4 rounded-[20px] p-5 w-[602px] sm:max-w-[602px]
+                 max-h-[calc(100dvh-2rem)]  /  lg: h-[calc(100dvh-200px)] max-h-[840px]   (기본 rounded-lg·p-6·sm:max-w-lg를 덮어씀)
+  form.flex min-h-0 flex-1 flex-col gap-4
+    머리 줄 flex items-center gap-2:
+      DialogTitle flex-1 text-xl leading-normal font-semibold  — "경력 추가"/"경력 수정" · "교육 이수 추가"/"교육 이수 수정" · "개인 프로젝트 추가"/"개인 프로젝트 수정"
+      DialogDescription sr-only (추가 / 수정 안내 한 문장)
+      DialogClose → Button ghost icon-sm aria-label="닫기" + X size-6
+    스크롤 본문 -mx-1 px-1 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto   (머리·바닥은 고정, 본문만 스크롤)
+      정보 섹션 (section flex flex-col gap-2): h3 text-base font-medium "재직 정보" / "교육 정보" / "프로젝트 정보"
+        칸(Field) = flex flex-col gap-2 py-2: Label text-sm font-normal → Input / SelectTrigger w-full → 오류 줄
+        두 칸 나란히: grid gap-x-2 sm:grid-cols-2 (경력 직급·직책·부서·고용 형태, 프로젝트 서비스 명·역할). 좁은 화면 한 열
+        기간(PeriodField): 라벨 text-sm → 한 줄 flex flex-wrap items-center gap-2 sm:flex-nowrap
+           [연도 Select][월 Select] ~ [연도][월]  + Checkbox "재직 중"(경력) / "진행 중"(교육·프로젝트), 라벨 text-base text-muted-foreground
+           각 연월 묶음 flex-1 basis-[calc(50%-1rem)] sm:basis-0 (좁은 화면에서 시작·종료가 두 줄로 접힘)
+           체크하면 종료 연월 Select disabled(값 비움). 연도 목록 SelectContent max-h-72(내년 → 1970)
+        사용 기술(프로젝트만): Input "기술 입력 후 Enter" → 아래 flex flex-wrap gap-2 칩
+           칩 = Badge secondary h-8 gap-1 pl-3 pr-1 text-sm + 빼기 Button ghost icon-xs (size-11 lg:size-7) X
+      긴 글 섹션 section flex min-h-48 flex-1 flex-col gap-2:
+        Label text-base font-medium "근무 내용" / "교육 내용" / "프로젝트 내용"
+        Textarea min-h-48 flex-1 resize-none text-base leading-[1.75]   (넓은 화면에서 모달 남은 높이를 채움)
+    바닥 줄 flex justify-end: Button default "추가하기" / "저장하기" (진행 중 disabled + Loader2 animate-spin)
+```
+
+- **크기**: 넓은 화면(`lg`)은 높이를 고정해(뷰포트 − 200px, 최대 840px) 긴 글 칸이 남은 높이를 채운다. 그보다 좁으면 내용 높이만큼, 최대 뷰포트 − 2rem. 좁은 화면에서도 `Sheet`로 바꾸지 않고 같은 `Dialog`다(폭 `max-w-[calc(100%-2rem)]`) — C-23도 같게 둔다(3.23).
+- **버튼**: 주 버튼 하나뿐이고 취소 버튼이 없다(닫기는 머리 X·Esc·바깥 누르기). 좁은 화면에서도 전체 폭으로 늘리지 않고 오른쪽 끝(5.6 "좁은 화면 `flex-col-reverse` 전체 폭" 규칙의 예외 — 버튼이 하나라 순서 문제가 없음).
+- **검증 오류**: 처음 "추가하기"·"저장하기"를 누른 뒤부터 보인다. 칸 아래 `p.flex items-center gap-1.5 text-sm text-destructive role="alert"` + `CircleAlert size-4`, 칸에 `aria-invalid` + `aria-describedby`. 기간은 시작·종료 오류를 묶음 아래 한 줄로, 직급·직책 "둘 중 하나" 오류는 직급 칸 아래에 두고 직책 칸도 같은 오류를 가리킨다. 문구는 명세 S-08 표.
+- **저장 결과**: Sonner 토스트(C-06 저장 상태 표시는 쓰지 않는다 — 플로우 C-06 v5.13). 성공 `toast.success` "경력을 추가했어요"·"교육을 추가했어요"·"프로젝트를 추가했어요" / 수정 "저장했어요" → 모달 닫힘, 추가면 목록에 넣고 선택. 실패 `toast.error` 명세 문구, **모달은 열어 둔 채** 입력 유지.
+- **닫기 = 입력 버림 (OD-C1)**: X·Esc·바깥 누르기로 닫으면 **확인 없이** 입력을 버린다. 이탈 확인 `AlertDialog`, 입력 보존 배너, 브라우저 임시 보존·복원 모두 **없다**. 열 때마다 빈 폼(또는 행 값)에서 시작한다(`key`로 폼을 새로 만듦). 입력 보존·이탈 확인(5.8 `LeaveGuard`, 자동 복원)은 L-02(S-10·S-44)만의 규칙이다 — 이 모달에 가져오지 않는다.
+- **자동 저장 없음**: 작성 중 표시·C-06·"작성 중" 배지를 그리지 않는다. "추가하기" 한 번에 행이 생긴다.
+- 이 모달을 여는 쪽(C-22 메뉴, C-23)은 먼저 닫힌 뒤 연다 — 다이얼로그를 겹치지 않는다(5.6).
 
 ### 5.7 AI 연결 화면 (S-40 · S-41 · S-42, v2 신설)
 
@@ -1758,7 +1797,7 @@ L-02 새 페이지(S-10 `/career/projects/new?…`, S-44 `/career/projects/[id]/
   - **모양** — `globals.css`의 `.doc-md`(**레이어 밖** 규칙: Tailwind v4가 소스 클래스와 맞지 않는 `@layer components` 규칙을 버리므로): `white-space: pre-wrap; overflow-wrap: anywhere`, 문단 사이 간격 0(예전 textarea 줄처럼), h1 1.375rem/700 · h2 1.1875rem/700 · h3 1.0625rem/600(위아래 작은 여백), `ul` disc(중첩 circle)·`ol` decimal 들여쓰기, `strong` 600, 인라인 `code` `--muted` 바탕 0.875em, `pre` `--muted` 바탕 `rounded 0.375rem` 0.875rem 가로 스크롤, 링크 `--primary-text` + 밑줄, 표 `border-collapse w-full table-fixed` 0.9375rem · 셀 `1px var(--border)` · 머리 셀 `--muted` 바탕 600, 인용 왼쪽 3px `--border` + `--muted-foreground`. 새 색 토큰 없음(기존 변수만).
   - **자리 표시**: TipTap `Placeholder` — 빈 첫 문단의 `data-placeholder`를 `.doc-md p.is-editor-empty:first-child::before`(`--muted-foreground`)로 그린다. CSS 생성 글자라 보조 기술에 전달되지 않는다(8.5 DR-7). 16px 유지(A-8).
   - **저장값 = 마크다운 문자열 그대로**(DB·AI·저장이 쓰는 모양). 글자 이스케이프 규칙: `&`·`<`를 엔티티로 바꾸지 않고, 단어 안 `_`는 이스케이프하지 않는다. 다음 파싱에서 뜻이 바뀌는 것만 이스케이프 — 인라인 기호(역슬래시·`` ` ``·`*`·`[`·`]`·`~`), 단어 가장자리의 `_`, HTML 태그를 여는 `<`(`&lt;`). 코드 안은 손대지 않는다(`patchMarkdownEscaping`).
-  - **2,000자 한도**(`maxLength`, 마크다운 문자열 길이 기준): 늘리는 편집은 막고, 붙여넣기는 들어갈 만큼만(일반 글자로) 붙인 뒤 `onLimitReached`. 바깥에서 들어온 값([반영]·되돌리기·입력 복원)은 자르지 않고 되돌리기 기록에도 넣지 않는다.
+  - **2,000자 한도**(`maxLength`, 마크다운 문자열 길이 기준): 늘리는 편집은 막고, 붙여넣기는 들어갈 만큼만(일반 글자로) 붙인 뒤 `onLimitReached`. 바깥에서 들어온 값([반영]·채우기·입력 복원. (v5.7) 되돌리기는 OD-P2로 없어짐)은 자르지 않고 되돌리기 기록에도 넣지 않는다.
   - **근거 구간 강조**(`highlightRange`, C-02 → S-44 "근거 구간 강조"·"지금 본문에서" 칩): 저장된 마크다운의 `source_locator` 구간(또는 인용문)을 서식 기호를 뺀 글자로 바꿔 편집기 글 블록 안에서 찾고, 칸을 화면 가운데로 스크롤 → 그 구간을 **편집기 선택 상태**로 → 칸 `animate-field-flash`(+ 링) 1회. 못 찾으면 칸만 강조하고 토스트(3.14 v4).
   - ~~마크다운 원문 입력·목록 줄 Enter 이어쓰기·Tab 2칸 들여쓰기·Esc 뒤 Tab 규칙~~(v5 G-50, UQ-PA-5) — (v5.5) 편집기로 대체.
 
@@ -1904,7 +1943,7 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
 
 ### A2 커리어 (S-04, S-08~S-12, S-34~S-36)
 
-> **(v5) 읽는 순서**: 플로우 v5.5·v5.6으로 S-08 트리, S-35, S-36, S-11, v3 S-10 메모는 **폐기**됐다(아래 v3 이하 메모는 이력). 지금 기준은 이 절 맨 끝 "(v5) 커리어 v5.6" 메모다. S-08 목록·S-09·S-34 패널의 시각 규칙은 아직 정리하지 않았다(8.4 P-15) — 지금 구현(`career-overview.tsx`)을 기준으로 두고, 새 패널 섹션은 그 `PanelSection` 모양을 따른다.
+> **(v5) 읽는 순서**: 플로우 v5.5·v5.6으로 S-08 트리, S-35, S-36, S-11, v3 S-10 메모는 **폐기**됐다(아래 v3 이하 메모는 이력). 지금 기준은 이 절 맨 끝 "(v5) 커리어 v5.6"(S-10·S-44·S-43 산출물) 메모와 "(v5.7) 커리어 v5.13"(S-08 목록·S-09·S-34·S-43 패널·C-22·C-25) 메모, 그리고 추가·수정 모달 5.6.1이다(8.4 P-15 해소). C-24 섹션 편집은 폐기(v5.7, OD-C2).
 
 - **S-08 트리**: `max-w-page`.
   - 상단 요약 카드: 프로필 한 줄(`subsection`) + 완료 개수 `caption` 배지 4개 + 규칙 안내 1줄 `Alert variant="info"` 작은 형. 시작 버튼 줄: 주 버튼 "AI와 대화하며 프로젝트 정리하기"(AiRunButton) + `outline` "+ 경력" "+ 교육" "+ 프로젝트". (v2) 키가 없으면 AI 버튼 자리가 C-18 인라인형이 되고, 빈 상태의 기본 시작점은 "직접 입력"(default)이다(명세 v5). 좁은 화면은 주 버튼 전체 폭 + 나머지 `⋯` 아닌 3열 작은 버튼.
@@ -1934,6 +1973,20 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
     - 로딩: 행 모양 `Skeleton h-11` 2개.
   - **C-23**: 3.23. C-09·S-16의 소속 선택에서만 연다. C-22 "프로젝트"는 C-23 없이 추가 모달(`AddCareerDialog` kind="project")로 간다(v5.3, 플로우 v5.9).
   - **폐기 경로 정리**: `projects/[id]/details/*`, `writing-chats/*`(S-36)의 화면 규칙은 이 문서에서 더 쓰지 않는다. 남은 링크는 S-10으로 옮긴다(브리프 범위).
+
+- **(v5.7) 커리어 v5.13 — S-08 목록 · S-09 · S-34 · S-43 패널 · C-22 · C-25** (플로우 v5.13, OD-C1·OD-C2·OD-D4. 구현 `career-overview.tsx` 기준 — 새 토큰·variant 없음):
+  - **배치**: L-01 본문 안 `flex flex-1 flex-col gap-4 lg:flex-row lg:gap-0`. 왼쪽 목록 칸 `nav` `w-full lg:w-60 lg:px-3 flex flex-col gap-4`, 오른쪽 상세 칸 `section` `min-w-0 flex-1 lg:px-3 flex flex-col gap-4`. 두 칸 사이 구분선·카드 바탕은 없다. 칸 머리 `h2 text-sm font-semibold text-muted-foreground` "커리어" / "커리어 상세"(상세 머리는 `lg`에서만). 빈 상태는 4장 ST-EMPTY "예외 S-08".
+  - **C-22 커리어 추가**: 목록 머리 바로 아래 `Button` 기본(default, `w-full`) + `CirclePlus` "커리어 추가" — 항목이 있든 없든 이 자리, 화면의 주 버튼은 이것 하나. 누르면 `DropdownMenu`(`DropdownMenuContent align="start" w-72`): `DropdownMenuLabel` "어떤 커리어를 추가할까요?" + 항목 3개(`flex flex-col items-start gap-0.5` — 이름 `font-medium` + 설명 `text-xs text-muted-foreground`, "프로젝트" 항목만 둘째 안내 줄 같은 모양). 고르면 메뉴가 닫히고 5.6.1 모달이 열린다.
+  - **목록**: 연도 묶음 `section flex flex-col gap-1`(묶음 사이 `gap-4`), 연도 머리 `h3 text-sm text-muted-foreground tabular-nums`("연도 미정" 포함, 접기·sticky 없음). 항목 행 = `Item`(ghost, `min-h-11 rounded-xl`) + 종류 아이콘(`Briefcase` 경력 / `GraduationCap` 교육 / `FolderKanban` 프로젝트, 색은 `Item`이 정함) + `sr-only` 종류 + 이름 `min-w-0 flex-1 truncate`. 선택 = `Item active`(초록 바탕·글자 + `aria-current`). 위아래 화살표로 행 이동.
+  - **상세 패널 공통** (S-09 · S-34 · S-43): `flex flex-col gap-6`, 섹션 사이 `Separator`. 머리 = 이름 `h3 text-xl font-semibold break-words` + 오른쪽 `⋯` `Button ghost icon-sm`(`size-11 lg:size-8`) → `DropdownMenuItem variant="destructive"` "{종류} 삭제" → C-05.
+    - 섹션(`PanelSection`): 제목 줄 `flex min-h-8 items-center gap-2` = `h4 text-base font-medium flex-1` + 오른쪽 동작 버튼, 그 아래 `gap-2` 본문. 동작 버튼은 모두 덧씌우기 없는 `Button variant="ghost" size="sm"` — "✎ 수정"(`Pencil` + "수정", `aria-label` "{섹션} 수정"), "+ 프로젝트 추가"·"+ 산출물 추가"(`Plus`, `Link`).
+    - 정보 목록(`InfoList`): `dl flex flex-col gap-2 text-sm`, 한 행 = 라벨 `dt font-medium text-muted-foreground sm:w-[140px]` + 값 `dd min-w-0 break-words`(`sm` 이상 한 줄, 좁은 화면은 라벨 위·값 아래 `gap-0.5`). 빈 값은 `text-muted-foreground` "—". 사용 기술 값은 `Badge secondary` 줄(`flex flex-wrap gap-1`), 링크 값은 `underline underline-offset-2 break-all` 새 탭.
+    - 긴 글(근무·교육·프로젝트 내용): `p text-base leading-relaxed whitespace-pre-wrap break-words`. 비면 "내용을 입력해주세요" 글자 버튼(`py-2.5 text-base text-muted-foreground hover:underline` + 포커스 링 — 1.3 예외) → 그 항목의 수정 모달.
+    - **편집은 5.6.1 모달뿐**: 어느 섹션의 "수정"이든 같은 모달(그 항목 전체)을 연다. 패널은 늘 보기 전용이고 섹션이 입력 폼으로 바뀌지 않는다. 섹션 이탈 확인·입력 보존 배너·저장 상태(C-06)를 그리지 않는다. C-09 `project_fields`가 붙인 `?edit=`도 같은 수정 모달을 한 번 연다.
+  - **S-09 경력**: 재직 정보(재직 기간 / 고용 형태 · 부서 · 직급 / 직무) → 근무 내용 → "프로젝트". **S-34 교육**: 교육 정보(교육 기간 · 운영 기관) → 교육 내용 → "진행 프로젝트". **S-43 독립 프로젝트**: 프로젝트 정보(기간 · 담당 업무 · 사용 기술 · 프로젝트 링크) → 프로젝트 내용 → 산출물(위 "(v5) 커리어 v5.6"의 S-43 산출물 섹션).
+  - **C-25 프로젝트 카드** (S-09 "프로젝트"·S-34 "진행 프로젝트"): `ul grid grid-cols-1 gap-2 sm:grid-cols-2`, 카드 = `Item asChild`(ghost, `h-full flex-col items-start justify-center`) 안 `Link` → S-10 — 이름 `text-base truncate`(+ `title`) + 기간 `text-sm text-muted-foreground tabular-nums`("YYYY.MM - YYYY.MM (N년 N개월)"). 테두리 카드가 아니라 다른 목록 행과 같은 ghost 행이다. 0개면 `p.py-2.5 text-sm text-muted-foreground` 명세 문구. 종류 태그는 아직 그리지 않는다(`projects.project_type` 컬럼 없음 — 생기면 이름 앞 `Badge`) `[가정]`.
+  - **좁은 화면**(`lg` 미만): 한 번에 한 칸. URL에 항목이 있으면 상세 칸만, 상세 맨 위 `Button ghost sm -ml-2` + `ArrowLeft` "커리어"(목록으로). 없으면 목록 칸만. 카드 그리드 `sm` 미만 1열.
+  - **폐기 (v5.7, OD-C2)**: C-24 섹션 인라인 편집 — 섹션이 그 자리에서 폼으로 바뀌는 모양, 섹션 단위 저장·취소 버튼, 섹션 이탈 확인, 섹션 입력 보존 배너("저장하지 않은 수정이 있어요 · 이어서 수정 / 버리기"), "새 경력"·"새 독립 프로젝트" 패널 상태. 이 문서에 정해 둔 패턴 이름이 없어 이전할 사용처도 없다(코드에도 없음).
 
 ### A3 기업 JD (S-13, S-14, S-31, S-15~S-19)
 
@@ -2112,7 +2165,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-53 | (v5) `Sparkles text-ai`를 AI 패널 식별 아이콘으로 허용(R-C9) | 1.1.3 |
 | ~~G-54~~ | (v5) 제안 독 = 입력창 바로 위 고정, 펼침 최대 55%, 새 제안이 오면 펼침 → (v5.5) **폐기**: 사용자 결정 UP-4(마지막 AI 턴 아래 확인 줄, 기본 접힘). 칩은 칩 줄 한 곳이라는 부분은 그대로 | 5.10 |
 | ~~G-55~~ | (v5) 빠른 응답 ghost 버튼, 패널 G-2 줄 12px → (v5.5) **폐기**: 빠른 응답 삭제(UP-1), 패널 G-2 줄 삭제(UP-2) | 5.10 |
-| G-56 | (v5 → v5.5) 제안 카드 값 글자 14px, 덧붙일 문장은 `ai-subtle` 상자, [반영] 직후 왼쪽 칸으로 스크롤하지 않음, 되돌리기 토스트 8초, (v5.5) 합친 제안 비교 상자 두 칸(`sm:grid-cols-2`), 분류 [무시] 기억은 브라우저 저장. ~~④ "폼에 채움" info 배지·⑤ 반영됨 섹션 접음~~ → 사용자 결정 UP-4로 반영한 섹션은 목록에서 숨김 | 3.24, 3.25 |
+| G-56 | (v5 → v5.5) 제안 카드 값 글자 14px, 덧붙일 문장은 `ai-subtle` 상자, [반영] 직후 왼쪽 칸으로 스크롤하지 않음, ~~되돌리기 토스트 8초~~ → (v5.7) OD-P2로 되돌리기 삭제, (v5.5) 합친 제안 비교 상자 두 칸(`sm:grid-cols-2`), 분류 [무시] 기억은 브라우저 저장. ~~④ "폼에 채움" info 배지·⑤ 반영됨 섹션 접음~~ → 사용자 결정 UP-4로 반영한 섹션은 목록에서 숨김 | 3.24, 3.25 |
 | G-57 | (v5) S-44 블록: "새 내용" = `ai` 왼쪽 선 + 배지, 덧붙이기 미리보기 = 붙을 블록 강조 + 나머지 흐림, [빼기] ghost, 블록 목록 28rem에서 접기(그라데이션 덮개), 교체 확인은 hash 불일치여도 default 버튼 | 3.25 |
 | G-58 | (v5 → v5.5) 반영됨의 방식 글자("반영됨 · 교체/덧붙임" — (v5.5) 배지가 아니라 확인 줄 설명), 사실 칩 라벨에 "#n" 붙임. ~~S-10 직접 고치기 완료 버튼 글자 "저장"~~ → 직접 고치기 삭제(UP-5) | 3.24, 3.25, 3.14 |
 | G-59 | (v5) 좁은 화면 패널 = 떠 있는 둥근 버튼 → 시트(768 미만 전체 화면, 768~1023 `max-w-md`), 시트 머리 "STAR 보기"/"본문 보기" | 5.8 |
@@ -2152,12 +2205,13 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | P-12 | S-36 · S-33 (v3) | 그만둔 대화를 열었을 때의 안내 문구, 그만둔 면접의 빈 답변 표시 문구가 없다. 임시 "그만둔 대화예요", "답변 없음" |
 | P-13 | S-17 · S-18 (v3) | 선택 상한(프로젝트 8개, 문항 10개)과 1개 이상 선택 조건의 안내 문구가 없다(자소서 근거 5개만 있음). 임시 문구는 G-39 |
 | P-14 | C-21 (v3) | 실행 전에 여는 동의 창의 제목과 확인 버튼 글자가 없다. 임시 "{공급자}({등급}) 데이터 사용 동의" / "동의하고 계속" |
-| P-15 | S-08 · S-09 · S-34 · C-22 · C-24 · C-25 (v5) | v5.5 커리어 재설계 화면의 시각 규칙이 이 문서에 아직 없다(이번 범위 밖). 구현은 앞서 진행됐으므로 다음 디자인 시스템 개정에서 구현을 기준으로 정리할지 리더 판단 필요. (v5, UQ-BR-16) 정리할 때 S-08 패널 안 클릭 요소는 v4 컴포넌트로 적는다 — 프로젝트 카드 C-25·산출물 행 = `Item`(ghost), 섹션 동작 버튼 = 덧씌우기 없는 `ghost sm`, 삭제 메뉴 = `DropdownMenuItem variant="destructive"` (v5.5, UQ-738) 빈 상태는 정리했다 — 4장 ST-EMPTY "예외 S-08" |
+| ~~P-15~~ | S-08 · S-09 · S-34 · C-22 · C-24 · C-25 (v5) | **해소(v5.7, OD-D4)**: 구현 코드 기준으로 정리했다 — 5.6.1 커리어 항목 추가·수정 모달, 6장 A2 "(v5.7) 커리어 v5.13". C-24는 폐기(OD-C2). (이전: v5.5 커리어 재설계 화면의 시각 규칙이 이 문서에 아직 없다(이번 범위 밖). 구현은 앞서 진행됐으므로 다음 디자인 시스템 개정에서 구현을 기준으로 정리할지 리더 판단 필요. (v5, UQ-BR-16) 정리할 때 S-08 패널 안 클릭 요소는 v4 컴포넌트로 적는다 — 프로젝트 카드 C-25·산출물 행 = `Item`(ghost), 섹션 동작 버튼 = 덧씌우기 없는 `ghost sm`, 삭제 메뉴 = `DropdownMenuItem variant="destructive"` (v5.5, UQ-738) 빈 상태는 정리했다 — 4장 ST-EMPTY "예외 S-08") |
 | ~~P-16~~ | S-10 · S-44 패널 (v5) | **해소(v5.5)**: 사용자 결정 UP-4 — 제안 카드는 마지막 AI 턴 바로 아래 확인 줄(5.10). (이전: "대화 목록 아래 고정"을 입력창 위 독으로 읽음) |
 | ~~P-17~~ | S-10 (v5) | **해소(v5.5)**: 사용자 결정 UP-5 — 직접 고치기·편집창·"직접 수정" 표식 삭제. 버튼 글자 질문이 없어졌다 |
 | P-18 | S-44 (v5) | 블록 [빼기]에 되돌리기가 없다(명세상 `rev` + 1 사용자 패치). 실수로 뺀 블록을 살릴 길이 새 초안뿐인데 맞는지 |
 | P-19 | L-02 (v5) | `stale_write` "새로 불러오기"의 "버린다고 함께 알림" 문구가 없다. 임시 "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요" |
 | P-20 | S-44 (v5) | 반영됨 상태에 방식("교체"/"덧붙임")을 보일지 명세에 없다(`applied_mode`는 저장됨). 임시로 보인다(G-58) |
+| P-21 | C-22 (v5.7) | 명세 C-22는 "작은 다이얼로그(좁은 화면은 아래에서 올라오는 시트) `[가정]`"인데, 구현은 "커리어 추가" 버튼에 붙은 `DropdownMenu`(라벨 "어떤 커리어를 추가할까요?" + 항목 3개, 모든 폭 같음)다. 이 문서는 코드대로 적었다(6장 A2). 명세 문장을 메뉴로 고칠지 기획 확인 필요 |
 
 ### 8.5 디자인 결정 필요 / 위험 (v5.5, 2026-11-04)
 
@@ -2201,6 +2255,7 @@ v5.5는 **이미 구현된 코드와 사용자 결정(UP-1~UP-13, 2026-11-04)을
 
 | 버전 | 날짜 | 내용 |
 |------|------|------|
+| v5.7 | 2026-11-05 | **커리어 화면·추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제**(열린 결정 일괄 OD-D4·OD-C1·OD-C2·OD-P2·R-OD-13, decisions 3.18·4.12 UI #12. 기준 기획 PRD v4.13 · 플로우 v5.13 · AI v4.11 · 데이터 모델 v4.11. 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx` 기준 — 새 시각을 만들지 않음). **신설**: 5.6.1 커리어 항목 추가·수정 모달(`AddCareerDialog` — 경력·교육·독립 프로젝트 공통, 크기·머리·스크롤 본문·기간 줄·사용 기술 칩·긴 글 칸·주 버튼 하나·검증 오류·토스트, **닫으면 확인 없이 입력 버림** OD-C1, 입력 보존·이탈 확인은 L-02만), 5.6 표에 그 행, 6장 A2 "(v5.7) 커리어 v5.13"(S-08 2단 배치·C-22 메뉴·연도 목록·`Item` 행, S-09·S-34·S-43 패널 `PanelSection`·`InfoList`·긴 글·"내용을 입력해주세요", 편집은 모달뿐, C-25 카드 = ghost `Item`, 좁은 화면). **폐기 표시**: C-24 섹션 인라인 편집(1.3 예외 문구, 6장 A2) — 패턴 이름이 없어 이전할 사용처 없음. **되돌리기 삭제(OD-P2)**: 3.24 "{섹션}에 채웠어요"·3.25 "본문에 채웠어요" 토스트의 "되돌리기" 액션과 바뀜 토스트 삭제, G-56 수정. **R-OD-13**: 3.25 교체 확인 설명 "저장하기 전에는 되돌릴 수 있어요" 삭제(교체 확인 자체는 유지), 기준 본문 바뀜형의 destructive 미사용 이유 문장 수정. **정정**: 3.23 C-23 좁은 화면 = `Dialog`(시트 아님, 코드 기준) + 소속 카드 클래스, `max-w-form` 사용처에서 S-09·S-34·S-10 제외, 5.3 폼 화면 참조. **8.4**: P-15 해소, P-21(C-22 메뉴 vs 명세 다이얼로그) 신설. **토큰·패턴 이름 변경 없음**. 코드 후속(이 문서 밖, A2 엔지니어): `project-page.tsx`·`deliverable-page.tsx`·`star-proposal-fill.ts`의 되돌리기 액션, `deliverable-draft-card.tsx` 교체 확인 설명 |
 | v1 | 2026-10-24 | 최초 작성. 사용자 결정 UD-1(초록 강조색)·UD-2(본문 16px) 반영 |
 | v2 | 2026-10-28 | **BYOK 반영**(PRD v4.2 · 플로우 v5.2 · AI v4.2 · 데이터 모델 v4.1a). 이후 반영된 5.1 sidebar-08 셸과 S-24 sidebar-13 설정 다이얼로그는 그대로 두었다. 신설: C-18 `AiLock`(3.18), C-19 `ProviderBadge`·`ProviderResultTag`(3.19), C-20 `AiErrorNotice`·`RetryButton`(3.20), C-21 `DataUseConsent`·`FreeTierNotice`(3.21), `AiRunButton`(3.22), C-03 무료 등급 순차·대기 줄, ST-AI-LOCKED / ST-AI-KEY-MISSING / ST-AI-KEY-CHECK, 공급자별 장애 배너, L-01 `NavAiStatus`, 설정 다이얼로그 섹션 2개, 5.7 S-40/S-41/S-42(`ProviderCard`, `StepIndicator`), badge `recommend` variant, A-11·A-12. **삭제와 이전**: `UsageHint` → `AiRunButton`(사용처: C-09, C-11 다시 생성, S-16 다시 생성, S-20 시작하기, S-08 시작 버튼, S-33 제출) / `AiFailed`·ST-AI-FAILED → `AiErrorNotice`(사용처: C-04 error, S-36 실패한 턴, S-16·S-19·S-22·S-15·S-33 결과 영역) / `LimitNotice`·ST-LIMIT → 삭제(대체 없음, 공급자 한도는 C-20) / C-09 10회 소진 분기 → 키 무효·대화 실패 분기 / "사용량은 차감되지 않았습니다"·"이번 달 N회 남음"·"{N}/10회" 문구 → 삭제. 토큰 추가 없음(기존 상태 토큰 재사용) |
 | v4 | 2026-11-03 | **사용자 지정 브랜드 토큰**. `--primary`·`--ring`·`--sidebar-primary`·`--chart-1` = `#15A76E`, `--primary-subtle` `#E3F5EE` / `-foreground` `#0E7A50`, 기본 바탕 `--sidebar` = `#F3FBF8`, 콘텐츠 패널 `--background` = `#FFFFFF`(`--sidebar-accent` = primary 10%, `-foreground` = `--primary-text`: 사이드바 메뉴 hover·선택도 ghost와 같은 초록), `--border`·`--input`·`--chip-border`·`--sidebar-border` = `#E2E2E2`. 신설 `--radius-control: 12px`(버튼·드롭다운·입력). 팝오버·메뉴·Select 상자 `p-2`, 외곽선 `ring-border`. outline 버튼 바탕 `bg-card`. secondary 버튼은 `bg-primary/10 text-primary-text`(hover `bg-primary/15`). ghost 버튼은 hover·열림 시 `bg-primary/10 text-primary-text`. 초록 글자는 `--primary-text` `#118658`. 팝오버 메뉴 항목(DropdownMenu·Select·Command)도 hover·포커스 시 같은 색(삭제 항목은 destructive 유지). 사용처의 색 덧씌우기 제거 규칙 추가. 공통 컴포넌트 `Item` 신설, `Card`·`TableRow`에 `interactive`, ghost 버튼 `aria-current` 선택 상태, Toggle 선택 색 초록. 다크 토큰은 `--sidebar-accent`만 같은 방식으로 바꾸고 나머지는 그대로. **후속(UQ-708~722)**: 신설 Button `destructive-ghost`·`destructive-link`·`warning-outline`, ghost `data-pending`, Badge `muted`·`count-neutral`, Card `tone="success"`, TableRow `muted`(+ hover는 `interactive` 행에만), Alert `warning`·`destructive` 아이콘 색을 variant로 이동, Item `active` → `aria-current` 자동·`aria-disabled` 지원·data 속성 보호·`row` 첫/마지막 행 모서리. 문서 토큰 코드 블록에 `--primary-text`·`--color-primary-text` 추가, 8장 대비 메모를 측정값으로 교체, 예외 목록에 `nav-user`·채팅 말풍선·빈 긴 글 자리 글자 추가. 사용처: 삭제 버튼(drafts-view·form-parts DangerZone·achievement-dialog·cover-letter-questions), 저장 실패 링크(save-status), 흐린 배지(basics·stage-menu·insight-view·session-status·result-view·applications/[id]·placeholders·project-form), 작성 중 면접 배너(interview-prep), 커리어 추가 버튼(빈 상태 쪽 secondary) |

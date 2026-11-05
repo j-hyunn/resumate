@@ -9,6 +9,7 @@ import { getEvidenceForOwners } from "@/lib/data/evidence"
 import { getInterviewSession, listInterviewSessions, type InterviewSessionDetail } from "@/lib/data/interviews"
 import { buildGradingFacts, gradingDecision, isInputCausedGrading } from "@/lib/data/interview-grading"
 import { applicationDisplayName } from "@/lib/data/labels"
+import { APPLICATION_DELETED_BADGE, isDeletedApplicationSegment, SCORE_MAX_DEFAULT } from "@/lib/data/interview-session-view"
 import { getPreviewState, previewErrorCode, type PreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 import { getAiConnection } from "@/lib/data/ai-connection"
@@ -24,6 +25,10 @@ import type { AiErrorCode } from "@/types/db"
  * input-failed (= grading-input-only).
  * 04 §2.7.1 판정표: grading-regrade · grading-summary-only (종합 평가 다시 정리) · grading-summary-input ·
  * grading-input-only · grading-mixed (입력 원인 + 다른 원인) · grading-completed-regrade · grading-completed-input.
+ * v5.13 OD-I1·I2: scored (d14.v1 "{n}점 / 100") · pending-method (점수 산정 방식 준비 중 · 항목 등급·다음 연습 숨김) ·
+ * empty / no-answers (모든 질문 미응답 → 0점 / 100 "답변이 없어 0점이에요") · not-scored (응답 있음 + 모두 채점 실패).
+ * OD-I6: application-deleted (이 세션을 "자기소개서 삭제됨" 읽기 전용으로). 실제 삭제된 세션은 /applications/deleted/…
+ * ([UI-가정] 라우트, lib/data/interview-session-view DELETED_APPLICATION_SEGMENT).
  * 미리보기는 저장소를 바꾸지 않는다 (다시 채점 없음, 표식 유지).
  */
 type Props = {
@@ -72,7 +77,7 @@ function setEvaluations(s: InterviewSessionDetail, outcome: (index: number) => "
   }
 }
 
-/** Preview-only overrides of the stored score slots (no formula: D-14 is undecided). */
+/** Preview-only overrides of the stored score slots (values are illustrative; the server computes d14.v1). */
 function previewSession(s: InterviewSessionDetail, state: PreviewState | null): InterviewSessionDetail {
   const failedShell = { status: "evaluation_failed" as const, score_status: null, feedback: null }
   const doneShell = { status: "completed" as const, score_status: "pending_method" as const }
@@ -99,27 +104,59 @@ function previewSession(s: InterviewSessionDetail, state: PreviewState | null): 
       status: "completed",
       score_status: "scored",
       score_value: 72,
-      score_max: 100,
-      score_counted_count: s.answered_count,
-      score_rationale: "미리보기용 값이에요. 실제 점수 산정 방식(D-14)이 정해지면 이 자리에 근거가 표시돼요.",
+      score_max: SCORE_MAX_DEFAULT,
+      score_method_version: "d14.v1",
+      score_counted_count: s.question_count,
+      score_rationale: "미리보기용 값이에요. 질문 점수의 평균이고 미응답 질문은 0점으로 들어가요.",
       questions: s.questions.map((q) =>
         q.answer && q.answer.status === "submitted"
-          ? { ...q, answer: { ...q.answer, score_status: "scored", score_value: 4, score_max: 5 } }
-          : q,
+          ? { ...q, answer: { ...q.answer, score_status: "scored", score_value: 72, score_max: SCORE_MAX_DEFAULT } }
+          : q.answer?.status === "unanswered"
+            ? { ...q, answer: { ...q.answer, score_status: "unanswered", score_value: 0, score_max: SCORE_MAX_DEFAULT } }
+            : q,
       ),
     }
+  // OD-I2: before the formula / backfill every slot is pending_method → criteria grades and 다음 연습 hidden
+  if (state === "pending-method")
+    return {
+      ...s,
+      status: "completed",
+      score_status: "pending_method",
+      score_value: null,
+      score_max: null,
+      score_rationale: null,
+      questions: s.questions.map((q) =>
+        q.answer?.status === "submitted" ? { ...q, answer: { ...q.answer, score_status: "pending_method", score_value: null, score_max: null } } : q,
+      ),
+    }
+  // R-OD-3: answers exist but none could be graded → "점수를 계산하지 못했어요"
+  if (state === "not-scored")
+    return {
+      ...setEvaluations({ ...s, status: "completed" }, () => null),
+      score_status: "not_scored",
+      score_value: null,
+      score_max: null,
+      score_rationale: null,
+    }
+  // OD-I1 / R-OD-3: every question unanswered → scored 0 / 100 + "답변이 없어 0점이에요"
   if (state === "empty" || state === "no-answers")
     return {
       ...s,
       status: "completed",
-      score_status: "not_scored",
+      score_status: "scored",
+      score_value: 0,
+      score_max: SCORE_MAX_DEFAULT,
+      score_method_version: "d14.v1",
+      score_rationale: null,
+      score_counted_count: s.question_count,
       unanswered_count: s.question_count,
       answered_count: 0,
       feedback: null,
       questions: s.questions.map((q) => ({
         ...q,
         evaluation: null,
-        answer: q.answer ? { ...q.answer, answer_text: "", status: "unanswered", score_status: "unanswered" } : null,
+        evaluation_error: null,
+        answer: q.answer ? { ...q.answer, answer_text: "", status: "unanswered", score_status: "unanswered", score_value: 0, score_max: SCORE_MAX_DEFAULT } : null,
       })),
     }
   if (state === "ai-pending")
@@ -184,10 +221,19 @@ async function Screen({ params, searchParams }: Props) {
   const state = getPreviewState(await searchParams)
   if (state === "not-found") notFound()
 
-  const ap = await getApplicationProject(id)
-  if (!ap) notFound()
-  const name = applicationDisplayName(ap.name, ap.name_source, ap.created_at)
-  const crumbs = (
+  // OD-I6: /applications/deleted/… = a kept session of a deleted 자기소개서 ([UI-가정] route). ?state=application-deleted
+  // previews any session that way.
+  const deletedRoute = isDeletedApplicationSegment(id)
+  const ap = deletedRoute ? null : await getApplicationProject(id)
+  if (!deletedRoute && !ap) notFound()
+  const deleted = deletedRoute || state === "application-deleted"
+  const stored = deletedRoute ? await getInterviewSession(id, sessionId) : null
+  if (deletedRoute && !stored) notFound()
+  const name = ap ? applicationDisplayName(ap.name, ap.name_source, ap.created_at) : stored!.application_name
+  // 02 S-22 "자기소개서 삭제됨": 이동 경로 첫 마디는 "모의 면접"(S-37), 자기소개서로 가는 링크 없음
+  const crumbs = deleted ? (
+    <PageCrumbs items={[{ label: "모의 면접", href: routes.interviews() }, { label: `${name} · ${APPLICATION_DELETED_BADGE}` }, { label: "면접 결과" }]} />
+  ) : (
     <PageCrumbs
       items={[
         { label: "기업 JD 관리", href: routes.applications() },
@@ -215,16 +261,18 @@ async function Screen({ params, searchParams }: Props) {
     )
 
   const latestJob = await getLatestJobFor("interview_session", sessionId) // advances the evaluation job
-  const stored = await getInterviewSession(id, sessionId)
-  if (!stored) notFound()
-  if (!stored.submitted_at && !state) redirect(routes.interviewSession(id, sessionId))
-  const session = previewSession(stored, state)
+  const loaded = stored ?? (await getInterviewSession(id, sessionId))
+  if (!loaded) notFound()
+  if (!loaded.submitted_at && !state && !deletedRoute) redirect(routes.interviewSession(id, sessionId))
+  const previewed = previewSession(loaded, state)
+  const session: InterviewSessionDetail = deleted && !previewed.application_deleted ? { ...previewed, application_deleted: true } : previewed
 
   const evalIds = session.questions.flatMap((q) => (q.evaluation ? [q.evaluation.id] : []))
   const [evidence, jd, siblings] = await Promise.all([
     getEvidenceForOwners("answer_evaluation", evalIds),
-    getJobDescription(id),
-    listInterviewSessions({ application_project_id: id }),
+    // OD-I6: the JD went with the 자기소개서 (and the method comparison has no siblings to read)
+    deleted ? null : getJobDescription(id),
+    deleted ? [] : listInterviewSessions({ application_project_id: id }),
   ])
   const weakRequirements = (jd?.requirements ?? [])
     .filter((r) => session.weak_requirement_ids.includes(r.id))

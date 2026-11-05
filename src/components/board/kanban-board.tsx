@@ -199,7 +199,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
     <>
       <DropdownMenuItem asChild>
         <Link href={routes.application(card.id)} onClick={() => setNavOrigin("board", card.id)}>
-          기업 JD 열기
+          자기소개서 열기
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -290,7 +290,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
               <Button asChild variant="outline" className="h-11 w-full">
                 <Link href={routes.applicationNew({ from: "board" })}>
                   <Plus aria-hidden />
-                  기업 JD 추가
+                  자기소개서 추가
                 </Link>
               </Button>
             ) : null}
@@ -312,7 +312,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
           if (!deleteTarget) return
           await deleteApplicationProjectAction(deleteTarget.entity_id)
           // [UI-가정] 삭제 완료 토스트 문구 (FL-06 "출발 화면으로 + 토스트")
-          toast("기업 JD를 삭제했어요")
+          toast("자기소개서를 삭제했어요")
           router.refresh()
         }}
       />
@@ -366,7 +366,7 @@ function BoardColumn({
         </Badge>
         {stage === "before_apply" ? (
           <Button asChild variant="ghost" size="icon-sm" className="ml-auto">
-            <Link href={routes.applicationNew({ from: "board" })} aria-label="기업 JD 추가">
+            <Link href={routes.applicationNew({ from: "board" })} aria-label="자기소개서 추가">
               <Plus aria-hidden />
             </Link>
           </Button>

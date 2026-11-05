@@ -425,7 +425,7 @@ function QuestionCard({
           <AlertDialogHeader>
             <AlertDialogTitle>문항 삭제</AlertDialogTitle>
             <AlertDialogDescription>
-              문항 {index}과 이 문항의 초안·직접 고친 내용·사용한 경력·프로젝트가 함께 삭제돼요. 되돌릴 수 없어요
+              문항 {index}과 이 문항의 답변·직접 고친 내용·사용한 경력·프로젝트가 함께 삭제돼요. 되돌릴 수 없어요
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

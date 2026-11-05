@@ -677,8 +677,9 @@ async function mockStartInsight(
   const job = createMockJob(db, {
     job_type: "insight",
     application_project_id: applicationProjectId,
-    target_type: "insight",
-    target_id: insightId,
+    // OD-D9: same target as the real AI-02 job (the insight row links back via ai_job_id)
+    target_type: "application_project",
+    target_id: applicationProjectId,
     units,
     // a failed `prepare` extraction ends the job with the same cause, before any match (S-16, Q53-2)
     fail: extraction.failed ?? opts?.fail,

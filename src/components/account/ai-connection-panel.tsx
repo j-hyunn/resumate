@@ -406,7 +406,12 @@ export function AiConnectionPanel({
                 card.is_active && consentRequired && card.key && state !== "rechecking" ? (
                   <>
                     <ProviderStatusLine state={state} provider={p} keyRow={card.key} />
-                    <ProviderConsentLine provider={p} tier={card.key.connection_tier} />
+                    <ProviderConsentLine
+                      provider={p}
+                      tier={card.key.connection_tier}
+                      // Q-15 (v5.13): a live consent for this provider·tier means the disclosure changed
+                      reconsent={preview === "consent-required" || (!!card.consent && !card.consent.withdrawn_at && card.consent.connection_tier === card.key.connection_tier)}
+                    />
                   </>
                 ) : (
                   <ProviderStatusLine state={state} provider={p} keyRow={card.key} />

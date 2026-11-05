@@ -5,7 +5,7 @@
  * Loads impact counts itself (get_deletion_impact etc.) and returns the chosen options.
  * Never delete without it (patterns.md §8).
  */
-import { actionFailedMessage } from "@/lib/data/labels"
+import { actionFailedMessage, objectParticle } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2 } from "lucide-react"
 import {
@@ -49,7 +49,8 @@ export type DeleteTarget =
     }
   | { kind: "writing_chat"; entity_id: string; label?: string }
   | { kind: "application_project"; entity_id: string; label: string }
-  | { kind: "draft"; entity_id: string; label: string }
+  /** K-3 (v5.13): the title follows the draft type; `label` = the draft's name */
+  | { kind: "draft"; entity_id: string; label: string; draft_type: "career_description" | "cover_letter" }
   | { kind: "interview_session"; entity_id: string; label: string }
   /** v5 C-05 "API 키 삭제" (S-40, D-36, NFR-KEY-06·09). `entity_id` = provider */
   | { kind: "api_key"; entity_id: AiProviderName; label?: string; is_active: boolean }
@@ -76,9 +77,9 @@ function targetName(t: DeleteTarget): string {
     case "writing_chat":
       return "AI 작성 대화"
     case "application_project":
-      return "기업 JD"
+      return "자기소개서" // K-2 (v5.13, CR-23)
     case "draft":
-      return "서류 초안"
+      return t.draft_type === "cover_letter" ? "자소서 문항 답변" : "경력기술서" // K-3 (v5.13, D-UX-23)
     case "interview_session":
       return "면접 세션"
     case "api_key":
@@ -203,7 +204,11 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           <AlertDialogTitle>{name} 삭제</AlertDialogTitle>
           <AlertDialogDescription>
             {target.kind === "application_project"
-              ? "이 기업 JD를 삭제할까요?"
+              ? `'${target.label}' 자기소개서를 삭제할까요?` // K-2 (v5.13)
+              : target.kind === "draft"
+                ? `'${target.label}'${objectParticle(target.label)} 삭제할까요?` // K-3 (v5.13)
+              : target.kind === "interview_session"
+                ? `'${target.label}' 면접 세션을 삭제할까요?` // K-3 (v5.13): particle fixed
               : target.kind === "api_key"
                 ? `${AI_PROVIDER_LABELS[target.entity_id]} 키를 삭제할까요? 즉시 영구 삭제되고 되돌릴 수 없어요.`
               : target.kind === "career" && target.entity_type === "project_deliverable"
@@ -262,8 +267,8 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           {needsAck ? (
             <Label className="flex items-start gap-2 text-base font-normal">
               <Checkbox checked={acknowledged} onCheckedChange={(v) => setAcknowledged(v === true)} className="mt-1" />
-              {/* [UI-가정] 확인 체크 문구 없음 (design-system P-1) */}
-              삭제된 내용은 되돌릴 수 없어요를 확인했어요
+              {/* K-2 (v5.13, OD-D1) */}
+              삭제한 내용은 되돌릴 수 없다는 것을 확인했어요
             </Label>
           ) : null}
 
@@ -287,6 +292,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
 }
 
 function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impact }) {
+  const name = targetName(target)
   const lines: string[] = []
   let byAp: DeletionImpact["affected_results"]["by_application_project"] = []
 
@@ -301,10 +307,15 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
     if (target.entity_type === "project_deliverable" && c.writing_chats > 0) lines.push(`이 산출물의 AI 대화 ${c.writing_chats}개도 함께 삭제돼요`)
     if (target.unsavedChanges) lines.push("저장하지 않은 수정도 함께 사라져요")
     if (target.entity_type === "experience" || target.entity_type === "education") {
-      // [UI-가정] cascade line copy for 경력·교육 is not in the spec
+      // K-3 (v5.13, CR-15): same line as the C-05 career row ②
       if (c.projects > 0)
-        lines.push(`소속 프로젝트 ${c.projects}건${c.writing_chats > 0 ? `과 그 AI 작성 대화 ${c.writing_chats}개` : ""}도 함께 삭제돼요`)
+        lines.push(
+          `이 ${name}의 프로젝트 ${c.projects}개와 그 ${c.writing_chats > 0 ? `STAR·AI 대화 ${c.writing_chats}개가` : "STAR가"} 함께 삭제돼요`,
+        )
     }
+    // OD-I6 / R-OD-5: completed sessions left after their 자기소개서 was deleted (0 → no line)
+    const detached = impact.data.affected_results.detached_interview_sessions ?? 0
+    if (detached > 0) lines.push(`삭제된 자기소개서의 면접 기록 ${detached}개`)
     byAp = impact.data.affected_results.by_application_project
   }
   if (impact.kind === "writing_chat") {
@@ -313,12 +324,19 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
   }
   if (impact.kind === "application_project") {
     const d = impact.data
+    // K-2 / OD-I6 (v5.13): only unfinished sessions go; completed ones stay as read-only records
     lines.push(
-      `JD·요건, 인사이트 ${d.insights}, 서류 초안 ${d.drafts}, 면접 세션 ${d.interview_sessions}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`,
+      `JD·요건, 인사이트 ${d.insights}, 서류 초안 ${d.drafts}, 작성 중인 면접 ${d.interview_sessions}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`,
     )
+    if (d.kept_interview_sessions > 0) lines.push(`끝난 모의 면접 ${d.kept_interview_sessions}개는 기록에 남아요`)
   }
-  // [UI-가정] 초안 / 면접 세션: spec says "하위 개수" only
-  if (impact.kind === "draft") lines.push(`섹션 ${impact.data.sections}개가 함께 삭제돼요`)
+  // K-3 (v5.13): a cover-letter draft's sections are its questions
+  if (impact.kind === "draft" && target.kind === "draft")
+    lines.push(
+      target.draft_type === "cover_letter"
+        ? `문항 ${impact.data.sections}개와 그 답변이 함께 삭제돼요`
+        : "작성한 블록과 직접 고친 내용이 함께 삭제돼요",
+    )
   if (impact.kind === "interview_session")
     lines.push(`질문 ${impact.data.questions}개와 작성한 답변 ${impact.data.answers}개가 함께 삭제돼요`)
   if (impact.kind === "api_key" && target.kind === "api_key") {
@@ -340,11 +358,11 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
       ) : null}
       {byAp.length > 0 ? (
         <div className="space-y-1 pt-1">
-          <p className="font-medium">영향을 받는 기업 JD</p>
+          <p className="font-medium">영향을 받는 자기소개서</p>
           <ul className="list-disc space-y-1 pl-4">
             {byAp.map((ap) => (
               <li key={ap.application_project_id}>
-                {ap.name ?? "새 기업 JD"} — 인사이트 {ap.insights} · 초안 {ap.drafts} · 면접 {ap.interview_sessions}
+                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.drafts} · 면접 {ap.interview_sessions}
               </li>
             ))}
           </ul>

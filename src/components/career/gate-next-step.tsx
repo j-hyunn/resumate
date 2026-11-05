@@ -98,7 +98,8 @@ export function chatLock(feature: string, alternativeHref?: string) {
     actionName: feature,
     // UQ-350: FL-19 returns to "AI 작성 대화" (AI_FEATURE_NAMES), not the button label
     feature: "writing_chat" as const,
-    description: `${feature} · 질문에 답하면 AI가 프로젝트와 상세 내용으로 정리해 줘요`,
+    // C-18 v5.13: the writing chat proposes STAR content (no "상세 내용" since v5.5)
+    description: `${feature} · 질문에 답하면 AI가 STAR(상황·역할·행동·결과/성과·배운 점)에 넣을 내용을 제안해요`,
     alternativeHref,
   }
 }

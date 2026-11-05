@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import type { InterviewSession, InterviewSessionStatus } from "@/types/db"
 import { formatRelative, SESSION_STATUS_LABELS } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
+import {
+  APPLICATION_DELETED_BADGE,
+  isApplicationDeleted,
+  sessionApplicationSegment,
+  type DeletedApplicationFields,
+} from "@/lib/data/interview-session-view"
 
 export function SessionStatusBadge({ status, className }: { status: InterviewSessionStatus; className?: string }) {
   const label = SESSION_STATUS_LABELS[status]
@@ -62,11 +68,22 @@ export function NewResultDot({ className }: { className?: string }) {
 /**
  * Row target (S-20 / S-37 → S-22 / S-33): writing in progress or abandoned → 답변지,
  * submitted (evaluating / completed / evaluation_failed) → 결과.
+ * OD-I6 자기소개서 삭제됨 → always S-22 (read-only) under the "deleted" segment ([UI-가정] route).
  */
-export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status">): string {
+export function sessionHref(s: Pick<InterviewSession, "id" | "application_project_id" | "status"> & DeletedApplicationFields): string {
+  if (isApplicationDeleted(s)) return routes.interviewResult(sessionApplicationSegment(s), s.id)
   return s.status === "in_progress" || s.status === "abandoned"
     ? routes.interviewSession(s.application_project_id, s.id)
     : routes.interviewResult(s.application_project_id, s.id)
+}
+
+/** OD-I6 표식 "자기소개서 삭제됨" (S-37 행, S-22 머리) */
+export function ApplicationDeletedBadge({ className }: { className?: string }) {
+  return (
+    <Badge variant="muted" className={className}>
+      {APPLICATION_DELETED_BADGE}
+    </Badge>
+  )
 }
 
 /** "3시간 전" — rendered on server and client at slightly different times */

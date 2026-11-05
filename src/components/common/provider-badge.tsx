@@ -38,17 +38,19 @@ export function connectionStatusText(c: ConnectionLike): string {
   return connectionLabel(c)
 }
 
-// [UI-가정] G-18 paid tooltip copy; free copy is the spec's 무료 등급 툴팁
+// free copy is the spec's 무료 등급 툴팁 (Gemini free only, R-OD-15); paid copy B-7 (v5.13)
 const FREE_TIP = "무료 등급은 입력이 Google 제품 개선에 쓰이고 사람이 검토할 수 있어요. 민감정보·회사 기밀은 넣지 마세요"
 
 function tooltipText(c: ConnectionLike): string {
   if (!c.active_provider) return ""
   if (c.key_status === "invalid") return "키를 확인해 주세요. 눌러서 키를 교체하세요"
-  // [UI-가정] G-33 consent badge tooltip
+  // B-7 (v5.13): consent badge tooltip
   if (c.consent_required) return "데이터 사용 고지에 동의해야 실행할 수 있어요"
   if (c.key_status === "needs_check") return "키 상태를 확인하지 못했어요(한도 또는 일시 오류)"
   if (c.connection_tier === "free" && c.active_provider === "gemini") return FREE_TIP
-  return `연결한 ${AI_PROVIDER_LABELS[c.active_provider]} 키로 실행돼요`
+  // B-7 (v5.13, OD-D1): paid tooltip names who is billed (BYOK, UX-11)
+  const name = AI_PROVIDER_LABELS[c.active_provider]
+  return `연결한 ${name} 키로 실행돼요. 사용한 토큰은 ${name} 계정에 청구돼요`
 }
 
 /**

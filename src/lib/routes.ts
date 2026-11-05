@@ -33,9 +33,11 @@ export const routes = {
   // 커리어 — A2
   career: () => "/career", // S-08
   profile: () => "/career/profile", // S-04
-  experienceNew: () => "/career/experiences/new", // S-09
-  /** S-09. `achievement` opens that 경력 단위 성과 in S-11 (C-02 "원본으로 이동") */
-  experience: (id: Id, query?: { achievement?: Id }) => withQuery(`/career/experiences/${id}`, query), // S-09
+  /**
+   * S-08 with the C-22 add modal open for `kind` (`?new={kind}`, [UI-가정]) — S-09 새 경력 is that modal (OD-C2).
+   * The retired `/career/experiences/new` page redirects here.
+   */
+  careerNew: (kind: "experience" | "education" | "project") => `/career?new=${kind}`, // S-08 (S-09 · S-34 · S-43 새 항목)
   educationNew: () => "/career/educations/new", // S-34
   education: (id: Id) => `/career/educations/${id}`, // S-34
   skills: () => "/career/skills", // S-12

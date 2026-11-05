@@ -28,7 +28,7 @@ type Props = {
 }
 
 const EMPTY_SUMMARY = {
-  career: { experiences: 0, educations: 0, projects: 0, project_details: 0, achievements: 0, skills: 0, writing_chats: 0 },
+  career: { experiences: 0, educations: 0, projects: 0, project_deliverables: 0, skills: 0, writing_chats: 0 },
   applications: { application_projects: 0, insights: 0, drafts: 0, interview_sessions: 0, application_stage_events: 0 },
   ai: { provider_keys: 0, data_use_consents: 0, usage_records: 0 },
 }

@@ -1,35 +1,23 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
-import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
-import { getPreviewState } from "@/lib/preview-state"
-import { getExperience } from "@/lib/data/career"
 import { routes } from "@/lib/routes"
-import { ExperienceForm } from "@/components/career/experience-form"
-import { careerPreviewView } from "@/components/career/screen-state"
 
-// S-09 경력 편집
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
+/**
+ * Retired S-09 경력 편집 page (UX v5.5: S-09 is the S-08 panel / add·edit modal, OD-C2). Old links land on S-08:
+ * `/career/experiences/new` → the 새 경력 modal, `/career/experiences/{id}` → that experience selected. The old
+ * `?achievement=` (S-11, retired with CR-11) is dropped. S-08 says "찾을 수 없는 항목이에요" for an unknown id.
+ */
+type Props = { params: Promise<{ id: string }> }
 
-export default function Page({ params, searchParams }: Props) {
-  return (
-    <ScreenSuspense>
-      <Screen params={params} searchParams={searchParams} />
-    </ScreenSuspense>
-  )
+async function Redirect({ params }: Props): Promise<null> {
+  const { id } = await params
+  redirect(id === "new" ? routes.careerNew("experience") : routes.careerItem("experience", id))
 }
 
-async function Screen({ params, searchParams }: Props) {
-  const { id } = await params
-  const sp = await searchParams
-  const state = getPreviewState(sp)
-  const achievementId = Array.isArray(sp.achievement) ? sp.achievement[0] : sp.achievement
-  const preview = careerPreviewView(state)
-  const row = preview ? null : await getExperience(id)
-  if (!preview && !row) notFound()
+export default function Page({ params }: Props) {
   return (
-    <>
-      <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: row?.company_name ?? "경력" }]} />
-      {preview ?? (row ? <ExperienceForm key={`${row.id}-${row.updated_at}`} experience={row} openAchievementId={achievementId ?? null} /> : null)}
-    </>
+    <ScreenSuspense>
+      <Redirect params={params} />
+    </ScreenSuspense>
   )
 }

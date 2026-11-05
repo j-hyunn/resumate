@@ -20,7 +20,7 @@ export interface EvidenceView {
   item_key: string
   source_type: EvidenceLink["source_type"]
   source_field: string | null
-  /** kind part: "상세 내용 · 행동", "회고 및 배운 점", "정량 성과" … */
+  /** kind part: "상세 내용 · 행동", "회고 및 배운 점", "산출물" … */
   kind_label: string
   /** source_label (or current name) */
   source_label: string
@@ -79,7 +79,7 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         source_label: e.source_label ?? x.company_name ?? "",
         current_value: e.source_field === "summary" ? x.summary : [x.job_rank, x.job_position].filter(Boolean).join(" / "),
         path: [year(x.start_month), x.company_name].filter(Boolean) as string[],
-        href: routes.experience(x.id),
+        href: routes.careerItem("experience", x.id), // S-08 패널 (S-09, C-02 v5.5)
         to_career: true,
         updated_at: x.updated_at,
       }
@@ -152,31 +152,10 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
         updated_at: d.updated_at,
       }
     }
-    case "achievement": {
-      const a = db.achievements.find((r) => r.id === sid)
-      if (!a) return empty
-      const d = db.project_details.find((r) => r.id === a.project_detail_id)
-      const ap = d ? db.projects.find((r) => r.id === d.project_id) : undefined
-      const aParent = ap ? parentName(db, ap) : db.experiences.find((r) => r.id === a.experience_id)?.company_name
-      const value = a.metric_name ? `${a.metric_name} ${a.value_before ?? ""} → ${a.value_after ?? ""} ${a.unit ?? ""}`.trim() : a.description
-      // [UI-가정] S-11 is a modal; deep link opens its host screen (S-35 or S-09)
-      return {
-        source_label: e.source_label ?? a.metric_name ?? a.description ?? "",
-        current_value: value,
-        path: (d
-          ? [projectYear(db, ap), aParent, ap?.name, d.title, "정량 성과"]
-          : [aParent, "경력 단위 성과"]
-        ).filter(Boolean) as string[],
-        // `?achievement=` opens S-11 for this row on arrival (A2 request 4)
-        href: d
-          ? routes.projectPage(d.project_id, { focus: "result" })
-          : a.experience_id
-            ? routes.experience(a.experience_id, { achievement: a.id })
-            : null,
-        to_career: true,
-        updated_at: a.updated_at,
-      }
-    }
+    case "achievement":
+      // 정량 성과·경력 단위 성과는 폐기됐다 (UX v5.5 S-11 폐기 · DM v4.4, CR-11). R4 마이그레이션이 이 근거 행을 지웠고
+      // source_type CHECK도 더는 받지 않는다 — 남은 행(옛 mock 픽스처)은 toEvidenceView가 "원본 삭제됨"으로 둔다 [UI-가정].
+      return empty
     case "skill": {
       const s = db.skills.find((r) => r.id === sid)
       if (!s) return empty
@@ -216,7 +195,8 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
 
 export function toEvidenceView(db: MockDb, e: EvidenceLink): EvidenceView {
   const r = resolve(db, e)
-  const status: EvidenceStatus = e.source_deleted_at
+  // a retired 정량 성과 source (see resolve) has no original to open → shown like a deleted source
+  const status: EvidenceStatus = e.source_deleted_at || e.source_type === "achievement"
     ? "deleted"
     : e.source_type !== "jd_sentence" && r.updated_at && Date.parse(r.updated_at) > Date.parse(e.source_snapshot_at)
       ? "changed"

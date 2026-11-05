@@ -16,11 +16,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { CharCount } from "@/components/common/input-guide"
-import { DeleteConfirmDialog, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
+import { DeleteConfirmDialog, type CareerDeleteEntityType, type DeleteTarget } from "@/components/common/delete-confirm-dialog"
 import { AutosaveBlocked, useAutosave } from "@/components/common/save-status"
 import { notifyCareerSaved } from "@/components/common/return-banner"
 import { usePreviewState } from "@/components/common/preview-state-client"
-import type { DeletionEntityType } from "@/types/db"
 import { decideConflict, isPeriodReversed, newRowId, type RowSaveResult } from "@/lib/data/row-save"
 import { deleteCareerItemAction } from "./actions"
 
@@ -434,7 +433,7 @@ export function DangerZone({
   afterHref,
   buttonLabel,
 }: {
-  entityType: Exclude<DeletionEntityType, "writing_chat">
+  entityType: CareerDeleteEntityType
   entityId: string | null
   label: string
   afterHref: string

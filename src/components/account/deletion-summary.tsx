@@ -2,7 +2,7 @@
  * S-25 삭제 범위 — get_account_deletion_summary() counts in the C-05 impact-summary style
  * (`rounded-md bg-muted p-3 text-sm`, design-system 6 A1). Server- and client-safe.
  *
- * 02 S-25: 커리어 — 경력 N, 교육 N, 프로젝트 N, 상세 내용 N, 정량 성과 N, 스킬 N, AI 작성 대화 N /
+ * 02 S-25: 커리어 — 경력 N, 교육 N, 프로젝트 N, 산출물 N, 스킬 N, AI 작성 대화 N (v5.5) /
  *          자기소개서 N개 — 인사이트 N, 초안 N, 면접 세션 N, 전형 이력 /
  *          (v5) AI 연결 — 등록한 API 키 N개(즉시 파기), 토큰 사용 기록, AI 연결 동의 이력 (UQ-200)
  *          + "공급자 사이트에서도 키를 폐기하는 것을 권해요" (NFR-KEY-09) with provider dashboard links.
@@ -20,8 +20,7 @@ export function DeletionSummary({ summary, runningAiJobs = 0 }: { summary: Accou
     ["경력", c.experiences],
     ["교육", c.educations],
     ["프로젝트", c.projects],
-    ["상세 내용", c.project_details],
-    ["정량 성과", c.achievements],
+    ["산출물", c.project_deliverables],
     ["스킬", c.skills],
     ["AI 작성 대화", c.writing_chats],
   ]

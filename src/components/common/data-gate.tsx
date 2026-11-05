@@ -112,17 +112,17 @@ export function DataInsufficientGate({
         : draftIds.educations[0]
           ? routes.careerItem("education", draftIds.educations[0])
           : missing.includes("complete_experience")
-            ? routes.experienceNew()
+            ? routes.careerNew("experience")
             : null)
 
   // 주 버튼 (C-09 v5.6): writing_chat + suggested → S-10 (패널이 새 대화), create_project → C-23 (`null`),
-  // form without a suggestion → "경력 먼저 입력하기" (S-09 새 경력) when the experience is missing, else 직접 입력
+  // form without a suggestion → "경력 먼저 입력하기" (S-08 새 경력 모달 = S-09 새 경력) when the experience is missing, else 직접 입력
   const chatHref: string | null =
     f.next_action === "writing_chat" && f.suggested_project_id
       ? routes.projectPage(f.suggested_project_id, { focus: "star" })
       : f.next_action === "form"
         ? missing.includes("complete_experience")
-          ? routes.experienceNew()
+          ? routes.careerNew("experience")
           : direct
         : null
   const chatLabel =

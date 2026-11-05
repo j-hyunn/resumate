@@ -246,6 +246,22 @@ function AddCareerMenu({
   onCreated: (item: { kind: AddCareerKind; id: string }) => void
 }) {
   const [adding, setAdding] = React.useState<AddCareerKind | null>(null)
+  // `?new={kind}` (routes.careerNew — C-09 "경력 먼저 입력하기", 옛 S-09 새 경력 주소): open that add modal once,
+  // then drop `new` from the URL
+  const searchParams = useSearchParams()
+  const newParam = searchParams.get("new")
+  const requestedKind = newParam === "experience" || newParam === "education" || newParam === "project" ? newParam : null
+  const [handledNew, setHandledNew] = React.useState<string | null>(null)
+  if (requestedKind && requestedKind !== handledNew) {
+    setHandledNew(requestedKind)
+    setAdding(requestedKind)
+  }
+  React.useEffect(() => {
+    if (!newParam) return
+    const url = new URL(window.location.href)
+    url.searchParams.delete("new")
+    window.history.replaceState(window.history.state, "", url)
+  }, [newParam])
   const options: Array<{ kind: AddCareerKind; label: string; hint: string }> = [
     { kind: "experience", label: "경력", hint: "회사에서 일한 기간" },
     { kind: "education", label: "교육", hint: "학위 과정, 부트캠프·교육 과정" },

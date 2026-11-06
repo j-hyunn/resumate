@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "@/components/common/theme"
 
-// Theme follows the 설정 › 화면 choice (Q-2, components/common/theme.ts), no next-themes.
+// Theme follows the 계정 메뉴 "다크 모드" choice (Q-2 / SD-A16, components/common/theme.ts), no next-themes.
 // design-system 2: neutral toasts with icons, richColors off.
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme } = useTheme()

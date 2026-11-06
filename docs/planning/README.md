@@ -2,7 +2,9 @@
 
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
-- 최종 정리: 2026-11-05(새 설정 다이얼로그 사이클 settings-dialog)
+- 최종 정리: 2026-11-06(UI 42 런 기획 확인 UI42-1~8)
+- **2026-11-06 확정: UI 42 런 기획 확인 UI42-1~UI42-8** (사용자, [decisions.md](decisions.md) 3.24, UX v5.17b 5.1k): 셀렉트 "선택 안 함", 저장 충돌 내 입력 목록, AI 연결 안내 문구 정본, **OpenAI 화면 표기 전체 "GPT"**, 화면 테마는 계정 메뉴에만, **개인정보 처리방침 수집 항목 개정 초안·AI 데이터 처리 본문 초안(`docs/legal/drafts/`, 법무 확인 전)**. 처리방침 개정은 PR #58 머지 전(늦어도 같은 배포)에 시행해야 한다
+- **2026-11-05 정정: 백엔드 R13 구현 피드백 D1~D10** (`_workspace/backend/R13/03_backend-qa_report.md`): 새 설정 다이얼로그 구현(PR #58)이 드러낸 문장 오류만 고쳤다 — **새 결정·스키마 변경 없음**. 관심 직군·직무 쌍 상한 잔여 문장을 2쌍으로, `computed_total_months`의 서버 경로용 public 래퍼, `app_ai_writer` grant 목록, 프롬프트 버전 표를 구현 현행값(`common.v3`·`ai-02.*.v5`, AI-06 포함)으로, 최종 학력 컬럼 7개·연월 `'YYYY-MM'`, `ai_data_use` 잠정 값과 "확정 시 새 행" 규칙. DM v4.12a · AI v4.12a · UX v5.17a. 백엔드·UI 후속 없음([decisions.md](decisions.md) 4.17). 같은 날 R13 릴리스 결정 4건 확정(3.23): 컬럼 drop 승인, `ai_data_use` = `2026-11-05`, 개선 요청은 주소 없이 "준비 중", Supabase CLI 2.121.0 유지
 - **2026-11-05 개정: 새 설정 다이얼로그 SD-1~SD-6** (사용자 확정, `_workspace/00_input/planning-decisions-settings-dialog.md`): 설정이 **탭 4개**(계정 / AI 연결 / 약관 / 개선 요청)가 된다. 계정 탭의 **내 정보**(이름·구직 상태·관심 기업군·관심 산업·관심 직군·직무 쌍·최종 학력)가 **S-04 기본 프로필 편집을 폐기**하고 대신하며, **총 경력 연차·희망 직무 컬럼은 없어진다**(SD-2·SD-A17). 내 정보는 **AI에 보내지 않는다**(SD-6 — 컨텍스트 팩의 프로필 블록 삭제, 연차 요건은 경력 기간 계산값으로만 판정). AI 연결 탭이 S-40 + S-42를 품고 사용량이 **공급자 × 기능 교차 집계**가 된다. 약관 탭 = 문서 4종 + 선택 동의 토글 2개. **개선 요청은 외부 폼 링크**(F-COM-11, Should). 자기소개서 작성의 채팅형 전환은 **별도 사이클**(SD-4). **같은 날 후속 확정**: 값 목록 7종은 PRD 9.7 초안 그대로, 관심 직군·직무는 **최대 2쌍**, 사용량 표는 토큰 열·합계 카드 없이 화면대로, 약관 탭의 **필수 동의 기록 표시는 두지 않음**(출시 전 법무 확인 권장), 사용량 비용 2컬럼은 과거 기록 **백필**. PRD v4.14, UX v5.17, AI v4.12, DM v4.12, [decisions.md](decisions.md) 3.22·4.16, 리뷰 `_workspace/03_spec-reviewer_review_settings-dialog.md`(2라운드, 23건 모두 해소)
 - **2026-11-05 개정: UI 40 런 기획 확인 U40-1·U40-2** (사용자 확정, `_workspace/00_input/planning-decisions-ui40-questions.md`): L-02(S-10·S-44) 입력 보존을 로그아웃·탈퇴 때 지우고, 다른 곳에서 더 새로 저장된 행에는 복원하지 않는다(UI QA UQ-421 — 예전 보존본이 새 저장을 조용히 덮어쓰던 문제). UX v5.16, [decisions.md](decisions.md) 3.21·4.15. 작은 변경이라 리더가 직접 고쳤다
 - **2026-11-05 개정: UI 38 런 기획 확인 U38-1~U38-3** (사용자 확정, `_workspace/00_input/planning-decisions-ui38-questions.md`): 자기소개서 삭제 토스트에 이름("'{이름}' 자기소개서를 삭제했어요", U36-7 겹침 규칙), S-13 페이지 제목 "자기소개서 관리"(명세를 구현에 맞춤), S-16 데이터 부족 안내 "프로젝트·STAR·산출물을 더 채우면 더 정확해져요". UX v5.15, [decisions.md](decisions.md) 3.20·4.14. 작은 변경이라 리더가 직접 고쳤다
@@ -27,9 +29,9 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
 | [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.14 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.17 | ux-planner |
-| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.12 | ai-feature-designer |
-| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.12 | data-architect |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.17b | ux-planner |
+| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.12a | ai-feature-designer |
+| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.12a | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |
 
 ## MVP 한 문단 요약
@@ -71,7 +73,8 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 ## 남은 결정
 
-- **사용자 결정 대기 1건**: SD-Q1 개선 요청 외부 폼 주소(정해지기 전 탭은 "준비 중"). 설정 사이클의 나머지 6건(SD-Q2 값 목록 · SD-Q3 (가)(나)(다) · D-DM-13 · D-DM-14 · D-DM-15)은 2026-11-05에 확정했다([decisions.md](decisions.md) 3.22 후속 확정)
+- **사용자 결정 대기 0건**. 마지막 남은 SD-Q1(개선 요청 폼 주소)은 "주소 없이 '준비 중'으로 출시, 주소가 생기면 Vercel env만"으로 닫았다(2026-11-05, [decisions.md](decisions.md) 3.23 R13-U3). 같은 날 R13 릴리스 결정도 확정 — `profiles` 옛 세 컬럼 drop 승인(2단 실행), `ai_data_use` 문서 버전 `2026-11-05`, Supabase CLI 2.121.0 유지. 설정 사이클의 나머지 6건(SD-Q2 · SD-Q3 (가)(나)(다) · D-DM-13·14·15)은 3.22 후속 확정
+- **출시 전 법무 확인 (필수)**: 개인정보 처리방침 수집 항목 개정 초안(UI42-7, `docs/legal/drafts/privacy-policy-2026-11-06.md` — 새 내 정보 항목이 지금 처리방침에 없다. PR #58 머지 전 시행 권장) · AI 데이터 처리 본문 초안(UI42-8)
 - 출시 전 법무 확인: 약관 탭에서 동의 이력 열람 경로를 없앤 건(SD-Q3 (다), PIPA)
 - 출시 전 운영 확인: 세 공급자 평가 세트 통과(UB-3, OD-L4), AI 고지 공급자 약관 재확인(AI C-7.1, OD-L2), 법무 검토 권장(D-39, OD-L3), 면접 점수 백필 실행(OD-I1)
 - 출시 후 과제: 외부 KMS 전환(OD-L1)
@@ -81,7 +84,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 ## 남은 일
 
-- **새 설정 다이얼로그 후속 ★ (2026-11-05)**: 백엔드는 DM 11.7 14개 항목(`profile_options`·`profile_job_interests` 신설, `profiles` 컬럼 추가·백필·**drop(파괴적)**, `save_profile_basics`, `get_data_readiness` 축소, `compute_total_experience_months`, 사용량 비용 2컬럼 + 교차 집계 RPC, `policy_versions` `ai_data_use`, `evidence_links` 트리거·허용 출처 5종, `app_ai_writer` 권한 정리), UI는 S-24 탭 4개 재구현·S-04 폐기·`/policies/ai_data_use`. **컬럼 drop은 readiness·컨텍스트 팩 배포 뒤에만 올린다.** 목록은 [decisions.md](decisions.md) 4.16
+- **새 설정 다이얼로그 후속 ★ (2026-11-05)**: 백엔드는 DM 11.7 14개 항목(`profile_options`·`profile_job_interests` 신설, `profiles` 컬럼 추가·백필·**drop(파괴적)**, `save_profile_basics`, `get_data_readiness` 축소, `compute_total_experience_months`, 사용량 비용 2컬럼 + 교차 집계 RPC, `policy_versions` `ai_data_use`, `evidence_links` 트리거·허용 출처 5종, `app_ai_writer` 권한 정리), UI는 S-24 탭 4개 재구현·S-04 폐기·`/policies/ai_data_use`. **컬럼 drop은 readiness·컨텍스트 팩 배포 뒤에만 올린다.** 목록은 [decisions.md](decisions.md) 4.16 — **백엔드 구현 2026-11-05 (R13) · UI 구현 2026-11-06 (42 런, 브라우저 미확인)**, 둘 다 PR #58, 원격 미반영 — 2단 배포
 
 
 - **열린 결정 일괄 확정 후속 ★ (2026-11-05)**: 백엔드는 DM 11.6(면접 보존 FK·트리거·가드, 점수 `d14.v1`·백필, `p_client_id`, 본문 해시, 답 없는 메시지 재응답, `ai_disclosures` `v2026-11-05`), UI는 S-22 점수·S-37 삭제된 자기소개서·C-05 문구·첫 저장 토스트·되돌리기 제거·고정 칩·다시 보내기·고지 상수 이동·국외 이전 고지 개정안 반영·UX 5.1i 문구. 목록은 [decisions.md](decisions.md) 4.12

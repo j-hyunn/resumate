@@ -12,7 +12,6 @@ const base = (features: Partial<V44["features"]>): V44 => ({
     draft_experiences: 0,
     draft_educations: 0,
     draft_projects: 3,
-    profile_filled: true,
   },
   draft_item_ids: { experiences: [], educations: [], projects: [] },
   features: {

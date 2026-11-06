@@ -41,7 +41,19 @@ function currentVersion(db: MockDb, policy_type: PolicyType): PolicyVersion {
   return rows[0] ?? db.policy_versions.find((p) => p.policy_type === policy_type)!
 }
 
-/** Current version of each policy document (S-03 고지, S-30 tabs). Pass to client components as props. */
+function previewAiDataUseVersion(db: MockDb): PolicyVersion {
+  const existing = db.policy_versions.find((p) => p.policy_type === "ai_data_use")
+  if (existing) return existing
+  const privacy = currentVersion(db, "privacy")
+  return {
+    ...privacy,
+    policy_type: "ai_data_use",
+    document_path: `/policies/ai_data_use/${privacy.version}`,
+    requires_reconsent: false,
+  }
+}
+
+/** Current version of each policy document (S-03 고지, S-30 tabs, S-24 ③ 약관 탭 4종). Pass to client components as props. */
 export async function getPolicyVersions(): Promise<Record<PolicyType, PolicyVersion>> {
   return previewOr(
     async () => {
@@ -50,6 +62,9 @@ export async function getPolicyVersions(): Promise<Record<PolicyType, PolicyVers
         terms: currentVersion(db, "terms"),
         privacy: currentVersion(db, "privacy"),
         cross_border_transfer: currentVersion(db, "cross_border_transfer"),
+        // R13: mock fixtures(UI 소유)에 아직 `ai_data_use` 행이 없다 — 미리보기에서는 privacy 행의
+        // 버전·시행일을 빌려 같은 모양을 만든다 `[가정]` (UI 요청: fixtures에 행 1건 추가).
+        ai_data_use: previewAiDataUseVersion(db),
       })
     },
     async () => {
@@ -60,7 +75,13 @@ export async function getPolicyVersions(): Promise<Record<PolicyType, PolicyVers
         if (!row) throw new AppError("internal_error")
         return row
       }
-      return { terms: latest("terms"), privacy: latest("privacy"), cross_border_transfer: latest("cross_border_transfer") }
+      return {
+        terms: latest("terms"),
+        privacy: latest("privacy"),
+        cross_border_transfer: latest("cross_border_transfer"),
+        // R13 (04 §2.1.3): `policy_versions`에 `ai_data_use` 행이 생긴다 (마이그레이션 ⑪).
+        ai_data_use: latest("ai_data_use"),
+      }
     },
   )
 }

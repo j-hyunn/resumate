@@ -13,6 +13,7 @@ import { InsightRpcError, type InsightInputs, type InsightStore } from "./db";
 import { batchIds, createInsightJobDefinition, pickFailure, savedBatches, type InsightBatch, type InsightPipeline } from "./job";
 import { insightJobPartial } from "./partial";
 import { AppError } from "@/lib/contracts/errors";
+import { emptyCareerRows } from "@/server/ai/context-pack/interview";
 
 /**
  * S6 insight job on the REAL runner (memory stores, scripted provider through
@@ -44,7 +45,7 @@ function inputs(n: number): InsightInputs {
   return {
     jd: { jobDescriptionId: "jd-1", updatedAt: null, extractionStatus: "succeeded", extractionJobId: null, rawTextEditedAt: null, sentences: [], positionTitle: null, seniorityLabel: null },
     requirements: requirements(n),
-    careerRows: { profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] },
+    careerRows: emptyCareerRows({ year: 2026, month: 11 }),
   };
 }
 

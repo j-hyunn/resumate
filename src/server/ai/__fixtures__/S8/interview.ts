@@ -36,7 +36,7 @@ export function sid(aliases: AliasMap, needle: string): string {
   return entry.alias;
 }
 
-/** Rows with profile + one experience (no projects) → culture `thin`. */
+/** Rows with one complete experience and no projects → culture `thin`. */
 export function thinCultureRows(): CareerRows {
   const rows = careerRowsFixture();
   return { ...rows, projects: [], deliverables: [], projectSkills: [] };

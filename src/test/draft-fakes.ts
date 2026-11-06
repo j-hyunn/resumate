@@ -8,6 +8,7 @@ import { createDraftStore } from "@/server/services/drafts/db";
 import type { DraftAiDeps, DraftPipelines, PipelineStreamEvent, StreamDeps } from "@/server/services/drafts/types";
 import { fakeSupabase, type FakeDb } from "./fake-supabase";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "./job-fakes";
+import { emptyCareerRows } from "@/server/ai/context-pack/interview";
 
 /**
  * S7 draft service test kit: fake Supabase tables/RPCs (user and writer share
@@ -202,7 +203,7 @@ export function draftKit(opts: {
     createLlm: (input: LlmFactoryInput) => llmFactory(input),
     drafts: createDraftStore(db.client as AiWriterSupabaseClient),
     pipelines: fakeDraftPipelines(seen),
-    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [{ id: PRJ1 } as never, { id: PRJ2 } as never], deliverables: [], skills: [], projectSkills: [] }),
+    loadCareerRows: async () => ({ ...emptyCareerRows({ year: 2026, month: 11 }), projects: [{ id: PRJ1 } as never, { id: PRJ2 } as never] }),
     getReadiness: async () =>
       ({
         features: {

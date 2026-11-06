@@ -50,7 +50,8 @@ select set_eq(
         'answer_evaluations', 'application_projects', 'application_stage_events', 'consents',
         'draft_section_sources', 'draft_sections', 'drafts', 'educations', 'evidence_links', 'experiences',
         'insights', 'interview_answers', 'interview_questions', 'interview_sessions', 'jd_requirements',
-        'job_descriptions', 'project_deliverables', 'project_skills', 'projects', 'session_feedbacks', 'skills',
+        'job_descriptions', 'profile_job_interests', 'project_deliverables', 'project_skills', 'projects',
+        'session_feedbacks', 'skills',
         'writing_chat_messages', 'writing_chats'],
   'public user_id tables = the list this test seeds (new table: seed it here and delete it in delete_account)');
 
@@ -81,6 +82,9 @@ insert into public.skills (id, name) values
   ('a0000000-6666-0000-0000-000000000001', 'Go'), ('a0000000-6666-0000-0000-000000000002', 'SQL');
 insert into public.project_skills (project_id, skill_id)
   values ('a0000000-3333-0000-0000-000000000002', 'a0000000-6666-0000-0000-000000000001');
+-- R13: 내 정보 관심 직군·직무 쌍 (DM v4.12 §2.1.2).
+insert into public.profile_job_interests (sort_order, job_family, job_role)
+  values (1, 'engineering', 'backend'), (2, 'data_ai', null);
 reset role;
 
 insert into public.writing_chats (id, user_id, project_id, status) values

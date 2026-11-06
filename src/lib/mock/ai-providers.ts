@@ -20,14 +20,28 @@ import type {
 /** Display order is fixed: Gemini → Claude → OpenAI (S-40) */
 export const AI_PROVIDER_ORDER: readonly AiProviderName[] = ["gemini", "anthropic", "openai"]
 
-/** C-19 / C-20 공급자 이름 (no logos — leader decision Q-4) */
+/**
+ * 화면에 보이는 공급자 이름 — **유일한 원천** (C-19 배지 · C-20 문구 · S-40 행 · S-41 · S-42 탭 · S-30 요약 ·
+ * 사이드바 AI 상태 등 `provider`를 사람에게 보이는 모든 곳). No logos — leader decision Q-4.
+ * 확정 2026-11-06 (사용자, UI42-5): `openai`의 화면 이름은 "GPT". 식별자(`openai`)는 그대로.
+ */
 export const AI_PROVIDER_LABELS: Record<AiProviderName, string> = {
+  gemini: "Gemini",
+  anthropic: "Claude",
+  openai: "GPT",
+}
+
+/**
+ * 법적 주체가 필요한 자리의 이름 (UI42-5 예외): 공급자 약관 링크 문구, C-21 "공급자" 사실 행처럼
+ * 데이터를 받는 회사를 말하는 곳. 그래서 `openai`는 "OpenAI"로 남는다.
+ */
+export const AI_PROVIDER_TERMS_NAMES: Record<AiProviderName, string> = {
   gemini: "Gemini",
   anthropic: "Claude",
   openai: "OpenAI",
 }
 
-/** S-40 카드 제목 (전체 이름) */
+/** C-21 "공급자" 사실 행 (회사·제품 전체 이름 — 법적 주체, UI42-5 예외) */
 export const AI_PROVIDER_FULL_NAMES: Record<AiProviderName, string> = {
   gemini: "Google Gemini",
   anthropic: "Anthropic Claude",

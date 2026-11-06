@@ -6,6 +6,7 @@ import { createJobRunner } from "@/server/jobs/runner";
 import type { JobTypeDefinition } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, memoryScope, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import type { BegunEvaluation, BegunQuestions, InterviewStore, SessionForEvaluation } from "./db";
+import { emptyCareerRows } from "@/server/ai/context-pack/interview";
 import {
   createInterviewEvaluationJobDefinition,
   createInterviewQuestionsJobDefinition,
@@ -278,7 +279,7 @@ function setup(opts: { context?: ProviderContext | null; responses?: ScriptedRes
     pipelines: fakePipelines(db, calls, opts.behavior ?? {}),
     storeFor: () => db,
     ensureJd: async () => ({ status: "already_extracted" as const }),
-    loadCareerRows: async () => ({ profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] }),
+    loadCareerRows: async () => emptyCareerRows({ year: 2026, month: 11 }),
     loaders: {
       jd: async () => ({ jobDescriptionId: "jd", updatedAt: null, extractionStatus: "succeeded", sentences: [], positionTitle: null, cultureSids: [], requirements: [] }),
       insightSignal: async () => null,

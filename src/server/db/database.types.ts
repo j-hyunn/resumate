@@ -129,14 +129,14 @@ isOneToOne: false
                   ]
                 },"ai_usage_records": {
                   Row: {
-                    "ai_job_id": string | null,"application_project_id": string | null,"cache_write_tokens": number,"cached_input_tokens": number,"call_key": string | null,"connection_tier": string,"created_at": string,"error_code": string | null,"estimated_cost_usd": number,"feature": string,"id": string,"input_tokens": number,"job_type": string,"model": string,"model_tier": string,"occurred_at": string,"outcome": string,"output_tokens": number,"period_month": string,"price_table_version": string,"provider": string,"reasoning_tokens": number | null,"usage_source": string,"user_id": string
+                    "ai_job_id": string | null,"application_project_id": string | null,"cache_write_tokens": number,"cached_input_tokens": number,"call_key": string | null,"connection_tier": string,"created_at": string,"error_code": string | null,"estimated_cost_usd": number,"feature": string,"id": string,"input_cost_usd": number,"input_tokens": number,"job_type": string,"model": string,"model_tier": string,"occurred_at": string,"outcome": string,"output_cost_usd": number,"output_tokens": number,"period_month": string,"price_table_version": string,"provider": string,"reasoning_tokens": number | null,"usage_source": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier": string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd": number,"feature": string,"id"?: string,"input_tokens"?: number,"job_type": string,"model": string,"model_tier": string,"occurred_at"?: string,"outcome": string,"output_tokens"?: number,"period_month"?: string,"price_table_version": string,"provider": string,"reasoning_tokens"?: number | null,"usage_source": string,"user_id"?: string
+                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier": string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd": number,"feature": string,"id"?: string,"input_cost_usd"?: number,"input_tokens"?: number,"job_type": string,"model": string,"model_tier": string,"occurred_at"?: string,"outcome": string,"output_cost_usd"?: number,"output_tokens"?: number,"period_month"?: string,"price_table_version": string,"provider": string,"reasoning_tokens"?: number | null,"usage_source": string,"user_id"?: string
                   }
                   Update: {
-                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd"?: number,"feature"?: string,"id"?: string,"input_tokens"?: number,"job_type"?: string,"model"?: string,"model_tier"?: string,"occurred_at"?: string,"outcome"?: string,"output_tokens"?: number,"period_month"?: string,"price_table_version"?: string,"provider"?: string,"reasoning_tokens"?: number | null,"usage_source"?: string,"user_id"?: string
+                    "ai_job_id"?: string | null,"application_project_id"?: string | null,"cache_write_tokens"?: number,"cached_input_tokens"?: number,"call_key"?: string | null,"connection_tier"?: string,"created_at"?: string,"error_code"?: string | null,"estimated_cost_usd"?: number,"feature"?: string,"id"?: string,"input_cost_usd"?: number,"input_tokens"?: number,"job_type"?: string,"model"?: string,"model_tier"?: string,"occurred_at"?: string,"outcome"?: string,"output_cost_usd"?: number,"output_tokens"?: number,"period_month"?: string,"price_table_version"?: string,"provider"?: string,"reasoning_tokens"?: number | null,"usage_source"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -559,16 +559,44 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"profiles": {
+                },"profile_job_interests": {
                   Row: {
-                    "active_ai_provider": string | null,"career_data_updated_at": string | null,"created_at": string,"desired_job_title": string | null,"display_name": string | null,"id": string,"inactivity_notice_sent_at": string | null,"interested_industries": (string)[],"last_active_at": string | null,"total_years_of_experience": number | null,"updated_at": string
+                    "created_at": string,"job_family": string,"job_role": string | null,"sort_order": number,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id": string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"job_family": string,"job_role"?: string | null,"sort_order": number,"user_id"?: string
                   }
                   Update: {
-                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"desired_job_title"?: string | null,"display_name"?: string | null,"id"?: string,"inactivity_notice_sent_at"?: string | null,"interested_industries"?: (string)[],"last_active_at"?: string | null,"total_years_of_experience"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"job_family"?: string,"job_role"?: string | null,"sort_order"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"profile_options": {
+                  Row: {
+                    "category": string,"code": string,"created_at": string,"is_active": boolean,"label": string,"parent_code": string | null,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category": string,"code": string,"created_at"?: string,"is_active"?: boolean,"label": string,"parent_code"?: string | null,"sort_order": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "category"?: string,"code"?: string,"created_at"?: string,"is_active"?: boolean,"label"?: string,"parent_code"?: string | null,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"profiles": {
+                  Row: {
+                    "active_ai_provider": string | null,"career_data_updated_at": string | null,"created_at": string,"display_name": string | null,"highest_education_degree": string | null,"highest_education_end_month": string | null,"highest_education_gpa": string | null,"highest_education_major": string | null,"highest_education_school_name": string | null,"highest_education_start_month": string | null,"highest_education_status": string | null,"id": string,"inactivity_notice_sent_at": string | null,"interested_company_type": string | null,"interested_industry": string | null,"job_search_status": string | null,"last_active_at": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"display_name"?: string | null,"highest_education_degree"?: string | null,"highest_education_end_month"?: string | null,"highest_education_gpa"?: string | null,"highest_education_major"?: string | null,"highest_education_school_name"?: string | null,"highest_education_start_month"?: string | null,"highest_education_status"?: string | null,"id": string,"inactivity_notice_sent_at"?: string | null,"interested_company_type"?: string | null,"interested_industry"?: string | null,"job_search_status"?: string | null,"last_active_at"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "active_ai_provider"?: string | null,"career_data_updated_at"?: string | null,"created_at"?: string,"display_name"?: string | null,"highest_education_degree"?: string | null,"highest_education_end_month"?: string | null,"highest_education_gpa"?: string | null,"highest_education_major"?: string | null,"highest_education_school_name"?: string | null,"highest_education_start_month"?: string | null,"highest_education_status"?: string | null,"id"?: string,"inactivity_notice_sent_at"?: string | null,"interested_company_type"?: string | null,"interested_industry"?: string | null,"job_search_status"?: string | null,"last_active_at"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -748,7 +776,7 @@ isOneToOne: false
           Views: {
             "ai_provider_keys_public": {
                   Row: {
-                    "connection_tier": string,"created_at": string,"id": string,"key_last4": string,"last_failure_at": string | null,"last_failure_cause": string | null,"last_verified_at": string | null,"provider": string,"status": string,"updated_at": string
+                    "connection_tier": string | null,"created_at": string | null,"id": string | null,"key_last4": string | null,"last_failure_at": string | null,"last_failure_cause": string | null,"last_verified_at": string | null,"provider": string | null,"status": string | null,"updated_at": string | null
                   }
                   ComputedFields: never
                   Insert: {
@@ -831,6 +859,11 @@ isOneToOne: false
                            },
 "complete_interview_questions":
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
+                           },
+"compute_total_experience_months":
+{ Args: { "p_as_of": string }; Returns: {
+              "as_of_month": string,"open_ended_experience_count": number,"total_months": number
+            }[]
                            },
 "create_application_project":
 { Args: { "p_company_name"?: string,"p_deadline"?: string,"p_id": string,"p_name"?: string,"p_position_title"?: string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json }; Returns: Json
@@ -979,6 +1012,9 @@ isOneToOne: false
                            },
 "save_interview_question":
 { Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
+                           },
+"save_profile_basics":
+{ Args: { "p_expected_updated_at"?: string,"p_job_interests"?: Json,"p_values": Json }; Returns: Json
                            },
 "save_project_deliverable":
 { Args: { "p_applied_proposals"?: Json,"p_body": string,"p_client_id"?: string,"p_expected_updated_at"?: string,"p_project_deliverable_id": string,"p_project_id": string,"p_title": string }; Returns: Json

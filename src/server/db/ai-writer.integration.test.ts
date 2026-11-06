@@ -20,7 +20,8 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
   let admin: SupabaseClient<Database>;
   const users: { id: string; email: string }[] = [];
 
-  async function createUser(label: string, displayName: string, jobTitle: string) {
+  // R13 (DM 2.1.1): the three old 내 정보 columns are dropped; display_name is what is left.
+  async function createUser(label: string, displayName: string) {
     const email = `ai-writer-${label}-${crypto.randomUUID()}@example.test`;
     const password = `pw-${crypto.randomUUID()}`;
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
@@ -33,7 +34,7 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
     if (signIn.error) throw new Error(`signIn failed: ${signIn.error.code}`);
     const upd = await userClient
       .from("profiles")
-      .update({ display_name: displayName, desired_job_title: jobTitle, total_years_of_experience: 4 })
+      .update({ display_name: displayName })
       .eq("id", data.user.id);
     if (upd.error) throw new Error(`profile update failed: ${upd.error.code}`);
     return data.user.id;
@@ -54,8 +55,8 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
   beforeAll(async () => {
     // Service role is used only to create and delete test users.
     admin = createClient<Database>(s.url, s.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    userA = await createUser("a", "홍길동", "백엔드 개발자");
-    userB = await createUser("b", "김철수", "디자이너");
+    userA = await createUser("a", "홍길동");
+    userB = await createUser("b", "김철수");
   });
 
   afterAll(async () => {
@@ -63,14 +64,24 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
     resetServerEnvCache();
   });
 
+  // R13 (DM 2.1.5, SD-6 / migration ⑬): 남은 app_ai_writer 컬럼 grant는 `id`·`career_data_updated_at`·
+  // `updated_at`뿐이다 (`active_ai_provider`는 grant 목록에 없다 — 게이트는 RPC가 본다).
   it("reads the allowed profile columns of its own user", async () => {
     const ai = createAiWriterClient(userA);
-    const { data, error } = await ai
-      .from("profiles")
-      .select("id, desired_job_title, total_years_of_experience, interested_industries, career_data_updated_at");
+    const { data, error } = await ai.from("profiles").select("id, career_data_updated_at, updated_at");
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
-    expect(data?.[0]).toMatchObject({ id: userA, desired_job_title: "백엔드 개발자", total_years_of_experience: 4 });
+    expect(data?.[0]).toMatchObject({ id: userA });
+  });
+
+  it("cannot read the 내 정보 columns, the pair table, or the option table (SD-6)", async () => {
+    const ai = createAiWriterClient(userA);
+    for (const columns of ["display_name", "active_ai_provider", "job_search_status", "interested_company_type", "interested_industry", "highest_education_school_name"]) {
+      const res = await ai.from("profiles").select(columns);
+      expect(res.error?.code, columns).toBe("42501");
+    }
+    expect((await ai.from("profile_job_interests").select("sort_order")).error?.code).toBe("42501");
+    expect((await ai.from("profile_options").select("code")).error?.code).toBe("42501");
   });
 
   it("cannot read display_name (column grant)", async () => {
@@ -93,8 +104,8 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
     expect(data).toEqual([]);
 
     const aiB = createAiWriterClient(userB);
-    const own = await aiB.from("profiles").select("id, desired_job_title");
-    expect(own.data).toEqual([{ id: userB, desired_job_title: "디자이너" }]);
+    const own = await aiB.from("profiles").select("id, career_data_updated_at");
+    expect(own.data).toEqual([{ id: userB, career_data_updated_at: null }]);
   });
 
   it("cannot read consents", async () => {
@@ -106,7 +117,7 @@ describe.skipIf(!ready)("app_ai_writer client (local stack)", () => {
 
   it("cannot update profiles", async () => {
     const ai = createAiWriterClient(userA);
-    const { error } = await ai.from("profiles").update({ desired_job_title: "changed" }).eq("id", userA);
+    const { error } = await ai.from("profiles").update({ display_name: "changed" }).eq("id", userA);
     expect(error?.code).toBe("42501");
   });
 

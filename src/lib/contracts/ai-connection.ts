@@ -182,7 +182,7 @@ export type KeyCheckOutcome = {
 };
 
 export const KEY_FORMAT_MESSAGE: Record<AiProvider, string> = {
-  openai: "OpenAI 키 형식이 아니에요. 키를 다시 붙여넣어 주세요.",
+  openai: "GPT 키 형식이 아니에요. 키를 다시 붙여넣어 주세요.", // UI42-5: 화면 표기 GPT
   gemini: "Google Gemini 키 형식이 아니에요. 키를 다시 붙여넣어 주세요.",
   anthropic: "Anthropic Claude 키 형식이 아니에요. 키를 다시 붙여넣어 주세요.",
 };

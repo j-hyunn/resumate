@@ -26,7 +26,7 @@ import { getShellBadges } from "./shell"
 import { getRunningAiJobCount, signOut } from "./account"
 import type { AccountDeletionErrorCode } from "@/types/db"
 import { withAiGuard } from "./ai-guard"
-import { getAiPriceTables, getAiUsageSummary } from "./ai-usage"
+import { getAiPriceTables, getAiUsageSummaryV412 } from "./ai-usage"
 import {
   changeProviderTier,
   deleteProviderKey,
@@ -205,8 +205,9 @@ export async function getRunningAiJobCountAction(provider?: AiProviderName) {
   return getRunningAiJobCount(provider)
 }
 
+/** S-24 ② 사용량 블록: `providers[]` 교차 집계 (DM v4.12 2.9.5) */
 export async function getAiUsageSummaryAction(periodMonth?: string) {
-  return getAiUsageSummary(periodMonth)
+  return getAiUsageSummaryV412(periodMonth)
 }
 
 export async function recordDataUseConsentAction(input: {

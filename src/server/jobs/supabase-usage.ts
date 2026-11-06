@@ -32,6 +32,9 @@ export function toUsageInsert(row: UsageRecordRow): TablesInsert<"ai_usage_recor
     outcome: row.outcome,
     error_code: row.errorCode,
     price_table_version: row.priceTableVersion,
+    // v4.12 (DM 2.9.2, SD-A11): 세 값을 함께 insert 한다 (합계 = 두 값의 합).
+    input_cost_usd: row.inputCostUsd,
+    output_cost_usd: row.outputCostUsd,
     estimated_cost_usd: row.estimatedCostUsd,
   };
 }

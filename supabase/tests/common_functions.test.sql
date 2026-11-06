@@ -18,7 +18,7 @@ select isnt((select career_data_updated_at from public.profiles
               where id = 'aaaaaaaa-0000-0000-0000-000000000001'), null, 'career write touches profile');
 
 -- set_updated_at
-update public.profiles set updated_at = '2000-01-01', desired_job_title = 'x'
+update public.profiles set updated_at = '2000-01-01', display_name = 'x'
  where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 select ok((select updated_at > '2000-01-01' from public.profiles
             where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'set_updated_at overrides updated_at');

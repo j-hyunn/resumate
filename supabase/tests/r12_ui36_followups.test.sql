@@ -6,11 +6,14 @@ create extension if not exists pgtap with schema extensions;
 select plan(21);
 
 -- 1. policy_versions 2026-11-05 (no reconsent) is the latest effective version of each type
-select is((select count(*)::int from public.policy_versions where version = '2026-11-05' and not requires_reconsent), 3,
+-- R13 added policy_type 'ai_data_use' with the same version string; this assertion stays about the R12 three.
+select is((select count(*)::int from public.policy_versions
+            where version = '2026-11-05' and not requires_reconsent and policy_type <> 'ai_data_use'), 3,
           'three 2026-11-05 policy versions without reconsent');
 select is((select array_agg(policy_type order by policy_type)
              from (select distinct on (policy_type) policy_type, version
-                     from public.policy_versions where effective_at <= now()
+                     from public.policy_versions
+                    where effective_at <= now() and policy_type <> 'ai_data_use'
                     order by policy_type, effective_at desc) latest
             where version = '2026-11-05'),
           array['cross_border_transfer', 'privacy', 'terms'], '2026-11-05 is the current version of all three');

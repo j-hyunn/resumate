@@ -2,7 +2,7 @@
 
 /**
  * C-10 복귀 배너 (02 C-10, design-system 3.9). Rendered by the shell on every 커리어 screen
- * (S-04, S-08~S-12, S-34~S-36). Re-checks readiness after each save:
+ * (S-08~S-12, S-34~S-36). Re-checks readiness after each save:
  * career forms call `notifyCareerSaved()` after a successful save.
  */
 import * as React from "react"

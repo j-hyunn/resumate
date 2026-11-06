@@ -1,10 +1,16 @@
 /**
  * AI spec C-3 근거 형식 table as typed constants (V-2 and the quote-required rule).
  * `writing_chat_message` is AI-12 only and never stored in evidence_links (DM-15).
+ *
+ * (v4.12, SD-6) **`profile` (`PROFILE`) is gone.** No profile value reaches a
+ * prompt, so the source type was dropped from C-3: a model output that still
+ * cites it fails V-1 (no `PROFILE` in the pack) and V-2 (unknown source type).
+ * The DB CHECK list keeps `profile` and existing `evidence_links` rows stay as
+ * they are (SD-A19) — only this code-side allow list narrows; an insert trigger
+ * rejects new rows (DM 2.8).
  */
 
 export const EVIDENCE_SOURCE_TYPES = [
-  "profile",
   "experience",
   "education",
   "project",
@@ -33,11 +39,6 @@ type Rule = {
 };
 
 export const EVIDENCE_RULES: Readonly<Record<EvidenceSourceType, Rule>> = {
-  profile: {
-    ref: /^PROFILE$/,
-    fields: ["desired_job_title", "total_years_of_experience", "interested_industries"],
-    quoteRequired: [],
-  },
   experience: { ref: /^EXP-\d+$/, fields: ["job_rank", "job_position", "department", "summary", "period"], quoteRequired: ["summary"] },
   education: {
     ref: /^EDU-\d+$/,
@@ -97,7 +98,6 @@ export function isReflectionEvidence(e: { source_type: string; field?: string | 
  * their own. Features can pass their own set.
  */
 export const CAREER_SUPPORT_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new Set<EvidenceSourceType>([
-  "profile",
   "experience",
   "education",
   "project",
@@ -108,27 +108,19 @@ export const CAREER_SUPPORT_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new 
 ]);
 
 /**
- * AI spec C-3 V-4 (v4.3, A10 — 확정 2026-11-05): the profile's wishes
- * (희망 직무·관심 산업) say what the user wants, not what they did. They are
- * context only and never count as support for a judgment, strength, or
- * positioning. `total_years_of_experience` stays a fact (연차 판정 근거).
- */
-export const PROFILE_PREFERENCE_FIELDS: readonly string[] = ["desired_job_title", "interested_industries"];
-
-export function isProfilePreferenceEvidence(e: { source_type: string; field?: string | null }): boolean {
-  return e.source_type === "profile" && e.field != null && PROFILE_PREFERENCE_FIELDS.includes(e.field);
-}
-
-/**
  * Whether one (validated) evidence object counts as support for a claim about
- * the user (V-4): its source type is in `types` (default: career sources) and
- * it is not a profile wish (A10). Reflections (C-9) are checked separately.
+ * the user (V-4): its source type is in `types` (default: career sources).
+ * (v4.12, SD-6) V-4 has no exception list any more — the profile-wish carve-out
+ * (A10) is gone with the profile block, so the rule is just "a judgment item
+ * with no valid evidence has zero evidence". Reflections (C-9) are checked
+ * separately (V-8), and `computed_total_months` is not an evidence object at
+ * all, so it never enters this count (C-1).
  */
 export function isCareerSupportEvidence(
   e: { source_type: string; field?: string | null },
   types: ReadonlySet<EvidenceSourceType> = CAREER_SUPPORT_SOURCE_TYPES,
 ): boolean {
-  return isEvidenceSourceType(e.source_type) && types.has(e.source_type) && !isProfilePreferenceEvidence(e);
+  return isEvidenceSourceType(e.source_type) && types.has(e.source_type);
 }
 
 /**

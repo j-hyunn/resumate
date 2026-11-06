@@ -294,7 +294,7 @@ export function AiOutageAlert({
   action,
   className,
 }: {
-  /** active provider display name (Gemini / Claude / OpenAI) */
+  /** active provider display name (Gemini / Claude / GPT) */
   providerLabel: string
   /** status-page link + dismiss button */
   action?: React.ReactNode

@@ -7,7 +7,7 @@
  */
 import type { InterviewType, PolicyType, ProjectStarField } from "@/types/db"
 import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
-import type { SettingsSectionId } from "@/components/account/settings-section-list"
+import type { SettingsTabId } from "@/components/account/settings-section-list"
 
 type Id = string
 
@@ -32,7 +32,6 @@ export const routes = {
 
   // 커리어 — A2
   career: () => "/career", // S-08
-  profile: () => "/career/profile", // S-04
   /**
    * S-08 with the C-22 add modal open for `kind` (`?new={kind}`, [UI-가정]) — S-09 새 경력 is that modal (OD-C2).
    * The retired `/career/experiences/new` · `/career/educations/new` addresses redirect here (next.config.ts ← legacy-redirects.ts).
@@ -101,13 +100,13 @@ export const routes = {
 
   // 설정 — A1
   /**
-   * S-24 설정 다이얼로그 (S-40 AI 연결 · S-42 AI 사용량 are its sections; there are no settings
-   * pages). Inside a shell use <SettingsLink> / openSettings(): it opens the dialog in place. This URL
-   * is the fallback for screens without the dialog (S-41 focus screen, S-25 취소): S-08 with
-   * `?settings={section}` — the shell opens the dialog on that section and drops the query.
-   * `provider` scrolls to that S-40 card (C-19 경고 배지 → 해당 카드, UQ-208 / UQ-267).
+   * S-24 설정 다이얼로그 — 왼쪽 탭 4개 (계정 · AI 연결 · 약관 · 개선 요청, UX v5.17). S-40·S-42는 AI 연결 탭의
+   * 두 블록이고 설정 페이지는 없다. Inside a shell use <SettingsLink> / openSettings(): it opens the dialog in
+   * place. This URL is the fallback for screens without the dialog (S-41 focus screen, S-25 취소, 폐기된
+   * `/career/profile`): S-08 with `?settings={tab}` — the shell opens that tab and drops the query.
+   * `provider` scrolls to that S-40 row (C-19 경고 배지 → 해당 행, `#provider-row-{p}`).
    */
-  settings: (section?: SettingsSectionId, provider?: "gemini" | "anthropic" | "openai") =>
+  settings: (section?: SettingsTabId, provider?: "gemini" | "anthropic" | "openai") =>
     withQuery("/career", { settings: section ?? "account", provider }), // S-24 · S-40 · S-42
   /**
    * S-41 키 연결 단계 (focus screen outside the shell, leader decision Q-5).

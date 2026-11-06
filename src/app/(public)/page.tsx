@@ -44,7 +44,7 @@ export default function Page() {
         </p>
         {/* 02 S-01 v5 */}
         <p className="text-sm leading-5 text-muted-foreground">
-          AI는 본인 키(OpenAI·Gemini·Claude)로 쓰고, Gemini는 무료 키로 시작할 수 있어요
+          AI는 본인 키(GPT·Gemini·Claude)로 쓰고, Gemini는 무료 키로 시작할 수 있어요
         </p>
         <div className="pt-2">
           <Button asChild size="lg">

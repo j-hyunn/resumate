@@ -10,7 +10,6 @@ const T = "2026-01-10T00:00:00.000Z";
 const T2 = "2026-02-01T00:00:00.000Z";
 
 export const IDS = {
-  profile: "00000000-0000-4000-8000-000000000001",
   expA: "10000000-0000-4000-8000-00000000000a",
   expB: "10000000-0000-4000-8000-00000000000b",
   expDraft: "10000000-0000-4000-8000-00000000000d",
@@ -31,15 +30,21 @@ export const IDS = {
   sklOrphan: "60000000-0000-4000-8000-000000000004",
 } as const;
 
+/**
+ * (v4.12, SD-2) What `private.compute_total_experience_months(user, 2026-11-01)`
+ * returns for these rows: 2019-01…2021-02 (26) + 2021-03…2026-10 (68, ongoing
+ * through the pack's asOf) = 94 months, no overlap, no open-ended experience.
+ * The `draft` experience is excluded by the function, like the pack.
+ */
+export const TOTAL_EXPERIENCE_FIXTURE = {
+  totalMonths: 94,
+  openEndedExperienceCount: 0,
+  asOfMonth: { year: 2026, month: 10 },
+} as const;
+
 export function careerRowsFixture(): CareerRows {
   return {
-    profile: {
-      id: IDS.profile,
-      desired_job_title: "백엔드 개발자",
-      total_years_of_experience: 5,
-      interested_industries: ["핀테크", "커머스"],
-      updated_at: "2026-03-15T00:00:00.000Z",
-    },
+    totalExperience: { ...TOTAL_EXPERIENCE_FIXTURE, asOfMonth: { ...TOTAL_EXPERIENCE_FIXTURE.asOfMonth } },
     experiences: [
       {
         id: IDS.expB,

@@ -10,9 +10,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:reset": "supabase db reset",
-    "db:test": "supabase test db",
-    "db:types": "supabase gen types typescript --local > src/server/db/database.types.ts"
+    "db:reset": "pnpm exec supabase db reset",
+    "db:test": "pnpm exec supabase test db",
+    "db:types": "pnpm exec supabase gen types typescript --local > src/server/db/database.types.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

@@ -22,6 +22,9 @@ export const PublicEnvSchema = z.object({
   // preview the request origin is used when unset. Must be on Supabase Auth's
   // redirect allow-list either way.
   NEXT_PUBLIC_SITE_URL: z.url().optional(),
+  // R13 (SD-3, F-COM-11): 개선 요청 탭이 여는 외부 폼 주소. 빈 값·미설정이면 화면은 "준비 중"
+  // (`[결정 필요]` SD-Q1). 선택 값이므로 설정하지 않아도 페이지가 뜬다.
+  NEXT_PUBLIC_FEEDBACK_FORM_URL: z.url().optional(),
 });
 
 export type PublicEnv = z.infer<typeof PublicEnvSchema>;

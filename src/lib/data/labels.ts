@@ -363,11 +363,12 @@ export function formatRelative(iso: string, now = Date.now()): string {
 
 /**
  * 으로/로 particle by final consonant (ㄹ받침 → 로). v5.3 (UQ-450): Latin words ending in a vowel /
- * l / r / y read without a 받침 ("Gemini로", "Claude로", "OpenAI로"); digits by their Korean
- * reading; anything else → "(으)로".
+ * l / r / y read without a 받침 ("Gemini로", "Claude로"); an upper-case acronym is read letter by letter
+ * ("GPT로" = 지피티로, only M·N end in a 받침 → "으로"); digits by their Korean reading; anything else → "(으)로".
  */
 export function directionParticle(word: string): string {
   const ch = word.trim().slice(-1)
+  if (/[A-Z]{2}$/.test(word.trim())) return /[MN]/.test(ch) ? "으로" : "로"
   if (/[aeiouylrAEIOUYLR]/.test(ch)) return "로"
   if (/[0-9]/.test(ch)) return "036".includes(ch) ? "으로" : "로"
   const last = ch.charCodeAt(0)
@@ -423,11 +424,6 @@ export function actionFailedMessage(action: string): string {
  */
 export const AI_TRAINING_NOTICE =
   "Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 공급자의 데이터 사용은 연결한 공급자·등급의 정책을 따라요"
-
-/** S-42 displayed "입력 토큰" = input + cache read + cache write (UQ-203, see ai-usage.ts) */
-export function displayInputTokens(t: { input_tokens: number; cached_input_tokens: number; cache_write_tokens: number }): number {
-  return t.input_tokens + t.cached_input_tokens + t.cache_write_tokens
-}
 
 /**
  * UQ-350 — FL-19 "{원래 기능}으로 돌아가기" / S-40 "{원래 기능}으로 돌아가려면 …" feature names.

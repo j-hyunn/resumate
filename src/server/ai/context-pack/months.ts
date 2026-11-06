@@ -45,25 +45,3 @@ export function currentMonthInSeoul(now: Date = new Date()): YearMonth {
   const month = Number(parts.find((p) => p.type === "month")?.value);
   return { year, month };
 }
-
-/** Total months covered by intervals, overlaps counted once. */
-export function mergedMonths(intervals: ReadonlyArray<{ start: YearMonth; end: YearMonth }>): number {
-  const sorted = intervals
-    .map((i) => [index(i.start), index(i.end)] as const)
-    .filter(([s, e]) => e >= s)
-    .sort((a, b) => a[0] - b[0]);
-  let total = 0;
-  let curStart = -1;
-  let curEnd = -2;
-  for (const [s, e] of sorted) {
-    if (s > curEnd + 1) {
-      if (curEnd >= curStart && curStart >= 0) total += curEnd - curStart + 1;
-      curStart = s;
-      curEnd = e;
-    } else if (e > curEnd) {
-      curEnd = e;
-    }
-  }
-  if (curStart >= 0) total += curEnd - curStart + 1;
-  return total;
-}

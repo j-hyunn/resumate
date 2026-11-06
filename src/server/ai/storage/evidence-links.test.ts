@@ -28,7 +28,8 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
           { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" },
           { source_type: "jd_sentence", ref: "S1" },
           { source_type: "jd_requirement", ref: "REQ-1" },
-          { source_type: "profile", ref: "PROFILE", field: "desired_job_title" },
+          // (v4.12, SD-6) `profile` is no longer a source type: V-2 drops it before storage.
+          { source_type: "profile" as never, ref: "PROFILE", field: "desired_job_title" },
         ],
       },
       { aliases, learnings: "forbidden" },
@@ -60,16 +61,9 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
         source_locator: { sid: "S1", start: 0, end: raw.length },
       }),
       expect.objectContaining({ sort_order: 2, source_type: "jd_requirement", source_id: "req-uuid", source_field: null, source_snapshot_at: "2026-03-01T00:00:00.000Z" }),
-      // QA-S3-06: profile snapshot = profiles.updated_at (not career_data_updated_at).
-      expect.objectContaining({
-        sort_order: 3,
-        source_type: "profile",
-        source_id: IDS.profile,
-        source_field: "desired_job_title",
-        quote: null,
-        source_snapshot_at: "2026-03-15T00:00:00.000Z",
-      }),
     ]);
+    // No `profile` row is ever written any more (DM 2.8 insert trigger rejects it).
+    expect(rows.some((r) => r.source_type === "profile")).toBe(false);
     for (const row of rows) expect(row).not.toHaveProperty("user_id");
   });
 

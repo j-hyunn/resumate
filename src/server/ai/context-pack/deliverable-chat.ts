@@ -75,7 +75,6 @@ export type DeliverableChatTurnInput = {
   project: DeliverableParentProject;
   /** Titles of the project's other deliverables (this one excluded; capped at 20 here). Not a source. */
   siblingTitles: readonly string[];
-  desiredJobTitle: string | null;
   /** Turn request `requested_slot` (validated against DELIVERABLE_SLOTS by the api). */
   requestedSlot: DeliverableSlot | null;
   requestedAction: DeliverableRequestedAction | null;
@@ -284,7 +283,6 @@ export function buildDeliverableChatContext(input: DeliverableChatTurnInput): De
     `deliverable_title: ${esc(title)}`,
     `writing_kind: ${kind ? `${kind} (${WRITING_KIND_LABELS[kind]})` : "(아직 모름)"}`,
     `project_name: ${esc(input.project.name)}`,
-    `desired_job_title: ${input.desiredJobTitle ? esc(input.desiredJobTitle) : "(없음)"}`,
     "</chat>",
   ];
   const sharedBlocks: AiTextBlock[] = [{ text: chat.join("\n") }];

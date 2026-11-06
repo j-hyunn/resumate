@@ -27,11 +27,17 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is((select count(*)::int from public.profiles), 1, 'A sees only own profile');
 select is((select id from public.profiles), 'aaaaaaaa-0000-0000-0000-000000000001'::uuid, 'the visible profile is A''s');
 
-select lives_ok($$update public.profiles set display_name = 'A', desired_job_title = 'PM',
-                    total_years_of_experience = 5, interested_industries = '{fintech}'
+-- R13 (DM v4.12 §2.1.1): desired_job_title / total_years_of_experience / interested_industries are dropped;
+-- the 내 정보 columns take their place and are updatable by the user session.
+select lives_ok($$update public.profiles set display_name = 'A', job_search_status = 'employed_considering',
+                    interested_company_type = 'startup_seed_series_a', interested_industry = 'b2b_saas',
+                    highest_education_school_name = '한국대학교', highest_education_degree = 'bachelor',
+                    highest_education_status = 'graduated',
+                    highest_education_start_month = '2016-03-01', highest_education_end_month = '2020-02-01',
+                    highest_education_major = '컴퓨터공학', highest_education_gpa = '3.8/4.5'
                    where id = 'aaaaaaaa-0000-0000-0000-000000000001'$$,
-                'A can update the 4 editable fields');
-select is((select desired_job_title from public.profiles), 'PM', 'A update applied');
+                'A can update the 내 정보 columns');
+select is((select interested_industry from public.profiles), 'b2b_saas', 'A update applied');
 
 update public.profiles set display_name = 'hacked' where id = 'bbbbbbbb-0000-0000-0000-000000000002';
 select throws_ok($$update public.profiles set career_data_updated_at = now()
@@ -60,7 +66,7 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select is((select count(*)::int from public.profiles), 1, 'app_ai_writer sees only the JWT user''s profile');
 select throws_ok($$select display_name from public.profiles$$, '42501', null,
                  'app_ai_writer cannot read display_name');
-select throws_ok($$update public.profiles set desired_job_title = 'x'$$, '42501', null,
+select throws_ok($$update public.profiles set display_name = 'x'$$, '42501', null,
                  'app_ai_writer cannot update profiles');
 
 reset role;

@@ -84,7 +84,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 ## 남은 일
 
-- **새 설정 다이얼로그 후속 ★ (2026-11-05)**: 백엔드는 DM 11.7 14개 항목(`profile_options`·`profile_job_interests` 신설, `profiles` 컬럼 추가·백필·**drop(파괴적)**, `save_profile_basics`, `get_data_readiness` 축소, `compute_total_experience_months`, 사용량 비용 2컬럼 + 교차 집계 RPC, `policy_versions` `ai_data_use`, `evidence_links` 트리거·허용 출처 5종, `app_ai_writer` 권한 정리), UI는 S-24 탭 4개 재구현·S-04 폐기·`/policies/ai_data_use`. **컬럼 drop은 readiness·컨텍스트 팩 배포 뒤에만 올린다.** 목록은 [decisions.md](decisions.md) 4.16 — **백엔드 구현 2026-11-05 (R13) · UI 구현 2026-11-06 (42 런, 브라우저 미확인)**, 둘 다 PR #58, 원격 미반영 — 2단 배포
+- **새 설정 다이얼로그 후속 ★ (2026-11-05)**: 백엔드는 DM 11.7 14개 항목(`profile_options`·`profile_job_interests` 신설, `profiles` 컬럼 추가·백필·**drop(파괴적)**, `save_profile_basics`, `get_data_readiness` 축소, `compute_total_experience_months`, 사용량 비용 2컬럼 + 교차 집계 RPC, `policy_versions` `ai_data_use`, `evidence_links` 트리거·허용 출처 5종, `app_ai_writer` 권한 정리), UI는 S-24 탭 4개 재구현·S-04 폐기·`/policies/ai_data_use`. **컬럼 drop은 readiness·컨텍스트 팩 배포 뒤에만 올린다.** 목록은 [decisions.md](decisions.md) 4.16 — **백엔드 R13 · UI 42·43 런 운영 반영 2026-11-06** (DB 1단 + PR #58 머지 `cd81538`). 남은 것: DB 2단(옛 컬럼 drop) · **처리방침 개정 시행(법무 확인, 출시 전 필수 — 지금 운영은 개정 전 처리방침으로 새 항목을 받고 있다)**
 
 
 - **열린 결정 일괄 확정 후속 ★ (2026-11-05)**: 백엔드는 DM 11.6(면접 보존 FK·트리거·가드, 점수 `d14.v1`·백필, `p_client_id`, 본문 해시, 답 없는 메시지 재응답, `ai_disclosures` `v2026-11-05`), UI는 S-22 점수·S-37 삭제된 자기소개서·C-05 문구·첫 저장 토스트·되돌리기 제거·고정 칩·다시 보내기·고지 상수 이동·국외 이전 고지 개정안 반영·UX 5.1i 문구. 목록은 [decisions.md](decisions.md) 4.12

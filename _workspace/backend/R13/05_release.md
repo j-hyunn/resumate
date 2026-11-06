@@ -134,3 +134,22 @@ supabase db push
 ## `ai_data_use` 문서 버전 — 확정
 
 `20261113002500`의 `ai_data_use` 행(`version`·`effective_at` = `2026-11-05`)을 **그대로 출시하기로 확정했다**(사용자 2026-11-05, decisions 3.23 R13-U2). 마이그레이션 변경 없음. 나중에 법무 확인으로 값이 바뀌면 **그 행을 고치지 말고 새 행을 추가한다**(`policy_versions`는 버전 이력이고 `requires_reconsent = false`라 게이트에 영향이 없다).
+
+## 1단 결과 — 2026-11-06 반영 완료
+
+| 단계 | 결과 |
+|------|------|
+| 사전 확인 | 원격 마지막 적용분 `20261113001400`, `main`에 새 마이그레이션 없음. **push만 먼저 하면 운영이 깨진다는 것을 확인**(main 코드의 AI 팩이 `profiles` 옛 컬럼을 `app_ai_writer`로 읽음 → `…002700`이 권한 회수 / readiness 계약이 `profile_filled` 필수 → `…002200`이 삭제) → push와 머지를 연달아 함 |
+| 처리방침 | **사용자 결정(2026-11-06): 처리방침을 고치지 않고 오늘 반영.** 머지 시점부터 법무 확인을 거친 개정판이 시행될 때까지, 시행 중인 처리방침(2026-11-05판)에 없는 내 정보 항목을 받는 기간이 생긴다(현행 문장 "학점·성적을 받지 않습니다"와 새 학점 칸도 어긋난다). 개정 초안 `docs/legal/drafts/privacy-policy-2026-11-06.md` — **출시 전 필수** |
+| drop 파일 | push 직전 작업 폴더에서만 `_workspace/backend/R13/pending/`으로 옮김 → push 뒤 되돌림(git 이력 불변) |
+| dry-run | R13 15개만, `…002800` 없음 (CLI 2.121.0, 로그인 토큰으로 연결 — DB 비밀번호 입력 없음) |
+| `db push` | 사용자가 터미널에서 Yes 확인 → **15개 모두 적용** |
+| 머지 | PR #58 → `main` 머지 커밋 `cd81538` (push 직후) |
+| `list_migrations` | 원격 마지막 = `20261113002760`, R13 15개 모두 기록 |
+| 데이터 | `profile_options` 101행 · `policy_versions` `ai_data_use` 1행 · `interested_industry` 백필 0건(원격에 옛 `interested_industries` 값이 있는 행 0) · `ai_usage_records` 39행 중 비용 분할이 비어 있는 행(가격표 있음 + 토큰 있음 + 0/0) **0건** · 합계가 저장 `estimated_cost_usd`와 다른 행 13건, **차이는 모두 정확히 0.000001 USD**(옛 단일 반올림 vs 새 양쪽 반올림 — 설계대로 저장 합계는 고치지 않음) |
+| advisors · security | 새 항목 1건: `public.compute_total_experience_months`가 `authenticated`로 실행 가능한 security definer — **의도**(호출자 자신의 수치만 계산하는 래퍼, 다른 사용자 id 인자 없음 — R13-DB-2). 나머지는 기존 항목 그대로(security definer RPC 22건, `account_deletion_logs` 정책 없음 INFO, Auth 설정 2건) |
+| advisors · performance | 새 항목: 새 인덱스 `ai_usage_records_user_period_provider_feature_idx` 미사용(INFO — 막 생김). 나머지 기존 그대로 |
+| Vercel | `main` `cd81538` 운영 배포 **성공**(GitHub 커밋 상태 "Deployment has completed"). Vercel MCP는 이 세션에서 403이라 런타임 오류 조회는 하지 못함 — 운영에서 AI 실행 한 번·설정 다이얼로그 열기를 직접 확인 권장 |
+
+**2단(drop)은 아직이다.** 운영에서 1단이 정상인 것을 확인한 뒤, 위 "2단 — 파괴적 drop" 절차대로(`migration list --linked`에서 Local 전용이 `20261113002800` 하나인지 확인 → `db push --dry-run` → `db push`). 사용자 승인은 2026-11-05에 받았다(R13-U1).
+

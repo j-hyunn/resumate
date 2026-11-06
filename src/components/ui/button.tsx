@@ -11,8 +11,9 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
           "border-input bg-card hover:bg-accent hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        // bg-tint = primary 10% (hover 15%) unless a container sets --tint-strength (S-24 설정 다이얼로그, DR-14)
         secondary:
-          "bg-primary/10 text-primary-text hover:bg-primary/15 aria-expanded:bg-primary/15 aria-expanded:text-primary-text",
+          "bg-tint text-primary-text hover:bg-tint-hover aria-expanded:bg-tint-hover aria-expanded:text-primary-text",
         // data-pending (v4, UQ-712): a not-yet-reached step (writing-chat step bar) stays muted until hovered
         ghost:
           "hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text aria-[current]:bg-primary/10 aria-[current]:font-medium aria-[current]:text-primary-text aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text data-pending:not-hover:text-muted-foreground",
@@ -25,9 +26,6 @@ const buttonVariants = cva(
         // design-system 3.5 v4 (UQ-708): ghost button that starts a destructive action (삭제, 그래도 닫기)
         "destructive-ghost":
           "text-destructive hover:bg-destructive/10 hover:text-destructive aria-expanded:bg-destructive/10 aria-expanded:text-destructive dark:hover:bg-destructive/20",
-        // design-system 2 (v5.11, G-68): S-24 위험 구역 입구 (로그아웃 · 회원 탈퇴) — destructive but not the confirm button
-        "destructive-outline":
-          "border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50 dark:hover:bg-destructive/20",
         // 알림·경고 모달 보조 버튼 (2026-11 모달 개편): grey text, no fill at rest
         "muted-ghost":
           "text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",

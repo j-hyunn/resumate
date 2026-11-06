@@ -8,7 +8,9 @@
  * `updatedAt`으로 갱신한다. 저장하지 않은 변경이 있으면 설정 다이얼로그가 닫기·탭 전환·회원 탈퇴 전에
  * 묻는다(`useSettingsGuard`). 입력은 임시 보존하지 않는다 — 다시 열면 늘 다시 읽는다.
  *
- * Parts: `SectionSaveBar` (저장 줄 + 실패·충돌 줄), `JobInterestRows` (쌍 행), `HighestEducationFields`.
+ * Parts: `SettingsFieldRow` (라벨 왼쪽 6rem 회색 + 칸 13rem h-8), `SectionSaveBar` (저장 줄 + 실패·충돌 줄),
+ * `JobInterestRows` (쌍 행), `HighestEducationFields` (테두리 상자 하나 + `PeriodCell`). v5.12 원본 화면 맞춤:
+ * 배치는 다이얼로그 본문의 컨테이너 쿼리(`@md/settings` 라벨 왼쪽 열, `@3xl/settings` 한 줄 두 쌍 · 학력 다섯 칸)로만 바꾼다.
  */
 import * as React from "react"
 import { Check, CircleAlert, Info, Loader2, Plus, TriangleAlert, X } from "lucide-react"
@@ -16,6 +18,8 @@ import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { InputGroupInput } from "@/components/ui/input-group"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MAX_JOB_INTERESTS, type ProfileOptionDto } from "@/lib/contracts/profile"
@@ -23,6 +27,7 @@ import type { ProfileBasicsViewDto } from "@/lib/contracts/profile"
 import type { ProfileOptionCategory } from "@/lib/contracts/enums"
 import { formatTime } from "@/lib/data/labels"
 import { useSettingsGuard } from "@/components/common/shell/settings-guard"
+import { SETTINGS_VISUAL_STYLE } from "@/components/common/shell/settings-visual"
 import { getProfileBasicsAction, saveProfileBasicsAction, type SaveProfileBasicsActionResult } from "./actions"
 import {
   FIELD_ID,
@@ -35,6 +40,7 @@ import {
   newPair,
   pairRowOf,
   payloadOf,
+  periodErrorA11y,
   sameValues,
   sentPairRows,
   validate,
@@ -268,10 +274,16 @@ export function ProfileBasicsForm({ view, preview = null }: { view: ProfileBasic
   const savedEmpty = isEmpty(saved)
 
   return (
-    <section aria-labelledby={SECTION_HEADING_ID} className="space-y-4">
-      <h3 id={SECTION_HEADING_ID} tabIndex={-1} className="text-base leading-6 font-semibold outline-none">
-        내 정보
-      </h3>
+    <section aria-labelledby={SECTION_HEADING_ID} aria-describedby="settings-profile-desc" className="space-y-3">
+      {/* v5.12: 안내는 섹션 머리 설명 줄 (AI 연결 탭 머리와 같은 모양, 아이콘 없음) */}
+      <div className="space-y-0.5">
+        <h3 id={SECTION_HEADING_ID} tabIndex={-1} className="text-base leading-6 font-semibold outline-none">
+          내 정보
+        </h3>
+        <p id="settings-profile-desc" className="text-sm leading-5 text-muted-foreground">
+          이 정보는 화면 표시와 Resumate 안 추천에만 써요. AI에는 보내지 않아요
+        </p>
+      </div>
 
       {banner?.kind === "save_failed" ? (
         <p role="alert" className="flex flex-wrap items-center gap-1.5 text-sm text-destructive">
@@ -311,36 +323,34 @@ export function ProfileBasicsForm({ view, preview = null }: { view: ProfileBasic
         <p className="text-sm text-muted-foreground">아직 비어 있어요. 채우면 Resumate 안 추천이 더 잘 맞아요</p>
       ) : null}
 
-      <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-        <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-        이 정보는 화면 표시와 Resumate 안 추천에만 써요. AI에는 보내지 않아요
-      </p>
-
-      {/* 칸 안 Enter로 제출되지 않게 (G-66) */}
-      <form noValidate onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
-        <FieldBox id={FIELD_ID.displayName} label={LABELS.displayName} error={err("displayName")}>
+      {/* 칸 안 Enter로 제출되지 않게 (G-66). 칸 줄 사이 12px (화면 줄 간격 약 44 = 칸 32 + 12) */}
+      <form noValidate onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
+        <SettingsFieldRow id={FIELD_ID.displayName} label={LABELS.displayName} error={err("displayName")}>
           <Input
             id={FIELD_ID.displayName}
+            className={FIELD_CONTROL}
             value={values.displayName}
             placeholder="이름을 입력해 주세요"
             onChange={(e) => update({ displayName: e.target.value })}
             aria-invalid={Boolean(err("displayName")) || undefined}
             aria-describedby={err("displayName") ? `${FIELD_ID.displayName}-error` : undefined}
           />
-        </FieldBox>
+        </SettingsFieldRow>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FieldBox id={FIELD_ID.jobSearchStatus} label={LABELS.jobSearchStatus} error={err("jobSearchStatus")}>
-            <OptionSelect
-              id={FIELD_ID.jobSearchStatus}
-              options={options}
-              category="job_search_status"
-              value={values.jobSearchStatus}
-              onChange={(v) => update({ jobSearchStatus: v })}
-              invalid={Boolean(err("jobSearchStatus"))}
-            />
-          </FieldBox>
-          <FieldBox id={FIELD_ID.interestedCompanyType} label={LABELS.interestedCompanyType} error={err("interestedCompanyType")}>
+        <SettingsFieldRow id={FIELD_ID.jobSearchStatus} label={LABELS.jobSearchStatus} error={err("jobSearchStatus")}>
+          <OptionSelect
+            id={FIELD_ID.jobSearchStatus}
+            options={options}
+            category="job_search_status"
+            value={values.jobSearchStatus}
+            onChange={(v) => update({ jobSearchStatus: v })}
+            invalid={Boolean(err("jobSearchStatus"))}
+          />
+        </SettingsFieldRow>
+
+        {/* 관심 기업군 | 관심 산업 — 본문 ≥ 768이면 한 줄에 두 쌍 (화면) */}
+        <div className={PAIR_LINE}>
+          <SettingsFieldRow pairSide="left" id={FIELD_ID.interestedCompanyType} label={LABELS.interestedCompanyType} error={err("interestedCompanyType")}>
             <OptionSelect
               id={FIELD_ID.interestedCompanyType}
               options={options}
@@ -349,23 +359,18 @@ export function ProfileBasicsForm({ view, preview = null }: { view: ProfileBasic
               onChange={(v) => update({ interestedCompanyType: v })}
               invalid={Boolean(err("interestedCompanyType"))}
             />
-          </FieldBox>
+          </SettingsFieldRow>
+          <SettingsFieldRow pairSide="right" id={FIELD_ID.interestedIndustry} label={LABELS.interestedIndustry} error={err("interestedIndustry")}>
+            <OptionSelect
+              id={FIELD_ID.interestedIndustry}
+              options={options}
+              category="industry"
+              value={values.interestedIndustry}
+              onChange={(v) => update({ interestedIndustry: v })}
+              invalid={Boolean(err("interestedIndustry"))}
+            />
+          </SettingsFieldRow>
         </div>
-        <FieldBox
-          id={FIELD_ID.interestedIndustry}
-          label={LABELS.interestedIndustry}
-          error={err("interestedIndustry")}
-          className="sm:w-[calc(50%-0.5rem)]"
-        >
-          <OptionSelect
-            id={FIELD_ID.interestedIndustry}
-            options={options}
-            category="industry"
-            value={values.interestedIndustry}
-            onChange={(v) => update({ interestedIndustry: v })}
-            invalid={Boolean(err("interestedIndustry"))}
-          />
-        </FieldBox>
 
         <JobInterestRows
           options={options}
@@ -392,26 +397,59 @@ export function ProfileBasicsForm({ view, preview = null }: { view: ProfileBasic
 // parts
 // ---------------------------------------------------------------------------
 
-function FieldBox({
+/** 폼 칸 높이·폭 — 이 다이얼로그 전용 h-8 (다른 화면은 h-10). 본문 < 448이면 본문 폭 전체 (design-system 5.11.0) */
+const FIELD_CONTROL = "h-8 w-full data-[size=default]:h-8"
+/** 라벨+칸 두 쌍을 한 줄에 (본문 ≥ 768, 화면 배치). 그 아래는 두 줄 — 둘째 칸 x가 서로 맞도록 같은 gap */
+const PAIR_LINE = "flex flex-col gap-3 @3xl/settings:flex-row @3xl/settings:items-start @3xl/settings:gap-x-11"
+/** 칸 열 시작(라벨 열 6rem)에 맞춘 줄 */
+const FIELD_COLUMN = "@md/settings:pl-24"
+
+/**
+ * `SettingsFieldRow` (design-system 5.11.1, v5.12): 라벨 왼쪽(6rem, 회색 본문 크기) · 칸 오른쪽(13rem) 한 줄.
+ * 본문 < 448이면 라벨이 칸 위. `label` 없음 = 쌍 2행의 빈 라벨 칸 (칸 이름은 `aria-label`로).
+ */
+/**
+ * 오류 줄 폭 (QA-43-05): 13rem 칸 열에 가두지 않고 칸 열 시작부터 본문 끝까지(`100cqw` = `@container/settings` 폭).
+ * 한 줄 두 쌍(본문 ≥ 768)에서는 왼쪽 쌍은 오른쪽 쌍의 칸 시작 전까지, 오른쪽 쌍은 본문 끝까지.
+ */
+const ERROR_LINE_WIDTH = {
+  single: "@md/settings:col-start-2 @md/settings:w-max @md/settings:max-w-[calc(100cqw-6rem)]",
+  left: "@md/settings:col-start-2 @md/settings:w-max @md/settings:max-w-[calc(100cqw-6rem)] @3xl/settings:max-w-[20rem]",
+  right: "@md/settings:col-start-2 @md/settings:w-max @md/settings:max-w-[calc(100cqw-6rem)] @3xl/settings:max-w-[calc(100cqw-27.75rem)]",
+} as const
+
+function SettingsFieldRow({
   id,
   label,
   error,
+  pairSide,
   className,
   children,
 }: {
   id: string
-  label: string
+  label: string | null
   error?: string | true
+  /** 한 줄 두 쌍(`PAIR_LINE`) 안에서의 자리 — 오류 줄 폭 계산용 */
+  pairSide?: "left" | "right"
   className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <Label htmlFor={id} className="text-sm leading-5 font-medium">
-        {label}
-      </Label>
+    <div
+      className={cn(
+        "grid gap-1.5 @md/settings:grid-cols-[6rem_13rem] @md/settings:items-center @md/settings:gap-x-0 @md/settings:gap-y-1.5",
+        className,
+      )}
+    >
+      {label ? (
+        <Label htmlFor={id} className="text-base leading-6 font-normal text-muted-foreground">
+          {label}
+        </Label>
+      ) : (
+        <span aria-hidden className="hidden @md/settings:block" />
+      )}
       {children}
-      <FieldErrorLine id={`${id}-error`} message={typeof error === "string" ? error : undefined} />
+      <FieldErrorLine id={`${id}-error`} message={typeof error === "string" ? error : undefined} className={ERROR_LINE_WIDTH[pairSide ?? "single"]} />
     </div>
   )
 }
@@ -440,6 +478,7 @@ function OptionSelect({
   placeholder = "선택해 주세요",
   parentCode,
   ariaLabel,
+  variant = "default",
 }: {
   id: string
   options: readonly ProfileOptionDto[]
@@ -452,6 +491,8 @@ function OptionSelect({
   /** job_role: only the roles of this job_family */
   parentCode?: string | null
   ariaLabel?: string
+  /** `cell` = 최종 학력 상자 안 칸 (테두리 없음, 화살표 없음) */
+  variant?: "default" | "cell"
 }) {
   const items = options
     .filter((o) => o.category === category && (parentCode === undefined || o.parentCode === parentCode))
@@ -462,7 +503,8 @@ function OptionSelect({
     <Select value={value ?? ""} onValueChange={(v) => onChange(v === NONE ? null : v)} disabled={disabled}>
       <SelectTrigger
         id={id}
-        className="w-full"
+        variant={variant}
+        className={variant === "cell" ? undefined : FIELD_CONTROL}
         aria-label={ariaLabel}
         aria-invalid={invalid || undefined}
         aria-describedby={invalid ? `${id}-error` : undefined}
@@ -503,79 +545,75 @@ function JobInterestRows({
 }) {
   const full = rows.length >= MAX_JOB_INTERESTS
   return (
-    <fieldset className="space-y-2" aria-describedby={tooMany ? TOO_MANY_ID : undefined} aria-invalid={tooMany || undefined}>
-      <legend className="mb-2 text-sm leading-5 font-medium">관심 직군 · 관심 직무</legend>
-      <div
-        aria-hidden
-        className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] gap-2 text-xs leading-4 text-muted-foreground sm:grid"
-      >
-        <span>관심 직군</span>
-        <span>관심 직무</span>
-        <span />
-      </div>
-      <ol className="space-y-2">
+    <fieldset className="space-y-3" aria-describedby={tooMany ? TOO_MANY_ID : undefined} aria-invalid={tooMany || undefined}>
+      {/* v5.12: 보이는 legend·열 머리 줄 없음 — 1행 라벨이 행 안에 있다 (화면) */}
+      <legend className="sr-only">관심 직군 · 관심 직무</legend>
+      <ol className="space-y-3">
         {rows.map((row, i) => {
           const n = i + 1
           const error = rowErrors[i]
           const errorId = `${pairFamilyId(n)}-error`
           return (
-            <li
-              key={row.key}
-              className="grid grid-cols-[minmax(0,1fr)_2rem] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem]"
-            >
-              <OptionSelect
-                id={pairFamilyId(n)}
-                ariaLabel={`관심 직군 ${n}`}
-                options={options}
-                category="job_family"
-                value={row.jobFamily}
-                invalid={Boolean(error)}
-                // 직군을 바꾸면 그 행의 직무를 경고 없이 비운다 (UX `[가정]`)
-                onChange={(v) => onChange(rows.map((r) => (r.key === row.key ? { ...r, jobFamily: v, jobRole: v === r.jobFamily ? r.jobRole : null } : r)))}
-              />
-              <div className="row-start-2 sm:row-start-auto">
-                <OptionSelect
-                  id={pairRoleId(n)}
-                  ariaLabel={`관심 직무 ${n}`}
-                  options={options}
-                  category="job_role"
-                  parentCode={row.jobFamily}
-                  value={row.jobRole}
-                  disabled={!row.jobFamily}
-                  placeholder={row.jobFamily ? "선택해 주세요" : "직군을 먼저 골라 주세요"}
-                  onChange={(v) => onChange(rows.map((r) => (r.key === row.key ? { ...r, jobRole: v } : r)))}
-                />
+            <li key={row.key} className="space-y-1.5">
+              <div className={PAIR_LINE}>
+                {/* 2행은 라벨 칸만 비운다 (화면의 라벨 없는 셀렉트 줄) — 칸 이름은 aria-label */}
+                <SettingsFieldRow pairSide="left" id={pairFamilyId(n)} label={n === 1 ? "관심 직군" : null}>
+                  <OptionSelect
+                    id={pairFamilyId(n)}
+                    ariaLabel={`관심 직군 ${n}`}
+                    options={options}
+                    category="job_family"
+                    value={row.jobFamily}
+                    invalid={Boolean(error)}
+                    // 직군을 바꾸면 그 행의 직무를 경고 없이 비운다 (UX `[가정]`)
+                    onChange={(v) => onChange(rows.map((r) => (r.key === row.key ? { ...r, jobFamily: v, jobRole: v === r.jobFamily ? r.jobRole : null } : r)))}
+                  />
+                </SettingsFieldRow>
+                <div className="flex items-end gap-1 @md/settings:items-center">
+                  <SettingsFieldRow pairSide="right" id={pairRoleId(n)} label={n === 1 ? "관심 직무" : null} className="min-w-0 flex-1 @md/settings:flex-none">
+                    <OptionSelect
+                      id={pairRoleId(n)}
+                      ariaLabel={`관심 직무 ${n}`}
+                      options={options}
+                      category="job_role"
+                      parentCode={row.jobFamily}
+                      value={row.jobRole}
+                      disabled={!row.jobFamily}
+                      placeholder={row.jobFamily ? "선택해 주세요" : "직군을 먼저 골라 주세요"}
+                      onChange={(v) => onChange(rows.map((r) => (r.key === row.key ? { ...r, jobRole: v } : r)))}
+                    />
+                  </SettingsFieldRow>
+                  <Button
+                    type="button"
+                    variant="muted-ghost"
+                    size="icon-sm"
+                    aria-label={`관심 직무 ${n} 삭제`}
+                    onClick={() => {
+                      if (rows.length === 1) {
+                        // [UI-가정] G-67: 마지막 행은 지우지 않고 비운다 (빈 행 1개가 늘 남음)
+                        onChange([{ ...row, jobFamily: null, jobRole: null }])
+                        onFocus(pairFamilyId(1))
+                        return
+                      }
+                      const next = rows.filter((r) => r.key !== row.key)
+                      onChange(next)
+                      onFocus(pairFamilyId(Math.min(i, next.length - 1) + 1))
+                    }}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </Button>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="col-start-2 row-start-1 sm:col-start-auto sm:row-start-auto"
-                aria-label={`관심 직무 ${n} 삭제`}
-                onClick={() => {
-                  if (rows.length === 1) {
-                    // [UI-가정] G-67: 마지막 행은 지우지 않고 비운다 (빈 행 1개가 늘 남음)
-                    onChange([{ ...row, jobFamily: null, jobRole: null }])
-                    onFocus(pairFamilyId(1))
-                    return
-                  }
-                  const next = rows.filter((r) => r.key !== row.key)
-                  onChange(next)
-                  onFocus(pairFamilyId(Math.min(i, next.length - 1) + 1))
-                }}
-              >
-                <X aria-hidden />
-              </Button>
-              <FieldErrorLine id={errorId} message={error} className="col-span-full" />
+              <FieldErrorLine id={errorId} message={error} className={FIELD_COLUMN} />
             </li>
           )
         })}
       </ol>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn("flex flex-wrap items-center gap-2", FIELD_COLUMN)}>
         <Button
           id={ADD_PAIR_ID}
           type="button"
-          variant="outline"
+          variant="secondary"
           size="sm"
           disabled={full}
           onClick={() => {
@@ -588,7 +626,7 @@ function JobInterestRows({
         </Button>
         {full ? <p className="text-sm text-muted-foreground">최대 2개까지 고를 수 있어요</p> : null}
       </div>
-      <FieldErrorLine id={TOO_MANY_ID} message={tooMany ? "관심 직군·직무는 최대 2개까지 고를 수 있어요" : undefined} />
+      <FieldErrorLine id={TOO_MANY_ID} message={tooMany ? "관심 직군·직무는 최대 2개까지 고를 수 있어요" : undefined} className={FIELD_COLUMN} />
     </fieldset>
   )
 }
@@ -601,7 +639,17 @@ function yearList(): string[] {
   return list
 }
 
-/** 최종 학력 묶음 (design-system 5.11.1 `HighestEducationFields`, 평면 6칸 DM v4.12) */
+/** 학력 상자 아랫줄 칸 — 본문 ≥ 768이면 둘째 칸부터 왼쪽 세로 구분선 (화면, 높이 약 18px · 테두리보다 진한 회색) */
+const EDU_CELL_DIVIDER =
+  "@3xl/settings:pl-3 @3xl/settings:before:absolute @3xl/settings:before:top-1/2 @3xl/settings:before:left-0 @3xl/settings:before:h-4.5 @3xl/settings:before:w-px @3xl/settings:before:-translate-y-1/2 @3xl/settings:before:bg-muted-foreground/70"
+/** 학력 상자 안 글자 칸 (InputGroupInput = 테두리·바탕 없음) */
+const EDU_TEXT_CELL = "h-7 w-full px-0 text-base"
+
+/**
+ * 최종 학력 (design-system 5.11.1 `HighestEducationFields`, v5.12 — 테두리 상자 하나, 평면 6칸 DM v4.12).
+ * 윗줄 학교 명(굵게), 아랫줄 학위 | 졸업 상태 | 기간 | 전공 | 학점. 칸마다 보이는 라벨이 없어 placeholder = 칸 이름,
+ * 접근 이름은 aria-label — [UI-가정] P-27 (UX 셀렉트 placeholder "선택해 주세요"의 예외). 칸 오류 문장은 상자 아래.
+ */
 function HighestEducationFields({
   options,
   values,
@@ -613,101 +661,178 @@ function HighestEducationFields({
   errors: (k: FieldKey) => string | true | undefined
   onChange: (patch: Partial<ProfileFormValues>) => void
 }) {
-  const periodError = errors("period")
+  const msg = (k: FieldKey) => {
+    const e = errors(k)
+    return typeof e === "string" ? e : undefined
+  }
+  const textCell = (k: "schoolName" | "major" | "gpa") => ({
+    id: FIELD_ID[k],
+    value: values[k],
+    placeholder: LABELS[k], // [UI-가정] P-27
+    "aria-label": LABELS[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange({ [k]: e.target.value }),
+    "aria-invalid": Boolean(errors(k)) || undefined,
+    "aria-describedby": msg(k) ? `${FIELD_ID[k]}-error` : undefined,
+  })
   return (
-    <fieldset className="space-y-3">
-      <legend className="mb-2 text-sm leading-5 font-medium">최종 학력</legend>
-      <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-        <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-        커리어의 교육과는 별개 값이에요. 한쪽을 고쳐도 다른 쪽은 바뀌지 않아요
-      </p>
-      <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2">
-        <FieldBox id={FIELD_ID.schoolName} label={LABELS.schoolName} error={errors("schoolName")} className="sm:col-span-2">
-          <Input
-            id={FIELD_ID.schoolName}
-            value={values.schoolName}
-            onChange={(e) => onChange({ schoolName: e.target.value })}
-            aria-invalid={Boolean(errors("schoolName")) || undefined}
-            aria-describedby={errors("schoolName") ? `${FIELD_ID.schoolName}-error` : undefined}
-          />
-        </FieldBox>
-        <FieldBox id={FIELD_ID.degree} label={LABELS.degree} error={errors("degree")}>
-          <OptionSelect
-            id={FIELD_ID.degree}
-            options={options}
-            category="degree"
-            value={values.degree}
-            onChange={(v) => onChange({ degree: v })}
-            invalid={Boolean(errors("degree"))}
-          />
-        </FieldBox>
-        <FieldBox id={FIELD_ID.status} label={LABELS.status} error={errors("status")}>
-          <OptionSelect
-            id={FIELD_ID.status}
-            options={options}
-            category="graduation_status"
-            value={values.status}
-            onChange={(v) => onChange({ status: v })}
-            invalid={Boolean(errors("status"))}
-          />
-        </FieldBox>
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <span id="pb-period-label" className="text-sm leading-5 font-medium">
-            {LABELS.period}
-          </span>
-          <div
-            role="group"
-            aria-labelledby="pb-period-label"
-            aria-describedby={typeof periodError === "string" ? "pb-period-error" : undefined}
-            className="flex flex-wrap items-center gap-2 sm:flex-nowrap"
-          >
-            <YearMonthSelect
-              idPrefix="pb-start"
-              label="기간 시작"
-              year={values.startYear}
-              month={values.startMonth}
-              invalid={Boolean(periodError)}
-              onChange={(startYear, startMonth) => onChange({ startYear, startMonth })}
-            />
-            <span aria-hidden>~</span>
-            <YearMonthSelect
-              idPrefix="pb-end"
-              label="기간 종료"
-              year={values.endYear}
-              month={values.endMonth}
-              invalid={Boolean(periodError)}
-              onChange={(endYear, endMonth) => onChange({ endYear, endMonth })}
-            />
+    <div className="grid gap-1.5 @md/settings:grid-cols-[6rem_minmax(0,1fr)] @md/settings:items-start">
+      <span id="pb-edu-label" className="text-base leading-6 text-muted-foreground @md/settings:pt-2">
+        최종 학력
+      </span>
+      <div className="min-w-0 space-y-1.5">
+        <div
+          role="group"
+          aria-labelledby="pb-edu-label"
+          className="rounded-control border border-input px-2.5 py-2 has-[[aria-invalid=true]]:border-destructive"
+        >
+          <InputGroupInput {...textCell("schoolName")} className={cn(EDU_TEXT_CELL, "font-semibold placeholder:font-semibold")} />
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 @3xl/settings:grid-cols-[3fr_2fr_3fr_3fr_2fr] @3xl/settings:gap-x-0">
+            <div className="relative min-w-0">
+              <OptionSelect
+                id={FIELD_ID.degree}
+                variant="cell"
+                placeholder={LABELS.degree}
+                ariaLabel={LABELS.degree}
+                options={options}
+                category="degree"
+                value={values.degree}
+                onChange={(v) => onChange({ degree: v })}
+                invalid={Boolean(errors("degree"))}
+              />
+            </div>
+            <div className={cn("relative min-w-0", EDU_CELL_DIVIDER)}>
+              <OptionSelect
+                id={FIELD_ID.status}
+                variant="cell"
+                placeholder={LABELS.status}
+                ariaLabel={LABELS.status}
+                options={options}
+                category="graduation_status"
+                value={values.status}
+                onChange={(v) => onChange({ status: v })}
+                invalid={Boolean(errors("status"))}
+              />
+            </div>
+            <div className={cn("relative col-span-2 min-w-0 @3xl/settings:col-span-1", EDU_CELL_DIVIDER)}>
+              <PeriodCell values={values} error={errors("period")} onChange={onChange} />
+            </div>
+            <div className={cn("relative min-w-0", EDU_CELL_DIVIDER)}>
+              <InputGroupInput {...textCell("major")} className={EDU_TEXT_CELL} />
+            </div>
+            <div className={cn("relative min-w-0", EDU_CELL_DIVIDER)}>
+              <InputGroupInput {...textCell("gpa")} className={cn(EDU_TEXT_CELL, "tabular-nums")} />
+            </div>
           </div>
-          <FieldErrorLine id="pb-period-error" message={typeof periodError === "string" ? periodError : undefined} />
         </div>
-        <FieldBox id={FIELD_ID.major} label={LABELS.major} error={errors("major")}>
-          <Input
-            id={FIELD_ID.major}
-            value={values.major}
-            onChange={(e) => onChange({ major: e.target.value })}
-            aria-invalid={Boolean(errors("major")) || undefined}
-            aria-describedby={errors("major") ? `${FIELD_ID.major}-error` : undefined}
-          />
-        </FieldBox>
-        <FieldBox id={FIELD_ID.gpa} label={LABELS.gpa} error={errors("gpa")}>
-          <Input
-            id={FIELD_ID.gpa}
-            className="tabular-nums"
-            value={values.gpa}
-            onChange={(e) => onChange({ gpa: e.target.value })}
-            aria-invalid={Boolean(errors("gpa")) || undefined}
-            aria-describedby={errors("gpa") ? `${FIELD_ID.gpa}-error` : undefined}
-          />
-        </FieldBox>
+        {/* 칸 오류 줄 — 칸 순서대로, 상자 바로 아래 (칸이 좁아 칸 아래에 두지 않는다) */}
+        <FieldErrorLine id={`${FIELD_ID.schoolName}-error`} message={msg("schoolName")} />
+        <FieldErrorLine id={`${FIELD_ID.degree}-error`} message={msg("degree")} />
+        <FieldErrorLine id={`${FIELD_ID.status}-error`} message={msg("status")} />
+        <PeriodErrorLine error={errors("period")} />
+        <FieldErrorLine id={`${FIELD_ID.major}-error`} message={msg("major")} />
+        <FieldErrorLine id={`${FIELD_ID.gpa}-error`} message={msg("gpa")} />
+        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          커리어의 교육과는 별개 값이에요. 한쪽을 고쳐도 다른 쪽은 바뀌지 않아요
+        </p>
       </div>
-    </fieldset>
+    </div>
+  )
+}
+
+/** 기간 오류 줄: 문구가 있으면 보이는 오류 줄, 연도·월 하나만 고른 경우(문구 없음, UI42-2)는 sr-only 문장 (QA-43-03) */
+function PeriodErrorLine({ error }: { error: string | true | undefined }) {
+  const a11y = periodErrorA11y(error)
+  if (a11y.message) return <FieldErrorLine id={`${FIELD_ID.period}-error`} message={a11y.message} />
+  if (a11y.srMessage)
+    return (
+      <p id={`${FIELD_ID.period}-error`} className="sr-only">
+        {a11y.srMessage}
+      </p>
+    )
+  return null
+}
+
+/**
+ * 기간 칸 `PeriodCell` (design-system 5.11.1, v5.12): 화면의 "yyyy.mm - yyyy.mm" 한 칸. 누르면 팝오버 안에 연월 셀렉트 4개
+ * (입력 방식은 UI42-2 그대로). 값 "2015.03 - 2019.02" — 기간 길이 "(N년 N개월)"은 칸이 좁아 생략 [UI-가정] G-81.
+ * 오류·검증 포커스는 이 버튼으로 온다(`FIELD_ID.period`). 팝오버를 닫아도 값은 폼에 남는다(저장은 [저장]).
+ */
+function PeriodCell({
+  values,
+  error,
+  onChange,
+}: {
+  values: ProfileFormValues
+  error: string | true | undefined
+  onChange: (patch: Partial<ProfileFormValues>) => void
+}) {
+  const a11y = periodErrorA11y(error)
+  const invalid = a11y.invalid
+  const side = (y: string | null, m: string | null) =>
+    y || m ? (
+      <span>{`${y ?? "yyyy"}.${m ? m.padStart(2, "0") : "mm"}`}</span>
+    ) : (
+      <span className="text-muted-foreground">yyyy.mm</span>
+    )
+  const empty = !values.startYear && !values.startMonth && !values.endYear && !values.endMonth
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {/* design-system 5.11.1: the period trigger carries aria-invalid (QA-43-03). ARIA 1.2 dropped it as a global
+            attribute, but screen readers still announce it on a button, and this is the only control the error focuses. */}
+        {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
+        <button
+          id={FIELD_ID.period}
+          type="button"
+          aria-label={LABELS.period}
+          aria-invalid={invalid || undefined}
+          aria-describedby={a11y.describedBy}
+          className="flex h-7 w-full items-center gap-1 text-left text-base whitespace-nowrap tabular-nums outline-none focus-visible:underline focus-visible:decoration-ring focus-visible:underline-offset-4 aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:underline-offset-4 [&[aria-invalid=true]_span]:text-destructive"
+        >
+          {/* [UI-가정] P-27: 비었을 때 칸 이름 대신 형식 "yyyy.mm - yyyy.mm" (화면) */}
+          {empty ? (
+            <span className="text-muted-foreground">yyyy.mm - yyyy.mm</span>
+          ) : (
+            <>
+              {side(values.startYear, values.startMonth)}
+              <span aria-hidden>-</span>
+              {side(values.endYear, values.endMonth)}
+            </>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-3" style={SETTINGS_VISUAL_STYLE}>
+        <div className="space-y-2">
+          <YearMonthSelect
+            idPrefix="pb-start"
+            label="기간 시작"
+            caption="시작"
+            year={values.startYear}
+            month={values.startMonth}
+            invalid={invalid}
+            onChange={(startYear, startMonth) => onChange({ startYear, startMonth })}
+          />
+          <YearMonthSelect
+            idPrefix="pb-end"
+            label="기간 종료"
+            caption="종료"
+            year={values.endYear}
+            month={values.endMonth}
+            invalid={invalid}
+            onChange={(endYear, endMonth) => onChange({ endYear, endMonth })}
+          />
+          <FieldErrorLine id={`${FIELD_ID.period}-popover-error`} message={a11y.message} />
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
 function YearMonthSelect({
   idPrefix,
   label,
+  caption,
   year,
   month,
   invalid,
@@ -715,6 +840,7 @@ function YearMonthSelect({
 }: {
   idPrefix: string
   label: string
+  caption: string
   year: string | null
   month: string | null
   invalid: boolean
@@ -722,9 +848,17 @@ function YearMonthSelect({
 }) {
   const years = React.useMemo(() => yearList(), [])
   return (
-    <div className="flex min-w-0 flex-1 basis-[calc(50%-1rem)] gap-2 sm:basis-0">
+    <div className="flex items-center gap-2">
+      <span aria-hidden className="w-8 text-sm text-muted-foreground">
+        {caption}
+      </span>
       <Select value={year ?? ""} onValueChange={(v) => onChange(v === NONE ? null : v, month)}>
-        <SelectTrigger id={`${idPrefix}-year`} className="min-w-0 flex-1" aria-label={`${label} 연도`} aria-invalid={invalid || undefined}>
+        <SelectTrigger
+          id={`${idPrefix}-year`}
+          className="h-8 w-24 data-[size=default]:h-8"
+          aria-label={`${label} 연도`}
+          aria-invalid={invalid || undefined}
+        >
           <SelectValue placeholder="연도" />
         </SelectTrigger>
         <SelectContent className="max-h-72">
@@ -740,7 +874,12 @@ function YearMonthSelect({
         </SelectContent>
       </Select>
       <Select value={month ?? ""} onValueChange={(v) => onChange(year, v === NONE ? null : v)}>
-        <SelectTrigger id={`${idPrefix}-month`} className="min-w-0 flex-1" aria-label={`${label} 월`} aria-invalid={invalid || undefined}>
+        <SelectTrigger
+          id={`${idPrefix}-month`}
+          className="h-8 w-20 data-[size=default]:h-8"
+          aria-label={`${label} 월`}
+          aria-invalid={invalid || undefined}
+        >
           <SelectValue placeholder="월" />
         </SelectTrigger>
         <SelectContent className="max-h-72">
@@ -774,7 +913,8 @@ function SectionSaveBar({
   onSave: () => void
 }) {
   return (
-    <div className="flex items-center justify-end gap-3 pt-2">
+    // v5.12: 내 정보 섹션 끝, 학력 상자 아래 오른쪽 (화면엔 [저장]이 없다 — UX 섹션 저장, G-80)
+    <div className="flex items-center justify-end gap-3 pt-1">
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground" aria-live="polite">
         {!saving && savedAt ? (
           <>

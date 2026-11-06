@@ -7,7 +7,7 @@
  *
  * preview: feedback-ready (주소가 있는 모양을 미리 본다 — 주소가 없으면 about:blank)
  */
-import { Clock, ExternalLink, Info } from "lucide-react"
+import { ArrowUpRight, Clock, Info } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FEEDBACK_FORM_URL, IS_FEEDBACK_FORM_READY } from "@/lib/contracts/feedback"
@@ -23,7 +23,7 @@ export function FeedbackTab({ preview = null }: { preview?: string | null }) {
           <Button asChild className="w-fit">
             <a href={url} target="_blank" rel="noopener noreferrer">
               개선 요청 보내기
-              <ExternalLink className="size-3.5" aria-hidden />
+              <ArrowUpRight className="size-4" aria-hidden />
               <span className="sr-only">(새 창)</span>
             </a>
           </Button>
@@ -38,7 +38,7 @@ export function FeedbackTab({ preview = null }: { preview?: string | null }) {
           <div className="flex flex-wrap items-center gap-2">
             <Button disabled>
               개선 요청 보내기
-              <ExternalLink className="size-3.5" aria-hidden />
+              <ArrowUpRight className="size-4" aria-hidden />
             </Button>
             <Badge variant="outline">준비 중</Badge>
           </div>

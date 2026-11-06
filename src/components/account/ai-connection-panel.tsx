@@ -230,16 +230,12 @@ export function AiConnectionPanel({
         <span className="sr-only">AI 연결을 불러오는 중</span>
         <ProviderRowGroup>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="px-4 py-3">
-              <Skeleton className="h-10 w-full" />
-            </div>
+            <Skeleton key={i} className="h-11 w-full rounded-lg" />
           ))}
         </ProviderRowGroup>
-        <div className="space-y-2">
-          <Skeleton className="h-9 w-56" />
-          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       </div>
     )
@@ -382,11 +378,13 @@ export function AiConnectionPanel({
         </Alert>
       ) : null}
 
-      <section aria-labelledby="settings-ai-providers" className="space-y-4">
-        <h3 id="settings-ai-providers" className="text-base leading-6 font-semibold">
-          모델 공급자 설정
-        </h3>
-        <p className="text-base text-muted-foreground">{BLOCK1_INTRO}</p>
+      <section aria-labelledby="settings-ai-providers" className="space-y-3">
+        <div className="space-y-0.5">
+          <h3 id="settings-ai-providers" className="text-base leading-6 font-semibold">
+            모델 공급자 설정
+          </h3>
+          <p className="text-sm leading-5 text-muted-foreground">{BLOCK1_INTRO}</p>
+        </div>
 
         {anyKey && !activeCard ? (
           <Alert variant="warning">
@@ -407,6 +405,7 @@ export function AiConnectionPanel({
           }}
           className="gap-0"
         >
+          {/* v5.12: 묶음 테두리·구분선 없음, 행 사이 4px (원본 화면) */}
           <ProviderRowGroup>
             {rows.map((card) => {
               const p = card.info.provider
@@ -424,13 +423,13 @@ export function AiConnectionPanel({
                   state={state}
                   active={card.is_active}
                   radio={
-                    card.key ? (
-                      <RadioGroupItem
-                        value={p}
-                        aria-label={`${PROVIDER_ROW_NAMES[p]}를 활성 공급자로`}
-                        disabled={!selectable || rechecking !== null}
-                      />
-                    ) : null
+                    // v5.12: 미연결 행도 비활성 라디오를 보인다 (화면의 회색 빈 원, G-79) — 고를 수 있는 건 연결된 행뿐
+                    <RadioGroupItem
+                      size="lg"
+                      value={p}
+                      aria-label={`${PROVIDER_ROW_NAMES[p]}를 활성 공급자로`}
+                      disabled={!selectable || rechecking !== null}
+                    />
                   }
                   badge={
                     showBadge && card.key ? (
@@ -607,13 +606,13 @@ function RowActions({
   if (!card.key) {
     if (state === "paused")
       return (
-        <Button size="sm" variant="outline" disabled>
+        <Button size="sm" variant="secondary" disabled>
           연결
         </Button>
       )
-    // Gemini default · GPT·Claude outline (design-system 5.11.2)
+    // v5.12: 모두 secondary (화면의 연한 초록 [연결]) — 추천은 배지가 말한다 (design-system 5.11.2, G-79)
     return (
-      <Button size="sm" variant={card.info.is_recommended ? "default" : "outline"} asChild>
+      <Button size="sm" variant="secondary" asChild>
         <Link href={connectHref(p)} onClick={onNavigate} aria-label={`${name} 연결`}>
           연결
         </Link>
@@ -634,13 +633,13 @@ function RowActions({
           </Link>
         </Button>
       ) : state === "needs_check" ? (
-        <Button size="sm" variant="outline" onClick={onRecheck} disabled={busy}>
+        <Button size="sm" variant="secondary" onClick={onRecheck} disabled={busy}>
           다시 확인
         </Button>
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={`${name} 키 관리`} disabled={state === "rechecking"}>
+          <Button variant="muted-ghost" size="icon-sm" aria-label={`${name} 키 관리`} disabled={state === "rechecking"}>
             <MoreHorizontal aria-hidden />
           </Button>
         </DropdownMenuTrigger>

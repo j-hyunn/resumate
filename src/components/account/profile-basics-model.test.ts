@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest"
 import type { ProfileBasicsDto } from "@/lib/contracts/profile"
-import { fromDto, isEmpty, pairRowOf, payloadOf, sameValues, sentPairRows, validate } from "./profile-basics-model"
+import {
+  FIELD_ID,
+  PERIOD_PARTIAL_SR_TEXT,
+  fromDto,
+  isEmpty,
+  pairRowOf,
+  payloadOf,
+  periodErrorA11y,
+  sameValues,
+  sentPairRows,
+  validate,
+} from "./profile-basics-model"
 
 const dto = (over: Partial<ProfileBasicsDto> = {}): ProfileBasicsDto => ({
   updatedAt: "2026-11-05T00:00:00.000Z",
@@ -80,5 +91,20 @@ describe("profile basics model (S-24 ①)", () => {
     expect(pairRowOf({ field: "job_role", fields: ["job_role"] }, sent)).toBe(1)
     // 둘 다 보낸 경우: 두 번째 위치 = 두 번째 행
     expect(pairRowOf({ sortOrder: 2 }, sentPairRows(v))).toBe(1)
+  })
+
+  it("period cell: a partial period (year without month) is invalid and described for screen readers (QA-43-03)", () => {
+    const partial = validate({ ...fromDto(dto()), startYear: "2012", startMonth: null })
+    expect(partial.period).toBe(true)
+    expect(periodErrorA11y(partial.period)).toEqual({
+      invalid: true,
+      describedBy: `${FIELD_ID.period}-error`,
+      message: undefined,
+      srMessage: PERIOD_PARTIAL_SR_TEXT,
+    })
+    expect(FIELD_ID.period).toBe("pb-period")
+    const reversed = periodErrorA11y("종료 시점이 시작보다 앞설 수 없어요")
+    expect(reversed).toMatchObject({ invalid: true, message: "종료 시점이 시작보다 앞설 수 없어요", srMessage: undefined })
+    expect(periodErrorA11y(undefined)).toMatchObject({ invalid: false, describedBy: undefined })
   })
 })

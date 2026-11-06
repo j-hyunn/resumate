@@ -8,7 +8,7 @@
  * preview: loading · error · save-failed (토글 저장 실패)
  */
 import * as React from "react"
-import { CircleAlert, ExternalLink, Loader2, RotateCcw, ShieldCheck } from "lucide-react"
+import { ArrowUpRight, CircleAlert, Loader2, RotateCcw, ShieldCheck } from "lucide-react"
 import type { ConsentType, PolicyType } from "@/types/db"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -87,15 +87,16 @@ export function PoliciesTab({ preview = null }: { preview?: string | null }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <section aria-labelledby="settings-policy-docs" className="space-y-4">
+      <section aria-labelledby="settings-policy-docs" className="space-y-1">
         <h3 id="settings-policy-docs" className="text-base leading-6 font-semibold">
           Resumate 약관
         </h3>
-        <ul className="divide-y rounded-lg border bg-card">
+        {/* v5.12: 상자·구분선 없는 행, [전문 확인] 연한 초록 · 아이콘 없음 (원본 화면) */}
+        <ul>
           {POLICY_DOCUMENT_TYPES.map((t) => (
-            <li key={t} className="flex min-h-14 items-center justify-between gap-3 px-4 py-3">
+            <li key={t} className="flex h-12 items-center justify-between gap-3">
               <span className="text-base">{TAB_DOCUMENT_LABELS[t]}</span>
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="secondary" size="sm" asChild>
                 <a
                   href={routes.policies(t)}
                   target="_blank"
@@ -103,7 +104,6 @@ export function PoliciesTab({ preview = null }: { preview?: string | null }) {
                   aria-label={`${TAB_DOCUMENT_LABELS[t]} 전문 확인 (새 탭)`}
                 >
                   전문 확인
-                  <ExternalLink className="size-3.5" aria-hidden />
                 </a>
               </Button>
             </li>
@@ -111,26 +111,28 @@ export function PoliciesTab({ preview = null }: { preview?: string | null }) {
         </ul>
       </section>
 
-      <section aria-labelledby="settings-optional-consents" className="space-y-4">
+      <section aria-labelledby="settings-optional-consents" className="space-y-1">
         <h3 id="settings-optional-consents" className="text-base leading-6 font-semibold">
           선택 동의
         </h3>
         <OptionalConsents statuses={load.statuses} failSave={preview === "save-failed"} />
       </section>
 
-      {/* AI 데이터 처리 원칙 줄 (SD-A9 — AI 연결 탭에서 옮겨 왔다) */}
-      <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-4">
-        <ShieldCheck className="mt-1 size-4 shrink-0 text-success" aria-hidden />
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-base">Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 키는 서버에 암호화해 저장하고 화면에는 마지막 4자리만 보여요</p>
-          <p className="text-sm text-muted-foreground">공급자 데이터 사용은 연결한 공급자·등급 정책을 따라요</p>
+      {/* AI 데이터 처리 원칙 줄 (SD-A9 — AI 연결 탭에서 옮겨 왔다). v5.12: 상자 없이 ⓘ 줄 모양 (G-77) */}
+      <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-foreground">Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 키는 서버에 암호화해 저장하고 화면에는 마지막 4자리만 보여요</p>
+          <p>
+            공급자 데이터 사용은 연결한 공급자·등급 정책을 따라요{" "}
+            <Button variant="link" size="sm" className="h-auto px-0 align-baseline" asChild>
+              <a href={routes.policies("ai_data_use")} target="_blank" rel="noopener" aria-label="AI 데이터 처리 전문 확인 (새 탭)">
+                전문 확인
+                <ArrowUpRight className="size-4" aria-hidden />
+              </a>
+            </Button>
+          </p>
         </div>
-        <Button variant="link" size="sm" className="h-auto shrink-0 px-0" asChild>
-          <a href={routes.policies("ai_data_use")} target="_blank" rel="noopener" aria-label="AI 데이터 처리 전문 확인 (새 탭)">
-            전문 확인
-            <ExternalLink className="size-3.5" aria-hidden />
-          </a>
-        </Button>
       </div>
     </div>
   )
@@ -165,31 +167,34 @@ function OptionalConsents({ statuses, failSave }: { statuses: ConsentStatus[]; f
 
   return (
     <>
-      <ul className="divide-y rounded-lg border bg-card">
+      {/* v5.12: 굵은 라벨 + 같은 줄 회색 설명(본문 ≥ 672) + 오른쪽 큰 Switch, 상자 없음 (원본 화면) */}
+      <ul>
         {optional.map((item) => {
           const s = state[item.consent_type]
           const id = `settings-consent-${item.consent_type}`
           const busy = pending === item.consent_type
           const label = OPTIONAL_LABELS[item.consent_type] ?? item.label
           return (
-            <li key={item.consent_type} className="space-y-2 px-4 py-3">
-              <div className="flex items-start gap-4">
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <Label htmlFor={id} className="text-base font-medium">
-                    {label}
-                  </Label>
-                  {item.description ? (
-                    <p id={`${id}-desc`} className="text-sm text-muted-foreground">
-                      {item.description}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2 pt-0.5">
+            <li key={item.consent_type}>
+              <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 py-1.5 @2xl/settings:grid-cols-[11rem_minmax(0,1fr)_auto]">
+                <Label htmlFor={id} className="text-base leading-6 font-semibold">
+                  {label}
+                </Label>
+                {item.description ? (
+                  <p
+                    id={`${id}-desc`}
+                    className="col-start-1 text-sm text-muted-foreground @2xl/settings:col-start-2 @2xl/settings:row-start-1"
+                  >
+                    {item.description}
+                  </p>
+                ) : null}
+                <div className="col-start-2 row-span-2 row-start-1 flex items-center gap-2 @2xl/settings:col-start-3 @2xl/settings:row-span-1">
                   {busy ? <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="저장 중" /> : null}
                   <Switch
                     id={id}
                     checked={s?.active ?? false}
                     disabled={busy}
+                    size="lg"
                     aria-describedby={item.description ? `${id}-desc` : undefined}
                     onCheckedChange={(v) => void change(item.consent_type, v, label)}
                   />

@@ -4,9 +4,9 @@
  * ProviderRow (design-system 5.11.2, UX v5.17 S-40 SD-A1) — S-24 AI 연결 탭의 공급자 라디오 행 3개와
  * S-41 공급자 선택 행. v5.10 `ProviderCard`(카드 3개)를 대체한다.
  *
- *   div.divide-y rounded-lg border bg-card            ← 한 묶음 안 세 줄
- *     div#provider-row-{p}.flex items-start gap-3 px-4 py-3 min-h-16
- *       [라디오 자리 w-4] [1행 이름 · 플랜 안내 · 배지 / 2행 상태 줄 / 3행 안내] [동작]
+ *   div.flex flex-col gap-1                           ← 묶음 테두리 없음 (v5.12 원본 화면). S-41만 `bordered`
+ *     div#provider-row-{p}.flex items-start gap-2 rounded-lg px-2 py-1.5 min-h-11   (활성 bg-primary/10)
+ *       [라디오 size-8 칸 · size="lg"] [1행 이름 w-28 · 플랜 안내 · 배지 / 2행 상태 줄 / 3행 안내] [동작 h-8]
  *
  * The row never reads `?state=` (the settings dialog renders it outside <Suspense>).
  */
@@ -173,9 +173,17 @@ export function providerRowId(provider: AiProviderName): string {
   return `provider-row-${provider}`
 }
 
-/** 묶음 테두리 (행 3개를 한 상자에, `divide-y`) */
-export function ProviderRowGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("divide-y overflow-hidden rounded-lg border bg-card", className)} {...props} />
+/**
+ * 행 묶음 (design-system 5.11.5 v5.12): 기본 = 테두리·구분선 없이 행 사이 4px (S-24 AI 연결 탭, 원본 화면).
+ * `bordered` = 한 상자 + `divide-y` — 독립 화면 S-41 공급자 선택만.
+ */
+export function ProviderRowGroup({ className, bordered = false, ...props }: React.ComponentProps<"div"> & { bordered?: boolean }) {
+  return (
+    <div
+      className={cn(bordered ? "divide-y overflow-hidden rounded-lg border bg-card" : "flex flex-col gap-1", className)}
+      {...props}
+    />
+  )
 }
 
 /**
@@ -216,8 +224,9 @@ export function ProviderRowFrame({
   className?: string
 }) {
   const frame = cn(
-    "flex min-h-16 items-start gap-3 px-4 py-3",
-    active ? "bg-primary-subtle/40" : state === "paused" ? "bg-muted/50" : inButton ? "bg-transparent" : undefined,
+    // S-41 (inButton, bordered 묶음 안) keeps its roomier row; S-40 follows the 원본 화면 (v5.12)
+    inButton ? "flex min-h-16 items-start gap-3 px-4 py-3" : "flex min-h-11 items-start gap-2 rounded-lg px-2 py-1.5",
+    active ? "bg-primary/10" : state === "paused" ? "bg-muted/50" : inButton ? "bg-transparent" : undefined,
     className,
   )
   const name = PROVIDER_ROW_NAMES[provider]
@@ -227,7 +236,7 @@ export function ProviderRowFrame({
         <span className="flex w-4 shrink-0 pt-1" />
         <span className="block min-w-0 flex-1 space-y-1">
           <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-base font-semibold">{name}</span>
+            <span className="w-28 shrink-0 text-base font-normal">{name}</span>
             <span className="text-sm text-muted-foreground">{PROVIDER_PLAN_NOTES[provider]}</span>
             {recommended ? <RecommendBadge /> : null}
           </span>
@@ -237,10 +246,11 @@ export function ProviderRowFrame({
     )
   return (
     <div id={anchor ? providerRowId(provider) : undefined} className={cn(frame, anchor && "scroll-mt-4")}>
-      <div className="flex w-4 shrink-0 pt-1">{radio}</div>
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <h4 className="text-base font-semibold">{name}</h4>
+      <div className="flex size-8 shrink-0 items-center justify-center">{radio}</div>
+      <div className="min-w-0 flex-1 space-y-1 py-1">
+        {/* 이름 열 고정 폭 — 플랜 안내가 세 행에서 같은 x에 선다 (화면). 본문 < 512면 안내·배지가 줄바꿈 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h4 className="w-28 shrink-0 text-base leading-6 font-normal">{name}</h4>
           <span className="text-sm text-muted-foreground">{PROVIDER_PLAN_NOTES[provider]}</span>
           {recommended ? <RecommendBadge /> : null}
           {badge}
@@ -249,7 +259,7 @@ export function ProviderRowFrame({
         {extra}
         {footer}
       </div>
-      <div className="flex shrink-0 items-center gap-1">{action}</div>
+      <div className="flex h-8 shrink-0 items-center gap-1">{action}</div>
     </div>
   )
 }

@@ -2,7 +2,8 @@
 
 /**
  * S-24 설정 다이얼로그 — 왼쪽 탭 4개 (UX v5.17a S-24 SD-A1, design-system 5.11): 계정 · AI 연결 · 약관 · 개선 요청.
- * shadcn sidebar-13 "sidebar in a dialog": 탭 목록(collapsible="none" sidebar) + 머리 "설정 › {탭}" + 스크롤 본문.
+ * shadcn sidebar-13 "sidebar in a dialog": 전체 폭 머리 "설정" + X · 탭 목록(collapsible="none" sidebar, 글자만) + 스크롤 본문
+ * (v5.12 원본 화면 맞춤 — 본문은 컨테이너 쿼리 `@container/settings`로 배치를 바꾼다).
  * There are no settings pages: S-24 · S-40 · S-42 live only here (S-25 탈퇴, S-41 키 연결은 밖의 화면).
  *
  * Opened from the L-01 사이드바 / L-02 계정 메뉴 / in-app links via useSettingsDialog() / <SettingsLink>, or by URL
@@ -16,7 +17,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { Loader2, X } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,15 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
   Sidebar,
   SidebarContent,
@@ -53,6 +47,7 @@ import { FeedbackTab } from "@/components/account/feedback-tab"
 import { PoliciesTab } from "@/components/account/policies-tab"
 import { SETTINGS_TABS, resolveSettingsSection, type SettingsTabId } from "@/components/account/settings-section-list"
 import { useAiConnectionBase } from "../ai-connection-context"
+import { SETTINGS_VISUAL_STYLE } from "./settings-visual"
 import { SettingsGuardContext, type SettingsGuard, type SettingsGuardContextValue } from "./settings-guard"
 
 export interface OpenSettingsOptions {
@@ -265,62 +260,72 @@ function SettingsDialog({
   options: OpenSettingsOptions
   session: number
 }) {
-  const current = SETTINGS_TABS.find((t) => t.id === tab) ?? SETTINGS_TABS[0]
   const preview = options.preview ?? null
 
   return (
-    // onOpenChange(false) covers Esc · 바깥 누르기 — it asks first when 내 정보 is dirty
+    // onOpenChange(false) covers 머리 X · Esc · 바깥 누르기 — it asks first when 내 정보 is dirty
     <Dialog open={open} onOpenChange={(o) => !o && onRequestClose()}>
-      <DialogContent className="overflow-hidden p-0 md:max-w-[760px] lg:max-w-[880px]">
-        <DialogTitle className="sr-only">설정</DialogTitle>
+      {/* 크기·높이는 틀에 고정 — 탭을 바꿔도 다이얼로그 크기가 출렁이지 않게 (design-system 5.11 틀, v5.12 G-75) */}
+      <DialogContent
+        showCloseButton={false}
+        style={SETTINGS_VISUAL_STYLE}
+        // 첫 포커스 = 선택된 탭 버튼 (머리 X가 첫 tabbable이 되어 열자마자 닫기 쉬운 것을 막는다, QA-43-04).
+        // 넓은 화면은 왼쪽 탭 목록, 좁은 화면은 탭 줄 — 보이는 쪽을 고른다.
+        onOpenAutoFocus={(e) => {
+          const root = e.currentTarget as HTMLElement | null
+          const current = Array.from(
+            root?.querySelectorAll<HTMLElement>('nav[aria-label="설정 탭"] [aria-current="page"]') ?? [],
+          ).find((el) => el.getClientRects().length > 0)
+          if (!current) return
+          e.preventDefault()
+          current.focus({ preventScroll: true })
+        }}
+        className="flex h-[min(640px,85svh)] flex-col gap-0 overflow-hidden p-0 md:h-[min(760px,calc(100dvh-4rem))] md:max-w-[760px] lg:max-w-[min(1100px,calc(100vw-4rem))]"
+      >
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 md:h-16 md:px-5">
+          <DialogTitle className="text-base leading-6 font-semibold">설정</DialogTitle>
+          <DialogClose asChild>
+            <Button variant="muted-ghost" size="icon-sm" aria-label="닫기">
+              <X className="size-5" aria-hidden />
+            </Button>
+          </DialogClose>
+        </header>
         <DialogDescription className="sr-only">
           계정과 내 정보, AI 연결과 사용량, 약관과 선택 동의, 개선 요청을 확인하고 바꿀 수 있어요.
         </DialogDescription>
-        <SidebarProvider className="min-h-0 items-start" style={{ "--sidebar-width": "12rem" } as React.CSSProperties}>
-          <Sidebar collapsible="none" className="hidden md:flex">
+        <SidebarProvider
+          className="min-h-0 flex-1 items-stretch"
+          style={{ "--sidebar-width": "13rem" } as React.CSSProperties}
+        >
+          <Sidebar collapsible="none" className="hidden h-auto md:flex">
             <SidebarContent>
-              <SidebarGroup>
+              <SidebarGroup className="p-3">
                 <SidebarGroupContent>
                   <nav aria-label="설정 탭">
-                    <SidebarMenu>
-                      {SETTINGS_TABS.map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <SidebarMenuItem key={item.id}>
-                            <SidebarMenuButton
-                              className="h-10 text-base [&>svg]:size-5"
-                              isActive={item.id === tab}
-                              aria-current={item.id === tab ? "page" : undefined}
-                              onClick={() => onTabChange(item.id)}
-                            >
-                              <Icon aria-hidden />
-                              <span>{item.label}</span>
-                              {item.id === "ai-connection" ? <AiConnectionWarnDot /> : null}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        )
-                      })}
+                    <SidebarMenu className="gap-0">
+                      {/* (v5.12) 탭은 글자만 — 아이콘 없음 (원본 화면) */}
+                      {SETTINGS_TABS.map((item) => (
+                        <SidebarMenuItem key={item.id}>
+                          <SidebarMenuButton
+                            className="h-10 text-sm"
+                            isActive={item.id === tab}
+                            aria-current={item.id === tab ? "page" : undefined}
+                            onClick={() => onTabChange(item.id)}
+                          >
+                            <span>{item.label}</span>
+                            {item.id === "ai-connection" ? <AiConnectionWarnDot /> : null}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
                     </SidebarMenu>
                   </nav>
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
           </Sidebar>
-          {/* 높이는 틀에 고정 — 탭을 바꿔도 다이얼로그 크기가 출렁이지 않게 (G-62) */}
-          <main className="flex h-[min(640px,85svh)] min-w-0 flex-1 flex-col overflow-hidden md:h-[min(640px,calc(100dvh-4rem))]">
-            <header className="flex h-14 shrink-0 items-center px-4 md:h-16 md:px-6">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className="hidden md:block">설정</BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>{current.label}</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-            </header>
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-popover">
             {/* [UI-가정] G-63 좁은 화면: 왼쪽 탭 대신 4칸 고정 탭 줄 (320px 미만에서만 가로 스크롤) */}
-            <nav aria-label="설정 탭" className="shrink-0 overflow-x-auto px-4 pb-3 md:hidden">
+            <nav aria-label="설정 탭" className="shrink-0 overflow-x-auto px-4 pt-3 pb-3 md:hidden">
               <div className="grid min-w-72 grid-cols-4 gap-1">
                 {SETTINGS_TABS.map((item) => (
                   <Button
@@ -337,7 +342,10 @@ function SettingsDialog({
                 ))}
               </div>
             </nav>
-            <div id="settings-body" className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
+            <div
+              id="settings-body"
+              className="@container/settings flex-1 overflow-y-auto px-4 pt-0 pb-4 md:px-5 md:pt-5 md:pb-6"
+            >
               <TabBody key={`${session}:${tab}`} tab={tab} options={options} preview={preview} onNavigate={onNavigate} />
             </div>
           </main>

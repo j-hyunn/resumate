@@ -9,7 +9,7 @@
  */
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { RotateCcw, UserX } from "lucide-react"
+import { RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ProfileBasicsViewDto } from "@/lib/contracts/profile"
@@ -73,13 +73,16 @@ export function AccountTab({
 
   if (load.status === "loading")
     return (
-      <div className="space-y-4" aria-busy="true">
+      <div className="space-y-3" aria-busy="true">
         <span className="sr-only">계정 정보를 불러오는 중</span>
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-5 w-64" />
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-10 w-full" />
+        <Skeleton className="h-6 w-16" />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center gap-4">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-8 w-52" />
+          </div>
         ))}
+        <Skeleton className="h-[4.5rem] w-full" />
       </div>
     )
   if (load.status === "error")
@@ -103,13 +106,14 @@ export function AccountTab({
 
   return (
     <div className="flex flex-col gap-8">
-      <section aria-labelledby="settings-account-heading" className="space-y-4">
+      <section aria-labelledby="settings-account-heading" className="space-y-3">
         <h3 id="settings-account-heading" className="text-base leading-6 font-semibold">
           계정
         </h3>
-        <dl className="grid gap-1 sm:grid-cols-[8rem_1fr] sm:gap-3">
-          <dt className="text-sm leading-5 font-medium text-muted-foreground">이메일</dt>
-          <dd className="text-base break-all">{load.email}</dd>
+        {/* v5.12: 라벨 왼쪽 회색 6rem 열 · 값 진한 글자 (SettingsFieldRow와 같은 열) */}
+        <dl className="grid gap-1.5 @md/settings:grid-cols-[6rem_minmax(0,1fr)] @md/settings:items-center @md/settings:gap-0">
+          <dt className="text-base leading-6 text-muted-foreground">이메일</dt>
+          <dd className="text-base leading-6 break-all">{load.email}</dd>
         </dl>
       </section>
 
@@ -125,14 +129,15 @@ function DangerZone({ onNavigate }: { onNavigate: () => void }) {
   const router = useRouter()
   const guarded = useGuardedAction()
   return (
-    <section id={SETTINGS_ANCHORS.dangerZone} aria-labelledby="settings-danger-heading" className="scroll-mt-4 space-y-4">
+    <section id={SETTINGS_ANCHORS.dangerZone} aria-labelledby="settings-danger-heading" className="scroll-mt-4 space-y-3">
       <h3 id="settings-danger-heading" className="text-base leading-6 font-semibold">
         위험 구역
       </h3>
       <div className="flex flex-wrap gap-2">
         <SignOutButton />
+        {/* v5.12: 화면의 채운 버튼 모양·크기·배치, 색은 파괴적 (SD-A7 — 화면의 초록은 자리표시자). 아이콘 없음 */}
         <Button
-          variant="destructive-outline"
+          variant="destructive"
           onClick={() =>
             guarded(() => {
               onNavigate()
@@ -140,7 +145,6 @@ function DangerZone({ onNavigate }: { onNavigate: () => void }) {
             })
           }
         >
-          <UserX aria-hidden />
           회원 탈퇴
         </Button>
       </div>

@@ -48,7 +48,7 @@ export const FIELD_ID: Record<FieldKey, string> = {
   schoolName: "pb-school",
   degree: "pb-degree",
   status: "pb-grad-status",
-  period: "pb-start-year",
+  period: "pb-period", // v5.12: 기간 칸 PeriodCell 버튼 (연월 셀렉트는 그 팝오버 안)
   major: "pb-major",
   gpa: "pb-gpa",
 }
@@ -207,3 +207,25 @@ export function validate(v: ProfileFormValues): Errors {
   return errors
 }
 
+
+/**
+ * 기간 칸 `PeriodCell` 버튼의 오류 접근성 (QA-43-03). 연도·월 중 하나만 고른 경우(`true`)는 보이는 문구가 없지만
+ * (UI42-2), 화면 낭독기에는 sr-only 문장으로 알린다 — 그 문장은 [UI-가정]. 문구가 있으면 그 문구를 잇는다.
+ */
+export const PERIOD_PARTIAL_SR_TEXT = "연도와 월을 함께 골라 주세요" // [UI-가정] sr-only (QA-43-03)
+
+export function periodErrorA11y(error: string | true | undefined): {
+  invalid: boolean
+  /** id of the line the button points at (`aria-describedby`) */
+  describedBy: string | undefined
+  /** visible message */
+  message: string | undefined
+  /** screen-reader-only message (partial period) */
+  srMessage: string | undefined
+} {
+  if (!error) return { invalid: false, describedBy: undefined, message: undefined, srMessage: undefined }
+  const describedBy = `${FIELD_ID.period}-error`
+  return typeof error === "string"
+    ? { invalid: true, describedBy, message: error, srMessage: undefined }
+    : { invalid: true, describedBy, message: undefined, srMessage: PERIOD_PARTIAL_SR_TEXT }
+}

@@ -506,7 +506,8 @@ function ProviderPick({
         연결할 공급자를 골라 주세요
       </h2>
       {/* UX v5.17 S-41: AI 연결 탭과 같은 라디오 행 3개 (Gemini → GPT → Claude), 행 전체가 선택 버튼 */}
-      <ProviderRowGroup>
+      {/* S-41만 묶음 테두리를 유지한다 (design-system 5.11.2 v5.12) */}
+      <ProviderRowGroup bordered>
         <ul className="divide-y">
           {sortProviderRows(providers).map((c) => {
             const p = c.info.provider

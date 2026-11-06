@@ -5,8 +5,6 @@
  * 탭 4개(순서 고정): 계정 · AI 연결 · 약관 · 개선 요청. v5.10까지의 섹션 ID는 URL·링크 호환으로만 받는다
  * (`resolveSettingsSection`): withdraw → 계정(위험 구역), ai-usage → AI 연결(사용량 블록), consents · ai-data → 약관.
  */
-import { FileText, MessageSquarePlus, PlugZap, UserRound, type LucideIcon } from "lucide-react"
-
 export type SettingsTabId = "account" | "ai-connection" | "policies" | "feedback"
 
 /** v5.10 섹션 ID — `?settings=` 로 들어오면 아래 표대로 바꿔 연다 (design-system 5.11 호환표). */
@@ -15,14 +13,14 @@ export type LegacySettingsSectionId = "ai-usage" | "consents" | "ai-data" | "wit
 export interface SettingsTab {
   id: SettingsTabId
   label: string
-  icon: LucideIcon
 }
 
 export const SETTINGS_TABS: ReadonlyArray<SettingsTab> = [
-  { id: "account", label: "계정", icon: UserRound },
-  { id: "ai-connection", label: "AI 연결", icon: PlugZap },
-  { id: "policies", label: "약관", icon: FileText },
-  { id: "feedback", label: "개선 요청", icon: MessageSquarePlus },
+  // v5.12: 탭은 글자만 (원본 화면) — 아이콘 없음
+  { id: "account", label: "계정" },
+  { id: "ai-connection", label: "AI 연결" },
+  { id: "policies", label: "약관" },
+  { id: "feedback", label: "개선 요청" },
 ]
 
 /** Scroll anchors inside a tab body (5.11). */

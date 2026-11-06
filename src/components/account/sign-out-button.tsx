@@ -2,14 +2,14 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, LogOut } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { routes } from "@/lib/routes"
 import { clearUserUnsavedInput } from "@/components/common/clear-user-storage"
 import { signOutAction } from "./actions"
 
 /**
- * S-24 ① 위험 구역 [로그아웃] → S-01, 확인 없이 즉시 (UX v5.17 SD-A5·A7, design-system 5.11.1 `destructive-outline`).
+ * S-24 ① 위험 구역 [로그아웃] → S-01, 확인 없이 즉시 (UX v5.17 SD-A5·A7, design-system 5.11.1 v5.12 `destructive` 채움, 아이콘 없음).
  * `replace` so 뒤로 가기 doesn't reopen 설정; the session is treated as ended even if the call fails
  * (client goes to S-01 either way).
  */
@@ -18,7 +18,7 @@ export function SignOutButton() {
   const [busy, setBusy] = React.useState(false)
   return (
     <Button
-      variant="destructive-outline"
+      variant="destructive"
       disabled={busy}
       onClick={async () => {
         setBusy(true)
@@ -32,7 +32,7 @@ export function SignOutButton() {
         }
       }}
     >
-      {busy ? <Loader2 className="animate-spin" aria-hidden /> : <LogOut aria-hidden />}
+      {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
       로그아웃
     </Button>
   )

@@ -25,6 +25,9 @@ const buttonVariants = cva(
         // design-system 3.5 v4 (UQ-708): ghost button that starts a destructive action (삭제, 그래도 닫기)
         "destructive-ghost":
           "text-destructive hover:bg-destructive/10 hover:text-destructive aria-expanded:bg-destructive/10 aria-expanded:text-destructive dark:hover:bg-destructive/20",
+        // design-system 2 (v5.11, G-68): S-24 위험 구역 입구 (로그아웃 · 회원 탈퇴) — destructive but not the confirm button
+        "destructive-outline":
+          "border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50 dark:hover:bg-destructive/20",
         // 알림·경고 모달 보조 버튼 (2026-11 모달 개편): grey text, no fill at rest
         "muted-ghost":
           "text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",

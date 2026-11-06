@@ -1,30 +1,11 @@
-import { ScreenSuspense } from "@/components/common/screen-suspense"
-import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
-import { getPreviewState } from "@/lib/preview-state"
-import { getProfile } from "@/lib/data/career"
+import { permanentRedirect } from "next/navigation"
 import { routes } from "@/lib/routes"
-import { ProfileForm } from "@/components/career/profile-form"
-import { careerPreviewView } from "@/components/career/screen-state"
 
-// S-04 기본 프로필 편집
-type Props = { params: Promise<Record<string, never>>; searchParams: Promise<Record<string, string | string[] | undefined>> }
-
-export default function Page({ params, searchParams }: Props) {
-  return (
-    <ScreenSuspense>
-      <Screen params={params} searchParams={searchParams} />
-    </ScreenSuspense>
-  )
-}
-
-async function Screen({ searchParams }: Props) {
-  const state = getPreviewState(await searchParams)
-  const preview = careerPreviewView(state)
-  const profile = preview ? null : await getProfile()
-  return (
-    <>
-      <PageCrumbs items={[{ label: "커리어", href: routes.career() }, { label: "기본 프로필" }]} />
-      {preview ?? (profile ? <ProfileForm key={profile.updated_at} profile={profile} /> : null)}
-    </>
-  )
+/**
+ * ~~S-04 기본 프로필 편집~~ — 폐기 (UX v5.17 SD-A2, 5.1j). 같은 값은 S-24 ① 계정 탭 "내 정보"에서 고친다.
+ * 기존 주소는 커리어(S-08)로 영구 리다이렉트하면서 설정 다이얼로그 계정 탭을 연다
+ * (`/career?settings=account`, UX 02 "URL 처리" `[가정]`).
+ */
+export default function Page(): never {
+  permanentRedirect(routes.settings("account"))
 }

@@ -15,7 +15,6 @@ import type {
   DeletionEntityType,
   Education,
   Experience,
-  Profile,
   Project,
   ProjectDetail,
   ResultMode,
@@ -36,7 +35,6 @@ import {
   saveProject,
   saveProjectDetail,
   setProjectSkills,
-  updateProfile,
   type WriteOptions,
 } from "@/lib/data/career"
 import { guardRowSave } from "@/lib/data/row-save-guard"
@@ -73,9 +71,6 @@ const lookupId = (id: string | null, opts?: Opts) => id ?? opts?.client_id ?? nu
 // forms (autosave targets)
 // ---------------------------------------------------------------------------
 
-export async function saveProfileAction(patch: Partial<Profile>, opts?: Pick<Opts, "fail">) {
-  return updateProfile(patch, opts)
-}
 
 export async function saveExperienceAction(id: string | null, patch: Partial<Experience>, opts?: Opts): Promise<RowSaveResult<Experience>> {
   return guardRowSave(

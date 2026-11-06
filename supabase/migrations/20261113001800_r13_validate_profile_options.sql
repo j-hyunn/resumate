@@ -43,6 +43,7 @@ declare
   v_insert boolean := tg_op = 'INSERT';
   v_parent text;
   v_active boolean;
+  v_held text;
 begin
   if tg_table_name = 'profiles' then
     perform private.profile_option_check('job_search_status', new.job_search_status,
@@ -62,14 +63,19 @@ begin
   end if;
 
   -- profile_job_interests: job_family, then job_role under that family.
+  -- UI-42: save_profile_basics rewrites pairs (delete -> insert) and records the codes the user held
+  -- before the delete; a held code is "not newly chosen", so a retired one may be saved again.
+  v_held := ',' || coalesce(current_setting('resumate.held_job_codes', true), '') || ',';
   perform private.profile_option_check('job_family', new.job_family,
-    v_insert or new.job_family is distinct from old.job_family, 'job_family');
+    (v_insert and position(',family:' || new.job_family || ',' in v_held) = 0)
+      or (not v_insert and new.job_family is distinct from old.job_family), 'job_family');
 
   if new.job_role is not null then
     select o.is_active, o.parent_code into v_active, v_parent from public.profile_options o
      where o.category = 'job_role' and o.code = new.job_role;
     if not found
-       or ((v_insert or new.job_role is distinct from old.job_role) and not v_active) then
+       or (((v_insert and position(',role:' || new.job_role || ',' in v_held) = 0)
+            or (not v_insert and new.job_role is distinct from old.job_role)) and not v_active) then
       raise exception using errcode = 'P0001', message = 'invalid_profile_option', detail = 'job_role';
     end if;
     if v_parent is distinct from new.job_family then

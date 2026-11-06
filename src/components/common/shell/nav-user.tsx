@@ -60,8 +60,9 @@ export function useAccountSignOut() {
 }
 
 /**
- * 다크 모드 on/off (light ↔ dark only; "system" from 설정 › 화면 shows as whatever the OS resolves to, and
- * the first toggle pins it). The menu stays open so the switch can be seen flipping.
+ * 다크 모드 on/off (light ↔ dark only) — 화면 테마의 유일한 입구 (UX v5.17 SD-A16, design-system 5.11: 설정에
+ * "화면" 섹션은 없다). 저장값이 없으면(처음) 시스템 설정을 따르고, 첫 토글이 라이트/다크로 고정한다 (P-23).
+ * The menu stays open so the switch can be seen flipping.
  */
 function ThemeToggleItem() {
   const { setTheme } = useTheme()

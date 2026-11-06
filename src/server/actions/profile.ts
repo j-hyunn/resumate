@@ -3,9 +3,7 @@
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import {
   SaveProfileBasicsInput,
-  UpdateProfileInput,
   type ProfileBasicsViewDto,
-  type ProfileDto,
   type SaveProfileBasicsResult,
 } from "@/lib/contracts/profile";
 import { requireConsentedUser } from "@/server/auth/session";
@@ -32,23 +30,5 @@ export async function saveProfileBasics(input: unknown): Promise<ActionResult<Sa
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return profile.saveProfileBasics(supabase, parsed.data);
-  });
-}
-
-/** Legacy S-04 read (display_name only — the three dropped columns are gone, DM 2.1.1). */
-export async function getProfile(): Promise<ActionResult<ProfileDto>> {
-  return runAction(async () => {
-    const { supabase, user } = await requireConsentedUser();
-    return profile.getProfile(supabase, user);
-  });
-}
-
-/** Legacy S-04 save: `display_name` only. */
-export async function updateProfile(input: unknown): Promise<ActionResult<ProfileDto>> {
-  const parsed = UpdateProfileInput.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error);
-  return runAction(async () => {
-    const { supabase, user } = await requireConsentedUser();
-    return profile.updateProfile(supabase, user, parsed.data);
   });
 }

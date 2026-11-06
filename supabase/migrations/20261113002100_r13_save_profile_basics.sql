@@ -148,6 +148,15 @@ begin
    where p.id = v_uid
   returning p.updated_at into v_updated_at;
 
+  -- UI-42 (DM 2.1.1 "is_active = false is rejected only when newly chosen"): pairs are rewritten with
+  -- delete -> insert, so the trigger would see every pair as new and reject a retired code the user
+  -- already had. Hand the trigger the codes this user held before the delete, transaction-local.
+  -- Forging it only lets a caller keep/choose a *retired but still valid* code (existence and the
+  -- family -> role relation are still checked), so it is not a data-integrity hole.
+  perform set_config('resumate.held_job_codes',
+    coalesce((select string_agg('family:' || i.job_family || coalesce(',role:' || i.job_role, ''), ',')
+                from public.profile_job_interests i where i.user_id = v_uid), ''), true);
+
   delete from public.profile_job_interests i where i.user_id = v_uid;
 
   begin

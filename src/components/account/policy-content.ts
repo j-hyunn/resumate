@@ -66,11 +66,10 @@ export interface PolicySection {
   notes?: string[]
 }
 
-export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
-  // R13 (04 §2.1.3, D-UX-31): `/policies/ai_data_use`의 본문은 정적 문구가 아니라 `policy_versions`
-  // 머리글 + `ai_disclosures` 6행(공급자·등급별 요약)이다 — 페이지 구현은 resumate-ui 후속(S-30 네 번째 문서).
-  // 여기 빈 목록은 타입을 채우는 자리이고, 구현이 들어오면 이 항목은 필요 없어진다.
-  ai_data_use: [],
+/** Documents whose whole body is static copy (docs/legal). `ai_data_use` is built from `ai_disclosures` rows. */
+export type StaticPolicyType = Exclude<PolicyType, "ai_data_use">
+
+export const POLICY_DOCUMENTS: Record<StaticPolicyType, PolicySection[]> = {
   terms: [
     {
       heading: "목적",
@@ -390,3 +389,26 @@ export const POLICY_DOCUMENTS: Record<PolicyType, PolicySection[]> = {
     },
   ],
 }
+
+// ---------------------------------------------------------------------------
+// S-30 AI 데이터 처리 (`/policies/ai_data_use`, UX v5.17 SD-A13 · SD-A9)
+// ---------------------------------------------------------------------------
+
+/**
+ * 공급자별 요약 단락 앞의 조항 (원칙 + 보내는 내용). [UI-가정] 조항 구성 — 플로우는 "AI 고지 전문 + 공급자별
+ * 요약 + 원칙"만 정했고 docs/legal에 이 문서의 원문이 없다. 문장은 기존 화면 문구(S-24 ③ 원칙 줄, C-21 전송 항목)를 쓴다.
+ */
+export const AI_DATA_USE_SECTIONS: PolicySection[] = [
+  {
+    heading: "원칙",
+    paragraphs: [
+      "Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 키는 서버에 암호화해 저장하고 화면에는 마지막 4자리만 보여요.",
+      "AI 기능은 내가 연결한 공급자의 키로 실행되고, 공급자 데이터 사용은 연결한 공급자·등급 정책을 따라요.",
+    ],
+  },
+  {
+    heading: "AI 공급자에게 보내는 내용",
+    paragraphs: ["AI 기능을 실행하면 아래 내용이 연결한 AI 공급자(국외)에게 전송돼요."],
+    items: [...CROSS_BORDER_ITEMS],
+  },
+]

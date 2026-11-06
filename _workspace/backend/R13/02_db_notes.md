@@ -184,3 +184,8 @@
 - `evidence_links.source_type` CHECK 변경·기존 `profile` 행 삭제·`source_deleted_at` 백필 없음
 - 과거 결과 행의 `prompt_version`·`input_hash` 수정 없음(#13)
 - `ai_price_tables.version` 문자열은 이미 `v{YYYY-MM-DD}`(`v2026-10-28`·`v2026-12-01`·`v2027-01-01`) — 확인만 하고 바꾸지 않음(#8 ⓞ)
+
+## UI 42 런 후속 수정 (리더, 2026-11-06)
+
+- **내려간 쌍 코드 재저장** — `20261113002100`·`20261113001800`을 그대로 고쳤다(원격 미반영 파일). RPC가 delete 전에 기존 코드를 `set_config('resumate.held_job_codes', 'family:x,role:y,...', true)`로 넘기고, 트리거는 INSERT에서 그 코드면 `p_is_new = false`로 본다. pgTAP `save_profile_basics.test.sql` +7. 전체 pgTAP **65 파일 / 3055**.
+

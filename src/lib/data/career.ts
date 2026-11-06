@@ -38,7 +38,6 @@ import {
   type SkillDto,
 } from "@/lib/contracts/career"
 import { AppError, invalid } from "@/lib/contracts/errors"
-import { UpdateProfileInput } from "@/lib/contracts/profile"
 import { requireConsentedUser } from "@/server/auth/session"
 import { wasRowDeleted } from "@/server/auth/user-cookies"
 import * as career from "@/server/services/career"
@@ -51,7 +50,6 @@ import {
   loadProjectSkillRows,
 } from "@/server/services/career/rows"
 import type { Database } from "@/server/db/database.types"
-import * as profiles from "@/server/services/profile"
 import { previewOr, unwrap } from "./source"
 
 // ---------------------------------------------------------------------------
@@ -249,48 +247,6 @@ function skillRow(dto: SkillDto, userId: string): Skill {
     created_at: dto.createdAt,
     updated_at: dto.updatedAt,
   }
-}
-
-// ---------------------------------------------------------------------------
-// profile (S-04)
-// ---------------------------------------------------------------------------
-
-export async function getProfile(): Promise<Profile> {
-  return previewOr(
-    async () => {
-      const db = await mockRequest()
-      return clone(db.profiles[0])
-    },
-    async () => {
-      const { supabase, user } = await requireConsentedUser()
-      return (await loadProfileRow(supabase, user.id)) as Profile
-    },
-  )
-}
-
-/**
- * R13 (DM 2.1.1): only `display_name` is left — `desired_job_title`,
- * `total_years_of_experience`, `interested_industries` are dropped columns.
- * 내 정보의 나머지 값은 `./profile` (`saveProfileBasics`, S-24 ① 계정 탭)으로 저장한다.
- */
-export async function updateProfile(patch: Partial<Pick<Profile, "display_name">>, opts?: WriteOptions): Promise<Profile> {
-  return previewOr(
-    async () => {
-      const db = await mockRequest()
-      maybeFail(opts)
-      const profile = db.profiles[0]
-      Object.assign(profile, patch)
-      stamp(profile)
-      return clone(profile)
-    },
-    async () => {
-      const { supabase, user } = await requireConsentedUser()
-      requirePatch(patch)
-      const input = parseInput(UpdateProfileInput, defined({ displayName: patch.display_name }))
-      await profiles.updateProfile(supabase, user, input)
-      return (await loadProfileRow(supabase, user.id)) as Profile
-    },
-  )
 }
 
 // ---------------------------------------------------------------------------

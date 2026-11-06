@@ -1,15 +1,16 @@
 "use client"
 
 /**
- * S-40 AI 연결 (02 S-40, FL-18~20, design-system 5.7) — the settings dialog section "AI 연결"
- * (there is no S-40 page).
+ * S-24 ② AI 연결 탭 (UX v5.17 S-24 ②, design-system 5.11.2) = 블록 ① 모델 공급자 설정(S-40, 공급자 라디오 행
+ * 3개 `ProviderRow`) + 블록 ② 모델 공급자 별 사용량 확인(S-42, `AiUsageByProvider`). There is no S-40 / S-42 page.
  *
  * The dialog renders this outside <Suspense>, so the panel never reads `?state=` itself: the dialog
  * passes `preview` (the ?state= it was opened with by URL) instead. Hooks that read search params
  * (AiErrorNotice) sit inside local <Suspense> boundaries.
  *
- * preview values: ai-locked · key-invalid · key-check · no-active · paused ·
- * recheck-failed · save-failed · ai-return · consent-required (v5.3 활성 카드 "동의 필요" + "동의하기")
+ * preview values: loading · error · ai-locked · key-invalid · key-check · no-active · paused ·
+ * recheck-failed · save-failed · ai-return · consent-required (v5.3 활성 행 "동의 필요" + "동의하기") ·
+ * 사용량 블록: empty (이번 달 기록 없음) · usage-error · usage-loading (+ loading · error · ai-locked)
  *
  * v5.3 (02 S-40, R-67 / A1 / A20; design-system 5.7 (v3)):
  * - 활성 카드 "동의 필요" (`ai_connection.consent_required`, key valid / needs_check): C-19 동의 필요형 배지,
@@ -21,7 +22,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ChevronRight, CornerUpLeft, Gauge, Loader2, MoreHorizontal, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react"
+import { CornerUpLeft, Loader2, MoreHorizontal, RotateCcw, TriangleAlert } from "lucide-react"
 import type { AiErrorCode, AiProviderKeyPublic, AiProviderName, ConnectionTier } from "@/types/db"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -64,23 +65,24 @@ import {
 } from "@/components/common/ai-connect-return"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
 import { DataUseConsent, DataUseConsentDialog } from "@/components/common/data-use-consent"
-import { useSettingsDialog } from "@/components/common/shell/settings-dialog"
-import { formatUsd } from "./ai-format"
 import { needsDataUseConsentAction } from "@/lib/data/actions"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
+import { PROVIDER_ROW_NAMES } from "./provider-names"
 import {
-  ProviderCardFrame,
   ProviderConsentLine,
+  ProviderRowFrame,
+  ProviderRowGroup,
   ProviderStatusLine,
   StaticConnectionBadge,
-  providerCardId,
-  providerCardState,
-} from "./provider-card"
-import { Item } from "@/components/ui/item"
+  providerRowId,
+  providerRowState,
+  sortProviderRows,
+} from "./provider-row"
+import { AiUsageByProvider } from "./ai-usage-panel"
 
-export const S40_INTRO =
-  "AI 기능은 선택이에요. 본인 AI 키를 연결하면 인사이트·서류 초안·모의 면접·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
-const S40_PRINCIPLE = "Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 키는 서버에 암호화해 저장하고 화면에는 마지막 4자리만 보여요"
+/** 블록 ① 안내 (UX v5.17 S-24 ② SD-1) */
+const BLOCK1_INTRO =
+  "본인 AI 키를 연결하면 연결한 모델의 한도 내에서 인사이트·서류 초안·모의 면접·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
 
 /** `activate=1`: S-41 등급·동의 (mode=tier) 끝나면 활성 공급자로 지정 (routes.aiConnect `activate`) */
 export function connectHref(provider: AiProviderName, mode?: "replace" | "tier", activate?: boolean): string {
@@ -149,7 +151,9 @@ function applyPreview(o: AiConnectionOverview, preview: string | null): AiConnec
 type Load = { status: "loading" } | { status: "error" } | { status: "ready"; data: AiConnectionOverview }
 
 async function loadOverview(preview: string | null): Promise<{ load: Load; returnTarget: AiReturnTarget | null }> {
+  if (preview === "loading") return { load: { status: "loading" }, returnTarget: null }
   try {
+    if (preview === "error") throw new Error("preview error")
     const data = await getAiConnectionOverviewAction()
     // FL-19 복귀 대상 (browser session); `ai-return` previews a C-18 arrival
     const returnTarget =
@@ -164,17 +168,19 @@ async function loadOverview(preview: string | null): Promise<{ load: Load; retur
 export function AiConnectionPanel({
   onNavigate,
   focusProvider = null,
+  scrollTo = null,
   preview = null,
 }: {
   /** closes the dialog when a link leaves it */
   onNavigate?: () => void
-  /** UQ-267: scroll to this provider's card once the cards load (C-19 경고 → "S-40 해당 카드") */
+  /** UQ-267: scroll to this provider's row once the rows load (C-19 경고 → "S-40 해당 행") */
   focusProvider?: AiProviderName | null
+  /** `#settings-ai-usage` when opened from the old `ai-usage` section id */
+  scrollTo?: string | null
   /** dev `?state=` value the dialog was opened with by URL */
   preview?: string | null
 }) {
   const router = useRouter()
-  const { openSettings } = useSettingsDialog()
   const [load, setLoad] = React.useState<Load>({ status: "loading" })
   const [returnTarget, setReturnTarget] = React.useState<AiReturnTarget | null>(null)
   const [rechecking, setRechecking] = React.useState<AiProviderName | null>(null)
@@ -208,30 +214,51 @@ export function AiConnectionPanel({
     }
   }, [preview])
 
-  // UQ-267: cards load on the client, so scroll to the requested card once they exist
+  // UQ-267: rows load on the client, so scroll to the requested row (or the usage block) once they exist
   const ready = load.status === "ready"
   React.useEffect(() => {
-    if (!ready || !focusProvider) return
-    document.getElementById(providerCardId(focusProvider))?.scrollIntoView({ block: "start" })
-  }, [ready, focusProvider])
+    if (!ready) return
+    const id = focusProvider ? providerRowId(focusProvider) : scrollTo
+    if (id) document.getElementById(id)?.scrollIntoView({ block: "start" })
+  }, [ready, focusProvider, scrollTo])
 
   const leave = () => onNavigate?.()
 
   if (load.status === "loading")
     return (
-      <div className="space-y-3" aria-busy="true">
+      <div className="flex flex-col gap-8" aria-busy="true">
         <span className="sr-only">AI 연결을 불러오는 중</span>
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-lg" />
-        ))}
+        <ProviderRowGroup>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="px-4 py-3">
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ))}
+        </ProviderRowGroup>
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-56" />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
       </div>
     )
   if (load.status === "error")
     return (
-      <div className="space-y-3" role="alert">
-        {/* [UI-가정] 불러오기 실패 문구 */}
-        <p className="text-sm text-destructive">AI 연결 정보를 불러오지 못했어요.</p>
-        <Button variant="outline" size="sm" onClick={() => void fetchData()}>
+      <div className="space-y-3 py-6 text-center" role="alert">
+        {/* [UI-가정] 블록 ① 불러오기 실패 문구 (v5.10 그대로) */}
+        <p className="text-base">AI 연결 정보를 불러오지 못했어요</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setLoad({ status: "loading" })
+            void loadOverview(preview === "error" ? null : preview).then((res) => {
+              setLoad(res.load)
+              setReturnTarget(res.returnTarget)
+            })
+          }}
+        >
           <RotateCcw aria-hidden />
           다시 불러오기
         </Button>
@@ -306,8 +333,14 @@ export function AiConnectionPanel({
     }
   }
 
+  const rows = sortProviderRows(data.providers)
+  const keyTiers = Object.fromEntries(data.providers.map((p) => [p.info.provider, p.key?.connection_tier ?? null])) as Record<
+    AiProviderName,
+    ConnectionTier | null
+  >
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-8">
       {returnTarget ? (
         <Alert variant="info">
           <CornerUpLeft aria-hidden />
@@ -349,108 +382,110 @@ export function AiConnectionPanel({
         </Alert>
       ) : null}
 
-      <p className="text-base leading-[1.6] text-muted-foreground">{S40_INTRO}</p>
+      <section aria-labelledby="settings-ai-providers" className="space-y-4">
+        <h3 id="settings-ai-providers" className="text-base leading-6 font-semibold">
+          모델 공급자 설정
+        </h3>
+        <p className="text-base text-muted-foreground">{BLOCK1_INTRO}</p>
 
-      {anyKey && !activeCard ? (
-        <Alert variant="warning">
-          <TriangleAlert aria-hidden />
-          <AlertTitle className="font-normal">AI 기능이 잠겨 있어요. 사용할 공급자를 골라 주세요</AlertTitle>
-        </Alert>
-      ) : null}
+        {anyKey && !activeCard ? (
+          <Alert variant="warning">
+            <TriangleAlert aria-hidden />
+            <AlertTitle className="font-normal">AI 기능이 잠겨 있어요. 사용할 공급자를 골라 주세요</AlertTitle>
+          </Alert>
+        ) : null}
 
-      <RadioGroup
-        aria-label="활성 공급자"
-        value={activeCard?.info.provider ?? ""}
-        onValueChange={(v) => {
-          const card = data.providers.find((c) => c.info.provider === v)
-          if (card && !card.is_active) {
-            setSwitchFailed(false)
-            setSwitchTo(card)
-          }
-        }}
-        className="gap-3"
-      >
-        {data.providers.map((card) => {
-          const p = card.info.provider
-          const state = providerCardState({ key: card.key, isAvailable: card.info.is_available, rechecking: rechecking === p })
-          const selectable = !!card.key && card.info.is_available && card.key.status !== "invalid"
-          return (
-            <ProviderCardFrame
-              key={p}
-              anchor
-              provider={p}
-              description={card.info.description}
-              recommended={card.info.is_recommended}
-              state={state}
-              active={card.is_active}
-              radio={
-                selectable || (card.key && card.is_active) ? (
-                  <RadioGroupItem
-                    value={p}
-                    aria-label={`${AI_PROVIDER_LABELS[p]}를 활성 공급자로`}
-                    disabled={!selectable || rechecking !== null}
-                  />
-                ) : null
-              }
-              badge={
-                card.is_active && card.key ? (
-                  <StaticConnectionBadge
-                    provider={p}
-                    tier={card.key.connection_tier}
-                    status={card.key.status}
-                    consent={card.is_active && consentRequired}
-                  />
-                ) : null
-              }
-              statusLine={
-                card.is_active && consentRequired && card.key && state !== "rechecking" ? (
-                  <>
-                    <ProviderStatusLine state={state} provider={p} keyRow={card.key} />
-                    <ProviderConsentLine
-                      provider={p}
-                      tier={card.key.connection_tier}
-                      // Q-15 (v5.13): a live consent for this provider·tier means the disclosure changed
-                      reconsent={preview === "consent-required" || (!!card.consent && !card.consent.withdrawn_at && card.consent.connection_tier === card.key.connection_tier)}
-                    />
-                  </>
-                ) : (
-                  <ProviderStatusLine state={state} provider={p} keyRow={card.key} />
-                )
-              }
-              action={
-                <CardActions
-                  card={card}
+        <RadioGroup
+          aria-label="활성 공급자"
+          value={activeCard?.info.provider ?? ""}
+          onValueChange={(v) => {
+            const card = data.providers.find((c) => c.info.provider === v)
+            if (card && !card.is_active) {
+              setSwitchFailed(false)
+              setSwitchTo(card)
+            }
+          }}
+          className="gap-0"
+        >
+          <ProviderRowGroup>
+            {rows.map((card) => {
+              const p = card.info.provider
+              const state = providerRowState({ key: card.key, isAvailable: card.info.is_available, rechecking: rechecking === p })
+              const selectable = !!card.key && card.info.is_available && card.key.status !== "invalid"
+              const consentHere = card.is_active && consentRequired
+              // 상태 배지: 활성 행은 C-19 연결 배지, 무효·확인 필요는 활성이 아니어도 (그 행의 키 상태)
+              const showBadge = !!card.key && (card.is_active || card.key.status !== "valid")
+              return (
+                <ProviderRowFrame
+                  key={p}
+                  anchor
+                  provider={p}
+                  recommended={card.info.is_recommended && !card.key}
                   state={state}
-                  busy={rechecking !== null}
-                  consentRequired={card.is_active && consentRequired}
-                  onConsent={() => setConsentOpen(true)}
-                  onNavigate={leave}
-                  onRecheck={() => void recheck(card)}
-                  onDelete={() => setDeleteTarget(card)}
-                  onDisclosure={() => setDisclosureOf(card)}
+                  active={card.is_active}
+                  radio={
+                    card.key ? (
+                      <RadioGroupItem
+                        value={p}
+                        aria-label={`${PROVIDER_ROW_NAMES[p]}를 활성 공급자로`}
+                        disabled={!selectable || rechecking !== null}
+                      />
+                    ) : null
+                  }
+                  badge={
+                    showBadge && card.key ? (
+                      <StaticConnectionBadge provider={p} tier={card.key.connection_tier} status={card.key.status} consent={consentHere} />
+                    ) : null
+                  }
+                  statusLine={<ProviderStatusLine state={state} provider={p} keyRow={card.key} />}
+                  extra={
+                    state === "invalid" ? (
+                      <p className="text-sm text-muted-foreground">무효 키는 교체한 뒤 활성으로 고를 수 있어요</p>
+                    ) : consentHere && card.key && state !== "rechecking" ? (
+                      <ProviderConsentLine
+                        provider={p}
+                        tier={card.key.connection_tier}
+                        // Q-15 (v5.13): a live consent for this provider·tier means the disclosure changed
+                        reconsent={
+                          preview === "consent-required" ||
+                          (!!card.consent && !card.consent.withdrawn_at && card.consent.connection_tier === card.key.connection_tier)
+                        }
+                      />
+                    ) : null
+                  }
+                  action={
+                    <RowActions
+                      card={card}
+                      state={state}
+                      busy={rechecking !== null}
+                      consentRequired={consentHere}
+                      onConsent={() => setConsentOpen(true)}
+                      onNavigate={leave}
+                      onRecheck={() => void recheck(card)}
+                      onDelete={() => setDeleteTarget(card)}
+                      onDisclosure={() => setDisclosureOf(card)}
+                    />
+                  }
+                  footer={
+                    recheckError?.provider === p ? (
+                      <React.Suspense fallback={null}>
+                        <AiErrorNotice code={recheckError.code} provider={p} size="inline" aiRetry={false} onRetry={() => void recheck(card)} />
+                      </React.Suspense>
+                    ) : null
+                  }
                 />
-              }
-              footer={
-                recheckError?.provider === p ? (
-                  <React.Suspense fallback={null}>
-                    <AiErrorNotice code={recheckError.code} provider={p} size="inline" aiRetry={false} onRetry={() => void recheck(card)} />
-                  </React.Suspense>
-                ) : null
-              }
-            />
-          )
-        })}
-      </RadioGroup>
+              )
+            })}
+          </ProviderRowGroup>
+        </RadioGroup>
+      </section>
 
-      {/* 사용량 입구 — 섹션만 바꾼다 (5.7) */}
-      <Item variant="outline" size="lg" className="justify-between gap-3" onClick={() => openSettings("ai-usage")}>
-        <UsageEntryText cost={data.month_estimated_cost_usd} />
-      </Item>
-
-      <p className="flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-        {S40_PRINCIPLE}
-      </p>
+      <AiUsageByProvider
+        preview={preview}
+        activeProvider={activeCard?.info.provider ?? null}
+        keyTiers={keyTiers}
+        connected={anyKey}
+      />
 
       {/* 활성 전환 확인 (F-AI-03) */}
       <AlertDialog open={!!switchTo} onOpenChange={(o) => !switching && !o && setSwitchTo(null)}>
@@ -544,20 +579,8 @@ export function switchConfirmText(provider: AiProviderName, tier: ConnectionTier
   return `다음 실행부터 ${name}(${CONNECTION_TIER_LABELS[tier]})로 실행돼요. 다시 시도·다시 생성·다시 채점도 ${name}${directionParticle(name)} 해요. 진행 중인 작업만 원래 공급자로 끝까지 해요`
 }
 
-function UsageEntryText({ cost }: { cost: number }) {
-  return (
-    <>
-      <span className="flex items-center gap-2 text-base">
-        <Gauge className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="tabular-nums">이번 달 Resumate에서 약 {formatUsd(cost)} (예상치)</span>
-      </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-    </>
-  )
-}
-
-/** [3열] 미연결: 연결하기 / 무효: 키 교체 / 확인 필요: 다시 확인 + ⋯ 카드 메뉴 */
-function CardActions({
+/** 행 오른쪽 동작: 미연결 [연결] / 무효 [키 교체] / 확인 필요 [다시 확인] / 동의 필요 [동의하기] + ⋯ 키 관리 메뉴 */
+function RowActions({
   card,
   state,
   busy,
@@ -569,9 +592,9 @@ function CardActions({
   onDisclosure,
 }: {
   card: ProviderCardData
-  state: ReturnType<typeof providerCardState>
+  state: ReturnType<typeof providerRowState>
   busy: boolean
-  /** v5.3 활성 카드 동의 필요 → "동의하기" (default sm, 3열 앞) */
+  /** v5.3 활성 행 동의 필요 → "동의하기" (default sm) */
   consentRequired?: boolean
   onConsent?: () => void
   onNavigate: () => void
@@ -580,18 +603,19 @@ function CardActions({
   onDisclosure: () => void
 }) {
   const p = card.info.provider
-  const name = AI_PROVIDER_LABELS[p]
+  const name = PROVIDER_ROW_NAMES[p]
   if (!card.key) {
     if (state === "paused")
       return (
         <Button size="sm" variant="outline" disabled>
-          연결하기
+          연결
         </Button>
       )
+    // Gemini default · GPT·Claude outline (design-system 5.11.2)
     return (
       <Button size="sm" variant={card.info.is_recommended ? "default" : "outline"} asChild>
-        <Link href={connectHref(p)} onClick={onNavigate} aria-label={`${name} 연결하기`}>
-          연결하기
+        <Link href={connectHref(p)} onClick={onNavigate} aria-label={`${name} 연결`}>
+          연결
         </Link>
       </Button>
     )
@@ -616,7 +640,7 @@ function CardActions({
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={`${name} 카드 메뉴`} disabled={state === "rechecking"}>
+          <Button variant="ghost" size="icon-sm" aria-label={`${name} 키 관리`} disabled={state === "rechecking"}>
             <MoreHorizontal aria-hidden />
           </Button>
         </DropdownMenuTrigger>

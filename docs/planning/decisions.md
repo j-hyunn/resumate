@@ -720,6 +720,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
   - 프롬프트 ~~8종~~ **10종**의 `prompt_version`이 올라간다(AI v4.12 → **v4.12a**에서 구현 번호로 정정: `common.v3`·`ai-02.match.v5`·`ai-02.synthesize.v5`·`ai-03.generate.v4`·`ai-04.generate.v4`·`ai-04.adjust.v4`·`ai-05.generate.v4`·**`ai-06.evaluate.v4`**·`ai-12.reply.v7`·`ai-13.reply.v3`). 과거 결과 행은 고치지 않고, 배포 시점에 동일 입력 재사용이 한 번 끊긴다
   - **구현 2026-11-05 (백엔드 R13, PR #58)** — 14개 항목 전부, 로컬 검증. **원격 미반영**(2단 배포, `_workspace/backend/R13/05_release.md`). 계획 밖 2건: 탈퇴 RPC가 `profile_job_interests`를 지움, `computed_total_months`의 public 래퍼(DM v4.12a 6.2)
 - **UI** (resumate-ui): S-24를 탭 4개로 재구현(계정 / AI 연결 / 약관 / 개선 요청), 계정 탭 내 정보 섹션 저장 + 오류 6종, **S-04 폐기**와 `/career/profile` 리다이렉트, 위험 구역(로그아웃·회원 탈퇴), AI 연결 탭에 S-40 + S-42 통합(라디오 행·플랜 안내 문구·공급자 탭·교차 집계 표), 약관 탭 4문서 + 선택 동의 토글 2개, `/policies/ai_data_use` 페이지, 근거 칩 `profile`의 "원본으로 이동" 비활성. 문구는 UX v5.17
+  - **반영 2026-11-06 (UI 42 런, PR #58)** — 전부 구현, UI QA 1라운드 Minor 7 수정. **브라우저 미확인**(사용자 결정 — 확장 미연결). 기획 확인 필요 9건은 `docs/ui/screen-status.md` "42 런"
 - **남은 사용자 결정**: **없음** — SD-Q1(주소 없이 "준비 중"으로 출시)·`ai_data_use` 버전(`2026-11-05` 확정)·컬럼 drop 승인은 2026-11-05에 확정했다(3.23). SD-Q2 · SD-Q3 (가)(나)(다) · D-DM-13 · D-DM-14 · D-DM-15는 2026-11-05에 모두 확정했다(3.22 후속 확정 표)
 - **출시 전 확인**: SD-Q3 (다)로 약관 탭에서 동의 이력 열람 경로가 사라지므로 **법무 확인 권장**(PIPA)
 

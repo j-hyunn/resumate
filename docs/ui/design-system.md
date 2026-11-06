@@ -1,7 +1,7 @@
-# Resumate 디자인 시스템 v5.10
+# Resumate 디자인 시스템 v5.11
 
-> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤 / v5.7: 2026-11-05, 커리어 화면(S-08 목록·S-09·S-34·S-43 패널)·커리어 항목 추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제 — OD-D4·OD-C1·OD-C2·OD-P2 / v5.8: 2026-11-05, 답 없는 메시지 줄·C-22 드롭다운 확정 — U36-3·U36-4 / v5.9: 2026-11-05, C-17 점수 표시를 플로우 v5.14에 맞춤·"자기소개서 삭제됨" 표식·CR-23 용어 — UQ-387 / v5.10: 2026-11-05, S-44 본문 칸 높이 고정 해제 — 사용자 요청)
-> 기준 기획: **v5.9 개정분(3.16 C-17·A4 "자기소개서 삭제됨" 표식·CR-23 화면 용어)은 플로우(UX) v5.14**(결정 원천 `docs/planning/decisions.md` 3.18 OD-I1·OD-I2·OD-I6·OD-D1, 3.19 U36-1·U36-2, 시각 세부는 구현 코드 `score-display.tsx`·`result-view.tsx`·`session-status.tsx`·`session-list.tsx` 기준). **v5.7 개정분(커리어 화면·추가·수정 모달·C-24 폐기·되돌리기 삭제)은 PRD v4.13 · 플로우(UX) v5.13 · AI v4.11 · 데이터 모델 v4.11**(결정 원천 `docs/planning/decisions.md` 3.18 OD-C1·OD-C2·OD-P2·OD-D4, 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx`가 기준). **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 화면 — S-08 목록·S-09·S-34·S-43 패널·C-22·C-25 — 의 시각 규칙은 (v5.7)에서 코드 기준으로 정리했다: 5.6.1, 6장 A2. C-24는 폐기, 8.4 P-15 해소) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`, v5.7은 `(v5.7)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
+> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤 / v5.7: 2026-11-05, 커리어 화면(S-08 목록·S-09·S-34·S-43 패널)·커리어 항목 추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제 — OD-D4·OD-C1·OD-C2·OD-P2 / v5.8: 2026-11-05, 답 없는 메시지 줄·C-22 드롭다운 확정 — U36-3·U36-4 / v5.9: 2026-11-05, C-17 점수 표시를 플로우 v5.14에 맞춤·"자기소개서 삭제됨" 표식·CR-23 용어 — UQ-387 / v5.10: 2026-11-05, S-44 본문 칸 높이 고정 해제 — 사용자 요청 / v5.11: 2026-11-05, 설정 다이얼로그 왼쪽 탭 4개 재작성·S-04 폐기 정리 — 결정 사이클 settings-dialog SD-*)
+> 기준 기획: **v5.11 개정분(5.11 설정 다이얼로그 신설, 5.1·5.7 S-40/S-42 정리, 3.1·3.2 `profile` 근거, 2장 `destructive-outline`·`switch`, S-04 폐기 정리)은 PRD v4.14 · 플로우(UX) v5.17a · AI v4.12a · 데이터 모델 v4.12a**(결정 원천 `docs/planning/decisions.md` 3.22 SD-1~SD-6·SD-A1~SD-A19, 3.23 R13-U1~U4, 4.16. **Figma 없음** — 사용자가 올린 원래 화면 3장은 파일로 남아 있지 않고, 플로우 S-24 ①~④ 컴포넌트 표가 정본이다). **v5.9 개정분(3.16 C-17·A4 "자기소개서 삭제됨" 표식·CR-23 화면 용어)은 플로우(UX) v5.14**(결정 원천 `docs/planning/decisions.md` 3.18 OD-I1·OD-I2·OD-I6·OD-D1, 3.19 U36-1·U36-2, 시각 세부는 구현 코드 `score-display.tsx`·`result-view.tsx`·`session-status.tsx`·`session-list.tsx` 기준). **v5.7 개정분(커리어 화면·추가·수정 모달·C-24 폐기·되돌리기 삭제)은 PRD v4.13 · 플로우(UX) v5.13 · AI v4.11 · 데이터 모델 v4.11**(결정 원천 `docs/planning/decisions.md` 3.18 OD-C1·OD-C2·OD-P2·OD-D4, 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx`가 기준). **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 화면 — S-08 목록·S-09·S-34·S-43 패널·C-22·C-25 — 의 시각 규칙은 (v5.7)에서 코드 기준으로 정리했다: 5.6.1, 6장 A2. C-24는 폐기, 8.4 P-15 해소) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`, v5.7은 `(v5.7)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
 
@@ -23,7 +23,7 @@
 ### 1.1 색 — shadcn CSS 변수
 
 - 형식: **OKLCH**. 파운데이션은 shadcn/ui 최신판(Tailwind CSS v4, `@theme inline`)으로 스캐폴드한다고 보고 작성했다 `[가정]`. Tailwind v3 + HSL 판으로 스캐폴드하면 같은 값을 HSL로 바꿔 쓰되 이름은 그대로 둔다.
-- 다크 모드: `.dark` 클래스 방식(shadcn 기본). 설정 › 화면에서 시스템 설정/라이트/다크를 고른다(8장 Q-2, 2026-10-29 결정).
+- 다크 모드: `.dark` 클래스 방식(shadcn 기본). (v5.11) 전환은 **L-01·L-02 계정 메뉴의 "다크 모드" 스위치** 한 곳이다(플로우 v5.17 SD-A16·OD-S1 — 설정 다이얼로그에는 두지 않는다). 저장값이 없으면 시스템 설정을 따르고, 스위치를 누르면 라이트/다크로 고정된다(8장 Q-2, 5.11 "화면 테마").
 - 아래 블록을 `src/app/globals.css`에 **그대로** 복사한다. 표의 hex는 확인용 근사값이다.
 
 #### 1.1.1 역할별 토큰 표
@@ -537,7 +537,7 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `w-sidebar` | 16rem (256px), 아이콘 레일 3.5rem | 왼쪽 메뉴 (`--sidebar-width: 16rem`, 5.1 메뉴 크기) |
 | `h-topbar` | `h-16` (64px) | 상단 바(사이드바 토글 · 이동 경로), 본문 패널 안에서 `sticky top-0` |
 | `max-w-prose-edit` | `max-w-[42rem]` (672px, 16px 한글 약 42자) | 긴 글 편집·읽기 열 (S-35 필드, S-19 문서, S-33 답변, 대화 메시지 열, S-30). (v5.5) L-02 문서형 페이지에는 쓰지 않는다 |
-| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(S-04, S-14, S-20, S-24). (v5.7) S-09·S-34는 S-08 패널, S-10은 L-02라 쓰지 않는다 |
+| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(S-14, S-20, S-25). (v5.7) S-09·S-34는 S-08 패널, S-10은 L-02라 쓰지 않는다. (v5.11) ~~S-04~~는 폐기(플로우 v5.17 SD-A2 — 같은 필드는 설정 계정 탭 "내 정보"), S-24는 다이얼로그(5.11)라 쓰지 않는다 |
 | `max-w-page` | `max-w-6xl` (1152px) | 목록·허브 화면(S-08, S-13, S-31, S-37) |
 | 전체 폭 | 제한 없음 | S-39 보드, S-36 대화(2단) |
 | `w-side-panel` | `w-80` (320px) / `2xl:w-96` | S-19 오른쪽 패널 |
@@ -557,7 +557,7 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 
 | shadcn 컴포넌트 | 쓰는 곳 | 커스텀 variant / 규칙 |
 |-----------------|---------|----------------------|
-| `button` | 전부 | variant: `default`(primary, 화면당 주 버튼 1개) · `secondary` · `outline` · `ghost`(`aria-current` 선택, `data-pending` 흐림) · `link` · `destructive` · (v4) `destructive-ghost`(삭제를 시작하는 ghost, 빨간 글자 + `bg-destructive/10` hover) · (v4) `destructive-link`(빨간 오류 문장 안 링크) · (v4) `warning-outline`(경고 테두리 버튼) · (v5, UQ-BR-9) `warning-ghost`(경고 묶음 여닫기 트리거, 1.3 표). (v5, UQ-BR-7) ghost는 `aria-pressed`도 `aria-current`과 같은 초록 선택 모양. size: `xs`(h-7, text-xs) · `sm`(h-8, text-sm) · `default`(h-10, text-base) · `lg`(h-11) · `icon`(size-9) · `icon-xs`(size-7) · `icon-sm`(size-8) · `icon-lg`(size-11). (v5.5, UP-12) **좁은 화면(<768) 크기는 32px**: `default`·`xs`·`sm`은 `max-md:h-8`(`xs`·`sm`은 + `max-md:px-4`), `icon`·`icon-xs`·`icon-sm`은 `max-md:size-8`. 그래서 `default`는 좁은 화면에서 40 → 32px로 **줄어든다**(`xs`는 28 → 32로 커짐). `lg`(h-11)·`icon-lg`(size-11)는 폭과 상관없이 44px(7장 A-4). 로딩: `disabled` + 왼쪽 `Loader2 animate-spin` + 글자 유지 |
+| `button` | 전부 | variant: `default`(primary, 화면당 주 버튼 1개) · `secondary` · `outline` · `ghost`(`aria-current` 선택, `data-pending` 흐림) · `link` · `destructive` · (v4) `destructive-ghost`(삭제를 시작하는 ghost, 빨간 글자 + `bg-destructive/10` hover) · (v4) `destructive-link`(빨간 오류 문장 안 링크) · (v4) `warning-outline`(경고 테두리 버튼) · (v5, UQ-BR-9) `warning-ghost`(경고 묶음 여닫기 트리거, 1.3 표). (v5, UQ-BR-7) ghost는 `aria-pressed`도 `aria-current`과 같은 초록 선택 모양. size: `xs`(h-7, text-xs) · `sm`(h-8, text-sm) · `default`(h-10, text-base) · `lg`(h-11) · `icon`(size-9) · `icon-xs`(size-7) · `icon-sm`(size-8) · `icon-lg`(size-11). (v5.5, UP-12) **좁은 화면(<768) 크기는 32px**: `default`·`xs`·`sm`은 `max-md:h-8`(`xs`·`sm`은 + `max-md:px-4`), `icon`·`icon-xs`·`icon-sm`은 `max-md:size-8`. 그래서 `default`는 좁은 화면에서 40 → 32px로 **줄어든다**(`xs`는 28 → 32로 커짐). `lg`(h-11)·`icon-lg`(size-11)는 폭과 상관없이 44px(7장 A-4). 로딩: `disabled` + 왼쪽 `Loader2 animate-spin` + 글자 유지 · (v5.11) `destructive-outline`(`border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50 dark:hover:bg-destructive/20` — 파괴적 동작의 **입구** 버튼, 확인 창의 빨간 채움과 구분. 지금 쓰는 곳: 설정 계정 탭 위험 구역 5.11.1) |
 | `badge` | 상태·카운트·칩 | 추가 variant: `success` · `warning` · `info` · `ai` · `destructive-subtle` (모두 `bg-{x}-subtle text-{x}-subtle-foreground border-transparent`) · `draft`(= warning, 아이콘 `CircleDashed`) · `count`(rounded-full, `min-w-5 h-5 px-1.5 text-xs tabular-nums bg-primary-subtle text-primary-subtle-foreground`) · `evidence`(3.1) · (v2) `recommend`(`bg-primary-subtle text-primary-subtle-foreground border-transparent`, S-40 "추천: 무료로 시작") · (v4) `muted`(`border-border text-muted-foreground`, 없음·근거 없음·중단·해당 없음 같은 흐린 상태) · (v4) `count-neutral`(`count` 모양 + `bg-background text-muted-foreground`, 보드 열 머리 개수) |
 | `card` | 카드·패널 | 기본 `rounded-lg border bg-card`, 그림자 없음(shadcn 기본 `shadow-sm` 제거). (v4) `interactive`(전체 클릭 카드 초록 hover) · `tone="success"`(완료 카드 `border-success/30`) |
 | `sidebar` | L-01 | `collapsible="offcanvas"`, 모바일 기준 1024 |
@@ -569,17 +569,18 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `dropdown-menu` | 행·카드 메뉴(⋯), C-12 | C-12는 `DropdownMenuRadioGroup` |
 | `popover` | 칩 미리보기 없음 — 칩은 Sheet로. 필터 묶음, (v5.5) S-10 역량 선택(`CompetencyChips`, 5.9) | 역량 선택: `PopoverContent align="start" className="w-64 p-0"` |
 | `tooltip` | 아이콘 버튼 이름, 잘린 칩 라벨 | 지연 500ms. 정보를 Tooltip에만 두지 않는다 |
-| `tabs` | S-31 하위 탐색 보조, 좁은 화면 보드 열 탭, S-36 좁은 화면 전환, S-20 유형 | |
+| `tabs` | (v5.11) S-24 AI 연결 탭 사용량 공급자 탭(`TabsList variant="line"`, 5.11.2), S-31 하위 탐색 보조, 좁은 화면 보드 열 탭, S-36 좁은 화면 전환, S-20 유형 | |
 | `toggle-group` | S-20 질문 수 3/5/7 | |
 | `radio-group` | C-05 선택지, S-20 면접 유형(카드형) | 카드형 옵션: `rounded-lg border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary-subtle` (v5, UQ-BR-15: 1.3 예외 목록에 등록) |
 | `checkbox` | C-11 체크 트리, C-05 확인 체크 | |
+| (v5.11) `switch` | 즉시 저장되는 켜고 끄기: S-24 약관 탭 선택 동의 2개(5.11.3), 계정 메뉴 "다크 모드" | 라벨·설명은 왼쪽 `FieldContent`, 스위치는 오른쪽. 저장 중 그 스위치만 `disabled`. 저장 버튼이 있는 폼 안에는 쓰지 않는다(Checkbox) |
 | `input` · `textarea` · `label` · `form` · `select` | 모든 폼 | Textarea: `field-sizing-content min-h-24 max-h-[60vh]`(지원하지 않는 브라우저는 `min-h`로 고정 + 세로 크기 조절). (v5.5, UP-12 — 앱 전체) **포커스 때 테두리·링 변화 없음**: `Input`·`Textarea`·`SelectTrigger`에서 `focus-visible:border-ring ring-2 ring-ring ring-offset-2`를 뺐다(`border-input` 그대로). 오류 표시(`aria-invalid:border-destructive ring-3 ring-destructive/20`)는 남는다. `SelectTrigger` 좁은 화면 높이는 `max-md:data-[size=*]:h-8`(32px). 접근성 위험은 8.5 DR-1 |
 | (v5.5) `input-group` | Resumate AI 패널 입력창(Prompt Input 배치, 5.10) | 포커스 때 테두리·링 변화 없음(`has-[…:focus-visible]:border-ring ring-2 …` 제거). 오류 링은 남음 |
 | `item` | 행·카드형 선택지, AI 패널 기록 행 | (v5.5) `size="sm"` 좁은 화면 `max-md:min-h-8`(이전 44px). `size="default"`는 `min-h-11` 그대로(A-4 남은 44px) |
 | `message-scroller` · `message` · `bubble` (shadcn Chat) | Resumate AI 패널 대화(5.10) | `MessageScrollerViewport`: (v5.5) 얇은 스크롤바(항상, 1.3) — 이전 `scrollbar-gutter-stable`·자동 스크롤 중 트랙 투명 규칙 삭제. `Bubble`: 사용자 말풍선은 (v5.5) `variant="default"`(primary 채움, 이전 `outline`), AI 메시지는 말풍선 없음(아바타 + 본문) |
 | `collapsible` | S-08 트리, 근거 펼치기, 점수 근거 펼치기 | |
 | `command` | C-16 검색 목록 | |
-| `table` | S-13(넓은 화면), S-37, S-22 항목 표 | 행 높이 `h-12`, 머리 `text-sm font-medium text-muted-foreground` |
+| `table` | S-13(넓은 화면), S-37, S-22 항목 표, (v5.11) S-42 기능별 교차 표(5.11.2 — 비용 칸 두 줄이라 행 `h-auto py-2`) | 행 높이 `h-12`, 머리 `text-sm font-medium text-muted-foreground` |
 | `progress` | C-03 | 막대 색 `bg-ai`, 트랙 `bg-ai-subtle`, 높이 `h-1.5` |
 | `skeleton` | ST-LOADING | |
 | `sonner` | 토스트 | 넓은 화면 `bottom-right`, 좁은 화면 `top-center`. `richColors` 끔(중립 토스트 + 아이콘). (v5) L-02에서는 넓은 화면도 `bottom-left`로 띄운다 — 오른쪽 아래가 Resumate AI 입력창이라 가리지 않게 `[가정]` |
@@ -602,7 +603,10 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `AiLock` | `Card` 영역형 / 점선 줄 인라인형 / `Dialog` 팝업형 | C-18 (3.18) |
 | `AiErrorNotice` · `RetryButton` | `Alert` block / inline / field | C-20 (3.20) |
 | `DataUseConsent` · `FreeTierNotice` | `Checkbox` + 강조 상자 | C-21 (3.21) |
-| `ProviderCard` · `StepIndicator` | `RadioGroup` 카드 / 단계 원 | S-40·S-41 (5.7) |
+| ~~`ProviderCard`~~ → (v5.11) `ProviderRow` · `StepIndicator` | `RadioGroup` 안 한 줄 행(묶음 테두리 + `divide-y`) / 단계 원 | S-40(설정 AI 연결 탭 블록 ①)·S-41 공급자 선택(5.11.2, 5.7). **이름 이전**: `account/provider-card.tsx`의 `ProviderCardFrame`·`providerCardId`(앵커 `provider-card-{p}` → `provider-row-{p}`) — 사용처 `ai-connection-panel.tsx`·`key-connect-flow.tsx`·`ai-status-line.tsx` |
+| (v5.11) `UnsavedChangesConfirm` | `AlertDialog` 2동작 + X(계속 편집) — `LeaveGuard`와 같은 모양 | 설정 다이얼로그 내 정보 미저장 확인(5.11). `LeaveGuard`와 겉모습 공통화는 선택 |
+| (v5.11) `SectionSaveBar` · `JobInterestRows` · `HighestEducationFields` | 저장 줄(C-06 + [저장]) + 실패·충돌 줄 / 쌍 행 목록 / 학력 6칸 묶음 | 설정 계정 탭 "내 정보"(5.11.1). A1 소유(`components/account/`) |
+| (v5.11) `AiUsageByProvider` | 고지 `Alert` + `Tabs variant="line"` + `Table` | S-42 블록 ②(5.11.2). v5.10 합계 카드·공급자별 표를 대체 |
 | `StatusDot` | `span.size-2 rounded-full bg-stage-*` | 단계 점 |
 | `DDay` | `caption`/`meta`, `tabular-nums` | `D-12`, 3일 이내 `Badge warning` "D-2" + `Clock`, 지남 `text-muted-foreground` "마감" |
 | `PageHeader` | `page-title` + 오른쪽 동작 묶음 + 아래 `meta` 설명 | 모든 화면 맨 위 |
@@ -644,6 +648,7 @@ hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-
 | 원본 삭제됨 | `border-dashed bg-transparent text-muted-foreground` + 앞에 `Unlink size-3` + 라벨 끝에 " · 원본 삭제됨". 클릭은 가능(C-02에서 삭제 안내) |
 
 - 배치: 본문 안에서는 문장 끝 뒤 `ml-1`, 여러 개면 블록 아래 `mt-2 flex flex-wrap gap-1`. 표 셀에서는 최대 2개 + "+N"(`Badge variant="outline"` 같은 높이) → 클릭 시 C-02에서 전부.
+- (v5.11) **`source_type = 'profile'` 근거**(과거 기록만 남음, 플로우 v5.17 SD-A19): 칩은 **정상 상태 모양 그대로**이고 라벨도 저장값 그대로("기본 프로필 · …")다. "변경됨"·"원본 삭제됨" 표식을 붙이지 않는다(원본 데이터가 지워진 것이 아니라 원본 화면 S-04가 없어진 것). 누르면 C-02가 열린다 — 비활성은 C-02 카드의 이동 자리에서만 표현한다(3.2). 칩에 `aria-disabled`·툴팁을 달지 않는다.
 - 접근성: `aria-label="근거: {전체 라벨}{, 변경됨}"`, 클릭 → C-02 열고 포커스 이동.
 
 ### 3.2 C-02 근거 패널
@@ -654,7 +659,7 @@ hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-
   - 1행: 칩과 같은 라벨(칩 모양 그대로, 클릭 동작 없음).
   - 2행: 경로 `meta text-muted-foreground`, 구분자 `›`, `truncate`는 쓰지 않고 줄바꿈.
   - 3행: `quote` 있으면 `blockquote border-l-2 border-chip-border pl-3 prose`(16px/1.75). 없으면 "원본 현재 값" `caption` 라벨 + 값.
-  - 4행: `Button variant="link" size="sm"` "원본으로 이동" + `ArrowUpRight`.
+  - 4행: `Button variant="link" size="sm"` "원본으로 이동" + `ArrowUpRight`. (v5.11) **`profile` 근거는 버튼 대신** 같은 자리에 `p.meta text-muted-foreground flex items-center gap-1.5` + `Info size-4` "이 근거의 원본 화면은 더 이상 없어요"(플로우 C-02 `[가정]` 문구). 비활성 버튼(`disabled`·`aria-disabled` + 툴팁)으로 그리지 않는다 — 플로우가 "이동 버튼 자리에 한 줄"로 정했고, 누를 수 없는 탭 정지를 만들지 않으려는 것이다(8.5 DR-8과 같은 이유). 설정 계정 탭으로 보내지 않는다.
   - 변경됨: 카드 위쪽에 `Badge warning` "변경됨" + `meta` 설명. 원본 삭제됨: `Alert` 없이 카드 안 `text-muted-foreground` + `Unlink` "원본 삭제됨 — 이 근거의 원본과 인용문은 삭제되었습니다", 인용·이동 없음.
 
 ### 3.3 C-03 AI 작업 상태 (비동기)
@@ -947,7 +952,7 @@ div.flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed 
 
 - 인라인형의 "AI 연결하기"는 `outline`이다. 그 화면의 주 버튼(예: 자소서 문항 저장)과 다투지 않게 하려는 것이다. 영역형은 화면에 다른 주 동작이 없으므로 `default`를 쓴다 `[가정]`.
 - **팝업형**(C-14 키 없음 변형, 3.13): `Dialog sm:max-w-md`. 제목은 명세 문구("면접 연습은 AI 연결 후 사용할 수 있어요")이고, 그 아래 기능 설명 `body text-muted-foreground`와 위 추천 줄을 둔다. 버튼은 `닫기`(ghost)와 `AI 연결하기`(default). 닫아도 카드 이동은 유지된다.
-- **AI 연결하기의 목적지**: 연결된 공급자가 하나도 없으면 S-41 공급자 선택(`/settings/ai/connect`)으로, 있으면 **설정 다이얼로그의 "AI 연결" 섹션**을 지금 화면 위에 연다(`AiConnectLink`). 둘 다 복귀 대상을 기억한다. 복귀 주소는 다이얼로그를 연 원래 화면이고, S-41이 끝나면 그 화면으로 돌아온다(FL-19). (2026-11-04 사용자 결정: 설정은 전부 다이얼로그, S-40·S-42 페이지 삭제)
+- **AI 연결하기의 목적지**: 연결된 공급자가 하나도 없으면 S-41 공급자 선택(`/settings/ai/connect`)으로, 있으면 **설정 다이얼로그의 "AI 연결" 탭**((v5.11) 5.11 — 탭 ID `ai-connection` 그대로)을 지금 화면 위에 연다(`AiConnectLink`). 둘 다 복귀 대상을 기억한다. 복귀 주소는 다이얼로그를 연 원래 화면이고, S-41이 끝나면 그 화면으로 돌아온다(FL-19). (2026-11-04 사용자 결정: 설정은 전부 다이얼로그, S-40·S-42 페이지 삭제)
 - **복귀 후(D-UX-16, 자동 실행 없음)**: 원래 화면에서 잠금이 풀린 실행 버튼에 `ring-2 ring-primary ring-offset-2 ring-offset-background`를 4초 두고, `animate-field-flash` 바탕은 쓰지 않는다. 동시에 Sonner 토스트를 띄운다: `CircleCheck text-success` + "AI를 연결했어요" + C-19 배지 글자. `prefers-reduced-motion`이어도 링은 남긴다(애니메이션이 아니므로) `[가정]`.
 - 접근성: 영역형 카드는 `role="region"`에 `aria-label="{기능} 잠김"`을 단다. 인라인형은 버튼 자리를 차지하므로 원래 버튼의 이름을 `sr-only`로 앞에 둔다("인사이트 생성 — AI 연결하면 사용할 수 있어요").
 
@@ -1425,9 +1430,9 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
   | `needs_check` | `CircleHelp text-warning` + "{공급자} · 확인 필요" | `CircleHelp` + 점 `bg-warning` |
   | `invalid` | `TriangleAlert text-warning` + "{공급자} · 키를 확인해 주세요" | `TriangleAlert` + 점 `bg-warning` |
   - 점 모양은 메뉴 배지 점과 같다(`size-2 ring-2 ring-sidebar`). 점에 색만 쓰지 않도록 아이콘이 상태마다 바뀌고, 툴팁(레일)과 `sr-only`(펼침)가 전체 글자를 준다(R-C6).
-  - 누르면 **설정 다이얼로그를 "AI 연결" 섹션으로 연다**. 설정 버튼과 동작을 맞춘 것이다. 서랍(<1024)에서도 같고, 터치 대상은 `h-11`이다 `[가정]`.
-- 하단(`NavUser`): `SidebarMenuButton size="lg"`에 `Avatar`(`h-8 w-8 rounded-lg`, Google 프로필 사진 `user_metadata.avatar_url`·`picture` — 없거나 못 불러오면 이니셜) + Google 이름(`full_name`·`name`, 없으면 이메일 앞부분) / 이메일 두 줄 + `ChevronsUpDown`. 누르면 `DropdownMenu`(넓은 화면 오른쪽, 서랍에서는 아래, 트리거 폭): 계정 표시 · 설정(설정 다이얼로그) · 로그아웃(S-24와 같은 동작).
-- **설정 다이얼로그**(S-24, shadcn **sidebar-13** 기반, 사용자 결정 2026-10-26, `shell/settings-dialog.tsx`): `DialogContent overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]` 안에 별도 `SidebarProvider` → 왼쪽 `Sidebar collapsible="none"`(md 이상) 섹션 목록(계정 `UserRound` · **(v2) AI 연결 `PlugZap` · AI 사용량 `Gauge`** · 동의 관리 `ShieldCheck` · AI 데이터 처리 `Sparkles` · 처리방침·약관 `FileText` · 회원 탈퇴 `UserX`. 새 두 섹션은 계정 바로 아래에 둔다 `[가정]`. "AI 연결" 항목은 `invalid`·`needs_check`일 때 이름 오른쪽에 `size-2 bg-warning` 점과 `sr-only` 상태를 단다), 오른쪽 `h-16` 머리에 이동 경로 "설정 › {섹션}"(md 미만은 섹션만), 본문은 `overflow-y-auto p-4 pt-0`, 높이 `h-[480px]`. 열 때마다 계정·동의 데이터를 다시 읽고(로딩 `Skeleton`, 실패 시 "설정을 불러오지 못했어요" + 다시 시도 `[UI-가정]`), 다이얼로그 밖으로 가는 링크(기본 프로필 편집, 약관, 회원 탈퇴)는 다이얼로그를 닫고 이동한다. 블록은 md 미만에서 섹션 목록을 숨기므로, 좁은 화면에서는 머리 아래 가로 섹션 버튼 줄(`Button size="sm"`, 현재 `secondary`)로 대신한다 `[UI-가정]`. 섹션 내용은 `account/settings-sections.tsx`. (2026-11-04) `/settings` 페이지는 없다. 셸 밖 화면은 `/career?settings={section}`으로 다이얼로그를 연다(5.7). L-02 셸에도 같은 다이얼로그가 있다(계정 메뉴의 설정·AI 연결).
+  - 누르면 **설정 다이얼로그를 "AI 연결" 탭으로 연다**((v5.11) 5.11**. 설정 버튼과 동작을 맞춘 것이다. 서랍(<1024)에서도 같고, 터치 대상은 `h-11`이다 `[가정]`.
+- 하단(`NavUser`): `SidebarMenuButton size="lg"`에 `Avatar`(`h-8 w-8 rounded-lg`, Google 프로필 사진 `user_metadata.avatar_url`·`picture` — 없거나 못 불러오면 이니셜) + Google 이름(`full_name`·`name`, 없으면 이메일 앞부분) / 이메일 두 줄 + `ChevronsUpDown`. 누르면 `DropdownMenu`(넓은 화면 오른쪽, 서랍에서는 아래, 트리거 폭): 계정 표시 · 설정(설정 다이얼로그) · (v5.11 문서 반영, 구현은 v5.13 OD-S1) 다크 모드(`DropdownMenuItem role="menuitemcheckbox"` + `Moon` + 오른쪽 `Switch`, 누르면 메뉴를 닫지 않고 전환) · 로그아웃(설정 계정 탭 위험 구역과 같은 동작).
+- **설정 다이얼로그**(S-24, shadcn **sidebar-13** 기반, 사용자 결정 2026-10-26, `shell/settings-dialog.tsx`): **(v5.11) 5.11로 옮겨 다시 썼다** — 왼쪽 탭 4개(계정 · AI 연결 · 약관 · 개선 요청), 크기 `md:max-w-[760px] lg:max-w-[880px]` · 높이 `min(640px, …)`, 좁은 화면 4칸 탭 줄, 내 정보 미저장 확인. v5.10까지의 섹션 7개 + "화면" 섹션 규칙은 쓰지 않는다. (2026-11-04) `/settings` 페이지는 없다. 셸 밖 화면은 `/career?settings={tab}`으로 다이얼로그를 연다(5.7). L-02 셸에도 같은 다이얼로그가 있다(계정 메뉴의 설정).
 - 접기: 상단 바 `SidebarTrigger`(`aria-label` 펼침 "메뉴 접기" / 접힘 "메뉴 펼치기" / 서랍 "메뉴 열기"), `SidebarRail`, `⌘/Ctrl+B`. 접으면 **완전히 숨기지 않고** 아이콘 레일로 남는다: 로고 심볼·메뉴 아이콘·보조 메뉴 아이콘·아바타만, 이름은 툴팁, 배지 숫자 대신 아이콘 오른쪽 위 점(`size-2 bg-primary ring-2 ring-sidebar`). 펼침 상태는 `sidebar_state` 쿠키에 쓰인다(첫 렌더 복원은 아직 하지 않음 `[UI-가정]`).
 - 상단 바: 블록과 같이 `flex h-16 shrink-0 items-center gap-2` · `SidebarTrigger -ml-1` · `Separator orientation="vertical" mr-2 h-4` · `Breadcrumb`. **상단 고정**(사용자 결정 2026-10-26): `SidebarInset`이 스크롤 영역(`h-dvh overflow-y-auto`, lg `h-[calc(100dvh-1rem)]` — inset 여백만큼 뺌)이고 상단 바는 그 안에서 `sticky top-0 z-20 bg-background`. 창(body)은 스크롤하지 않는다. 오른쪽에 화면 동작(`PageTopActions`). 상단 바 아래에 붙는 sticky 요소(C-10 배너, 커리어 연도 머리)는 `top-16`. 화면 높이를 쓰는 레이아웃(S-36 대화)은 `100dvh - 4rem`(lg는 inset 여백 1rem 더 뺌).
 - 이동 경로: 마지막 마디 `font-medium text-foreground`, 앞 마디 `text-muted-foreground hover:text-foreground`, 긴 이름 `max-w-[16rem] truncate`. 화면이 경로를 선언하지 않으면 현재 메뉴 이름을 보인다.
@@ -1447,7 +1452,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 
 ### 5.3 편집기
 
-- **폼 화면**(S-04, S-14. (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — (v5.7) 6장 A2 "커리어 v5.13", 편집은 5.6.1 모달): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
+- **폼 화면**(S-14. (v5.11) ~~S-04~~ 폐기 — 같은 필드는 설정 계정 탭 "내 정보"(5.11.1, 섹션 단위 저장). (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — (v5.7) 6장 A2 "커리어 v5.13", 편집은 5.6.1 모달): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
   - 필드 2열: 넓은 화면에서 짧은 값(기간, 고용 형태)만 `grid sm:grid-cols-2 gap-4`. 긴 글은 항상 한 열.
 - **긴 글 편집**(S-33 답변. (v5) S-35는 폐기 — S-10 STAR는 5.9 `DocTextarea`): 본문 열 `max-w-prose-edit`. 필드마다 `label`(예: "행동 (A) *") + 안내 `meta` + `Textarea prose`(16px/1.75, `min-h-32`) + C-07 + 글자 수. 필드 사이 `space-y-6`. 포커스 이동(C-02 "원본으로 이동")된 필드는 `ring-2 ring-ring` + `animate-field-flash` 1회.
 - **초안 편집기**(S-19): 넓은 화면(≥1280) `grid grid-cols-[minmax(0,1fr)_20rem] gap-8`: 왼쪽 문서(`max-w-prose-edit mx-auto`, 블록마다 hover 시 `bg-accent/50 rounded-md`, 블록 아래 칩 줄 C-01·C-08), 오른쪽 `sticky top-20` 패널(C-11, 자리 표시 목록, 글자 수). 1280 미만은 패널을 머리의 `Button variant="outline" size="sm"` "근거·출처"로 여는 `Sheet side="right"`.
@@ -1518,7 +1523,7 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 
 - 모달 안 주 버튼은 오른쪽 끝, 좁은 화면에서 `flex-col-reverse` 전체 폭.
 - (v5.4) **알림·경고 모달 공통 모양**(`AlertDialog`, `components/ui/alert-dialog.tsx` 기본값 — 사용처에서 덮어쓰지 않는다): `rounded-2xl p-6 shadow-lg`, 테두리 없음, 기본 폭 `sm:max-w-md`. 제목 `text-xl font-bold`(왼쪽 정렬) + 오른쪽 위 X 닫기(`size-8`, `text-muted-foreground`, 누르면 취소와 같다). **X는 바닥 줄에 취소 버튼(`AlertDialogCancel`)이 없을 때만 보인다** — 취소가 있으면 자동으로 숨는다(`showCloseButton={false}`로 항상 끌 수도 있음). 본문 `text-base text-foreground`. 아래 버튼 줄은 구분선·바탕 없이 오른쪽 정렬, 버튼 높이 `h-11 px-5`. 보조 버튼 = `Button variant="muted-ghost"`(회색 글자, 채움 없음 — `AlertDialogCancel` 기본값), 주 버튼 = `default`(초록 채움), 경고 모달의 주 버튼 = `destructive`(빨강 채움).
-- 다이얼로그 위에 다이얼로그 금지(C-11 다시 생성 확인은 패널 위 AlertDialog — 패널은 Sheet라 허용).
+- 다이얼로그 위에 다이얼로그 금지(C-11 다시 생성 확인은 패널 위 AlertDialog — 패널은 Sheet라 허용). (v5.11) 예외: **설정 다이얼로그 위의 `AlertDialog` 한 겹**(미저장 확인·활성 공급자 전환 확인·C-05 키 삭제)과 C-21 동의 창 — 5.11 "다이얼로그 위 확인 창".
 
 #### 5.6.1 커리어 항목 추가·수정 모달 (`AddCareerDialog`, v5.7 신설 — OD-C1·OD-C2)
 
@@ -1563,52 +1568,16 @@ Dialog (showCloseButton={false} — X는 머리 줄에 직접 둔다)
 
 | 화면 | 설정 다이얼로그 안 | 라우트 페이지 |
 |------|-------------------|---------------|
-| S-40 AI 연결 | 섹션 "AI 연결" | 없음 (2026-11-04 삭제) |
-| S-42 AI 사용량 | 섹션 "AI 사용량" | 없음 (2026-11-04 삭제) |
+| S-40 AI 연결 | (v5.11) **AI 연결 탭 블록 ①**(5.11.2) | 없음 (2026-11-04 삭제) |
+| S-42 AI 사용량 | (v5.11) **AI 연결 탭 블록 ②**(5.11.2) — 섹션 "AI 사용량"은 없어졌다 | 없음 (2026-11-04 삭제) |
 | S-41 키 연결 단계 | 없음. 다이얼로그에서 연결을 시작하면 다이얼로그를 닫고 이동한다 | `/settings/ai/connect?provider=` (복귀 대상 유지) |
 
 - (2026-11-04 사용자 결정) 설정은 **다이얼로그로만** 연다. `/settings`, `/settings/ai`, `/settings/ai/usage` 페이지는 없다. 셸 안의 링크(C-19 배지, C-20 "AI 연결 확인", 계정 메뉴 등)는 `SettingsLink` / `openSettings(section, { provider })`로 지금 화면 위에 다이얼로그를 연다. L-02의 이탈 확인은 이 링크를 이탈로 보지 않는다.
-- 다이얼로그가 없는 화면(S-41 집중 화면, S-25 취소·이동 경로)은 주소 `routes.settings(section, provider)` = `/career?settings={section}[&provider=]`로 간다. 셸이 다이얼로그를 그 섹션으로 열고 `settings`·`provider` 쿼리를 지운다. 개발용 `?state=`는 남기고 다이얼로그 섹션의 미리보기로도 넘긴다.
+- 다이얼로그가 없는 화면(S-41 집중 화면, S-25 취소·이동 경로)은 주소 `routes.settings(section, provider)` = `/career?settings={tab}[&provider=]`((v5.11) 옛 섹션 ID는 5.11 표대로 탭으로 바꿔 연다)로 간다. 셸이 다이얼로그를 그 섹션으로 열고 `settings`·`provider` 쿼리를 지운다. 개발용 `?state=`는 남기고 다이얼로그 섹션의 미리보기로도 넘긴다.
 - C-19 경고 배지 → "S-40 해당 카드"(UQ-208/267): `provider`를 받으면 카드를 불러온 뒤 그 카드로 스크롤한다.
-- 다이얼로그 안에서는 본문 폭이 약 560px이므로 카드를 세로 목록으로만 배치한다. S-40의 "사용량 입구"를 누르면 섹션만 바꾼다(페이지 이동 없음).
+- (v5.11) 다이얼로그 본문 폭은 lg 688px · md 568px이다(5.11). 공급자는 카드가 아니라 한 줄 라디오 행(`ProviderRow`)이고, S-40의 "사용량 입구"는 없어졌다(사용량 표가 같은 탭 블록 ②에 있다, 플로우 v5.17).
 
-**S-40 AI 연결**
-
-```
-(C-18에서 왔으면) 복귀 배너 — C-10과 같은 모양(info-subtle, CornerUpLeft), 연결 성공 후 "돌아가기" 버튼이 default로 바뀜
-안내: body text-muted-foreground (명세 문구)
-(활성 공급자 없음) Alert variant="warning" + TriangleAlert — 명세 문구
-RadioGroup(활성 공급자) 안에 공급자 카드 3개, space-y-3, 순서 고정 Gemini → Claude → OpenAI
-사용량 입구: Card p-4 flex items-center justify-between hover:bg-accent — Gauge size-4 + "이번 달 Resumate에서 약 $0.42 (예상치)" tabular-nums + ChevronRight
-Resumate 원칙: meta text-muted-foreground + ShieldCheck size-4
-```
-
-공급자 카드 (`ProviderCard`):
-
-```
-div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
-  [1열] RadioGroupItem (연결됨·확인 필요 상태에서만 보임, aria-label "{공급자}를 활성 공급자로"), 그 밖은 같은 폭 빈 칸
-  [2열] 1행: 공급자 이름 text-base font-semibold + (Gemini) Badge variant="recommend" "추천: 무료로 시작"
-        2행: meta text-muted-foreground 설명 ("결제 등록 없이 무료 키 발급" / "유료 결제 필요")
-        3행: 상태 줄 (아래 표)
-  [3열] 미연결: Button variant="outline" size="sm" "연결하기" / 연결된 상태: ⋯ 카드 메뉴(DropdownMenu)
-```
-
-| 상태 | 카드 테두리·바탕 | 상태 줄 (`text-sm`, 아이콘 `size-4`) | 강조 동작 |
-|------|------------------|--------------------------------------|-----------|
-| 미연결 | 기본 | `Circle text-muted-foreground` "연결 안 됨" | "연결하기" (Gemini 카드만 `default`, 나머지 `outline`) `[가정]` |
-| 연결됨 | 기본 | `CircleCheck text-success` "연결됨 · ••••1a2b · 무료 등급 · 마지막 확인 10월 28일 14:02" (`tabular-nums`, 마스킹 글자는 `font-mono`) | — |
-| **활성** (연결됨 중 선택된 것) | `border-primary bg-primary-subtle/40` | 위 상태 줄 + 1행 이름 옆 연결 배지(C-19) | — |
-| 무효 (`invalid`) | `border-warning` | `TriangleAlert text-warning` + 원인 문구(`last_failure_cause`) + `meta` `last_failure_at` | 3열 앞에 Button `default sm` "키 교체" |
-| 확인 필요 (`needs_check`) | `border-warning/60` | `CircleHelp text-warning` + 명세 문구 | Button `outline sm` "다시 확인" (카드 메뉴에도 있음) |
-| 다시 확인 중 | 그대로 | `Loader2 animate-spin text-ai` "다시 확인 중… 최대 10초 정도"(유료 "최대 5초") | 카드 메뉴 `disabled` |
-| 일시 중지 (`is_available = false`) | `bg-muted/50` | `PauseCircle text-muted-foreground` + 명세 문구 | 라디오·"연결하기" `disabled`. 카드 메뉴의 삭제는 남긴다 `[가정]` |
-| (v3) **동의 필요** (활성 카드, `consent_required = true`) | 활성 카드 모양 그대로 | 키 상태 줄은 그대로 두고, 그 아래 둘째 줄에 `ScrollText text-warning` + 명세 문구를 둔다. 1행의 C-19 배지는 동의 필요형이다 | 3열 앞에 Button `default sm` "동의하기"(→ C-21 동의 창). 동의하면 둘째 줄이 사라진다. 복귀 대상이 있으면 복귀 배너의 "돌아가기"가 default가 된다 |
-
-- 카드 메뉴: 키 교체 · 다시 확인 · 등급 변경 · 데이터 사용 고지 다시 보기 / `DropdownMenuSeparator` / 키 삭제(`text-destructive`). 키 삭제는 C-05 "API 키 삭제" 문구를 `AlertDialog`로 보이고, 공급자 대시보드 링크는 외부 링크 규칙(3.20)을 따른다.
-- 활성 전환: 다른 라디오를 고르면 바로 바꾸지 않고 `AlertDialog`(확인 버튼 `default`)에 명세 문구를 보인다. 재동의가 필요하면 확인 뒤에 S-41 ②로 간다. 저장되기 전까지 라디오는 원래 값을 유지한다.
-- 확인 실패(다시 확인 결과)는 카드 상태 줄을 바꾸고, 카드 아래에 C-20 inline을 붙인다.
-- 로딩: 카드 3개 높이의 `Skeleton`. 저장 실패: ST-SAVE-FAILED 제출형.
+**S-40 AI 연결** — (v5.11) **5.11.2 "공급자 라디오 행"으로 옮겨 다시 썼다.** v5.10의 공급자 카드(`ProviderCard`, 카드 3개 `space-y-3`)·사용량 입구 카드·"Resumate 원칙" 줄(→ 약관 탭 5.11.3)은 쓰지 않는다. 카드 상태 표(미연결·연결됨·활성·무효·확인 필요·다시 확인 중·일시 중지·동의 필요)는 같은 상태를 행 모양으로 옮겨 5.11.2 표에 있다. 카드 메뉴·활성 전환 확인·확인 실패 C-20 inline 규칙은 그대로다.
 
 **S-41 키 연결 단계** (`/settings/ai/connect`)
 
@@ -1627,7 +1596,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
   - 완료: `bg-primary-subtle text-primary-subtle-foreground` + `Check size-4`
   - 남음: `border border-input text-muted-foreground`
   - 768 미만은 원을 숨기고 `meta` "2 / 3 · 데이터 사용 동의"만 보인다. 교체(③만)·등급 변경(①②만)일 때는 해당 단계만 그리고 번호를 다시 매긴다 `[가정]`.
-- **공급자 선택**(공급자가 아직 정해지지 않았을 때): S-40의 `ProviderCard`를 상태 줄·메뉴 없이 그린다. 카드 전체가 선택 버튼이고, Gemini 카드에 추천 배지를 단다.
+- **공급자 선택**(공급자가 아직 정해지지 않았을 때): (v5.11) S-24 AI 연결 탭과 **같은 `ProviderRow` 3줄**(Gemini → GPT → Claude)을 상태 줄·메뉴·[연결] 없이 그린다(5.11.2 끝). 행 전체가 선택 버튼이고, Gemini 행에 추천 배지를 단다.
 - **① 등급**: `RadioGroup` 카드형 2개(무료 `Gift` / 유료 `CreditCard`). 각 카드에 설명 `meta` 두 줄을 넣는다. 기본값이 미리 선택된다(Gemini 무료, 그 밖 유료).
 - **② 동의**: C-21(3.21).
 - **③ 가이드·입력·검증**:
@@ -1657,31 +1626,7 @@ div.rounded-lg border bg-card p-4 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-2
 - **③ 실패**(저장 안 함): 입력란을 비우지 않고 그대로 두며 field형 C-20을 띄운다. `billing_required`면 결제 페이지 링크를 같은 줄에 둔다. 교체 중 실패면 그 위에 `meta` "기존 키는 그대로 쓰여요" `[가정: 문구]`.
 - **그만두기**: 키 입력란에 값이 있으면 `AlertDialog` "연결을 그만둘까요? 입력한 키는 저장되지 않아요"(확인 `default` "그만두기")를 띄우고, 없으면 바로 나간다 `[가정]`.
 
-**S-42 AI 사용량**
-
-```
-상시 고지 (sticky: 다이얼로그 본문 top-0 / 페이지 top-16, z-10)
-  Alert variant="info" 닫기 버튼 없음 — Info + font-semibold "예상치이며 공급자 청구서가 아니에요." + 나머지 문구
-  + 공급자별 대시보드 링크들 (flex flex-wrap gap-x-3, 외부 링크 규칙)
-기간: meta "2026년 10월 1일 ~ 오늘 (KST)"
-합계 Card p-5 grid grid-cols-3 gap-4 (md 미만 grid-cols-1)
-  각 칸: caption text-muted-foreground 라벨 ("예상 비용" / "입력 토큰" / "출력 토큰")
-        값 text-2xl font-semibold tabular-nums ("$0.42" / "182,340" / "24,105")
-기능별 표 Card: section-title "기능별" + Table
-  열: 기능 | 입력 토큰 | 출력 토큰 | 예상 비용 | 호출 수 — 숫자 열 text-right tabular-nums
-  머리 정렬 버튼: TableHead 안 Button variant="ghost" size="sm" + ArrowUpDown size-3.5, aria-sort
-  0인 행: text-muted-foreground (행 자체는 남김, 8행 고정 순서가 기본)
-공급자별 표 Card: section-title "공급자별" + Table
-  열: 공급자 | 등급(Badge outline) | 토큰(입력+출력) | 예상 비용
-  무료 등급 행: 행 아래 붙는 caption 줄 (Info size-3.5) "무료 등급: 청구되지 않을 수 있어요(유료 단가로 환산한 예상치)"
-가격표 정보: meta + Collapsible "가격표 보기" → 작은 Table (모델 · 입력/출력 $/MTok)
-포함 범위·반영 지연: ul space-y-1 meta text-muted-foreground, 각 줄 Info size-4
-```
-
-- 금액 표기: `$` + 소수 2자리이다. 0보다 크고 0.01보다 작으면 "< $0.01"로 쓴다. 토큰은 `ko-KR` 천 단위 구분이다 `[가정]`.
-- 좁은 화면(<768) 표는 행마다 두 줄로 바꾼다. 1행은 기능 이름(왼쪽)과 예상 비용(오른쪽 `font-medium tabular-nums`), 2행은 `meta` "입력 182,340 · 출력 24,105 · 호출 12회"이다. 정렬은 머리의 `Select`("정렬: 예상 비용 순")로 한다.
-- 차트는 쓰지 않는다(차트 라이브러리 없음, 2장).
-- 상태: 연결 전 = C-18 영역형(상시 고지는 그대로 위에 둠) / 이번 달 기록 없음 = EmptyState 작은 형(`Gauge`, 명세 문구) / 로딩 = 합계·표 `Skeleton` / 오류 = 본문 자리 `ErrorState` 작은 형 "사용량을 불러오지 못했어요" + "다시 불러오기" `[가정: 문구]`. 키를 지워도 기록은 그대로 보인다.
+**S-42 AI 사용량** — (v5.11) **5.11.2 "사용량: 공급자 탭 + 교차 표"로 옮겨 다시 썼다.** v5.10의 합계 카드(예상 비용·입력 토큰·출력 토큰), 기능별 표(입력 토큰 / 출력 토큰 / 예상 비용 / 호출 수, 8행), 공급자별 표, 고지 sticky·공급자별 링크 묶음, C-18 영역형 빈 상태는 쓰지 않는다. 금액 표기(`$` 소수 2자리, "< $0.01")·`ko-KR` 천 단위·차트 없음·키를 지워도 기록 유지는 그대로다.
 
 ### 5.8 L-02 전체 페이지 셸 (S-10 · S-44, v4 신설)
 
@@ -1916,6 +1861,311 @@ form > InputGroup className="rounded-3xl bg-white has-disabled:bg-white has-disa
 
 - 공급자가 바뀌면 (v5.5) 입력 영역 아래 줄의 C-19 배지만 바뀐다(애니메이션 없음).
 
+### 5.11 설정 다이얼로그 (S-24 — 왼쪽 탭 4개, v5.11 재작성)
+
+플로우 **v5.17a S-24 ①~④**(결정 사이클 `settings-dialog`, SD-1~SD-6 · SD-A1~SD-A19)를 그대로 옮긴 시각 규칙이다. Figma는 없고 컴포넌트 표가 정본이다. v5.10까지의 **섹션 7개 + "화면" 섹션**(계정 · AI 연결 · AI 사용량 · 동의 관리 · AI 데이터 처리 · 처리방침·약관 · 회원 탈퇴 · 화면)은 쓰지 않는다. 파일: 틀은 `components/common/shell/settings-dialog.tsx`(파운데이션), 탭 내용은 `components/account/`(A1).
+
+**탭 4개** (순서 고정, SD-A1)
+
+| 탭 ID (`SettingsTabId`) | 이름 | 아이콘 | 내용 | 옛 섹션 ID → 이 탭 (URL·링크 호환) |
+|------|------|--------|------|------|
+| `account` | 계정 | `UserRound` | 계정 · 내 정보 · 위험 구역 | `withdraw` → `account`(위험 구역 `#settings-danger-zone`으로 스크롤) |
+| `ai-connection` | AI 연결 | `PlugZap` | 블록 ① 모델 공급자 설정(S-40) · 블록 ② 사용량(S-42) | `ai-usage` → `ai-connection`(블록 ② `#settings-ai-usage`로 스크롤) |
+| `policies` | 약관 | `FileText` | Resumate 약관 4개 · 선택 동의 · AI 데이터 처리 원칙 줄 | `consents` · `ai-data` → `policies` |
+| `feedback` | 개선 요청 | `MessageSquarePlus` | 안내 · 외부 폼 링크 / 준비 중 | (새 탭) |
+
+- 탭 ID는 기존 섹션 ID를 살릴 수 있는 것은 살렸다(`account`·`ai-connection`·`policies`) — `SettingsLink section="ai-connection"`·`routes.settings("ai-connection")`을 쓰는 코드(C-19 `provider-badge.tsx`, C-20 `ai-error-notice.tsx`, C-09 `data-gate.tsx`, `ai-connect-link.tsx`, `app-sidebar.tsx`, `ai-status-line.tsx`, S-41 `(focus)/settings/ai/connect/page.tsx`·`key-connect-flow.tsx`)는 그대로 둔다. **옮겨야 하는 사용처**: `routes.settings("withdraw")`(`app/(dashboard)/settings/withdraw/page.tsx` 이동 경로, `account/withdraw-form.tsx` 취소) → `"account"`, `openSettings("ai-usage")`(`account/ai-connection-panel.tsx` 사용량 입구 — 입구 자체가 없어진다). URL `?settings=` 로 옛 ID가 들어오면 위 표대로 바꿔 연다(목록에 없는 값은 `account`).
+- **열 때 고를 탭**: 진입점이 지정한 탭, 없으면 `account`. 닫았다 다시 열면 `account`로 돌아간다(플로우 `[가정]`, 구현 그대로).
+- **AI 연결 탭 경고 점 — 유지.** 활성 키가 `invalid`·`needs_check`이면 탭 이름 오른쪽에 `ml-auto size-2 rounded-full bg-warning` + `sr-only` "키를 확인해 주세요" / "확인 필요"(지금 코드 `AiConnectionWarnDot` 그대로). 플로우가 S-40 행 안의 무효·확인 필요 표시를 그대로 두었고(SD-A8) L-01 AI 상태 줄도 같은 두 상태를 경고로 보이므로, 탭에서만 빼면 "어디가 문제인지" 찾는 길이 끊긴다. **동의 필요는 점을 달지 않는다**(지금과 같음 — 실행할 때 C-21로 묻는 상태라 경고가 아니다) `[UI-가정]`. 다른 탭에는 점이 없다(내 정보 미저장은 점 대신 확인으로 막는다).
+
+**틀 (넓은 화면 ≥ 768)**
+
+```
+Dialog  onOpenChange → 내 정보에 저장하지 않은 변경이 있으면 닫지 않고 "미저장 확인"(아래)을 띄운다
+  DialogContent overflow-hidden p-0 md:max-w-[760px] lg:max-w-[880px]          (v5.10: md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px])
+    DialogTitle sr-only "설정" · DialogDescription sr-only "계정과 내 정보, AI 연결과 사용량, 약관과 선택 동의, 개선 요청을 확인하고 바꿀 수 있어요."
+    SidebarProvider style={{ "--sidebar-width": "12rem" }} className="min-h-0 items-start"
+      Sidebar collapsible="none" className="hidden md:flex"                         (탭 목록 폭 192px — 탭 이름이 4자 이하)
+        nav aria-label="설정 탭" > SidebarMenu > SidebarMenuButton × 4             (5.1 "메뉴 크기" default: h-10 text-base, 아이콘 size-5)
+           isActive + aria-current="page" — 선택 모양은 L-01 메뉴와 같은 bg-sidebar-accent
+      main.flex flex-1 flex-col overflow-hidden  h-[min(640px,85svh)] md:h-[min(640px,calc(100dvh-4rem))]   (v5.10: h-[480px])
+        header.flex h-16 shrink-0 items-center px-6 — Breadcrumb "설정 › {탭 이름}" (마지막 마디 BreadcrumbPage)
+        div#settings-body.flex-1 overflow-y-auto px-6 pb-6   ← 탭 본문. 스크롤은 여기 한 곳(머리·탭 목록은 고정)
+          div.flex flex-col gap-8   ← 탭 안 섹션들 (섹션 사이 Separator 없음, 제목이 나눈다)
+            section aria-labelledby: h3.subsection(16/600) 제목 → 내용 space-y-4
+```
+
+- **크기 판단**: 계정 탭은 이메일 + 안내 + 이름 + 셀렉트 3 + 쌍 행 2 + 학력 6칸 + 저장 줄 + 위험 구역으로 약 900~1,000px 높이다. `h-[480px]`(머리 64 빼면 본문 416)에서는 화면 두 장 넘게 스크롤해야 저장 버튼에 닿고, 사용량 표(4열 + 토큰 보조 줄)는 본문 폭 약 544px(800 − 사이드바 256)에서 비용 칸이 두 줄로 접힌다. 그래서 **높이 640(낮은 창은 뷰포트 − 4rem), 폭 lg 880 · md 760, 탭 목록 12rem**으로 키운다 → 본문 폭 lg 688px · md 568px. 높이는 내용이 아니라 틀에 고정한다 — 탭을 바꿀 때 다이얼로그 크기가 출렁이지 않게 하려는 것이다(v5.10과 같은 생각) `[UI-가정]`.
+- 본문 안쪽 여백 `px-6`(v5.10 `p-4 pt-0`) — 넓어진 폭에 맞춘 것. 본문 감싸개의 `max-w-3xl`은 뗀다(본문이 688px 이하라 의미 없음).
+- **로딩·오류는 탭마다**: 탭 본문 자리에 그 탭 모양의 `Skeleton`(계정: 줄 2 + 입력 칸 높이 `h-10` 4개 / AI 연결: 행 3개 `h-16` + 표 자리 / 약관: 행 6개 `h-12`). 개선 요청 탭은 서버에서 읽는 값이 없어 로딩이 없다. 불러오기 실패는 탭 본문 자리에 `ErrorState` 작은 형 — 약관 탭은 플로우 문구 "약관 설정을 불러오지 못했어요" + "다시 불러오기", AI 연결 탭 사용량 블록은 "사용량을 불러오지 못했어요" + "다시 불러오기", 계정 탭은 v5.10의 "설정을 불러오지 못했어요" + "다시 시도" `[UI-가정]`(문구 없음 — 8.4 P-24).
+- **다이얼로그 밖으로 가는 동작**은 다이얼로그를 닫고 간다: [회원 탈퇴](→ S-25), 공급자 행 [연결]·⋯ "키 교체"(→ S-41). **새 탭으로 여는 링크**([전문 확인] 5개, 공급자 대시보드 ↗, 개선 요청 보내기 ↗)는 다이얼로그를 닫지 않는다.
+- **다이얼로그 위 확인 창**: 이 다이얼로그 안에서만 `AlertDialog`를 한 겹 겹쳐 띄울 수 있다(미저장 확인, 활성 공급자 전환 확인, C-05 키 삭제). 5.6 "다이얼로그 위에 다이얼로그 금지"의 예외이고, 두 겹을 넘기지 않는다. C-21 동의 창(`Dialog`)은 지금처럼 설정 다이얼로그를 닫지 않고 그 위에 연다(v5.10까지와 같음).
+
+**좁은 화면 (< 768)**
+
+```
+DialogContent  기본 max-w-[calc(100%-2rem)] p-0
+  main h-[min(640px,85svh)]
+    header h-14 px-4 — Breadcrumb 탭 이름만
+    nav aria-label="설정 탭" grid grid-cols-4 gap-1 px-4 pb-3       ← 탭 4개가 한 줄에 다 들어간다(가로 스크롤 없음)
+      Button size="sm" variant={선택 ? "secondary" : "ghost"} aria-current — 글자만(아이콘 없음), AI 연결 경고 점은 글자 뒤 ml-1
+    div#settings-body overflow-y-auto px-4 pb-4
+```
+
+- v5.10의 가로 버튼 줄(`flex gap-1 overflow-x-auto`, 8개라 넘쳤음)을 **4칸 고정 격자**로 바꾼다. 360px 폭에서 칸 하나가 약 78px이라 "개선 요청"(4자 `text-sm`)이 한 줄에 들어간다. 320px 미만에서만 `overflow-x-auto`로 넘긴다 `[UI-가정]`.
+- 버튼 높이는 A-4(좁은 화면 32px) 그대로.
+
+**화면 테마 — 설정에 두지 않는다.** v5.10의 "화면" 섹션(`ToggleGroup` 시스템 설정 · 라이트 · 다크)은 없앤다. 플로우가 자리를 정했다 — "화면 모드(다크 모드)는 설정에 넣지 않고 계정 메뉴 스위치로 남는다"(S-24 구조, SD-A16·OD-S1). 이미 구현된 **L-01·L-02 계정 메뉴 "다크 모드" 스위치**(`nav-user.tsx` `ThemeToggleItem`: `DropdownMenuItem role="menuitemcheckbox"` + `Moon` + 오른쪽 `Switch`, 메뉴를 닫지 않음)가 유일한 입구다. 저장값이 없으면(처음) **시스템 설정을 따르고**, 스위치를 한 번 누르면 라이트/다크 중 하나로 고정된다. 다시 "시스템 설정 따르기"로 돌아가는 길은 없다 `[UI-가정]` → 8.4 P-23.
+
+**미저장 확인** (`UnsavedChangesConfirm`, 계정 탭 "내 정보" 전용 — 커리어 모달 OD-C1과 **다른 규칙**)
+
+- 띄우는 때: 내 정보에 저장하지 않은 변경(dirty)이 있는데 ① 다이얼로그를 닫으려 할 때(머리 X는 없으므로 Esc·바깥 누르기·계정 메뉴 재열기 등 `onOpenChange(false)` 전부) ② 다른 탭을 누를 때 ③ 위험 구역 [회원 탈퇴]를 누를 때(플로우 `[가정]`). 선택 동의 토글·AI 연결은 각자 즉시 저장이라 대상이 아니다. [로그아웃]은 확인 없이 바로 로그아웃한다(플로우 "확인 없이 즉시").
+- 모양: L-02 `LeaveGuard`(5.8)와 **같은 `AlertDialog sm:max-w-md`**(5.6 v5.4 공통 모양). 제목 "저장하지 않은 변경이 있어요". 오른쪽 위 X = 계속 편집(확인만 닫고 다이얼로그·탭·입력 그대로). 버튼 오른쪽 정렬 `저장하지 않고 닫기`(`muted-ghost`) · `저장하고 닫기`(`default`, 요청 중 `Loader2` + `disabled`). 좁은 화면 `flex-col-reverse` 전체 폭. 문구는 플로우 그대로 — 탭 전환·회원 탈퇴일 때도 버튼 글자는 "닫기"다(8.4 P-22).
+- 결과: "저장하지 않고 닫기" → 입력을 버리고(폼을 마지막 저장값으로 되돌림) 원래 하려던 동작(닫기 / 그 탭으로 / S-25로). "저장하고 닫기" → 내 정보 저장 → 성공하면 원래 동작. **검증 오류·저장 실패면** 확인 창만 닫고 다이얼로그·계정 탭에 남아 첫 오류 칸으로 포커스(실패면 섹션 위 실패 줄) — L-02 이탈 확인과 같은 처리.
+- **커리어 항목 추가·수정 모달과 다른 점**: 그 모달(5.6.1)은 닫으면 확인 없이 버린다(OD-C1). 설정 다이얼로그는 묻는다. 둘 다 입력을 브라우저에 임시 보존하지 않는다(L-02 자동 복원 대상이 아니다).
+
+#### 5.11.1 계정 탭 (S-24 ①)
+
+```
+section 계정:  h3 "계정"
+  dl.grid gap-1 sm:grid-cols-[8rem_1fr] sm:gap-3
+    dt.label text-muted-foreground "이메일" · dd.body break-all {email}           ← 읽기 전용 글자(Input disabled 아님), 복사 버튼 없음
+section 내 정보:  h3 "내 정보"   (form, noValidate)
+  (저장 실패·충돌·빈 상태 줄 — 아래 "섹션 단위 저장 폼")
+  p.meta text-muted-foreground flex gap-1.5 + Info size-4 mt-0.5 "이 정보는 화면 표시와 Resumate 안 추천에만 써요. AI에는 보내지 않아요"
+  FieldGroup.gap-4
+    Field 이름 (Input, placeholder "이름을 입력해 주세요", maxLength 없음 — 50자 검증은 저장 때)
+    div.grid gap-4 sm:grid-cols-2:  Field 구직 상태 (Select) · Field 관심 기업군 (Select)
+    Field 관심 산업 (Select, sm:w-[calc(50%-0.5rem)])
+    관심 직군·직무 (아래 "쌍 행")
+    최종 학력 (아래 "최종 학력 묶음")
+  저장 줄 (아래 "섹션 단위 저장 폼")
+section 위험 구역: id="settings-danger-zone"  (아래 "위험 구역")
+```
+
+- 라벨은 `FieldLabel`(`label` 14/500), 입력은 `Input`·`SelectTrigger w-full`(16px). 모든 항목이 선택 입력이라 필수 표시(`*`)를 두지 않는다.
+- **셀렉트 공통**: placeholder "선택해 주세요"(플로우). 옵션은 `profile_options`의 라벨. 저장된 값이 `is_active = false`로 내려갔어도 그 값을 트리거에 그대로 보인다(목록에는 없어도 됨). **고른 값을 비우는 길**: `SelectContent` 맨 위에 항목 "선택 안 함" + `SelectSeparator`(값 `null`) `[UI-가정]` — 모든 항목이 선택 입력인데 shadcn `Select`는 고른 값을 지울 수 없어서다(8.4 P-25, 새 문구).
+- **오류 줄**: 5.6.1과 같은 모양 — 칸 아래 `p.flex items-center gap-1.5 text-sm text-destructive role="alert"` + `CircleAlert size-4`, 칸 `aria-invalid` + `aria-describedby`. 처음 [저장]을 누른 뒤부터 보인다. 문구는 플로우 "검증 문구" 4종 + 저장 오류 6종 표.
+
+**섹션 단위 저장 폼** (`SectionSaveBar` — 내 정보 전용이지만 같은 방식의 섹션이 생기면 재사용)
+
+```
+(실패 줄 — 섹션 머리 바로 아래, 맨 위)  p.flex items-center gap-1.5 text-sm text-destructive role="alert"
+     CircleAlert size-4 + "내 정보를 저장하지 못했어요 · " + Button variant="destructive-link" size="sm" h-auto p-0 "다시 시도"
+(충돌 줄 — stale_write)  Alert variant="warning" + TriangleAlert
+     AlertTitle "다른 곳에서 내 정보가 바뀌었어요. 새로 불러온 값을 확인해 주세요"
+     AlertDescription ul.meta list-disc pl-5 — 내가 고쳤던 칸만 "{칸 라벨}: {내가 입력한 값}" (새 문장 없음, 값이 비었으면 "—")
+(빈 상태 줄 — 내 정보 전부 비었을 때만)  p.meta text-muted-foreground "아직 비어 있어요. 채우면 Resumate 안 추천이 더 잘 맞아요"
+… 칸들 …
+div.flex items-center justify-end gap-3 pt-2         ← 저장 줄: 섹션 끝(위험 구역 위), sticky 아님
+  C-06 (meta, aria-live="polite")   저장 중: 비움(버튼이 보임) / 저장됨: Check size-3.5 text-success + "저장됨 HH:MM"
+  Button variant="default" "저장"   변경 없음: disabled / 변경 있음: 활성 / 저장 중: disabled + Loader2 + "저장 중…"
+```
+
+- 저장 줄은 섹션 맨 끝 오른쪽이다(플로우 "섹션 아래 [저장] 버튼 하나"). 화면 아래에 붙이지(`sticky`) 않는다 — 위험 구역이 같은 스크롤 안에 이어지고, 다이얼로그 높이 640에서 저장 줄이 학력 바로 아래라 찾기 쉽다 `[UI-가정]`.
+- 성공: C-06 "저장됨 HH:MM"(3.6) + `sr-only` 알림 "내 정보를 저장했어요"(같은 `aria-live` 영역). 토스트는 띄우지 않는다. 다음 저장의 기대 버전은 응답 `updatedAt`. 칸을 다시 고치면 "저장됨"을 지운다.
+- 그 밖 실패(네트워크·서버): 위 실패 줄 + 입력 유지 + 버튼 다시 활성. 실패 줄이 보이도록 `#settings-body`를 섹션 머리까지 스크롤한다. "다시 시도"는 저장을 다시 보낸다.
+- 저장 오류 6종(플로우 표): `stale_write` → 위 충돌 줄 + 칸을 서버 값으로 다시 채움. `invalid_profile_option`·`field_too_long`·`invalid_period`·`duplicate_job_interest`·`too_many_job_interests` → 해당 칸 아래 오류 줄 + 그 칸으로 포커스(`details.field`; 쌍은 `job_interests.{n}` → n번째 행). `invalid_profile_option`은 섹션 머리에도 실패 줄 모양으로 "고를 수 없는 값이에요. 다시 골라 주세요"를 두고 칸 아래에 "목록에서 내려간 값이거나 고른 직군에 없는 직무예요"를 둔다.
+- 검증에 걸리면 저장을 막고 **첫 오류 칸으로 포커스** — 칸이 스크롤 밖이면 `scrollIntoView({ block: "center" })`.
+- 단축키 없음(플로우). 칸 안 Enter로 폼이 제출되지 않게 한다(셀렉트·쌍 행 조작과 섞이지 않도록) `[UI-가정]`.
+
+**관심 직군·직무 쌍 행** (`JobInterestRows`)
+
+```
+fieldset.space-y-2
+  legend.label "관심 직군 · 관심 직무"           ← 묶음 이름 하나. 행마다 라벨을 되풀이하지 않는다
+  div.hidden sm:grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] gap-2 caption text-muted-foreground   (열 머리 "관심 직군" · "관심 직무" · 빈 칸, aria-hidden)
+  ol.space-y-2 — 행 (최대 2)
+    li.grid grid-cols-[minmax(0,1fr)_2rem] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] items-start
+      SelectTrigger w-full aria-label="관심 직군 {n}"   placeholder "선택해 주세요"
+      SelectTrigger w-full aria-label="관심 직무 {n}"   (sm 미만: 둘째 줄, 직군 아래 — row-start-2)
+         직군 없음: disabled + placeholder "직군을 먼저 골라 주세요"   /   직군 있음: 그 직군의 직무만(jobRolesOf)
+      Button variant="ghost" size="icon-sm" aria-label="관심 직무 {n} 삭제" > X size-4    (sm 미만: 첫 줄 오른쪽)
+      (중복 오류) p.col-span-full 오류 줄 "이미 고른 직군·직무예요. 다른 쌍을 고르거나 지워 주세요"
+  div.flex flex-wrap items-center gap-2
+    Button variant="outline" size="sm" > Plus + "관심 직무 추가"     2쌍이면 disabled
+    (2쌍일 때) p.meta text-muted-foreground "최대 2개까지 고를 수 있어요"   ← 버튼 옆 글자(툴팁에만 두지 않는다)
+```
+
+- 쌍이 0개면 빈 행 1개를 그린다(플로우). 행이 1개일 때 [삭제]는 행을 지우지 않고 **두 셀렉트를 비운다**(빈 행 1개가 늘 남음) `[UI-가정]`. 직군을 바꾸면 그 행의 직무를 경고 없이 비운다(플로우).
+- 행을 더하면 새 행의 직군 셀렉트로 포커스, 행을 지우면 남은 행의 직군 셀렉트(없으면 [관심 직무 추가])로 포커스.
+- 중복 판정은 저장 때 서버가 한다(직무를 비운 쌍끼리도 중복). 오류는 **걸린 행 바로 아래**, 그 행의 직군 셀렉트에 `aria-invalid` + 포커스. 화면이 미리 막지 않는다(플로우가 서버 오류로 정함) `[UI-가정]`.
+- `too_many_job_interests`(방어 문구)는 [관심 직무 추가] 아래 오류 줄.
+
+**최종 학력 묶음** (`HighestEducationFields`)
+
+```
+fieldset.space-y-3
+  legend.label "최종 학력"
+  p.meta text-muted-foreground flex gap-1.5 + Info size-4 mt-0.5 "커리어의 교육과는 별개 값이에요. 한쪽을 고쳐도 다른 쪽은 바뀌지 않아요"   ← 링크 없음
+  div.grid gap-x-3 gap-y-4 sm:grid-cols-2          (DOM 순서 = 플로우 순서)
+    Field 학교 명  sm:col-span-2        Input (100자 검증)
+    Field 학위                          Select
+    Field 졸업 상태                     Select
+    Field 기간     sm:col-span-2        시작 [연도][월] ~ 종료 [연도][월]   (5.6.1 PeriodField에서 "재직 중" 체크 뺀 모양)
+                                        div.flex flex-wrap items-center gap-2 sm:flex-nowrap, 각 연월 묶음 flex-1 basis-[calc(50%-1rem)] sm:basis-0
+                                        시작·종료 오류는 묶음 아래 한 줄 "종료 시점이 시작보다 앞설 수 없어요"
+    Field 전공                          Input (100자 검증)
+    Field 학점                          Input placeholder 없음, 자유 입력(형식 검사 없음, 20자 검증), tabular-nums
+```
+
+- 학력은 `subsection` 제목이 아닌 **묶음(`legend`)**이다 — 내 정보 섹션 안의 칸 묶음이라 H3를 하나 더 두지 않는다.
+- 기간 연월 셀렉트도 위 "선택 안 함" 규칙을 따른다(연도·월 각각). 저장값은 `'YYYY-MM'`, 연도만 고르고 월을 비우면 저장 전 검증에서 막는다 — 문구가 없어 기간 오류 줄 자리에 같은 묶음 강조(`aria-invalid`)만 둔다 `[UI-가정]`(8.4 P-25).
+
+**위험 구역** (SD-A7)
+
+```
+section#settings-danger-zone aria-labelledby
+  h3.subsection "위험 구역"
+  div.flex flex-wrap gap-2
+    Button variant="destructive-outline" > LogOut + "로그아웃"       요청 중 disabled + Loader2
+    Button variant="destructive-outline" > UserX + "회원 탈퇴"        → (미저장이면 확인) → 다이얼로그 닫고 /settings/withdraw
+```
+
+- **`destructive-outline`는 v5.11에서 `button`에 더하는 variant**다: `border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50 dark:hover:bg-destructive/20` (바탕 투명, 크기는 size 그대로). 필요한 이유: 두 버튼은 "되돌릴 수 없는 일의 입구"라 파괴적으로 보여야 하지만(SD-A7), 그 자체가 확정 버튼은 아니라 빨간 채움(`destructive`, C-05 확인 전용)을 쓰면 확인 창의 버튼과 위계가 같아진다. `destructive-ghost`는 테두리가 없어 섹션 끝의 독립 버튼으로는 눌러지는 것처럼 보이지 않는다. 사용처에서 색을 덧씌우지 않는다(v4 규칙).
+- 섹션 전체를 빨갛게 칠하거나 테두리 상자로 감싸지 않는다(위험 강조는 버튼에만 — A1 S-25와 같은 원칙).
+
+#### 5.11.2 AI 연결 탭 (S-24 ② = S-40 블록 ① + S-42 블록 ②)
+
+```
+(C-18에서 왔으면) 복귀 배너 — C-10 모양(info-subtle, CornerUpLeft), 연결 뒤 "돌아가기" default
+section 블록 ①  h3 "모델 공급자 설정"
+  p.body text-muted-foreground  "본인 AI 키를 연결하면 연결한 모델의 한도 내에서 …"(플로우 S-24 ② 문구)
+  (활성 공급자 없음) Alert variant="warning" + TriangleAlert "AI 기능이 잠겨 있어요. 사용할 공급자를 골라 주세요"
+  RadioGroup — 공급자 라디오 행 3개 (아래 ProviderRow)
+section#settings-ai-usage 블록 ②  h3 "모델 공급자 별 사용량 확인"
+  사용량 (아래 "공급자 탭 + 교차 표")
+```
+
+- 블록 ①·② 사이는 탭 공통 `gap-8`. 블록 ②로 바로 오는 진입(옛 `ai-usage`)은 `#settings-ai-usage`를 `scrollIntoView({ block: "start" })`.
+- C-19 경고 배지로 들어와 `provider`가 오면 그 행(`#provider-row-{provider}`, `scroll-mt-4`)으로 스크롤한다(v5.10 카드 앵커와 같은 규칙).
+
+**공급자 라디오 행** (`ProviderRow` — v5.10 `ProviderCard`(카드 3개)를 대체, SD-A1)
+
+```
+RadioGroup value={활성 공급자} aria-label="활성 공급자"
+  div.divide-y rounded-lg border bg-card        ← 한 묶음 안 세 줄 (카드 3개 아님)
+    div#provider-row-{p}.flex items-start gap-3 px-4 py-3 min-h-16   (활성 행: bg-primary-subtle/40)
+      div.flex w-4 pt-1   RadioGroupItem (연결된 행만, aria-label "{공급자}를 활성 공급자로") / 미연결은 같은 폭 빈 칸
+      div.min-w-0 flex-1 space-y-1
+        1행 div.flex flex-wrap items-baseline gap-x-2 gap-y-1
+             span.text-base font-semibold {Gemini | GPT | Claude}
+             span.meta text-muted-foreground {플랜 안내}                ← "무료/유료 가능" / "GPT Pro 플랜 이상만 가능" / "Claude MAX 플랜 이상만 가능"
+             (Gemini, 미연결) Badge variant="recommend" "추천: 무료로 시작"
+             (상태 배지) 아래 표 — 행 1행 끝 ml-auto 아님, 이름 뒤에 이어 붙임(줄바꿈 허용)
+        2행 상태 줄 text-sm (연결된 행만): 아래 표
+        (그 상태일 때만) 3행 안내 줄 meta + 행 동작 버튼
+      div.flex shrink-0 items-center gap-1
+        미연결: Button size="sm" "연결" (Gemini default · GPT·Claude outline)
+        연결됨: (상태별 강조 버튼 sm) + DropdownMenu 트리거 Button variant="ghost" size="icon-sm" aria-label="{공급자} 키 관리" > Ellipsis
+```
+
+| 상태 | 행 바탕 | 상태 배지 (1행, `Badge` h-6 — C-19 연결 배지와 같은 variant·아이콘이지만 눌리지 않는 글자) | 2행 상태 줄 · 3행 | 강조 버튼 |
+|------|---------|------|------|------|
+| 미연결 | 기본 | 없음 | 없음 | [연결] |
+| 연결됨 | 기본 | 없음 | `CircleCheck size-4 text-success` "••••1a2b · 무료 등급 · 마지막 확인 10월 28일 14:02"(마스킹 `font-mono`, 숫자 `tabular-nums`) | — |
+| **활성** | `bg-primary-subtle/40` | C-19 `valid`형 "Gemini · 무료 등급" | 위와 같음 | — |
+| 무효 `invalid` | 기본 | `warning` + `TriangleAlert` "{공급자} · 키를 확인해 주세요" | `TriangleAlert text-warning` 원인 문구(`last_failure_cause`) + `meta` `last_failure_at`. 3행 `meta` "무효 키는 교체한 뒤 활성으로 고를 수 있어요"(라디오 `disabled`) | `default sm` "키 교체" |
+| 확인 필요 `needs_check` | 기본 | `warning` + `CircleHelp` "{공급자} · {등급} · 확인 필요" | `CircleHelp text-warning` "키는 인증됐지만 한도 때문에 확인을 끝내지 못했어요. 그대로 쓸 수 있어요" | `outline sm` "다시 확인" |
+| 동의 필요 (활성 행, `consent_required`) | 활성 바탕 | `warning` + `ScrollText` "{공급자} · {등급} · 동의 필요" | 키 상태 줄 그대로 + 3행 `ScrollText text-warning` 이유별 문구(플로우 S-40 두 가지) | `default sm` "동의하기"(→ C-21) |
+| 다시 확인 중 | 그대로 | 그대로 | `Loader2 animate-spin text-ai` "다시 확인 중… 최대 10초 정도"(유료 "최대 5초") | ⋯ 메뉴 `disabled` |
+| 일시 중지 (`is_available = false`) | `bg-muted/50` | 없음 | `PauseCircle text-muted-foreground` 플로우 문구 | 라디오·[연결] `disabled`, ⋯ 메뉴의 키 삭제만 남김 |
+
+- **"상태 배지" 정리**: 브리프의 "키 무효·확인 필요·동의 필요" 배지는 **C-19 연결 배지의 글자를 그대로 쓴다**(새 글자를 만들지 않음). 배지는 행 안에서 버튼이 아니다(`ProviderBadge`의 `static` 모양 — 같은 variant·아이콘의 `Badge`, `role` 없음). 무효·확인 필요 배지는 활성이 아닌 행에도 보인다(그 행의 키 상태이므로).
+- 행 순서 **Gemini → GPT → Claude**(플로우 v5.17, v5.10의 Gemini → Claude → OpenAI에서 바뀜). 화면 이름은 "GPT"(값 `openai`).
+- ⋯ 메뉴: 키 교체 · 다시 확인 · 등급 변경 · 데이터 사용 고지 다시 보기 / `DropdownMenuSeparator` / 키 삭제(`variant="destructive"` 항목) — v5.10 카드 메뉴와 같다.
+- 활성 전환: 다른 라디오 → `AlertDialog`(확인 `default`) 플로우 문구 → (재동의면 C-21) → 저장. 저장 전에는 라디오가 원래 값. v5.10 그대로.
+- 다시 확인 결과 실패 → 2행을 바꾸고 행 안 맨 아래에 C-20 inline.
+- 좁은 화면(< 768): 오른쪽 동작 묶음이 1행 오른쪽에 남고, 1행 안의 플랜 안내·배지는 이름 아래로 줄바꿈된다. 행을 카드로 바꾸지 않는다.
+- 로딩: `Skeleton h-16` 3줄(묶음 테두리 안). 저장 실패: ST-SAVE-FAILED 제출형(행 아래).
+- **S-41 공급자 선택**(공급자가 정해지지 않았을 때)도 같은 `ProviderRow`를 쓴다(플로우 "AI 연결 탭과 같은 라디오 행 3개"): 상태 줄·⋯ 메뉴·[연결] 없이, **행 전체가 선택 버튼**(`Item` 버튼형 안에 행 내용 — v5.10 `inButton`과 같은 규칙, 구문 요소만).
+
+**사용량: 공급자 탭 + 교차 표** (`AiUsageByProvider` — S-42, SD-A10~A12)
+
+```
+Alert variant="info" (닫기 없음) Info + font-semibold "예상치이며 공급자 청구서가 아니에요." + " 실제 청구는 공급자 대시보드에서 확인하세요"
+Tabs defaultValue={활성 공급자 ?? "gemini"}
+  div.flex flex-wrap items-center justify-between gap-2 border-b
+    TabsList variant="line"  TabsTrigger × 3 "Gemini" · "GPT" · "Claude"      ← 기록 없는 공급자도 탭은 늘 3개
+    Button variant="link" size="sm" asChild > a target="_blank" rel="noopener noreferrer" "{공급자} 대시보드" + ExternalLink size-3.5 + sr-only "(새 탭)"
+  TabsContent (공급자마다) space-y-3 pt-3
+    p.meta text-muted-foreground tabular-nums "2026년 11월 1일 ~ 오늘"
+    (활성 키가 free일 때만) p.meta text-muted-foreground flex gap-1.5 + Info size-4 "무료 등급: 청구되지 않을 수 있어요(유료 단가로 환산한 예상치)"
+    (그 공급자 기록 없음) p.meta text-muted-foreground "{공급자}로는 이번 달에 아직 AI를 쓰지 않았어요"
+    Table (아래)
+    p.meta text-muted-foreground tabular-nums "가격표 {version} · 기준일 {source_checked_at}" + Collapsible "가격표 보기"(v5.10 그대로)
+    p.meta text-muted-foreground "공급자 가격이 바뀌면 갱신해요. 지난 기록은 당시 가격표로 계산돼요"
+ul.space-y-1 meta text-muted-foreground — 각 줄 Info size-4: "Resumate 밖에서 같은 키로 쓴 사용량은 …" / "AI 사용 후 1분 안에 반영돼요"
+```
+
+표 (`Table`, 2장 규칙: 행 `h-12`, 머리 `label text-muted-foreground`):
+
+| 열 | 정렬 | 셀 |
+|----|------|-----|
+| 기능 | 왼쪽 | `body` 기능 이름(7행 고정 매핑 `USAGE_FEATURE_DISPLAY_GROUPS`) |
+| 입력 비용 | 오른쪽 | 1줄 `font-medium tabular-nums` "$0.12" / 2줄 `caption text-muted-foreground tabular-nums` "42,100 토큰"(= `input_tokens + cached_input_tokens + cache_write_tokens`, 플로우 `[가정]`) |
+| 호출 수 | 오른쪽 | `tabular-nums` "12" |
+| 출력 비용 | 오른쪽 | 1줄 "$0.03" / 2줄 "8,200 토큰"(= `output_tokens`) |
+
+- 열 순서는 플로우 그대로 **기능 / 입력 비용 / 호출 수 / 출력 비용**이다. 숫자 열 `text-right tabular-nums`, 머리도 오른쪽 정렬. 열 폭: 기능 `w-auto`, 숫자 세 열 `w-28`(호출 수 `w-20`) `[UI-가정]`.
+- **토큰 보조 표기는 비용 칸 안 둘째 줄**이다(플로우 "각 비용 칸 아래 보조 표기"). 열을 따로 만들지 않는다. 행 높이는 두 줄이 들어가게 `h-auto py-2`(그 밖 표의 `h-12`는 최소 높이로).
+- 금액: `$` + 소수 2자리, 0 초과 0.01 미만 "< $0.01", 0은 "$0.00". 토큰·호출 수 `ko-KR` 천 단위. 원화 없음(D-33).
+- **0인 행**(비용·호출 모두 0)은 행 `text-muted-foreground`(숫자 1줄 `font-medium`도 흐리게). 행은 지우지 않는다 — 7행 고정 순서가 기본.
+- 정렬: 머리 버튼 `TableHead > Button variant="ghost" size="sm"` + `ArrowUpDown size-3.5`, `aria-sort`(v5.10 그대로). 정렬 기준은 비용 1줄 값(토큰 아님).
+- **합계 행·합계 카드 없음**(플로우가 없앰, SD-Q3 (나)). `by_provider` 표 없음.
+- 좁은 화면(< 640, 본문 폭 약 340px): 표를 행 목록으로 바꾼다 — `ul.divide-y`, 각 행 1줄 기능 이름(왼쪽) + `meta` "호출 12회"(오른쪽), 2줄 `meta tabular-nums` "입력 $0.12 · 42,100 토큰" / 3줄 "출력 $0.03 · 8,200 토큰". 정렬은 표 위 `Select`("정렬: …") `[UI-가정]`.
+- 상태: **연결 전** = 고지 Alert 아래 `p.meta text-muted-foreground` "AI를 연결하면 Resumate에서 쓴 토큰과 예상 비용을 여기서 볼 수 있어요" 한 줄(탭·표 없음, C-18 영역형 쓰지 않음) / **연결했지만 이번 달 기록 없음** = 탭은 그대로, 각 탭 표는 7행 모두 0(흐림) + 표 위 "이번 달에는 아직 AI를 쓰지 않았어요" / **고른 공급자만 기록 없음** = 위 "{공급자}로는…" 한 줄 + 0 표 / 로딩 = 탭 줄 `Skeleton h-9 w-56` + 표 7행 `Skeleton h-12` / 오류 = 블록 ② 자리 `ErrorState` 작은 형 "사용량을 불러오지 못했어요" + "다시 불러오기".
+- 가격표 줄: 그 공급자 기록의 `price_table_versions`가 여럿이면 " · "로 이어 쓴다. 기록이 없으면 버전 줄을 빼고 설명 한 줄만 둔다 `[UI-가정]`.
+- 상시 고지는 **블록 ② 맨 위에 두고 sticky로 붙이지 않는다**(v5.10은 사용량이 섹션 전체라 본문 `top-0` sticky였다). 이제 블록 ① 아래에 있어 붙이면 블록 ①을 가린다. 닫기 버튼 없음은 그대로 `[UI-가정]`.
+- 대시보드 링크는 **고른 탭의 공급자 하나만** 탭 줄 오른쪽에 둔다(플로우 S-24 ② "고른 공급자의 '{공급자} 대시보드 ↗'"). v5.10의 고지 안 공급자별 링크 묶음은 없앤다.
+
+#### 5.11.3 약관 탭 (S-24 ③)
+
+```
+section h3 "Resumate 약관"
+  ul.divide-y rounded-lg border bg-card
+    li.flex items-center justify-between gap-3 px-4 py-3 min-h-14 × 4  (개인정보 처리방침 · 이용 약관 · 국외 이전 약관 · AI 데이터 처리)
+      span.body {문서 이름}
+      Button variant="outline" size="sm" asChild > a href="/policies/{type}" target="_blank" rel="noopener" "전문 확인" + ExternalLink size-3.5 + sr-only "(새 탭)"
+section h3 "선택 동의"
+  ul.divide-y rounded-lg border bg-card
+    li.px-4 py-3 × 2:  Field orientation="horizontal" items-start gap-4
+      FieldContent: FieldLabel htmlFor body font-medium {이용 패턴 기록 활용 | 기능 업데이트, 소식 받기} + FieldDescription meta {현행 설명 한 줄}
+      div.flex items-center gap-2 pt-0.5:  (저장 중) Loader2 size-4 animate-spin text-muted-foreground  ·  Switch id
+      (실패) p.col-span-full 오류 줄 "변경하지 못했어요 · {항목} 설정이 그대로예요 · " + Button destructive-link size="sm" "다시 시도"
+div.rounded-lg bg-muted/50 p-4 flex items-start gap-3        ← AI 데이터 처리 원칙 줄 (섹션 제목 없음)
+  ShieldCheck size-4 mt-1 text-success
+  div.min-w-0 flex-1 space-y-1
+    p.body "Resumate는 내 데이터를 AI 학습에 쓰지 않아요. 키는 서버에 암호화해 저장하고 화면에는 마지막 4자리만 보여요"
+    p.meta text-muted-foreground "공급자 데이터 사용은 연결한 공급자·등급 정책을 따라요"
+  Button variant="link" size="sm" asChild > a /policies/ai_data_use target="_blank" "전문 확인" + ExternalLink size-3.5
+```
+
+- 문서 행은 v5.10 "처리방침·약관" 섹션의 밑줄 링크 묶음을 대체한다. 네 문서가 같은 모양(SD-A13). 버튼 글자는 "전문 확인" 하나로 같다 — 스크린 리더용으로 `aria-label="{문서 이름} 전문 확인 (새 탭)"`.
+- 선택 동의는 `Switch`(체크박스 아님) — 즉시 저장되는 켜고 끄기라 저장 버튼이 있는 내 정보와 모양으로 구분한다. 저장 중에는 **그 스위치만** `disabled`. 실패하면 스위치를 되돌리고 오류 줄.
+- **필수 동의 기록(동의 항목·날짜 목록)은 그리지 않는다**(SD-Q3 (다) 확정). v5.10 "동의 관리" 섹션 설명 문구("가입할 때 동의한 항목과 날짜예요…")도 없앤다.
+- 공급자별 데이터 사용 동의(C-21)는 이 탭에 없다 — AI 연결 탭 ⋯ 메뉴 "데이터 사용 고지 다시 보기"와 동의 필요 배지가 자리다. v5.10 "AI 데이터 처리" 섹션의 "연결한 공급자의 데이터 사용 고지 다시 보기" 링크와 국외 전송 항목 목록(`CROSS_BORDER_ITEMS`)은 없앤다(전문은 S-30 `/policies/ai_data_use`·`/policies/cross_border_transfer`).
+- 상태: 로딩 = 행 6개 `Skeleton h-12` / 불러오기 실패 = `ErrorState` 작은 형 "약관 설정을 불러오지 못했어요" + "다시 불러오기".
+
+#### 5.11.4 개선 요청 탭 (S-24 ④)
+
+```
+div.space-y-4
+  p.body "쓰면서 아쉬웠던 점이나 바라는 기능을 알려 주세요"
+  ── 링크 상태 (IS_FEEDBACK_FORM_READY) ──
+  Button variant="default" asChild className="w-fit" > a href={FEEDBACK_FORM_URL} target="_blank" rel="noopener noreferrer"
+      "개선 요청 보내기" + ExternalLink size-3.5 + sr-only "(새 창)"
+  p.meta text-muted-foreground flex gap-1.5 + Info size-4 "입력한 내용은 폼 제공자에게 전달돼요. Resumate는 저장하지 않아요"
+  ── 준비 중 상태 (주소 없음, 기본) ──
+  div.flex flex-wrap items-center gap-2
+    Button variant="default" disabled "개선 요청 보내기" + ExternalLink size-3.5
+    Badge variant="outline" "준비 중"
+  p.meta text-muted-foreground flex gap-1.5 + Clock size-4 "개선 요청 창구를 준비하고 있어요. 곧 열어요"
+```
+
+- 준비 중의 버튼은 그냥 `disabled`(포커스 없음)다 — 이유가 바로 아래 글자로 보이므로 툴팁·`aria-disabled` 포커스 정지를 두지 않는다(8.5 DR-8 같은 빈 탭 정지 회피). 전달 고지 줄은 링크 상태에서만 보인다(보낼 수 없을 때 전달 고지는 의미가 없다) `[UI-가정]`.
+- 입력창·첨부·보낸 내역 없음(SD-3). 로딩·오류 상태 없음.
+
 ---
 
 ## 6. 영역별 메모
@@ -1932,9 +2182,10 @@ form > InputGroup className="rounded-3xl bg-white has-disabled:bg-white has-disa
   - 시작 실패: 버튼 바로 아래 `mt-2` 오류 한 줄(A-10: `flex items-start gap-1.5 text-sm text-destructive` + `CircleAlert size-4 mt-0.5`, `role="alert"`) "Google 로그인을 시작하지 못했어요. 다시 시도해 주세요". 버튼은 다시 활성. Alert 상자를 쓰지 않는 것은 콜백 실패(페이지에 돌아온 상태)와 구분하기 위해서다.
   - 약관 안내: 버튼(또는 오류 줄) 아래 `mt-6 text-center text-sm leading-5 text-muted-foreground` 명세 문구 + **"이용약관 · 개인정보 처리방침" 두 인라인 링크**(v5.2, 플로우 v5.8 PT-6. 각각 `Button variant="link" asChild` + `h-auto max-md:h-auto p-0 text-sm`, 사이 구분 " · ", 색·밑줄은 link variant 기본값 그대로). S-01 하단도 "로그인 · 이용약관 · 개인정보 처리방침" 링크 줄.
 - S-03: 동의 항목 `Checkbox` 목록과 필수 표시. (v2) AI 공급자 동의는 여기서 받지 않는다(C-21로 옮김). AI 고지는 한 줄 `meta text-muted-foreground` + `Info`로 줄인다. (v5.2, PT-5) 목록 맨 위에 **"만 14세 이상이에요"** 행 — 동의 항목 행과 같은 모양(`Checkbox` + `Label` + `Badge variant="info"` "필수"), "보기" 링크 없음. 빠지면 `aria-invalid`와 필수 항목 오류 줄을 함께 쓴다.
-- (v5.2, PT-6) S-30 문서 페이지: `max-w-[42rem] mx-auto px-4 py-10`. "돌아가기" → 제목 `page-title`(문서 이름) + `meta text-muted-foreground tabular-nums` "버전 · 시행일" → 조항마다 `h2 text-base font-semibold` "{n}. {제목}" + 본문 `text-base leading-[1.75]`(문단·`list-disc` 목록) → `border-t pt-6` 아래 다른 두 문서 링크(`text-sm text-muted-foreground underline`, 좁은 화면 (v5.5) `max-md:min-h-8`, A-4). 탭(`Tabs`)은 쓰지 않는다.
-- (v2) S-40·S-41·S-42: 5.7.
-- S-24 설정: 사이드바에서는 설정 다이얼로그(5.1)로 열린다. (v2) "AI 연결"·"AI 사용량" 섹션은 5.7. 계정 섹션의 "AI 연결" 한 줄은 "연결 안 됨" 또는 C-19 배지 + `font-mono` "••••1a2b"로 쓰고, 누르면 섹션을 바꾼다. "AI 데이터 처리" 섹션은 명세 v5 문구로 바꾸고 "고지 다시 보기" 링크(→ AI 연결 섹션)를 단다. (2026-11-04) `/settings` 페이지는 삭제했다. S-25 취소·이동 경로는 S-08 위 다이얼로그 "회원 탈퇴" 섹션으로 간다. "화면" 섹션(AI 사용량 다음): `ToggleGroup variant="outline" spacing={0}` 시스템 설정 · 라이트 · 다크, 기본 시스템 설정, 이 브라우저(localStorage)에만 저장.
+- (v5.2, PT-6) S-30 문서 페이지: `max-w-[42rem] mx-auto px-4 py-10`. "돌아가기" → 제목 `page-title`(문서 이름) + `meta text-muted-foreground tabular-nums` "버전 · 시행일" → 조항마다 `h2 text-base font-semibold` "{n}. {제목}" + 본문 `text-base leading-[1.75]`(문단·`list-disc` 목록) → `border-t pt-6` 아래 다른 문서 링크((v5.11) 문서가 4개라 **다른 세 문서**, 플로우 v5.17 SD-A13)(`text-sm text-muted-foreground underline`, 좁은 화면 (v5.5) `max-md:min-h-8`, A-4). 탭(`Tabs`)은 쓰지 않는다.
+- (v5.11) S-30 **AI 데이터 처리** `/policies/ai_data_use`(신설, SD-A13): 다른 세 문서와 **같은 페이지 모양**이다. 머리 "버전 · 시행일"은 `policy_versions`(`ai_data_use`) 행, 본문 = 조항 본문(원칙 "Resumate는 내 데이터를 AI 학습에 쓰지 않아요 · 키는 암호화 저장" 포함) + **공급자별 요약 단락**(`ai_disclosures` 6행 — 공급자·등급마다 `h3.subsection` "{공급자}({등급})" + 단락 `text-base leading-[1.75]`). 표(`Table`)나 탭으로 만들지 않는다 — 플로우가 "한 단락"으로 정했고 다른 문서와 읽기 모양을 맞춘다 `[UI-가정]`.
+- (v2) S-41: 5.7. (v5.11) S-40·S-42는 설정 AI 연결 탭의 두 블록이다: 5.11.2.
+- S-24 설정: (v5.11) **5.11**(탭 4개 — 계정 5.11.1 · AI 연결 5.11.2 · 약관 5.11.3 · 개선 요청 5.11.4). v5.10까지의 섹션별 메모(계정 섹션의 "AI 연결" 한 줄 `AiStatusLine`·"기본 프로필 편집" 버튼, "AI 데이터 처리" 섹션의 고지 다시 보기 링크·국외 전송 목록, "처리방침·약관" 밑줄 링크, "회원 탈퇴" 섹션 버튼, "화면" 섹션 `ToggleGroup`)는 쓰지 않는다. 화면 테마는 계정 메뉴 "다크 모드" 스위치(5.1 NavUser). S-25 취소·이동 경로는 S-08 위 다이얼로그 **계정 탭**(`routes.settings("account")`)으로 간다.
 - S-25 탈퇴: (v2) 삭제 범위에 "AI 연결" 묶음(키 N개 · 토큰 사용 기록 · 동의 이력)을 더하고, 그 아래 `Alert variant="info"` "공급자 사이트에서도 키를 폐기하는 것을 권해요"와 공급자 대시보드 외부 링크를 둔다. 삭제 범위를 C-05의 영향 요약 스타일로, 확인 입력/체크 후 `destructive` 버튼. 위험 강조는 버튼에만(화면 전체를 빨갛게 하지 않음).
 - **(v3) S-25 탈퇴** (약관 동의 게이트 밖 경로):
   - 정상 상태는 `max-w-form` 한 열이다. 순서는 삭제 범위 요약(C-05 영향 요약 스타일) → AI 연결 묶음과 `Alert variant="info"`(위 v2) → **확인 체크** → 버튼이다. 확인 체크는 `rounded-md border border-input p-4 flex items-start gap-3` 안에 `Checkbox`와 `label text-base` 명세 문구를 둔다. 문구 입력란은 없다. "탈퇴하기"는 오른쪽 정렬 `destructive`이고, 체크 전에는 `disabled`, 요청 중에는 `Loader2` 로딩이다.
@@ -1951,9 +2202,9 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
 ```
 
   - 마무리 요청이 또 실패하면 카드는 그대로 두고 버튼 위에 ST-SAVE-FAILED 제출형 한 줄을 둔다. 성공하면 로그아웃하고 `/`로 간다. 토스트는 없다 `[가정]`.
-- (v3) S-40 "동의 필요" 상태는 5.7 공급자 카드 표, 동의 창은 3.21에 있다.
+- (v3) S-40 "동의 필요" 상태는 (v5.11) 5.11.2 공급자 라디오 행 표, 동의 창은 3.21에 있다.
 
-### A2 커리어 (S-04, S-08~S-12, S-34~S-36)
+### A2 커리어 (S-08~S-12, S-34~S-36. ~~S-04~~ v5.11 폐기 — 6장 A1 · 5.11.1)
 
 > **(v5) 읽는 순서**: 플로우 v5.5·v5.6으로 S-08 트리, S-35, S-36, S-11, v3 S-10 메모는 **폐기**됐다(아래 v3 이하 메모는 이력). 지금 기준은 이 절 맨 끝 "(v5) 커리어 v5.6"(S-10·S-44·S-43 산출물) 메모와 "(v5.7) 커리어 v5.13"(S-08 목록·S-09·S-34·S-43 패널·C-22·C-25) 메모, 그리고 추가·수정 모달 5.6.1이다(8.4 P-15 해소). C-24 섹션 편집은 폐기(v5.7, OD-C2).
 
@@ -2149,7 +2400,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-20 | (v2) KST 시각 형식("오후 4:00 (KST)", "내일", "곧")과 외부 링크 글자 | 3.20 |
 | G-21 | (v2) C-20 보존 줄 문구 "입력과 지금까지 만든 결과는 그대로 있어요" | 3.20 |
 | G-22 | (v2) 무료 등급 요청 한도 대기는 AI 보라 `Hourglass`로 보이고 경고색을 쓰지 않는다. 진행 카드의 공급자 배지는 축약형에 두지 않는다 | 3.3 |
-| G-23 | (v2) L-01 AI 상태 줄은 `NavSecondary` 첫 항목이고, 누르면 설정 다이얼로그 "AI 연결" 섹션이 열린다. 레일에서는 아이콘 + 상태 점 | 5.1 |
+| G-23 | (v2) L-01 AI 상태 줄은 `NavSecondary` 첫 항목이고, 누르면 설정 다이얼로그 "AI 연결" 탭이 열린다((v5.11) 탭 ID `ai-connection`). 레일에서는 아이콘 + 상태 점 | 5.1 |
 | G-24 | (v2) 설정 다이얼로그 섹션 순서(계정 다음에 AI 연결·AI 사용량)와 경고 점 | 5.1 |
 | G-25 | (v2) S-41은 넓은 화면에서 사이드바 없는 집중 화면이다. 일부 단계만 하는 흐름은 번호를 다시 매기고, 키를 입력한 상태에서 그만두면 확인을 받는다 | 5.7 |
 | G-26 | (v2) C-21은 "모두 동의"가 없고, 다음 버튼이 비활성인 이유와 재동의 알림 문구를 보인다 | 3.21 |
@@ -2188,13 +2439,26 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-59 | (v5) 좁은 화면 패널 = 떠 있는 둥근 버튼 → 시트(768 미만 전체 화면, 768~1023 `max-w-md`), 시트 머리 "STAR 보기"/"본문 보기" | 5.8 |
 | G-60 | (v5) L-02 토스트 위치 `bottom-left`, 로고 표기 "Resumate" | 2, 5.8 |
 | G-61 | (v5) S-43 산출물 행 = 아이콘 + 제목 + `ChevronRight`, 50개 안내는 제목 줄 아래 | 6 A2 |
+| G-62 | (v5.11) 설정 다이얼로그 크기 `md:max-w-[760px] lg:max-w-[880px]`, 본문 높이 `min(640px, 100dvh − 4rem)`(좁은 화면 `85svh`) 고정, 탭 목록 폭 `12rem` | 5.11 |
+| G-63 | (v5.11) 좁은 화면 탭 줄 = `grid-cols-4` 글자 버튼(아이콘 없음), 320px 미만만 가로 스크롤 | 5.11 |
+| G-64 | (v5.11) AI 연결 탭 경고 점은 `invalid`·`needs_check`만(동의 필요는 점 없음), 다른 탭은 점 없음 | 5.11 |
+| G-65 | (v5.11) 선택 입력 셀렉트 맨 위 "선택 안 함" 항목(값 비우기), 연도만 고른 기간은 문구 없이 강조만 | 5.11.1 |
+| G-66 | (v5.11) 내 정보 저장 줄은 섹션 끝 오른쪽(sticky 아님), 성공 토스트 없음(C-06 + `sr-only`), Enter 제출 막음 | 5.11.1 |
+| G-67 | (v5.11) 쌍 행이 1개일 때 [삭제]는 두 셀렉트를 비움, 중복은 저장 때만 판정 | 5.11.1 |
+| G-68 | (v5.11) 위험 구역 두 버튼 = 새 variant `destructive-outline`, 섹션 상자·빨간 바탕 없음 | 5.11.1, 2 |
+| G-69 | (v5.11) 사용량 상시 고지는 블록 ② 맨 위(sticky 아님), 대시보드 링크는 고른 탭 하나만 탭 줄 오른쪽, 숫자 열 폭 `w-28`/`w-20`, 기록 없는 탭은 가격표 버전 줄 생략 | 5.11.2 |
+| G-70 | (v5.11) 좁은 화면(< 640) 사용량 표 → 행 목록 3줄 + 정렬 `Select` | 5.11.2 |
+| G-71 | (v5.11) 개선 요청 준비 중 = `disabled` 버튼 + `Badge outline` "준비 중" + 안내 줄(툴팁 없음), 전달 고지는 링크 상태에서만 | 5.11.4 |
+| G-72 | (v5.11) `stale_write` 때 "덮어쓰기 전에 보여 준다" = 충돌 Alert 안에 내가 고친 칸의 "{라벨}: {값}" 목록 | 5.11.1 |
+| G-73 | (v5.11) 선택 동의 = `Switch`(체크박스 아님), AI 데이터 처리 원칙 줄 = `bg-muted/50` 상자 + `ShieldCheck text-success` | 5.11.3 |
+| G-74 | (v5.11) S-30 AI 데이터 처리의 공급자별 요약 = 공급자·등급마다 소제목 + 단락(표 아님) | 6 A1 |
 
 ### 8.3 열린 질문 (리더 경유)
 
 | # | 질문 | 대상 |
 |---|------|------|
 | Q-1 | Pretendard 폰트 파일을 저장소에 넣어도 되는지(라이선스 OFL, 용량 약 2MB 또는 dynamic-subset) — 아니면 시스템 폰트만 | 리더 |
-| Q-2 | 다크 모드 전환 → **결정(2026-10-29, 사용자)**: 설정에서 시스템 설정/라이트/다크 선택. `next-themes` 없이 루트 레이아웃 인라인 스크립트(`components/common/theme.ts`)가 첫 화면 전에 `.dark`를 붙임 | 리더 |
+| Q-2 | 다크 모드 전환 → **결정(2026-10-29, 사용자)**: 설정에서 시스템 설정/라이트/다크 선택. `next-themes` 없이 루트 레이아웃 인라인 스크립트(`components/common/theme.ts`)가 첫 화면 전에 `.dark`를 붙임. → **(v5.11) 바뀜**: 플로우 v5.13 OD-S1 · v5.17 SD-A16에 따라 전환은 계정 메뉴 "다크 모드" 스위치만(라이트↔다크). "시스템 설정"은 저장값이 없을 때의 기본으로만 남는다(8.4 P-23) | 리더 |
 | Q-3 | `cmdk`(shadcn `command`) 의존성 사용 승인 — C-16 검색 | 리더 |
 | Q-4 | (v2) 공급자 로고(Gemini·Claude·OpenAI)를 S-40 카드에 쓸지. 쓰려면 각 브랜드 가이드 확인이 필요하다. 지금은 글자만 쓴다 | 리더 |
 | Q-5 | (v2) S-41 집중 화면(사이드바 없음)을 `(dashboard)` 아래 라우트에서 셸 레이아웃을 빼고 그릴 수 있는지(라우트 그룹 분리). 어렵다면 셸 안 페이지로 두고, 넓은 화면에서는 본문을 가운데 `max-w-2xl`로 둔다 | 리더 · 파운데이션 |
@@ -2229,6 +2493,11 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | P-19 | L-02 (v5) | `stale_write` "새로 불러오기"의 "버린다고 함께 알림" 문구가 없다. 임시 "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요" |
 | P-20 | S-44 (v5) | 반영됨 상태에 방식("교체"/"덧붙임")을 보일지 명세에 없다(`applied_mode`는 저장됨). 임시로 보인다(G-58) |
 | ~~P-21~~ | C-22 (v5.7) | **해소(v5.8, 플로우 v5.14 U36-4, 확정 2026-11-05 (사용자))**: C-22는 "커리어 추가" 버튼에 붙은 `DropdownMenu`(구현 그대로, 모든 폭 같음)로 명세가 바뀌었다. 다이얼로그·시트는 그리지 않는다 |
+| P-22 | S-24 ① 미저장 확인 (v5.11) | 확인 버튼 글자가 "저장하지 않고 닫기" / "저장하고 닫기" 하나뿐인데, 같은 확인이 **다른 탭으로 갈 때**와 **[회원 탈퇴]를 누를 때**도 뜬다. 그때도 "닫기"라 쓰면 무엇이 닫히는지 헷갈린다. 지금은 플로우 문구 그대로 쓴다. 상황별 글자(예: 탭 전환은 "…이동")가 필요한지 |
+| P-23 | 계정 메뉴 다크 모드 (v5.11) | v5.10의 "화면" 섹션(시스템 설정 / 라이트 / 다크)이 없어져, 스위치를 한 번 누른 사용자는 "시스템 설정 따르기"로 돌아갈 길이 없다. 그대로 둘지, 계정 메뉴에 셋째 상태를 둘지 |
+| P-24 | S-24 ① (v5.11) | 계정 탭(이메일·내 정보) 불러오기 실패 문구가 없다(약관 탭·사용량은 있음). 임시 "설정을 불러오지 못했어요" + "다시 시도"(v5.10 그대로) |
+| P-25 | S-24 ① 내 정보 (v5.11) | 모든 항목이 선택 입력인데 셀렉트에서 고른 값을 **비우는 방법·문구**가 없다. 임시 항목 "선택 안 함"(G-65). 또 최종 학력 기간에서 연도만 고르고 월을 비운 경우의 검증 문구가 없다(연월 `'YYYY-MM'`만 저장 가능) |
+| P-26 | S-24 ① `stale_write` (v5.11) | "사용자가 고친 값은 덮어쓰기 전에 보여 준다"의 방법이 없다. 임시로 충돌 Alert 안에 "{칸 라벨}: {내가 입력한 값}" 목록(G-72). 되돌려 넣는 버튼은 두지 않았다 |
 
 ### 8.5 디자인 결정 필요 / 위험 (v5.5, 2026-11-04)
 
@@ -2272,6 +2541,7 @@ v5.5는 **이미 구현된 코드와 사용자 결정(UP-1~UP-13, 2026-11-04)을
 
 | 버전 | 날짜 | 내용 |
 |------|------|------|
+| v5.11 | 2026-11-05 | **새 설정 다이얼로그 — 왼쪽 탭 4개**(UI 42 런, 결정 사이클 `settings-dialog` SD-1~SD-6 · SD-A1~SD-A19 · R13-U1~U4. 기준 PRD v4.14 · 플로우 v5.17a · AI v4.12a · 데이터 모델 v4.12a, Figma 없음). **신설 5.11**: 탭 4개(`account` · `ai-connection` · `policies` · `feedback`, 아이콘 `UserRound`·`PlugZap`·`FileText`·`MessageSquarePlus`)와 옛 섹션 ID 호환표, 크기 `md:max-w-[760px] lg:max-w-[880px]` · 높이 `min(640px,…)` · 탭 목록 `12rem`(v5.10 `max-h-[500px]`·`h-[480px]`·`700/800`에서), 좁은 화면 4칸 탭 줄, AI 연결 경고 점 유지, 미저장 확인 `UnsavedChangesConfirm`(커리어 모달 OD-C1과 다른 규칙), 5.11.1 계정 탭(섹션 단위 저장 `SectionSaveBar`, 쌍 행 `JobInterestRows`, 최종 학력 묶음 `HighestEducationFields`, 위험 구역), 5.11.2 AI 연결 탭(공급자 라디오 행 `ProviderRow`, 사용량 공급자 탭 + 교차 표 `AiUsageByProvider`), 5.11.3 약관 탭(문서 4행 + `Switch` 선택 동의 2개 + 원칙 줄), 5.11.4 개선 요청 탭(링크 / 준비 중). **variant 추가**: `button` `destructive-outline`. **2장**: `switch` 행 추가, `tabs`·`table` 쓰는 곳 추가. **이름 이전**: `ProviderCard` → `ProviderRow`(사용처 `account/provider-card.tsx`·`ai-connection-panel.tsx`·`key-connect-flow.tsx`·`ai-status-line.tsx`, 앵커 `provider-card-{p}` → `provider-row-{p}`), 섹션 ID `withdraw` → 탭 `account`(사용처 `app/(dashboard)/settings/withdraw/page.tsx`·`account/withdraw-form.tsx`), `ai-usage` 삭제(사용처 `ai-connection-panel.tsx` 사용량 입구, `settings-section-list.ts`·`settings-sections.tsx`). **없앤 것**: 섹션 7개 + "화면" 섹션(테마는 계정 메뉴 스위치 — 1.1·Q-2), 5.7 S-40 카드·사용량 입구·원칙 줄, S-42 합계 카드·공급자별 표·고지 sticky. **고친 것**: 3.1·3.2 `profile` 근거(칩 그대로, C-02 이동 자리에 한 줄), 3.18 AI 연결하기 목적지·5.1 AI 상태 줄 "섹션" → "탭", 5.6 다이얼로그 겹침 예외, 1.4 `max-w-form`·5.2 폼 화면·A2 머리에서 ~~S-04~~ 정리, 6 A1 S-24·S-30(문서 4개, AI 데이터 처리 페이지). 8.2 G-62~G-74, 8.4 P-22~P-26. 다른 토큰 변경 없음 |
 | v5.10 | 2026-11-05 | **S-44 본문 칸 높이 고정 해제**(사용자 요청 2026-11-05 — "독립 프로젝트에서 산출물 작성할 때 작성 text area 높이 화면에 고정으로 두지마"). `DocTextarea`에 `grow` 옵션 신설: 400px 상한과 칸 안 스크롤(`CAPPED_CLASS`)을 떼어, 칸이 내용만큼 자라고 스크롤은 왼쪽 입력 영역 한 곳에서만 일어난다. **S-44 본문만 적용**(S-10 STAR 칸은 400px 유지 — UP-9 그대로). 5.9 S-44 본문 한 칸·`DocTextarea` 높이·근거 구간 강조(칸이 스크롤 상자보다 높으면 선택 구간을 가운데로), 1.3 스크롤 규칙 ③, 8.5 DR-6·DR-10(S-44만 해소) 수정. 토큰·패턴 이름 변경 없음. 기획 문서(UX v5.12 S-44 본문 행·C-24 본문 형식, UP-9)는 아직 400px라 적혀 있다 → **기획 확인 필요**(screen-status) |
 | v5.9 | 2026-11-05 | **UQ-387(UI QA 38 런) — C-17·CR-23·OD-I6 정리(플로우 v5.14)**: 3.16 C-17을 v5.13 산식·문구로("{n}점 / 100", "반영 질문 {n}개 · 미응답 {n}개(0점으로 반영)", 모두 미응답 "0점" + "답변이 없어 0점이에요" + "새 면접 시작하기", 질문 "미응답 · 0점", 질문별 `score_rationale` 한 줄 항상 펼침, 등급 라벨 우수/양호/보완 필요/미흡/해당 없음 — `not_applicable`은 코드대로 `muted`), 8.4 P-1(OD-D1 K-2)·P-2(OD-I2) 해소, 화면 문구 "기업 JD" 16곳 + P-1 행 → "자기소개서"·"자기소개서 관리"(CR-23·U36-2: 3.5·3.13·3.15·4장 ST-EMPTY·S-28 배너·5.1 메뉴·5.2·5.5·6장 A3·A4), A4에 "자기소개서 삭제됨" 표식 패턴(`Badge muted`, S-37 행·카드·S-22 머리), 1.3 흐린 상태 배지 표에 추가. 토큰·패턴 이름 변경 없음(3.15 제목만 "C-16 자기소개서 선택 다이얼로그") |
 | v5.8 | 2026-11-05 | **기획 확인 U36-3·U36-4 반영(플로우 v5.14)**: 5.10 패널 "답을 받지 못한 메시지" 줄 패턴(코드 기준), 8.4 P-21 해소(C-22 = 드롭다운 메뉴) |

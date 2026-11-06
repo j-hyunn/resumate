@@ -132,7 +132,7 @@ export function WithdrawForm({
           </Button>
         ) : (
           <Button asChild variant="outline">
-            <Link href={routes.settings("withdraw")}>취소</Link>
+            <Link href={routes.settings("account")}>취소</Link>
           </Button>
         )}
         <Button type="submit" variant="destructive" disabled={!confirmed || running}>

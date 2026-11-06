@@ -1320,33 +1320,6 @@ export interface AccountDeletionSummary {
   }
 }
 
-/** RPC get_ai_usage_summary(period_month, include_previous) (04 §2.9.5) */
-export interface AiUsageSummary {
-  period_month: DateString
-  as_of: Timestamp
-  totals: {
-    input_tokens: number
-    cached_input_tokens: number
-    cache_write_tokens: number
-    output_tokens: number
-    estimated_cost_usd: number
-    calls: number
-    failed_calls: number
-  }
-  by_feature: Array<{ feature: AiUsageFeature; input_tokens: number; output_tokens: number; estimated_cost_usd: number; calls: number }>
-  by_provider: Array<{
-    provider: AiProviderName
-    connection_tier: ConnectionTier
-    input_tokens: number
-    output_tokens: number
-    estimated_cost_usd: number
-    calls: number
-  }>
-  price_table_versions: Array<{ version: string; source_checked_at: DateString }>
-  /** only when include_previous = true */
-  previous_month?: { period_month: DateString; estimated_cost_usd: number; input_tokens: number; output_tokens: number }
-}
-
 /** save_provider_key verification_result (04 §2.11.3) */
 export type ProviderKeyVerificationResult = "valid" | "limited"
 

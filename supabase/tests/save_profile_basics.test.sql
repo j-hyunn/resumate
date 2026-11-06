@@ -144,6 +144,37 @@ select is(pg_temp.dup_detail(), 'duplicate_job_interest|2',
 -- a failed save leaves nothing behind (one transaction)
 select is((select count(*)::int from public.profile_job_interests), 2, 'the last successful save is what is stored');
 
+-- UI-42 (DM 2.1.1): a retired code (is_active = false) is rejected only when newly chosen. Pairs are rewritten
+-- with delete -> insert, so the RPC hands the trigger the codes the user already held.
+select lives_ok($$select public.save_profile_basics('{}'::jsonb,
+                    '[{"job_family": "engineering", "job_role": "backend"}]'::jsonb, null)$$,
+                'save a pair with an active role');
+reset role;
+update public.profile_options set is_active = false
+ where (category = 'job_role' and code = 'backend') or (category = 'job_family' and code = 'design');
+set local role authenticated;
+select lives_ok($$select public.save_profile_basics('{}'::jsonb,
+                    '[{"job_family": "engineering", "job_role": "backend"}]'::jsonb, null)$$,
+                'a retired role the user already had can be saved again');
+select lives_ok($$select public.save_profile_basics('{}'::jsonb,
+                    '[{"job_family": "data_ai"}, {"job_family": "engineering", "job_role": "backend"}]'::jsonb, null)$$,
+                'it survives moving to another position');
+select throws_ok($$select public.save_profile_basics('{}'::jsonb,
+                     '[{"job_family": "design"}]'::jsonb, null)$$,
+                 'P0001', 'invalid_profile_option', 'a retired family the user did not have is rejected');
+select lives_ok($$select public.save_profile_basics('{}'::jsonb,
+                    '[{"job_family": "data_ai"}]'::jsonb, null)$$,
+                'dropping the retired pair');
+select throws_ok($$select public.save_profile_basics('{}'::jsonb,
+                     '[{"job_family": "engineering", "job_role": "backend"}]'::jsonb, null)$$,
+                 'P0001', 'invalid_profile_option', 'once dropped, the retired role counts as newly chosen');
+select is(current_setting('resumate.held_job_codes', true) is not null, true,
+          'the held-codes hint is transaction-local (set by the RPC)');
+reset role;
+update public.profile_options set is_active = true
+ where (category = 'job_role' and code = 'backend') or (category = 'job_family' and code = 'design');
+set local role authenticated;
+
 set local request.jwt.claims = '{"role":"authenticated"}';
 select throws_ok($$select public.save_profile_basics('{}'::jsonb, '[]'::jsonb, null)$$,
                  '42501', 'not_authenticated', 'no sub');

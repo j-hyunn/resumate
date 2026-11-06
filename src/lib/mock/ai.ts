@@ -431,7 +431,9 @@ export function recordMockUsage(
   for (let i = 0; i < (input.calls ?? 1); i += 1) {
     const input_tokens = noUsage ? 0 : inTok
     const output_tokens = noUsage || input.outcome === "failed" ? 0 : outTok
-    const cost = price ? (input_tokens * price.input_usd_per_mtok + output_tokens * price.output_usd_per_mtok) / 1_000_000 : 0
+    // R13 cost.ts 규칙: 두 쪽을 마이크로 USD 정수로 반올림하고 합계 = 두 정수의 합 / 1e6
+    const inMicros = price ? Math.round(input_tokens * price.input_usd_per_mtok) : 0
+    const outMicros = price ? Math.round(output_tokens * price.output_usd_per_mtok) : 0
     db.ai_usage_records.push({
       id: newId(),
       user_id: USER_ID,
@@ -457,9 +459,9 @@ export function recordMockUsage(
       error_code: input.outcome === "failed" ? (input.error_code ?? null) : null,
       price_table_version: PRICE_TABLE_VERSION,
       // R13 (04 §2.9.2, SD-A11): 입력 쪽 / 출력 쪽을 나눠 기록한다 (합계 = 두 값의 합).
-      input_cost_usd: price ? Math.round((input_tokens * price.input_usd_per_mtok) / 1_000_000 * 1_000_000) / 1_000_000 : 0,
-      output_cost_usd: price ? Math.round((output_tokens * price.output_usd_per_mtok) / 1_000_000 * 1_000_000) / 1_000_000 : 0,
-      estimated_cost_usd: Math.round(cost * 1_000_000) / 1_000_000,
+      input_cost_usd: inMicros / 1_000_000,
+      output_cost_usd: outMicros / 1_000_000,
+      estimated_cost_usd: (inMicros + outMicros) / 1_000_000,
     })
   }
 }

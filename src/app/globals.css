@@ -10,7 +10,8 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Dark mode (Q-2): the user picks 시스템 설정 / 라이트 / 다크 in 설정 › 화면 (default 시스템 설정).
+ * Dark mode (Q-2 → UX v5.17 SD-A16): the 계정 메뉴 "다크 모드" switch picks 라이트 / 다크; with no stored
+ * choice the theme follows the OS (시스템 설정). There is no 설정 › 화면 section any more.
  * An inline script in the root layout (components/common/theme.ts) puts .dark on <html> before
  * first paint and follows OS changes while "system" is selected. No next-themes.
  */

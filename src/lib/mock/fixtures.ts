@@ -56,10 +56,15 @@ import { IDS, USER_ID } from "./ids"
 import { mockAiMeta, mockMessageMeta } from "./ai-meta"
 import { DISCLOSURE_VERSION, MOCK_MODELS, PRICE_TABLE_VERSION, mockDisclosures, mockPriceTables } from "./ai-providers"
 import { currentPeriodMonth, dateFromToday, daysAgo, minutesAgo, month } from "./time"
+import { mockProfileOptions, type MockProfileJobInterest, type MockProfileOption } from "./profile-options"
 
 export interface MockDb {
   user: { id: string; email: string }
   profiles: Profile[]
+  /** R13 (04 §2.1.2): 관심 직군·직무 쌍 (최대 2, sort_order 1..2) */
+  profile_job_interests: MockProfileJobInterest[]
+  /** R13 (04 §2.1.1): 내 정보 셀렉트 코드 표 — non-user reference table */
+  profile_options: MockProfileOption[]
   consents: Consent[]
   /** non-user reference table (04 A.2) */
   policy_versions: PolicyVersion[]
@@ -1578,15 +1583,23 @@ export function createFixtures(): MockDb {
   ]
   // this month's token records (S-42) — tokens/costs are mock values
   const period = currentPeriodMonth()
+  const prices = mockPriceTables()
+  const costOf = (provider: AiProviderName, input: number, output: number) => {
+    const price = prices.find((p) => p.model === MOCK_MODELS[provider].default)
+    const inMicros = price ? Math.round(input * price.input_usd_per_mtok) : 0
+    const outMicros = price ? Math.round(output * price.output_usd_per_mtok) : 0
+    return { input_cost_usd: inMicros / 1_000_000, output_cost_usd: outMicros / 1_000_000, estimated_cost_usd: (inMicros + outMicros) / 1_000_000 }
+  }
   const rec = (
     n: number,
     feature: AiUsageRecord["feature"],
     job_type: AiUsageRecord["job_type"],
     input_tokens: number,
     output_tokens: number,
-    cost: number,
     daysBack: number,
     outcome: AiUsageRecord["outcome"] = "succeeded",
+    provider: AiProviderName = "gemini",
+    connection_tier: AiUsageRecord["connection_tier"] = "free",
   ): AiUsageRecord => ({
     id: IDS.usage(100 + n),
     user_id: u,
@@ -1598,10 +1611,10 @@ export function createFixtures(): MockDb {
     ai_job_id: null,
     call_key: `${feature}.${n}`,
     application_project_id: IDS.ap(1),
-    provider: "gemini",
-    model: MOCK_MODELS.gemini.default,
+    provider,
+    model: MOCK_MODELS[provider].default,
     model_tier: "default",
-    connection_tier: "free",
+    connection_tier,
     input_tokens,
     cached_input_tokens: 0,
     cache_write_tokens: 0,
@@ -1611,23 +1624,25 @@ export function createFixtures(): MockDb {
     outcome,
     error_code: outcome === "failed" ? "rate_limited" : null,
     price_table_version: PRICE_TABLE_VERSION,
-    // R13 (04 §2.9.2, SD-A11): 비용 두 열 신설. 미리보기 값은 입력 70% / 출력 30%로 쪼갠다 (UI 요청: 실제 값으로 다시)
-    input_cost_usd: Math.round(cost * 0.7 * 1_000_000) / 1_000_000,
-    output_cost_usd: cost - Math.round(cost * 0.7 * 1_000_000) / 1_000_000,
-    estimated_cost_usd: cost,
+    // R13 (04 §2.9.2, SD-A11): 비용 두 열 = 토큰 × 가격표 단가 (server/jobs/cost.ts 규칙 — 쪽마다 마이크로 USD
+    // 정수로 반올림, 합계 = 두 정수의 합). 캐시 토큰은 0이라 입력 = 비캐시 입력만.
+    ...costOf(provider, input_tokens, output_tokens),
   })
   const ai_usage_records: AiUsageRecord[] = [
-    rec(1, "key_verification", "key_verification", 20, 5, 0.00002, 20),
-    rec(2, "jd_extraction", "jd_extraction", 3_500, 900, 0.0011, 6),
-    rec(3, "insight", "insight", 11_500, 2_400, 0.0095, 6),
-    rec(4, "insight", "insight", 11_200, 2_600, 0.0099, 6),
-    rec(5, "career_description", "career_description", 10_500, 5_100, 0.0159, 5),
-    rec(6, "cover_letter", "cover_letter", 9_000, 2_200, 0.0082, 3),
-    rec(7, "interview_questions", "interview_questions", 8_100, 2_000, 0.0074, 4),
-    rec(8, "interview_evaluation", "interview_evaluation", 11_500, 3_000, 0.0110, 4),
-    rec(9, "interview_evaluation", "interview_evaluation", 11_400, 2_900, 0.0107, 4),
-    rec(10, "writing_chat", "writing_chat_turn", 4_000, 600, 0.0027, 1),
-    rec(11, "writing_chat", "writing_chat_turn", 4_200, 0, 0.0013, 1, "failed"),
+    rec(1, "key_verification", "key_verification", 20, 5, 20),
+    rec(2, "jd_extraction", "jd_extraction", 3_500, 900, 6),
+    rec(3, "insight", "insight", 11_500, 2_400, 6),
+    rec(4, "insight", "insight", 11_200, 2_600, 6),
+    rec(5, "career_description", "career_description", 10_500, 5_100, 5),
+    rec(6, "cover_letter", "cover_letter", 9_000, 2_200, 3),
+    rec(7, "interview_questions", "interview_questions", 8_100, 2_000, 4),
+    rec(8, "interview_evaluation", "interview_evaluation", 11_500, 3_000, 4),
+    rec(9, "interview_evaluation", "interview_evaluation", 11_400, 2_900, 4),
+    rec(10, "writing_chat", "writing_chat_turn", 4_000, 600, 1),
+    rec(11, "writing_chat", "writing_chat_turn", 4_200, 0, 1, "failed"),
+    // S-42 공급자 탭 미리보기: 키를 지운 공급자(Claude)의 이번 달 기록도 계속 보인다 (02 S-42 상태)
+    rec(12, "insight", "insight", 12_000, 2_500, 12, "succeeded", "anthropic", "paid"),
+    rec(13, "cover_letter", "cover_letter", 9_500, 2_300, 11, "succeeded", "anthropic", "paid"),
   ]
 
   return {
@@ -1636,19 +1651,17 @@ export function createFixtures(): MockDb {
       {
         id: u,
         display_name: "김지우",
-        // R13 (04 §2.1.1): desired_job_title / total_years_of_experience / interested_industries 삭제.
-        // 새 내 정보 값은 전부 비어 있다 — 값 있는 미리보기와 쌍 목록(profile_job_interests)·코드 표
-        // (profile_options)는 UI 요청(S-24 재구현과 함께).
-        job_search_status: null,
-        interested_company_type: null,
-        interested_industry: null,
-        highest_education_school_name: null,
-        highest_education_degree: null,
-        highest_education_status: null,
-        highest_education_start_month: null,
-        highest_education_end_month: null,
-        highest_education_major: null,
-        highest_education_gpa: null,
+        // R13 (04 §2.1.1): 내 정보 값 (코드는 profile_options, 연월은 그 달 1일 date — DM-4)
+        job_search_status: "employed_considering",
+        interested_company_type: "startup_series_b_plus",
+        interested_industry: "b2b_saas",
+        highest_education_school_name: "한국대학교",
+        highest_education_degree: "bachelor",
+        highest_education_status: "graduated",
+        highest_education_start_month: "2012-03-01",
+        highest_education_end_month: "2018-02-01",
+        highest_education_major: "컴퓨터공학",
+        highest_education_gpa: "3.8/4.5",
         career_data_updated_at: daysAgo(1),
         active_ai_provider: "gemini",
         last_active_at: minutesAgo(5),
@@ -1657,20 +1670,38 @@ export function createFixtures(): MockDb {
         updated_at: daysAgo(30),
       },
     ],
+    profile_job_interests: [
+      { user_id: u, sort_order: 1, job_family: "engineering", job_role: "backend", created_at: daysAgo(30) },
+      // 직무를 비운 쌍 (직군만 고른 상태 허용, 04 §2.1.2)
+      { user_id: u, sort_order: 2, job_family: "product_planning", job_role: null, created_at: daysAgo(30) },
+    ],
+    profile_options: mockProfileOptions(),
     consents: [
       { ...base(IDS.con(1), 120), consent_type: "terms", policy_version: POLICY_VERSION, agreed: true, agreed_at: daysAgo(120), withdrawn_at: null, user_agent_hash: null },
       { ...base(IDS.con(2), 120), consent_type: "privacy_required", policy_version: POLICY_VERSION, agreed: true, agreed_at: daysAgo(120), withdrawn_at: null, user_agent_hash: null },
       { ...base(IDS.con(3), 120), consent_type: "cross_border_transfer", policy_version: POLICY_VERSION, agreed: true, agreed_at: daysAgo(120), withdrawn_at: null, user_agent_hash: null },
     ],
-    policy_versions: (["terms", "privacy", "cross_border_transfer"] as const).map((policy_type, i) => ({
-      id: `00000000-0000-4d05-8000-00000000000${i + 1}`,
-      policy_type,
-      version: POLICY_VERSION,
-      effective_at: `${POLICY_VERSION}T00:00:00.000Z`,
-      requires_reconsent: false,
-      document_path: `policies/${policy_type}/${POLICY_VERSION}.md`,
-      created_at: "2026-03-25T00:00:00.000Z",
-    })),
+    policy_versions: [
+      ...(["terms", "privacy", "cross_border_transfer"] as const).map((policy_type, i) => ({
+        id: `00000000-0000-4d05-8000-00000000000${i + 1}`,
+        policy_type,
+        version: POLICY_VERSION,
+        effective_at: `${POLICY_VERSION}T00:00:00.000Z`,
+        requires_reconsent: false,
+        document_path: `policies/${policy_type}/${POLICY_VERSION}.md`,
+        created_at: "2026-03-25T00:00:00.000Z",
+      })),
+      // R13 (04 §2.1.3, D-UX-31): AI 데이터 처리 문서 행 (마이그레이션 20261113002500과 같은 날짜, 재동의 없음)
+      {
+        id: "00000000-0000-4d05-8000-000000000004",
+        policy_type: "ai_data_use" as const,
+        version: "2026-11-05",
+        effective_at: "2026-11-05T00:00:00.000Z",
+        requires_reconsent: false,
+        document_path: "/policies/ai_data_use/2026-11-05",
+        created_at: "2026-11-05T00:00:00.000Z",
+      },
+    ],
     experiences,
     educations,
     projects,

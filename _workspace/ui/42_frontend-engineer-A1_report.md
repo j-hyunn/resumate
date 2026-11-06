@@ -97,3 +97,31 @@
 검사: `pnpm typecheck` 통과 · `pnpm lint` 통과 · `pnpm build` 통과 · `pnpm vitest run` **2503 통과 / 1 실패** — 실패는 `src/lib/data/career.integration.test.ts:317`(로컬 스택) `profile.display_name: "홍길동"` 기대값. 리더의 QA-42-05 작업(같은 파일에서 `updateProfile` 테스트를 지움)으로 그 값을 쓰던 테스트가 없어져서 남은 단정이 깨진 것이고, 이번 수정과 무관하다(내 파일 밖 — 손대지 않음). 새 테스트 1건(`profile-basics-model.test.ts`) 추가.
 
 백엔드 확인 요청(추가): 쌍 저장이 delete → insert라 `profile_job_interests`의 트리거가 늘 `p_is_new = true`로 본다 → 목록에서 내려간 직군·직무를 이미 저장한 사용자는 그 쌍을 지우지 않으면 내 정보를 다시 저장할 수 없다. DM 2.1.1 "내려간 값은 계속 보인다"와 어긋날 수 있다.
+
+## 9. 기획 확인 반영 (2026-11-06)
+
+### UI42-5 (QP-2) — `openai` 화면 이름 "GPT"로 통일
+- **원천 하나로**: `src/lib/mock/ai-providers.ts`의 `AI_PROVIDER_LABELS.openai`를 "GPT"로 바꿨다. C-19 배지 · C-20 실패 문구 · 공급자 행 상태 줄·배지 · S-41 공급자 선택·제목("GPT 연결")·키 만들기·형식 오류·검증 문구 · 다시 시도 버튼 · 사이드바 AI 상태 · S-28 장애 배너 · 결과·근거 배지 · 토스트 등 이 맵을 읽는 34곳이 함께 바뀐다. `components/account/provider-names.ts`의 `PROVIDER_ROW_NAMES`는 이제 이 맵을 그대로 내보낸다(이름 원천 2개 → 1개).
+- 그 밖 직접 쓴 글자: S-01 랜딩 "AI는 본인 키(GPT·Gemini·Claude)로…", `state-views.tsx` 주석.
+- 조사: `labels.ts` `directionParticle`가 대문자 약어를 글자 단위로 읽게 했다("GPT로", M·N만 "으로") — 고치기 전에는 "GPT(으)로"가 됐다. 다른 화면의 하드코딩 조사(가·는·를)는 "OpenAI"와 "GPT" 모두 모음으로 끝나 그대로 맞다. 테스트 `src/lib/data/labels-particle.test.ts` 추가. 기존 테스트 중 화면 기대 문자열로 "OpenAI"를 쓴 UI 테스트는 없었다(서버 테스트의 "OpenAI"는 어댑터·가격표 이름).
+- **OpenAI로 남긴 곳**(회사·법적 주체):
+  - C-21 데이터 사용 고지의 "공급자" 사실 행 — `AI_PROVIDER_FULL_NAMES.openai` = "OpenAI" (데이터를 받는 회사)
+  - C-21 "공급자 정책 자세히"의 약관 링크 "OpenAI 약관" — 새 맵 `AI_PROVIDER_TERMS_NAMES`(Gemini·Claude는 기존 글자 그대로)
+  - 개인정보 처리방침·국외 이전 본문(`policy-content.ts`, docs/legal 미러): "AI 공급자 … (OpenAI, Google, Anthropic)", "이전받는 자: OpenAI, L.L.C.", 수탁자 연락처 줄
+  - **애매해서 남긴 곳**: S-41 GPT 키 가이드 1단계 "아래 버튼으로 OpenAI Platform의 키 페이지를 열어요(새 탭)" — 외부 사이트 이름(제품명)이라 남김
+  - 백엔드 소유(손대지 않음): `src/lib/contracts/ai-connection.ts` `KEY_FORMAT_MESSAGE.openai` "OpenAI 키 형식이 아니에요…". 화면은 이 메시지를 쓰지 않고 자체 문구("GPT 키 형식이 아니에요")를 그리지만, 다른 곳에 노출될 수 있으니 백엔드가 맞추면 좋다
+- 식별자(`openai`)·DB 값은 그대로.
+
+### 확정 태그 정리 (동작 변경 없음)
+| 결정 | 바꾼 주석 |
+|------|-----------|
+| UI42-1 (P-22) | `settings-dialog.tsx` `UnsavedChangesConfirm` — 탭 전환·회원 탈퇴도 "…닫기" |
+| UI42-1 (P-24) | `account-tab.tsx` 계정 탭 불러오기 실패 문구 |
+| UI42-2 (P-25) | `profile-basics-form.tsx` "선택 안 함", `profile-basics-model.ts` 연도·월 하나만 고른 기간 |
+| UI42-3 (P-26) | `profile-basics-form.tsx` `stale_write` 내 입력 목록 |
+| UI42-4 (QP-1) | `ai-connection-panel.tsx` 블록 ① 안내 = S-24 ② 문구 정본 |
+| UI42-6 (P-23) | `nav-user.tsx` `ThemeToggleItem` — 테마는 계정 메뉴에만 (코드 변경 없음) |
+
+바꾼 파일: `src/lib/mock/ai-providers.ts`, `src/components/account/provider-names.ts`, `src/components/common/data-use-consent.tsx`, `src/app/(public)/page.tsx`, `src/components/common/state-views.tsx`, `src/lib/data/labels.ts`, `src/lib/data/labels-particle.test.ts`(새), `src/components/account/{account-tab.tsx, profile-basics-form.tsx, profile-basics-model.ts, ai-connection-panel.tsx}`, `src/components/common/shell/{settings-dialog.tsx, nav-user.tsx}`. `docs/planning/`·`docs/legal/drafts/`는 건드리지 않았다.
+
+검사: `pnpm typecheck` 통과 · `pnpm lint` 통과 · `pnpm vitest run` 2505 전부 통과 · `pnpm build` 통과. 브라우저 확인은 여전히 못 함(Chrome 확장 미연결).

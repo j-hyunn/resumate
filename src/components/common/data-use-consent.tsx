@@ -29,7 +29,7 @@ import { CONNECTION_TIER_LABELS, submitFailedMessage } from "@/lib/data/labels"
 import { getDataUseConsentStateAction, recordDataUseConsentAction } from "@/lib/data/actions"
 import { readPreviewState } from "@/lib/preview-state"
 import { markConsentGiven } from "./ai-connection-context"
-import { AI_PROVIDER_FULL_NAMES, AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
+import { AI_PROVIDER_FULL_NAMES, AI_PROVIDER_LABELS, AI_PROVIDER_TERMS_NAMES } from "@/lib/mock/ai-providers"
 import { DISCLOSURE_FACTS, SENT_DATA_ITEMS, usesInputsForTraining } from "@/lib/ai-disclosures"
 import { ExternalProviderLink } from "./external-link"
 import { AI_TRAINING_NOTICE } from "@/lib/data/labels"
@@ -174,7 +174,8 @@ export function DataUseConsent({
             <dt className="text-muted-foreground">보관 기간</dt>
             <dd>{facts.retention}</dd>
           </dl>
-          <ExternalProviderLink href={facts.terms_url}>{`${p} 약관`}</ExternalProviderLink>
+          {/* 공급자 약관 링크 = 회사 이름 (UI42-5 예외) */}
+          <ExternalProviderLink href={facts.terms_url}>{`${AI_PROVIDER_TERMS_NAMES[provider]} 약관`}</ExternalProviderLink>
         </CollapsibleContent>
       </Collapsible>
 

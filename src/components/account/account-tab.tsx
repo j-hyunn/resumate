@@ -85,7 +85,7 @@ export function AccountTab({
   if (load.status === "error")
     return (
       <div role="alert" className="space-y-3 py-6 text-center">
-        {/* [UI-가정] 계정 탭 불러오기 실패 문구 — v5.10 문구 유지 (design-system 5.11, P-24) */}
+        {/* 확정 2026-11-06 (사용자, UI42-1): 계정 탭 불러오기 실패는 기존(v5.10) 문구 (design-system 5.11, P-24) */}
         <p className="text-base">설정을 불러오지 못했어요</p>
         <Button
           variant="outline"

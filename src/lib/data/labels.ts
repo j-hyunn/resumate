@@ -363,11 +363,12 @@ export function formatRelative(iso: string, now = Date.now()): string {
 
 /**
  * 으로/로 particle by final consonant (ㄹ받침 → 로). v5.3 (UQ-450): Latin words ending in a vowel /
- * l / r / y read without a 받침 ("Gemini로", "Claude로", "OpenAI로"); digits by their Korean
- * reading; anything else → "(으)로".
+ * l / r / y read without a 받침 ("Gemini로", "Claude로"); an upper-case acronym is read letter by letter
+ * ("GPT로" = 지피티로, only M·N end in a 받침 → "으로"); digits by their Korean reading; anything else → "(으)로".
  */
 export function directionParticle(word: string): string {
   const ch = word.trim().slice(-1)
+  if (/[A-Z]{2}$/.test(word.trim())) return /[MN]/.test(ch) ? "으로" : "로"
   if (/[aeiouylrAEIOUYLR]/.test(ch)) return "로"
   if (/[0-9]/.test(ch)) return "036".includes(ch) ? "으로" : "로"
   const last = ch.charCodeAt(0)

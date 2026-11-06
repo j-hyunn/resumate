@@ -294,7 +294,7 @@ export function ProfileBasicsForm({ view, preview = null }: { view: ProfileBasic
           <AlertTitle>다른 곳에서 내 정보가 바뀌었어요. 새로 불러온 값을 확인해 주세요</AlertTitle>
           {conflict.length ? (
             <AlertDescription>
-              {/* [UI-가정] G-72: 덮어쓰기 전 내가 고친 값 목록 (P-26) */}
+              {/* 확정 2026-11-06 (사용자, UI42-3): 덮어쓰기 전 내가 고친 값을 경고 상자 안 목록으로 (G-72, P-26) */}
               <ul className="list-disc space-y-0.5 pl-5 text-sm">
                 {conflict.map((c) => (
                   <li key={c.label}>
@@ -470,7 +470,7 @@ function OptionSelect({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className="max-h-72">
-        {/* [UI-가정] G-65 "선택 안 함" (새 문구, P-25) */}
+        {/* 확정 2026-11-06 (사용자, UI42-2): "선택 안 함" 항목 (G-65, P-25) */}
         <SelectItem value={NONE} className="text-muted-foreground">
           선택 안 함
         </SelectItem>

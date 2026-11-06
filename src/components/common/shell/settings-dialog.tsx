@@ -379,7 +379,7 @@ function TabBody({
 
 /**
  * 미저장 확인 (design-system 5.11 `UnsavedChangesConfirm`): L-02 LeaveGuard와 같은 AlertDialog 모양.
- * X = 계속 편집. 탭 전환·회원 탈퇴일 때도 버튼 글자는 "닫기"다 (UX 문구 그대로, P-22).
+ * X = 계속 편집. 탭 전환·회원 탈퇴일 때도 버튼 글자는 "…닫기"다 — 확정 2026-11-06 (사용자, UI42-1, P-22).
  */
 function UnsavedChangesConfirm({
   open,

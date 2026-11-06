@@ -197,7 +197,7 @@ export function validate(v: ProfileFormValues): Errors {
   if (v.gpa.trim().length > PROFILE_LIMITS.gpa) errors.gpa = "학점은 20자까지 쓸 수 있어요"
   const half = (y: string | null, m: string | null) => Boolean(y) !== Boolean(m)
   if (half(v.startYear, v.startMonth) || half(v.endYear, v.endMonth)) {
-    // [UI-가정] 연도·월 중 하나만 고른 경우: 문구가 없어 묶음 강조만 (design-system 5.11.1, P-25)
+    // 확정 2026-11-06 (사용자, UI42-2): 연도·월 중 하나만 고른 경우 문구 없이 묶음 강조만 (design-system 5.11.1, P-25)
     errors.period = true
   } else {
     const start = ym(v.startYear, v.startMonth)

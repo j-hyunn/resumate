@@ -61,7 +61,8 @@ export function useAccountSignOut() {
 
 /**
  * 다크 모드 on/off (light ↔ dark only) — 화면 테마의 유일한 입구 (UX v5.17 SD-A16, design-system 5.11: 설정에
- * "화면" 섹션은 없다). 저장값이 없으면(처음) 시스템 설정을 따르고, 첫 토글이 라이트/다크로 고정한다 (P-23).
+ * "화면" 섹션은 없다). 저장값이 없으면(처음) 시스템 설정을 따르고, 첫 토글이 라이트/다크로 고정한다.
+ * 확정 2026-11-06 (사용자, UI42-6, P-23): 테마는 계정 메뉴에만 둔다 — 설정 탭에 테마 행을 다시 넣지 않는다.
  * The menu stays open so the switch can be seen flipping.
  */
 function ThemeToggleItem() {

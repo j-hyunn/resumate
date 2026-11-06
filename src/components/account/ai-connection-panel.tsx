@@ -80,7 +80,7 @@ import {
 } from "./provider-row"
 import { AiUsageByProvider } from "./ai-usage-panel"
 
-/** 블록 ① 안내 (UX v5.17 S-24 ② SD-1) */
+/** 블록 ① 안내 — S-24 ② 문구가 정본 (UX v5.17 SD-1; 확정 2026-11-06 (사용자, UI42-4, QP-1)) */
 const BLOCK1_INTRO =
   "본인 AI 키를 연결하면 연결한 모델의 한도 내에서 인사이트·서류 초안·모의 면접·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
 

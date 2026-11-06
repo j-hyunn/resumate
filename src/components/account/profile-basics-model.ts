@@ -210,9 +210,9 @@ export function validate(v: ProfileFormValues): Errors {
 
 /**
  * 기간 칸 `PeriodCell` 버튼의 오류 접근성 (QA-43-03). 연도·월 중 하나만 고른 경우(`true`)는 보이는 문구가 없지만
- * (UI42-2), 화면 낭독기에는 sr-only 문장으로 알린다 — 그 문장은 [UI-가정]. 문구가 있으면 그 문구를 잇는다.
+ * (UI42-2), 화면 낭독기에는 sr-only 문장으로 알린다 — 그 문장은 확정 2026-11-06 (사용자, UI43-3). 문구가 있으면 그 문구를 잇는다.
  */
-export const PERIOD_PARTIAL_SR_TEXT = "연도와 월을 함께 골라 주세요" // [UI-가정] sr-only (QA-43-03)
+export const PERIOD_PARTIAL_SR_TEXT = "연도와 월을 함께 골라 주세요" // 확정 2026-11-06 (사용자, UI43-3) sr-only (QA-43-03)
 
 export function periodErrorA11y(error: string | true | undefined): {
   invalid: boolean

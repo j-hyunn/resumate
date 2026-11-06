@@ -648,7 +648,7 @@ const EDU_TEXT_CELL = "h-7 w-full px-0 text-base"
 /**
  * 최종 학력 (design-system 5.11.1 `HighestEducationFields`, v5.12 — 테두리 상자 하나, 평면 6칸 DM v4.12).
  * 윗줄 학교 명(굵게), 아랫줄 학위 | 졸업 상태 | 기간 | 전공 | 학점. 칸마다 보이는 라벨이 없어 placeholder = 칸 이름,
- * 접근 이름은 aria-label — [UI-가정] P-27 (UX 셀렉트 placeholder "선택해 주세요"의 예외). 칸 오류 문장은 상자 아래.
+ * 접근 이름은 aria-label — 확정 2026-11-06 (사용자, UI43-1) P-27 (UX 셀렉트 placeholder "선택해 주세요"의 예외). 칸 오류 문장은 상자 아래.
  */
 function HighestEducationFields({
   options,
@@ -668,7 +668,7 @@ function HighestEducationFields({
   const textCell = (k: "schoolName" | "major" | "gpa") => ({
     id: FIELD_ID[k],
     value: values[k],
-    placeholder: LABELS[k], // [UI-가정] P-27
+    placeholder: LABELS[k], // 확정 2026-11-06 (사용자, UI43-1) P-27
     "aria-label": LABELS[k],
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange({ [k]: e.target.value }),
     "aria-invalid": Boolean(errors(k)) || undefined,
@@ -755,7 +755,7 @@ function PeriodErrorLine({ error }: { error: string | true | undefined }) {
 
 /**
  * 기간 칸 `PeriodCell` (design-system 5.11.1, v5.12): 화면의 "yyyy.mm - yyyy.mm" 한 칸. 누르면 팝오버 안에 연월 셀렉트 4개
- * (입력 방식은 UI42-2 그대로). 값 "2015.03 - 2019.02" — 기간 길이 "(N년 N개월)"은 칸이 좁아 생략 [UI-가정] G-81.
+ * (입력 방식은 UI42-2 그대로). 값 "2015.03 - 2019.02" — 기간 길이 "(N년 N개월)"은 칸이 좁아 생략 — 확정 2026-11-06 (사용자, UI43-2).
  * 오류·검증 포커스는 이 버튼으로 온다(`FIELD_ID.period`). 팝오버를 닫아도 값은 폼에 남는다(저장은 [저장]).
  */
 function PeriodCell({
@@ -790,7 +790,7 @@ function PeriodCell({
           aria-describedby={a11y.describedBy}
           className="flex h-7 w-full items-center gap-1 text-left text-base whitespace-nowrap tabular-nums outline-none focus-visible:underline focus-visible:decoration-ring focus-visible:underline-offset-4 aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:underline-offset-4 [&[aria-invalid=true]_span]:text-destructive"
         >
-          {/* [UI-가정] P-27: 비었을 때 칸 이름 대신 형식 "yyyy.mm - yyyy.mm" (화면) */}
+          {/* 확정 2026-11-06 (사용자, UI43-1) P-27: 비었을 때 칸 이름 대신 형식 "yyyy.mm - yyyy.mm" (화면) */}
           {empty ? (
             <span className="text-muted-foreground">yyyy.mm - yyyy.mm</span>
           ) : (

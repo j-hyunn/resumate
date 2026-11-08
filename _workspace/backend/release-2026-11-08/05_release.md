@@ -48,14 +48,24 @@
 | build | 통과 (`✓ Compiled successfully`) |
 | 브라우저 | **미확인** — `/policies/privacy`·`/policies/ai_data_use` 실제 렌더는 보지 않았다 |
 
-## 원격 반영 — 아직 안 했다
+## 원격 반영 — 2026-11-08 완료
 
-마이그레이션 `20261113002900`은 **로컬만** 적용했다(원격 마지막은 `20261113002800`).
 
 - **비파괴**다. 기존 행을 고치지 않고 새 버전 행 2개만 넣는다.
 - **앱 본문과 같은 머지로 나가야 한다.** 행만 먼저 올리면 화면이 옛 본문에 새 시행일(2026-11-08)을 보인다 — 법적으로 잘못된 표시다.
-- 순서: ① 이 브랜치를 머지해 Vercel 운영 배포가 끝나는 것을 확인 ② `db push`(또는 MCP) ③ `/policies/privacy`·`/policies/ai_data_use`에서 버전·시행일·본문 확인. 반대로 ②를 먼저 하면 위의 잘못된 표시 구간이 생긴다.
 - `requires_reconsent = false`라 가입 게이트(`get_consent_status().needs_consent`)는 열리지 않는다. 기존 사용자에게 재동의를 요구하지 않는다.
+
+### 실제 순서와 중간에 생긴 구간
+
+| 단계 | 결과 |
+|------|------|
+| 머지 | PR #62 → `main` 머지 커밋 `9ffd881` |
+| 운영 배포 | Vercel "Deployment has completed" (GitHub 커밋 상태 success) |
+| **중간 구간** | 배포가 끝나고 행을 올리기 전까지, 화면에 **새 본문 + 옛 버전·시행일(2026-11-05)** 이 함께 보였다. 처음 시도가 권한 분류기(Production Deploy)에 막혀 사용자 승인을 받는 동안 생긴 구간이다. 기능 영향은 없고(앱은 있는 행을 읽는다), 그 사이 가입이 있었다면 `privacy_required` 동의가 2026-11-05를 인용한다 |
+| 행 반영 | 사용자 승인 뒤 Supabase MCP `execute_sql` 한 트랜잭션으로 2행 insert + `schema_migrations` 버전 행 (이 워크트리는 `supabase link` 안 됨 → `db push` 불가) |
+| 확인 | `privacy` 현재 버전 = **2026-11-08**(4행), `ai_data_use` = **2026-11-08**(2행), `terms`·`cross_border_transfer`는 2026-11-05 그대로. 원격 마지막 마이그레이션 = `20261113002900` |
+| advisors | 실행하지 않았다 — DDL이 없는 insert 전용 마이그레이션이라 `20261113002800` 뒤에 확인한 결과와 같다 |
+| 브라우저 | **미확인** — `/policies/privacy`·`/policies/ai_data_use`의 머리글과 본문을 눌러 보지는 않았다 |
 
 ## UI 요청
 

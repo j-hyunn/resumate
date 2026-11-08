@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 -- pgTAP lives in `extensions`; let the AI role call it inside this rolled-back test only.
 grant usage on schema extensions to app_ai_writer;
-select plan(51);
+select plan(53);
 
 insert into auth.users (id, email, aud, role) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated'),
@@ -27,7 +27,7 @@ select is((select required from public.get_consent_status() where consent_type =
 select is((select needs_consent from public.get_consent_status() where consent_type = 'cross_border_transfer'),
           false, 'cross_border_transfer does not need consent at sign-up');
 select is((select current_version from public.get_consent_status() where consent_type = 'marketing'),
-          '2026-11-05', 'optional consents follow the privacy version');
+          '2026-11-08', 'optional consents follow the privacy version');
 
 -- record_consents error branches
 select throws_ok($$select * from public.record_consents('[]'::jsonb, null)$$,
@@ -62,11 +62,15 @@ select is(
 select is((select count(*)::int from public.consents), 4, 'one row per item');
 select is((select count(*)::int from public.consents where consent_type = 'cross_border_transfer'),
           0, 'sign-up records no cross_border_transfer row');
-select is((select count(distinct policy_version)::int from public.consents), 1, 'server filled the version');
+-- 2026-11-08 처리방침 개정 뒤: 동의마다 **자기 문서의** 현재 버전을 인용하므로 terms(2026-11-05)와
+-- privacy 계열(privacy_required·service_improvement·marketing, 2026-11-08)이 서로 다르다.
+select is((select count(distinct policy_version)::int from public.consents), 2, 'server filled each consent''s own document version');
+select is((select policy_version from public.consents where consent_type = 'terms'), '2026-11-05', 'terms cites the terms version');
+select is((select count(*)::int from public.consents where policy_version = '2026-11-08'), 3, 'the 3 privacy-backed consents cite the privacy version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'marketing'),
           null, 'declined optional consent has no agreed_version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'service_improvement'),
-          '2026-11-05', 'agreed optional consent has agreed_version');
+          '2026-11-08', 'agreed optional consent has agreed_version');
 
 -- cross_border_transfer stays a valid type: recordable as agreed or declined, by RPC and direct insert.
 select is(
@@ -105,10 +109,10 @@ select throws_ok($$insert into public.consents (user_id, consent_type, policy_ve
 
 -- QA-02: direct insert follows record_consents rules
 select throws_ok($$insert into public.consents (consent_type, policy_version, agreed)
-                   values ('privacy_required', '2026-11-05', false)$$,
+                   values ('privacy_required', '2026-11-08', false)$$,
                  'P0001', 'required_consent_missing', 'direct insert cannot decline a required consent');
 select lives_ok($$insert into public.consents (consent_type, policy_version, agreed)
-                  values ('marketing', '2026-11-05', true)$$,
+                  values ('marketing', '2026-11-08', true)$$,
                 'direct insert of an optional consent at the current version works');
 reset role;
 insert into public.policy_versions (policy_type, version, effective_at, requires_reconsent, document_path)
@@ -132,7 +136,7 @@ select ok((select withdrawn_at > '2000-01-01' from public.consents
 -- QA-03: B cannot withdraw A's optional consent
 reset role;
 insert into public.consents (user_id, consent_type, policy_version, agreed)
-values ('aaaaaaaa-0000-0000-0000-000000000001', 'service_improvement', '2026-11-05', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'service_improvement', '2026-11-08', true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
 update public.consents set withdrawn_at = now() where consent_type = 'service_improvement';
@@ -176,7 +180,7 @@ set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 select throws_ok($$select id from public.consents$$, '42501', null, 'app_ai_writer cannot read consents');
 select throws_ok($$insert into public.consents (user_id, consent_type, policy_version, agreed)
-                   values ('aaaaaaaa-0000-0000-0000-000000000001', 'marketing', '2026-11-05', true)$$,
+                   values ('aaaaaaaa-0000-0000-0000-000000000001', 'marketing', '2026-11-08', true)$$,
                  '42501', null, 'app_ai_writer cannot insert consents');
 reset role;
 

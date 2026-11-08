@@ -179,7 +179,7 @@ insert into public.ai_data_use_consents (user_id, provider, connection_tier, dis
 values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
   ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-05', true),
-  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-05', true);
+  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-08', true);
 insert into public.ai_usage_records (user_id, occurred_at, feature, job_type, ai_job_id, application_project_id, provider,
                                      model, model_tier, connection_tier, usage_source, outcome, price_table_version,
                                      estimated_cost_usd) values

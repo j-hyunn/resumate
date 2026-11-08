@@ -5,17 +5,17 @@ select plan(7);
 
 select ok((select relrowsecurity from pg_class where oid = 'public.policy_versions'::regclass),
           'RLS enabled on policy_versions');
-select is((select count(*)::int from public.policy_versions), 11, 'placeholder + 2026-11-04 + cross-border 2026-11-04.1 + 2026-11-05 + ai_data_use versions seeded');
+select is((select count(*)::int from public.policy_versions), 13, 'placeholder + 2026-11-04 + cross-border 2026-11-04.1 + 2026-11-05 + ai_data_use + privacy·ai_data_use 2026-11-08 versions seeded');
 
 set local role anon;
-select is((select count(*)::int from public.policy_versions), 11, 'anon can read policy_versions');
+select is((select count(*)::int from public.policy_versions), 13, 'anon can read policy_versions');
 select throws_ok($$insert into public.policy_versions (policy_type, version, effective_at, document_path)
                    values ('terms', 'x', now(), '/x')$$, '42501', null, 'anon cannot insert');
 
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}';
-select is((select count(*)::int from public.policy_versions), 11, 'authenticated can read policy_versions');
+select is((select count(*)::int from public.policy_versions), 13, 'authenticated can read policy_versions');
 select throws_ok($$update public.policy_versions set requires_reconsent = false$$, '42501', null,
                  'authenticated cannot update');
 

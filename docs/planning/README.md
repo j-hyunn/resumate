@@ -2,7 +2,8 @@
 
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
-- 최종 정리: **2026-11-08**(자기소개서 작성 채팅형 전환 사이클 `cover-letter-chat`을 main의 UI 42·43 런 확인·백엔드 R13 위로 리베이스하고 **CL-Q2를 (a)로 확정** — **결정 대기 1건** CL-Q1)
+- 최종 정리: **2026-11-08**(재검토 사이클 **`cl-audit`** — 자기소개서 작성 채팅형 전환 2차 감사. 문장 정정만 하고 **결정 대기 10건**(CL-Q1 + CLA-Q1~Q7 + CLA-T1·T2)을 [decisions.md](decisions.md) 1장에 올렸다. 이전 정리: 같은 날 `cover-letter-chat`을 main의 UI 42·43 런 확인·백엔드 R13 위로 리베이스하고 CL-Q2를 (a)로 확정)
+- **2026-11-08 재검토: 자기소개서 작성 채팅형 전환 2차 감사 `cl-audit`** (`_workspace/00_input/planning-decisions-cl-audit.md`, 리뷰 `_workspace/03_spec-reviewer_review_cl-audit.md`, 감사 노트 `_workspace/cl-audit/`): CL-9가 CL-3을 좁힌 뒤 처음 하는 전수 재검토다. **새 결정은 하지 않았다** — PRD v4.15a · UX v5.18a · AI v4.13a · DM v4.13a는 문장 정정·정합·`[결정 필요]` 표기뿐이다. 찾은 것: ① **관찰 기간 읽기 경로 누락**(Critical R-CLA-1) — UX S-17 [초안 보기]가 쓰는 읽기를 DM 11.8이 "전부 폐기"로 적어, 그대로면 사용자가 못 본 초안이 7단계 drop으로 영구 삭제될 뻔했다. 읽기는 7단계까지 남기도록 고쳤다 ② **이관 실패 상태 미정의** — 비최신 `drafts` 행·블록 없는 문항 메타·옮기지 못한 근거가 7단계에서 조용히 사라지고, 영향 받은 사용자만 골라 안내할 수단이 없다 → CLA-Q3~Q7로 올렸다(7단계 drop의 새 전제) ③ **CL-Q1 수치 정정** — 요약형 팩 "월 약 $1.8"은 확정 가격표로 재현되지 않는다. 정정값 약 $2.1~2.3(전체 팩보다 월 약 $0.01~0.26 적다), 서류 대화 비용의 81~83%는 초안 턴이라 두 안 모두 초안 6회 상한이 실질 천장 ④ CL-A2·CL-A6이 "확정"으로 적혀 백엔드 1단계를 사용자 확인 없이 열 뻔한 자리 → CLA-Q1·Q2 ⑤ **용어는 코드 라벨이 이미 통일**돼 있었다("자소서 문항 답변") — 용어집에 해소 규칙 1줄만 넣고, 법무 본문은 U36-8대로 두었다. 이슈 20건(R-CLA-1~20) 모두 해소(라운드 2 잔여 7건은 리더 수정)
 - **2026-11-05 개정: 자기소개서 작성의 채팅형 전환 CL-1~CL-10** (사용자 확정, `_workspace/00_input/planning-decisions-cover-letter-chat.md`): 3.22 SD-4가 미뤄 둔 재기획이다. 서류(경력기술서·자소서 문항 답변)를 "포함 항목 설정 → 한 번에 생성 → 초안 편집기"에서 **서류별 AI 작성 대화로 채워 가는 구조**로 바꿨다(CL-1·CL-2·CL-6). **S-45 경력기술서 작성 · S-46 자소서 문항 답변 작성**을 신설하고 **S-19 초안 편집기를 폐기**, S-17의 포함 항목 설정·문체 선택·생성 버튼 3개를 폐기, S-18은 자소서의 진입 단계로 남겼다(CL-7·CL-8). 데이터는 `structured_draft`로 모양을 통일하고 **`drafts`·`draft_sections`·`draft_section_sources`를 폐기**(파괴적 ★)하되, **서류 정본은 대화 밖 `application_documents` 한 행**이고 대화에는 제안만 담는다(**CL-9** — 세 담당이 모두 같은 모순을 보고해 2차로 확정했다). 자소서 초안 제안은 **한 턴에 최대 3문항**(CL-10, 함수 60초 한도). 근거(칩·V-*·AI-11)와 기존 초안은 그대로 살아 있다(CL-4·CL-5). PRD v4.15, UX v5.18, AI v4.13, DM v4.13, [decisions.md](decisions.md) 3.23·4.17, 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). **미룬 결정 2건 중 CL-Q2는 2026-11-08에 (a)로 확정**(운영자 덤프 + 관찰 기간 안내 뒤 drop, 선례 R13-U1 — F-DOC-04 (4)·S-17에 손실 안내를 넣었다). 남은 것은 **CL-Q1**(채팅형 토큰 비용 — 월 약 $2.0~2.3 vs 요약형 팩 약 $1.8) 1건
 - **2026-11-06 확정: UI 42 런 기획 확인 UI42-1~UI42-8** (사용자, [decisions.md](decisions.md) 3.24, UX v5.17b 5.1k): 셀렉트 "선택 안 함", 저장 충돌 내 입력 목록, AI 연결 안내 문구 정본, **OpenAI 화면 표기 전체 "GPT"**, 화면 테마는 계정 메뉴에만, **개인정보 처리방침 수집 항목 개정 초안·AI 데이터 처리 본문 초안(`docs/legal/drafts/`, 법무 확인 전)**. 처리방침 개정은 PR #58 머지 전(늦어도 같은 배포)에 시행해야 한다
 - **2026-11-05 정정: 백엔드 R13 구현 피드백 D1~D10** (`_workspace/backend/R13/03_backend-qa_report.md`): 새 설정 다이얼로그 구현(PR #58)이 드러낸 문장 오류만 고쳤다 — **새 결정·스키마 변경 없음**. 관심 직군·직무 쌍 상한 잔여 문장을 2쌍으로, `computed_total_months`의 서버 경로용 public 래퍼, `app_ai_writer` grant 목록, 프롬프트 버전 표를 구현 현행값(`common.v3`·`ai-02.*.v5`, AI-06 포함)으로, 최종 학력 컬럼 7개·연월 `'YYYY-MM'`, `ai_data_use` 잠정 값과 "확정 시 새 행" 규칙. DM v4.12a · AI v4.12a · UX v5.17a. 백엔드·UI 후속 없음([decisions.md](decisions.md) 4.17). 같은 날 R13 릴리스 결정 4건 확정(3.23): 컬럼 drop 승인, `ai_data_use` = `2026-11-05`, 개선 요청은 주소 없이 "준비 중", Supabase CLI 2.121.0 유지
@@ -29,10 +30,10 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
-| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.15 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.18 | ux-planner |
-| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.13 | ai-feature-designer |
-| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.13 | data-architect |
+| [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.15a | product-planner |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.18a | ux-planner |
+| [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.13a | ai-feature-designer |
+| [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.13a | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |
 
 ## MVP 한 문단 요약
@@ -55,6 +56,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 상세 내용은 `_workspace/03_spec-reviewer_review.md`에 있다.
 
+- **재검토 `cl-audit`(2026-11-08): 2라운드, 이슈 20건(R-CLA-1~20 — Critical 1·Major 6·Minor 13) 모두 해소.** 라운드 1에서 15건(Critical R-CLA-1 관찰 기간 읽기 경로), 라운드 2에서 새 5건(Major R-CLA-16 CLA-Q1·Q2 표식 누락 등)이 나왔고 라운드 2 잔여 7건은 리더가 고쳤다. 상세 `_workspace/03_spec-reviewer_review_cl-audit.md`
 - **자기소개서 작성 채팅형 전환 사이클(2026-11-05): 리뷰 1라운드, 이슈 6건(R-CL-1~6, Critical 1·Major 2·Minor 3) 모두 해소.** Critical R-CL-1은 AI-04의 저장 매핑이 CL-3로 폐기된 `draft_section_sources` 컬럼(`requirement_ids`·`reuse_reason`·`role`)을 가리키던 것 — 구현자가 그대로 쓰면 없는 컬럼에 쓸 자리였다. R-CL-2는 자소서 요건 선행 추출 자리가 PRD·UX는 확정인데 AI만 권고 상태였던 것, R-CL-3은 PRD 9.3 A 결정 표에서 이 사이클이 폐기·이동시킨 A4·A13·A17·A21·A23이 무주석으로 남고 백엔드 후속 ★ 개수가 틀렸던 것이다. 6건 모두 리더가 고쳤고 리뷰어 재검토는 거치지 않았다(grep으로 확인). 리뷰어가 통과로 확인한 경계: CL-9 정본/제안 분리와 그 세 귀결, 폐기물 15개 전부, 키 없이 되는 범위, DM 확정 이름 전부, CL-10과 스트리밍 이벤트 9개, CL-Q1 두 숫자, CL-Q2로 drop 단계 차단, 초안 6회 `[가정]` 유지. 기록: `_workspace/03_spec-reviewer_review_cover-letter-chat.md`
 
 - 새 설정 다이얼로그 사이클(2026-11-05): 리뷰 2라운드, 이슈 23건(R-SD-1~R-SD-23) **모두 해소**. 라운드 1의 17건(Major 11·Minor 6)은 네 담당자가, 라운드 2의 신규 5건(Major 1 R-SD-18 중복 쌍 제약 + Minor 4)은 담당자가 리더 지시로 고쳤다(R-SD-21은 리뷰어가 직접, R-SD-24·25는 확인 결과 이슈 아님). 기록: `_workspace/03_spec-reviewer_review_settings-dialog.md`
@@ -76,7 +78,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 
 ## 남은 결정
 
-- **사용자 결정 대기 1건**: **CL-Q1**(채팅형 토큰 비용 — 질문 턴에 요약형 팩만 쓸지. 문서 기준은 전체 팩 월 약 $2.0~2.3, 요약형은 약 $1.8. 문구·추정치만 바뀌어 구현을 막지 않는다). **CL-Q2는 2026-11-08에 (a)로 확정됐다** — 이관하지 못한 초안은 운영자 덤프로 보관하고 관찰 기간 동안 안내한 뒤 `drafts` 계열을 지운다(데이터 모델 11.8 7단계 차단 해제, 선례 R13-U1). **SD-Q1은 2026-11-05에 R13-U3로 닫혔다**([decisions.md](decisions.md) 3.23·3.25)
+- **사용자 결정 대기 10건** ([decisions.md](decisions.md) 1장): **데이터 모양 — 백엔드 1단계를 막는다** CLA-Q1(경력기술서 섹션을 커리어 항목에 묶을지) · CLA-Q2("서류 수" 정의) / **되돌릴 수 없는 이관 — 11.8 7단계(drop)를 막는다** CLA-Q3(비최신 초안·블록 없는 문항 처리) · CLA-Q4(안내 대상 판정 수단·[초안 보기] 범위) · CLA-Q5(관찰 기간 길이) · CLA-Q6(옮기지 못한 근거 행) · CLA-Q7(운영자 덤프 보관 정책, PIPA) / **구현을 막지 않는다** CL-Q1(질문 턴 팩 — 정정 뒤 다투는 금액은 월 $0.01~0.26) · CLA-T1·T2(용어, 현행 유지 권고). CL-Q2는 2026-11-08 (a) 확정 그대로다
 - **출시 전 법무 확인 (필수)**: 개인정보 처리방침 수집 항목 개정 초안(UI42-7, `docs/legal/drafts/privacy-policy-2026-11-06.md` — 새 내 정보 항목이 지금 처리방침에 없다. PR #58 머지 전 시행 권장) · AI 데이터 처리 본문 초안(UI42-8)
 - 출시 전 법무 확인: 약관 탭에서 동의 이력 열람 경로를 없앤 건(SD-Q3 (다), PIPA)
 - 출시 전 운영 확인: 세 공급자 평가 세트 통과(UB-3, OD-L4), AI 고지 공급자 약관 재확인(AI C-7.1, OD-L2), 법무 검토 권장(D-39, OD-L3), 면접 점수 백필 실행(OD-I1)
@@ -86,6 +88,8 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 내용은 [decisions.md](decisions.md)에 있다.
 
 ## 남은 일
+
+- **재검토 `cl-audit` 후속 (2026-11-08)**: [decisions.md](decisions.md) 4.20 — 4.19와 함께 읽는다. 백엔드는 관찰 기간 읽기 경로 유지(R-CLA-1)·되돌릴 수 없는 지점 표기·`migration_note` 어휘를 반영하고, **CLA-Q1·Q2 답 전에는 1단계를, CLA-Q3~Q7 답 전에는 7단계를 올리지 않는다**. UI는 C-11 "근거 최대 5개" 문구를 만들지 않고, `docs/ui/screen-status.md`(닫힌 항목이 열린 문장으로 남음)·`docs/ui/design-system.md` 2373~2420행(폐기된 S-19·체크 트리 묘사)을 정리한다
 
 - **자기소개서 작성 채팅형 전환 후속 ★ (2026-11-05)**: 백엔드는 DM **11.8** 11개 항목 — `application_documents` 신설, `writing_chats` 대상 3분기(`project_id` not null 해제), `ai_jobs` CHECK 완화, RPC 2개 신설(`save_application_document`·`start_document_writing_chat`) + 4개 교체, 근거 `owner_type` `application_document`, 서류 결과 RPC 일괄 폐기, 기존 초안 이관, AI-03·AI-04를 대화 턴으로 재구현(새 프롬프트 4개). **배포 순서 주의**: 비파괴 단계를 먼저 올리고 코드가 새 경로로 넘어간 뒤 이관을 돌리며, **테이블 3개 drop은 별도 마이그레이션·별도 배포로 뺀다**(CL-Q2 (a) 확정 2026-11-08 — 전제 3개: 이관 실패 행 덤프 보관·관찰 기간 최소 1주·사용자 안내). 되돌릴 수 없는 지점 2개(drop, `project_id` not null 해제). UI는 S-45·S-46 신설, S-19 폐기, S-17·S-18·C-11·C-18 재구현, 키 없는 경계 변경, "서류 수" 셈법 교체, `AI_FEATURE_NAMES`에서 "AI 근거 선택" 제거. **UI는 백엔드 비파괴 단계 배포 뒤에 붙인다.** 목록은 [decisions.md](decisions.md) 4.17
 
@@ -97,7 +101,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 - **로그인 Google 단일화 후속 ★ (2026-11-04)**: 매직 링크 서버 코드·콜백 분기·Supabase 이메일 공급자·S-02 화면 정리. 목록은 [decisions.md](decisions.md) 4.5
 
 - **프로젝트 추가·산출물 상세 후속 ★ (2026-11-03)**: 백엔드는 DM 11.3(`writing_chats.project_deliverable_id`, 페이지 저장 RPC 2개, `apply_writing_chat_proposal` 폐기, `structured_draft` `rev`·산출물 모양, AI-13 파이프라인), UI는 L-02 셸·S-10 재구현·S-44 신규. 피그마 수정 요청 FG-1~13. 목록은 [decisions.md](decisions.md) 4.4
-- **백엔드 후속 수정 ★ 14건**(A2·A5·A6·A7·A10·A11·A13·A18·A19·A20·A22·A23·A24 + R-67 readiness `consent_required`)과 확인 항목 5건(2건 해소, 남은 3건). A1은 구현됨(42f7611). A6은 2026-11-02 커리어 재설계(CR-5·CR-6)로 취소되어 실제 남은 것은 13건, A18은 내용 변경. 목록은 [decisions.md](decisions.md) 4장. `resumate-backend`로 처리한다
+- **백엔드 후속 수정 ★ 14건**(A2·A5·A6·A7·A10·A11·A13·A18·A19·A20·A22·~~A23~~·A24 + R-67 readiness `consent_required`)과 확인 항목 5건(2건 해소, 남은 3건). A1은 구현됨(42f7611). A6은 2026-11-02 커리어 재설계(CR-5·CR-6)로 취소되어 실제 남은 것은 13건(**cl-audit R-CLA-6: A23도 CL-2로 폐기돼 12건**), A18은 내용 변경. 목록은 [decisions.md](decisions.md) 4장. `resumate-backend`로 처리한다
 - **UI QA 후속 ★**: Q53 결정의 백엔드 수정 목록은 [decisions.md](decisions.md) 4.1a. `resumate-backend`로 처리한다
 - **커리어 재설계 후속 ★**: 백엔드는 DM 11장(`project_details`·`achievements` 삭제, `projects` STAR 컬럼, `project_deliverables`, `writing_chats` 개정·`apply_writing_chat_proposal`, 90일 크론 삭제, readiness 힌트, `projects.is_current`, 분류 추천 반영), UI는 S-08·S-10·S-43·S-44 재작업과 화면 용어 "기업 JD" → "자기소개서"·기본 이름 "새 자기소개서 (날짜)". ★ A6 취소, A18 내용 변경. 목록은 [decisions.md](decisions.md) 4.3
 - **UI·기획 하네스 문서**: `patterns.md`의 AI-12 설명과 한도 문구는 2026-10-30에, 나머지(BYOK·커리어 재설계·PA·실제 백엔드 연결·결정 반영 사이클)는 2026-11-04에 기획 v4.6/v5.6/v4.6/v4.5 기준으로 맞췄다(`.claude/harness/CHANGELOG.md`)

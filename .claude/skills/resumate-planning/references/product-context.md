@@ -4,19 +4,18 @@ Every planning agent reads this file before starting work. What is written here 
 
 ## One-line definition
 
-An AI career management service that accumulates a user's experience and project data, connects it to job descriptions (JDs) to produce application documents and insights, and prepares the user for real interviews through AI mock interviews. AI features run on the user's own API key (BYOK).
+An AI career management service that accumulates a user's experience and project data, connects it to job descriptions (JDs) to produce insights and 자기소개서 answers. AI features run on the user's own API key (BYOK). AI mock interviews were removed from the MVP (2026-11-08, RM-1).
 
-## Three pillars (settled)
+## Two pillars (settled)
 
 | Pillar | Scope | Key question |
 |--------|-------|--------------|
 | P1. Career data management | Experiences, educations, projects (STAR per project), standalone projects and their deliverables, skills; filled in directly or through the Resumate AI writing chat | How far can we reduce input friction without the AI inventing anything? |
-| P2. Application projects (JD insights & documents) | Per application: JD, requirement extraction, insight, 경력기술서 and 자기소개서 answers, all anchored to P1 data | How do we keep every output traceable to the user's own data or the JD? |
-| P3. AI mock interview + board | Interview questions, answers submitted in one go, scores and feedback; a kanban board of application stages | Which evaluation feels closest to a real interview? (score formula settled 2026-11-05, OD-I1: weighted 30·30·20·20, unanswered = 0) |
+| P2. Application projects (JD insights & 자기소개서) | Per application: JD (pasted, or fetched server-side from a posting URL — CF-10), requirement extraction, insight, and **one document: 자기소개서 문항 답변** (up to 5 questions, each with a user-set char limit and an answer title), written through the Resumate AI chat and anchored to P1 data. 경력기술서 was removed (2026-11-08, CF-1). The 지원 현황 board is a 4-stage kanban (before_apply · document · assignment · closed, RM-2) and needs no AI | How do we keep every output traceable to the user's own data or the JD? |
 
-P1 is the input to P2 and P3. P1 data quality determines the quality of the whole service; keep this in mind in every design decision.
+P1 is the input to P2. P1 data quality determines the quality of the whole service; keep this in mind in every design decision.
 
-Menu (L-01, fixed): 커리어 / 자기소개서 관리 / 모의 면접 / 지원 현황. Sign-in lands on 커리어.
+Menu (L-01, fixed): 커리어 / 자기소개서 관리 / 지원 현황 (모의 면접 removed, RM-1). Sign-in lands on 커리어. 자기소개서 관리 flow (CF-7·CF-8): list → 2-step add modal → one writing page (S-46: question setup, then writing; tabs 자소서 / 채용 공고 / 인사이트). Stage changes happen only on the board (CF-3).
 
 ## Tech stack (settled)
 
@@ -40,7 +39,7 @@ The UI (`resumate-ui`) and backend (`resumate-backend`) harnesses have implement
 - **Planning only**: this team produces documents. No code, no applied DB migrations, no deployments.
 - **Sensitive data**: careers and resumes are personal information. Reflect consent, retention, and deletion requirements from the Korean Personal Information Protection Act (PIPA), and the cross-border transfer implied by sending data to the user's provider (D-39), in the requirements.
 - **Evidence-based AI**: AI must never invent experience the user does not have. Every AI output must be traceable to a specific part of the user's data or the JD; unsupported content stays a placeholder.
-- **Primary user language**: Korean. Korean hiring conventions (자기소개서, 경력기술서, 직무/컬처핏 interviews) are the default context.
+- **Primary user language**: Korean. Korean hiring conventions (자기소개서 문항 and their char limits, 서류·과제 전형 stages) are the default context.
 
 ## Output language
 
@@ -65,7 +64,7 @@ The PRD glossary (`docs/planning/01-prd.md` section 8) is the single source of t
 | 경력·교육 안 프로젝트 | A project under an experience or education: name, period, 3 classifications, and one STAR (상황 / 역할 / 행동 / 결과·성과 / 배운 점) |
 | 독립 프로젝트 / Standalone Project | A project with no experience/education: project info, project content, and deliverables; no STAR |
 | 산출물 / Deliverable | Title + markdown body written by the user under a standalone project (`project_deliverables`); used as AI evidence. Not a file upload |
-| 지원 프로젝트 / Application Project | One application: one JD plus its insight, documents, interviews, board stage. On screen: menu "자기소개서 관리", item "자기소개서" |
-| Resumate AI 패널 · AI 작성 대화 | The chat beside project detail (S-10) and deliverable detail (S-44); the AI only organizes what the user said, and [반영] fills the form until "저장하기" |
+| 지원 프로젝트 / Application Project | One application: one JD plus its insight, its one document, and a board stage. On screen the application **and** its document are both "자기소개서" (CF-U3, 확정 2026-11-08 (사용자) — replaces OD-D7·U36-6's "자소서 문항 답변"); the writing-page tab is "자소서"; the menu is "자기소개서 관리". Data names stay `application_projects` / `application_documents` (`document_kind = 'cover_letter'`) |
+| Resumate AI 패널 · AI 작성 대화 | The chat beside project detail (S-10), deliverable detail (S-44), and the 자기소개서 writing page (S-46); the AI only organizes what the user said (or proposes drafts from P1 data), and [반영] fills the form until "저장하기". The career context is one swappable assembly point with per-item source aliases — RAG is planned and will replace it (CL-Q1) |
 | 활성 공급자 / Active Provider | The one provider whose key runs all AI features |
-| 폐기된 용어 | 성과·정량 성과 (achievements), 상세 내용 (project_details), 사용량 한도, 기업 JD 관리 — don't reintroduce them |
+| 폐기된 용어 | 성과·정량 성과 (achievements), 상세 내용 (project_details), 사용량 한도, 기업 JD 관리, **경력기술서** (CF-1), **모의 면접·면접 단계** (RM-1·RM-2), 지원 프로젝트 허브 (S-31)·서류 초안 목록 (S-17)·초안 편집기 (S-19), 괄호 병기형 "자기소개서(문항 답변)" — don't reintroduce them |

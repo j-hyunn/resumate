@@ -1,17 +1,23 @@
 import type { Database } from "@/server/db/database.types";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { AppError } from "@/lib/contracts/errors";
+import { kstDateString, loadTotalExperience, type TotalExperience } from "./total-experience";
 
 /**
  * Career rows for the Career Context Pack (C-1), read as app_ai_writer.
  * Columns are listed explicitly: app_ai_writer has column grants, and
- * `select *` fails (S1 rule). `display_name` is never read (C-1, C-7).
+ * `select *` fails (S1 rule).
+ *
+ * (v4.12, SD-6) **`profiles` is not read at all.** No value of 내 정보 —
+ * `display_name`, `desired_job_title`, `total_years_of_experience`,
+ * `interested_industries`, nor the new 내 정보 fields — goes into any prompt,
+ * and there is no profile block left in the pack (AI spec 0.v412: not even an
+ * empty one). 연차 판정에 쓰는 숫자는 `totalExperience` 하나다 (SD-2, C-1).
  */
 
 type Tables = Database["public"]["Tables"];
 type Row<T extends keyof Tables> = Tables[T]["Row"];
 
-export const PROFILE_COLUMNS = "id, desired_job_title, total_years_of_experience, interested_industries, updated_at" as const;
 export const EXPERIENCE_COLUMNS =
   "id, status, company_name, start_month, end_month, is_current, job_rank, job_position, department, employment_type, summary, created_at, updated_at" as const;
 export const EDUCATION_COLUMNS =
@@ -24,7 +30,6 @@ export const DELIVERABLE_COLUMNS = "id, project_id, title, body, sort_order, cre
 export const SKILL_COLUMNS = "id, name, normalized_name, is_manual, created_at, updated_at" as const;
 export const PROJECT_SKILL_COLUMNS = "project_id, skill_id" as const;
 
-export type ProfileRow = Pick<Row<"profiles">, "id" | "desired_job_title" | "total_years_of_experience" | "interested_industries" | "updated_at">;
 export type ExperienceRow = Pick<
   Row<"experiences">,
   | "id"
@@ -101,7 +106,8 @@ export type SkillRow = Pick<Row<"skills">, "id" | "name" | "normalized_name" | "
 export type ProjectSkillRow = Pick<Row<"project_skills">, "project_id" | "skill_id">;
 
 export type CareerRows = {
-  profile: ProfileRow | null;
+  /** C-1 (SD-2): server-computed total experience, from the DB function (DM 6.2). */
+  totalExperience: TotalExperience;
   experiences: ExperienceRow[];
   educations: EducationRow[];
   projects: ProjectRow[];
@@ -116,9 +122,11 @@ export type CareerRows = {
  * Only `complete` rows of status-bearing tables are fetched; the pack builder
  * then drops children of non-complete parents (deliverables have no status).
  */
-export async function loadCareerRows(db: AiWriterSupabaseClient): Promise<CareerRows> {
-  const [profile, experiences, educations, projects, deliverables, skills, projectSkills] = await Promise.all([
-    db.from("profiles").select(PROFILE_COLUMNS).maybeSingle(),
+export async function loadCareerRows(db: AiWriterSupabaseClient, options: { asOf?: string } = {}): Promise<CareerRows> {
+  // C-1 / DM 6.2: the same reference date feeds the sum and the pack's period strings.
+  const asOf = options.asOf ?? kstDateString();
+  const [totalExperience, experiences, educations, projects, deliverables, skills, projectSkills] = await Promise.all([
+    loadTotalExperience(db, asOf),
     db.from("experiences").select(EXPERIENCE_COLUMNS).eq("status", "complete"),
     db.from("educations").select(EDUCATION_COLUMNS).eq("status", "complete"),
     db.from("projects").select(PROJECT_COLUMNS).eq("status", "complete"),
@@ -126,11 +134,11 @@ export async function loadCareerRows(db: AiWriterSupabaseClient): Promise<Career
     db.from("skills").select(SKILL_COLUMNS),
     db.from("project_skills").select(PROJECT_SKILL_COLUMNS),
   ]);
-  for (const result of [profile, experiences, educations, projects, deliverables, skills, projectSkills]) {
+  for (const result of [experiences, educations, projects, deliverables, skills, projectSkills]) {
     if (result.error) throw new AppError("internal_error", undefined, { cause: result.error });
   }
   return {
-    profile: profile.data ?? null,
+    totalExperience,
     experiences: experiences.data ?? [],
     educations: educations.data ?? [],
     projects: projects.data ?? [],

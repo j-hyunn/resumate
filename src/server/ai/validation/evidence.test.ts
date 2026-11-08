@@ -63,7 +63,6 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
     ["deliverable body on normalized text", { source_type: "project_deliverable", ref: "DLV-1", field: "body", quote: "은행 문자 10종의 형식을 정규식으로 분류했다" }],
     ["skill name", { source_type: "skill", ref: "SKL-1", field: "name" }],
     ["period", { source_type: "experience", ref: "EXP-1", field: "period" }],
-    ["profile", { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }],
     ["jd sentence without field", { source_type: "jd_sentence", ref: "S1" }],
     ["jd sentence with quote", { source_type: "jd_sentence", ref: "S1", field: null, quote: "결제 API 운영 경험" }],
     ["jd requirement", { source_type: "jd_requirement", ref: "REQ-1" }],
@@ -113,9 +112,9 @@ describe("validateItem V-4", () => {
   const bad: ModelEvidence = { ...action, ref: "PRJ-99" };
   const jdOnly: ModelEvidence = { source_type: "jd_requirement", ref: "REQ-1" };
   const learn: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
-  const wish: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" };
-  const industries: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "interested_industries", quote: null };
-  const years: ModelEvidence = { source_type: "profile", ref: "PROFILE", field: "total_years_of_experience", quote: null };
+  // (v4.12, SD-6) `profile` is not a source type any more: V-2 drops it whatever the field.
+  const wish = { source_type: "profile" as never, ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" } as ModelEvidence;
+  const years = { source_type: "profile" as never, ref: "PROFILE", field: "total_years_of_experience", quote: null } as ModelEvidence;
 
   it.each<[string, Parameters<typeof validateItem>[0], string, string[]]>([
     ["judgment with evidence → keep", { key: "strengths.0", kind: "judgment", evidence: [action] }, "keep", []],
@@ -124,13 +123,12 @@ describe("validateItem V-4", () => {
     ["match without evidence → downgrade", { key: "requirement_matches.REQ-1", kind: "match", evidence: [bad] }, "downgrade", []],
     ["draft block without evidence → flag", { key: "p3-b1", kind: "draft_block", evidence: [], text: "x" }, "flag", ["evidence_check_needed"]],
     ["reference item may have none", { key: "gaps.0", kind: "reference", evidence: [jdOnly] }, "keep", []],
-    // A10 (C-3 V-4 v4.3): profile wishes never count as support; total_years_of_experience does.
-    ["judgment on desired_job_title only → drop (A10)", { key: "strategy.positioning", kind: "judgment", evidence: [wish] }, "drop", []],
-    ["judgment on interested_industries only → drop (A10)", { key: "strengths.0", kind: "judgment", evidence: [industries] }, "drop", []],
-    ["match on profile wishes only → downgrade (A10)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [wish, industries] }, "downgrade", []],
-    ["draft block on desired_job_title only → flag (A10)", { key: "q1-p1", kind: "draft_block", evidence: [wish], text: "x" }, "flag", ["evidence_check_needed"]],
-    ["match on total_years_of_experience → keep (연차 근거)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [years] }, "keep", []],
-    ["judgment on wish + action → keep", { key: "strengths.0", kind: "judgment", evidence: [wish, action] }, "keep", []],
+    // (v4.12, SD-6) V-4 has no profile exception left: every profile evidence is
+    // dropped by V-2, so an item that rests on one has zero evidence.
+    ["judgment on a profile source only → drop (SD-6)", { key: "strategy.positioning", kind: "judgment", evidence: [wish] }, "drop", []],
+    ["match on a profile source only → downgrade (SD-6)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [wish, years] }, "downgrade", []],
+    ["draft block on a profile source only → flag (SD-6)", { key: "q1-p1", kind: "draft_block", evidence: [wish], text: "x" }, "flag", ["evidence_check_needed"]],
+    ["judgment on profile + action → keep (the action carries it)", { key: "strengths.0", kind: "judgment", evidence: [wish, action] }, "keep", []],
     [
       "learnings never the sole support (reflection_only judgment)",
       { key: "strengths.0", kind: "judgment", evidence: [learn], learnings: "reflection_only" },
@@ -179,14 +177,14 @@ describe("validateItem V-4", () => {
 });
 
 describe("buildSelectionScope (V-7)", () => {
-  it("an affiliated project is its own STAR scope (no DET/ACH in v4.5), plus profile and JD", () => {
+  it("an affiliated project is its own STAR scope (no DET/ACH in v4.5), plus JD — (v4.12, SD-6) no profile", () => {
     const scope = buildSelectionScope(aliases, { refs: ["PRJ-2"] });
-    expect([...scope].sort()).toEqual(["PRJ-2", "PROFILE", "REQ-1", "S1", "S2"].sort());
+    expect([...scope].sort()).toEqual(["PRJ-2", "REQ-1", "S1", "S2"].sort());
   });
 
   it("a selected standalone project brings its deliverables and skills, not other projects'", () => {
     const scope = buildSelectionScope(aliases, { refs: ["PRJ-4"] });
-    expect([...scope].sort()).toEqual(["DLV-1", "DLV-2", "PRJ-4", "PROFILE", "REQ-1", "S1", "S2", "SKL-1", "SKL-2"].sort());
+    expect([...scope].sort()).toEqual(["DLV-1", "DLV-2", "PRJ-4", "REQ-1", "S1", "S2", "SKL-1", "SKL-2"].sort());
     expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("DLV-1")).toBe(false);
     expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("SKL-1")).toBe(false);
   });
@@ -206,7 +204,7 @@ describe("isCareerSupportEvidence (A10)", () => {
   it.each<[string, { source_type: string; field: string | null }, boolean]>([
     ["profile desired_job_title", { source_type: "profile", field: "desired_job_title" }, false],
     ["profile interested_industries", { source_type: "profile", field: "interested_industries" }, false],
-    ["profile total_years_of_experience", { source_type: "profile", field: "total_years_of_experience" }, true],
+    ["profile (dropped source type, SD-6)", { source_type: "profile", field: "total_years_of_experience" }, false],
     ["project action", { source_type: "project", field: "action" }, true],
     ["deliverable body", { source_type: "project_deliverable", field: "body" }, true],
     ["removed type project_detail", { source_type: "project_detail", field: "action" }, false],
@@ -218,10 +216,10 @@ describe("isCareerSupportEvidence (A10)", () => {
     expect(isCareerSupportEvidence(e)).toBe(expected);
   });
 
-  it("a feature's own support set still excludes profile wishes", () => {
-    const onlyProfile = new Set<EvidenceSourceType>(["profile"]);
-    expect(isCareerSupportEvidence({ source_type: "profile", field: "desired_job_title" }, onlyProfile)).toBe(false);
-    expect(isCareerSupportEvidence({ source_type: "profile", field: "total_years_of_experience" }, onlyProfile)).toBe(true);
-    expect(isCareerSupportEvidence({ source_type: "skill", field: "name" }, onlyProfile)).toBe(false);
+  it("a feature's own support set narrows the types (SD-6: no profile exception left)", () => {
+    const onlyProjects = new Set<EvidenceSourceType>(["project"]);
+    expect(isCareerSupportEvidence({ source_type: "project", field: "action" }, onlyProjects)).toBe(true);
+    expect(isCareerSupportEvidence({ source_type: "skill", field: "name" }, onlyProjects)).toBe(false);
+    expect(isCareerSupportEvidence({ source_type: "profile", field: "total_years_of_experience" })).toBe(false);
   });
 });

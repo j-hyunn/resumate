@@ -67,7 +67,8 @@ export type ConsentType =
   | "cross_border_transfer"
   | "service_improvement"
   | "marketing"
-export type PolicyType = "terms" | "privacy" | "cross_border_transfer"
+/** policy_versions.policy_type (A.2). R13 (v4.12, D-UX-31·SD-A13): + `ai_data_use` (고지 문서 4종). */
+export type PolicyType = "terms" | "privacy" | "cross_border_transfer" | "ai_data_use"
 
 export type WritingChatMode = "new_project" | "augment_project"
 export type WritingChatStatus = "active" | "saved" | "handed_off" | "abandoned"
@@ -1099,11 +1100,20 @@ export type AiProviderKey = Row<"ai_provider_keys", {
   last_failure_cause: AiFailureCause | null
 }>
 
-/** view ai_provider_keys_public (security invoker, meta columns only) */
+/**
+ * view ai_provider_keys_public (security invoker, meta columns only).
+ * R13: the generated view row types every column as nullable (Postgres views carry no not-null
+ * info). The underlying columns are `not null`, so the screen type narrows them back — a key row
+ * always has an id, provider, tier, status, last 4 and timestamps.
+ */
 export type AiProviderKeyPublic = Row<"ai_provider_keys_public", {
+  id: Uuid
   provider: AiProviderName
   connection_tier: ConnectionTier
   status: ProviderKeyStatus
+  key_last4: string
+  created_at: Timestamp
+  updated_at: Timestamp
   last_failure_cause: AiFailureCause | null
 }>
 
@@ -1143,7 +1153,7 @@ export type ReadinessMissing = "complete_experience" | "complete_project"
  * DM §6 v4.4: `project_star` = an affiliated draft project lacks 상황·행동; `project_fields` = a standalone draft
  * project lacks 프로젝트 내용 (`description`). `complete_project_detail` = @deprecated v4.2 name (never produced now).
  */
-export type ReadinessHint = "project_star" | "project_fields" | "profile" | "complete_project_detail"
+export type ReadinessHint = "project_star" | "project_fields" | "complete_project_detail"
 export type ReadinessFeatureKey = "insight" | "draft" | "job_interview" | "culture_fit_interview"
 
 export interface ReadinessFeature {
@@ -1179,7 +1189,6 @@ export interface DataReadiness {
     draft_experiences: number
     draft_educations: number
     draft_projects: number
-    profile_filled: boolean
   }
   draft_item_ids: {
     experiences: Uuid[]
@@ -1309,33 +1318,6 @@ export interface AccountDeletionSummary {
     data_use_consents: number
     usage_records: number
   }
-}
-
-/** RPC get_ai_usage_summary(period_month, include_previous) (04 §2.9.5) */
-export interface AiUsageSummary {
-  period_month: DateString
-  as_of: Timestamp
-  totals: {
-    input_tokens: number
-    cached_input_tokens: number
-    cache_write_tokens: number
-    output_tokens: number
-    estimated_cost_usd: number
-    calls: number
-    failed_calls: number
-  }
-  by_feature: Array<{ feature: AiUsageFeature; input_tokens: number; output_tokens: number; estimated_cost_usd: number; calls: number }>
-  by_provider: Array<{
-    provider: AiProviderName
-    connection_tier: ConnectionTier
-    input_tokens: number
-    output_tokens: number
-    estimated_cost_usd: number
-    calls: number
-  }>
-  price_table_versions: Array<{ version: string; source_checked_at: DateString }>
-  /** only when include_previous = true */
-  previous_month?: { period_month: DateString; estimated_cost_usd: number; input_tokens: number; output_tokens: number }
 }
 
 /** save_provider_key verification_result (04 §2.11.3) */

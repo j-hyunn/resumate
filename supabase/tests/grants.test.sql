@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(44);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -66,6 +66,21 @@ select set_eq(
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
           'app_ai_writer cannot read profiles.display_name');
 
+-- R13 (DM v4.12 §2.1.5, SD-6): app_ai_writer can read no 내 정보 column, and nothing at all on
+-- profile_job_interests / profile_options.
+select ok((select bool_and(not has_column_privilege('app_ai_writer', 'public.profiles', col, 'SELECT'))
+             from unnest(array['job_search_status', 'interested_company_type', 'interested_industry',
+                               'highest_education_school_name', 'highest_education_degree',
+                               'highest_education_status', 'highest_education_start_month',
+                               'highest_education_end_month', 'highest_education_major',
+                               'highest_education_gpa']) col),
+          'app_ai_writer cannot read any 내 정보 column of profiles');
+select ok(not has_table_privilege('app_ai_writer', 'public.profile_job_interests', 'SELECT')
+          and not has_any_column_privilege('app_ai_writer', 'public.profile_job_interests', 'SELECT')
+          and not has_table_privilege('app_ai_writer', 'public.profile_options', 'SELECT')
+          and not has_any_column_privilege('app_ai_writer', 'public.profile_options', 'SELECT'),
+          'app_ai_writer has no select on profile_job_interests / profile_options');
+
 -- QA-S2-05 -> S3 allow list: app_ai_writer column-level writes in public are exactly these
 -- (DM §5 v4.2: ai_jobs, ai_usage_records insert; career tables and ai_price_tables never).
 -- R1 A24: evidence_links INSERT removed — evidence is written only inside the result RPCs.
@@ -93,7 +108,8 @@ select set_eq(
     select 'ai_usage_records.' || col || ':INSERT' from unnest(array['id', 'user_id', 'occurred_at', 'feature',
       'job_type', 'ai_job_id', 'call_key', 'application_project_id', 'provider', 'model', 'model_tier',
       'connection_tier', 'input_tokens', 'cached_input_tokens', 'cache_write_tokens', 'output_tokens',
-      'reasoning_tokens', 'usage_source', 'outcome', 'error_code', 'price_table_version', 'estimated_cost_usd']) col),
+      'reasoning_tokens', 'usage_source', 'outcome', 'error_code', 'price_table_version', 'estimated_cost_usd',
+      'input_cost_usd', 'output_cost_usd']) col),
   'app_ai_writer column-level INSERT / UPDATE / REFERENCES in public = ai_jobs + ai_usage_records (R1 A24: no evidence_links)');
 
 -- authenticated: no write privilege at all on the AI tables (cancel goes through an RPC).
@@ -132,7 +148,9 @@ select set_eq(
         'begin_interview_questions', 'save_interview_question', 'complete_interview_questions',
         'fail_interview_questions', 'begin_interview_evaluation', 'save_answer_evaluation', 'fail_answer_evaluation',
         'save_session_feedback', 'complete_interview_evaluation',
-        'retry_ai_job', 'get_interview_grading_decisions'],
+        'retry_ai_job', 'get_interview_grading_decisions',
+        -- R13: the context-pack assembly calls the total-experience-months wrapper through PostgREST.
+        'compute_total_experience_months'],
   'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + S8 interview RPCs + R2 retry_ai_job');
 
 -- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
@@ -355,7 +373,8 @@ select set_eq(
         'reorder_cover_letter_questions', 'reorder_project_deliverables', 'request_ai_job_cancel',
         'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
         'start_writing_chat', 'submit_interview_session',
-        'get_interview_grading_decisions', 'update_failed_jd_raw_text', 'touch_last_active'],
+        'get_interview_grading_decisions', 'update_failed_jd_raw_text', 'touch_last_active',
+        'save_profile_basics', 'compute_total_experience_months'],
   'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role; touch_last_active for inactive account deletion)');
 
 -- QA-S9-04 (a): every table in public has RLS enabled (a new table without RLS fails here).

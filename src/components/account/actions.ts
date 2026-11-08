@@ -1,7 +1,7 @@
 "use server"
 
 /**
- * A1 account server actions (S-02, S-03, S-24, S-25). Thin wrappers around the account data
+ * A1 account server actions (S-02, S-03, S-24 ①③, S-25). Thin wrappers around the account data
  * module. `fail` flags simulate failures for `?state=` previews (mock only).
  * Results are plain objects ({ ok, ... }) so client components can show inline errors.
  */
@@ -16,6 +16,9 @@ import {
   type ConsentStatus,
 } from "@/lib/data/account"
 import { getCurrentUser } from "@/lib/data/shell"
+import { getProfileBasics, saveProfileBasics, type ProfileBasicsViewDto } from "@/lib/data/profile"
+import { PROFILE_SAVE_ERROR_CODES, type SaveProfileBasicsInput } from "@/lib/contracts/profile"
+import { isAppError } from "@/lib/contracts/errors"
 import { routes, safeNextPath } from "@/lib/routes"
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false }
@@ -77,13 +80,48 @@ export async function setOptionalConsentAction(
   }
 }
 
-/** S-24 설정 다이얼로그를 열 때 읽는 데이터 (계정 이메일 + 동의 상태) */
-export async function getSettingsDataAction(): Promise<Result<{ email: string; statuses: ConsentStatus[] }>> {
+/** S-24 ③ 약관 탭: 선택 동의 상태 (탭을 열 때마다 다시 읽는다) */
+export async function getConsentStatusesAction(): Promise<Result<{ statuses: ConsentStatus[] }>> {
   try {
-    const [user, statuses] = await Promise.all([getCurrentUser(), getConsentStatuses()])
-    return { ok: true, email: user.email, statuses }
+    return { ok: true, statuses: await getConsentStatuses() }
   } catch {
     return { ok: false }
+  }
+}
+
+/** S-24 ① 계정 탭: 이메일 + 내 정보 (profiles + profile_job_interests + profile_options) */
+export async function getAccountTabDataAction(): Promise<Result<{ email: string; view: ProfileBasicsViewDto }>> {
+  try {
+    const [user, view] = await Promise.all([getCurrentUser(), getProfileBasics()])
+    return { ok: true, email: user.email, view }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** S-24 ① 내 정보 다시 읽기 (stale_write · invalid_profile_option 뒤) */
+export async function getProfileBasicsAction(): Promise<Result<{ view: ProfileBasicsViewDto }>> {
+  try {
+    return { ok: true, view: await getProfileBasics() }
+  } catch {
+    return { ok: false }
+  }
+}
+
+export type SaveProfileBasicsActionResult =
+  | { ok: true; updatedAt: string }
+  /** `code` = UX S-24 ① 오류 6종(그 밖은 null), `details.field` / `details.sortOrder`로 칸·행을 찾는다 */
+  | { ok: false; code: string | null; details: Record<string, unknown> | null }
+
+/** S-24 ① [저장] — RPC save_profile_basics (섹션 전체 덮어쓰기) */
+export async function saveProfileBasicsAction(input: SaveProfileBasicsInput): Promise<SaveProfileBasicsActionResult> {
+  try {
+    const { updatedAt } = await saveProfileBasics(input)
+    return { ok: true, updatedAt }
+  } catch (err) {
+    if (isAppError(err) && (PROFILE_SAVE_ERROR_CODES as readonly string[]).includes(err.code))
+      return { ok: false, code: err.code, details: err.details ?? null }
+    return { ok: false, code: null, details: null }
   }
 }
 

@@ -18,23 +18,23 @@ import type { DeliverablePipelines, DeliverablePlan, Log, TurnSnapshot, WritingC
  * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
  * Builds `WritingChatTurnInput` once per turn from the snapshot plus the context reads the
  * pack needs (app_ai_writer: the chat's project row read fresh every turn + its parent's name /
- * status, desired job title, readiness and JD requirements for gate chats). Reads only — the
+ * status, readiness and JD requirements for gate chats; **no `profiles` read** — R13 SD-6). Reads only — the
  * turn never writes career tables (NFR-AI-05).
  */
 
-type Loaded = Pick<WritingChatTurnInput, "project" | "desiredJobTitle" | "gate" | "gateRequirements">;
+// R13 (v4.12, SD-6 / DM 2.1.5): the pack no longer reads `profiles` — 내 정보는 어떤 프롬프트에도 들어가지 않는다.
+type Loaded = Pick<WritingChatTurnInput, "project" | "gate" | "gateRequirements">;
 
 async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<Loaded> {
   const chat = snap.chat;
-  const [projectRes, profile] = await Promise.all([
+  const [projectRes] = await Promise.all([
     db
       .from("projects")
       .select("id, name, start_month, end_month, is_current, experience_id, education_id, project_type, experience_type, competencies, situation, task, action, result, learnings")
       .eq("id", chat.projectId)
       .maybeSingle(),
-    db.from("profiles").select("desired_job_title").eq("id", chat.userId).maybeSingle(),
   ]);
-  for (const r of [projectRes, profile]) if (r.error) throw mapDbError(r.error);
+  for (const r of [projectRes]) if (r.error) throw mapDbError(r.error);
   const p = projectRes.data;
   // The chat cascades with its project; a missing row here is a race with a delete.
   if (!p) throw new AppError("not_found", "대상 프로젝트를 찾을 수 없습니다.");
@@ -76,7 +76,6 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
       result: p.result,
       learnings: p.learnings,
     },
-    desiredJobTitle: profile.data?.desired_job_title ?? null,
     gate,
     gateRequirements,
   };
@@ -206,7 +205,8 @@ export function createWritingChatPipelines(opts: PipelineLogOptions = {}): Writi
 
 // ---------------- AI-13 deliverable chats (ai notes §3.2–3.3) ----------------
 
-type DeliverableLoaded = Pick<DeliverableChatTurnInput, "deliverable" | "project" | "siblingTitles" | "desiredJobTitle">;
+// R13 (SD-6): `desiredJobTitle` is gone from the pack input too.
+type DeliverableLoaded = Pick<DeliverableChatTurnInput, "deliverable" | "project" | "siblingTitles">;
 
 /**
  * AI-13 input reads (app_ai_writer, RLS = this user): the deliverable row, its parent standalone
@@ -217,14 +217,13 @@ export async function loadDeliverableInputs(db: AiWriterSupabaseClient, snap: Tu
   const chat = snap.chat;
   const deliverableId = chat.projectDeliverableId;
   if (!deliverableId) throw new AppError("internal_error", undefined, { status: 500 });
-  const [deliverableRes, projectRes, skillsRes, siblingsRes, profile] = await Promise.all([
+  const [deliverableRes, projectRes, skillsRes, siblingsRes] = await Promise.all([
     db.from("project_deliverables").select("id, title, body").eq("id", deliverableId).maybeSingle(),
     db.from("projects").select("id, name, start_month, end_month, is_current, role, description").eq("id", chat.projectId).maybeSingle(),
     db.from("project_skills").select("skill_id, created_at").eq("project_id", chat.projectId).order("created_at"),
     db.from("project_deliverables").select("id, title").eq("project_id", chat.projectId).neq("id", deliverableId).order("sort_order").limit(20),
-    db.from("profiles").select("desired_job_title").eq("id", chat.userId).maybeSingle(),
   ]);
-  for (const r of [deliverableRes, projectRes, skillsRes, siblingsRes, profile]) if (r.error) throw mapDbError(r.error);
+  for (const r of [deliverableRes, projectRes, skillsRes, siblingsRes]) if (r.error) throw mapDbError(r.error);
   const d = deliverableRes.data;
   const p = projectRes.data;
   // The chat cascades with its deliverable / project; a missing row is a race with a delete.
@@ -250,7 +249,6 @@ export async function loadDeliverableInputs(db: AiWriterSupabaseClient, snap: Tu
       skills,
     },
     siblingTitles: (siblingsRes.data ?? []).map((r) => r.title),
-    desiredJobTitle: profile.data?.desired_job_title ?? null,
   };
 }
 

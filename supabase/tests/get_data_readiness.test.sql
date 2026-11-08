@@ -34,22 +34,25 @@ select is(public.get_data_readiness(), jsonb_build_object(
   'counts', jsonb_build_object(
     'complete_experiences', 0, 'complete_educations', 0, 'complete_projects', 0,
     'projects_without_complete_star', 0, 'standalone_projects_without_description', 0,
-    'draft_experiences', 0, 'draft_educations', 0, 'draft_projects', 0, 'profile_filled', false),
+    'draft_experiences', 0, 'draft_educations', 0, 'draft_projects', 0),
   'draft_item_ids', jsonb_build_object('experiences', '[]'::jsonb, 'educations', '[]'::jsonb,
                                        'projects', '[]'::jsonb),
   'features', jsonb_build_object(
-    'insight', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["profile"], "next_action": "form"}'::jsonb,
-    'draft', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["profile"], "next_action": "form"}'::jsonb,
-    'job_interview', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": ["profile"], "next_action": "form"}'::jsonb,
+    'insight', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
+    'draft', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
+    'job_interview', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
     'culture_fit_interview', '{"ready": true, "data_sufficiency": "none"}'::jsonb)),
   'empty account: full §6 shape, form first, data_sufficiency none (B''s data not counted)');
 
--- 2. profile only → thin, no profile hint
-update public.profiles set desired_job_title = 'Backend' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
-select is(public.get_data_readiness() #> '{counts,profile_filled}', 'true'::jsonb, 'profile_filled from desired_job_title');
-select is(public.get_data_readiness() #> '{features,culture_fit_interview,data_sufficiency}', '"thin"'::jsonb,
-          'profile only → thin');
-select is(public.get_data_readiness() #> '{features,insight,hints}', '[]'::jsonb, 'no profile hint once filled');
+-- 2. R13 (DM v4.12 §6-A, SD-A18·SD-6): counts has no profile_filled key, hints never contain "profile",
+-- and 내 정보 alone is no longer "thin" (프로필은 데이터 양의 근거가 아니다).
+update public.profiles set job_search_status = 'employed_considering'
+ where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select ok(not (public.get_data_readiness() -> 'counts' ? 'profile_filled'),
+          'counts has no profile_filled key');
+select is(public.get_data_readiness() #> '{features,culture_fit_interview,data_sufficiency}', '"none"'::jsonb,
+          '내 정보만 채워도 none (thin의 "프로필 또는" 삭제)');
+select is(public.get_data_readiness() #> '{features,insight,hints}', '[]'::jsonb, 'no profile hint ever');
 
 -- 3. education only: still not ready, still form (education does not satisfy D-01)
 insert into public.educations (id, institution_name, education_type, start_month)
@@ -76,7 +79,7 @@ select is(public.get_data_readiness() #> '{features,draft}',
 select is(public.get_data_readiness() -> 'counts',
           '{"complete_experiences": 1, "complete_educations": 1, "complete_projects": 0,
             "projects_without_complete_star": 1, "standalone_projects_without_description": 0,
-            "draft_experiences": 0, "draft_educations": 0, "draft_projects": 1, "profile_filled": true}'::jsonb,
+            "draft_experiences": 0, "draft_educations": 0, "draft_projects": 1}'::jsonb,
           'counts for the STAR case');
 select is(public.get_data_readiness() -> 'draft_item_ids',
           '{"experiences": [], "educations": [], "projects": ["aaaaaaaa-3333-0000-0000-000000000001"]}'::jsonb,

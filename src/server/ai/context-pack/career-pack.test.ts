@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { careerRowsFixture, IDS, project } from "../__fixtures__/career-rows";
+import { careerRowsFixture, IDS, project, TOTAL_EXPERIENCE_FIXTURE } from "../__fixtures__/career-rows";
 import { buildCareerPack } from "./career-pack";
 import { sourceLabel } from "./selection";
 import { buildSummaryCareerPack } from "./summary-pack";
 import type { CareerRows } from "./career-rows";
 import { DELIVERABLE_PACK_MAX_CHARS, DELIVERABLE_PACK_TOTAL_CHARS } from "./deliverable-text";
-import { mergedMonths, monthsInclusive } from "./months";
+import { monthsInclusive } from "./months";
 
 const asOf = { year: 2026, month: 10 };
 
@@ -14,7 +14,15 @@ function shuffled<T>(list: T[]): T[] {
 }
 
 function emptyRows(): CareerRows {
-  return { profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] };
+  return {
+    totalExperience: { totalMonths: 0, openEndedExperienceCount: 0, asOfMonth: asOf },
+    experiences: [],
+    educations: [],
+    projects: [],
+    deliverables: [],
+    skills: [],
+    projectSkills: [],
+  };
 }
 
 describe("buildCareerPack (C-1 v4.5)", () => {
@@ -66,7 +74,6 @@ describe("buildCareerPack (C-1 v4.5)", () => {
     expect(pack.aliases.get("PRJ-4")?.id).toBe(IDS.prjSide);
     expect(pack.aliases.get("DLV-1")?.id).toBe(IDS.dlvSide1); // sort_order 1 before 2
     expect(pack.aliases.get("DLV-2")?.id).toBe(IDS.dlvSide2);
-    expect(pack.aliases.get("PROFILE")?.id).toBe(IDS.profile);
     expect(pack.text.indexOf("<standalone_projects>")).toBeGreaterThan(pack.text.indexOf("</education>"));
   });
 
@@ -163,11 +170,14 @@ describe("buildCareerPack (C-1 v4.5)", () => {
     expect(none.careerSnapshotHash).toBe(buildCareerPack(rows, { asOf }).careerSnapshotHash);
   });
 
-  it("never sends display_name and escapes angle brackets in user text", () => {
-    const rows = careerRowsFixture();
-    const withName = { ...rows, profile: { ...rows.profile!, display_name: "홍길동" } as typeof rows.profile };
-    const pack = buildCareerPack(withName, { asOf });
-    expect(pack.text).not.toContain("홍길동");
+  it("sends no profile value and escapes angle brackets in user text", () => {
+    const pack = buildCareerPack(careerRowsFixture(), { asOf });
+    // (v4.12, SD-6) no profile block, not even an empty one.
+    expect(pack.text).not.toContain("<profile");
+    expect(pack.text).not.toContain("PROFILE");
+    expect(pack.text).not.toContain("desired_job_title");
+    expect(pack.text).not.toContain("interested_industries");
+    expect(pack.text).not.toContain("total_years_of_experience");
     expect(pack.text).toContain("운영 ＜리드＞");
     expect(pack.text).not.toContain("<리드>");
     // The alias map keeps the raw DB text (V-3 compares against it).
@@ -217,22 +227,43 @@ describe("buildCareerPack (C-1 v4.5)", () => {
 
   it("handles an empty career", () => {
     const pack = buildCareerPack(emptyRows(), { asOf });
-    expect(pack.text).toBe("<career_data>\n</career_data>");
+    expect(pack.text).toBe("<career_data>\ncomputed_total_months: 등록된 경력 기간 합계 0개월 (총 0개월, 기준 2026-10, 서버 계산)\n</career_data>");
     expect(pack.aliases.size).toBe(0);
+  });
+
+  // (v4.12, SD-2) C-1 "경력 합계 (서버 계산)": the number comes from the DB
+  // function (DM 6.2); the pack only renders it and feeds it to V-5.
+  describe("computed_total_months (SD-2)", () => {
+    it("puts the server-computed sum on the pack's head line and allows its numbers in V-5", () => {
+      const pack = buildCareerPack(careerRowsFixture(), { asOf });
+      expect(pack.text.split("\n")[1]).toBe("computed_total_months: 등록된 경력 기간 합계 7년 10개월 (총 94개월, 기준 2026-10, 서버 계산)");
+      expect(pack.numberSources.computedNumbers).toEqual(expect.arrayContaining([94, 7, 10]));
+      expect(pack.text).not.toContain("computed_open_ended_experiences");
+    });
+
+    it("adds the open-ended line from the same call's count, and never counts them itself", () => {
+      const rows = careerRowsFixture();
+      rows.totalExperience = { totalMonths: 26, openEndedExperienceCount: 2, asOfMonth: asOf };
+      const pack = buildCareerPack(rows, { asOf });
+      expect(pack.text).toContain("computed_total_months: 등록된 경력 기간 합계 2년 2개월 (총 26개월, 기준 2026-10, 서버 계산)");
+      expect(pack.text).toContain("computed_open_ended_experiences: 기간 미입력 경력 2건(합계에 넣지 않음)");
+    });
+
+    it("stays out of career_snapshot_hash (DM 6.2: it changes every month)", () => {
+      const base = buildCareerPack(careerRowsFixture(), { asOf });
+      const rows = careerRowsFixture();
+      rows.totalExperience = { totalMonths: TOTAL_EXPERIENCE_FIXTURE.totalMonths + 1, openEndedExperienceCount: 1, asOfMonth: { year: 2026, month: 11 } };
+      const next = buildCareerPack(rows, { asOf });
+      expect(next.careerSnapshotHash).toBe(base.careerSnapshotHash);
+      expect(next.text).not.toBe(base.text);
+    });
   });
 });
 
 describe("months", () => {
-  it("counts months inclusively and merges overlaps", () => {
+  it("counts months inclusively", () => {
     expect(monthsInclusive({ year: 2021, month: 3 }, { year: 2024, month: 2 })).toBe(36);
     expect(monthsInclusive({ year: 2021, month: 3 }, { year: 2021, month: 2 })).toBeNull();
-    expect(
-      mergedMonths([
-        { start: { year: 2020, month: 1 }, end: { year: 2020, month: 12 } },
-        { start: { year: 2020, month: 6 }, end: { year: 2021, month: 6 } },
-        { start: { year: 2022, month: 1 }, end: { year: 2022, month: 1 } },
-      ]),
-    ).toBe(19);
   });
 
   describe("education label = display name (UQ-734 / UI32-2)", () => {

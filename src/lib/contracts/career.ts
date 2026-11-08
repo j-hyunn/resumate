@@ -525,7 +525,6 @@ export const DataReadiness = z.object({
     draft_experiences: count,
     draft_educations: count,
     draft_projects: count,
-    profile_filled: z.boolean(),
   }),
   draft_item_ids: z.object({
     experiences: z.array(z.guid()),

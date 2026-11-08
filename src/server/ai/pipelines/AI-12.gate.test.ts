@@ -42,7 +42,7 @@ describe("R-31 gate requirements in AI-12", () => {
     const llm = createFakeLlm([{ text: "결제 쪽에서 어떤 일을 하셨나요?" }]);
     await drain(reply(c, { llm }));
     expect(llm.requests[0].promptVersion).toBe(AI12_REPLY_PROMPT_VERSION);
-    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v6\+/);
+    expect(AI12_REPLY_PROMPT_VERSION).toMatch(/^ai-12\.reply\.v7\+/);
   });
 
   it("QA-S5-04: <gate_requirements> is in the data-block (injection) rule of both calls", () => {

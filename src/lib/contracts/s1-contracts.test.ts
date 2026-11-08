@@ -43,19 +43,17 @@ describe("SubmitConsentsInput", () => {
   });
 });
 
-describe("UpdateProfileInput", () => {
-  it("turns empty strings into null and keeps omitted keys omitted", () => {
-    expect(UpdateProfileInput.parse({ displayName: "  ", desiredJobTitle: "PM" })).toEqual({
-      displayName: null,
-      desiredJobTitle: "PM",
-    });
+describe("UpdateProfileInput (R13: display_name only)", () => {
+  it("turns empty strings into null", () => {
+    expect(UpdateProfileInput.parse({ displayName: "  " })).toEqual({ displayName: null });
+    expect(UpdateProfileInput.parse({ displayName: " 홍길동 " })).toEqual({ displayName: "홍길동" });
   });
-  it("enforces DM A.1 limits", () => {
+  it("enforces the DM A.1 limit (50자) and refuses the dropped columns' keys silently", () => {
     expect(UpdateProfileInput.safeParse({ displayName: "a".repeat(51) }).success).toBe(false);
-    expect(UpdateProfileInput.safeParse({ desiredJobTitle: "a".repeat(101) }).success).toBe(false);
-    expect(UpdateProfileInput.safeParse({ totalYearsOfExperience: 51 }).success).toBe(false);
-    expect(UpdateProfileInput.safeParse({ totalYearsOfExperience: 1.5 }).success).toBe(false);
-    expect(UpdateProfileInput.safeParse({ totalYearsOfExperience: 0 }).success).toBe(true);
+    expect(UpdateProfileInput.safeParse({ displayName: "a".repeat(50) }).success).toBe(true);
+    // 삭제된 컬럼(DM 2.1.1): 보내도 통과하지 않는다 — 키가 없으면 displayName 누락으로 거부된다.
+    expect(UpdateProfileInput.safeParse({ desiredJobTitle: "PM" }).success).toBe(false);
+    expect(UpdateProfileInput.safeParse({ totalYearsOfExperience: 3 }).success).toBe(false);
   });
   it("rejects an empty patch", () => {
     expect(UpdateProfileInput.safeParse({}).success).toBe(false);

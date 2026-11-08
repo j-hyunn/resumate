@@ -23,41 +23,46 @@ function num(value: unknown): number {
   return typeof n === "number" && Number.isFinite(n) ? n : 0;
 }
 
+/** One bucket's token + cost figures (DM 2.9.5 v4.12: 비용 열 2개 + 합계). */
+function totalsOf(raw: unknown) {
+  const t = obj(raw);
+  return {
+    inputTokens: num(t.input_tokens),
+    cachedInputTokens: num(t.cached_input_tokens),
+    cacheWriteTokens: num(t.cache_write_tokens),
+    outputTokens: num(t.output_tokens),
+    inputCostUsd: num(t.input_cost_usd),
+    outputCostUsd: num(t.output_cost_usd),
+    estimatedCostUsd: num(t.estimated_cost_usd),
+    calls: num(t.calls),
+    failedCalls: num(t.failed_calls),
+  };
+}
+
+function versionsOf(raw: unknown) {
+  return arr(raw).map((v) => ({ version: String(v.version ?? ""), sourceCheckedAt: String(v.source_checked_at ?? "") }));
+}
+
+/**
+ * (v4.12, SD-A10) 응답 교체: `providers[]` 교차 집계. The 7행 묶음
+ * (`career_description` + `cover_letter`) is NOT done here — it is a screen
+ * constant (AI C-13.1, DM 2.9.5), so `byFeature` keeps the stored values.
+ */
 export function toAiUsageSummary(raw: unknown): AiUsageSummary {
   const r = obj(raw);
-  const t = obj(r.totals);
   const prev = r.previous_month === undefined || r.previous_month === null ? null : obj(r.previous_month);
   const mapped = {
     periodMonth: String(r.period_month ?? ""),
     asOf: String(r.as_of ?? ""),
-    totals: {
-      inputTokens: num(t.input_tokens),
-      cachedInputTokens: num(t.cached_input_tokens),
-      cacheWriteTokens: num(t.cache_write_tokens),
-      outputTokens: num(t.output_tokens),
-      estimatedCostUsd: num(t.estimated_cost_usd),
-      calls: num(t.calls),
-      failedCalls: num(t.failed_calls),
-    },
-    byFeature: arr(r.by_feature).map((f) => ({
-      feature: f.feature,
-      inputTokens: num(f.input_tokens),
-      outputTokens: num(f.output_tokens),
-      estimatedCostUsd: num(f.estimated_cost_usd),
-      calls: num(f.calls),
-    })),
-    byProvider: arr(r.by_provider).map((p) => ({
+    totals: totalsOf(r.totals),
+    providers: arr(r.providers).map((p) => ({
       provider: p.provider,
-      connectionTier: p.connection_tier,
-      inputTokens: num(p.input_tokens),
-      outputTokens: num(p.output_tokens),
-      estimatedCostUsd: num(p.estimated_cost_usd),
-      calls: num(p.calls),
+      connectionTiers: Array.isArray(p.connection_tiers) ? p.connection_tiers : [],
+      totals: totalsOf(p.totals),
+      byFeature: arr(p.by_feature).map((f) => ({ feature: f.feature, ...totalsOf(f) })),
+      priceTableVersions: versionsOf(p.price_table_versions),
     })),
-    priceTableVersions: arr(r.price_table_versions).map((v) => ({
-      version: String(v.version ?? ""),
-      sourceCheckedAt: String(v.source_checked_at ?? ""),
-    })),
+    priceTableVersions: versionsOf(r.price_table_versions),
     previousMonth: prev
       ? {
           periodMonth: String(prev.period_month ?? ""),

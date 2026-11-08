@@ -36,8 +36,11 @@ import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
  * v2 (R7): keep the concrete elements the user said when summarizing a fact.
  */
 export const AI13_EXTRACT_PROMPT_VERSION = `ai-13.extract.v3+${COMMON_PROMPT_VERSION}`;
-/** v2 (R7, RQ-1~RQ-2): quote the user's own words, one concrete element per question, category examples, up to 2 follow-ups per slot. */
-export const AI13_REPLY_PROMPT_VERSION = `ai-13.reply.v2+${COMMON_PROMPT_VERSION}`;
+/**
+ * v3 (R13, v4.12 SD-6): the <chat> block no longer carries desired_job_title.
+ * v2 (R7, RQ-1~RQ-2): quote the user's own words, one concrete element per question, category examples, up to 2 follow-ups per slot.
+ */
+export const AI13_REPLY_PROMPT_VERSION = `ai-13.reply.v3+${COMMON_PROMPT_VERSION}`;
 /** v2 (R8, v4.9 RQ-4): body blocks in -음 체 (headings exempt), examples rewritten; sensitive rule as RQ-6. */
 export const AI13_COMPOSE_PROMPT_VERSION = `ai-13.compose.v2+${COMMON_PROMPT_VERSION}`;
 

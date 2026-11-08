@@ -439,6 +439,8 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
       outcome: "failed",
       errorCode: "canceled",
       priceTableVersion: "unpriced",
+      inputCostUsd: 0,
+      outputCostUsd: 0,
       estimatedCostUsd: 0,
     });
     const late = await admin.from("ai_usage_records").select("application_project_id").eq("ai_job_id", inflight);

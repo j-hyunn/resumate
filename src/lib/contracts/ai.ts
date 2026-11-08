@@ -366,27 +366,49 @@ export const GetAiUsageSummaryInputSchema = z.object({
 });
 export type GetAiUsageSummaryInput = z.infer<typeof GetAiUsageSummaryInputSchema>;
 
-const TokenTotals = {
+/**
+ * Token + cost figures of one bucket (DM 2.9.5 v4.12). `inputCostUsd` /
+ * `outputCostUsd` come from the stored columns (DM 2.9.2, SD-A11) and
+ * `estimatedCostUsd` is their sum.
+ */
+const UsageTotals = {
   inputTokens: z.number().int().min(0),
+  cachedInputTokens: z.number().int().min(0),
+  cacheWriteTokens: z.number().int().min(0),
   outputTokens: z.number().int().min(0),
+  inputCostUsd: z.number().min(0),
+  outputCostUsd: z.number().min(0),
   estimatedCostUsd: z.number().min(0),
   calls: z.number().int().min(0),
+  failedCalls: z.number().int().min(0),
 };
 
-/** RPC `get_ai_usage_summary` in camelCase (DM §2.9.5). Costs are USD estimates (free tier: paid-equivalent). */
+const PriceTableVersions = z.array(z.object({ version: z.string(), sourceCheckedAt: z.string() }));
+
+/**
+ * RPC `get_ai_usage_summary` in camelCase — **(v4.12, SD-A10) 응답 교체**: the old
+ * top-level `byFeature` / `byProvider` are gone and `providers[]` carries the
+ * 공급자 × 기능 교차 집계 (DM 2.9.5). Only providers with rows that month appear,
+ * ordered by `ai_providers.display_order`. `byFeature` holds the **stored**
+ * `feature` values (8): the 7행 묶음 is a screen constant (AI C-13.1, SD-4).
+ * Costs are USD estimates (free tier: paid-equivalent).
+ */
 export const AiUsageSummarySchema = z.object({
   /** KST month start, `YYYY-MM-DD`. */
   periodMonth: z.string(),
   asOf: z.string(),
-  totals: z.object({
-    ...TokenTotals,
-    cachedInputTokens: z.number().int().min(0),
-    cacheWriteTokens: z.number().int().min(0),
-    failedCalls: z.number().int().min(0),
-  }),
-  byFeature: z.array(z.object({ feature: UsageFeatureSchema, ...TokenTotals })),
-  byProvider: z.array(z.object({ provider: AiProviderSchema, connectionTier: ConnectionTierSchema, ...TokenTotals })),
-  priceTableVersions: z.array(z.object({ version: z.string(), sourceCheckedAt: z.string() })),
+  totals: z.object(UsageTotals),
+  providers: z.array(
+    z.object({
+      provider: AiProviderSchema,
+      /** 그 달 기록에 나타난 등급 목록 (달 중간에 바꾸면 둘이 된다). */
+      connectionTiers: z.array(ConnectionTierSchema),
+      totals: z.object(UsageTotals),
+      byFeature: z.array(z.object({ feature: UsageFeatureSchema, ...UsageTotals })),
+      priceTableVersions: PriceTableVersions,
+    }),
+  ),
+  priceTableVersions: PriceTableVersions,
   /** Only with `includePrevious: true`. */
   previousMonth: z
     .object({

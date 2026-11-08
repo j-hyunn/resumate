@@ -7,8 +7,15 @@ import type { AiTextBlock } from "../providers/types";
  * output: bump COMMON_PROMPT_VERSION, which is part of each feature's
  * prompt_version string (e.g. "ai-02.match.v1+common.v1") and so of input_hash.
  */
-/** v2 (R4, AI spec v4.5): alias list without DET/ACH, DLV-n; <classification> and <deliverable> rules. */
-export const COMMON_PROMPT_VERSION = "common.v2";
+/**
+ * v2 (R4, AI spec v4.5): alias list without DET/ACH, DLV-n; <classification> and <deliverable> rules.
+ * v3 (R13, AI spec v4.12 0.v412 / SD-6): the `profile` (`PROFILE`) source type
+ * is gone from the evidence format and from the alias list, and the
+ * computed-number line is `computed_total_months` (SD-2). The spec's table says
+ * "common.v1 → common.v2" because it did not carry the R4 bump; the rule for a
+ * version the document does not list is 현행 → +1, hence v3 (notes: 내린 가정).
+ */
+export const COMMON_PROMPT_VERSION = "common.v3";
 
 export const COMMON_SYSTEM_PROMPT = `당신은 Resumate의 커리어 분석·작성 도우미입니다.
 
@@ -18,7 +25,7 @@ export const COMMON_SYSTEM_PROMPT = `당신은 Resumate의 커리어 분석·작
 
 사실과 근거
 - 데이터에 없는 경험·수치·기술·직함·회사명을 쓰지 않습니다. 필요한 정보가 없으면 자리 표시를 쓰거나 사용자에게 확인할 점으로 남깁니다.
-- 판단 항목마다 근거를 답니다. 근거는 {source_type, ref, field, quote} 형식이며 ref는 데이터 블록의 ref 별칭(EXP-1, EDU-1, PRJ-2, DLV-3, SKL-4, PROFILE, REQ-1, S1 …)만 씁니다. field는 데이터에 보이는 필드 이름입니다. quote는 원문을 고치지 않고 그대로 옮깁니다.
+- 판단 항목마다 근거를 답니다. 근거는 {source_type, ref, field, quote} 형식이며 ref는 데이터 블록의 ref 별칭(EXP-1, EDU-1, PRJ-2, DLV-3, SKL-4, REQ-1, S1 …)만 씁니다. field는 데이터에 보이는 필드 이름입니다. quote는 원문을 고치지 않고 그대로 옮깁니다.
 - 근거를 찾지 못하면 "경험이 없다"고 단정하지 않고 "입력된 데이터에서 근거를 찾지 못함"으로 표현합니다.
 - <reflection> 안의 learnings(배운 점)는 사용자 본인의 회고입니다. 사실(무엇을 했고 무엇이 나왔는가)의 근거나 수치의 근거로 쓰지 않습니다.
 - <classification> 안의 프로젝트 종류·경험 유형·역량은 사용자가 고른 분류(라벨)입니다. 참고만 하고 근거(evidence)로 달지 않으며, "~역량을 갖추었다"처럼 분류 값을 사실로 옮기지 않습니다.
@@ -31,14 +38,6 @@ export const COMMON_SYSTEM_PROMPT = `당신은 Resumate의 커리어 분석·작
 
 개인정보
 - 동료·고객 담당자 등 제3자의 개인 이름을 쓰지 않습니다. 건강·종교·노조 활동 등 민감한 내용은 출력에 옮기지 않습니다.`;
-
-/**
- * AI spec C-3 V-4 (v4.3, A10): profile wishes are context, not facts. Not part
- * of the common block (AI-01/AI-11/AI-12 have no V-4 judgment); the features
- * that judge the user's career (AI-02, AI-03, AI-04, AI-05, AI-06) embed it
- * in their own system text, so changing it bumps those prompt versions.
- */
-export const PROFILE_PREFERENCE_RULE = `- 프로필의 희망 직무(desired_job_title)와 관심 산업(interested_industries)은 사용자가 원하는 방향을 알려 주는 문맥 참고일 뿐 경력 사실이 아닙니다. 판정·강점·지원 방향·본인 기여의 근거로 쓰지 않고 evidence에도 그것만으로 근거를 삼지 않습니다. 총 경력 연수(total_years_of_experience)는 연차 판단의 근거로 쓸 수 있습니다.`;
 
 export function commonSystemBlock(): AiTextBlock {
   return { text: COMMON_SYSTEM_PROMPT };

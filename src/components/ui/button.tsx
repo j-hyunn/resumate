@@ -11,8 +11,9 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
           "border-input bg-card hover:bg-accent hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        // bg-tint = primary 10% (hover 15%) unless a container sets --tint-strength (S-24 설정 다이얼로그, DR-14)
         secondary:
-          "bg-primary/10 text-primary-text hover:bg-primary/15 aria-expanded:bg-primary/15 aria-expanded:text-primary-text",
+          "bg-tint text-primary-text hover:bg-tint-hover aria-expanded:bg-tint-hover aria-expanded:text-primary-text",
         // data-pending (v4, UQ-712): a not-yet-reached step (writing-chat step bar) stays muted until hovered
         ghost:
           "hover:bg-primary/10 hover:text-primary-text aria-expanded:bg-primary/10 aria-expanded:text-primary-text aria-[current]:bg-primary/10 aria-[current]:font-medium aria-[current]:text-primary-text aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary-text data-pending:not-hover:text-muted-foreground",

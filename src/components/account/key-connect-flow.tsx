@@ -44,7 +44,7 @@ import { aiErrorTitle, ExternalProviderLink, formatKstTime, useNow } from "@/com
 import { DataUseConsent } from "@/components/common/data-use-consent"
 import { ProviderBadge } from "@/components/common/provider-badge"
 import { verifyEta } from "./ai-format"
-import { KeyMask, ProviderCardFrame, providerCardState } from "./provider-card"
+import { KeyMask, ProviderRowFrame, ProviderRowGroup, providerRowState, sortProviderRows } from "./provider-row"
 import { needsDataUseConsentAction } from "@/lib/data/actions"
 import { Item } from "@/components/ui/item"
 
@@ -505,45 +505,45 @@ function ProviderPick({
       <h2 id="s41-pick" ref={headingRef} tabIndex={-1} className="text-lg leading-7 font-semibold outline-none">
         연결할 공급자를 골라 주세요
       </h2>
-      <ul className="space-y-3">
-        {providers.map((c) => {
-          const p = c.info.provider
-          const disabled = !c.info.is_available
-          return (
-            <li key={p}>
-              {(() => {
-                const card = (
-                  <ProviderCardFrame
-                    provider={p}
-                    description={c.info.description}
-                    recommended={c.info.is_recommended}
-                    state={providerCardState({ key: null, isAvailable: c.info.is_available })}
-                    inButton
-                    statusLine={
-                      c.key ? (
-                        <span className="block text-sm text-muted-foreground">
-                          이미 연결됨 · <KeyMask last4={c.key.key_last4} />
-                        </span>
-                      ) : disabled ? (
-                        <span className="block text-sm text-muted-foreground">{AI_PROVIDER_LABELS[p]} 연결을 잠시 멈췄어요</span>
-                      ) : null
-                    }
-                  />
-                )
-                // UQ-721: a paused provider is not clickable, so it is not an Item. The card's own
-                // unavailable state is the only dimming (no extra disabled opacity).
-                return disabled ? (
-                  card
+      {/* UX v5.17 S-41: AI 연결 탭과 같은 라디오 행 3개 (Gemini → GPT → Claude), 행 전체가 선택 버튼 */}
+      {/* S-41만 묶음 테두리를 유지한다 (design-system 5.11.2 v5.12) */}
+      <ProviderRowGroup bordered>
+        <ul className="divide-y">
+          {sortProviderRows(providers).map((c) => {
+            const p = c.info.provider
+            const disabled = !c.info.is_available
+            const row = (
+              <ProviderRowFrame
+                provider={p}
+                recommended={c.info.is_recommended}
+                state={providerRowState({ key: null, isAvailable: c.info.is_available })}
+                inButton
+                statusLine={
+                  c.key ? (
+                    <span className="block text-sm text-muted-foreground">
+                      이미 연결됨 · <KeyMask last4={c.key.key_last4} />
+                    </span>
+                  ) : disabled ? (
+                    <span className="block text-sm text-muted-foreground">{AI_PROVIDER_LABELS[p]} 연결을 잠시 멈췄어요</span>
+                  ) : null
+                }
+              />
+            )
+            return (
+              <li key={p}>
+                {/* UQ-721: a paused provider is not clickable, so it is not an Item */}
+                {disabled ? (
+                  row
                 ) : (
-                  <Item size="none" className="block rounded-lg" onClick={() => onPick(p)}>
-                    {card}
+                  <Item size="none" className="block rounded-none" onClick={() => onPick(p)}>
+                    {row}
                   </Item>
-                )
-              })()}
-            </li>
-          )
-        })}
-      </ul>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </ProviderRowGroup>
     </section>
   )
 }

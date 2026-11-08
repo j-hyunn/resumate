@@ -69,8 +69,11 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
   const sid = e.source_id
   switch (e.source_type) {
     case "profile": {
+      // R13 (v4.12, SD-A19): 기존 `profile` 근거 행만 남아 있고 새 행은 트리거가 막는다. 가리키던 컬럼
+      // (`desired_job_title` 등)이 삭제됐으므로 현재 값은 보여 줄 수 없다 — 칩은 라벨만 보이고
+      // "원본으로 이동"은 비활성이다 (UI 후속). `[가정]`
       const p = db.profiles[0]
-      return { source_label: e.source_label ?? "기본 프로필", current_value: p.desired_job_title, path: ["기본 프로필"], href: routes.profile(), to_career: true, updated_at: p.updated_at }
+      return { source_label: e.source_label ?? "기본 프로필", current_value: null, path: ["기본 프로필"], href: null, to_career: false, updated_at: p.updated_at }
     }
     case "experience": {
       const x = db.experiences.find((r) => r.id === sid)

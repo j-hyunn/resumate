@@ -47,9 +47,19 @@ export const POLICY_TYPE_LABELS: Record<PolicyType, string> = {
   terms: "이용약관",
   privacy: "개인정보 처리방침",
   cross_border_transfer: "국외 이전 고지",
+  // R13 (v4.12, D-UX-31·SD-A13): S-30의 네 번째 문서 (UI 42 `/policies/ai_data_use`)
+  ai_data_use: "AI 데이터 처리",
 }
 
-export const POLICY_TYPES: ReadonlyArray<PolicyType> = ["terms", "privacy", "cross_border_transfer"]
+/** S-30 문서 페이지 4종 (UX v5.17 SD-A13 — UI 42에서 `ai_data_use`를 더했다). 주소의 문서 이름 = `policy_type` */
+export const POLICY_TYPES: ReadonlyArray<PolicyType> = ["terms", "privacy", "cross_border_transfer", "ai_data_use"]
+
+/**
+ * 약관 탭이 읽는 문서 **4종** (04 §2.1.3, UX S-24 ③). `policy_versions.policy_type`과 같은 목록이고,
+ * `consents.consent_type`은 늘어나지 않는다 — AI 데이터 처리는 **고지 문서**이고 동의는 키 연결 때
+ * 공급자별로 받는다(`ai_data_use_consents`).
+ */
+export const POLICY_DOCUMENT_TYPES: ReadonlyArray<PolicyType> = ["privacy", "terms", "cross_border_transfer", "ai_data_use"]
 
 export function isPolicyType(value: unknown): value is PolicyType {
   return typeof value === "string" && (POLICY_TYPES as readonly string[]).includes(value)

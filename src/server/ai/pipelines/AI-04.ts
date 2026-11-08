@@ -66,7 +66,7 @@ import { buildAllowedNumbers } from "../validation/numbers";
  * (count_basis), and at most one correction call (ai-04.adjust) when outside
  * ±10% of the limit; then persist(p_payload) → validated → done.
  *
- * V-1..V-5, V-7 (sources' subtree + profile, JD, note), V-8 (learnings only in
+ * V-1..V-5, V-7 (sources' subtree + JD, note — (v4.12, SD-6) no profile), V-8 (learnings only in
  * motivation / future_plan / experience_story, reflection wording), per-class
  * source counts, user-mode list kept as is.
  */
@@ -527,7 +527,7 @@ export function streamCoverLetterSection(input: { context: CoverLetterContext },
       const parsed = toRawBlock(raw, blockId);
       if (!parsed) return null;
       const questionClass = state.questionClass ?? resolveQuestionClass(context, classFromRoot(at.root));
-      // Sources not seen yet (unusual key order): user mode knows its list; AI mode stays strict (profile/JD/note only).
+      // Sources not seen yet (unusual key order): user mode knows its list; AI mode stays strict (JD/note only).
       const sources = state.sources ?? (context.mode === "user" ? validateSources([], questionClass, context, {}) : []);
       const checked = checkDraftBlock(
         parsed,

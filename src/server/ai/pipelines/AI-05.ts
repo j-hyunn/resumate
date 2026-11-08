@@ -316,7 +316,7 @@ export function checkQuestion(
   const checked = validateItem({ key: QUESTION_ITEM_KEY, kind: "reference", evidence: rawEvidence, learnings }, { aliases, learnings });
   addToReport(report, checked.report);
   const evidence = checked.outcome.evidence;
-  // A10: profile wishes (희망 직무·관심 산업) are context, never a user fact.
+  // (v4.12, SD-6) Career support sources only; the profile source type is gone.
   const career = evidence.filter((e) => isCareerSupportEvidence(e));
   const factualCareer = career.filter((e) => !isReflectionEvidence(e));
 

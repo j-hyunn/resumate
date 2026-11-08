@@ -254,6 +254,12 @@ export function EvidencePanel({
                         <ArrowUpRight aria-hidden />
                       </Link>
                     </Button>
+                  ) : item.source_type === "profile" ? (
+                    // C-02 (UX v5.17 SD-A19, design-system 3.2 v5.11): S-04가 없어져 원본 화면이 없다 — 이동 버튼 자리에 한 줄
+                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Info className="size-4 shrink-0" aria-hidden />
+                      이 근거의 원본 화면은 더 이상 없어요
+                    </p>
                   ) : null}
                 </>
               )}

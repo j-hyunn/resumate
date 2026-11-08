@@ -45,11 +45,10 @@ describe("applyMatchRules (V-4 + met downgrade)", () => {
     ["partial with skill stays partial", "partial", [e("skill", "name")], "partial", {}],
     ["partial with nothing → no_evidence", "partial", [], "no_evidence", { items_downgraded: 1 }],
     ["partial with learnings only → no_evidence", "partial", [e("project", "learnings")], "no_evidence", { items_downgraded: 1 }],
-    // A10: profile wishes are context, not a fact.
-    ["partial with desired_job_title only → no_evidence (A10)", "partial", [e("profile", "desired_job_title")], "no_evidence", { items_downgraded: 1 }],
-    ["partial with interested_industries only → no_evidence (A10)", "partial", [e("profile", "interested_industries")], "no_evidence", { items_downgraded: 1 }],
-    ["partial with total_years_of_experience stays partial (연차 근거)", "partial", [e("profile", "total_years_of_experience")], "partial", {}],
-    ["met with action + desired_job_title stays met", "met", [e("profile", "desired_job_title"), e("project", "action")], "met", {}],
+    // (v4.12, SD-6) profile is not a source type any more — nothing rests on it.
+    ["partial with a profile source only → no_evidence (SD-6)", "partial", [e("profile" as never, "desired_job_title")], "no_evidence", { items_downgraded: 1 }],
+    ["partial with total_years_of_experience only → no_evidence (SD-6)", "partial", [e("profile" as never, "total_years_of_experience")], "no_evidence", { items_downgraded: 1 }],
+    ["met with action + a profile source stays met", "met", [e("profile" as never, "desired_job_title"), e("project", "action")], "met", {}],
     ["no_evidence never upgraded, evidence cleared", "no_evidence", [e("project", "action")], "no_evidence", {}],
   ])("%s", (_, model, evidence, expected, counts) => {
     const report = emptyAi02Report();

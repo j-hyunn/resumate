@@ -360,8 +360,15 @@ describe.skipIf(!ready)("job runner v4 (local stack)", () => {
     expect(summary.periodMonth).toBe(kstPeriodMonth(new Date()));
     expect(summary.totals.calls).toBeGreaterThan(0);
     expect(summary.totals.failedCalls).toBeGreaterThan(0);
-    expect(summary.byFeature.map((f) => f.feature)).toContain("insight");
-    expect(summary.byProvider.map((p) => `${p.provider}/${p.connectionTier}`)).toEqual(expect.arrayContaining(["anthropic/paid", "gemini/free"]));
+    // R13 (DM 2.9.5 v4.12): 공급자 × 기능 교차 집계 `providers[]`
+    expect(summary.providers.flatMap((p) => p.byFeature.map((f) => f.feature))).toContain("insight");
+    expect(summary.providers.map((p) => `${p.provider}/${p.connectionTiers.join("+")}`)).toEqual(
+      expect.arrayContaining(["anthropic/paid", "gemini/free"]),
+    );
+    // 비용 두 열의 합 = 합계 열
+    for (const p of summary.providers) {
+      expect(p.totals.estimatedCostUsd).toBeCloseTo(p.totals.inputCostUsd + p.totals.outputCostUsd, 6);
+    }
     expect(summary.priceTableVersions.map((v) => v.version)).toContain(seededVersion());
     expect(summary.previousMonth).toBeNull();
     const withPrev = await getAiUsageSummary(userClient, { includePrevious: true });

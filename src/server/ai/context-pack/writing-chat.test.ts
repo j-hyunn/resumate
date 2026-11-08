@@ -44,14 +44,15 @@ describe("buildWritingChatContext", () => {
     expect(notice("김민수 팀장님과 했어요. 010-1234-5678")).toEqual(["contact", "third_party_name"]);
   });
 
-  it("<chat> block: name, affiliation, desired job — no STAR text, no ids; cache on the last message", () => {
+  it("<chat> block: name, affiliation — no STAR text, no ids; cache on the last message", () => {
     const ctx = buildWritingChatContext(
       baseInput({ messages: rows([["assistant", GREETING], ["user", "a"], ["user", "b"]]), project: filledProject() }),
     );
     const chat = ctx.sharedBlocks[0].text;
     expect(chat).toContain("project_name: 결제 승인 API 개선");
     expect(chat).toContain("affiliation: 경력 '에이비씨페이'");
-    expect(chat).toContain("desired_job_title: 백엔드 개발자");
+    // (v4.12, SD-6) 질문 어휘 조정용 desired_job_title 입력은 삭제됐다.
+    expect(chat).not.toContain("desired_job_title");
     expect(chat).not.toContain("병목");
     expect(chat).not.toContain(PROJECT_ID);
     const cached = ctx.sharedBlocks.filter((b) => b.cache);

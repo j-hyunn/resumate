@@ -106,7 +106,6 @@ export type WritingChatTurnInput = {
    * focus slots). Omitted / null (old screen) → DB values.
    */
   formSnapshot?: ProjectFormSnapshot | null;
-  desiredJobTitle: string | null;
   /** return_target.feature + get_data_readiness() `missing` for that feature (recomputed every turn). */
   gate: { feature: GateFeature; missing: readonly ReadinessMissing[] } | null;
   /**
@@ -221,7 +220,6 @@ export function buildWritingChatContext(input: WritingChatTurnInput): WritingCha
     "<chat>",
     `project_name: ${esc(p.name)}`,
     `affiliation: ${p.parent.type === "experience" ? "경력" : "교육"} ${p.parent.name ? `'${esc(p.parent.name)}'` : "(이름 없음)"}`,
-    `desired_job_title: ${input.desiredJobTitle ? esc(input.desiredJobTitle) : "(없음)"}`,
     "</chat>",
   ];
   const sharedBlocks: AiTextBlock[] = [{ text: chatLines.join("\n") }];

@@ -63,7 +63,7 @@ export function selectionFromPrioritiesWithAliases(aliases: AliasMap, priorities
  * fields); only `projectIds`
  * come with them, unless the parent is in `whole*Ids` (all its projects).
  * Parents of selected projects are added. Skills: those tagged on included projects.
- * The profile always stays.
+ * The server-computed total experience always stays (C-1, SD-2).
  */
 export function filterCareerRows(
   rows: CareerRows,
@@ -87,7 +87,7 @@ export function filterCareerRows(
   const links = rows.projectSkills.filter((l) => projectIds.has(l.project_id));
   const skillIds = new Set(links.map((l) => l.skill_id));
   return {
-    profile: rows.profile,
+    totalExperience: rows.totalExperience,
     experiences: rows.experiences.filter((e) => expIds.has(e.id)),
     educations: rows.educations.filter((e) => eduIds.has(e.id)),
     projects,

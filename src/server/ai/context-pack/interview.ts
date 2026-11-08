@@ -6,7 +6,8 @@ import { AliasMap } from "./aliases";
 import { buildCareerPack, type CareerPack } from "./career-pack";
 import type { CareerRows } from "./career-rows";
 import { buildJdContext, type JdRequirementInput, type JdSentence } from "./jd";
-import type { YearMonth } from "./months";
+import { currentMonthInSeoul, type YearMonth } from "./months";
+import { emptyTotalExperience } from "./total-experience";
 
 /**
  * Shared context of the interview features (AI-05, AI-06; AI spec C-1, C-2).
@@ -60,12 +61,21 @@ export type InterviewBase = {
   cultureSentenceCount: number;
 };
 
-export function emptyCareerRows(): CareerRows {
-  return { profile: null, experiences: [], educations: [], projects: [], deliverables: [], skills: [], projectSkills: [] };
+/** `data_sufficiency = none` (JD only): no career rows, so the C-1 sum is 0 (SD-2). */
+export function emptyCareerRows(asOf: YearMonth): CareerRows {
+  return {
+    totalExperience: emptyTotalExperience(asOf),
+    experiences: [],
+    educations: [],
+    projects: [],
+    deliverables: [],
+    skills: [],
+    projectSkills: [],
+  };
 }
 
 export function buildInterviewBase(input: InterviewBaseInput): InterviewBase {
-  const rows = input.careerRows ?? emptyCareerRows();
+  const rows = input.careerRows ?? emptyCareerRows(input.asOf ?? currentMonthInSeoul());
   const pack = buildCareerPack(rows, {
     asOf: input.asOf,
     deliverableProjectIds: input.deliverableProjectIds ? new Set(input.deliverableProjectIds) : undefined,
@@ -85,12 +95,13 @@ export function buildInterviewBase(input: InterviewBaseInput): InterviewBase {
   const jdNumbers = buildAllowedNumbers({ texts: jd.numberTexts });
 
   const jdNorm = normalizeForMatch(jd.numberTexts.join(" ")).text;
-  const desired = normalizeForMatch(rows.profile?.desired_job_title ?? "").text;
+  // (v4.12, SD-6) 고유명사 검사 예외는 **JD에 있는 말만**이다 — "희망 직무에 있는
+  // 말" 예외는 프로필이 입력에서 빠지면서 사라졌다 (AI spec 4.1 / AI-05).
   const terms = new Set<string>();
   const addTerm = (value: string | null | undefined) => {
     const t = normalizeForMatch(value ?? "").text;
     if (t.length < 2 || /^\d+$/.test(t)) return;
-    if (jdNorm.includes(t) || (desired && desired.includes(t))) return;
+    if (jdNorm.includes(t)) return;
     terms.add(t);
   };
   for (const e of pack.aliases.values()) {

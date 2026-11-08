@@ -151,8 +151,8 @@ describe("AI-05 job interview", () => {
     const bad = [
       // requirement_fit premised on a situation only (팀 맥락일 수 있음).
       q({ source_kind: "requirement_fit", text: "장애 대응이 사람마다 달랐던 상황에서 어떤 원칙을 세우셨나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), det(ctx, IDS.prjPay, "situation", "피크 시간 결제 승인 API 응답이 1.2초까지 늘었다")] }),
-      // requirement_fit on the profile's wish only (A10: not a career fact → no experience evidence).
-      q({ source_kind: "requirement_fit", text: "백엔드 개발자로서 장애 대응 요건을 어떻게 충족하시나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), { source_type: "profile", ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }] }),
+      // requirement_fit on a profile source only — (v4.12, SD-6) that source type is gone.
+      q({ source_kind: "requirement_fit", text: "백엔드 개발자로서 장애 대응 요건을 어떻게 충족하시나요?", target_requirement_refs: [R(ctx, 3)], evidence: [req(3), { source_type: "profile" as never, ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" }] }),
       // gap_probe citing a standalone project's role (담당 업무 = scope, not a fact) as its "similar experience".
       q({ source_kind: "gap_probe", anchor: "jd", text: "1인 개발 경험을 메시지 큐 운영에 어떻게 연결하시겠어요?", target_gap_requirement_refs: [R(ctx, 8)], evidence: [req(8), det(ctx, IDS.prjSide, "role", "1인 개발 (기획·백엔드)")] }),
       // gap_probe naming a project with no fact evidence at all.
@@ -162,7 +162,10 @@ describe("AI-05 job interview", () => {
     ];
     const { saved, result } = await gen(ctx, [{ json: ai05Output("job", [...bad, ...set]) }]);
     expect(result).toMatchObject({ dropped: 5, remaining: 0 });
-    expect(result.report).toMatchObject({ dropped_fact_premise_unsupported: 4, dropped_anchor_evidence_missing: 1 });
+    // (v4.12, SD-6) The profile-wish question now fails the output schema (the
+    // `profile` source type left the model-output enum), so it is dropped as a
+    // schema violation instead of "anchor evidence missing" — stricter either way.
+    expect(result.report).toMatchObject({ dropped_fact_premise_unsupported: 4, dropped_schema: 1 });
     expect(saved.map((s) => s.question_text)).toEqual(set.map((x) => x.text));
     // The jobSet gap_probe ("…경험이 데이터에 보이지 않는데…", anchor jd, no career evidence) premises nothing → saved.
     expect(saved[3]).toMatchObject({ source_kind: "gap_probe", anchor: "jd" });

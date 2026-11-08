@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Shared pieces for the A2 career forms (S-04 프로필; design-system 5.3 편집기): section cards,
+ * Shared pieces for the A2 career forms (design-system 5.3 편집기): section cards,
  * labelled inputs, and the autosave wiring that creates the row on the first save.
  */
 import * as React from "react"

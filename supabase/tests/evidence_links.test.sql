@@ -76,7 +76,6 @@ insert into t_links values
   ('e0000000-0000-0000-0000-000000000005', 'project', 'a0000000-3333-0000-0000-000000000002', 'description', '사이드 내용', null),
   ('e0000000-0000-0000-0000-000000000006', 'skill', 'a0000000-6666-0000-0000-000000000001', 'name', null, null),
   ('e0000000-0000-0000-0000-000000000007', 'project', 'a0000000-3333-0000-0000-000000000001', 'action', '인덱스 재설계', null),
-  ('e0000000-0000-0000-0000-000000000008', 'profile', 'a0000000-0000-0000-0000-000000000001', 'desired_job_title', null, null),
   ('e0000000-0000-0000-0000-000000000009', 'jd_sentence', 'f0000000-0000-0000-0000-000000000001', null, '결제 경험',
    '{"sid":"S1","start":0,"end":5}');
 
@@ -87,10 +86,34 @@ select lives_ok($$insert into public.evidence_links
                          'strengths.0', 0, source_type, source_id, source_field, quote, now(), 'label', source_locator
                     from t_links$$,
                 'owner (result RPC path) inserts links for each source type');
-select is((select count(*)::int from public.evidence_links where source_deleted_at is null), 9,
+select is((select count(*)::int from public.evidence_links
+            where source_deleted_at is null and user_id = 'a0000000-0000-0000-0000-000000000001'), 8,
           'all links live (sources exist)');
-select is((select count(*)::int from public.evidence_links where user_id = 'a0000000-0000-0000-0000-000000000001'), 9,
+select is((select count(*)::int from public.evidence_links where user_id = 'a0000000-0000-0000-0000-000000000001'), 8,
           'user_id defaults to JWT sub');
+
+-- R13 (DM v4.12 §2.8, SD-A19): source_type = 'profile' — new rows refused, existing rows untouched.
+select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+                   values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'profile', 'a0000000-0000-0000-0000-000000000001', 'desired_job_title')$$,
+                 'P0001', 'invalid_evidence_source', 'a new profile evidence row is refused (SD-A19)');
+select ok((select pg_get_constraintdef(oid) like '%''profile''%'
+            from pg_constraint where conname = 'evidence_links_source_type_check'),
+          'the source_type CHECK still lists profile (existing rows stay valid)');
+-- A legacy row, as it exists in the DB from before R13 (insert with the guard off, like a pre-R13 write).
+alter table public.evidence_links disable trigger evidence_links_check_source;
+insert into public.evidence_links (id, application_project_id, owner_type, owner_id, item_key, sort_order,
+                                   source_type, source_id, source_field, quote, source_snapshot_at, source_label)
+values ('e0000000-0000-0000-0000-00000000000f', 'c0000000-0000-0000-0000-000000000001', 'insight',
+        'd0000000-0000-0000-0000-000000000001', 'strengths.9', 9, 'profile',
+        'a0000000-0000-0000-0000-000000000001', 'desired_job_title', null, now(), '기본 프로필');
+alter table public.evidence_links enable trigger evidence_links_check_source;
+select is((select source_label from public.evidence_links
+            where id = 'e0000000-0000-0000-0000-00000000000f'), '기본 프로필',
+          'an existing profile row is still readable');
+select lives_ok($$update public.evidence_links set source_label = '기본 프로필 (구)'
+                   where id = 'e0000000-0000-0000-0000-00000000000f'$$,
+                'an existing profile row is still updatable (no backfill, no delete)');
+delete from public.evidence_links where id = 'e0000000-0000-0000-0000-00000000000f';
 
 -- CHECKs
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
@@ -158,7 +181,7 @@ reset role;
 -- authenticated: select own, no writes.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is((select count(*)::int from public.evidence_links), 10, 'A sees own links');
+select is((select count(*)::int from public.evidence_links), 9, 'A sees own links');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
                  '42501', null, 'user cannot insert links');

@@ -3,6 +3,7 @@
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
 - 최종 정리: 2026-11-05(열린 결정 일괄 확정 OD-* — 결정 대기 0건)
+- **2026-11-08 개정: S-44 산출물 본문 칸 높이 고정 해제 DH-1** (사용자 확정, 코드 먼저 2026-11-05 — PR #56, `_workspace/00_input/planning-decisions-s44-body-height.md`): 산출물 상세(S-44)의 본문 칸은 높이를 화면에 고정하지 않는다 — 내용에 따라 자라고 칸 안에서 따로 스크롤하지 않으며, 넘치는 만큼은 본문 영역이 스크롤한다. UP-9의 "400px에서 칸 안 스크롤"은 S-10 STAR 칸에만 남는다. UX v5.17, design-system v5.10, [decisions.md](decisions.md) 3.22·4.16 (PRD·AI·데이터 모델 변경 없음, 리뷰 없음 — 한 행 수정)
 - **2026-11-05 개정: UI 40 런 기획 확인 U40-1·U40-2** (사용자 확정, `_workspace/00_input/planning-decisions-ui40-questions.md`): L-02(S-10·S-44) 입력 보존을 로그아웃·탈퇴 때 지우고, 다른 곳에서 더 새로 저장된 행에는 복원하지 않는다(UI QA UQ-421 — 예전 보존본이 새 저장을 조용히 덮어쓰던 문제). UX v5.16, [decisions.md](decisions.md) 3.21·4.15. 작은 변경이라 리더가 직접 고쳤다
 - **2026-11-05 개정: UI 38 런 기획 확인 U38-1~U38-3** (사용자 확정, `_workspace/00_input/planning-decisions-ui38-questions.md`): 자기소개서 삭제 토스트에 이름("'{이름}' 자기소개서를 삭제했어요", U36-7 겹침 규칙), S-13 페이지 제목 "자기소개서 관리"(명세를 구현에 맞춤), S-16 데이터 부족 안내 "프로젝트·STAR·산출물을 더 채우면 더 정확해져요". UX v5.15, [decisions.md](decisions.md) 3.20·4.14. 작은 변경이라 리더가 직접 고쳤다
 - **2026-11-05 개정: UI 36 런 기획 확인 U36-1~U36-5** (사용자 확정, `_workspace/00_input/planning-decisions-ui36-questions.md`): "자기소개서 삭제됨" 면접은 `/interviews/{sessionId}/result`, CR-23 화면 용어("자기소개서"·"자소서 문항 답변")를 코드 전체에 적용, 답 없는 메시지 줄은 구현 그대로, C-22는 버튼 드롭다운 메뉴, 처리방침 1번·이용약관 2조에서도 "정량 성과" 삭제, AI 기능 이름의 문항 서류 = "자소서 문항 답변", S-31 제목 "자기소개서" 겹침 생략, 법무 문서 용어는 유지(U36-6~U36-8). UX v5.14, [decisions.md](decisions.md) 3.19·4.13
@@ -26,7 +27,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
 | [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.13 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.16 | ux-planner |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.17 | ux-planner |
 | [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.11 | ai-feature-designer |
 | [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.11 | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |

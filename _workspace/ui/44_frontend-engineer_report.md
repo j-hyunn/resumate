@@ -1,6 +1,6 @@
 # 44 런 frontend-engineer 보고 — AI 모의 면접 MVP 제외 (A0 + A1·A3·A4 면접 접점)
 
-- 작성: 2026-11-08 · 기준: PRD v4.16 / 플로우 v5.19 / AI v4.14 / DM v4.14, decisions 4.20 UI 1~7, R14 `02_api_notes.md` "UI 요청"
+- 작성: 2026-11-08 · 기준: PRD v4.16 / 플로우 v5.19 / AI v4.14 / DM v4.14, decisions 4.21 UI 1~7, R14 `02_api_notes.md` "UI 요청"
 - 작업 트리: `.claude/worktrees/remove-mock-interview-8577ac` (커밋 안 함)
 
 ## 지운 파일 (`git rm`, 22개)

@@ -2,7 +2,7 @@
 
 - 작성: 2026-11-08 (리더)
 - 요청: 사용자 "모의 면접은 MVP에서 빼기로 했어. 관련 코드, 관련 문서들 전부 삭제해줘."
-- 기획: PRD v4.16 / 플로우 v5.19 / AI v4.14 / 데이터 모델 v4.14. **UI 후속 목록 = `docs/planning/decisions.md` 4.20 "UI" 표 1~7**, 화면별 상세는 `docs/planning/02-user-flows.md`의 `(v5.19, RM-n)` 표시와 5.1m
+- 기획: PRD v4.16 / 플로우 v5.19 / AI v4.14 / 데이터 모델 v4.14. **UI 후속 목록 = `docs/planning/decisions.md` 4.21 "UI" 표 1~7**, 화면별 상세는 `docs/planning/02-user-flows.md`의 `(v5.19, RM-n)` 표시와 5.1m
 - 백엔드: **R14 완료(QA 진행 중)** — 면접 서버 코드·계약·데이터 계층 삭제. **입력 = `_workspace/backend/R14/02_api_notes.md` "UI 요청"**(지운·바뀐 export → 쓰는 UI 파일:줄, 통째로 지울 면접 화면 파일 목록). 바뀐 계약: `APPLICATION_STAGES` 4값(`before_apply`·`document`·`assignment`·`closed`), `INTERVIEW_STAGES` 없음, readiness `features` = {insight, draft}, `move_application_stage` 반환에 `interviewPrompt` 없음, 삭제 영향 키에서 면접 제거, 사용량 표시 5행, return_target 3값, 진행 단계 `evaluate`/`summarize`/`score`/`complete` 없음, 자리 표시 5종(`[사례 입력 필요]` 없음)
 - 경과 파일: `src/lib/data/interview-grading.ts`는 `src/lib/mock/grading.ts`가 import해서 남겨 둔 것 — **이번 런에서 `lib/mock/grading.ts`와 함께 삭제**한다(데이터 계층 파일이지만 리더 허용)
 

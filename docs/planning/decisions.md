@@ -2,7 +2,7 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: **2026-11-08** (**AI 모의 면접 MVP 제외 RM-1~RM-5 — 3.26·4.20**, 이 사이클이 만든 결정 대기 없음. 이전: 자기소개서 작성의 채팅형 전환 CL-* — 3.25·4.19. main의 백엔드 R13 릴리스 결정(3.23)·UI 42 런 확인(3.24)·기획 정정 D1~D10(4.17)·UI 42 후속(4.18) 위로 리베이스했다. **1장 결정 대기 1건** — CL-Q1. **CL-Q2는 2026-11-08에 (a)로 확정**(3.25). **SD-Q1은 3.23 R13-U3로 닫혔다**)
+- 최종 갱신: **2026-11-08** (**AI 모의 면접 MVP 제외 RM-1~RM-5 — 3.27·4.21**, 이 사이클이 만든 결정 대기 없음. 이전: 자기소개서 작성의 채팅형 전환 CL-* — 3.25·4.19. main의 백엔드 R13 릴리스 결정(3.23)·UI 42 런 확인(3.24)·기획 정정 D1~D10(4.17)·UI 42 후속(4.18) 위로 리베이스했다. **1장 결정 대기 1건** — CL-Q1. **CL-Q2는 2026-11-08에 (a)로 확정**(3.25). **SD-Q1은 3.23 R13-U3로 닫혔다**)
 - 2026-11-08 입력(AI 모의 면접 MVP 제외): `_workspace/00_input/planning-decisions-remove-mock-interview.md`(사용자 확정 RM-1~RM-3, 후속 확정 RM-4·RM-5, 리더 판단 RM-A1·A2·A4·A5 — RM-A3은 RM-4로 대체). 요청·회신 `_workspace/remove-mock-interview/{prd,ux,ai}_requests.md`·`dm_replies.md`, 리뷰 `_workspace/03_spec-reviewer_review_remove-mock-interview.md`(2라운드, R-RM-1~9 전부 해소). 반영 문서: PRD v4.16, UX v5.19, AI v4.14, DM v4.14, `docs/legal/` 4종(2026-11-08판)
 - 2026-11-05 입력(자기소개서 작성 채팅형): `_workspace/00_input/planning-decisions-cover-letter-chat.md`(사용자 확정 CL-1~CL-8, 2차 확정 CL-9·CL-10, 리더 판단 CL-A1~CL-A10, 미룬 결정 CL-Q1·CL-Q2). 사전 조사 `_workspace/cover-letter-chat/touchpoints_{prd,ux,ai,dm}.md`(편집 자리 245개), 회신 `dm_replies.md`(39건), 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). 반영 문서: PRD v4.15, UX v5.18, AI v4.13, DM v4.13
 - 2026-11-05 입력(열린 결정 일괄): `_workspace/00_input/open-decisions-2026-11-04.md`(통합 목록 48행, 원본 질문 출처·닫힌 근거), `_workspace/00_input/planning-decisions-open-decisions.md`(사용자 확정 OD-*), 리뷰 `_workspace/03_spec-reviewer_review_open-decisions.md`. 반영 문서: PRD v4.13, UX v5.13, AI v4.11, DM v4.11, `docs/legal/cross-border-transfer.md` 개정안 2026-11-05
@@ -573,7 +573,17 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 **이 사이클이 폐기한 기존 결정**: `A4`(초안 실패 시 블록 미보존 — `structured_draft` 위에서 다시 씀) · `A13`(자리 이동) · **`A17`**(서류 톤 `concise`/`detailed`) · `A21`(생성 직후 안내 미저장 — 대화 기록으로 해소) · **`A23`**(AI-11 실패 시 직접 고름) · **`Q53-4`**(AI-11 자동 실행 예외) · **`Q53-7`**(경력기술서 `composing`) · **`F-DOC-05`**(다시 쓰기 지시, Should → F-DOC-11 흡수). 백엔드 후속 ★ A 결정분은 A23 폐기로 13건 → **12건**.
 
-### 3.26 사용자 확정 (2026-11-08, AI 모의 면접 MVP 제외 — 사이클 remove-mock-interview)
+### 3.26 사용자 확정 (2026-11-08, S-44 본문 칸 높이 — 사이클 s44-body-height)
+
+계기: 사용자 요청 "독립 프로젝트에서 산출물 작성할 때 작성 text area 높이 화면에 고정으로 두지마"(2026-11-05) + "기획도 반영"(2026-11-08). 원문 `_workspace/00_input/planning-decisions-s44-body-height.md`. 반영: UX v5.19(PRD·AI·DM 변경 없음) · design-system v5.10. 코드는 먼저 구현됐다(PR #56, 머지 2026-11-05, `_workspace/ui/41_s44-body-height.md`).
+
+| ID | 결정 | 권고와 다름 |
+|----|------|-------------|
+| DH-1 | S-44 산출물 본문 칸은 높이를 화면에 고정하지 않는다 — 내용에 따라 자라고 칸 안에서 따로 스크롤하지 않으며(최소 높이만 유지), 넘치는 만큼은 본문 영역(L-02 왼쪽 입력 영역)이 스크롤한다. UP-9의 "400px에서 멈추고 칸 안 스크롤"은 **S-10 STAR 칸에만** 남는다 | |
+
+비고: S-10 STAR 칸을 같이 풀 것인지는 사용자 요청 범위 밖이라 그대로 뒀다(필요해지면 같은 사이클에 DH-2로 추가).
+
+### 3.27 사용자 확정 (2026-11-08, AI 모의 면접 MVP 제외 — 사이클 remove-mock-interview)
 
 입력: `_workspace/00_input/planning-decisions-remove-mock-interview.md`. 리뷰 `_workspace/03_spec-reviewer_review_remove-mock-interview.md`(2라운드, R-RM-1~9 — Major 2·Minor 7 — 전부 해소). 반영: PRD v4.16, UX v5.19, AI v4.14, DM v4.14. 제품은 **커리어 데이터 관리 + 지원 프로젝트(JD 인사이트·서류) 2대 축**이 된다.
 
@@ -839,7 +849,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 - **UI** (resumate-ui): UI42-5 OpenAI 화면 표기 GPT 통일, UI42-1~4 코드 주석의 `[UI-가정]` → 확정 표시 — **반영 2026-11-06 (UI 42 런)**. UI43-1~4는 43 런 구현 그대로(코드 변경 없음, 주석 확정 표시만)
 - **법무·운영**: UI42-7·UI42-8 **반영 완료 2026-11-08** (사용자 확인) — 처리방침 개정판을 `docs/legal/privacy-policy.md`(버전·시행 2026-11-08)와 앱 본문 `POLICY_DOCUMENTS.privacy`에, AI 데이터 처리 본문을 새 원문 `docs/legal/ai-data-use.md`와 `AI_DATA_USE_SECTIONS`에 넣었다. **학점 모순은 "본문을 고치는 쪽"으로 확정**(사용자 2026-11-08): 최종 학력의 학점 칸은 그대로 두고 처리방침을 "이용자가 직접 적을 때만 보관, 성적 증명·과목별 성적은 받지 않음"으로 바꿨다. 시행일 2026-11-08, `requires_reconsent = false`(초안 권고대로). **법무(변호사) 검토는 여전히 출시 전 권장**으로 남는다
-- **백엔드**: `policy_versions`에 `privacy`·`ai_data_use` 2026-11-08 행 — 마이그레이션 `20261113002900` 작성·로컬 적용 완료, **원격 미반영**(앱 본문과 같은 머지로 나가야 한다). AI 데이터 처리 화면의 공급자별 사실은 계속 `ai_disclosures`가 원천이라 그 조항은 문서 끝에 붙는다(원문 5번 자리와 다름)
+- **백엔드**: `policy_versions`에 `privacy`·`ai_data_use` 2026-11-08 행 — 마이그레이션 `20261113002900` **원격 반영·시행 2026-11-08**(PR #62 머지 `9ffd881` 운영 배포 뒤 — 순서대로). AI 데이터 처리 화면의 공급자별 사실은 계속 `ai_disclosures`가 원천이라 그 조항은 문서 끝에 붙는다(원문 5번 자리와 다름)
 
 ### 4.19 자기소개서 작성 채팅형 전환 후속 (2026-11-05, CL-*) ★
 
@@ -886,9 +896,14 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 **남은 사용자 결정**: **CL-Q1 1건**(1장). 문구·추정치만 바뀌므로 구현을 막지 않는다. **CL-Q2는 2026-11-08에 (a)로 확정**되어 drop 단계가 풀렸다(3.25 후속 확정).
 
-### 4.20 AI 모의 면접 MVP 제외 후속 (2026-11-08, RM-*) ★
+### 4.20 S-44 본문 칸 높이 후속 (2026-11-08, DH-1)
 
-> **진행 (2026-11-08)**: 백엔드 1~6 **완료** — 슬라이스 R14(`_workspace/backend/R14/04_summary.md`), UI 1~7 **완료** — 44 런(`_workspace/ui/44_frontend-engineer_report.md`, QA `44_ui-qa_review.md` 2라운드). **원격 미반영** — 사용자가 `supabase db push` 뒤 병합. 브라우저 클릭 확인은 미실시(HTTP 확인만).
+- **UI** (resumate-ui): `DocTextarea` `grow` 옵션 + S-44 본문 적용, 근거 구간 강조·AI 채우기 스크롤 보정 — **반영 2026-11-05 (UI 41 런, PR #56 머지)**
+- **백엔드**: 없음(저장값·20,000자 검증·정규화 변경 없음)
+
+### 4.21 AI 모의 면접 MVP 제외 후속 (2026-11-08, RM-*) ★
+
+> **진행 (2026-11-08)**: 백엔드 1~6 **완료** — 슬라이스 R14(`_workspace/backend/R14/04_summary.md`), UI 1~7 **완료** — 44 런(`_workspace/ui/44_frontend-engineer_report.md`, QA `44_ui-qa_review.md` 2라운드). **DB 원격 반영 2026-11-08**(`20261113002950`·`20261113003000`, 사용자 요청 "배포 순서대로") → PR #64 병합으로 코드 배포. 브라우저 클릭 확인은 미실시(HTTP 확인만).
 
 **이 사이클은 기획·법무 문서만 고쳤다.** 아래가 `resumate-backend`와 `resumate-ui`가 Phase 0에서 읽을 목록이다. **★ = 이미 구현된 것을 바꿔야 함.** 상세(단계별 SQL 순서, 함수 44개 이름, 교체 RPC의 현재 정의 파일)는 데이터 모델 [11.9](04-data-model.md).
 

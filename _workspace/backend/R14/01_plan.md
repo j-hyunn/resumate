@@ -1,7 +1,7 @@
 # R14 — AI 모의 면접 MVP 제외 (remove-mock-interview, RM-1~RM-5)
 
 - 작성: 2026-11-08 (리더)
-- 기획 근거: `docs/planning/decisions.md` 3.26·**4.20**, `docs/planning/04-data-model.md` **11.9**(단계별 SQL 순서·함수 이름·교체 RPC의 현재 정의 파일), 결정 입력 `_workspace/00_input/planning-decisions-remove-mock-interview.md`. 문서: PRD v4.16 / UX v5.19 / AI v4.14 / DM v4.14
+- 기획 근거: `docs/planning/decisions.md` 3.27·**4.21**, `docs/planning/04-data-model.md` **11.9**(단계별 SQL 순서·함수 이름·교체 RPC의 현재 정의 파일), 결정 입력 `_workspace/00_input/planning-decisions-remove-mock-interview.md`. 문서: PRD v4.16 / UX v5.19 / AI v4.14 / DM v4.14
 - 법무 원문: `docs/legal/{privacy-policy,terms-of-service,cross-border-transfer,ai-data-use}.md` (2026-11-08판, 리더가 고침)
 
 ## 1. 범위

@@ -1,6 +1,6 @@
 # UI QA — 44 런 AI 모의 면접 MVP 제외 (라운드 1)
 
-- 작성: 2026-11-08 · ui-qa · 기준: PRD v4.16 / 플로우 v5.19 / AI v4.14 / DM v4.14, decisions 4.20 UI 1~7, R14 `02_api_notes.md` "UI 요청"
+- 작성: 2026-11-08 · ui-qa · 기준: PRD v4.16 / 플로우 v5.19 / AI v4.14 / DM v4.14, decisions 4.21 UI 1~7, R14 `02_api_notes.md` "UI 요청"
 - 입력: `44_brief_remove-mock-interview.md`, `44_frontend-engineer_report.md`, 작업 트리 미커밋 diff
 
 ## 요약 — Critical 0 / Major 1 / Minor 5

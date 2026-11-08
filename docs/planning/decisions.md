@@ -1022,7 +1022,7 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | 4 | ux_terminology B-1~B-3 | `docs/ui/screen-status.md` 112~116·136~137·57~58행 — **닫힌 항목이 열린 문장으로 남아 있다**(코드 라벨은 이미 "자소서 문항 답변"으로 통일됨) | UI 하네스 몫 |
 | 5 | ux_terminology B-7 | `docs/ui/design-system.md` 2373~2420행 — 폐기된 S-19·C-11 체크 트리·`drafts.status` 5값을 아직 묘사(v5.18 미반영) | UI 하네스 몫 |
 
-~~**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md` 용어집에 해소 규칙 1구절(ux_terminology A-4) — CHANGELOG와 함께, 미반영~~ **반영 2026-11-08** — product-context(원본·Codex 사본)를 RM·CF 기준으로 고침(축 2개·메뉴 3개·서류 1종·용어집), `.claude/harness/CHANGELOG.md` 2026-11-08 행. 다른 하네스 파일 16곳의 설명·트리거 문구는 별도 점검.
+~~**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md` 용어집에 해소 규칙 1구절(ux_terminology A-4) — CHANGELOG와 함께, 미반영~~ **반영 2026-11-08** — product-context(원본·Codex 사본)를 RM·CF 기준으로 고침(축 2개·메뉴 3개·서류 1종·용어집), `.claude/harness/CHANGELOG.md` 2026-11-08 행. 다른 하네스 파일(19개 × 원본·사본)의 설명·트리거 문구도 같은 날 정리(CHANGELOG 2026-11-08).
 
 ### 4.23 자기소개서 관리 흐름 재설계 후속 (2026-11-08, CF-*) ★
 
@@ -1062,4 +1062,4 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | 8 | R-CF-2·15·12·8·18 | 라운드 1 반영분: 턴 요청에 `formSnapshot.questions[].answer_title` 전송 · ~~S-13 경력기술서 초안용 안내 문장~~(CF-M1로 없음)("경력기술서는 더 이상 제공하지 않는 서류예요 …") · C-05 영향 줄 "자소서"(수 없음) · 첫 턴 문구 문항 수 분기 · ~~글자 수 제한이 빈 이관 문항 처리~~(CF-M1로 이관 행 없음) |
 
 **출시 전 법무 확인**: 사람인·잡코리아 이용약관의 자동 수집 제한(CF-10, PRD NFR-PRV-12).
-~~**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md`에 경력기술서·P2 서술이 남아 있다(4.22 용어 항목과 함께) — 미반영~~ **반영 2026-11-08** — product-context(원본·Codex 사본)를 RM·CF 기준으로 고침(축 2개·메뉴 3개·서류 1종·용어집), `.claude/harness/CHANGELOG.md` 2026-11-08 행. 다른 하네스 파일 16곳의 설명·트리거 문구는 별도 점검.
+~~**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md`에 경력기술서·P2 서술이 남아 있다(4.22 용어 항목과 함께) — 미반영~~ **반영 2026-11-08** — product-context(원본·Codex 사본)를 RM·CF 기준으로 고침(축 2개·메뉴 3개·서류 1종·용어집), `.claude/harness/CHANGELOG.md` 2026-11-08 행. 다른 하네스 파일(19개 × 원본·사본)의 설명·트리거 문구도 같은 날 정리(CHANGELOG 2026-11-08).

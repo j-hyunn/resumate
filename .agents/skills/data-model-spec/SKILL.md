@@ -1,6 +1,6 @@
 ---
 name: data-model-spec
-description: "Guide for writing and revising the Resumate data model planning document. Covers domain entities (profiles, experiences, educations, projects with STAR, deliverables, skills, writing chats, application projects with JDs, insights, drafts, mock interview sessions, AI jobs, evidence links, provider keys and consents, usage records) and relationships, Supabase Postgres table drafts, RLS policy direction, Storage layout, AI output storage and versioning, deletion policy, and the API boundary draft. Use for ERDs, data models, schema design, table structure, RLS design, and data model revisions. Korean triggers: ERD, 데이터 모델, 스키마 설계, 테이블 구조, RLS 설계, 데이터 모델 수정. Not for applying migrations or running SQL (documents only)."
+description: "Guide for writing and revising the Resumate data model planning document. Covers domain entities (profiles, experiences, educations, projects with STAR, deliverables, skills, writing chats, application projects with JDs, insights, the 자기소개서 document (`application_documents`), AI jobs, evidence links, provider keys and consents, usage records) and relationships, Supabase Postgres table drafts, RLS policy direction, Storage layout, AI output storage and versioning, deletion policy, and the API boundary draft. Use for ERDs, data models, schema design, table structure, RLS design, and data model revisions. Korean triggers: ERD, 데이터 모델, 스키마 설계, 테이블 구조, RLS 설계, 데이터 모델 수정. Not for applying migrations or running SQL (documents only)."
 ---
 
 # Data Model Spec
@@ -33,7 +33,7 @@ Because the schema is live:
 - AI outputs: columns if screens query or filter by field; `jsonb` + `schema_version` if rendered as a whole. If regeneration history is needed, append rows instead of overwriting.
 - Evidence references the source entity's id. Decide how evidence is displayed when the source is deleted.
 - Files: Storage bucket + path convention (`{user_id}/...`) + bucket policy. Parsed results are stored in tables.
-- Ordered items (experience ordering, interview turns): specify the ordering column.
+- Ordered items (experience ordering, 자기소개서 questions): specify the ordering column.
 - Add embeddings (pgvector) only if ai-feature-designer chose RAG.
 
 ## Deletion & retention policy

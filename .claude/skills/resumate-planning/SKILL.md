@@ -1,6 +1,6 @@
 ---
 name: resumate-planning
-description: "Orchestrator for the Resumate (AI career management service) planning team. Coordinates a five-member team — product planner, UX, AI feature, data, consistency reviewer — to produce the PRD, user flows & screen specs, AI feature specs, data model, and decision log under docs/planning/. Always use when starting or refining planning, gathering requirements, defining the MVP, writing feature specs, or planning career data, application projects (JD insights, documents), the Resumate AI writing chat, BYOK AI connection, or mock interviews. Follow-ups: always use for planning revisions, applying user decisions (decision cycles such as CR-x / PA-x), turning a Figma design into planning decisions, applying backend spec gaps or UI QA questions to the documents, partial re-runs (e.g. only the AI interview part, only the data model), re-reviews, and improving previous planning output. Korean triggers: 기획 시작, 기획 구체화, 요구사항 정리, 서비스 설계, MVP 정의, 기능 명세, 기획 수정, 보완, 업데이트, 다시 실행, 결정 사항 반영, 피그마 기획 반영, spec-gaps 반영, UI 기획 질문 반영, 기획 재검토, 'AI 면접 부분만 다시', '데이터 모델만 수정'. Not for implementation (writing code, DB migrations, deployment — resumate-ui / resumate-backend)."
+description: "Orchestrator for the Resumate (AI career management service) planning team. Coordinates a five-member team — product planner, UX, AI feature, data, consistency reviewer — to produce the PRD, user flows & screen specs, AI feature specs, data model, and decision log under docs/planning/. Always use when starting or refining planning, gathering requirements, defining the MVP, writing feature specs, or planning career data, application projects (JD insights, documents), the Resumate AI writing chat, the 자기소개서 writing flow, or BYOK AI connection. Follow-ups: always use for planning revisions, applying user decisions (decision cycles such as CR-x / PA-x), turning a Figma design into planning decisions, applying backend spec gaps or UI QA questions to the documents, partial re-runs (e.g. only the 자기소개서 writing part, only the data model), re-reviews, and improving previous planning output. Korean triggers: 기획 시작, 기획 구체화, 요구사항 정리, 서비스 설계, MVP 정의, 기능 명세, 기획 수정, 보완, 업데이트, 다시 실행, 결정 사항 반영, 피그마 기획 반영, spec-gaps 반영, UI 기획 질문 반영, 기획 재검토, '자기소개서 작성 부분만 다시', '데이터 모델만 수정'. Not for implementation (writing code, DB migrations, deployment — resumate-ui / resumate-backend)."
 ---
 
 # Resumate Planning Orchestrator
@@ -38,7 +38,7 @@ All paths are relative to the repository root (`/Users/jehyun/Resumate`).
 2. Branch:
    - **Neither exists** → initial run. Start at Phase 1.
    - **Exists + a set of decisions or design input to apply** (the user settled questions, gave a Figma design, or asked to apply backend `spec-gaps.md` / UI 기획 확인 필요) → **decision cycle** (below). This is the usual case now.
-   - **Exists + partial revision request** (e.g. "only redo the mock interview part") → partial re-run. Use the table below to pick who to re-invoke; run only that part of Phase 3 + Phase 4 (relevant boundaries only).
+   - **Exists + partial revision request** (e.g. "only redo the 자기소개서 writing part") → partial re-run. Use the table below to pick who to re-invoke; run only that part of Phase 3 + Phase 4 (relevant boundaries only).
    - **Exists + re-review only** ("기획 재검토") → Phase 4 alone on the named documents/boundaries, with a new cycle slug for the review file.
    - **Exists + new planning direction altogether** → new run. Move the planning files in `_workspace/` (everything except `_workspace/backend/` and `_workspace/ui/`, which belong to the backend and UI harnesses) to `_workspace_{YYYYMMDD_HHMMSS}/`, then start at Phase 1. Before overwriting `docs/planning/` with new results, confirm git is tracking the changes.
 
@@ -46,7 +46,7 @@ All paths are relative to the repository root (`/Users/jehyun/Resumate`).
 |----------------|-----------|-------------|
 | Target, MVP scope, priorities | product-planner | every affected teammate → reviewer |
 | Screens, flows | ux-planner | reviewer (B1, B2, B5, B6) |
-| AI features (chat, insights, interview, providers, etc.) | ai-feature-designer | data-architect if fields change → reviewer (B3–B6, B11) |
+| AI features (chat, insights, 자기소개서 drafting, providers, etc.) | ai-feature-designer | data-architect if fields change → reviewer (B3–B6, B11) |
 | Data structure | data-architect | reviewer (B2–B4, B7, B10) |
 | User answered a `[결정 필요]` | owner of the document the answer affects | reviewer (affected boundaries + B12) |
 
@@ -71,8 +71,8 @@ On a partial re-run, include the existing deliverable paths and the user's feedb
 3. Ask the questions that most change the planning direction via `AskUserQuestion` (at most 4, in Korean; skip any already answered):
    - Primary target (new grads / experienced job changers / career switchers)
    - Career input method (manual entry / resume upload parsing / both)
-   - Mock interview format (text / voice / text first)
-   - Output scope (insights only / also 자기소개서 and 경력기술서 drafts)
+   - JD input (paste / posting URL / both)
+   - Output scope (insights only / also 자기소개서 drafts)
    If the user says "you decide", record the recommendation as `[가정]` and proceed.
 4. Append the answers to brief.md.
 
@@ -181,11 +181,11 @@ brief.md ─→ [product-planner] ─→ 01_prd
 8. Phase 6: report with the top decision-needed items
 
 ### Partial re-run flow
-1. User: "모의 면접은 음성으로 하기로 했어, 반영해줘"
-2. Phase 0: existing output + partial revision → re-invoke ai-feature-designer (existing ai-spec path + the decision)
-3. Audio storage fields needed → re-invoke data-architect; interview screens change → re-invoke ux-planner
+1. User: "자소서 문항을 최대 3개로 줄이기로 했어, 반영해줘"
+2. Phase 0: existing output + partial revision → re-invoke ux-planner (S-46 question setup, existing flows path + the decision)
+3. The question cap and save validation change → re-invoke data-architect; the per-turn draft math changes → re-invoke ai-feature-designer
 4. Reviewer re-checks only B2–B6 and B11
-5. Record "mock interview format: voice — settled (date)" in `decisions.md`
+5. Record "자소서 문항 최대 3개 — settled (date)" in `decisions.md`
 
 ### Decision cycle flow
 1. User: "피그마에 산출물 상세 화면 그렸어, 기획에 반영해줘" + Figma URL

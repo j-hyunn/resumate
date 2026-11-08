@@ -21,9 +21,9 @@ Source: `03-ai-features.md` C-6. Every AI-backed screen uses exactly one of thes
 
 | Mode | Used by | UI pattern |
 |------|---------|------------|
-| Sync | AI-01 JD extraction, AI-11 source ranking, AI-08 | Button → spinner on the button (ST-AI-SYNC) → result replaces content. Disable the trigger while running |
-| Async job | AI-02 insight, AI-05 interview questions, AI-06/07 evaluation | Start → receive `job_id` → C-03 progress (stage label from `ai_jobs.progress.stage`, `done/total`) → partial results as they arrive → complete. The user may leave; completion shows the in-app toast and a menu badge. Poll every 2s in the mock (Realtime later) |
-| Streaming (documents) | AI-03 career description, AI-04 cover letter | C-04, event order from the spec's C-04: `sources_selected` → `block_started` / `block_delta` / `block_completed` → (only when needed) `adjusting_length` → `validated` → `done` (or `error`). Streamed blocks are provisional; on `validated` replace the whole section (career description: the whole draft) and only then attach evidence chips, badges, and the post-generation notes. Show a stop button (sets `cancel_requested_at`) |
+| Sync | AI-01 JD extraction (also the add modal's preview run, CF-A17), AI-08; AI-11 source ranking only in the current S-17 code until it is removed (CF-1) | Button → spinner on the button (ST-AI-SYNC) → result replaces content. Disable the trigger while running |
+| Async job | AI-02 insight | Start → receive `job_id` → C-03 progress (stage label from `ai_jobs.progress.stage`, `done/total`) → partial results as they arrive → complete. The user may leave; completion shows the in-app toast and a menu badge. Poll every 2s in the mock (Realtime later) |
+| Streaming (documents) | AI-04 cover letter in the current S-19 code (AI-03 removed by CF-1; document writing moves into the S-46 chat — decisions 4.23) | C-04, event order from the spec's C-04: `sources_selected` → `block_started` / `block_delta` / `block_completed` → (only when needed) `adjusting_length` → `validated` → `done` (or `error`). Streamed blocks are provisional; on `validated` replace the whole section (career description: the whole draft) and only then attach evidence chips, badges, and the post-generation notes. Show a stop button (sets `cancel_requested_at`) |
 | Streaming (chat turn) | AI-12 project STAR chat (S-10 panel), AI-13 deliverable chat (S-44 panel) | Turn events, not blocks: `turn_started` → `reply_delta`* → `reply_done` → `draft_patch` → `draft_flags` → `turn_done` (or `error`); AI-13 draft turns add the body-draft card per the AI spec. The thread is rendered with the shadcn Chat components. [반영] fills the page form only; "저장하기" persists it. No message limit per month; only the 40-message cap per chat (greeting excluded) |
 
 Stage labels come from the C-03 table in the screen spec — map `stage` keys to that copy in one shared constant, not per screen.
@@ -52,7 +52,7 @@ The screen spec decides which model a screen uses; don't carry one screen's mode
 
 - **Page save (S-10, S-44, L-02):** the page opens empty for "new"; the row is created on the first "저장하기" or the first AI message (name required first — focus the name field instead of sending). "저장하기" sends the whole page with the expected version (`stale_write` → conflict UI) and the applied-proposal records; AI [반영] only fills the form. Leaving with unsaved changes asks first; input is preserved across the leave confirmation.
 - **Section / modal save (S-08 detail panels, C-24, career add/edit modal):** explicit save per section or modal; no autosave indicator.
-- **Autosave (other forms, cover-letter questions, interview answer sheets):** debounced (~800ms after the last change, plus on blur and before navigation) through the data layer; C-06 shows 저장 중… / 저장됨 HH:MM / 저장 실패 — 다시 시도. Warn before leaving only when a save failed or is in flight.
+- **Autosave (other forms, cover-letter questions):** debounced (~800ms after the last change, plus on blur and before navigation) through the data layer; C-06 shows 저장 중… / 저장됨 HH:MM / 저장 실패 — 다시 시도. Warn before leaving only when a save failed or is in flight.
 - Missing required fields → save anyway with `status = 'draft'` and show the draft note. Don't block saving on validation; validation decides draft vs complete.
 
 ## 5. Evidence chips and panel

@@ -1,6 +1,6 @@
 ---
 name: ai-feature-spec
-description: "Guide for writing and revising Resumate AI feature specs. LLM design for the Resumate AI writing chat (STAR and deliverable drafting), JD requirement extraction and fit insights, 경력기술서 / 자기소개서 drafts, career chat, and AI mock interviews (question generation, answer evaluation and feedback) — input context, processing steps, provider-neutral model tier (BYOK: OpenAI / Gemini / Claude), prompt strategy, canonical output JSON schema, evidence validation, evaluation criteria, token/latency estimates, provider error causes, guardrails. Use for AI feature design, prompt design direction, LLM architecture, deciding whether RAG is needed, interview evaluation rubrics, and AI spec revisions. Korean triggers: AI 기능 설계, 프롬프트 설계, LLM 구조, RAG 필요성, 면접 평가 루브릭, AI 명세 수정. Not for implementing prompt code or writing API integration code."
+description: "Guide for writing and revising Resumate AI feature specs. LLM design for the Resumate AI writing chat (STAR and deliverable drafting), JD requirement extraction and fit insights, the 자기소개서 drafting chat, and career chat — input context, processing steps, provider-neutral model tier (BYOK: OpenAI / Gemini / Claude), prompt strategy, canonical output JSON schema, evidence validation, evaluation criteria, token/latency estimates, provider error causes, guardrails. Use for AI feature design, prompt design direction, LLM architecture, deciding whether RAG is needed (planned, CL-Q1), and AI spec revisions. Korean triggers: AI 기능 설계, 프롬프트 설계, LLM 구조, RAG 필요성, 자기소개서 작성 대화, AI 명세 수정. Not for implementing prompt code or writing API integration code."
 ---
 
 # AI Feature Specs
@@ -46,10 +46,10 @@ Write cards in Korean; translate the field labels below. Keep JSON keys in Engli
 | Feature | Easy to miss |
 |---------|-------------|
 | Career structuring | Don't fill in numbers or dates that aren't in the source. Leave uncertain fields empty and ask the user to confirm |
-| JD analysis | Structure the JD itself first (required/preferred qualifications, role, seniority) and store it, so insights and interviews can reuse it |
+| JD analysis | Structure the JD itself first (required/preferred qualifications, role, seniority) and store it, so insights and 자기소개서 drafting can reuse it |
 | Insights & application direction | A fit score with no evidence loses trust. Output the matching evidence per requirement |
 | Career chat | Which context (full profile, a specific JD, previous insights) gets injected into the conversation, and how conversation length is managed |
-| Mock interview | Basis for each question (JD requirement / user's project), conditions for follow-ups, answer evaluation rubric, structure of the end-of-session report |
+| 자기소개서 drafting chat | At most 3 questions per draft turn (CL-10), the user's char limit per question, answer titles (CF-6), evidence per question; keep career-context assembly one swappable point with per-item source aliases so RAG can replace it (CL-Q1) |
 
 ## Quality bar
 

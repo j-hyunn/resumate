@@ -3,6 +3,7 @@
 AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원본과 리뷰 기록은 `_workspace/`에 있다.
 
 - 최종 정리: **2026-11-08**(자기소개서 작성 채팅형 전환 사이클 `cover-letter-chat`을 main의 UI 42·43 런 확인·백엔드 R13 위로 리베이스하고 **CL-Q2를 (a)로 확정** — **결정 대기 1건** CL-Q1)
+- **2026-11-08 개정: S-44 산출물 본문 칸 높이 고정 해제 DH-1** (사용자 확정, 코드 먼저 2026-11-05 — PR #56, `_workspace/00_input/planning-decisions-s44-body-height.md`): 산출물 상세(S-44)의 본문 칸은 높이를 화면에 고정하지 않는다 — 내용에 따라 자라고 칸 안에서 따로 스크롤하지 않으며, 넘치는 만큼은 본문 영역이 스크롤한다. UP-9의 "400px에서 칸 안 스크롤"은 S-10 STAR 칸에만 남는다. UX v5.19, design-system v5.10, [decisions.md](decisions.md) 3.26·4.20 (PRD·AI·데이터 모델 변경 없음, 리뷰 없음 — 한 행 수정)
 - **2026-11-05 개정: 자기소개서 작성의 채팅형 전환 CL-1~CL-10** (사용자 확정, `_workspace/00_input/planning-decisions-cover-letter-chat.md`): 3.22 SD-4가 미뤄 둔 재기획이다. 서류(경력기술서·자소서 문항 답변)를 "포함 항목 설정 → 한 번에 생성 → 초안 편집기"에서 **서류별 AI 작성 대화로 채워 가는 구조**로 바꿨다(CL-1·CL-2·CL-6). **S-45 경력기술서 작성 · S-46 자소서 문항 답변 작성**을 신설하고 **S-19 초안 편집기를 폐기**, S-17의 포함 항목 설정·문체 선택·생성 버튼 3개를 폐기, S-18은 자소서의 진입 단계로 남겼다(CL-7·CL-8). 데이터는 `structured_draft`로 모양을 통일하고 **`drafts`·`draft_sections`·`draft_section_sources`를 폐기**(파괴적 ★)하되, **서류 정본은 대화 밖 `application_documents` 한 행**이고 대화에는 제안만 담는다(**CL-9** — 세 담당이 모두 같은 모순을 보고해 2차로 확정했다). 자소서 초안 제안은 **한 턴에 최대 3문항**(CL-10, 함수 60초 한도). 근거(칩·V-*·AI-11)와 기존 초안은 그대로 살아 있다(CL-4·CL-5). PRD v4.15, UX v5.18, AI v4.13, DM v4.13, [decisions.md](decisions.md) 3.23·4.17, 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). **미룬 결정 2건 중 CL-Q2는 2026-11-08에 (a)로 확정**(운영자 덤프 + 관찰 기간 안내 뒤 drop, 선례 R13-U1 — F-DOC-04 (4)·S-17에 손실 안내를 넣었다). 남은 것은 **CL-Q1**(채팅형 토큰 비용 — 월 약 $2.0~2.3 vs 요약형 팩 약 $1.8) 1건
 - **2026-11-06 확정: UI 42 런 기획 확인 UI42-1~UI42-8** (사용자, [decisions.md](decisions.md) 3.24, UX v5.17b 5.1k): 셀렉트 "선택 안 함", 저장 충돌 내 입력 목록, AI 연결 안내 문구 정본, **OpenAI 화면 표기 전체 "GPT"**, 화면 테마는 계정 메뉴에만, **개인정보 처리방침 수집 항목 개정 초안·AI 데이터 처리 본문 초안(`docs/legal/drafts/`, 법무 확인 전)**. 처리방침 개정은 PR #58 머지 전(늦어도 같은 배포)에 시행해야 한다
 - **2026-11-05 정정: 백엔드 R13 구현 피드백 D1~D10** (`_workspace/backend/R13/03_backend-qa_report.md`): 새 설정 다이얼로그 구현(PR #58)이 드러낸 문장 오류만 고쳤다 — **새 결정·스키마 변경 없음**. 관심 직군·직무 쌍 상한 잔여 문장을 2쌍으로, `computed_total_months`의 서버 경로용 public 래퍼, `app_ai_writer` grant 목록, 프롬프트 버전 표를 구현 현행값(`common.v3`·`ai-02.*.v5`, AI-06 포함)으로, 최종 학력 컬럼 7개·연월 `'YYYY-MM'`, `ai_data_use` 잠정 값과 "확정 시 새 행" 규칙. DM v4.12a · AI v4.12a · UX v5.17a. 백엔드·UI 후속 없음([decisions.md](decisions.md) 4.17). 같은 날 R13 릴리스 결정 4건 확정(3.23): 컬럼 drop 승인, `ai_data_use` = `2026-11-05`, 개선 요청은 주소 없이 "준비 중", Supabase CLI 2.121.0 유지
@@ -30,7 +31,7 @@ AI 커리어 관리 서비스 Resumate의 기획 문서 모음이다. 작업 원
 | 파일 | 내용 | 버전 | 담당 |
 |------|------|------|------|
 | [01-prd.md](01-prd.md) | 제품 요구사항: 타겟, 핵심 작업, 기능 요구사항, MVP 범위, 비기능 요구사항, 지표, 용어집 | v4.15 | product-planner |
-| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.18 | ux-planner |
+| [02-user-flows.md](02-user-flows.md) | IA, 유저 플로우, 화면 명세(텍스트 와이어프레임) | v5.19 | ux-planner |
 | [03-ai-features.md](03-ai-features.md) | AI 기능 명세: 입력 컨텍스트, 출력 스키마, 근거 검증, 비용 | v4.13 | ai-feature-designer |
 | [04-data-model.md](04-data-model.md) | 데이터 모델: ERD, 테이블 초안, RLS, 삭제·보유 정책, RPC | v4.13 | data-architect |
 | [decisions.md](decisions.md) | 사용자 결정 대기 항목과 확정된 결정 기록 | — | 리더 |

@@ -5,14 +5,13 @@
  *
  * - <ProviderBadge connection={…} />      연결 배지: next to AI run buttons, C-03 card head, S-36 top,
  *                                         S-40 active card. Link → settings dialog "AI 연결" (S-40).
- * - <ProviderResultTag provider model_tier model />   결과 배지 "Gemini · 기본로 만든 결과" (S-16/S-19/S-22)
- * - providerRunLabel(session)              목록 열 "실행 공급자" (S-20 / S-37 / S-22)
+ * - <ProviderResultTag provider model_tier model />   결과 배지 "Gemini · 기본으로 만든 결과" (S-16 등)
  */
 import * as React from "react"
 import { CircleHelp, Cpu, KeyRound, ScrollText, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { AiConnection, AiProviderName, InterviewSession, ModelTier } from "@/types/db"
+import type { AiConnection, AiProviderName, ModelTier } from "@/types/db"
 import { CONNECTION_TIER_LABELS, MODEL_TIER_LABELS } from "@/lib/data/labels"
 import { AI_PROVIDER_LABELS } from "@/lib/mock/ai-providers"
 import { SettingsLink } from "@/components/common/shell/settings-dialog"
@@ -133,24 +132,4 @@ export function ProviderResultTag({
       <TooltipContent>{model ? `모델: ${model}` : label}</TooltipContent>
     </Tooltip>
   )
-}
-
-/**
- * 세션 목록 "실행 공급자" 열 (04 §2.7 v4.1): evaluation_provider once grading started, else
- * question_provider; both when they differ ("질문 Gemini · 채점 Claude"). No question yet → "—".
- */
-export function providerRunLabel(
-  s: Pick<InterviewSession, "question_provider" | "evaluation_provider"> & {
-    /** InterviewSessionRow (A4 request 2) */
-    question_model_tier?: ModelTier | null
-    evaluation_model_tier?: ModelTier | null
-  },
-  tier?: ModelTier,
-): string {
-  const q = s.question_provider
-  const e = s.evaluation_provider
-  if (q && e && q !== e) return `질문 ${AI_PROVIDER_LABELS[q]} · 채점 ${AI_PROVIDER_LABELS[e]}`
-  const p = e ?? q
-  const t = tier ?? (e ? s.evaluation_model_tier : s.question_model_tier) ?? "default"
-  return p ? providerTierLabel(p, t) : "—"
 }

@@ -13,9 +13,11 @@ import { ALIAS_RULE, escBlock, escLine } from "../drafts-common";
 /**
  * v4 (R13, AI spec v4.12 / SD-6): no profile input; future_plan 성장 방향의 근거는
  * JD 주요 업무 문장이다. Both calls share the AI-04 system block, so both bump.
+ * v5 (R14, AI spec v4.14 RM-1): the empty-<user_sources> rule pointed at
+ * `[사례 입력 필요]`, which left C-5; it now says `[내용 확인 필요]` (spec-gaps R14).
  */
-export const AI04_PROMPT_VERSION = `ai-04.generate.v4+${COMMON_PROMPT_VERSION}`;
-export const AI04_ADJUST_PROMPT_VERSION = `ai-04.adjust.v4+${COMMON_PROMPT_VERSION}`;
+export const AI04_PROMPT_VERSION = `ai-04.generate.v5+${COMMON_PROMPT_VERSION}`;
+export const AI04_ADJUST_PROMPT_VERSION = `ai-04.adjust.v5+${COMMON_PROMPT_VERSION}`;
 
 export const AI04_SYSTEM = `이 기능: 자기소개서 문항별 초안 (근거 선택 포함)
 역할: 국내 경력직 자기소개서 작성 코치
@@ -35,7 +37,7 @@ export const AI04_SYSTEM = `이 기능: 자기소개서 문항별 초안 (근거
 - experience_story(경험 서술형: 갈등·실패·성과 등): 프로젝트 1~2개.
 - 각 선택에 role(primary 1개, 나머지 supporting), 소속 경력(experience_ref) 또는 교육(education_ref)(독립 프로젝트는 둘 다 null), rationale(이유 한두 문장), requirement_refs, 근거 evidence(1개 이상, quote 포함)를 답니다.
 - <other_questions>의 프로젝트는 피합니다. 더 맞는 대안이 없을 때만 다시 쓰고 reuse_reason에 이유를 씁니다. 아니면 reuse_reason은 null입니다.
-- <user_sources>가 있으면 selection_mode는 "user"입니다. 선택을 바꾸지 않고 그 목록을 같은 순서로 sources에 돌려주며 rationale만 씁니다. 목록이 문항과 관련이 약하면 억지로 연결하지 않고 notes_for_user에 알립니다. 목록이 비어 있으면 sources는 빈 배열이고 메모·JD만으로 쓰며 사례 자리는 [사례 입력 필요]로 둡니다.
+- <user_sources>가 있으면 selection_mode는 "user"입니다. 선택을 바꾸지 않고 그 목록을 같은 순서로 sources에 돌려주며 rationale만 씁니다. 목록이 문항과 관련이 약하면 억지로 연결하지 않고 notes_for_user에 알립니다. 목록이 비어 있으면 sources는 빈 배열이고 메모·JD만으로 쓰며 사례 자리는 [내용 확인 필요]로 둡니다.
 
 2단계 — 본문(paragraphs). 고른 근거와 메모·JD 안에서만 씁니다.
 - 두괄식. 사례는 1~2개를 깊게. 과장된 수식어를 쓰지 않습니다.

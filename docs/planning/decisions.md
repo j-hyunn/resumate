@@ -2,7 +2,8 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: **2026-11-08** (자기소개서 작성의 채팅형 전환 CL-* — 3.25·4.19. main의 백엔드 R13 릴리스 결정(3.23)·UI 42 런 확인(3.24)·기획 정정 D1~D10(4.17)·UI 42 후속(4.18) 위로 리베이스했다. **1장 결정 대기 1건** — CL-Q1. **CL-Q2는 2026-11-08에 (a)로 확정**(3.25). **SD-Q1은 3.23 R13-U3로 닫혔다**)
+- 최종 갱신: **2026-11-08** (**AI 모의 면접 MVP 제외 RM-1~RM-5 — 3.26·4.20**, 이 사이클이 만든 결정 대기 없음. 이전: 자기소개서 작성의 채팅형 전환 CL-* — 3.25·4.19. main의 백엔드 R13 릴리스 결정(3.23)·UI 42 런 확인(3.24)·기획 정정 D1~D10(4.17)·UI 42 후속(4.18) 위로 리베이스했다. **1장 결정 대기 1건** — CL-Q1. **CL-Q2는 2026-11-08에 (a)로 확정**(3.25). **SD-Q1은 3.23 R13-U3로 닫혔다**)
+- 2026-11-08 입력(AI 모의 면접 MVP 제외): `_workspace/00_input/planning-decisions-remove-mock-interview.md`(사용자 확정 RM-1~RM-3, 후속 확정 RM-4·RM-5, 리더 판단 RM-A1·A2·A4·A5 — RM-A3은 RM-4로 대체). 요청·회신 `_workspace/remove-mock-interview/{prd,ux,ai}_requests.md`·`dm_replies.md`, 리뷰 `_workspace/03_spec-reviewer_review_remove-mock-interview.md`(2라운드, R-RM-1~9 전부 해소). 반영 문서: PRD v4.16, UX v5.19, AI v4.14, DM v4.14, `docs/legal/` 4종(2026-11-08판)
 - 2026-11-05 입력(자기소개서 작성 채팅형): `_workspace/00_input/planning-decisions-cover-letter-chat.md`(사용자 확정 CL-1~CL-8, 2차 확정 CL-9·CL-10, 리더 판단 CL-A1~CL-A10, 미룬 결정 CL-Q1·CL-Q2). 사전 조사 `_workspace/cover-letter-chat/touchpoints_{prd,ux,ai,dm}.md`(편집 자리 245개), 회신 `dm_replies.md`(39건), 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). 반영 문서: PRD v4.15, UX v5.18, AI v4.13, DM v4.13
 - 2026-11-05 입력(열린 결정 일괄): `_workspace/00_input/open-decisions-2026-11-04.md`(통합 목록 48행, 원본 질문 출처·닫힌 근거), `_workspace/00_input/planning-decisions-open-decisions.md`(사용자 확정 OD-*), 리뷰 `_workspace/03_spec-reviewer_review_open-decisions.md`. 반영 문서: PRD v4.13, UX v5.13, AI v4.11, DM v4.11, `docs/legal/cross-border-transfer.md` 개정안 2026-11-05
 - 2026-11-04 입력(STAR 합친 제안·-음 체·민감정보): `_workspace/backend/R8/01_plan.md`(사용자 확정 RQ-4~RQ-6). 반영 문서: PRD v4.11, UX v5.11, AI v4.9, DM v4.9
@@ -572,6 +573,23 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 **이 사이클이 폐기한 기존 결정**: `A4`(초안 실패 시 블록 미보존 — `structured_draft` 위에서 다시 씀) · `A13`(자리 이동) · **`A17`**(서류 톤 `concise`/`detailed`) · `A21`(생성 직후 안내 미저장 — 대화 기록으로 해소) · **`A23`**(AI-11 실패 시 직접 고름) · **`Q53-4`**(AI-11 자동 실행 예외) · **`Q53-7`**(경력기술서 `composing`) · **`F-DOC-05`**(다시 쓰기 지시, Should → F-DOC-11 흡수). 백엔드 후속 ★ A 결정분은 A23 폐기로 13건 → **12건**.
 
+### 3.26 사용자 확정 (2026-11-08, AI 모의 면접 MVP 제외 — 사이클 remove-mock-interview)
+
+입력: `_workspace/00_input/planning-decisions-remove-mock-interview.md`. 리뷰 `_workspace/03_spec-reviewer_review_remove-mock-interview.md`(2라운드, R-RM-1~9 — Major 2·Minor 7 — 전부 해소). 반영: PRD v4.16, UX v5.19, AI v4.14, DM v4.14. 제품은 **커리어 데이터 관리 + 지원 프로젝트(JD 인사이트·서류) 2대 축**이 된다.
+
+| ID | 결정 |
+|----|------|
+| RM-1 | **AI 모의 면접을 MVP 범위에서 뺀다.** 기획·코드·문서에서 지운다(「보류」로 남기지 않는다). F-P3-01~15·F-ST-04·J-5·PB-4, S-20·S-22·S-33·S-37, UX C-14·C-16·C-17, FL-04·FL-12·FL-16·FL-17, AI-05·AI-06·AI-07·AI-10, DM A.12·A.13(면접 테이블 5개)이 없어진다. ID는 비워 두고 재번호하지 않는다 |
+| RM-2 | **지원 단계에서 `job_interview`·`culture_fit_interview`를 뺀다** — `before_apply` · `document` · `assignment` · `closed` 4값. 보드 4열, 단계 메뉴·이동 RPC·CHECK가 따라 바뀐다 |
+| RM-3 | **DB는 drop 마이그레이션으로 정리한다** — `-- DESTRUCTIVE:` 표시, 원격 `supabase db push`는 사용자가 직접 |
+| RM-4 | (후속 확정) 지금 면접 단계에 있는 지원 프로젝트는 **없다** — 이관 규칙 없이, 그런 행이 있으면 마이그레이션이 **멈추는 가드**만 둔다(RM-A3 대체) |
+| RM-5 | (후속 확정) 전형 이력의 면접 단계 값 행은 **삭제**한다 |
+
+- **결과로 사라지는 결정**: D-14·D-16·D-AI-07~09(점수·미응답·컬처핏), OD-I1·OD-I2(점수 산식), OD-I6(자기소개서 삭제 후 면접 기록 보존 — `evidence_links.application_project_id` not null 복원). 각 문서에 효력 없음으로 표시했다.
+- **남긴 공통 요소 (RM-A1)**: D-01 데이터 게이트와 복귀 흐름(대상 3개: 인사이트·경력기술서·자소서), 데이터 충분성 `ok`/`thin`과 인사이트 "근거가 제한적이에요" 배너(AI-02) — **면접 전용이었던 것은 `none` 수준과 readiness 응답의 `data_sufficiency` 키뿐**. 단계 이동 메뉴(C-12, 4값)·결과 선택(C-13)·삭제 다이얼로그(C-05) 틀은 유지.
+- **숫자**: 사이드바 메뉴 3개(커리어 / 자기소개서 관리 / 지원 현황), 사용량 화면 7행 → **5행**, 저장 `feature` 8 → **6**(CHECK 10 → 8, Should 2 포함), `ai_jobs`·`ai_usage_records`의 `job_type` 11 → **9**, 자리 표시 6 → **5종**, MVP 사용자 테이블 **22**.
+- **법무 (리더, 2026-11-08)**: 처리방침·AI 데이터 처리는 **2026-11-08.1 새 판**(2026-11-08판은 `20261113002900`으로 이미 원격 시행 — R14 db-engineer 확인), 이용약관·국외 이전 고지는 **2026-11-08 새 개정판**(재동의 없음 — 수집·이전 항목과 제공 서비스가 줄어드는 변경). `ai_disclosures`에는 면접 문구가 없어 새 버전이 필요 없다. 날짜 초안 `docs/legal/drafts/`는 역사 기록이라 고치지 않았다.
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -867,3 +885,37 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 - **CL-Q2는 (a)로 확정됐다 (2026-11-08)** — "이전 형식 · 읽기 전용" 화면은 만들지 않는다. 대신 UI는 **관찰 기간 중 이관 실패 안내**(S-17)를 보여야 하고, 관찰 기간이 끝나면 그 안내도 걷는다.
 
 **남은 사용자 결정**: **CL-Q1 1건**(1장). 문구·추정치만 바뀌므로 구현을 막지 않는다. **CL-Q2는 2026-11-08에 (a)로 확정**되어 drop 단계가 풀렸다(3.25 후속 확정).
+
+### 4.20 AI 모의 면접 MVP 제외 후속 (2026-11-08, RM-*) ★
+
+> **진행 (2026-11-08)**: 백엔드 1~6 **완료** — 슬라이스 R14(`_workspace/backend/R14/04_summary.md`), UI 1~7 **완료** — 44 런(`_workspace/ui/44_frontend-engineer_report.md`, QA `44_ui-qa_review.md` 2라운드). **원격 미반영** — 사용자가 `supabase db push` 뒤 병합. 브라우저 클릭 확인은 미실시(HTTP 확인만).
+
+**이 사이클은 기획·법무 문서만 고쳤다.** 아래가 `resumate-backend`와 `resumate-ui`가 Phase 0에서 읽을 목록이다. **★ = 이미 구현된 것을 바꿔야 함.** 상세(단계별 SQL 순서, 함수 44개 이름, 교체 RPC의 현재 정의 파일)는 데이터 모델 [11.9](04-data-model.md).
+
+**백엔드** (`resumate-backend`)
+
+| # | 결정 | 할 일 | ★ | 파괴적 |
+|---|------|-------|---|--------|
+| 1 | RM-3·RM-4·RM-5 | **drop 마이그레이션 1개**(첫 줄 `-- DESTRUCTIVE:`), 한 트랜잭션: ⓪ 면접 단계 행이 있으면 raise(RM-4) → ① 다른 테이블에 걸린 트리거 2개(`application_projects_detach_interviews`·`ai_jobs_release_interview`)와 함수 → ② `evidence_links` 면접 행 삭제 → ③ `ai_usage_records`·`ai_jobs` 면접 행 삭제(RM-A2) → ④ 전형 이력 면접 행 삭제(RM-5) → ⑤ `writing_chats.return_target.feature = job_interview`만 null → ⑥ 테이블 5개 drop(cascade 없이) → ⑦ 면접 함수 drop(public 16 · private 28) → ⑧ CHECK 9개 drop → add → ⑨ `evidence_links_detached_check` 삭제 + `application_project_id set not null` | ★ | **예 — 되돌릴 수 없다** |
+| 2 | RM-1·RM-2 | **같은 파일 앞쪽에서 RPC 교체**: `get_data_readiness`(면접 키·`data_sufficiency` 제거), `move_application_stage`(4값, `interview_prompt` 제거), `get_deletion_impact`·`delete_career_item`, `get_account_deletion_summary`, **`private.delete_account_data`(빠뜨리면 탈퇴·장기 미접속 파기가 깨진다)**, `retry_ai_job`, `update_failed_jd_raw_text`, `private.evidence_links_check_source`, `start_writing_chat`·`private.writing_chat_greeting` | ★ | 아니다 |
+| 3 | RM-1 | **코드 삭제**: `src/server/services/interview/*`, 면접 Route Handler(`src/app/api/interview-sessions/**`, `application-projects/[id]/interview-sessions`)·Server Action, `src/server/jobs/interview.ts`와 실행기 분기, AI-05·06·07 파이프라인·프롬프트·스키마·검증·저장·컨텍스트 팩·픽스처, `src/lib/contracts/interview.ts`, enum 상수(`APPLICATION_STAGES` 4값, `INTERVIEW_STAGES`·면접 job/feature/source/owner/progress 값), 사용량 표시 매핑 5행 | ★ | 아니다 |
+| 4 | RM-1 | **공통 프롬프트 `common.v3` → `common.v4`** — 자리 표시 `[사례 입력 필요]` 제거(6 → 5종). 모든 기능의 `prompt_version`이 바뀌어 동일 입력 재사용이 한 번 끊긴다 `[가정]` | ★ | 아니다 |
+| 5 | RM-1 | pgTAP: `interviews`·`interview_grading`·`interviews_career_deletion` 삭제, 면접 단정이 섞인 20개 파일 정리, 새 단정(면접 객체 부재, 4값 CHECK, 가드, readiness 키 2개, `interview_prompt` 없음). `database.types.ts` 재생성 | | 아니다 |
+| 6 | 법무 | `policy_versions` 새 행 4개(`requires_reconsent = false`): `terms`·`cross_border_transfer` `2026-11-08`, `privacy`·`ai_data_use` `2026-11-08.1` — `20261113002900`은 이미 원격에 있어 **새 파일 `20261113002950`**(R14). 앱 본문 `src/components/account/policy-content.ts`(terms·cross_border_transfer·privacy·`AI_DATA_USE_SECTIONS`)를 `docs/legal/` 2026-11-08판과 맞춰 **같은 머지**로 | ★ | 아니다 |
+
+- **배포 순서**: 앱 코드와 마이그레이션을 **같은 배포**로 묶는다(마이그레이션만 먼저 가면 남은 면접 코드가 없는 RPC를 부른다). push 전 원격 읽기 전용 확인: 면접 단계 행 0(RM-4), 실행 중 면접 작업 수, 지울 사용량 행 수. 필요하면 push 전에 운영자가 면접 테이블 5개를 덤프한다(권고).
+- **11.8(CL-*)과의 관계**: 둘 중 **나중에 가는 마이그레이션이 앞의 것을 포함한 최종 모양**이어야 한다(`evidence_links.owner_type` CHECK·`get_deletion_impact`·`delete_account_data`).
+
+**UI** (`resumate-ui`) — 상세는 유저 플로우 v5.19 5.1m과 각 화면의 `(v5.19, RM-n)` 표시
+
+| # | 결정 | 할 일 |
+|---|------|-------|
+| 1 | RM-1 | **면접 화면·라우트 삭제** ★ — S-20·S-22·S-33·S-37(`/applications/[id]/interview/**`, `/interviews/**`), `src/components/interviews/*`, 보드의 면접 준비 팝업(C-14, `interview-prompt-preview`), 자기소개서 선택 다이얼로그(C-16), 점수 표시(C-17, `score-display`) |
+| 2 | RM-1 | **L-01 사이드바 메뉴 3개**(커리어 / 자기소개서 관리 / 지원 현황), 모의 면접 배지·브레드크럼 마디 제거 ★ |
+| 3 | RM-2 | **보드 4열**, 단계 메뉴(C-12) 4값, S-31 단계 칩의 면접 분기 제거 ★ |
+| 4 | RM-1 | 공통 요소의 면접 부분 제거 ★ — C-01 `interview_answer` 칩, C-03 면접 단계 문구·알림·토스트, C-04 면접 스트리밍, C-05 면접 세션 삭제·면접 수, C-09 면접 분기, C-18 면접 진입점·기능 이름 2개, C-19·C-20 면접 행, C-21 "면접 답변" |
+| 5 | RM-1 | S-13·S-31·S-39의 "면접 세션 수", S-25 삭제 요약의 면접 세션, S-24 ②·S-40 안내의 "모의 면접", **사용량 표 5행**, `?state=` 미리보기·mock 픽스처·dev 상태 갤러리의 면접 항목 ★ |
+| 6 | RM-1 | 옛 주소 리다이렉트: `/applications/{id}/interview…` → S-31, `/interviews…` → S-13(토스트 없음) `[가정]` |
+| 7 | — | `docs/ui/screen-status.md`·`docs/ui/design-system.md`의 면접 화면·컴포넌트 항목 정리 |
+
+**남은 사용자 결정**: 이 사이클이 만든 `[결정 필요]`는 없다. 확인할 `[가정]`은 RM-A1·A2·A4·A5, UX 3건(옛 주소 리다이렉트, C-21 재동의 없음, "다시 생성하면" 문구), AI 4건(AI-02 `prepare_answer` 유지, AI-12 "면접 코치" 역할 문구 유지, `common.v4`, 이번 달 사용량 합계 감소).

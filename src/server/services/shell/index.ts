@@ -19,11 +19,10 @@ export type ShellRows = {
   activeChat: boolean;
   /** application-screen jobs in flight (jd_extraction and chat turns have their own UI). */
   runningApplicationJobs: number;
-  sessions: { status: string; submitted_at: string | null; result_viewed_at: string | null }[];
 };
 
 export async function loadShellRows(supabase: UserSupabaseClient): Promise<ShellRows> {
-  const [chats, jobs, sessions] = await Promise.all([
+  const [chats, jobs] = await Promise.all([
     supabase.from("writing_chats").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase
       .from("ai_jobs")
@@ -31,12 +30,10 @@ export async function loadShellRows(supabase: UserSupabaseClient): Promise<Shell
       .in("status", ["queued", "running"])
       .not("application_project_id", "is", null)
       .not("job_type", "in", "(jd_extraction,writing_chat_turn)"),
-    supabase.from("interview_sessions").select("status, submitted_at, result_viewed_at"),
   ]);
   if (chats.error) throw mapDbError(chats.error);
   if (jobs.error) throw mapDbError(jobs.error);
-  if (sessions.error) throw mapDbError(sessions.error);
-  return { activeChat: (chats.count ?? 0) > 0, runningApplicationJobs: jobs.count ?? 0, sessions: sessions.data ?? [] };
+  return { activeChat: (chats.count ?? 0) > 0, runningApplicationJobs: jobs.count ?? 0 };
 }
 
 export async function loadPolicyVersions(supabase: Pick<UserSupabaseClient, "from">, now: Date = new Date()) {
@@ -44,7 +41,10 @@ export async function loadPolicyVersions(supabase: Pick<UserSupabaseClient, "fro
     .from("policy_versions")
     .select("id, policy_type, version, effective_at, requires_reconsent, document_path, created_at")
     .lte("effective_at", now.toISOString())
-    .order("effective_at", { ascending: false });
+    .order("effective_at", { ascending: false })
+    // R14 (R14-DB-6): same tie-break as private.current_policy_version — two versions can share an
+    // effective date (privacy 2026-11-08 / 2026-11-08.1); the higher version string wins.
+    .order("version", { ascending: false });
   if (error) throw mapDbError(error);
   return data ?? [];
 }

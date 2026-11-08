@@ -110,13 +110,11 @@ export function useAiJob(jobId: string | null | undefined, opts?: { onDone?: (jo
 }
 
 /**
- * Ordered stage rows per job type (03 C-6 v4.3). `synthesize_regen` reuses the `synthesize` row and
- * `complete` has no row (all rows done, bar 100 %) — design-system 3.3 (v3).
+ * Ordered stage rows per job type (03 C-6 v4.3). `synthesize_regen` reuses the `synthesize` row —
+ * design-system 3.3 (v3).
  */
 const STAGE_SEQUENCE: Partial<Record<AiJobType, AiProgressStage[]>> = {
   insight: ["prepare", "match", "synthesize", "validate"],
-  interview_questions: ["prepare", "generate"],
-  interview_evaluation: ["prepare", "evaluate", "summarize", "score"],
   career_description: ["generate", "validate"],
   cover_letter: ["rank", "generate", "adjust_length", "validate"],
   draft_source_ranking: ["rank"],
@@ -128,10 +126,9 @@ export function stageText(progress: AiJobProgress | null | undefined, jobType?: 
   return jobType ? aiStageLabel(jobType, progress) : AI_STAGE_LABELS[progress.stage]
 }
 
-/** row index of a stage in the sequence (synthesize_regen → synthesize row, complete → past the end) */
+/** row index of a stage in the sequence (synthesize_regen → synthesize row) */
 function stageRow(stages: AiProgressStage[], stage: AiProgressStage | undefined): number {
   if (!stage) return 0
-  if (stage === "complete") return stages.length
   const i = stages.indexOf(stage === "synthesize_regen" ? "synthesize" : stage)
   return i < 0 ? 0 : i
 }
@@ -150,8 +147,6 @@ const PAID_ESTIMATE_SEC: Partial<Record<AiJobType, number>> = {
   career_description: 40,
   cover_letter: 45,
   draft_source_ranking: 15,
-  interview_questions: 30,
-  interview_evaluation: 40,
 }
 
 function formatDuration(sec: number): string {
@@ -200,15 +195,12 @@ export function AiProgress({
   const connection = useAiConnection()
   const free = (connectionTier ?? connection?.connection_tier) === "free"
   const waitSec = useRetryWait(progress)
-  const stages = STAGE_SEQUENCE[jobType] ?? (progress && progress.stage !== "complete" ? [progress.stage] : [])
+  const stages = STAGE_SEQUENCE[jobType] ?? (progress ? [progress.stage] : [])
   const currentIndex = stageRow(stages, progress?.stage)
-  const complete = progress?.stage === "complete"
-  // interview questions put n/N in the row text ("질문 만드는 중 (n/N)")
-  const countInLabel = jobType === "interview_questions"
-  const count = countInLabel ? null : countText(progress)
+  const count = countText(progress)
   const percent =
-    stages.length === 0 || complete
-      ? complete ? 100 : 0
+    stages.length === 0
+      ? 0
       : ((Math.max(0, currentIndex) + (progress?.total ? (progress.done ?? 0) / progress.total : 0)) / stages.length) * 100
 
   return (
@@ -254,8 +246,8 @@ export function AiProgress({
                 // A-11: countdown not announced (polling region is not live)
                 <span className="tabular-nums">공급자 요청 한도로 잠시 기다리는 중 ({waitSec}초)</span>
               ) : (
-                <span className={countInLabel ? "tabular-nums" : undefined}>
-                  {rowLabel(jobType, stage, state, progress)}
+                <span>
+                  {aiStageLabel(jobType, { stage })}
                   {state === "current" && count ? ` (${count})` : ""}
                 </span>
               )}
@@ -272,21 +264,7 @@ export function AiProgress({
   )
 }
 
-/** One row's text: the current / last row follows the live progress (n/N, complete keeps it) */
-function rowLabel(
-  jobType: AiJobType,
-  stage: AiProgressStage,
-  state: "done" | "current" | "pending",
-  progress: AiJobProgress | null,
-): string {
-  if (jobType === "interview_questions" && stage === "generate") {
-    const live = progress && (progress.stage === "generate" || progress.stage === "complete") ? progress : null
-    return aiStageLabel(jobType, live ?? { stage: "generate", done: state === "done" ? progress?.total : 0, total: progress?.total })
-  }
-  return aiStageLabel(jobType, { stage })
-}
-
-/** 축약형 (S-37 행, S-13 기능 진행 칸, S-36 "정리 중"). Pass `jobType` for v5.3 job-dependent copy */
+/** 축약형 (S-13 기능 진행 칸, S-39 카드, S-36 "정리 중"). Pass `jobType` for v5.3 job-dependent copy */
 export function AiProgressInline({
   progress,
   label,
@@ -296,11 +274,11 @@ export function AiProgressInline({
   progress?: AiJobProgress | null
   /** override stage text (e.g. "정리 중") */
   label?: string
-  /** job type → "채점 준비 중" / "질문 만드는 중 (n/N)" / complete keeps the previous copy */
+  /** job type → job-dependent stage copy (aiStageLabel) */
   jobType?: AiJobType | null
   className?: string
 }) {
-  const count = jobType === "interview_questions" || progress?.stage === "complete" ? null : countText(progress)
+  const count = countText(progress)
   const waitSec = useRetryWait(progress)
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-sm text-ai-subtle-foreground", className)} role="status">

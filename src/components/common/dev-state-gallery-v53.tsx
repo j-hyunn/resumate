@@ -23,7 +23,6 @@ import { AiRunButton } from "./ai-run-button"
 import { DataInsufficientGate } from "./data-gate"
 import { DataUseConsentDialog } from "./data-use-consent"
 import { ProviderBadge } from "./provider-badge"
-import { InterviewPromptDialog, type InterviewPromptState } from "./stage-menu"
 import { StreamingBlock, StreamingHeader, StreamRegion, useAiStream } from "./streaming"
 
 function Section({ id, title, show, children }: { id: string; title: string; show: boolean; children: React.ReactNode }) {
@@ -52,22 +51,11 @@ const Q53_LINKS: Array<{ label: string; href: string }> = [
   { label: "Q53-2 S-15 저장 뒤", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-saved` },
   { label: "Q53-2 S-15 원인 모름", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-unknown-cause` },
   { label: "Q53-2 S-16 공고를 고친 뒤", href: `${routes.applicationInsight(IDS.ap(1))}?state=raw-edited` },
-  { label: "Q53-3 픽스처: 입력 원인만", href: routes.interviewResult(IDS.ap(5), IDS.ses(7)) },
-  { label: "Q53-3 픽스처: 입력 원인 + 다른 원인", href: routes.interviewResult(IDS.ap(5), IDS.ses(14)) },
   { label: "Q53-4 S-17 요건 없는 JD", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements` },
   { label: "Q53-4 S-17 동의 필요", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements-consent` },
   { label: "Q53-4 S-17 키 무효", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements-key-invalid` },
-  { label: "Q53-5 픽스처: 종합만 실패", href: routes.interviewResult(IDS.ap(5), IDS.ses(8)) },
-  { label: "Q53-5 픽스처: 종합이 입력 원인", href: routes.interviewResult(IDS.ap(5), IDS.ses(9)) },
-  { label: "Q53-6 픽스처: 완료 + 실패 답변 (S-37 메뉴)", href: routes.interviews() },
-  { label: "Q53-6 픽스처: 완료 + 입력 원인 답변", href: routes.interviewResult(IDS.ap(4), IDS.ses(10)) },
   { label: "Q53-7 픽스처: 작성 중 경력기술서", href: `${routes.applicationDrafts(IDS.ap(3))}#new-draft` },
   { label: "Q53-8 C-09 project_fields", href: `${routes.applicationDrafts(IDS.ap(1))}?state=insufficient-project-fields` },
-  { label: "Q53-9 픽스처: 요건 없음 → 공고 원문 고치기", href: routes.interviewSession(IDS.ap(7), IDS.ses(6)) },
-  { label: "Q53-9 픽스처: 요건 있음 → 공고 확인하기", href: routes.interviewSession(IDS.ap(2), IDS.ses(13)) },
-  { label: "Q53-9 S-20 그만두고 새로 시작", href: routes.interviewPrep(IDS.ap(7)) },
-  { label: "Q53-9 픽스처: 질문 0개 그만둔 세션", href: routes.interviewSession(IDS.ap(7), IDS.ses(12)) },
-  { label: "Q53-9 S-33 공고를 고친 뒤", href: `${routes.interviewSession(IDS.ap(1), IDS.ses(1))}?state=raw-edited-stale` },
 ]
 
 const REFUSALS: Array<{ state: string; code: AiRetryRefusalCode }> = [
@@ -92,7 +80,6 @@ export function DevStateGalleryV53({
   const at = (sec: number) => (now ? new Date(Math.ceil(now / 60_000) * 60_000 + sec * 1000).toISOString() : null)
   const connection = useAiConnection()
   const [consentOpen, setConsentOpen] = React.useState(false)
-  const [prompt, setPrompt] = React.useState<InterviewPromptState | null>(null)
   const stream = useAiStream()
   const ranOnce = () => {
     toast("실행했어요 (개발용)")
@@ -146,7 +133,7 @@ export function DevStateGalleryV53({
 
       <Section id="retry-other-provider" title="C-20 다시 시도 배지 · 처음부터 다시 (A1)" show={show("retry-other-provider")}>
         <AiErrorNotice code="provider_unavailable" provider="openai" jobTier="paid" sameRow onRetry={ranOnce} />
-        <AiErrorNotice code="timeout" provider="openai" jobTier="paid" sameRow size="inline" retryLabel="다시 채점" onRetry={ranOnce} />
+        <AiErrorNotice code="timeout" provider="openai" jobTier="paid" sameRow size="inline" retryLabel="다시 생성" onRetry={ranOnce} />
       </Section>
 
       <Section
@@ -236,12 +223,9 @@ export function DevStateGalleryV53({
         </Card>
       </Section>
 
-      <Section id="ai-stages" title="C-03 v5.3 단계 (prepare · synthesize_regen · complete · 질문 n/N)" show={show("ai-stages", "ai-pending")}>
+      <Section id="ai-stages" title="C-03 v5.3 단계 (prepare · synthesize_regen)" show={show("ai-stages", "ai-pending")}>
         <AiProgress jobType="insight" progress={{ stage: "prepare" }} title="인사이트 생성" />
         <AiProgress jobType="insight" progress={{ stage: "synthesize_regen" }} title="인사이트 생성" />
-        <AiProgress jobType="interview_questions" progress={{ stage: "generate", done: 2, total: 5 }} title="면접 질문 생성" />
-        <AiProgress jobType="interview_evaluation" progress={{ stage: "prepare" }} title="답변 채점" />
-        <AiProgress jobType="interview_evaluation" progress={{ stage: "complete" }} title="답변 채점" />
       </Section>
 
       <Section id="feature-status" title="C-03 진행 표시 우선순위 (AiFeatureStatus)" show={show("feature-status")}>
@@ -266,40 +250,6 @@ export function DevStateGalleryV53({
           applicationProjectId={demoApplication.id}
           applicationName={demoApplication.name}
           returnHref={routes.applicationInsight(demoApplication.id)}
-        />
-      </Section>
-
-      <Section id="interview-prompt" title="C-14 작성 중 세션 (마지막 활동 · generation_status · 유형 다름)" show={show("interview-prompt")}>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() =>
-              setPrompt({
-                interview_type: "job",
-                session: { id: "dev", interview_type: "job", answered_count: 2, question_count: 5, generation_status: "generating", last_activity_at: new Date(Date.now() - 3 * 3_600_000).toISOString() },
-              })
-            }
-          >
-            질문 생성 중
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              setPrompt({
-                interview_type: "culture_fit",
-                session: { id: "dev", interview_type: "job", answered_count: 1, question_count: 5, generation_status: "failed", last_activity_at: new Date(Date.now() - 26 * 3_600_000).toISOString() },
-              })
-            }
-          >
-            생성 실패 · 유형 다름
-          </Button>
-        </div>
-        <InterviewPromptDialog
-          open={prompt !== null}
-          onOpenChange={(o) => !o && setPrompt(null)}
-          applicationProjectId={demoApplication.id}
-          name={demoApplication.name}
-          prompt={prompt}
         />
       </Section>
 

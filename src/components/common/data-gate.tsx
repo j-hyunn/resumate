@@ -16,7 +16,6 @@ import { getProjectFieldsAction } from "@/lib/data/actions"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import type { AiErrorCode, DataReadiness, ReadinessFeatureKey, ReturnTargetFeature } from "@/types/db"
 import { objectParticle } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
@@ -40,11 +39,10 @@ export function DataInsufficientGate({
   activeChatId,
   chatFailure,
   directInputHref,
-  onSwitchToCultureFit,
   className,
 }: {
-  feature: Exclude<ReadinessFeatureKey, "culture_fit_interview">
-  /** 인사이트 / 경력기술서 / 자소서 문항 답변 / 직무 면접 */
+  feature: ReadinessFeatureKey
+  /** 인사이트 / 경력기술서 / 자소서 문항 답변 */
   featureLabel: string
   returnFeature: ReturnTargetFeature
   readiness: DataReadiness
@@ -53,7 +51,7 @@ export function DataInsufficientGate({
   applicationName: string
   /** where C-10 "돌아가기" lands (this screen) */
   returnHref: string
-  /** 진행 중 설정 to restore (면접 유형·질문 수, 자소서 문항 …) */
+  /** 진행 중 설정 to restore (자소서 문항 …) */
   returnParams?: Record<string, unknown>
   /** existing active writing chat → "이어서 대화하기" stays available when the key is invalid */
   activeChatId?: string | null
@@ -61,8 +59,6 @@ export function DataInsufficientGate({
   chatFailure?: AiErrorCode | null
   /** override for "직접 입력" target */
   directInputHref?: string
-  /** S-20 직무 only: "컬처핏 면접은 지금 바로 연습할 수 있어요" */
-  onSwitchToCultureFit?: () => void
   className?: string
 }) {
   const titleId = React.useId()
@@ -267,18 +263,6 @@ export function DataInsufficientGate({
           )}
         </div>
       </div>
-
-      {onSwitchToCultureFit ? (
-        <>
-          <Separator />
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-muted-foreground">컬처핏 면접은 지금 바로 연습할 수 있어요</p>
-            <Button variant="outline" size="sm" onClick={onSwitchToCultureFit}>
-              컬처핏 면접으로 바꾸기
-            </Button>
-          </div>
-        </>
-      ) : null}
 
       {choose.dialog}
       <p className="text-sm text-muted-foreground">

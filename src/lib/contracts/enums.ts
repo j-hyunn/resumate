@@ -137,24 +137,21 @@ export const READINESS_MISSING = ["complete_experience", "complete_project"] as 
 /** (v4.12, SD-A18) `profile` removed: 내 정보는 어떤 게이트 판정에도 쓰지 않는다 (DM 6-A). */
 export const READINESS_HINTS = ["project_star", "project_fields"] as const;
 export const READINESS_NEXT_ACTIONS = ["writing_chat", "form", "create_project"] as const;
-export const DATA_SUFFICIENCIES = ["ok", "thin", "none"] as const;
-export type DataSufficiency = (typeof DATA_SUFFICIENCIES)[number];
+/** (R14, RM-1) `data_sufficiency` and DATA_SUFFICIENCIES removed: get_data_readiness no longer returns it. */
 
 // --- S3 / S3a: AI infrastructure v4 BYOK (DM §2.8–2.9, A.14–A.16, AI C-6, C-10–C-13) ---
 
-/** ai_jobs.job_type CHECK (DM §2.9.1 v4: + key_verification). */
+/** ai_jobs.job_type = ai_usage_records.job_type CHECK (DM §2.9.1; R14 RM-1: 9 values, CHECK order). */
 export const AI_JOB_TYPES = [
   "jd_extraction",
   "insight",
   "career_description",
   "draft_source_ranking",
   "cover_letter",
-  "interview_questions",
-  "interview_evaluation",
-  "writing_assist",
-  "chat_reply",
   "writing_chat_turn",
   "key_verification",
+  "writing_assist",
+  "chat_reply",
 ] as const;
 export type AiJobType = (typeof AI_JOB_TYPES)[number];
 
@@ -215,22 +212,15 @@ export const AI_PROGRESS_STAGES = [
   "reply",
   // R5 (AI-13 draft turn, C-6): extract → compose (draft stream) → validate (V-10 + RPC).
   "compose",
-  "evaluate",
-  "summarize",
-  "score",
-  // S8 [가정, spec-gaps S8 (api) ⑫]: last step of both interview jobs (save the set / close the evaluation, no call).
-  "complete",
 ] as const;
 export type AiProgressStage = (typeof AI_PROGRESS_STAGES)[number];
 
-/** ai_usage_records.feature CHECK (DM §2.9.2, C-13). */
+/** ai_usage_records.feature CHECK (DM §2.9.2, C-13; R14 RM-A2: 8 values, CHECK order). */
 export const USAGE_FEATURES = [
   "jd_extraction",
   "insight",
   "career_description",
   "cover_letter",
-  "interview_questions",
-  "interview_evaluation",
   "writing_chat",
   "key_verification",
   "writing_assist",
@@ -250,9 +240,6 @@ export type UsageOutcome = (typeof USAGE_OUTCOMES)[number];
 export const EVIDENCE_OWNER_TYPES = [
   "insight",
   "draft_section",
-  "interview_question",
-  "answer_evaluation",
-  "session_feedback",
   "chat_message",
 ] as const;
 export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];
@@ -267,7 +254,6 @@ export const EVIDENCE_SOURCE_TYPES = [
   "skill",
   "jd_requirement",
   "jd_sentence",
-  "interview_answer",
   "user_note",
 ] as const;
 export type EvidenceSourceType = (typeof EVIDENCE_SOURCE_TYPES)[number];
@@ -298,8 +284,8 @@ export type DraftFieldReview = (typeof DRAFT_FIELD_REVIEWS)[number];
 export const CLARIFICATION_KINDS = ["actor_ambiguous", "number_vague", "period_unclear"] as const;
 export type ClarificationKind = (typeof CLARIFICATION_KINDS)[number];
 
-/** writing_chats.return_target.feature (DM §2.5 v3.2, U-5). */
-export const RETURN_TARGET_FEATURES = ["insight", "career_description", "cover_letter", "job_interview"] as const;
+/** writing_chats.return_target.feature (DM §2.5 v3.2, U-5; R14: 3 values). */
+export const RETURN_TARGET_FEATURES = ["insight", "career_description", "cover_letter"] as const;
 export type ReturnTargetFeature = (typeof RETURN_TARGET_FEATURES)[number];
 
 /** structured_draft v3 `project` keys = projects period columns (DM 2.5 v4.4; `is_current` is never proposed). */
@@ -334,16 +320,13 @@ export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
 
 // --- S5: application projects & JD (DM §2.6, A.5–A.7, AI-01) ---
 
-/** application_projects.stage CHECK (F-ST-01, board column order). */
-export const APPLICATION_STAGES = ["before_apply", "document", "assignment", "job_interview", "culture_fit_interview", "closed"] as const;
+/** application_projects.stage CHECK (F-ST-01, board column order; R14 RM-2: 4 values). */
+export const APPLICATION_STAGES = ["before_apply", "document", "assignment", "closed"] as const;
 export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
 
 /** application_projects.stage_outcome CHECK (null = 결과 미기록; only with stage = closed). */
 export const STAGE_OUTCOMES = ["passed", "failed"] as const;
 export type StageOutcome = (typeof STAGE_OUTCOMES)[number];
-
-/** Interview columns that open the C-14 popup (F-ST-04). */
-export const INTERVIEW_STAGES = ["job_interview", "culture_fit_interview"] as const satisfies readonly ApplicationStage[];
 
 /** application_stage_events.event_type CHECK (F-ST-05). */
 export const STAGE_EVENT_TYPES = ["created", "stage_changed", "outcome_changed"] as const;
@@ -426,67 +409,3 @@ export type SelectionOrigin = (typeof SELECTION_ORIGINS)[number];
 /** AI-11 `rankings[].relevance`. */
 export const RANKING_RELEVANCES = ["high", "medium", "low"] as const;
 export type RankingRelevance = (typeof RANKING_RELEVANCES)[number];
-
-// --- S8: mock interview (DM A.12–A.13, AI-05 / AI-06 / AI-07) ---
-
-/** interview_sessions.interview_type CHECK (U-7; no default). */
-export const INTERVIEW_TYPES = ["job", "culture_fit"] as const;
-export type InterviewType = (typeof INTERVIEW_TYPES)[number];
-
-/** interview_sessions.question_count CHECK (default 5). */
-export const INTERVIEW_QUESTION_COUNTS = [3, 5, 7] as const;
-export type InterviewQuestionCount = (typeof INTERVIEW_QUESTION_COUNTS)[number];
-
-/** interview_sessions.status CHECK: 작성 중 / 채점 중 / 완료 / 채점 실패 / 그만둠. */
-export const INTERVIEW_SESSION_STATUSES = ["in_progress", "evaluating", "completed", "evaluation_failed", "abandoned"] as const;
-export type InterviewSessionStatus = (typeof INTERVIEW_SESSION_STATUSES)[number];
-
-/** interview_sessions.generation_status CHECK. */
-export const INTERVIEW_GENERATION_STATUSES = ["generating", "ready", "failed"] as const;
-export type InterviewGenerationStatus = (typeof INTERVIEW_GENERATION_STATUSES)[number];
-
-/** interview_questions.source_kind CHECK (AI-05: job 3 + culture_fit 6). */
-export const INTERVIEW_SOURCE_KINDS = [
-  "project_deep_dive",
-  "requirement_fit",
-  "gap_probe",
-  "collaboration",
-  "conflict",
-  "failure_growth",
-  "values",
-  "org_adaptation",
-  "motivation_career",
-] as const;
-export type InterviewSourceKind = (typeof INTERVIEW_SOURCE_KINDS)[number];
-
-/** interview_questions.anchor CHECK. */
-export const INTERVIEW_ANCHORS = ["experience", "jd", "general"] as const;
-export type InterviewAnchor = (typeof INTERVIEW_ANCHORS)[number];
-
-/** interview_answers.status CHECK. */
-export const INTERVIEW_ANSWER_STATUSES = ["draft", "submitted", "unanswered"] as const;
-export type InterviewAnswerStatus = (typeof INTERVIEW_ANSWER_STATUSES)[number];
-
-/** interview_sessions.score_status CHECK (AI 4.3: session scores never `unanswered`). */
-export const SESSION_SCORE_STATUSES = ["pending_method", "scored", "not_scored"] as const;
-export type SessionScoreStatus = (typeof SESSION_SCORE_STATUSES)[number];
-
-/** interview_answers.score_status CHECK. */
-export const ANSWER_SCORE_STATUSES = ["pending_method", "scored", "unanswered", "not_scored"] as const;
-export type AnswerScoreStatus = (typeof ANSWER_SCORE_STATUSES)[number];
-
-/** answer_evaluations.status / session_feedbacks.status CHECK. */
-export const INTERVIEW_RESULT_STATUSES = ["pending", "succeeded", "failed"] as const;
-export type InterviewResultStatus = (typeof INTERVIEW_RESULT_STATUSES)[number];
-
-/** AI 4.2 rubric keys (AI-06 `criteria[].key`, `focus_criteria`). */
-export const EVALUATION_CRITERIA_KEYS = ["specificity", "intent_fit", "structure", "job_relevance"] as const;
-export type EvaluationCriteriaKey = (typeof EVALUATION_CRITERIA_KEYS)[number];
-
-/** AI-06 `criteria[].grade` (`not_applicable` only for `job_relevance`). */
-export const EVALUATION_GRADES = ["excellent", "good", "fair", "poor", "not_applicable"] as const;
-export type EvaluationGrade = (typeof EVALUATION_GRADES)[number];
-
-/** AI-07 `next_practice[].type`. */
-export const NEXT_PRACTICE_TYPES = ["retry_question", "focus_session", "add_data"] as const;
-export type NextPracticeType = (typeof NEXT_PRACTICE_TYPES)[number];

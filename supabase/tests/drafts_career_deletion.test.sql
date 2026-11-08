@@ -83,28 +83,27 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 -- ── get_deletion_impact ──
 select is(public.get_deletion_impact('project_deliverable', 'a0000000-4444-0000-0000-000000000001') -> 'affected_results',
           '{"by_application_project": [
-             {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
-              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}],
-            "detached_interview_sessions": 0}'::jsonb,
+             {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1,
+              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}]}'::jsonb,
           'impact: deliverable -> Q5 (evidence)');
 select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000003') -> 'affected_results' -> 'by_application_project',
-          '[{"name": "가 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          '[{"name": "가 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"},
-            {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+            {"name": "나 프로젝트", "drafts": 0, "insights": 0, "draft_sections": 1,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000002"}]'::jsonb,
           'impact: standalone project -> Q4 / Q5 through its cascaded deliverables');
 select is(public.get_deletion_impact('project', 'a0000000-3333-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
-          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"}]'::jsonb,
           'impact: project -> DR1 (evidence), Q1 (source + evidence counted once)');
 select is(public.get_deletion_impact('experience', 'a0000000-1111-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
-          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"}]'::jsonb,
           'impact: experience (+ its projects) -> DR1 (section header), Q1 (source experience / project)');
 select is(public.get_deletion_impact('skill', 'a0000000-6666-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project' -> 0 ->> 'draft_sections',
           '1', 'impact: skill -> Q2 (evidence)');
 select is(public.get_deletion_impact('education', 'a0000000-2222-0000-0000-000000000001') -> 'affected_results' -> 'by_application_project',
-          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          '[{"name": "가 프로젝트", "drafts": 1, "insights": 0, "draft_sections": 1,
              "application_project_id": "a0000000-aaaa-0000-0000-000000000001"}]'::jsonb,
           'impact: education -> DR1 (education section), Q3 (source)');
 select is(public.get_deletion_impact('skill', 'a0000000-6666-0000-0000-000000000002') -> 'affected_results' -> 'by_application_project',

@@ -93,8 +93,6 @@ export const USAGE_FEATURE_BY_JOB_TYPE: Record<AiJobType, UsageFeature> = {
   career_description: "career_description",
   draft_source_ranking: "career_description",
   cover_letter: "cover_letter",
-  interview_questions: "interview_questions",
-  interview_evaluation: "interview_evaluation",
   writing_assist: "writing_assist",
   chat_reply: "chat_reply",
   writing_chat_turn: "writing_chat",

@@ -80,7 +80,7 @@ export function isInputCausedFailure(code: AiErrorCode | null | undefined): bool
 }
 
 /** Async job types retried on the same row (POST /api/ai-jobs/{id}/retry, 04 §2.9.1 경우 (1)) */
-export const SAME_ROW_RETRY_JOB_TYPES: readonly AiJobType[] = ["insight", "interview_questions", "interview_evaluation"]
+export const SAME_ROW_RETRY_JOB_TYPES: readonly AiJobType[] = ["insight"]
 
 /** Request-path failures that wait for retry_after (A14): chat turn, document stream, JD extraction */
 export function isRequestPathWait(code: AiErrorCode | null | undefined): boolean {

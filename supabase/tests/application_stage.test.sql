@@ -25,7 +25,7 @@ select throws_ok($$select public.move_application_stage(gen_random_uuid(), 'docu
 
 -- 1. Same stage: nothing.
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'before_apply') - 'stage_changed_at',
-          '{"stage":"before_apply","stage_outcome":null,"changed":false,"interview_prompt":null}'::jsonb,
+          '{"stage":"before_apply","stage_outcome":null,"changed":false}'::jsonb,
           'same stage -> changed false');
 select is((select count(*)::int from public.application_stage_events), 1, 'same stage -> no event');
 
@@ -35,15 +35,17 @@ update public.application_projects set stage_changed_at = now() - interval '1 da
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'document') - 'stage_changed_at',
-          '{"stage":"document","stage_outcome":null,"changed":true,"interview_prompt":null}'::jsonb, 'move to document');
+          '{"stage":"document","stage_outcome":null,"changed":true}'::jsonb, 'move to document');
 select ok((select stage_changed_at > now() - interval '1 minute' and last_activity_at > now() - interval '1 minute'
              from public.application_projects), 'stage_changed_at and last_activity_at bumped');
 
--- 5. Interview prompts (C-14).
-select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'job_interview') -> 'interview_prompt',
-          '{"interview_type":"job","in_progress_session_id":null,"in_progress_session":null}'::jsonb, 'job interview prompt');
-select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'culture_fit_interview') -> 'interview_prompt',
-          '{"interview_type":"culture_fit","in_progress_session_id":null,"in_progress_session":null}'::jsonb, 'culture fit prompt');
+-- 5. R14 (RM-1): interview stages are gone; no interview_prompt key.
+select throws_ok($$select public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'job_interview')$$,
+                 'P0001', 'invalid_stage', 'R14: job_interview refused');
+select throws_ok($$select public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'culture_fit_interview')$$,
+                 'P0001', 'invalid_stage', 'R14: culture_fit_interview refused');
+select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'assignment') - 'stage_changed_at',
+          '{"stage":"assignment","stage_outcome":null,"changed":true}'::jsonb, 'move to assignment');
 
 -- 3. Closed with an outcome.
 select is(public.move_application_stage('a0000000-aaaa-0000-0000-000000000001', 'closed', 'failed') ->> 'stage_outcome',
@@ -76,9 +78,8 @@ select results_eq(
       from public.application_stage_events order by created_at, ctid$$,
   $$values ('created', '-', 'before_apply', '-', '-'),
            ('stage_changed', 'before_apply', 'document', '-', '-'),
-           ('stage_changed', 'document', 'job_interview', '-', '-'),
-           ('stage_changed', 'job_interview', 'culture_fit_interview', '-', '-'),
-           ('stage_changed', 'culture_fit_interview', 'closed', '-', 'failed'),
+           ('stage_changed', 'document', 'assignment', '-', '-'),
+           ('stage_changed', 'assignment', 'closed', '-', 'failed'),
            ('outcome_changed', 'closed', 'closed', 'failed', 'passed'),
            ('outcome_changed', 'closed', 'closed', 'passed', '-'),
            ('outcome_changed', 'closed', 'closed', '-', 'passed'),

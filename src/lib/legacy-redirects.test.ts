@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 import { getPathMatch } from "next/dist/shared/lib/router/utils/path-match"
 import { prepareDestination } from "next/dist/shared/lib/router/utils/prepare-destination"
-import { CAREER_LEGACY_REDIRECTS } from "./legacy-redirects"
+import { LEGACY_REDIRECTS } from "./legacy-redirects"
 import { routes } from "./routes"
 
 /** What Next's `redirects()` does with a path: the first matching rule's Location (path + query). */
 function redirectOf(pathname: string): string | null {
-  for (const rule of CAREER_LEGACY_REDIRECTS) {
+  for (const rule of LEGACY_REDIRECTS) {
     const params = getPathMatch(rule.source, { strict: true, removeUnnamedParams: true })(pathname)
     if (!params) continue
     const { parsedDestination } = prepareDestination({ destination: rule.destination, params, query: {}, appendParamsToQuery: false })
@@ -46,5 +46,25 @@ describe("retired S-09 · S-34 addresses → S-08 (UQ-428)", () => {
     expect(redirectOf("/career")).toBeNull()
     expect(redirectOf("/career/projects/p1")).toBeNull()
     expect(redirectOf("/career/experiences/a/b")).toBeNull()
+  })
+})
+
+describe("retired S-20 · S-22 · S-33 · S-37 addresses (v5.19, RM-1)", () => {
+  const ap = "5b0c7f9e-1111-4c2a-9a55-0123456789ab"
+  const ses = "6c1d8a0f-2222-4d3b-8b66-123456789abc"
+  it("/applications/{id}/interview… → S-31", () => {
+    expect(redirectOf(`/applications/${ap}/interview`)).toBe(routes.application(ap))
+    expect(redirectOf(`/applications/${ap}/interview/${ses}`)).toBe(routes.application(ap))
+    expect(redirectOf(`/applications/${ap}/interview/${ses}/result`)).toBe(routes.application(ap))
+  })
+  it("/interviews… → S-13", () => {
+    expect(redirectOf("/interviews")).toBe(routes.applications())
+    expect(redirectOf(`/interviews/${ses}/result`)).toBe(routes.applications())
+  })
+  it("other application paths are untouched", () => {
+    expect(redirectOf(`/applications/${ap}`)).toBeNull()
+    expect(redirectOf(`/applications/${ap}/insight`)).toBeNull()
+    expect(redirectOf(`/applications/${ap}/interviews`)).toBeNull()
+    expect(redirectOf("/interviewsx")).toBeNull()
   })
 })

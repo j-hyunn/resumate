@@ -72,7 +72,7 @@ export type BuildCareerPackOptions = {
   asOf?: YearMonth;
   /**
    * Standalone projects whose deliverables enter the pack (C-1.1 기능별 포함
-   * 범위, e.g. AI-06 = projects the session's questions cite). Undefined = all.
+   * 범위). Undefined = all.
    * Projects outside the set still render their own fields.
    */
   deliverableProjectIds?: ReadonlySet<string>;

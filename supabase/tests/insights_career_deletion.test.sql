@@ -75,18 +75,18 @@ $f$;
 
 select is(pg_temp.by_project('project', 'aaaaaaaa-3333-0000-0000-000000000003'),
           '[{"application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000002", "name": "A 프로젝트", "insights": 1,
-             "drafts": 0, "draft_sections": 0, "interview_sessions": 0},
+             "drafts": 0, "draft_sections": 0},
             {"application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000001", "name": "B 프로젝트", "insights": 1,
-             "drafts": 0, "draft_sections": 0, "interview_sessions": 0}]'::jsonb,
+             "drafts": 0, "draft_sections": 0}]'::jsonb,
           'standalone project: cascaded deliverable citations counted per application project, ordered by name; two links of one insight count once');
 select is(pg_temp.by_project('project_deliverable', 'aaaaaaaa-4444-0000-0000-000000000001'),
           pg_temp.by_project('project', 'aaaaaaaa-3333-0000-0000-000000000003'), 'project_deliverable: same citations');
 select is(pg_temp.by_project('skill', 'aaaaaaaa-6666-0000-0000-000000000001'),
           '[{"application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000001", "name": "B 프로젝트", "insights": 1,
-             "drafts": 0, "draft_sections": 0, "interview_sessions": 0}]'::jsonb, 'skill');
+             "drafts": 0, "draft_sections": 0}]'::jsonb, 'skill');
 select is(pg_temp.by_project('experience', 'aaaaaaaa-1111-0000-0000-000000000001'),
           '[{"application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000001", "name": "B 프로젝트", "insights": 1,
-             "drafts": 0, "draft_sections": 0, "interview_sessions": 0}]'::jsonb,
+             "drafts": 0, "draft_sections": 0}]'::jsonb,
           'experience: its projects'' citations count (v4.4 always delete_projects)');
 select is(pg_temp.by_project('experience', 'aaaaaaaa-1111-0000-0000-000000000002') -> 0 ->> 'insights', '1',
           'experience: cascaded project citation counted');

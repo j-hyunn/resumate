@@ -13,7 +13,7 @@ import { InsightRpcError, type InsightInputs, type InsightStore } from "./db";
 import { batchIds, createInsightJobDefinition, pickFailure, savedBatches, type InsightBatch, type InsightPipeline } from "./job";
 import { insightJobPartial } from "./partial";
 import { AppError } from "@/lib/contracts/errors";
-import { emptyCareerRows } from "@/server/ai/context-pack/interview";
+import { emptyCareerRows } from "@/server/ai/context-pack/career-rows";
 
 /**
  * S6 insight job on the REAL runner (memory stores, scripted provider through

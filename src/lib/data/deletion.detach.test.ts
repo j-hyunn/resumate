@@ -3,8 +3,8 @@ import { createFixtures, type MockDb } from "@/lib/mock/fixtures"
 import { applicationDeletedToast, applicationObjectPhrase } from "./labels"
 
 /**
- * UQ-384 (run 38): the mock 자기소개서 delete leaves kept-session evidence like the real R11 triggers —
- * application_project_id null, and links to the deleted JD / requirements read as 원본 삭제됨 (quote null).
+ * R14 (RM-1): the mock 자기소개서 delete removes every evidence link of the project (the real FK
+ * cascade) and leaves other projects' links alone.
  */
 const store = vi.hoisted(() => ({ db: null as MockDb | null }))
 vi.mock("./source", () => ({
@@ -20,38 +20,18 @@ beforeEach(() => {
   store.db = createFixtures()
 })
 
-describe("mock deleteApplicationProject keeps completed-session evidence detached (UQ-384)", () => {
-  it("nulls the project id and marks JD sources deleted", async () => {
+describe("mock deleteApplicationProject removes the project's evidence (R14)", () => {
+  it("drops every link of the deleted project and keeps the others", async () => {
     const db = store.db!
-    const kept = db.interview_sessions.find((s) => s.status === "completed" && s.application_project_id !== null)!
-    const apId = kept.application_project_id!
-    const qIds = new Set(db.interview_questions.filter((q) => q.session_id === kept.id).map((q) => q.id))
-    const jdIds = db.job_descriptions.filter((j) => j.application_project_id === apId).map((j) => j.id)
-    const reqIds = new Set(db.jd_requirements.filter((r) => jdIds.includes(r.job_description_id)).map((r) => r.id))
-    // make sure the kept session cites a JD requirement of the deleted project
-    const [qId] = [...qIds]
-    const [reqId] = [...reqIds]
-    expect(qId && reqId).toBeTruthy()
-    const template = db.evidence_links[0]
-    db.evidence_links.push({
-      ...template,
-      id: "00000000-0000-4000-8000-00000000e384",
-      owner_type: "interview_question",
-      owner_id: qId,
-      application_project_id: apId,
-      source_type: "jd_requirement",
-      source_id: reqId,
-      quote: "요건 인용",
-      source_deleted_at: null,
-    })
+    const apId = db.application_projects[0]!.id
+    const template = db.evidence_links[0]!
+    db.evidence_links.push({ ...template, id: "00000000-0000-4000-8000-00000000e384", owner_type: "insight", application_project_id: apId })
+    const others = db.evidence_links.filter((e) => e.application_project_id !== apId).length
 
     await deleteApplicationProject(apId)
 
-    const link = db.evidence_links.find((e) => e.id === "00000000-0000-4000-8000-00000000e384")!
-    expect(link).toMatchObject({ application_project_id: null, quote: null })
-    expect(link.source_deleted_at).not.toBeNull()
     expect(db.evidence_links.some((e) => e.application_project_id === apId)).toBe(false)
-    expect(db.interview_sessions.find((s) => s.id === kept.id)?.application_project_id).toBeNull()
+    expect(db.evidence_links.filter((e) => e.application_project_id !== apId)).toHaveLength(others)
   })
 })
 

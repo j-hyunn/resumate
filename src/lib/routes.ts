@@ -2,10 +2,9 @@
  * Route tree for every screen (S-xx). Build links with these helpers instead of string
  * literals so areas link to each other through one place (foundation-owned).
  *
- * Query strings carry only non-personal values (spec: C-14 "쿼리에는 유형 값만",
- * FL-13 "URL에는 지원 프로젝트 ID와 기능 이름만").
+ * Query strings carry only non-personal values (spec: FL-13 "URL에는 지원 프로젝트 ID와 기능 이름만").
  */
-import type { InterviewType, PolicyType, ProjectStarField } from "@/types/db"
+import type { PolicyType, ProjectStarField } from "@/types/db"
 import { safeNextPath as contractSafeNextPath } from "@/lib/contracts/routes"
 import type { SettingsTabId } from "@/components/account/settings-section-list"
 
@@ -76,26 +75,14 @@ export const routes = {
    */
   applicationJd: (
     id: Id,
-    query?: { edit?: 1; from?: "insight" | "drafts" | "questions" | "interview"; draft?: Id; cause?: "not_a_jd" | "input_too_long" | "safety_blocked" },
+    query?: { edit?: 1; from?: "insight" | "drafts" | "questions"; draft?: Id; cause?: "not_a_jd" | "input_too_long" | "safety_blocked" },
   ) => withQuery(`/applications/${id}/jd`, query), // S-15
   applicationInsight: (id: Id) => `/applications/${id}/insight`, // S-16
   applicationDrafts: (id: Id) => `/applications/${id}/drafts`, // S-17
   draftQuestions: (id: Id, draftId: Id) => `/applications/${id}/drafts/${draftId}/questions`, // S-18
   draft: (id: Id, draftId: Id) => `/applications/${id}/drafts/${draftId}`, // S-19
 
-  // 면접 · 보드 — A4
-  interviewPrep: (id: Id, type?: InterviewType) =>
-    withQuery(`/applications/${id}/interview`, { type }), // S-20
-  interviewSession: (id: Id, sessionId: Id) => `/applications/${id}/interview/${sessionId}`, // S-33
-  interviewResult: (id: Id, sessionId: Id) =>
-    `/applications/${id}/interview/${sessionId}/result`, // S-22
-  interviews: () => "/interviews", // S-37
-  /**
-   * S-22 of a "자기소개서 삭제됨" session (OD-I6, U36-1): under 모의 면접, keyed by the session only (its
-   * application_project_id is null). No S-33 / S-20 address for such a session. A live session opened here is
-   * redirected to `interviewResult`; `/applications/{id}/interview/{sessionId}[/result]` of a deleted one comes here.
-   */
-  interviewDeletedResult: (sessionId: Id) => `/interviews/${sessionId}/result`, // S-22 (자기소개서 삭제됨)
+  // 보드 — A4 (S-20·S-22·S-33·S-37 폐기 v5.19 RM-1: 옛 주소는 next.config.ts 리다이렉트)
   board: () => "/board", // S-39
 
   // 설정 — A1
@@ -125,20 +112,18 @@ export const routes = {
 } as const
 
 /** L-01 left menu, fixed order (UX-1, U-4) */
-export type MenuKey = "career" | "applications" | "interviews" | "board"
+export type MenuKey = "career" | "applications" | "board"
 
 export const MENU_ITEMS: ReadonlyArray<{ key: MenuKey; label: string; href: string }> = [
   { key: "career", label: "커리어", href: routes.career() },
   { key: "applications", label: "자기소개서 관리", href: routes.applications() },
-  { key: "interviews", label: "모의 면접", href: routes.interviews() },
   { key: "board", label: "지원 현황", href: routes.board() },
 ]
 
-/** Active-menu rule (L-01): application sub-screens (S-14~S-22, S-31, S-33) → 자기소개서 관리; `/interviews/{id}/result` (자기소개서 삭제됨 S-22) → 모의 면접 */
+/** Active-menu rule (L-01): application sub-screens (S-14~S-18, S-31, S-45, S-46) → 자기소개서 관리 */
 export function menuKeyForPath(pathname: string): MenuKey | null {
   if (pathname.startsWith("/career")) return "career"
   if (pathname.startsWith("/applications")) return "applications"
-  if (pathname.startsWith("/interviews")) return "interviews"
   if (pathname.startsWith("/board")) return "board"
   return null
 }

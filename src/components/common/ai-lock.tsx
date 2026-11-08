@@ -5,7 +5,7 @@
  *
  *   <AiLock entry="insight" size="area" />                 화면·탭 본문 대신 (기존 결과 없음)
  *   <AiLock entry="draft" size="inline" actionName="경력기술서 생성" />   실행 버튼 하나 대신
- *   <AiLockDialog open … interviewType="job" returnHref={routes.interviewPrep(id, {type})} />  C-14 키 없음 변형
+ *   <AiLockPopup open … entry="insight" returnHref={…} />          팝업형
  *
  * "AI 연결하기" → S-41 (저장된 키 없음) / S-40, and remembers the FL-19 return target.
  * Not a failure: primary-subtle icon circle, no warning/destructive colour.
@@ -35,8 +35,6 @@ export type AiLockEntry =
   | "requirements"
   | "insight"
   | "draft"
-  | "interview_new"
-  | "interview_submit"
   | "usage"
 
 /** Entry-point table (02 C-18): 기능 설명 1줄 + 기본 대안 */
@@ -45,8 +43,6 @@ export const AI_LOCK_ENTRIES: Record<AiLockEntry, { description: string; alterna
   requirements: { description: "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요" },
   insight: { description: "이 공고와 내 커리어를 비교해 충족 요건·강점·보완점을 정리해요", alternative: "커리어 정리하기" },
   draft: { description: "커리어를 바탕으로 경력기술서·자소서 문항 답변 초안을 써 드려요" }, // C-18 (v5.13, D-UX-23)
-  interview_new: { description: "공고와 커리어에 맞춘 면접 질문을 만들고 답변을 채점해요", alternative: "지난 세션 보기" },
-  interview_submit: { description: "제출하면 연결한 AI로 채점해요. 작성한 답변은 저장돼 있어요", alternative: "계속 작성" },
   usage: { description: "AI를 연결하면 Resumate에서 쓴 토큰과 예상 비용을 여기서 볼 수 있어요" },
 }
 
@@ -56,8 +52,6 @@ const ENTRY_FEATURE: Record<AiLockEntry, AiFeatureKey> = {
   requirements: "requirements",
   insight: "insight",
   draft: "career_description",
-  interview_new: "interview_questions",
-  interview_submit: "interview_evaluation",
   usage: "usage",
 }
 
@@ -209,68 +203,7 @@ export function AiLock({
 }
 
 /**
- * C-14 키 없음 변형 (팝업형). Replaces the interview-stage popup when no key is active.
- * Closing keeps the card move (the caller already moved it).
- */
-export function AiLockDialog({
-  open,
-  onOpenChange,
-  interviewType,
-  returnHref,
-  onConnect,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  interviewType: "job" | "culture_fit"
-  /** FL-19 복귀 대상 = S-20 `?type=` */
-  returnHref: string
-  /** also run when leaving to connect (UQ-326: board origin + S-20 진입 안내 markers) */
-  onConnect?: () => void
-}) {
-  const links = useConnectLinks(returnHref, "interview_questions")
-  const { gemini } = links
-  const remember = () => {
-    links.remember()
-    onConnect?.()
-    // the settings dialog may open in place (saved key) — don't leave this dialog under it
-    onOpenChange(false)
-  }
-  const typeLabel = interviewType === "job" ? "직무 면접" : "컬처핏 면접"
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>면접 연습은 AI 연결 후 사용할 수 있어요</DialogTitle>
-          <DialogDescription className="text-base">
-            연결하면 {typeLabel}이 선택된 면접 준비로 바로 이어져요
-          </DialogDescription>
-        </DialogHeader>
-        <p className="flex items-center gap-1.5 text-sm leading-5 text-muted-foreground">
-          <Gift className="size-4 shrink-0" aria-hidden />
-          <Button variant="link" size="sm" asChild className="h-auto px-0">
-            <Link href={gemini} onClick={remember}>
-              {AI_LOCK_RECOMMEND}
-            </Link>
-          </Button>
-        </p>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            닫기
-          </Button>
-          <Button asChild>
-            <AiConnectLink onClick={remember}>
-              AI 연결하기
-            </AiConnectLink>
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/**
- * C-18 팝업형, generic (design-system 3.18; A4 request 4). Same look as AiLockDialog (C-14 키 없음
- * 변형) with caller-given copy — e.g. S-37 메뉴 "다시 채점" without a key. Closing changes nothing.
+ * C-18 팝업형, generic (design-system 3.18) with caller-given copy. Closing changes nothing.
  */
 export function AiLockPopup({
   open,
@@ -286,7 +219,7 @@ export function AiLockPopup({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** e.g. "다시 채점은 AI 연결 후 사용할 수 있어요" (default: AI_LOCK_TITLE) */
+  /** default: AI_LOCK_TITLE */
   title?: string
   /** default: the entry's 기능 설명 (02 C-18 표) */
   description?: string

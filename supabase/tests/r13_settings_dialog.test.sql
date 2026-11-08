@@ -9,12 +9,13 @@ insert into auth.users (id, email, aud, role) values
 
 -- ── ⑪ policy_versions.policy_type = 'ai_data_use' (D-UX-31, R-SD-14) ──
 -- 2026-11-08: 본문 원문(docs/legal/ai-data-use.md)이 생겨 새 버전 행을 더했다 (UI42-8, 20261113002900).
-select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 2,
-          'ai_data_use rows: 2026-11-05 + 2026-11-08');
+select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 3,
+          'ai_data_use rows: 2026-11-05 + 2026-11-08 + 2026-11-08.1 (R14)');
 select results_eq($$select version, requires_reconsent, document_path from public.policy_versions
                      where policy_type = 'ai_data_use' order by version$$,
   $$values ('2026-11-05', false, '/policies/ai_data_use/2026-11-05'),
-           ('2026-11-08', false, '/policies/ai_data_use/2026-11-08')$$,
+           ('2026-11-08', false, '/policies/ai_data_use/2026-11-08'),
+           ('2026-11-08.1', false, '/policies/ai_data_use/2026-11-08.1')$$,
   'document_path follows /policies/{type}/{version}, no reconsent (R-SD-14)');
 select ok((select pg_get_constraintdef(oid) like '%ai_data_use%'
             from pg_constraint where conname = 'policy_versions_policy_type_check'),
@@ -59,12 +60,6 @@ select is(private.insight_payload_valid(jsonb_build_object(
               'item_key', 'strengths.0', 'sort_order', 0, 'source_type', 'experience',
               'source_id', 'a0000000-0000-0000-0000-000000000001', 'source_field', 'summary')))),
           true, 'the same payload with an experience source is valid');
-select ok(not private.interview_evidence_valid(
-            jsonb_build_array(jsonb_build_object(
-              'item_key', 'criteria.x', 'sort_order', 0, 'source_type', 'profile',
-              'source_id', 'a0000000-0000-0000-0000-000000000001', 'source_field', 'desired_job_title')),
-            array['experience', 'education', 'project', 'project_deliverable', 'skill']),
-          'interview evidence with a profile source is invalid');
 -- every result-saving RPC uses the same 5-source list (no 'profile' left in any allowed-source array)
 select is_empty($$select n.nspname || '.' || p.proname
                     from pg_proc p join pg_namespace n on n.oid = p.pronamespace

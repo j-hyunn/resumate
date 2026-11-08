@@ -44,7 +44,7 @@ describe("mapDbError", () => {
 });
 
 describe("QA-W0-05 program errors", () => {
-  it.each(["invalid_error_code", "job_description_immutable"])("%s → internal_error 500", (raise) => {
+  it.each(["job_description_immutable"])("%s → internal_error 500", (raise) => {
     const err = mapDbError({ code: "P0001", message: raise });
     expect(err.code).toBe("internal_error");
     expect(err.status).toBe(500);
@@ -52,14 +52,13 @@ describe("QA-W0-05 program errors", () => {
 });
 
 describe("W0 refusals", () => {
-  it.each(["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged", "interview_evaluation_input_only"])("%s → 409 under its own code, Korean message", (raise) => {
+  it.each(["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged"])("%s → 409 under its own code, Korean message", (raise) => {
     const err = mapDbError({ code: "P0001", message: raise });
     expect(err).toMatchObject({ code: raise, status: 409 });
     expect(err.message).toMatch(/[가-힣]/);
   });
 
-  it("interview_evaluation_input_only carries the cause in details", () => {
-    expect(mapDbError({ code: "P0001", message: "interview_evaluation_input_only", details: "safety_blocked" }).details).toEqual({ cause: "safety_blocked" });
+  it("a W0 refusal carries no details", () => {
     expect(mapDbError({ code: "P0001", message: "jd_has_results", details: "x" }).details).toBeUndefined();
   });
 

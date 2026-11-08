@@ -3,7 +3,7 @@
 /**
  * L-01 이동 경로. Pages declare their trail with <PageCrumbs items=… />; the shell's top bar
  * renders it. Application sub-screens pass `applicationProjectId` so the first node becomes
- * "지원 현황" / "모의 면접" when the user came from S-39 / S-37 (setNavOrigin).
+ * "지원 현황" when the user came from S-39 (setNavOrigin).
  */
 import * as React from "react"
 import Link from "next/link"
@@ -60,10 +60,9 @@ export function PageTopActions({ children }: { children: React.ReactNode }) {
   return null
 }
 
-const ORIGIN_CRUMB = {
+const ORIGIN_CRUMB: Record<string, Crumb | undefined> = {
   board: { label: "지원 현황", href: routes.board() },
-  interviews: { label: "모의 면접", href: routes.interviews() },
-} as const
+}
 
 /** Declare the page trail. Last item = current page (no href needed). */
 export function PageCrumbs({ items, applicationProjectId }: { items: Crumb[]; applicationProjectId?: string }) {
@@ -72,11 +71,13 @@ export function PageCrumbs({ items, applicationProjectId }: { items: Crumb[]; ap
   React.useEffect(() => {
     if (!ctx) return
     let trail = items
-    // UQ-7 / UQ-122: any screen outside a 자기소개서 (menus, 커리어 incl. S-36, 설정) resets the
-    // origin, so later visits to S-20/S-22/S-31 show "자기소개서 관리" unless they come from S-39/S-37 again
+    // UQ-7 / UQ-122: any screen outside a 자기소개서 (menus, 커리어, 설정) resets the
+    // origin, so later visits to S-31 and its sub-screens show "자기소개서 관리" unless they come from S-39 again
     if (!applicationProjectId) clearNavOrigin()
     const origin = readNavOrigin(applicationProjectId)
-    if (origin && items[0]?.href === routes.applications()) trail = [ORIGIN_CRUMB[origin], ...items.slice(1)]
+    // UQ-44-1: an unknown origin never replaces the first node
+    const originCrumb = origin ? ORIGIN_CRUMB[origin] : undefined
+    if (originCrumb && items[0]?.href === routes.applications()) trail = [originCrumb, ...items.slice(1)]
     ctx.setCrumbs(trail)
     return () => ctx.setCrumbs([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,7 +91,8 @@ export function PageCrumbs({ items, applicationProjectId }: { items: Crumb[]; ap
  */
 export function CrumbTrail({ fallback }: { fallback?: string }) {
   const crumbs = useCrumbs()
-  const shown = crumbs.length > 0 ? crumbs : fallback ? [{ label: fallback }] : []
+  const declared = crumbs.filter((c): c is Crumb => Boolean(c?.label))
+  const shown = declared.length > 0 ? declared : fallback ? [{ label: fallback }] : []
   if (shown.length === 0) return null
   return (
     <Breadcrumb className="min-w-0">

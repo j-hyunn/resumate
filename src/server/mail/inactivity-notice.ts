@@ -37,7 +37,7 @@ export function buildInactivityNotice({ deleteOn, siteOrigin }: InactivityNotice
     "안녕하세요, Resumate입니다.",
     "",
     "회원님의 Resumate 계정에 1년 가까이 접속 기록이 없습니다.",
-    `개인정보 처리방침에 따라 ${date} 이후 계정과 저장된 모든 데이터(커리어 정보, 자기소개서, 지원 현황, 모의 면접 기록, AI 연결 정보)를 파기합니다.`,
+    `개인정보 처리방침에 따라 ${date} 이후 계정과 저장된 모든 데이터(커리어 정보, 자기소개서, 지원 현황, AI 연결 정보)를 파기합니다.`,
     "",
     "계정을 계속 쓰려면 그 전에 한 번 로그인해 주세요. 로그인하면 계정이 그대로 유지됩니다.",
     signInUrl,

@@ -51,7 +51,6 @@ export function toAccountDeletionSummary(raw: unknown): AccountDeletionSummary {
       applicationProjects: count(apps.application_projects),
       insights: count(apps.insights),
       drafts: count(apps.drafts),
-      interviewSessions: count(apps.interview_sessions),
       stageEvents: count(apps.application_stage_events),
     },
     aiConnection: {

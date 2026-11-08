@@ -223,7 +223,7 @@ export function CareerOverview({ tree, deliverables = {} }: { tree: CareerTree; 
           <div data-empty-guide="detail" className="flex flex-1 items-center justify-center lg:absolute lg:inset-0 lg:px-3">
             <EmptyState
               icon={Layers}
-              title="커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요"
+              title="커리어를 정리해 두면 자기소개서마다 인사이트·서류에 바로 쓸 수 있어요"
               description="경력·교육 아래에 프로젝트를 만들면 Resumate AI와 대화하며 내용을 채울 수 있어요(AI 연결 필요)"
             />
           </div>

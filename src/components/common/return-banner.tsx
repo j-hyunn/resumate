@@ -21,14 +21,12 @@ export const RETURN_FEATURE_LABELS: Record<ReturnTargetFeature, string> = {
   insight: "인사이트",
   career_description: "경력기술서",
   cover_letter: "자소서 문항 답변", // D-UX-23 (U36-2)
-  job_interview: "직무 면접",
 }
 
-export const RETURN_FEATURE_READINESS: Record<ReturnTargetFeature, Exclude<ReadinessFeatureKey, "culture_fit_interview">> = {
+export const RETURN_FEATURE_READINESS: Record<ReturnTargetFeature, ReadinessFeatureKey> = {
   insight: "insight",
   career_description: "draft",
   cover_letter: "draft",
-  job_interview: "job_interview",
 }
 
 /** 으로/로 — // [UI-가정] spec writes "{기능}으로" literally */

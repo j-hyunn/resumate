@@ -5,7 +5,6 @@ import {
   type CreateApplicationProjectInput,
   type CreateApplicationProjectResult,
   type DeleteApplicationProjectResult,
-  type InterviewPrompt,
   type MoveApplicationStageInput,
   type MoveApplicationStageResult,
   type SetApplicationOutcomeInput,
@@ -186,31 +185,6 @@ function toStageChange(id: string, row: Record<string, unknown>): StageChangeRes
   };
 }
 
-function toInterviewPrompt(value: unknown): InterviewPrompt | null {
-  const p = obj(value);
-  const type = str(p.interview_type);
-  if (type !== "job" && type !== "culture_fit") return null;
-  const session = obj(p.in_progress_session);
-  const sessionId = str(session.session_id);
-  const sessionType = str(session.interview_type);
-  const generation = str(session.generation_status);
-  return {
-    interviewType: type,
-    inProgressSessionId: str(p.in_progress_session_id),
-    inProgressSession:
-      sessionId && (sessionType === "job" || sessionType === "culture_fit")
-        ? {
-            sessionId,
-            interviewType: sessionType,
-            answeredCount: typeof session.answered_count === "number" ? session.answered_count : 0,
-            questionCount: typeof session.question_count === "number" ? session.question_count : 0,
-            generationStatus: generation === "ready" || generation === "failed" ? generation : "generating",
-            lastActivityAt: str(session.last_activity_at),
-          }
-        : null,
-  };
-}
-
 export async function moveApplicationStage(
   supabase: UserSupabaseClient,
   input: z.output<typeof MoveApplicationStageInput>,
@@ -222,7 +196,7 @@ export async function moveApplicationStage(
   });
   if (error) throw mapDbError(error);
   const row = obj(data);
-  return { ...toStageChange(input.id, row), interviewPrompt: toInterviewPrompt(row.interview_prompt) };
+  return toStageChange(input.id, row);
 }
 
 export async function setApplicationOutcome(

@@ -61,13 +61,6 @@ export function computeReadiness(db: MockDb): DataReadiness {
     return { ready: false, missing, hints, next_action: aiUsable ? "create_project" : "form" }
   }
 
-  // (v4.12, SD-6) `thin` = complete 경력·교육·프로젝트가 하나라도 있음 ("프로필 또는" 삭제, DM 6-A)
-  const dataSufficiency = ready
-    ? "ok"
-    : completeExperiences.length || completeEducations.length || completeProjects.length
-      ? "thin"
-      : "none"
-
   return {
     counts: {
       complete_experiences: completeExperiences.length,
@@ -92,9 +85,6 @@ export function computeReadiness(db: MockDb): DataReadiness {
     features: {
       insight: gated(),
       draft: gated(),
-      job_interview: gated(),
-      // 컬처핏 예외 [가정] (U-5): always ready
-      culture_fit_interview: { ready: true, data_sufficiency: dataSufficiency },
     },
   }
 }
@@ -153,8 +143,6 @@ export function toLegacyReadiness(r: DataReadinessV44): DataReadiness {
     features: {
       insight: feature(r.features.insight),
       draft: feature(r.features.draft),
-      job_interview: feature(r.features.job_interview),
-      culture_fit_interview: r.features.culture_fit_interview,
     },
     ai_connection: r.ai_connection as DataReadiness["ai_connection"],
   }
@@ -194,8 +182,6 @@ export function insufficientReadinessPreview(
     features: {
       insight: feature,
       draft: feature,
-      job_interview: feature,
-      culture_fit_interview: { ready: true, data_sufficiency: "thin" },
     },
   }
 }

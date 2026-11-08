@@ -46,7 +46,7 @@ function projectedReady(
   educations: Pick<Education, "id" | "status">[],
   readiness: DataReadiness,
 ): boolean {
-  const key = chat.return_target?.feature === "job_interview" ? "job_interview" : chat.return_target && chat.return_target.feature !== "insight" ? "draft" : "insight"
+  const key = chat.return_target && chat.return_target.feature !== "insight" ? "draft" : "insight"
   const feature = readiness.features[key]
   if (feature.ready) return true
   if (feature.missing?.includes("complete_experience")) return false

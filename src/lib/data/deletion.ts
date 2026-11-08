@@ -1,6 +1,6 @@
 /**
  * C-05 deletion: RPC get_deletion_impact / delete_career_item (04 §4.2) plus application
- * project / draft / interview session deletion. Server only.
+ * project / draft deletion. Server only.
  */
 import type {
   AffiliationMode,
@@ -15,7 +15,6 @@ import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
 import * as applicationActions from "@/server/actions/application"
 import * as draftActions from "@/server/actions/draft"
-import * as interviewActions from "@/server/actions/interview"
 import {
   DeleteCareerItemInput,
   DeletionImpactInput,
@@ -169,13 +168,12 @@ function toDeletionImpact(impact: CareerDeletionImpact | WritingChatDeletionImpa
         writing_chats: impact.cascade.writing_chats,
         project_deliverables: impact.cascade.project_deliverables,
       },
-      // R11 (DM v4.11 2.7.2, R-OD-5): detached_interview_sessions comes with the RPC
       affected_results: impact.affected_results,
     }
   }
   return {
     cascade: { projects: 0, project_details: 0, achievements: 0, project_skills: 0, writing_chats: 0, project_deliverables: 0 },
-    affected_results: { by_application_project: [], detached_interview_sessions: 0 },
+    affected_results: { by_application_project: [] },
     // v4.4 has no saved rows: `last_applied_at` set → "반영된 STAR는 남아요" (shown as 1 kept row).
     writing_chat: { message_count: impact.message_count, linked_saved_rows: impact.last_applied_at ? 1 : 0 },
   }
@@ -221,7 +219,7 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
       writing_chats: set.writing_chats.length + v45.writing_chats,
       project_deliverables: v45.project_deliverables,
     },
-    affected_results: { by_application_project: [], detached_interview_sessions: 0 },
+    affected_results: { by_application_project: [] },
   }
   if (entityType === "project_deliverable") return impact
   if (entityType === "writing_chat") {
@@ -241,38 +239,23 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
   }
   const evidence = affectedEvidence(db, set)
   const sources = affectedSources(db, set)
-  const byAp = new Map<string, { insights: Set<string>; drafts: Set<string>; sections: Set<string>; sessions: Set<string> }>()
+  const byAp = new Map<string, { insights: Set<string>; drafts: Set<string>; sections: Set<string> }>()
   const bucket = (apId: string) => {
     let b = byAp.get(apId)
     if (!b) {
-      b = { insights: new Set(), drafts: new Set(), sections: new Set(), sessions: new Set() }
+      b = { insights: new Set(), drafts: new Set(), sections: new Set() }
       byAp.set(apId, b)
     }
     return b
   }
-  const sessionOf = (e: (typeof evidence)[number]) =>
-    db.interview_questions.find((q) => q.id === e.owner_id)?.session_id ??
-    db.answer_evaluations.find((a) => a.id === e.owner_id)?.session_id ??
-    db.session_feedbacks.find((f) => f.id === e.owner_id)?.session_id
-  const detached = new Set<string>()
   for (const e of evidence) {
-    // OD-I6 (DM v4.11 2.7.2): evidence of a kept session of a deleted 자기소개서 has no project bucket —
-    // it counts toward "삭제된 자기소개서의 면접 기록 {n}개" like the RPC's detached_interview_sessions.
-    if (!e.application_project_id) {
-      const sessionId = sessionOf(e)
-      if (sessionId) detached.add(sessionId)
-      continue
-    }
+    if (!e.application_project_id) continue
     const b = bucket(e.application_project_id)
     if (e.owner_type === "insight") b.insights.add(e.owner_id)
     if (e.owner_type === "draft_section") {
       b.sections.add(e.owner_id)
       const section = db.draft_sections.find((s) => s.id === e.owner_id)
       if (section) b.drafts.add(section.draft_id)
-    }
-    if (e.owner_type === "interview_question" || e.owner_type === "answer_evaluation" || e.owner_type === "session_feedback") {
-      const sessionId = sessionOf(e)
-      if (sessionId) b.sessions.add(sessionId)
     }
   }
   for (const s of sources) {
@@ -287,9 +270,7 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     insights: b.insights.size,
     drafts: b.drafts.size,
     draft_sections: b.sections.size,
-    interview_sessions: b.sessions.size,
   }))
-  impact.affected_results.detached_interview_sessions = detached.size
   return impact
 }
 
@@ -391,14 +372,10 @@ async function mockDeleteCareerItem(entityType: DeletionEntityType, entityId: st
   }
 }
 
-/** C-05 자기소개서 삭제 counts (v5.13, OD-I6: DM v4.11 `get_deletion_impact('application_project')`) */
+/** C-05 자기소개서 삭제 counts (DM 2.7.2 `get_deletion_impact('application_project')`) */
 export interface ApplicationDeletionImpact {
   insights: number
   drafts: number
-  /** sessions deleted with it = not `completed` (`cascade.interview_sessions`) */
-  interview_sessions: number
-  /** completed sessions kept as read-only records (`kept.interview_sessions`); 0 → line hidden */
-  kept_interview_sessions: number
   stage_events: number
 }
 
@@ -409,19 +386,15 @@ export async function getApplicationDeletionImpact(applicationProjectId: string)
       return {
         insights: db.insights.filter((i) => i.application_project_id === applicationProjectId).length,
         drafts: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
-        interview_sessions: db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId && s.status !== "completed").length,
-        kept_interview_sessions: db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId && s.status === "completed").length,
         stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
       }
     },
-    // R11 (DM v4.11 2.7.2, OD-I6): RPC get_deletion_impact('application_project', id)
+    // DM 2.7.2: RPC get_deletion_impact('application_project', id)
     async () => {
       const r = unwrap(await applicationActions.getApplicationProjectDeletionImpact({ id: applicationProjectId }))
       return {
         insights: r.cascade.insights,
         drafts: r.cascade.drafts,
-        interview_sessions: r.cascade.interview_sessions,
-        kept_interview_sessions: r.kept.interview_sessions,
         stage_events: r.cascade.stage_events,
       }
     },
@@ -441,17 +414,6 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   }
   const jdIds = db.job_descriptions.filter((j) => j.application_project_id === applicationProjectId).map((j) => j.id)
   const draftIds = db.drafts.filter((d) => d.application_project_id === applicationProjectId).map((d) => d.id)
-  const ap = db.application_projects.find((a) => a.id === applicationProjectId)
-  const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  const own = db.interview_sessions.filter((s) => s.application_project_id === applicationProjectId)
-  // OD-I6 (DM v4.11): completed sessions stay as read-only records with the names copied at delete time.
-  // Like the real FK (`on delete set null`), the kept session loses its project id.
-  for (const s of own.filter((x) => x.status === "completed")) {
-    s.company_name_snapshot = jd?.company_name ?? ap?.name ?? null
-    s.position_title_snapshot = jd?.position_title ?? null
-    s.application_project_id = null
-  }
-  const sessionIds = own.filter((s) => s.status !== "completed").map((s) => s.id)
   const requirementIds = new Set(db.jd_requirements.filter((r) => jdIds.includes(r.job_description_id)).map((r) => r.id))
   db.application_projects = db.application_projects.filter((a) => a.id !== applicationProjectId)
   db.application_stage_events = db.application_stage_events.filter((e) => e.application_project_id !== applicationProjectId)
@@ -461,21 +423,10 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   db.drafts = db.drafts.filter((d) => !draftIds.includes(d.id))
   db.draft_sections = db.draft_sections.filter((s) => !draftIds.includes(s.draft_id))
   db.draft_section_sources = db.draft_section_sources.filter((s) => s.application_project_id !== applicationProjectId)
-  db.interview_sessions = db.interview_sessions.filter((s) => !sessionIds.includes(s.id))
-  db.interview_questions = db.interview_questions.filter((q) => !sessionIds.includes(q.session_id))
-  db.interview_answers = db.interview_answers.filter((a) => !sessionIds.includes(a.session_id))
-  db.answer_evaluations = db.answer_evaluations.filter((a) => !sessionIds.includes(a.session_id))
-  db.session_feedbacks = db.session_feedbacks.filter((f) => !sessionIds.includes(f.session_id))
-  // evidence owned by kept sessions stays (its JD-requirement sources now read as "원본 삭제됨"); the rest goes
-  const keptIds = new Set<string>(own.filter((x) => x.status === "completed").map((x) => x.id))
-  for (const q of db.interview_questions) if (keptIds.has(q.session_id)) keptIds.add(q.id)
-  for (const ev of db.answer_evaluations) if (keptIds.has(ev.session_id)) keptIds.add(ev.id)
-  for (const f of db.session_feedbacks) if (keptIds.has(f.session_id)) keptIds.add(f.id)
-  db.evidence_links = db.evidence_links.filter((e) => e.application_project_id !== applicationProjectId || keptIds.has(e.owner_id))
-  // Same as the real triggers (R11 application_projects_detach_interviews + evidence_mark_source_deleted, DM 2.7.2):
-  // the kept evidence loses its project id, and links to the deleted JD / requirements read as "원본 삭제됨".
+  db.evidence_links = db.evidence_links.filter((e) => e.application_project_id !== applicationProjectId)
+  // Same as the real trigger (evidence_mark_source_deleted, DM 2.7.2): links to the deleted JD / requirements
+  // read as "원본 삭제됨".
   for (const e of db.evidence_links) {
-    if (e.application_project_id === applicationProjectId) e.application_project_id = null
     const jdSourceGone =
       (e.source_type === "jd_requirement" && e.source_id !== null && requirementIds.has(e.source_id)) ||
       (e.source_type === "jd_sentence" && e.source_id !== null && jdIds.includes(e.source_id))
@@ -486,7 +437,7 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   }
 }
 
-/** C-05 초안 / 면접 세션: 하위 개수 */
+/** C-05 초안: 하위 개수 */
 export async function getDraftDeletionImpact(draftId: string): Promise<{ sections: number }> {
   if (!(await isPreviewRequest())) {
     const { supabase } = await requireConsentedUser()
@@ -509,48 +460,4 @@ export async function deleteDraft(draftId: string): Promise<void> {
   db.draft_sections = db.draft_sections.filter((s) => s.draft_id !== draftId)
   db.draft_section_sources = db.draft_section_sources.filter((s) => !sectionIds.includes(s.draft_section_id))
   db.evidence_links = db.evidence_links.filter((e) => !(e.owner_type === "draft_section" && sectionIds.includes(e.owner_id)))
-}
-
-export async function getInterviewSessionDeletionImpact(sessionId: string): Promise<{ questions: number; answers: number }> {
-  return previewOr(
-    async () => {
-      const db = await mockRequest(300)
-      return {
-        questions: db.interview_questions.filter((q) => q.session_id === sessionId).length,
-        answers: db.interview_answers.filter((a) => a.session_id === sessionId && a.answer_text.trim() !== "").length,
-      }
-    },
-    async () => {
-      const { supabase } = await requireConsentedUser()
-      const [session, questions] = await Promise.all([
-        // answered_count: non-blank answers, kept by the answer trigger.
-        supabase.from("interview_sessions").select("answered_count").eq("id", sessionId).maybeSingle(),
-        supabase.from("interview_questions").select("id", { count: "exact", head: true }).eq("session_id", sessionId),
-      ])
-      if (session.error) throw mapDbError(session.error)
-      if (questions.error) throw mapDbError(questions.error)
-      return { questions: questions.count ?? 0, answers: session.data?.answered_count ?? 0 }
-    },
-  )
-}
-
-export async function deleteInterviewSession(sessionId: string): Promise<void> {
-  return previewOr(
-    async () => {
-      const db = await mockRequest()
-      const questionIds = db.interview_questions.filter((q) => q.session_id === sessionId).map((q) => q.id)
-      const evalIds = db.answer_evaluations.filter((a) => a.session_id === sessionId).map((a) => a.id)
-      const fbIds = db.session_feedbacks.filter((f) => f.session_id === sessionId).map((f) => f.id)
-      db.interview_sessions = db.interview_sessions.filter((s) => s.id !== sessionId)
-      db.interview_questions = db.interview_questions.filter((q) => q.session_id !== sessionId)
-      db.interview_answers = db.interview_answers.filter((a) => a.session_id !== sessionId)
-      db.answer_evaluations = db.answer_evaluations.filter((a) => a.session_id !== sessionId)
-      db.session_feedbacks = db.session_feedbacks.filter((f) => f.session_id !== sessionId)
-      const owners = new Set([...questionIds, ...evalIds, ...fbIds])
-      db.evidence_links = db.evidence_links.filter((e) => !owners.has(e.owner_id))
-    },
-    async () => {
-      unwrap(await interviewActions.deleteInterviewSession({ sessionId }))
-    },
-  )
 }

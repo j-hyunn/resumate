@@ -1,6 +1,6 @@
 -- R1 (planning decisions 2026-11-05): A7 get_account_deletion_state, A18 readiness project_fields,
 -- A19 key RPC executors, A20 unified re-consent rule (save_provider_key = check_ai_run_allowed).
--- A5 / A6 are in writing_chats.test.sql, A22 in interviews.test.sql, A24 in evidence_links.test.sql / grants.test.sql.
+-- A5 / A6 are in writing_chats.test.sql, A24 in evidence_links.test.sql / grants.test.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer, service_role;
@@ -74,8 +74,8 @@ select is(public.get_data_readiness() #> '{features,insight}',
           'A18: project_fields -> form + suggested_project_id, same without AI connection');
 select is(public.get_data_readiness() #> '{features,draft}', public.get_data_readiness() #> '{features,insight}',
           'A18: draft feature same object');
-select is(public.get_data_readiness() #> '{features,job_interview}', public.get_data_readiness() #> '{features,insight}',
-          'A18: job_interview feature same object');
+select is((select array_agg(k order by k) from jsonb_object_keys(public.get_data_readiness() -> 'features') k),
+          array['draft', 'insight'], 'R14: only insight / draft features remain');
 reset role;
 
 -- with a valid active key -> same result (no AI panel on standalone projects).

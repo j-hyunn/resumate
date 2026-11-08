@@ -206,8 +206,6 @@ describe("DataReadiness (DM §6 v4.4)", () => {
     features: {
       insight: { ready: false, missing: ["complete_project"], hints: ["project_star"], next_action: "writing_chat", suggested_project_id: ID },
       draft: { ready: false, missing: ["complete_project"], hints: [], next_action: "create_project" },
-      job_interview: { ready: false, missing: ["complete_experience", "complete_project"], hints: [], next_action: "form" },
-      culture_fit_interview: { ready: true, data_sufficiency: "thin" },
     },
   };
   it("parses the DM §6 v4.4 example shape", () => {

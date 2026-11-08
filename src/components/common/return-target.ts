@@ -4,7 +4,7 @@
  * Browser-session state shared across areas (client only):
  * - C-10 return target for form paths (FL-13: "폼(S-09 등)으로만 넘어간 경우는 브라우저 세션 저장").
  *   AI writing chats store theirs in writing_chats.return_target instead.
- * - Navigation origin for breadcrumbs (L-01: S-39 / S-37 에서 들어오면 첫 마디가 출발 메뉴).
+ * - Navigation origin for breadcrumbs (L-01: S-39 에서 들어오면 첫 마디가 출발 메뉴 "지원 현황").
  * Nothing personal goes into URLs; ids + feature names only.
  */
 import type { ReturnTargetFeature } from "@/types/db"
@@ -16,7 +16,6 @@ export interface ReturnTargetInput {
    * 진행 중 설정 restored on return. Settled keys (A2 request 7):
    * - cover_letter: `{ draft_id }` (S-18 문항 설정 화면의 초안)
    * - career_description: `{ included_project_ids }`
-   * - job_interview: `{ interview_type, question_count }`
    * - insight (보완점): `{ gap_item_key, requirement_ids }`
    */
   params?: Record<string, unknown>
@@ -104,9 +103,9 @@ export function consumeReturnParams(applicationProjectId: string, feature: Retur
   return t.params ?? {}
 }
 
-export type NavOrigin = "board" | "interviews"
+export type NavOrigin = "board"
 
-/** Call when leaving S-39 / S-37 toward an application sub-screen. */
+/** Call when leaving S-39 toward an application sub-screen. */
 export function setNavOrigin(origin: NavOrigin, applicationProjectId: string): void {
   safeSession()?.setItem(ORIGIN_KEY, JSON.stringify({ origin, application_project_id: applicationProjectId }))
 }
@@ -116,29 +115,17 @@ export function readNavOrigin(applicationProjectId: string | undefined): NavOrig
   const raw = safeSession()?.getItem(ORIGIN_KEY)
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw) as { origin: NavOrigin; application_project_id: string }
-    return parsed.application_project_id === applicationProjectId ? parsed.origin : null
+    const parsed = JSON.parse(raw) as { origin?: unknown; application_project_id?: unknown }
+    // UQ-44-1: a value left by an older build (e.g. "interviews", v5.19 RM-1) is not an origin any more
+    if (parsed.origin !== "board") {
+      clearNavOrigin()
+      return null
+    }
+    return parsed.application_project_id === applicationProjectId ? "board" : null
   } catch {
+    clearNavOrigin()
     return null
   }
-}
-
-const STAGE_MOVE_KEY = "resumate.board-stage-move"
-
-/**
- * One-time marker: the user moved this card into an interview stage on S-39 and chose
- * "면접 준비하기" in C-14 (UQ-122). S-20 consumes it for its 진입 안내, so later visits
- * (S-22 links, S-31 chip, S-36 return) don't show "지원 현황에서 … 옮겼어요".
- */
-export function markBoardStageMove(applicationProjectId: string): void {
-  safeSession()?.setItem(STAGE_MOVE_KEY, applicationProjectId)
-}
-
-export function consumeBoardStageMove(applicationProjectId: string): boolean {
-  const s = safeSession()
-  if (s?.getItem(STAGE_MOVE_KEY) !== applicationProjectId) return false
-  s.removeItem(STAGE_MOVE_KEY)
-  return true
 }
 
 export function clearNavOrigin(): void {

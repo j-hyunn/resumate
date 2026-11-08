@@ -21,3 +21,19 @@ export const CAREER_LEGACY_REDIRECTS: LegacyRedirect[] = [
   { source: "/career/educations/new", destination: "/career?new=education", permanent: true },
   { source: "/career/educations/:id", destination: "/career?item=education::id", permanent: true },
 ]
+
+/**
+ * Retired mock-interview screens (UX v5.19 1장 "폐기한 면접 화면의 주소", RM-1 `[가정]`), no toast:
+ * - S-20 · S-33 · S-22 (`/applications/{id}/interview[/{sessionId}[/result]]`) → S-31 `/applications/{id}`
+ *   (S-31 answers ST-NOTFOUND when the 자기소개서 is missing or not the user's).
+ * - S-37 · "자기소개서 삭제됨" S-22 (`/interviews[/{sessionId}/result]`) → S-13 `/applications`.
+ * `:rest*` also matches the bare prefix. [UI-가정] Next keeps the request's query string on a config redirect
+ * (`?type=` 등이 남는다); both targets ignore unknown keys, so nothing changes on screen.
+ */
+export const INTERVIEW_LEGACY_REDIRECTS: LegacyRedirect[] = [
+  { source: "/applications/:id/interview/:rest*", destination: "/applications/:id", permanent: true },
+  { source: "/interviews/:rest*", destination: "/applications", permanent: true },
+]
+
+/** Every retired-screen redirect, in match order (next.config.ts). */
+export const LEGACY_REDIRECTS: LegacyRedirect[] = [...CAREER_LEGACY_REDIRECTS, ...INTERVIEW_LEGACY_REDIRECTS]

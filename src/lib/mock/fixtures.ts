@@ -9,13 +9,11 @@
  * - writing chats: active new_project, saved augment, active with return_target
  * - application projects at different board stages, closed with/without outcome
  * - insight ready + insight generating (running ai_job), drafts, cover letter sections
- * - interview sessions: in_progress, completed (new result), evaluating, abandoned
  * - evidence links incl. one "변경됨" and one "원본 삭제됨"
  */
 import type {
   AiJob,
   Achievement,
-  AnswerEvaluation,
   ApplicationProject,
   ApplicationStageEvent,
   Draft,
@@ -25,16 +23,12 @@ import type {
   EvidenceLink,
   Experience,
   Insight,
-  InterviewAnswer,
-  InterviewQuestion,
-  InterviewSession,
   JdRequirement,
   JobDescription,
   Profile,
   Project,
   ProjectDetail,
   ProjectSkill,
-  SessionFeedback,
   Skill,
   AiProviderKey,
   AiDataUseConsent,
@@ -85,11 +79,6 @@ export interface MockDb {
   drafts: Draft[]
   draft_sections: DraftSection[]
   draft_section_sources: DraftSectionSource[]
-  interview_sessions: InterviewSession[]
-  interview_questions: InterviewQuestion[]
-  interview_answers: InterviewAnswer[]
-  answer_evaluations: AnswerEvaluation[]
-  session_feedbacks: SessionFeedback[]
   evidence_links: EvidenceLink[]
   ai_jobs: AiJob[]
   /** v4 BYOK (04 §2.9 ~ 2.11). usage_events / usage_limits removed (D-34) */
@@ -137,21 +126,6 @@ const aiMeta = (jobId: string | null): AiOutputMeta => mockAiMeta(jobId)
 
 /** Current policy version. effective_at precedes the fixture consents (120 days ago) — A1 UQ-106. */
 const POLICY_VERSION = "2026-04-01"
-
-/** 04 §2.7.1 판정표 fixture sessions: each answer's outcome. "target" = failed, cause unknown (다시 채점 대상) */
-const GRADED_SESSIONS = [7, 8, 9, 10, 11, 14] as const
-/** OD-I6: the deleted 자기소개서 of session 15 — IDS.ap(90) is not in application_projects; the session's id is null */
-export const DELETED_AP_N = 90
-const GRADED_OUTCOMES: Record<(typeof GRADED_SESSIONS)[number], Array<"ok" | "target" | "unanswered" | "input_too_long" | "safety_blocked">> = {
-  7: ["input_too_long", "input_too_long", "unanswered"],
-  8: ["ok", "ok", "ok"],
-  9: ["ok", "ok", "ok"],
-  10: ["ok", "ok", "safety_blocked"],
-  11: ["ok", "target", "ok"],
-  14: ["safety_blocked", "ok", "target"],
-}
-const GRADED_QUESTIONS = ["가장 어려웠던 장애를 어떻게 풀었나요?", "설계를 바꾼 결정을 설명해 주세요.", "부족한 경험은 어떻게 보완하겠어요?"]
-const GRADED_ANSWERS = ["지표로 병목을 찾고 쿼리를 바꿔 해결했습니다.", "장애 범위를 줄이려고 모듈을 나눴습니다.", "사이드 프로젝트로 직접 운영해 보며 익히겠습니다."]
 
 export function createFixtures(): MockDb {
   const thisYear = new Date().getFullYear()
@@ -575,8 +549,8 @@ export function createFixtures(): MockDb {
       saved_at: null,
       return_target: {
         application_project_id: IDS.ap(2),
-        feature: "job_interview",
-        params: { question_count: 5 },
+        feature: "insight",
+        params: {},
         created_at: daysAgo(2),
       },
       last_extracted_sequence: 2,
@@ -692,13 +666,13 @@ export function createFixtures(): MockDb {
     duplicated_from_id: null,
   })
   const application_projects: ApplicationProject[] = [
-    ap(1, "그린뱅크 – 결제 백엔드 엔지니어", "ai", "job_interview", null, 10, 2, 0),
+    ap(1, "그린뱅크 – 결제 백엔드 엔지니어", "ai", "assignment", null, 10, 2, 0),
     ap(2, "하늘커머스 – 서버 개발자", "user", "document", null, 2, 5, 1),
     ap(3, "클라우드나인 – 플랫폼 엔지니어", "ai", "before_apply", null, 21, 3, 3),
     ap(4, "별빛증권 – 백엔드 개발", "ai", "closed", "failed", -12, 8, 8),
     ap(5, "스텔라랩스 – Senior Backend Engineer", "ai", "closed", null, -30, 15, 15),
     ap(6, null, null, "before_apply", null, null, 0, 0),
-    // Q53-2 · 9: 입력 원인으로 요건 추출 실패 + 요건 0개 → 공고 원문 고치기 (JD 7, 세션 6 · 12)
+    // Q53-2 · 9: 입력 원인으로 요건 추출 실패 + 요건 0개 → 공고 원문 고치기 (JD 7)
     ap(7, "새 자기소개서 (2026-10-29)", "default", "before_apply", null, 14, 1, 1),
     // Q53-11: 추출은 성공했는데 요건 0개, 이 원문으로 만든 결과 없음
     ap(8, "새 자기소개서 (2026-10-30)", "default", "before_apply", null, 14, 1, 1),
@@ -726,7 +700,7 @@ export function createFixtures(): MockDb {
   const application_stage_events: ApplicationStageEvent[] = [
     stageEvent(1, 1, "created", null, "before_apply", 39),
     stageEvent(2, 1, "stage_changed", "before_apply", "document", 20),
-    stageEvent(3, 1, "stage_changed", "document", "job_interview", 2),
+    stageEvent(3, 1, "stage_changed", "document", "assignment", 2),
     stageEvent(4, 2, "created", null, "before_apply", 38),
     stageEvent(5, 2, "stage_changed", "before_apply", "document", 5),
     stageEvent(6, 3, "created", null, "before_apply", 3),
@@ -899,20 +873,6 @@ export function createFixtures(): MockDb {
     job(11, "insight", 2, "insight", IDS.ins(2), "running", { stage: "match", done: 0, total: 2 }, 0, {
       mock_duration_ms: 10 * 60_000,
     }),
-    job(12, "interview_evaluation", 2, "interview_session", IDS.ses(3), "running", { stage: "evaluate", done: 1, total: 3 }, 0, {
-      mock_duration_ms: 10 * 60_000,
-    }),
-    // v4.2: failed grading on another provider/tier → same-row retry shows "{활성 공급자}로 처음부터 다시 해요"
-    {
-      ...job(13, "interview_evaluation", 3, "interview_session", IDS.ses(5), "failed", { stage: "evaluate", done: 1, total: 3 }, 60 * 26),
-      provider: "openai",
-      connection_tier: "paid",
-      model: MOCK_MODELS.openai.default,
-      error_code: "provider_unavailable",
-      error_category: "transient",
-      failure_cause: "provider_unavailable",
-      finished_at: minutesAgo(60 * 25),
-    },
     // v4.2 A4: failed career description generation (request-scoped, not same-row retryable)
     {
       ...job(14, "career_description", 2, "draft", IDS.drf(3), "failed", { stage: "generate" }, 60 * 48),
@@ -920,17 +880,9 @@ export function createFixtures(): MockDb {
       error_category: "system",
       finished_at: minutesAgo(60 * 48 - 1),
     },
-    // Q53-2 · 9: 입력 원인 실패 JD (AP 7). 추출 · 인사이트 선행 추출 · 질문 생성 선행 추출이 같은 원인으로 실패
+    // Q53-2 · 9: 입력 원인 실패 JD (AP 7). 추출 · 인사이트 선행 추출이 같은 원인으로 실패
     failedJob(15, "jd_extraction", 7, "job_description", IDS.jd(7), "not_a_jd", 60 * 26),
-    failedJob(16, "interview_questions", 7, "interview_session", IDS.ses(6), "not_a_jd", 60 * 25),
     failedJob(17, "insight", 7, "insight", IDS.ins(3), "not_a_jd", 60 * 24),
-    // Q53-9: 요건이 있는 공고의 질문 생성 입력 원인 실패 (AP 2) → S-15 읽기 전용 + 안내
-    failedJob(21, "interview_questions", 2, "interview_session", IDS.ses(13), "safety_blocked", 60 * 6),
-    // 04 §2.7.1 판정표: 세션 7 입력 원인만 · 8 종합만 실패 · 9 종합이 입력 원인 · 14 입력 원인 + 다른 원인
-    failedJob(18, "interview_evaluation", 5, "interview_session", IDS.ses(7), "input_too_long", 60 * 20),
-    failedJob(19, "interview_evaluation", 5, "interview_session", IDS.ses(8), "provider_unavailable", 60 * 19),
-    failedJob(20, "interview_evaluation", 5, "interview_session", IDS.ses(9), "input_too_long", 60 * 18),
-    failedJob(22, "interview_evaluation", 5, "interview_session", IDS.ses(14), "provider_unavailable", 60 * 17),
   ]
 
   // --- insights --------------------------------------------------------------
@@ -1202,298 +1154,6 @@ export function createFixtures(): MockDb {
     },
   ]
 
-  // --- interviews -------------------------------------------------------------
-  const session = (
-    n: number,
-    apN: number,
-    type: InterviewSession["interview_type"],
-    status: InterviewSession["status"],
-    extra: Partial<InterviewSession>,
-  ): InterviewSession => ({
-    ...base(IDS.ses(n), 10 - n, 0),
-    application_project_id: IDS.ap(apN),
-    company_name_snapshot: null, // R11 최소 수정 (OD-I6 columns)
-    position_title_snapshot: null,
-    insight_id: null,
-    source_session_id: null,
-    interview_type: type,
-    question_count: 5,
-    data_sufficiency: "ok",
-    weak_requirement_ids: [],
-    status,
-    generation_status: "ready",
-    answered_count: 0,
-    unanswered_count: 0,
-    submitted_at: null,
-    completed_at: null,
-    result_viewed_at: null,
-    abandoned_at: null,
-    last_activity_at: daysAgo(0, 3),
-    career_snapshot_hash: null,
-    score_status: null,
-    score_value: null,
-    score_max: null,
-    score_method_version: null,
-    score_rationale: null,
-    score_counted_count: null,
-    question_provider: "gemini",
-    question_model: MOCK_MODELS.gemini.default,
-    evaluation_provider: status === "completed" || status === "evaluating" ? "gemini" : null,
-    evaluation_model: status === "completed" || status === "evaluating" ? MOCK_MODELS.gemini.default : null,
-    question_validation_report: null,
-    question_usage: null,
-    ...extra,
-  })
-  const gradedSession = (n: (typeof GRADED_SESSIONS)[number], apN: number, status: "evaluation_failed" | "completed", answered: number, unanswered: number): InterviewSession =>
-    session(n, apN, "job", status, {
-      created_at: daysAgo(2),
-      question_count: 3,
-      answered_count: answered,
-      unanswered_count: unanswered,
-      submitted_at: daysAgo(1),
-      completed_at: status === "completed" ? daysAgo(1) : null,
-      score_status: status === "completed" ? "pending_method" : null,
-      score_counted_count: status === "completed" ? GRADED_OUTCOMES[n].filter((o) => o === "ok").length : null,
-      last_activity_at: daysAgo(1),
-      evaluation_provider: "gemini",
-      evaluation_model: MOCK_MODELS.gemini.default,
-    })
-  const interview_sessions: InterviewSession[] = [
-    session(1, 1, "job", "in_progress", { answered_count: 2, weak_requirement_ids: [IDS.req(4)], last_activity_at: minutesAgo(180) }),
-    // OD-I1 d14.v1: good·good·fair·해당 없음 → (75·30 + 75·30 + 50·20) / 80 = 68.75 → 69 per answer
-    session(2, 1, "culture_fit", "completed", {
-      question_count: 3,
-      answered_count: 3,
-      submitted_at: daysAgo(4),
-      completed_at: daysAgo(4),
-      result_viewed_at: null,
-      score_status: "scored",
-      score_value: 69,
-      score_max: 100,
-      score_method_version: "d14.v1",
-      score_rationale: "답변 3개의 평균이에요. 구체성·질문 의도 부합은 양호, 구조는 보완 필요였고 JD 연관성은 컬처핏 질문이라 빼고 계산했어요.",
-      score_counted_count: 3,
-      last_activity_at: daysAgo(4),
-    }),
-    session(3, 2, "job", "evaluating", { question_count: 3, answered_count: 3, submitted_at: minutesAgo(1), last_activity_at: minutesAgo(1) }),
-    // A8 읽기 전용: 질문이 있고 답변 1개를 쓰다 그만둔 세션 (UQ-609, 질문 40~42)
-    session(4, 4, "job", "abandoned", { question_count: 3, answered_count: 1, abandoned_at: daysAgo(9), last_activity_at: daysAgo(9) }),
-    // v4.2 A9: grading failed (2 of 3 answers) on another provider → "실패한 답변 2개 다시 채점"
-    session(5, 3, "job", "evaluation_failed", {
-      question_count: 3,
-      answered_count: 3,
-      submitted_at: daysAgo(1),
-      last_activity_at: daysAgo(1),
-      evaluation_provider: "openai",
-      evaluation_model: MOCK_MODELS.openai.default,
-    }),
-    // Q53-9 질문 생성 입력 원인 실패: 요건 없음 → S-15 공고 원문 고치기 / 요건 있음 → S-15 안내
-    session(6, 7, "job", "in_progress", { generation_status: "failed", question_provider: null, question_model: null, last_activity_at: daysAgo(1) }),
-    session(13, 2, "culture_fit", "in_progress", { created_at: minutesAgo(60 * 6), generation_status: "failed", question_count: 3, question_provider: null, question_model: null, last_activity_at: minutesAgo(60 * 6) }),
-    // Q53-9: 질문 0개인 그만둔 세션 — "질문을 만들지 못함", 면접 수에서 제외
-    session(12, 7, "job", "abandoned", { created_at: daysAgo(3), generation_status: "failed", question_provider: null, question_model: null, abandoned_at: daysAgo(2), last_activity_at: daysAgo(2) }),
-    // 04 §2.7.1 판정표 (ai_jobs 18~20, 22)
-    gradedSession(7, 5, "evaluation_failed", 2, 1), // 입력 원인만 → 버튼 없음, 첫 열람에 표식 지움 (Q53-10)
-    gradedSession(8, 5, "evaluation_failed", 3, 0), // 종합만 실패 → 종합 평가 다시 정리 (Q53-5)
-    gradedSession(9, 5, "evaluation_failed", 3, 0), // 종합이 입력 원인 → 버튼 없음
-    gradedSession(14, 5, "evaluation_failed", 3, 0), // 입력 원인 + 다른 원인 → 대상만 다시 채점 ({n} = 1)
-    gradedSession(10, 4, "completed", 3, 0), // 완료 + 입력 원인 답변만 → 메뉴 없음, 답변에 원인
-    gradedSession(11, 4, "completed", 3, 0), // 완료 + 대상 ≥ 1 → 실패한 답변 다시 채점 (Q53-6)
-    // OD-I6 자기소개서 삭제됨: 지운 자기소개서(IDS.ap(90), application_projects에 없음)의 끝난 세션 — 스냅샷 이름,
-    // S-37 "자기소개서 삭제됨" 행 · "삭제된 자기소개서" 필터, S-22 읽기 전용 (route segment "deleted")
-    {
-      ...session(15, DELETED_AP_N, "job", "completed", {
-        created_at: daysAgo(12),
-        question_count: 3,
-        answered_count: 2,
-        unanswered_count: 1,
-        submitted_at: daysAgo(12),
-        completed_at: daysAgo(12),
-        result_viewed_at: daysAgo(11),
-        score_status: "scored",
-        // d14.v1: 69 · 69 · 미응답 0 → 46
-        score_value: 46,
-        score_max: 100,
-        score_method_version: "d14.v1",
-        score_rationale: "질문 3개의 평균이에요. 미응답 1개는 0점으로 들어갔어요.",
-        score_counted_count: 3,
-        last_activity_at: daysAgo(12),
-      }),
-      // like the real FK (on delete set null) + R11 snapshot columns
-      application_project_id: null,
-      company_name_snapshot: "한빛소프트",
-      position_title_snapshot: "백엔드 개발자",
-    },
-  ]
-
-  const question = (n: number, sesN: number, sequence: number, text: string, kind: InterviewQuestion["source_kind"]): InterviewQuestion => ({
-    ...base(IDS.q(n), 9),
-    ...aiMeta(null),
-    session_id: IDS.ses(sesN),
-    sequence,
-    source_kind: kind,
-    anchor: kind === "values" || kind === "collaboration" ? "general" : "experience",
-    question_text: text,
-    intent: null,
-    focus_criteria: [],
-    target_requirement_ids: [],
-    target_gap_requirement_ids: [],
-    good_answer_signals: null,
-    copied_from_question_id: null,
-  })
-  const interview_questions: InterviewQuestion[] = [
-    question(1, 1, 1, "결제 승인 API 응답 시간을 줄일 때 병목을 어떻게 찾았나요?", "project_deep_dive"),
-    question(2, 1, 2, "인덱스 재설계가 다른 쿼리에 준 영향은 어떻게 확인했나요?", "project_deep_dive"),
-    question(3, 1, 3, "메시지 큐 기반 비동기 처리를 설계한다면 무엇부터 고려하겠어요?", "gap_probe"),
-    question(4, 1, 4, "정산 배치를 재설계하며 데이터 정합성은 어떻게 지켰나요?", "requirement_fit"),
-    question(5, 1, 5, "장애 상황에서 팀과 어떻게 협업했나요?", "collaboration"),
-    question(6, 2, 1, "동료와 의견이 달랐던 경험을 말해 주세요.", "conflict"),
-    question(7, 2, 2, "실패에서 배운 경험을 말해 주세요.", "failure_growth"),
-    question(8, 2, 3, "일할 때 가장 중요하게 생각하는 가치는 무엇인가요?", "values"),
-    // session 3 (채점 중) — so S-22 can show partial results (UQ-48)
-    question(9, 3, 1, "주문·결제 서버에서 가장 어려웠던 장애를 어떻게 해결했나요?", "project_deep_dive"),
-    question(10, 3, 2, "Spring 기반 서버를 설계할 때 무엇을 먼저 고려하나요?", "requirement_fit"),
-    question(11, 3, 3, "AWS 운영 경험이 부족하다면 어떻게 보완하겠어요?", "gap_probe"),
-    question(12, 5, 1, "플랫폼 팀에서 가장 먼저 개선하고 싶은 것은 무엇인가요?", "requirement_fit"),
-    question(13, 5, 2, "배포 자동화를 도입하며 겪은 어려움을 말해 주세요.", "project_deep_dive"),
-    question(14, 5, 3, "쿠버네티스 경험이 부족하다면 어떻게 보완하겠어요?", "gap_probe"),
-    question(40, 4, 1, "가장 자신 있는 프로젝트에서 본인이 직접 한 일을 설명해 주세요.", "project_deep_dive"),
-    question(41, 4, 2, "공고의 핵심 요건과 맞닿는 경험을 하나 들려주세요.", "requirement_fit"),
-    question(42, 4, 3, "경험이 부족한 영역을 어떻게 보완하겠어요?", "gap_probe"),
-    // OD-I6 자기소개서 삭제됨 세션 15
-    question(60, 15, 1, "주문 서버의 장애 대응 경험을 말해 주세요.", "project_deep_dive"),
-    question(61, 15, 2, "트래픽이 몰릴 때 서버를 어떻게 확장하겠어요?", "requirement_fit"),
-    question(62, 15, 3, "메시징 시스템 경험이 부족하다면 어떻게 보완하겠어요?", "gap_probe"),
-    // 04 §2.7.1 판정표 세션: 세션마다 질문 3개 (15부터 3개씩, 세션 7 · 8 · 9 · 10 · 11 · 14 순서)
-    ...GRADED_SESSIONS.flatMap((sesN, s) =>
-      [0, 1, 2].map((i) => question(15 + s * 3 + i, sesN, i + 1, GRADED_QUESTIONS[i], i === 2 ? "gap_probe" : "project_deep_dive")),
-    ),
-  ]
-
-  const answer = (n: number, qN: number, sesN: number, text: string, status: InterviewAnswer["status"], score: InterviewAnswer["score_status"] = null): InterviewAnswer => ({
-    ...base(IDS.ans(n), 9, 0),
-    session_id: IDS.ses(sesN),
-    question_id: IDS.q(qN),
-    answer_text: text,
-    status,
-    score_status: score,
-    score_value: null,
-    score_max: null,
-    score_method_version: null,
-    score_rationale: null,
-  })
-  // d14.v1 question rationale, same shape as private.interview_answer_score_d14v1 (good · good · fair · n/a → 69)
-  const SCORED_69_RATIONALE = "구체성 양호 · 의도 부합 양호 · 구조 보완 필요 · JD 연관성 해당 없음 → 69점"
-  const interview_answers: InterviewAnswer[] = [
-    answer(1, 1, 1, "APM에서 p95 지표를 보고 결제 승인 테이블의 풀 스캔 쿼리를 찾았습니다.", "draft"),
-    answer(2, 2, 1, "변경 전후로 슬로 쿼리 로그를 비교했습니다.", "draft"),
-    answer(3, 3, 1, "", "draft"),
-    answer(4, 4, 1, "", "draft"),
-    answer(5, 5, 1, "", "draft"),
-    { ...answer(6, 6, 2, "코드 리뷰 기준을 두고 의견이 갈렸을 때 데이터를 모아 팀 회의에서 함께 정했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
-    { ...answer(7, 7, 2, "배포 체크리스트를 빠뜨려 장애가 났고, 이후 자동화된 배포 검증을 도입했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
-    { ...answer(8, 8, 2, "투명한 공유입니다. 문제를 일찍 알리면 팀 전체의 비용이 줄어듭니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
-    answer(9, 9, 3, "결제 승인 지연 장애 때 APM으로 병목 쿼리를 찾아 인덱스를 바꿨습니다.", "submitted"),
-    answer(10, 10, 3, "트랜잭션 경계와 장애 시 재시도 정책을 먼저 정합니다.", "submitted"),
-    answer(11, 11, 3, "개인 프로젝트로 ECS 배포를 직접 해 보며 익히겠습니다.", "submitted"),
-    answer(12, 12, 5, "배포 파이프라인의 수동 단계를 줄이는 것부터 하겠습니다.", "submitted", "pending_method"),
-    answer(13, 13, 5, "사내 배포 도구를 만들며 서버별 설정 차이를 정리하는 일이 가장 어려웠습니다.", "submitted"),
-    answer(14, 14, 5, "사이드 프로젝트로 클러스터를 직접 운영해 보며 익히겠습니다.", "submitted"),
-    { ...answer(60, 60, 15, "장애 알림을 받고 로그로 원인을 좁힌 뒤 롤백했습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
-    { ...answer(61, 61, 15, "읽기 트래픽은 캐시로, 쓰기는 큐로 나눠 받겠습니다.", "submitted", "scored"), score_value: 69, score_max: 100, score_method_version: "d14.v1", score_rationale: SCORED_69_RATIONALE },
-    { ...answer(62, 62, 15, "", "unanswered", "unanswered"), score_value: 0, score_max: 100, score_method_version: "d14.v1", score_rationale: "미응답 · 0점" },
-    answer(40, 40, 4, "결제 승인 지연을 줄이려고 쿼리와 캐시 구조를 직접 바꿨습니다.", "draft"),
-    answer(41, 41, 4, "", "draft"),
-    answer(42, 42, 4, "", "draft"),
-    ...GRADED_SESSIONS.flatMap((sesN, s) =>
-      [0, 1, 2].map((i) => {
-        const n = 15 + s * 3 + i
-        const outcome = GRADED_OUTCOMES[sesN][i]
-        if (outcome === "unanswered") return answer(n, n, sesN, "", "unanswered", "unanswered")
-        return answer(n, n, sesN, GRADED_ANSWERS[i], "submitted", outcome === "ok" ? "pending_method" : "not_scored")
-      }),
-    ),
-  ]
-
-  const evaluation = (n: number, ansN: number): AnswerEvaluation => ({
-    ...base(IDS.ev(n), 4),
-    ...aiMeta(null),
-    session_id: IDS.ses(2),
-    answer_id: IDS.ans(ansN),
-    status: "succeeded",
-    error_code: null,
-    result: {
-      schema_version: 2,
-      criteria: [
-        { key: "specificity", grade: "good", reason: "상황과 본인 행동이 구체적입니다.", answer_quotes: [], missing: null },
-        { key: "intent_fit", grade: "good", reason: "질문 의도에 맞게 답했습니다.", answer_quotes: [], missing: null },
-        { key: "structure", grade: "fair", reason: "결과를 마지막에 한 번 더 정리하면 좋습니다.", answer_quotes: [], missing: "결과 요약" },
-        { key: "job_relevance", grade: "not_applicable", reason: "컬처핏 질문이라 해당하지 않습니다.", answer_quotes: [], missing: null },
-      ],
-      strengths: [{ text: "본인 행동을 주어로 말했습니다.", answer_quotes: [] }],
-      improvements: [{ item_key: "improvements.0", text: "결과를 수치나 변화로 마무리해 보세요.", how: "'그 뒤로 같은 유형의 장애가 0건이었습니다'처럼 끝맺어 보세요.", related_criteria: ["structure"] }],
-      intent_reveal: "갈등을 다루는 방식과 협업 태도를 확인하려는 질문이었습니다.",
-      model_answer: { text: "의견이 갈렸을 때 저는 먼저 근거 데이터를 모았습니다. [사례 입력 필요]", placeholders: [{ token: "[사례 입력 필요]", hint: "실제 합의 결과" }], suggestions_if_true: [] },
-      // ㉘: one note with a quote and a chip on the first evaluation
-      consistency_notes: n === 1 ? [{ text: "등록한 상세 내용과 수치가 달라요. 실제 수치를 확인해 보세요.", answer_quotes: ["응답 시간을 절반으로 줄였습니다"] }] : [],
-      score: { status: "pending_method", value: null, max: null, method_version: null, rationale: null },
-    },
-  })
-  const failedEvaluation = (n: number, ansN: number): AnswerEvaluation => ({
-    ...evaluation(n, ansN),
-    ...aiMeta(IDS.job(13)),
-    session_id: IDS.ses(5),
-    status: "failed",
-    result: null,
-  })
-  const answer_evaluations: AnswerEvaluation[] = [
-    evaluation(1, 6),
-    evaluation(2, 7),
-    evaluation(3, 8),
-    { ...evaluation(4, 12), ...aiMeta(IDS.job(13)), session_id: IDS.ses(5) },
-    failedEvaluation(5, 13),
-    failedEvaluation(6, 14),
-    { ...evaluation(60, 60), session_id: IDS.ses(15) },
-    { ...evaluation(61, 61), session_id: IDS.ses(15) },
-    ...GRADED_SESSIONS.flatMap((sesN, s) =>
-      [0, 1, 2].flatMap((i): AnswerEvaluation[] => {
-        const n = 15 + s * 3 + i
-        const outcome = GRADED_OUTCOMES[sesN][i]
-        if (outcome === "unanswered") return []
-        const row: AnswerEvaluation = { ...evaluation(n, n), session_id: IDS.ses(sesN) }
-        return [outcome === "ok" ? row : { ...row, status: "failed", result: null, error_code: outcome === "target" ? null : outcome }]
-      }),
-    ),
-  ]
-
-  const session_feedbacks: SessionFeedback[] = [
-    {
-      ...base(IDS.fb(1), 4),
-      ...aiMeta(null),
-      session_id: IDS.ses(2),
-      status: "succeeded",
-      result: {
-        schema_version: 2,
-        headline: "본인 행동을 분명히 말했지만, 결과로 마무리하는 연습이 필요합니다.",
-        overall_strengths: [{ text: "상황을 구체적으로 설명합니다.", related_criteria: ["specificity"] }],
-        overall_weaknesses: [{ text: "답변 끝에 결과 정리가 빠집니다.", related_criteria: ["structure"] }],
-        next_practice: [{ type: "focus_session", text: "직무 면접 3문항으로 결과 중심 답변을 연습해 보세요.", interview_type: "job" }],
-        unanswered_note: null,
-      },
-    },
-    {
-      ...base(IDS.fb(2), 1),
-      ...aiMeta(IDS.job(13)),
-      session_id: IDS.ses(5),
-      status: "failed",
-      result: null,
-    },
-    // 04 §2.7.1: 채점 실패 세션의 종합 행
-    ...[7, 8, 9, 14].map(
-      (sesN, i): SessionFeedback => ({ ...base(IDS.fb(3 + i), 1), ...aiMeta(null), session_id: IDS.ses(sesN), status: "failed", result: null }),
-    ),
-  ]
-
   // --- evidence links -------------------------------------------------------------
   const ev = (
     n: number,
@@ -1545,11 +1205,6 @@ export function createFixtures(): MockDb {
     ev(13, "draft_section", IDS.dsec(1), "p2-b1", "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
     ev(14, "draft_section", IDS.dsec(1), "e1-s", "experience", IDS.exp(1), "summary", "결제 승인·정산 플랫폼 백엔드 개발과 운영", { source_label: "그린페이먼츠", source_snapshot_at: daysAgo(1) }),
     ev(15, "draft_section", IDS.dsec(2), "q1-p1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
-    // v5.3 S-33 질문 근거 칩 (A4 request 3): owner interview_question (session 1)
-    ev(16, "interview_question", IDS.q(1), "question", "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
-    ev(17, "interview_question", IDS.q(1), "target_requirements", "jd_requirement", IDS.req(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영" }),
-    ev(18, "interview_question", IDS.q(3), "target_requirements", "jd_requirement", IDS.req(4), null, null, { source_label: "메시지 큐 기반 비동기 처리 경험" }),
-    ev(19, "answer_evaluation", IDS.ev(1), "consistency_notes.0", "project_detail", IDS.det(1), "result", null),
   ]
 
   // --- AI 연결 (v4 BYOK): Gemini 무료 키 연결 + 활성 (05 brief) ----------------------
@@ -1635,9 +1290,6 @@ export function createFixtures(): MockDb {
     rec(4, "insight", "insight", 11_200, 2_600, 6),
     rec(5, "career_description", "career_description", 10_500, 5_100, 5),
     rec(6, "cover_letter", "cover_letter", 9_000, 2_200, 3),
-    rec(7, "interview_questions", "interview_questions", 8_100, 2_000, 4),
-    rec(8, "interview_evaluation", "interview_evaluation", 11_500, 3_000, 4),
-    rec(9, "interview_evaluation", "interview_evaluation", 11_400, 2_900, 4),
     rec(10, "writing_chat", "writing_chat_turn", 4_000, 600, 1),
     rec(11, "writing_chat", "writing_chat_turn", 4_200, 0, 1, "failed"),
     // S-42 공급자 탭 미리보기: 키를 지운 공급자(Claude)의 이번 달 기록도 계속 보인다 (02 S-42 상태)
@@ -1701,6 +1353,44 @@ export function createFixtures(): MockDb {
         document_path: "/policies/ai_data_use/2026-11-05",
         created_at: "2026-11-05T00:00:00.000Z",
       },
+      // R14 (RM-1, 마이그레이션 20261113002950): 개정판. 시행일 2026-11-08 KST, 재동의 없음.
+      // privacy·ai_data_use는 같은 시행일의 .1 판 — 현재 판은 시행일 → 버전 문자열 순 (data/account.ts currentVersion)
+      {
+        id: "00000000-0000-4d05-8000-000000000005",
+        policy_type: "terms" as const,
+        version: "2026-11-08",
+        effective_at: "2026-11-07T15:00:00.000Z",
+        requires_reconsent: false,
+        document_path: "/policies/terms/2026-11-08",
+        created_at: "2026-11-08T00:00:00.000Z",
+      },
+      {
+        id: "00000000-0000-4d05-8000-000000000006",
+        policy_type: "cross_border_transfer" as const,
+        version: "2026-11-08",
+        effective_at: "2026-11-07T15:00:00.000Z",
+        requires_reconsent: false,
+        document_path: "/policies/cross_border_transfer/2026-11-08",
+        created_at: "2026-11-08T00:00:00.000Z",
+      },
+      {
+        id: "00000000-0000-4d05-8000-000000000007",
+        policy_type: "privacy" as const,
+        version: "2026-11-08.1",
+        effective_at: "2026-11-07T15:00:00.000Z",
+        requires_reconsent: false,
+        document_path: "/policies/privacy/2026-11-08.1",
+        created_at: "2026-11-08T00:00:00.000Z",
+      },
+      {
+        id: "00000000-0000-4d05-8000-000000000008",
+        policy_type: "ai_data_use" as const,
+        version: "2026-11-08.1",
+        effective_at: "2026-11-07T15:00:00.000Z",
+        requires_reconsent: false,
+        document_path: "/policies/ai_data_use/2026-11-08.1",
+        created_at: "2026-11-08T00:00:00.000Z",
+      },
     ],
     experiences,
     educations,
@@ -1719,11 +1409,6 @@ export function createFixtures(): MockDb {
     drafts,
     draft_sections,
     draft_section_sources,
-    interview_sessions,
-    interview_questions,
-    interview_answers,
-    answer_evaluations,
-    session_feedbacks,
     evidence_links,
     ai_jobs,
     ai_provider_keys,

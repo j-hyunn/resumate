@@ -3,7 +3,7 @@ import { AppError, errorResponse } from "@/lib/contracts/errors";
 import { getSiteOrigin } from "@/server/auth/site-url";
 import { requireConsentedUser } from "@/server/auth/session";
 import { connections, createAppJobRunner } from "@/server/jobs/app-runner";
-import { loadActiveForPreview, loadRetryBlocked, toAiJobStatusResponse } from "@/server/jobs/status";
+import { loadActiveForPreview, toAiJobStatusResponse } from "@/server/jobs/status";
 
 /** The continuation fallback may run a job step in this request's after(). */
 export const maxDuration = 60;
@@ -20,12 +20,11 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/ai-jobs/[id
   try {
     const { id } = await ctx.params;
     if (!AiJobIdSchema.safeParse(id).success) throw new AppError("not_found");
-    const { supabase, user } = await requireConsentedUser();
+    const { user } = await requireConsentedUser();
     const runner = createAppJobRunner(await getSiteOrigin());
     const job = await runner.getStatus({ jobId: id, userId: user.id });
     const active = await loadActiveForPreview(job, connections().context, user.id);
-    const retryBlocked = await loadRetryBlocked(job, supabase);
-    return Response.json({ data: toAiJobStatusResponse(job, undefined, active, retryBlocked) }, { headers: { "Cache-Control": "private, no-store" } });
+    return Response.json({ data: toAiJobStatusResponse(job, undefined, active) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

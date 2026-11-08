@@ -9,7 +9,7 @@ import type { ValidatedEvidence } from "../validation/evidence";
  * - `user_id` is omitted: the column defaults to private.current_uid() (the
  *   app_ai_writer JWT `sub`), so a row can't be written for another user.
  * - `ref` → `source_id` (UUID), `field` → `source_field` (null for JD
- *   sentence/requirement, answer, note — the DB CHECK enforces C-3 per type).
+ *   sentence/requirement, note — the DB CHECK enforces C-3 per type).
  * - `source_snapshot_at` = the alias entry's snapshot (DM §2.8 v4.4: projects use
  *   `content_updated_at`, everything else the row `updated_at`), falling back to
  *   `now` when the source has none (sources without a row timestamp, e.g. JD sentences when the JD updated_at is not passed).
@@ -23,9 +23,7 @@ export type EvidenceLinkInsert = Database["public"]["Tables"]["evidence_links"][
 export const EVIDENCE_OWNER_TYPES = [
   "insight",
   "draft_section",
-  "interview_question",
-  "answer_evaluation",
-  "session_feedback",
+  // (R14, AI spec v4.14 RM-1) interview_question / answer_evaluation / session_feedback removed.
   "chat_message",
 ] as const;
 export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];

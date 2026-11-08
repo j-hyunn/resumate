@@ -11,22 +11,21 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { routes } from "@/lib/routes"
 import { Card } from "@/components/ui/card"
-import type { DataReadiness, InterviewSession } from "@/types/db"
+import type { DataReadiness } from "@/types/db"
 import type { EvidenceView } from "@/lib/data/evidence"
 import { FAILURE_CAUSES, codeForCause } from "@/lib/data/ai-errors"
 import { AiProgress, AiProgressInline, useAiJob } from "./ai-progress"
 import { AiErrorNotice, useNow } from "./ai-error-notice"
-import { AiLock, AiLockDialog } from "./ai-lock"
+import { AiLock } from "./ai-lock"
 import { AiRunButton } from "./ai-run-button"
 import { DataUseConsent } from "./data-use-consent"
-import { ProviderBadge, ProviderResultTag, providerRunLabel } from "./provider-badge"
+import { ProviderBadge, ProviderResultTag } from "./provider-badge"
 import { DataInsufficientGate } from "./data-gate"
 import { DeleteConfirmDialog, type DeleteTarget } from "./delete-confirm-dialog"
 import { EvidenceChips, EvidenceProvider } from "./evidence"
 import { BlockFlagBadges, PlaceholderText } from "./placeholders"
 import { usePreviewState } from "./preview-state-client"
 import { DraftBadge, DraftNotice, SaveStatus } from "./save-status"
-import { SessionScore } from "./score-display"
 import { StageCardMenu, StageChip, useStageMove } from "./stage-menu"
 import { AiFailedInline, AiOutageAlert, EmptyState, WaitJd } from "./state-views"
 import { PendingBlock, StreamingBlock, StreamingHeader, StreamRegion, useAiStream } from "./streaming"
@@ -52,7 +51,6 @@ export function DevStateGallery({
   insufficientProjectFields,
   evidence,
   demoApplication,
-  scoredSession,
 }: {
   runningJobId: string | null
   readiness: DataReadiness
@@ -61,8 +59,7 @@ export function DevStateGallery({
   /** v5.3 C-09 hint project_fields preview */
   insufficientProjectFields: DataReadiness
   evidence: EvidenceView[]
-  demoApplication: { id: string; name: string; stage: "job_interview" }
-  scoredSession: Pick<InterviewSession, "score_status" | "score_value" | "score_max" | "score_counted_count" | "unanswered_count" | "question_count">
+  demoApplication: { id: string; name: string; stage: "document" }
 }) {
   const state = usePreviewState()
   const show = (...ids: string[]) => !state || ids.includes(state)
@@ -77,7 +74,6 @@ export function DevStateGallery({
   })
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null)
   const [syncing, setSyncing] = React.useState(state === "ai-sync")
-  const [lockDialog, setLockDialog] = React.useState(false)
   const now = useNow()
   // C-03 요청 한도 대기 줄: waiting_retry_until 12 s ahead, re-armed every minute
   const waitUntil = now ? new Date(Math.ceil(now / 60_000) * 60_000 - 48_000).toISOString() : null
@@ -90,7 +86,7 @@ export function DevStateGallery({
         <DevStateGalleryV53 state={state} projectFields={insufficientProjectFields} demoApplication={demoApplication} />
         <Section id="ai-pending" title="C-03 AI 작업 상태 (ST-AI-PENDING)" show={show("ai-pending")}>
           <AiProgress jobType="insight" progress={job.progress ?? { stage: "match", done: 1, total: 2 }} title="인사이트 생성" />
-          <AiProgressInline progress={{ stage: "evaluate", done: 2, total: 5 }} />
+          <AiProgressInline progress={{ stage: "match", done: 2, total: 5 }} jobType="insight" />
         </Section>
 
         <Section id="ai-waiting" title="C-03 무료 등급 순차 · 요청 한도 대기 줄" show={show("ai-waiting")}>
@@ -100,7 +96,7 @@ export function DevStateGallery({
             progress={{ stage: "match", done: 2, total: 6, waiting_retry_until: waitUntil }}
             title="인사이트 생성"
           />
-          <AiProgressInline progress={{ stage: "evaluate", done: 3, total: 5, waiting_retry_until: waitUntil }} />
+          <AiProgressInline progress={{ stage: "match", done: 3, total: 5, waiting_retry_until: waitUntil }} jobType="insight" />
         </Section>
 
         <Section id="ai-stream" title="C-04 스트리밍 (ST-AI-STREAM)" show={show("ai-stream")}>
@@ -205,12 +201,6 @@ export function DevStateGallery({
           <AiLock entry="usage" size="area" featureLabel="AI 사용량" />
           <AiLock entry="writing_chat" size="inline" actionName="AI와 대화하며 정리" alternativeHref={routes.projectPageNew({ experience: "00000000-0000-4e01-8000-000000000001" })} />
           <AiLock entry="draft" size="inline" actionName="초안 생성" />
-          <AiLock entry="interview_new" size="inline" actionName="시작하기" alternativeHref="/interviews" />
-          <AiLock entry="interview_submit" size="inline" actionName="제출" />
-          <Button variant="outline" onClick={() => setLockDialog(true)}>
-            C-14 키 없음 변형 열기
-          </Button>
-          <AiLockDialog open={lockDialog} onOpenChange={setLockDialog} interviewType="job" returnHref={`/applications/${demoApplication.id}/interview?type=job`} />
         </Section>
 
         <Section id="key-invalid" title="C-19 배지 · AiRunButton (key-invalid / key-check)" show={show("key-invalid", "key-check")}>
@@ -232,10 +222,6 @@ export function DevStateGallery({
           </AiRunButton>
           <div className="space-y-1">
             <ProviderResultTag provider="gemini" model_tier="default" model="gemini-mock-default" />
-            <p className="text-sm text-muted-foreground">
-              세션 목록 열: {providerRunLabel({ question_provider: "gemini", evaluation_provider: "anthropic" })} ·{" "}
-              {providerRunLabel({ question_provider: "gemini", evaluation_provider: null })} · {providerRunLabel({ question_provider: null, evaluation_provider: null })}
-            </p>
           </div>
         </Section>
 
@@ -255,14 +241,13 @@ export function DevStateGallery({
         <Section id="insufficient" title="C-09 데이터 부족 (ST-INSUFFICIENT)" show={show("insufficient", "insufficient-no-experience")}>
           {show("insufficient") ? (
             <DataInsufficientGate
-              feature="job_interview"
-              featureLabel="직무 면접"
-              returnFeature="job_interview"
+              feature="draft"
+              featureLabel="경력기술서"
+              returnFeature="career_description"
               readiness={insufficient}
               applicationProjectId={demoApplication.id}
               applicationName={demoApplication.name}
-              returnHref={`/applications/${demoApplication.id}/interview`}
-              onSwitchToCultureFit={() => undefined}
+              returnHref={`/applications/${demoApplication.id}/drafts`}
             />
           ) : null}
           {show("insufficient-no-experience") ? (
@@ -284,7 +269,7 @@ export function DevStateGallery({
           <WaitJd />
         </Section>
 
-        <Section id="move-failed" title="C-12 단계 이동 · C-13 · C-14 (ST-MOVE-FAILED)" show={show("move-failed")}>
+        <Section id="move-failed" title="C-12 단계 이동 · C-13 (ST-MOVE-FAILED)" show={show("move-failed")}>
           <div className="flex flex-wrap items-center gap-3">
             <StageChip controller={move} />
             <StageCardMenu controller={move} />
@@ -303,13 +288,12 @@ export function DevStateGallery({
           <DraftNotice />
         </Section>
 
-        <Section id="empty" title="ST-EMPTY · C-01 · C-05 · C-08 · C-17" show={show("empty")}>
+        <Section id="empty" title="ST-EMPTY · C-01 · C-05 · C-08" show={show("empty")}>
           <EmptyState title="빈 상태 예시" description="설명 문구" actions={<Button size="sm">주 동작</Button>} />
           <EvidenceChips items={evidence} />
           <p className="text-base leading-[1.75]">
             <PlaceholderText text="정산 배치 처리 시간을 [수치 입력 필요] 줄였습니다." placeholders={[{ token: "[수치 입력 필요]", hint: "개선 전후 값" }]} />
           </p>
-          <SessionScore session={scoredSession} startNewAction={<Button size="sm" variant="link">새 면접 시작하기</Button>} />
           <Button variant="outline" onClick={() => setDeleteTarget({ kind: "application_project", entity_id: demoApplication.id, label: demoApplication.name })}>
             C-05 자기소개서 삭제 확인 열기
           </Button>

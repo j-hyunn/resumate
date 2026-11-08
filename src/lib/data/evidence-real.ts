@@ -2,8 +2,7 @@ import "server-only"
 import { AppError } from "@/lib/contracts/errors"
 /**
  * W3: evidence chips from real rows. Loads the owners' `evidence_links` and the rows their chips point at (RLS =
- * ownership), then `toEvidenceView` computes status / path / deep link exactly as for the previews. Shared with
- * the interview screens.
+ * ownership), then `toEvidenceView` computes status / path / deep link exactly as for the previews.
  */
 import { requireConsentedUser } from "@/server/auth/session"
 import { mapDbError } from "@/server/db/errors"
@@ -25,19 +24,18 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     ? (rowsOf(await supabase.from("evidence_links").select("*").eq("owner_type", ownerType).in("owner_id", ownerIds).order("sort_order")) as unknown as EvidenceLink[])
     : []
   const idsOf = (...types: Array<EvidenceLink["source_type"]>) => uniq(links.filter((l) => types.includes(l.source_type)).map((l) => l.source_id))
-  type SourceTable = "project_deliverables" | "projects" | "experiences" | "educations" | "skills" | "jd_requirements" | "interview_answers" | "draft_sections"
+  type SourceTable = "project_deliverables" | "projects" | "experiences" | "educations" | "skills" | "jd_requirements" | "draft_sections"
   const select = async <T,>(table: SourceTable, ids: string[]): Promise<T[]> => (ids.length ? (rowsOf(await supabase.from(table).select("*").in("id", ids)) as unknown as T[]) : [])
 
   type Row = Record<string, string | null>
   // DM v4.4: project_details / achievements are gone; deliverables point at their standalone project.
   const deliverables = await select<Row>("project_deliverables", idsOf("project_deliverable"))
   const projects = await select<Row>("projects", uniq([...idsOf("project"), ...deliverables.map((d) => d.project_id)]))
-  const [experiences, educations, skills, requirements, answers, sections, profiles] = await Promise.all([
+  const [experiences, educations, skills, requirements, sections, profiles] = await Promise.all([
     select<Row>("experiences", uniq([...idsOf("experience"), ...projects.map((p) => p.experience_id)])),
     select<Row>("educations", uniq([...idsOf("education"), ...projects.map((p) => p.education_id)])),
     select<Row>("skills", idsOf("skill")),
     select<Row>("jd_requirements", idsOf("jd_requirement")),
-    select<Row>("interview_answers", idsOf("interview_answer")),
     select<Row>("draft_sections", idsOf("user_note")),
     idsOf("profile").length || links.some((l) => l.source_type === "profile") ? supabase.from("profiles").select("*").limit(1).then(rowsOf) : Promise.resolve([]),
   ])
@@ -51,7 +49,6 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     achievements: [],
     skills,
     jd_requirements: requirements,
-    interview_answers: answers,
     draft_sections: sections,
   } as unknown as MockDb
   return { links, db }

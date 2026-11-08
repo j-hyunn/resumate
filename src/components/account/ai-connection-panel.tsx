@@ -16,7 +16,7 @@
  * - 활성 카드 "동의 필요" (`ai_connection.consent_required`, key valid / needs_check): C-19 동의 필요형 배지,
  *   둘째 줄 문구, "동의하기"(default sm) → C-21 동의 창(활성 공급자·등급, confirmLabel "동의하기") → 동의 저장 뒤
  *   다시 읽기 → "연결됨". 복귀 대상이 있으면 그때 "돌아가기"가 default가 된다.
- * - 활성 변경 확인 문구 = A1 문구(다시 시도·다시 생성·다시 채점도 새 공급자). 재동의 판정은 서버(A20).
+ * - 활성 변경 확인 문구 = A1 문구(다시 시도·다시 생성도 새 공급자, v5.19 RM-1). 재동의 판정은 서버(A20).
  */
 import * as React from "react"
 import Link from "next/link"
@@ -82,7 +82,7 @@ import { AiUsageByProvider } from "./ai-usage-panel"
 
 /** 블록 ① 안내 — S-24 ② 문구가 정본 (UX v5.17 SD-1; 확정 2026-11-06 (사용자, UI42-4, QP-1)) */
 const BLOCK1_INTRO =
-  "본인 AI 키를 연결하면 연결한 모델의 한도 내에서 인사이트·서류 초안·모의 면접·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
+  "본인 AI 키를 연결하면 연결한 모델의 한도 내에서 인사이트·서류 초안·AI 작성 대화를 쓸 수 있어요. 비용은 연결한 공급자에 직접 내요"
 
 /** `activate=1`: S-41 등급·동의 (mode=tier) 끝나면 활성 공급자로 지정 (routes.aiConnect `activate`) */
 export function connectHref(provider: AiProviderName, mode?: "replace" | "tier", activate?: boolean): string {
@@ -575,7 +575,7 @@ export function AiConnectionPanel({
 /** 02 S-40 활성 공급자 선택 확인 문구 (v5.3 A1: 모든 재실행이 새 활성 공급자) */
 export function switchConfirmText(provider: AiProviderName, tier: ConnectionTier): string {
   const name = AI_PROVIDER_LABELS[provider]
-  return `다음 실행부터 ${name}(${CONNECTION_TIER_LABELS[tier]})로 실행돼요. 다시 시도·다시 생성·다시 채점도 ${name}${directionParticle(name)} 해요. 진행 중인 작업만 원래 공급자로 끝까지 해요`
+  return `다음 실행부터 ${name}(${CONNECTION_TIER_LABELS[tier]})로 실행돼요. 다시 시도·다시 생성도 ${name}${directionParticle(name)} 해요. 진행 중인 작업만 원래 공급자로 끝까지 해요`
 }
 
 /** 행 오른쪽 동작: 미연결 [연결] / 무효 [키 교체] / 확인 필요 [다시 확인] / 동의 필요 [동의하기] + ⋯ 키 관리 메뉴 */

@@ -49,9 +49,9 @@ export async function getDeletionImpact<T extends DeletableEntityType>(
 }
 
 /**
- * (R11 OD-I6, DM 2.7.2) C-05 impact of deleting an application project (자기소개서): what goes with it and how
- * many finished interview sessions stay read-only. Not a career item (`delete_career_item` refuses it); the
- * delete itself stays `deleteApplicationProject` (table delete + the DB detach trigger). Someone else's / a
+ * (DM 2.7.2) C-05 impact of deleting an application project (자기소개서): what goes with it (R14: insights,
+ * drafts, stage events). Not a career item (`delete_career_item` refuses it); the delete itself stays
+ * `deleteApplicationProject` (table delete). Someone else's / a
  * missing project → `not_found` (404).
  */
 export async function getApplicationProjectDeletionImpact(supabase: UserSupabaseClient, applicationProjectId: string): Promise<ApplicationProjectDeletionImpact> {

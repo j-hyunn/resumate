@@ -75,7 +75,7 @@ describe("S-08 empty career (ED-1)", () => {
 
   it("shows both column guides without buttons", () => {
     expect(html).toContain("아직 추가한 커리어가 없어요")
-    expect(html).toContain("커리어를 정리해 두면 자기소개서마다 인사이트·서류·면접에 바로 쓸 수 있어요")
+    expect(html).toContain("커리어를 정리해 두면 자기소개서마다 인사이트·서류에 바로 쓸 수 있어요")
     const detail = html.slice(html.indexOf('data-empty-guide="detail"'))
     expect(detail).not.toContain("<button")
   })

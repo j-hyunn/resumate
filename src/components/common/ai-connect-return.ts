@@ -22,7 +22,7 @@ export interface AiReturnTarget {
   feature_label?: string
   /**
    * 진행 중 설정 to restore on return (FL-19 "설정 복원", UQ-351/352): ids and choices only,
-   * e.g. S-20 `{ interview_type, question_count }`, S-36 start `{ affiliation, experience_id }`.
+   * e.g. S-36 start `{ affiliation, experience_id }`.
    */
   params?: Record<string, unknown>
   created_at: string

@@ -7,8 +7,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { FileText, Lightbulb, MessagesSquare } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { FileText, Lightbulb } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -22,8 +21,7 @@ import { AI_STAGE_LABELS, STAGE_LABELS, STAGE_ORDER, applicationDisplayName, for
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { JobInline, useDeleteApplication } from "./shared"
-import { AiFeatureFailureLine, AiFeatureStatus } from "@/components/common/ai-feature-status"
-import { AiProgressInline } from "@/components/common/ai-progress"
+import { AiFeatureStatus } from "@/components/common/ai-feature-status"
 
 // ---------------------------------------------------------------------------
 // filters (query: sort, stage — non-personal values only)
@@ -269,13 +267,12 @@ function DeadlineCell({ deadline }: { deadline: string | null }) {
 }
 
 /**
- * 기능 진행: 인사이트(없음/생성 중/있음) · 서류 초안 수 · 면접 세션 수·작성 중.
+ * 기능 진행: 인사이트(없음/생성 중/있음) · 서류 초안 수.
  * v5.3 C-03 진행 표시 우선순위 (AiFeatureStatus): 작업이 대기·실행 중이면 이전 결과가 있어도 "생성 중"(C-03
  * 축약형, live), 아니면 있음 / 없음 + 결과보다 늦게 끝난 실패 한 줄(버튼 없음, G-30).
  */
 function ProgressCell({ row }: { row: ApplicationListRow }) {
   const insight = row.insight_status
-  const interview = row.interview_status
   return (
     <span className="flex flex-wrap items-center gap-3 text-sm">
       {insight.kind === "generating" && row.insight_job_id ? (
@@ -297,21 +294,6 @@ function ProgressCell({ row }: { row: ApplicationListRow }) {
         <FileText className="size-3.5" aria-hidden />
         <span className="sr-only">서류 초안</span>
         {row.draft_count}
-      </span>
-      <span className="inline-flex flex-wrap items-center gap-1 tabular-nums">
-        <MessagesSquare className="size-3.5" aria-hidden />
-        <span className="sr-only">면접 세션</span>
-        {row.interview_session_count}
-        {row.in_progress_session ? (
-          <Badge variant="draft" className="ml-1">
-            작성 중
-          </Badge>
-        ) : null}
-        {interview.kind === "generating" ? (
-          <AiProgressInline progress={interview.progress} jobType={interview.job_type} className="ml-1" />
-        ) : interview.failure ? (
-          <AiFeatureFailureLine failure={interview.failure} />
-        ) : null}
       </span>
     </span>
   )

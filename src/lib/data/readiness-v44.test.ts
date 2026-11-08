@@ -17,8 +17,6 @@ const base = (features: Partial<V44["features"]>): V44 => ({
   features: {
     insight: { ready: false, missing: ["complete_project"], hints: [], next_action: "create_project" },
     draft: { ready: true },
-    job_interview: { ready: true },
-    culture_fit_interview: { ready: true, data_sufficiency: "ok" },
     ...features,
   },
   ai_connection: { active_provider: "gemini", key_status: "valid", connection_tier: "free", consent_required: false },

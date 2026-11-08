@@ -63,15 +63,12 @@ export const PREVIEW_STATES = [
   "request-wait",
   // C-04 "마무리 중" (validated pending, edit / copy disabled)
   "finalizing",
-  // W5: S-19 중단 대기, 커리어 폼 저장 충돌, S-33 중단한 질문 생성
+  // W5: S-19 중단 대기, 커리어 폼 저장 충돌
   "stopping",
   "save-conflict",
-  "generation-canceled",
   "multi-detail",
   // C-09 hint project_fields (A18)
   "insufficient-project-fields",
-  // C-14 작성 중 세션: generating / failed / type differs
-  "interview-prompt",
   // S-25 (A7): account_deletion_busy / 탈퇴 마무리 상태
   "deletion-busy",
   "deletion-incomplete",

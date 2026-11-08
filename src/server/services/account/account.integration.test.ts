@@ -97,7 +97,7 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
     const summary = await getAccountDeletionSummary(target.client);
     expect(summary).toEqual({
       career: { experiences: 1, educations: 1, projects: 2, projectDeliverables: 1, skills: 1, writingChats: 1 },
-      applications: { applicationProjects: 1, insights: 1, drafts: 1, interviewSessions: 1, stageEvents: 1 },
+      applications: { applicationProjects: 1, insights: 1, drafts: 1, stageEvents: 1 },
       aiConnection: { providerKeys: 1, dataUseConsents: 1, usageRecords: 1 },
       recommendProviderKeyRevocation: true,
     });

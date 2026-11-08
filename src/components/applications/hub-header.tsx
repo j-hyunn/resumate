@@ -2,7 +2,7 @@
 
 /**
  * S-31 헤더: 이름(AI 추출 배지) + 인라인 수정(이름·마감일, F-AP-04 MVP 범위) + 회사·포지션 +
- * 마감일 D-day + 전형 단계 칩(C-12 → C-13/C-14) + 삭제(C-05).
+ * 마감일 D-day + 전형 단계 칩(C-12 → C-13) + 삭제(C-05).
  */
 import * as React from "react"
 import { useRouter } from "next/navigation"

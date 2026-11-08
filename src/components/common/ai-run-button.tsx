@@ -53,9 +53,9 @@ export interface AiRunButtonProps {
   running?: boolean
   /** C-03 축약형 etc. under "이미 만들고 있어요" */
   runningSlot?: React.ReactNode
-  /** 다시 생성·다시 채점: adds "다시 하면 공급자 토큰을 다시 써요" */
+  /** 다시 생성: adds "다시 하면 공급자 토큰을 다시 써요" */
   rerun?: boolean
-  /** v5.3 (A4 request 5): rerun note text, e.g. "다시 채점하면 공급자 토큰을 다시 써요" */
+  /** v5.3 (A4 request 5): rerun note text, e.g. "다시 생성하면 공급자 토큰을 다시 써요" */
   rerunNote?: string
   /** other non-AI reasons to disable (validation, ST-WAIT-JD) */
   disabled?: boolean

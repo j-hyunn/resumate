@@ -1,5 +1,5 @@
 -- Test-only fixture for account.integration.test.ts: one row (or more) in every
--- public table that has user_id, for the user :'uid' (S1 … S8 data).
+-- public table that has user_id, for the user :'uid' (S1 … S7 data; R14 dropped the S8 tables).
 -- Runs as the local superuser with session_replication_role = replica so
 -- triggers (counters, guards, FK triggers) don't fire during the insert; every
 -- reference still points at a row created here, so the ON DELETE cascades
@@ -26,9 +26,6 @@ declare
   ins uuid := gen_random_uuid();
   drf uuid := gen_random_uuid();
   sec uuid := gen_random_uuid();
-  ses uuid := gen_random_uuid();
-  qst uuid := gen_random_uuid();
-  ans uuid := gen_random_uuid();
   job_done uuid := gen_random_uuid();
   job_live uuid := gen_random_uuid();
   disclosure text := (select version from public.ai_disclosures where provider = 'gemini' and connection_tier = 'paid' order by effective_at desc limit 1);
@@ -78,12 +75,5 @@ begin
   insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, experience_id) values (sec, u, drf, 0, 'experience', exp);
   insert into public.draft_section_sources (user_id, draft_section_id, application_project_id, role, origin, experience_id)
     values (u, sec, ap, 'primary', 'ai', exp);
-  -- S8 interview
-  insert into public.interview_sessions (id, user_id, application_project_id, interview_type, data_sufficiency) values (ses, u, ap, 'job', 'ok');
-  insert into public.interview_questions (id, user_id, session_id, sequence, source_kind, anchor, question_text, intent)
-    values (qst, u, ses, 1, 'values', 'general', '질문', '의도');
-  insert into public.interview_answers (id, user_id, session_id, question_id) values (ans, u, ses, qst);
-  insert into public.answer_evaluations (user_id, session_id, answer_id) values (u, ses, ans);
-  insert into public.session_feedbacks (user_id, session_id) values (u, ses);
 end $$;
 commit;

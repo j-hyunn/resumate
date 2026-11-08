@@ -116,7 +116,7 @@ export interface AiErrorInfo {
   quotaResetsAt?: string | null
   /** v5.3: the failed job's connection_tier (with `provider`, for "처음부터 다시") */
   jobTier?: ConnectionTier | null
-  /** v5.3: retry reopens the same job row (insight / interview questions / grading) */
+  /** v5.3: retry reopens the same job row (insight) */
   sameRow?: boolean
 }
 
@@ -333,12 +333,12 @@ export const AI_RETRY_TOKEN_NOTE = "다시 시도하면 공급자 토큰을 다�
 
 /**
  * UQ-492 / Q-25 (v5.13): the token note follows the button's verb — "다시 보내기" → "다시 보내면 공급자 토큰을 다시 써요",
- * "다시 채점" → "다시 채점하면 …", "다시 생성" → "다시 생성하면 …". [UI-가정] (02 C-20 gives only 다시 시도)
+ * "다시 생성" → "다시 생성하면 …". [UI-가정] (02 C-20 gives only 다시 시도)
  */
 export function retryTokenNote(label: string): string {
   const verb = label.replace(/\s*\(.*\)$/, "").trim()
   if (verb === "다시 시도") return AI_RETRY_TOKEN_NOTE
-  // "…기" verbs: 보내기 → 보내면, 만들기 → 만들면, 정리하기 → 정리하면 (UQ-557); nouns: 채점 → 채점하면
+  // "…기" verbs: 보내기 → 보내면, 만들기 → 만들면, 정리하기 → 정리하면 (UQ-557); nouns: 생성 → 생성하면
   if (verb.endsWith("기") && verb.length > 1) {
     const stem = verb.slice(0, -1)
     const code = stem.charCodeAt(stem.length - 1) - 0xac00
@@ -354,7 +354,7 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   onRetry?: () => void
   retryHref?: string
   retrying?: boolean
-  /** "다시 시도" (default) / "다시 보내기" (대화 턴) / "다시 채점" */
+  /** "다시 시도" (default) / "다시 보내기" (대화 턴) */
   retryLabel?: string
   /** input_rejected / not_a_jd / key_missing: "{대상}으로 이동" / "입력 화면으로" / "입력으로 돌아가기" */
   inputHref?: string
@@ -366,10 +366,10 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   hidePreserved?: boolean
   /**
    * v5.3 input-caused failures: the run button to press after fixing the input — "고친 뒤
-   * {rerunLabel}로 새로 실행해 주세요" (인사이트 "다시 생성", 면접 질문 S-20 "시작하기", 요건 "요건 정리하기" …)
+   * {rerunLabel}로 새로 실행해 주세요" (인사이트 "다시 생성", 요건 "요건 정리하기" …)
    */
   rerunLabel?: string
-  /** no "고친 뒤 …" caption: the input can't be fixed here (S-33 → S-15 "요건이 있는 공고", Q53-9) */
+  /** no "고친 뒤 …" caption: the input can't be fixed here (Q53-9 "요건이 있는 공고") */
   hideFixCaption?: boolean
   /** v5.3 A14: request-path failure (chat turn / document stream / JD extraction) — countdown line */
   requestPath?: boolean

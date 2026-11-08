@@ -269,7 +269,7 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     const r = await getDataReadiness(carol);
     expect(r.ai_connection).toEqual({ active_provider: null, key_status: null, connection_tier: null, consent_required: null });
     expect(r.counts.projects_without_complete_star).toBe(1);
-    for (const f of [r.features.insight, r.features.draft, r.features.job_interview]) {
+    for (const f of [r.features.insight, r.features.draft]) {
       expect(f).toMatchObject({ ready: false, next_action: "form", suggested_project_id: p.id });
       expect(f.hints).toContain("project_star");
     }
@@ -310,8 +310,8 @@ describe.skipIf(!ready)("career services (local stack)", () => {
     });
     const impact = await getDeletionImpact(alice, { entityType: "experience", entityId: experienceId });
     expect(impact.cascade).toMatchObject({ projects: 1 });
-    // R11 OD-I6: the career impact always carries the detached-session count.
-    expect(impact.affected_results.detached_interview_sessions).toBe(0);
+    // R14 (RM-1): no detached-session count any more.
+    expect(impact.affected_results).not.toHaveProperty("detached_interview_sessions");
     await expect(deleteCareerItem(bob, { entityType: "project", entityId: projectId, resultMode: "keep_results" })).rejects.toMatchObject({ code: "not_found" });
     const res = await deleteCareerItem(alice, { entityType: "experience", entityId: experienceId, resultMode: "keep_results" });
     expect(res).toMatchObject({ entity_type: "experience", affiliation_mode: "delete_projects", cascade: { projects: 1 } });

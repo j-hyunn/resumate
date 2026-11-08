@@ -460,7 +460,6 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
     const c = await career()
     const w = await chats()
     const d = await deletion()
-    const i = await import("./interviews")
     const j = await import("./ai-jobs")
     const e = await import("./evidence")
     const n = null as never
@@ -485,14 +484,6 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
       ["saveWritingChat(null)", () => w.saveWritingChat(n)],
       ["handOffWritingChat(null)", () => w.handOffWritingChat(n)],
       ["clearReturnTarget(null)", () => w.clearReturnTarget(n)],
-      ["startInterviewSession(null)", () => i.startInterviewSession(n)],
-      ["startInterviewSession(bad)", () => i.startInterviewSession({ application_project_id: "x", interview_type: "nope", question_count: 99 } as never)],
-      ["restartInterviewSession(null, null)", () => i.restartInterviewSession(n, n)],
-      ["getInterviewSession(null, null)", () => i.getInterviewSession(n, n)],
-      ["saveInterviewAnswer(null, null)", () => i.saveInterviewAnswer(n, n)],
-      ["submitInterviewSession(null)", () => i.submitInterviewSession(n)],
-      ["abandonInterviewSession(null)", () => i.abandonInterviewSession(n)],
-      ["deleteInterviewSession(null)", () => d.deleteInterviewSession(n)],
       ["getLatestJobFor(null, null)", () => (j.getLatestJobFor as (...a: unknown[]) => Promise<unknown>)(null, null)],
       ["getEvidenceForOwners(null, null)", () => e.getEvidenceForOwners(n, n)],
     ]

@@ -214,7 +214,7 @@ export function validateItem(item: ItemInput, ctx: EvidenceContext): { outcome: 
  * V-7 scope from a selection (AI-03 포함 항목, AI-04 사용한 경력·프로젝트, v4.5):
  * the selected experiences/educations/projects, their descendants (a standalone
  * project's deliverables) and the skills of included projects, plus
- * always-allowed sources (JD, notes, answers — (v4.12, SD-6) no profile).
+ * always-allowed sources (JD, notes — (v4.12, SD-6) no profile; (R14) no interview answers).
  * Affiliated project STAR
  * is on the PRJ-n itself (no DET-n / ACH-n since v4.5).
  */
@@ -225,7 +225,6 @@ export function buildSelectionScope(aliases: AliasMap, selection: { refs: readon
     "jd_sentence",
     "jd_requirement",
     "user_note",
-    "interview_answer",
   ]);
   const entries = [...aliases.values()];
   const byAlias = new Map(entries.map((e) => [e.alias, e]));

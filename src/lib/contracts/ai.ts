@@ -164,7 +164,7 @@ export type AiJobError = z.infer<typeof AiJobErrorSchema>;
  * Retry badge preview (UX C-20 / S-40, decisions "A1 세부"): which provider "다시 시도" will use.
  * - `provider`: the ACTIVE provider now (C-11.4: every retry runs on it); null = no active
  *   provider / key (the button leads to "AI 연결 필요").
- * - `fromScratch`: a same-row retry (insight / interview_questions / interview_evaluation)
+ * - `fromScratch`: a same-row retry (insight only, R14)
  *   whose active provider or connection tier differs from the job's → "{provider}로 처음부터
  *   다시 해요". Always false for request-scoped jobs (their retry is a new job anyway) and
  *   when `provider` is null.

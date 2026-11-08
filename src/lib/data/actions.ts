@@ -7,10 +7,8 @@
  */
 import type { AffiliationMode, AiErrorCode, AiProviderName, ApplicationStage, ConnectionTier, DeletionEntityType, StageOutcome } from "@/types/db"
 import { moveApplicationStage, setApplicationOutcome } from "./applications"
-import { listInterviewSessions } from "./interviews"
-import { cancelAiJob, getAiJob, listActiveAiJobs, regradeFailedAnswers, retryAiJob, startRemainingQuestions } from "./ai-jobs"
+import { cancelAiJob, getAiJob, listActiveAiJobs, retryAiJob } from "./ai-jobs"
 import { abandonWritingChat, listAbandonedWritingChats, resumeWritingChat } from "./writing-chats"
-import { markResultViewed } from "./interviews"
 import { deleteAccountConfirmed, getAccountDeletionState } from "./account"
 import { getMockControls, setMockControls } from "./mock-controls"
 import type { MockControls } from "@/lib/mock/fixtures"
@@ -19,7 +17,6 @@ import {
   getApplicationDeletionImpact,
   getDeletionImpact,
   getDraftDeletionImpact,
-  getInterviewSessionDeletionImpact,
 } from "./deletion"
 import { getDataReadiness } from "./readiness"
 import { getShellBadges } from "./shell"
@@ -63,27 +60,6 @@ export async function cancelAiJobAction(jobId: string) {
  */
 export async function retryAiJobAction(jobId: string, fail?: AiErrorCode | null) {
   return withAiGuard(() => retryAiJob(jobId, { fail: fail ?? null }))
-}
-
-/**
- * S-22 / S-37 "실패한 답변 {n}개 다시 채점" (v4.2 A9, new job on the active provider, path ①).
- * `{ rejected, refusal }` when the start is refused; null when nothing needs grading.
- */
-export async function regradeFailedAnswersAction(sessionId: string) {
-  return withAiGuard(() => regradeFailedAnswers(sessionId))
-}
-
-/**
- * S-33 "남은 질문 다시 만들기" (new job, path ①): reopens the session to generating. `{ rejected,
- * refusal }` when the start is refused; null when nothing remains.
- */
-export async function startRemainingQuestionsAction(sessionId: string) {
-  return withAiGuard(() => startRemainingQuestions(sessionId))
-}
-
-/** S-22 first open of a **completed** result clears the 새 결과 표식 (A9; grading / failed screens don't) */
-export async function markInterviewResultViewedAction(sessionId: string) {
-  return markResultViewed(sessionId)
 }
 
 // --- v4.2 A6: AI 작성 대화 그만두기 / 다시 이어 하기 (S-08, S-10, S-36) -------------------------
@@ -148,7 +124,6 @@ export async function publishMockReconsentDisclosureAction() {
   return publishMockReconsentDisclosure()
 }
 
-
 export async function getDeletionImpactAction(entityType: DeletionEntityType, entityId: string, affiliationMode?: AffiliationMode) {
   return getDeletionImpact(entityType, entityId, affiliationMode)
 }
@@ -159,10 +134,6 @@ export async function getApplicationDeletionImpactAction(applicationProjectId: s
 
 export async function getDraftDeletionImpactAction(draftId: string) {
   return getDraftDeletionImpact(draftId)
-}
-
-export async function getInterviewSessionDeletionImpactAction(sessionId: string) {
-  return getInterviewSessionDeletionImpact(sessionId)
 }
 
 export async function getDataReadinessAction() {
@@ -255,7 +226,7 @@ export async function shellSignOutAction() {
   await signOut()
 }
 
-// --- C-12 / C-13 / C-14 (foundation-owned since A0 round 1) ---------------------------
+// --- C-12 / C-13 (foundation-owned since A0 round 1) ---------------------------
 
 export async function moveApplicationStageAction(
   applicationProjectId: string,
@@ -268,19 +239,4 @@ export async function moveApplicationStageAction(
 
 export async function setApplicationOutcomeAction(applicationProjectId: string, outcome: StageOutcome | null) {
   return setApplicationOutcome(applicationProjectId, outcome)
-}
-
-/** C-14 "작성 중인 면접 ({유형}, n/N 작성 · 마지막 활동)" — v4.2 in_progress_session shape too */
-export async function getInProgressSessionAction(applicationProjectId: string) {
-  const [s] = await listInterviewSessions({ application_project_id: applicationProjectId, status: "in_progress" })
-  return s
-    ? {
-        id: s.id,
-        interview_type: s.interview_type,
-        answered_count: s.answered_count,
-        question_count: s.question_count,
-        generation_status: s.generation_status,
-        last_activity_at: s.last_activity_at,
-      }
-    : null
 }

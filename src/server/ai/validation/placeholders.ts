@@ -1,7 +1,7 @@
 import { NUMBER_CHECK_TOKEN } from "./numbers";
 
 /**
- * C-5 자리 표시 규칙. The six tokens are fixed (UX highlights them and warns
+ * C-5 자리 표시 규칙. The five tokens are fixed (UX highlights them and warns
  * before copy). The body keeps the tokens; the block's `placeholders` array
  * lists `{token, hint}` in body order. The server checks that the counts match.
  *
@@ -14,7 +14,8 @@ export const PLACEHOLDER_TOKENS = [
   "[내용 확인 필요]",
   "[지원 동기 입력 필요]",
   "[계획 입력 필요]",
-  "[사례 입력 필요]",
+  // (R14, AI spec v4.14 RM-1) "[사례 입력 필요]" removed (AI-06 only); the model
+  // writing it now gets the unknown-token rule below → [내용 확인 필요].
 ] as const;
 export type PlaceholderToken = (typeof PLACEHOLDER_TOKENS)[number];
 

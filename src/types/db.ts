@@ -80,8 +80,6 @@ export type ApplicationStage =
   | "before_apply"
   | "document"
   | "assignment"
-  | "job_interview"
-  | "culture_fit_interview"
   | "closed"
 export type StageOutcome = "passed" | "failed"
 export type StageEventType = "created" | "stage_changed" | "outcome_changed"
@@ -112,38 +110,9 @@ export type DraftBlockKind = "header" | "summary" | "role_line" | "bullet" | "pa
 export type DraftSourceRole = "primary" | "supporting"
 export type DraftSourceOrigin = "ai" | "user"
 
-export type InterviewType = "job" | "culture_fit"
-export type QuestionCount = 3 | 5 | 7
-export type DataSufficiency = "ok" | "thin" | "none"
-export type InterviewSessionStatus =
-  | "in_progress"
-  | "evaluating"
-  | "completed"
-  | "evaluation_failed"
-  | "abandoned"
-export type InterviewGenerationStatus = "generating" | "ready" | "failed"
-export type SessionScoreStatus = "pending_method" | "scored" | "not_scored"
-export type AnswerScoreStatus = "pending_method" | "scored" | "unanswered" | "not_scored"
-export type QuestionSourceKind =
-  | "project_deep_dive"
-  | "requirement_fit"
-  | "gap_probe"
-  | "collaboration"
-  | "conflict"
-  | "failure_growth"
-  | "values"
-  | "org_adaptation"
-  | "motivation_career"
-export type QuestionAnchor = "experience" | "jd" | "general"
-export type InterviewAnswerStatus = "draft" | "submitted" | "unanswered"
-export type EvaluationStatus = "pending" | "succeeded" | "failed"
-
 export type EvidenceOwnerType =
   | "insight"
   | "draft_section"
-  | "interview_question"
-  | "answer_evaluation"
-  | "session_feedback"
   | "chat_message"
 export type EvidenceSourceType =
   | "profile"
@@ -158,7 +127,6 @@ export type EvidenceSourceType =
   | "skill"
   | "jd_requirement"
   | "jd_sentence"
-  | "interview_answer"
   | "user_note"
 /** project_details STAR fields used as evidence_links.source_field for project_detail */
 export type ProjectDetailField = "title" | "situation" | "task" | "action" | "result" | "learnings"
@@ -179,8 +147,6 @@ export type AiJobType =
   | "career_description"
   | "draft_source_ranking"
   | "cover_letter"
-  | "interview_questions"
-  | "interview_evaluation"
   | "writing_chat_turn"
   | "key_verification"
   | "writing_assist"
@@ -216,7 +182,7 @@ export type AiFailureCause =
   | "input_rejected"
 /**
  * ai_jobs.progress.stage keys (02 C-03, 03 C-6 v4.3). v4.3 adds `prepare` (시작 준비·선행 추출),
- * `synthesize_regen` (shown as the `synthesize` row) and `complete` (no copy, last row kept).
+ * `synthesize_regen` (shown as the `synthesize` row).
  */
 export type AiProgressStage =
   | "prepare"
@@ -228,11 +194,7 @@ export type AiProgressStage =
   | "rank"
   | "generate"
   | "adjust_length"
-  | "evaluate"
-  | "summarize"
-  | "score"
   | "synthesize_regen"
-  | "complete"
 
 /** ai_usage_records.feature (04 §2.9.2) */
 export type AiUsageFeature =
@@ -240,8 +202,6 @@ export type AiUsageFeature =
   | "insight"
   | "career_description"
   | "cover_letter"
-  | "interview_questions"
-  | "interview_evaluation"
   | "writing_chat"
   | "key_verification"
   | "writing_assist"
@@ -474,7 +434,7 @@ export interface StructuredDraft {
 }
 
 /** writing_chats.return_target.feature */
-export type ReturnTargetFeature = "insight" | "career_description" | "cover_letter" | "job_interview"
+export type ReturnTargetFeature = "insight" | "career_description" | "cover_letter"
 
 /** writing_chats.return_target (2.5, v3.2) */
 export interface ReturnTarget {
@@ -777,7 +737,7 @@ export type JdRequirement = Row<"jd_requirements", {
 }>
 
 // ---------------------------------------------------------------------------
-// 2.7 인사이트·서류·면접
+// 2.7 인사이트·서류
 // ---------------------------------------------------------------------------
 
 export type RequirementMatchStatus = "met" | "partial" | "no_evidence"
@@ -873,7 +833,6 @@ export type PlaceholderToken =
   | "[내용 확인 필요]"
   | "[지원 동기 입력 필요]"
   | "[계획 입력 필요]"
-  | "[사례 입력 필요]"
 
 export type DraftBlockFlag = "evidence_check_needed" | "number_check_needed"
 
@@ -919,112 +878,6 @@ export type DraftSectionSourceRow = Row<"draft_section_sources", {
  * layer fills it with `[]`. Use `DraftSectionSourceRow`. Delete in the UI rework.
  */
 export type DraftSectionSource = DraftSectionSourceRow & { project_detail_ids: Uuid[] }
-
-/** interview_sessions (A.12) */
-export type InterviewSession = Row<"interview_sessions", {
-  interview_type: InterviewType
-  question_count: QuestionCount
-  data_sufficiency: DataSufficiency | null
-  status: InterviewSessionStatus
-  generation_status: InterviewGenerationStatus
-  score_status: SessionScoreStatus | null
-  question_provider: AiProviderName | null
-  evaluation_provider: AiProviderName | null
-  question_validation_report: Record<string, unknown> | null
-  question_usage: Record<string, unknown> | null
-}, "evaluation_job_id" | "evaluation_run_generation" | "question_job_id" | "question_run_generation">
-
-/** interview_questions (A.13) — public columns only are granted to the client */
-export type InterviewQuestion = Row<"interview_questions", {
-  source_kind: QuestionSourceKind
-  anchor: QuestionAnchor
-  intent: string | null
-  good_answer_signals: unknown
-  provider: AiProviderName | null
-  model_tier: ModelTier | null
-  connection_tier: ConnectionTier | null
-  validation_report: Record<string, unknown> | null
-  usage: Record<string, unknown> | null
-}, "run_generation">
-
-/** interview_answers (A.13) */
-export type InterviewAnswer = Row<"interview_answers", {
-  status: InterviewAnswerStatus
-  score_status: AnswerScoreStatus | null
-}>
-
-export type CriterionKey = "specificity" | "intent_fit" | "structure" | "job_relevance"
-export type CriterionGrade = "excellent" | "good" | "fair" | "poor" | "not_applicable"
-
-/** answer_evaluations.result stored form (03 AI-06) */
-export interface AnswerEvaluationResult {
-  schema_version: number
-  criteria: Array<{
-    key: CriterionKey
-    grade: CriterionGrade
-    reason: string
-    answer_quotes: string[]
-    missing: string | null
-  }>
-  strengths: Array<{ text: string; answer_quotes: string[] }>
-  improvements: Array<{ item_key?: string; text: string; how: string; related_criteria: CriterionKey[] }>
-  intent_reveal: string
-  model_answer: {
-    text: string
-    placeholders: Array<{ token: PlaceholderToken; hint: string }>
-    suggestions_if_true: string[]
-  }
-  /** AI-06 stored form (`[가정]`). Chips: evidence with item_key `consistency_notes.<n>` */
-  consistency_notes: Array<{ text: string; answer_quotes: string[] }>
-  answer_quotes?: string[]
-  score?: {
-    status: AnswerScoreStatus
-    value: number | null
-    max: number | null
-    method_version: string | null
-    rationale: string | null
-  }
-}
-
-/** answer_evaluations (A.13) */
-export type AnswerEvaluation = Row<"answer_evaluations", {
-  status: EvaluationStatus
-  result: AnswerEvaluationResult | null
-  error_code: AiErrorCode | null
-  provider: AiProviderName | null
-  model_tier: ModelTier | null
-  connection_tier: ConnectionTier | null
-  validation_report: Record<string, unknown> | null
-  usage: Record<string, unknown> | null
-}, "completed_at" | "run_generation">
-
-/** session_feedbacks.result stored form (03 AI-07) */
-export interface SessionFeedbackResult {
-  schema_version: number
-  headline: string
-  overall_strengths: Array<{ text: string; question_ids?: Uuid[]; related_criteria: CriterionKey[] }>
-  overall_weaknesses: Array<{ text: string; question_ids?: Uuid[]; related_criteria: CriterionKey[] }>
-  next_practice: Array<{
-    type: "retry_question" | "focus_session" | "add_data"
-    text: string
-    requirement_ids?: Uuid[]
-    interview_type?: InterviewType
-    question_id?: Uuid
-  }>
-  criteria_summary?: Array<{ key: CriterionKey; distribution: Partial<Record<CriterionGrade, number>> }>
-  unanswered_note: string | null
-}
-
-/** session_feedbacks (A.13) */
-export type SessionFeedback = Row<"session_feedbacks", {
-  status: EvaluationStatus
-  result: SessionFeedbackResult | null
-  provider: AiProviderName | null
-  model_tier: ModelTier | null
-  connection_tier: ConnectionTier | null
-  validation_report: Record<string, unknown> | null
-  usage: Record<string, unknown> | null
-}, "completed_at" | "run_generation">
 
 // ---------------------------------------------------------------------------
 // 2.8 근거
@@ -1154,7 +1007,7 @@ export type ReadinessMissing = "complete_experience" | "complete_project"
  * project lacks 프로젝트 내용 (`description`). `complete_project_detail` = @deprecated v4.2 name (never produced now).
  */
 export type ReadinessHint = "project_star" | "project_fields" | "complete_project_detail"
-export type ReadinessFeatureKey = "insight" | "draft" | "job_interview" | "culture_fit_interview"
+export type ReadinessFeatureKey = "insight" | "draft"
 
 export interface ReadinessFeature {
   ready: boolean
@@ -1169,7 +1022,6 @@ export interface ReadinessFeature {
   suggested_mode?: WritingChatMode
   /** writing_chat / form + project_star → that affiliated project; form + project_fields → that standalone project */
   suggested_project_id?: Uuid
-  data_sufficiency?: DataSufficiency
 }
 
 /** RPC get_data_readiness() (04 §6) */
@@ -1230,11 +1082,6 @@ export type AiRetryRefusalCode =
 export type AiGateRefusalCode = AiStartRefusalCode | AiRetryRefusalCode
 /** ⑥ create_application_project (Q53-1, 04 §2.11.7): HTTP 409 before the insert, no row */
 export type ApplicationCreateRefusalCode = "ai_consent_required" | "key_invalid"
-/**
- * 다시 채점 route (Q53-3, 04 §2.7.1): HTTP 409. RPC variant of not_retryable: interview_evaluation_not_needed.
- * (R11 OD-I6, DM 2.7.2) `interview_session_read_only`: the session's 자기소개서 was deleted (contracts INTERVIEW_EVALUATION_REFUSAL_CODES).
- */
-export type InterviewEvaluationRefusalCode = "interview_evaluation_not_retryable" | "interview_evaluation_input_only" | "interview_session_read_only"
 /** RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1), in check order */
 export type JdRawTextRefusalCode =
   | "invalid_raw_text"
@@ -1272,20 +1119,14 @@ export interface DeletionImpact {
     project_deliverables: number
   }
   affected_results: {
-    // [UI-가정] 04 says "v2 형식: 이름, insights, drafts, draft_sections, interview_sessions"; key names follow that list.
+    // [UI-가정] 04 says "v2 형식: 이름, insights, drafts, draft_sections"; key names follow that list.
     by_application_project: Array<{
       application_project_id: Uuid
       name: string | null
       insights: number
       drafts: number
       draft_sections: number
-      interview_sessions: number
     }>
-    /**
-     * OD-I6 / R-OD-5 (DM v4.11): completed sessions whose 자기소개서 was already deleted and that cite this item.
-     * R11: always returned by get_deletion_impact (contracts CareerDeletionImpact); 0 for writing_chat.
-     */
-    detached_interview_sessions: number
   }
   /** entity_type = 'writing_chat' only */
   writing_chat?: { message_count: number; linked_saved_rows: number }
@@ -1309,7 +1150,6 @@ export interface AccountDeletionSummary {
     application_projects: number
     insights: number
     drafts: number
-    interview_sessions: number
     application_stage_events: number
   }
   /** v4: 등록 키 수, 데이터 사용 동의 수, 토큰 사용 기록 수 — // [UI-가정] key names */
@@ -1323,28 +1163,12 @@ export interface AccountDeletionSummary {
 /** save_provider_key verification_result (04 §2.11.3) */
 export type ProviderKeyVerificationResult = "valid" | "limited"
 
-/** move_application_stage interview_prompt.in_progress_session (04 §2.6 v4.2) */
-export interface InterviewPromptSession {
-  session_id: Uuid
-  interview_type: InterviewType
-  answered_count: number
-  question_count: QuestionCount
-  generation_status: InterviewGenerationStatus
-  last_activity_at: Timestamp
-}
-
 /**
- * RPC move_application_stage(...) return (04 §2.6: "새 상태 + interview_prompt")
+ * RPC move_application_stage(...) return (04 §2.6).
  * // [UI-가정] the "새 상태" key name is not specified; returned as application_project.
  */
 export interface MoveApplicationStageResult {
   application_project: ApplicationProject
-  interview_prompt: {
-    interview_type: InterviewType
-    in_progress_session_id: Uuid | null
-    /** v4.2: details of the in-progress session (any type — one per application project) */
-    in_progress_session: InterviewPromptSession | null
-  } | null
 }
 
 /** RPC get_account_deletion_state(p_user_id) (04 §6.1 v4.2 [가정]) */

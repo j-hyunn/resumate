@@ -39,10 +39,8 @@ select is(public.get_data_readiness(), jsonb_build_object(
                                        'projects', '[]'::jsonb),
   'features', jsonb_build_object(
     'insight', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
-    'draft', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
-    'job_interview', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb,
-    'culture_fit_interview', '{"ready": true, "data_sufficiency": "none"}'::jsonb)),
-  'empty account: full §6 shape, form first, data_sufficiency none (B''s data not counted)');
+    'draft', '{"ready": false, "missing": ["complete_experience", "complete_project"], "hints": [], "next_action": "form"}'::jsonb)),
+  'empty account: full §6 shape (R14: insight / draft only, no data_sufficiency), form first (B''s data not counted)');
 
 -- 2. R13 (DM v4.12 §6-A, SD-A18·SD-6): counts has no profile_filled key, hints never contain "profile",
 -- and 내 정보 alone is no longer "thin" (프로필은 데이터 양의 근거가 아니다).
@@ -50,8 +48,8 @@ update public.profiles set job_search_status = 'employed_considering'
  where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 select ok(not (public.get_data_readiness() -> 'counts' ? 'profile_filled'),
           'counts has no profile_filled key');
-select is(public.get_data_readiness() #> '{features,culture_fit_interview,data_sufficiency}', '"none"'::jsonb,
-          '내 정보만 채워도 none (thin의 "프로필 또는" 삭제)');
+select is(public.get_data_readiness() #> '{features,insight,missing}', '["complete_experience", "complete_project"]'::jsonb,
+          '내 정보만 채워도 게이트는 그대로 (프로필은 데이터 양의 근거가 아니다)');
 select is(public.get_data_readiness() #> '{features,insight,hints}', '[]'::jsonb, 'no profile hint ever');
 
 -- 3. education only: still not ready, still form (education does not satisfy D-01)
@@ -84,8 +82,8 @@ select is(public.get_data_readiness() -> 'counts',
 select is(public.get_data_readiness() -> 'draft_item_ids',
           '{"experiences": [], "educations": [], "projects": ["aaaaaaaa-3333-0000-0000-000000000001"]}'::jsonb,
           'draft_item_ids: experiences / educations / projects only');
-select is(public.get_data_readiness() #> '{features,culture_fit_interview,data_sufficiency}', '"thin"'::jsonb,
-          'complete experience without complete project → thin');
+select is(public.get_data_readiness() #> '{features,insight,missing}', '["complete_project"]'::jsonb,
+          'complete experience without complete project → only complete_project missing');
 
 -- a standalone project without description too: STAR still wins (order 2 before 3)
 insert into public.projects (id, name) values ('aaaaaaaa-3333-0000-0000-000000000002', 'Side');
@@ -98,10 +96,8 @@ select is(public.get_data_readiness() #>> '{counts,standalone_projects_without_d
 update public.projects set situation = 's', action = 'a' where id = 'aaaaaaaa-3333-0000-0000-000000000001';
 select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": true, "missing": [], "hints": []}'::jsonb, 'D-01 met → ready, gate keys omitted');
-select is(public.get_data_readiness() #> '{features,job_interview}', public.get_data_readiness() #> '{features,insight}',
-          'job_interview uses the same gate');
-select is(public.get_data_readiness() #> '{features,culture_fit_interview}',
-          '{"ready": true, "data_sufficiency": "ok"}'::jsonb, 'culture fit ok when D-01 met');
+select is((select array_agg(k order by k) from jsonb_object_keys(public.get_data_readiness() -> 'features') k),
+          array['draft', 'insight'], 'R14: features = insight / draft only');
 
 -- 6b. draft parent excludes complete children: move the project under a draft experience
 insert into public.experiences (id, company_name) values ('aaaaaaaa-1111-0000-0000-000000000002', 'draft exp');
@@ -163,8 +159,9 @@ select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": false, "missing": ["complete_project"], "hints": ["project_star"], "next_action": "form",
             "suggested_project_id": "aaaaaaaa-3333-0000-0000-000000000001"}'::jsonb,
           'invalid key → STAR step becomes form, still with the project to fill');
-select is(public.get_data_readiness() #> '{features,culture_fit_interview}',
-          '{"ready": true, "data_sufficiency": "thin"}'::jsonb, 'culture fit has no next_action even without a usable key');
+select ok(not (public.get_data_readiness() ? 'data_sufficiency')
+          and not (public.get_data_readiness() -> 'features' ? 'culture_fit_interview'),
+          'R14: no data_sufficiency anywhere, no culture_fit_interview feature');
 
 -- app_ai_writer sees the same ai_connection (definer helper; it has no ai_provider_keys privilege).
 reset role;
@@ -189,7 +186,7 @@ set local role authenticated;
 select is(public.get_data_readiness() #> '{features,insight}',
           '{"ready": false, "missing": ["complete_project"], "hints": [], "next_action": "form"}'::jsonb,
           'nothing to fill and no key → form instead of create_project');
-select is(public.get_data_readiness() #>> '{features,job_interview,next_action}', 'form', 'no key → form (job_interview)');
+select is(public.get_data_readiness() #>> '{features,draft,next_action}', 'form', 'no key → form (draft)');
 
 -- B's key never shows in A's ai_connection.
 reset role;

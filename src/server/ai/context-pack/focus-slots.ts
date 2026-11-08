@@ -20,7 +20,8 @@ export const SLOT_IDS = ["period", "situation", "task", "action", "result", "lea
 export type SlotId = (typeof SLOT_IDS)[number];
 export type StarSlot = Exclude<SlotId, "period">;
 
-export const GATE_FEATURES = ["insight", "career_description", "cover_letter", "job_interview"] as const;
+/** (R14, AI spec v4.14 RM-1) `job_interview` is gone: three return targets. */
+export const GATE_FEATURES = ["insight", "career_description", "cover_letter"] as const;
 export type GateFeature = (typeof GATE_FEATURES)[number];
 export type ReadinessMissing = "complete_experience" | "complete_project";
 

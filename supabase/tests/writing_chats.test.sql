@@ -89,11 +89,14 @@ select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000
 select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001',
                    '{"feature":"board","application_project_id":"aaaaaaaa-7777-0000-0000-000000000001"}')$$,
                  'P0001', 'invalid_return_target', 'return_target feature CHECK');
+select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001',
+                   '{"feature":"job_interview","application_project_id":"aaaaaaaa-7777-0000-0000-000000000001"}')$$,
+                 'P0001', 'invalid_return_target', 'R14: job_interview is no longer a return target');
 select throws_ok($$select public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001', '"insight"')$$,
                  'P0001', 'invalid_return_target', 'return_target must be an object');
 
 select lives_ok($$select set_config('t.chat', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000000000001',
-                   '{"application_project_id":"AAAAAAAA-7777-0000-0000-000000000001","feature":"job_interview","params":{"question_count":5}}')::text, true)$$,
+                   '{"application_project_id":"AAAAAAAA-7777-0000-0000-000000000001","feature":"cover_letter","params":{"question_count":5}}')::text, true)$$,
                 'start a chat with return_target (gate entry)');
 select is((select (message_count, status, project_id, title is null, last_applied_at is null,
                    structured_draft = private.writing_chat_empty_draft())::text
@@ -104,14 +107,14 @@ select is((select structured_draft from public.writing_chats where id = current_
           '{"schema_version": 3, "project": {}, "star": {}, "classification": {}, "clarifications": [], "sensitive_flags_count": 0}'::jsonb,
           'empty draft v3 shape');
 select is((select return_target - 'created_at' from public.writing_chats where id = current_setting('t.chat')::uuid),
-          '{"application_project_id":"aaaaaaaa-7777-0000-0000-000000000001","feature":"job_interview","params":{"question_count":5}}'::jsonb,
+          '{"application_project_id":"aaaaaaaa-7777-0000-0000-000000000001","feature":"cover_letter","params":{"question_count":5}}'::jsonb,
           'return_target normalized');
 select isnt((select return_target ->> 'created_at' from public.writing_chats where id = current_setting('t.chat')::uuid),
             null, 'return_target.created_at set by the server');
 select is((select (sequence, role, status, ai_job_id is null, provider is null)::text
              from public.writing_chat_messages where writing_chat_id = current_setting('t.chat')::uuid),
           '(1,assistant,done,t,t)', 'greeting = sequence 1 assistant, no AI job, no provider');
-select ok((select content like '%민감정보%' and content like '%무료 등급%' and content like '직무 면접을 쓰려면%'
+select ok((select content like '%민감정보%' and content like '%무료 등급%' and content like '자소서 문항 답변을 쓰려면%'
                   and content like '%''A project''을 함께 정리해 볼게요%'
              from public.writing_chat_messages
             where writing_chat_id = current_setting('t.chat')::uuid),

@@ -36,16 +36,13 @@ describe("safeNextPath (screens, QA-W5-08)", () => {
   })
 })
 
-describe("U36-1 자기소개서 삭제됨 S-22 (모의 면접 메뉴 아래)", () => {
-  it("builds /interviews/{sessionId}/result", () => {
-    expect(routes.interviewDeletedResult("ses-1")).toBe("/interviews/ses-1/result")
+describe("L-01 menu (v5.19, RM-1)", () => {
+  it("has 3 menus in fixed order", () => {
+    expect(MENU_ITEMS.map((m) => m.key)).toEqual(["career", "applications", "board"])
   })
-  it("keeps live sessions under the application", () => {
-    expect(routes.interviewResult("ap-1", "ses-1")).toBe("/applications/ap-1/interview/ses-1/result")
-    expect(routes.interviewSession("ap-1", "ses-1")).toBe("/applications/ap-1/interview/ses-1")
-  })
-  it("is under the 모의 면접 menu", () => {
-    expect(menuKeyForPath(routes.interviewDeletedResult("ses-1"))).toBe("interviews")
+  it("maps application sub-screens to 자기소개서 관리", () => {
+    expect(menuKeyForPath(routes.applicationInsight("ap-1"))).toBe("applications")
+    expect(menuKeyForPath(routes.board())).toBe("board")
   })
 })
 

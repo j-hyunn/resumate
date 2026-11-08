@@ -32,7 +32,7 @@ export function JobInline({ jobId, label, className }: { jobId: string; label?: 
   React.useEffect(() => {
     if (status === "failed" || status === "canceled") router.refresh()
   }, [status, router])
-  // v5.3 C-03: job-dependent stage copy (prepare "공고 요건 정리 중" / "채점 준비 중", 질문 n/N, complete)
+  // v5.3 C-03: job-dependent stage copy (prepare "공고 요건 정리 중")
   return <AiProgressInline progress={progress} jobType={job?.job_type ?? null} label={label} className={className} />
 }
 

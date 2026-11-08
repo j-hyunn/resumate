@@ -8,6 +8,9 @@
  * The DB CHECK list keeps `profile` and existing `evidence_links` rows stay as
  * they are (SD-A19) — only this code-side allow list narrows; an insert trigger
  * rejects new rows (DM 2.8).
+ *
+ * (R14, AI spec v4.14 RM-1) `interview_answer` (`ANS-n`) is gone with the mock
+ * interview features (AI-05/06/07).
  */
 
 export const EVIDENCE_SOURCE_TYPES = [
@@ -18,7 +21,6 @@ export const EVIDENCE_SOURCE_TYPES = [
   "skill",
   "jd_sentence",
   "jd_requirement",
-  "interview_answer",
   "user_note",
   "writing_chat_message",
 ] as const;
@@ -57,7 +59,6 @@ export const EVIDENCE_RULES: Readonly<Record<EvidenceSourceType, Rule>> = {
   skill: { ref: /^SKL-\d+$/, fields: ["name"], quoteRequired: [] },
   jd_sentence: { ref: /^S\d+$/, fields: [], quoteRequired: [] },
   jd_requirement: { ref: /^REQ-\d+$/, fields: [], quoteRequired: [] },
-  interview_answer: { ref: /^ANS-\d+$/, fields: [], quoteRequired: ["*"] },
   user_note: { ref: /^NOTE-\d+$/, fields: [], quoteRequired: ["*"] },
   writing_chat_message: { ref: /^M-\d+$/, fields: [], quoteRequired: ["*"] },
 };
@@ -75,7 +76,7 @@ export const PROJECT_SCOPE_FIELDS: Readonly<Record<ProjectScope, readonly string
   standalone: ["name", "period", "role", "description"],
 };
 
-/** Key used in alias entries for sources without fields (JD sentence, answer, note, …). */
+/** Key used in alias entries for sources without fields (JD sentence, note, …). */
 export const WHOLE_SOURCE_FIELD = "";
 
 export function isEvidenceSourceType(value: unknown): value is EvidenceSourceType {
@@ -103,7 +104,6 @@ export const CAREER_SUPPORT_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new 
   "project",
   "project_deliverable",
   "skill",
-  "interview_answer",
   "user_note",
 ]);
 
@@ -124,8 +124,7 @@ export function isCareerSupportEvidence(
 }
 
 /**
- * A fact a question or a `met` verdict may rest on (AI spec AI-02 판정 기준,
- * 4.1 사실 전제 A11, v4.5): an affiliated project's action / result, a
+ * A fact a `met` verdict may rest on (AI spec AI-02 판정 기준, v4.5): an affiliated project's action / result, a
  * standalone project's description, or a deliverable body (C-1.1).
  * Situation, task, role, skill tags, classification, and learnings are not enough.
  * V-2 already guarantees `description` only comes from a standalone project.

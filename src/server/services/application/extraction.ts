@@ -18,7 +18,7 @@ import { createPriceCache, createUsageRecorder } from "@/server/jobs/usage-recor
  *
  * `ensureJdExtracted` is THE entry point: the sync route
  * (`POST /api/application-projects/{id}/jd-extraction`) uses it now, and the
- * first step of S6–S8 jobs (insight / drafts / interview) calls it too (D-30:
+ * first step of S6–S7 jobs (insight / drafts) calls it too (D-30:
  * a JD created without a key is extracted first). It always runs its own
  * `jd_extraction` ai_jobs row (usage meter "요건 추출", feature jd_extraction).
  *

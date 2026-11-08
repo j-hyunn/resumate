@@ -24,7 +24,7 @@ import type { AiErrorCode } from "@/types/db"
 //     · retry-connection-changed · retry-not-retryable
 //   · Q53-2 (저장소를 바꾸지 않음): raw-editable (not_a_jd 실패 + 고치기 버튼) · raw-edit (수정 중) · raw-save-failed · raw-save-refused
 //     · raw-saved (저장 안내) · raw-unknown-cause · raw-has-requirements (요건이 있는 공고 안내)
-// ?edit=1&from=insight|drafts|questions|interview&draft=&cause= : C-20 "입력 원인 실패의 이동"에서 온 진입
+// ?edit=1&from=insight|drafts|questions&draft=&cause= : C-20 "입력 원인 실패의 이동"에서 온 진입
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -34,7 +34,6 @@ function returnLink(id: string, from: string | undefined, draft: string | undefi
   if (from === "insight") return { href: routes.applicationInsight(id), label: "인사이트로 돌아가기" }
   if (from === "drafts") return { href: routes.applicationDrafts(id), label: "서류 초안으로 돌아가기" }
   if (from === "questions" && draft) return { href: routes.draftQuestions(id, draft), label: "자소서 문항 설정으로 돌아가기" }
-  if (from === "interview") return { href: routes.interviewPrep(id), label: "면접 준비로" }
   return null
 }
 
@@ -82,7 +81,7 @@ async function Screen({ params, searchParams }: Props) {
   // `refused=1`: the read-back after a refused `?state=raw-save-refused` save. The prop turns false like the
   // real read-back does, so the preview runs the same path (UQ-601)
   const editable = rawPreview ? state !== "raw-saved" && one(sp.refused) !== "1" : !unknownFailure && jd.raw_text_editable
-  // Q53-9 "요건이 있는 공고": 질문 생성·인사이트 입력 원인 실패로 왔는데 요건이 있으면 읽기 전용 + 안내
+  // Q53-9 "요건이 있는 공고": 인사이트 입력 원인 실패로 왔는데 요건이 있으면 읽기 전용 + 안내
   const causeParam = one(sp.cause)
   const lockedCause: AiErrorCode | null =
     state === "raw-has-requirements"

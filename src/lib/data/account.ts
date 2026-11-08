@@ -37,13 +37,14 @@ import { createSupabaseServerClient } from "@/server/db/server"
 function currentVersion(db: MockDb, policy_type: PolicyType): PolicyVersion {
   const rows = db.policy_versions
     .filter((p) => p.policy_type === policy_type && Date.parse(p.effective_at) <= Date.now())
-    .sort((x, y) => y.effective_at.localeCompare(x.effective_at))
+    // R14 (R14-DB-6): same order as private.current_policy_version — effective_at desc, then version desc.
+    .sort((x, y) => y.effective_at.localeCompare(x.effective_at) || (y.version < x.version ? -1 : y.version > x.version ? 1 : 0))
   return rows[0] ?? db.policy_versions.find((p) => p.policy_type === policy_type)!
 }
 
 function previewAiDataUseVersion(db: MockDb): PolicyVersion {
-  const existing = db.policy_versions.find((p) => p.policy_type === "ai_data_use")
-  if (existing) return existing
+  // UQ-44-5: several ai_data_use rows exist (2026-11-05 · 2026-11-08 · 2026-11-08.1) — pick the current one.
+  if (db.policy_versions.some((p) => p.policy_type === "ai_data_use")) return currentVersion(db, "ai_data_use")
   const privacy = currentVersion(db, "privacy")
   return {
     ...privacy,
@@ -69,6 +70,7 @@ export async function getPolicyVersions(): Promise<Record<PolicyType, PolicyVers
     },
     async () => {
       // policy_versions is public (S-30 opens signed out). DM has no updated_at use on screens.
+      // Rows come ordered effective_at desc, version desc (R14-DB-6), so the first row per type is current.
       const rows = (await loadPolicyVersions(await createSupabaseServerClient())) as PolicyVersion[]
       const latest = (type: PolicyType) => {
         const row = rows.find((r) => r.policy_type === type)
@@ -306,7 +308,6 @@ export async function getAccountDeletionSummary(): Promise<AccountDeletionSummar
         application_projects: r.applications.applicationProjects,
         insights: r.applications.insights,
         drafts: r.applications.drafts,
-        interview_sessions: r.applications.interviewSessions,
         application_stage_events: r.applications.stageEvents,
       },
       ai: {
@@ -330,7 +331,6 @@ export async function getAccountDeletionSummary(): Promise<AccountDeletionSummar
       application_projects: db.application_projects.length,
       insights: db.insights.length,
       drafts: db.drafts.length,
-      interview_sessions: db.interview_sessions.length,
       application_stage_events: db.application_stage_events.length,
     },
     // v4: AI 연결 — keys are destroyed immediately; consents / usage records follow D-DM-02

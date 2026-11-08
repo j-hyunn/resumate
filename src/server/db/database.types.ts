@@ -147,38 +147,6 @@ isOneToOne: false
       referencedColumns: ["id","user_id"]
     }
                   ]
-                },"answer_evaluations": {
-                  Row: {
-                    "ai_job_id": string | null,"answer_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"error_code": string | null,"id": string,"input_hash": string | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"session_id": string,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "ai_job_id"?: string | null,"answer_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"error_code"?: string | null,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id": string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Update: {
-                    "ai_job_id"?: string | null,"answer_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"error_code"?: string | null,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id"?: string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "answer_evaluations_ai_job_fkey"
-      columns: ["ai_job_id","user_id"]
-isOneToOne: false
-      referencedRelation: "ai_jobs"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "answer_evaluations_answer_fkey"
-      columns: ["answer_id","session_id"]
-isOneToOne: false
-      referencedRelation: "interview_answers"
-      referencedColumns: ["id","session_id"]
-    },{
-      foreignKeyName: "answer_evaluations_session_fkey"
-      columns: ["session_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_sessions"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
                 },"application_projects": {
                   Row: {
                     "created_at": string,"deadline": string | null,"duplicated_from_id": string | null,"id": string,"last_activity_at": string,"memo": string | null,"name": string | null,"name_source": string | null,"stage": string,"stage_changed_at": string,"stage_outcome": string | null,"updated_at": string,"user_id": string
@@ -339,14 +307,14 @@ isOneToOne: false
                   ]
                 },"evidence_links": {
                   Row: {
-                    "application_project_id": string | null,"created_at": string,"id": string,"item_key": string,"owner_id": string,"owner_type": string,"quote": string | null,"quote_adjusted": boolean,"sort_order": number,"source_deleted_at": string | null,"source_field": string | null,"source_id": string,"source_label": string | null,"source_locator": Json | null,"source_snapshot_at": string | null,"source_type": string,"updated_at": string,"user_id": string
+                    "application_project_id": string,"created_at": string,"id": string,"item_key": string,"owner_id": string,"owner_type": string,"quote": string | null,"quote_adjusted": boolean,"sort_order": number,"source_deleted_at": string | null,"source_field": string | null,"source_id": string,"source_label": string | null,"source_locator": Json | null,"source_snapshot_at": string | null,"source_type": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "application_project_id"?: string | null,"created_at"?: string,"id"?: string,"item_key": string,"owner_id": string,"owner_type": string,"quote"?: string | null,"quote_adjusted"?: boolean,"sort_order"?: number,"source_deleted_at"?: string | null,"source_field"?: string | null,"source_id": string,"source_label"?: string | null,"source_locator"?: Json | null,"source_snapshot_at"?: string | null,"source_type": string,"updated_at"?: string,"user_id"?: string
+                    "application_project_id": string,"created_at"?: string,"id"?: string,"item_key": string,"owner_id": string,"owner_type": string,"quote"?: string | null,"quote_adjusted"?: boolean,"sort_order"?: number,"source_deleted_at"?: string | null,"source_field"?: string | null,"source_id": string,"source_label"?: string | null,"source_locator"?: Json | null,"source_snapshot_at"?: string | null,"source_type": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "application_project_id"?: string | null,"created_at"?: string,"id"?: string,"item_key"?: string,"owner_id"?: string,"owner_type"?: string,"quote"?: string | null,"quote_adjusted"?: boolean,"sort_order"?: number,"source_deleted_at"?: string | null,"source_field"?: string | null,"source_id"?: string,"source_label"?: string | null,"source_locator"?: Json | null,"source_snapshot_at"?: string | null,"source_type"?: string,"updated_at"?: string,"user_id"?: string
+                    "application_project_id"?: string,"created_at"?: string,"id"?: string,"item_key"?: string,"owner_id"?: string,"owner_type"?: string,"quote"?: string | null,"quote_adjusted"?: boolean,"sort_order"?: number,"source_deleted_at"?: string | null,"source_field"?: string | null,"source_id"?: string,"source_label"?: string | null,"source_locator"?: Json | null,"source_snapshot_at"?: string | null,"source_type"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -394,108 +362,6 @@ isOneToOne: false
       columns: ["application_project_id","user_id"]
 isOneToOne: false
       referencedRelation: "application_projects"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
-                },"interview_answers": {
-                  Row: {
-                    "answer_text": string,"created_at": string,"id": string,"question_id": string,"score_max": number | null,"score_method_version": string | null,"score_rationale": string | null,"score_status": string | null,"score_value": number | null,"session_id": string,"status": string,"updated_at": string,"user_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "answer_text"?: string,"created_at"?: string,"id"?: string,"question_id": string,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"session_id": string,"status"?: string,"updated_at"?: string,"user_id"?: string
-                  }
-                  Update: {
-                    "answer_text"?: string,"created_at"?: string,"id"?: string,"question_id"?: string,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"session_id"?: string,"status"?: string,"updated_at"?: string,"user_id"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "interview_answers_question_fkey"
-      columns: ["question_id","session_id"]
-isOneToOne: false
-      referencedRelation: "interview_questions"
-      referencedColumns: ["id","session_id"]
-    },{
-      foreignKeyName: "interview_answers_session_fkey"
-      columns: ["session_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_sessions"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
-                },"interview_questions": {
-                  Row: {
-                    "ai_job_id": string | null,"anchor": string,"career_snapshot_hash": string | null,"connection_tier": string | null,"copied_from_question_id": string | null,"created_at": string,"focus_criteria": (string)[],"good_answer_signals": NonNullable<Json>,"id": string,"input_hash": string | null,"intent": string,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"question_text": string,"run_generation": number | null,"schema_version": number | null,"sequence": number,"session_id": string,"source_kind": string,"target_gap_requirement_ids": (string)[],"target_requirement_ids": (string)[],"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "ai_job_id"?: string | null,"anchor": string,"career_snapshot_hash"?: string | null,"connection_tier"?: string | null,"copied_from_question_id"?: string | null,"created_at"?: string,"focus_criteria"?: (string)[],"good_answer_signals"?: NonNullable<Json>,"id"?: string,"input_hash"?: string | null,"intent": string,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"question_text": string,"run_generation"?: number | null,"schema_version"?: number | null,"sequence": number,"session_id": string,"source_kind": string,"target_gap_requirement_ids"?: (string)[],"target_requirement_ids"?: (string)[],"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Update: {
-                    "ai_job_id"?: string | null,"anchor"?: string,"career_snapshot_hash"?: string | null,"connection_tier"?: string | null,"copied_from_question_id"?: string | null,"created_at"?: string,"focus_criteria"?: (string)[],"good_answer_signals"?: NonNullable<Json>,"id"?: string,"input_hash"?: string | null,"intent"?: string,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"question_text"?: string,"run_generation"?: number | null,"schema_version"?: number | null,"sequence"?: number,"session_id"?: string,"source_kind"?: string,"target_gap_requirement_ids"?: (string)[],"target_requirement_ids"?: (string)[],"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "interview_questions_ai_job_fkey"
-      columns: ["ai_job_id","user_id"]
-isOneToOne: false
-      referencedRelation: "ai_jobs"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_questions_copied_from_fkey"
-      columns: ["copied_from_question_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_questions"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_questions_session_fkey"
-      columns: ["session_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_sessions"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
-                },"interview_sessions": {
-                  Row: {
-                    "abandoned_at": string | null,"answered_count": number,"application_project_id": string | null,"career_snapshot_hash": string | null,"company_name_snapshot": string | null,"completed_at": string | null,"created_at": string,"data_sufficiency": string,"evaluation_job_id": string | null,"evaluation_model": string | null,"evaluation_provider": string | null,"evaluation_run_generation": number | null,"generation_status": string,"id": string,"insight_id": string | null,"interview_type": string,"last_activity_at": string,"position_title_snapshot": string | null,"question_count": number,"question_job_id": string | null,"question_model": string | null,"question_provider": string | null,"question_run_generation": number | null,"question_usage": Json | null,"question_validation_report": Json | null,"result_viewed_at": string | null,"score_counted_count": number | null,"score_max": number | null,"score_method_version": string | null,"score_rationale": string | null,"score_status": string | null,"score_value": number | null,"source_session_id": string | null,"status": string,"submitted_at": string | null,"unanswered_count": number,"updated_at": string,"user_id": string,"weak_requirement_ids": (string)[]
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id"?: string | null,"career_snapshot_hash"?: string | null,"company_name_snapshot"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency": string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type": string,"last_activity_at"?: string,"position_title_snapshot"?: string | null,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"question_usage"?: Json | null,"question_validation_report"?: Json | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
-                  }
-                  Update: {
-                    "abandoned_at"?: string | null,"answered_count"?: number,"application_project_id"?: string | null,"career_snapshot_hash"?: string | null,"company_name_snapshot"?: string | null,"completed_at"?: string | null,"created_at"?: string,"data_sufficiency"?: string,"evaluation_job_id"?: string | null,"evaluation_model"?: string | null,"evaluation_provider"?: string | null,"evaluation_run_generation"?: number | null,"generation_status"?: string,"id"?: string,"insight_id"?: string | null,"interview_type"?: string,"last_activity_at"?: string,"position_title_snapshot"?: string | null,"question_count"?: number,"question_job_id"?: string | null,"question_model"?: string | null,"question_provider"?: string | null,"question_run_generation"?: number | null,"question_usage"?: Json | null,"question_validation_report"?: Json | null,"result_viewed_at"?: string | null,"score_counted_count"?: number | null,"score_max"?: number | null,"score_method_version"?: string | null,"score_rationale"?: string | null,"score_status"?: string | null,"score_value"?: number | null,"source_session_id"?: string | null,"status"?: string,"submitted_at"?: string | null,"unanswered_count"?: number,"updated_at"?: string,"user_id"?: string,"weak_requirement_ids"?: (string)[]
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "interview_sessions_application_project_fkey"
-      columns: ["application_project_id","user_id"]
-isOneToOne: false
-      referencedRelation: "application_projects"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_sessions_evaluation_job_fkey"
-      columns: ["evaluation_job_id","user_id"]
-isOneToOne: false
-      referencedRelation: "ai_jobs"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_sessions_insight_fkey"
-      columns: ["insight_id","user_id"]
-isOneToOne: false
-      referencedRelation: "insights"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_sessions_question_job_fkey"
-      columns: ["question_job_id","user_id"]
-isOneToOne: false
-      referencedRelation: "ai_jobs"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "interview_sessions_source_session_fkey"
-      columns: ["source_session_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_sessions"
       referencedColumns: ["id","user_id"]
     }
                   ]
@@ -685,32 +551,6 @@ isOneToOne: false
       referencedColumns: ["id","user_id"]
     }
                   ]
-                },"session_feedbacks": {
-                  Row: {
-                    "ai_job_id": string | null,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"id": string,"input_hash": string | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"session_id": string,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "ai_job_id"?: string | null,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id": string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Update: {
-                    "ai_job_id"?: string | null,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"session_id"?: string,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "session_feedbacks_ai_job_fkey"
-      columns: ["ai_job_id","user_id"]
-isOneToOne: false
-      referencedRelation: "ai_jobs"
-      referencedColumns: ["id","user_id"]
-    },{
-      foreignKeyName: "session_feedbacks_session_fkey"
-      columns: ["session_id","user_id"]
-isOneToOne: false
-      referencedRelation: "interview_sessions"
-      referencedColumns: ["id","user_id"]
-    }
-                  ]
                 },"skills": {
                   Row: {
                     "created_at": string,"id": string,"is_manual": boolean,"name": string,"normalized_name": string | null,"proficiency": string | null,"updated_at": string,"user_id": string
@@ -791,10 +631,7 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "abandon_interview_session":
-{ Args: { "p_session_id": string }; Returns: Json
-                           },
-"add_cover_letter_question":
+            "add_cover_letter_question":
 { Args: { "p_char_limit"?: number,"p_count_basis"?: string,"p_draft_id": string,"p_question_text": string,"p_section_id"?: string }; Returns: Json
                            },
 "append_writing_chat_message":
@@ -807,9 +644,6 @@ isOneToOne: false
                            },
 "apply_structured_draft_patch":
 { Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
-                           },
-"backfill_interview_scores":
-{ Args: { "p_limit"?: number }; Returns: Json
                            },
 "begin_assistant_message":
 { Args: { "p_ai_job_id": string,"p_connection_tier": string,"p_model": string,"p_model_tier": string,"p_provider": string,"p_writing_chat_id": string }; Returns: {
@@ -824,12 +658,6 @@ isOneToOne: false
                            },
 "begin_insight":
 { Args: { "p_ai_job_id": string,"p_application_project_id": string }; Returns: string
-                           },
-"begin_interview_evaluation":
-{ Args: { "p_ai_job_id": string,"p_model": string,"p_provider": string,"p_session_id": string }; Returns: Json
-                           },
-"begin_interview_questions":
-{ Args: { "p_ai_job_id": string,"p_session_id": string }; Returns: Json
                            },
 "begin_jd_extraction":
 { Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: undefined
@@ -854,12 +682,6 @@ isOneToOne: false
 "complete_insight":
 { Args: { "p_ai_job_id": string,"p_insight_id": string,"p_payload": Json,"p_run_generation": number }; Returns: Json
                            },
-"complete_interview_evaluation":
-{ Args: { "p_ai_job_id": string,"p_run_generation": number,"p_session_id": string }; Returns: Json
-                           },
-"complete_interview_questions":
-{ Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
-                           },
 "compute_total_experience_months":
 { Args: { "p_as_of": string }; Returns: {
               "as_of_month": string,"open_ended_experience_count": number,"total_months": number
@@ -870,9 +692,6 @@ isOneToOne: false
                            },
 "create_cover_letter_draft":
 { Args: { "p_application_project_id": string,"p_draft_id"?: string,"p_title"?: string }; Returns: Json
-                           },
-"create_interview_session":
-{ Args: { "p_application_project_id": string,"p_data_sufficiency": string,"p_interview_type": string,"p_question_count": number,"p_session_id"?: string }; Returns: Json
                            },
 "delete_account":
 { Args: { "p_subject_hash": string }; Returns: Json
@@ -886,9 +705,6 @@ isOneToOne: false
 "delete_provider_key":
 { Args: { "p_provider": string }; Returns: boolean
                            },
-"fail_answer_evaluation":
-{ Args: { "p_ai_job_id": string,"p_answer_id": string,"p_error_code"?: string }; Returns: boolean
-                           },
 "fail_career_description":
 { Args: { "p_ai_job_id": string,"p_draft_id": string }; Returns: boolean
                            },
@@ -897,9 +713,6 @@ isOneToOne: false
                            },
 "fail_insight":
 { Args: { "p_ai_job_id": string,"p_insight_id": string }; Returns: boolean
-                           },
-"fail_interview_questions":
-{ Args: { "p_ai_job_id": string,"p_session_id": string }; Returns: boolean
                            },
 "fail_jd_extraction":
 { Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: boolean
@@ -927,16 +740,6 @@ isOneToOne: false
 "get_deletion_impact":
 { Args: { "p_affiliation_mode"?: string,"p_entity_id": string,"p_entity_type": string }; Returns: Json
                            },
-"get_interview_grading_decisions":
-{ Args: { "p_session_ids": (string)[] }; Returns: {
-              "answer_input_cause": string,"cause": string,"decision": string,"regrade_target_count": number,"session_id": string,"status": string,"succeeded_count": number,"summary_error_code": string
-            }[]
-                           },
-"get_interview_question_reveals":
-{ Args: { "p_session_id": string }; Returns: {
-              "intent": string,"question_id": string,"sequence": number
-            }[]
-                           },
 "get_provider_key_secret":
 { Args: { "p_ai_job_id": string }; Returns: {
               "encryption_version": number,"kek_id": string,"key_ciphertext": string,"key_id": string,"key_nonce": string,"wrapped_dek": string
@@ -959,9 +762,6 @@ isOneToOne: false
                            },
 "mark_inactivity_notice_sent":
 { Args: { "p_sent_at": string,"p_user_id": string }; Returns: boolean
-                           },
-"mark_interview_result_viewed":
-{ Args: { "p_session_id": string }; Returns: Json
                            },
 "mark_provider_key_invalid":
 { Args: { "p_ai_job_id": string,"p_failure_cause": string }; Returns: boolean
@@ -1007,12 +807,6 @@ isOneToOne: false
 "retry_ai_job":
 { Args: { "p_ai_job_id": string,"p_expected_connection_tier"?: string,"p_expected_provider": string,"p_expected_run_generation": number,"p_model": string,"p_model_tier": string,"p_run_meta": Json }; Returns: Json
                            },
-"save_answer_evaluation":
-{ Args: { "p_ai_job_id": string,"p_answer_id": string,"p_payload": Json,"p_run_generation": number }; Returns: Json
-                           },
-"save_interview_question":
-{ Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
-                           },
 "save_profile_basics":
 { Args: { "p_expected_updated_at"?: string,"p_job_interests"?: Json,"p_values": Json }; Returns: Json
                            },
@@ -1024,9 +818,6 @@ isOneToOne: false
                            },
 "save_provider_key":
 { Args: { "p_connection_tier": string,"p_disclosure_version": string,"p_encryption_version"?: number,"p_failure_cause"?: string,"p_kek_id": string,"p_key_ciphertext": string,"p_key_id": string,"p_key_last4": string,"p_key_nonce": string,"p_provider": string,"p_user_id": string,"p_verification_result": string,"p_wrapped_dek": string }; Returns: Json
-                           },
-"save_session_feedback":
-{ Args: { "p_ai_job_id": string,"p_payload": Json,"p_run_generation": number,"p_session_id": string }; Returns: Json
                            },
 "set_active_ai_provider":
 { Args: { "p_provider": string }; Returns: undefined
@@ -1042,9 +833,6 @@ isOneToOne: false
                            },
 "start_writing_chat":
 { Args: { "p_form_snapshot"?: Json,"p_project_id": string,"p_return_target"?: Json }; Returns: string
-                           },
-"submit_interview_session":
-{ Args: { "p_session_id": string }; Returns: Json
                            },
 "sweep_stalled_ai_jobs":
 { Args: { "p_stalled_before": string }; Returns: number

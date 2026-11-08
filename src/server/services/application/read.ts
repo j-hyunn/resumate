@@ -31,7 +31,6 @@ import { AppError } from "@/lib/contracts/errors";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
-import { loadInterviewProgress } from "@/server/services/interview/progress";
 import { loadDraftCounts } from "@/server/services/drafts/progress";
 import { loadInsightProgress } from "@/server/services/insight/progress";
 import { parseSentences } from "./db";
@@ -81,25 +80,22 @@ function jdOf(row: ProjectRow): JdEmbed | null {
 
 /**
  * Feature progress per project (S-13, S-39, S-31). S6: insight state
- * (services/insight/read.ts). S7–S8 fill draft and interview counts.
+ * (services/insight/read.ts). S7 fills draft counts.
  */
 export async function loadProgress(supabase: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, ApplicationProgress>> {
   const out = new Map<string, ApplicationProgress>();
   if (ids.length === 0) return out;
-  const [insight, drafts, interviews] = await Promise.all([loadInsightProgress(supabase, ids), loadDraftCounts(supabase, ids), loadInterviewProgress(supabase, ids)]);
+  const [insight, drafts] = await Promise.all([loadInsightProgress(supabase, ids), loadDraftCounts(supabase, ids)]);
   for (const id of ids) {
-    const interview = interviews.get(id);
     out.set(id, {
       insight: insight.get(id) ?? "none",
       draftCount: drafts.get(id) ?? 0,
-      interviewCount: interview?.interviewCount ?? 0,
-      interviewInProgress: interview?.interviewInProgress ?? false,
     });
   }
   return out;
 }
 
-const EMPTY_PROGRESS: ApplicationProgress = { insight: "none", draftCount: 0, interviewCount: 0, interviewInProgress: false };
+const EMPTY_PROGRESS: ApplicationProgress = { insight: "none", draftCount: 0 };
 
 export function toListItem(row: ProjectRow, progress: ApplicationProgress = EMPTY_PROGRESS, jobs: ReadonlyMap<string, ExtractionJobRow> = new Map()): ApplicationProjectListItem {
   const jd = jdOf(row);
@@ -322,22 +318,17 @@ async function hasRowsFromThisText(supabase: UserSupabaseClient, applicationProj
     return n ?? 0;
   };
   const head = { count: "exact", head: true } as const;
-  const [insights, evidence, sessions, drafts] = await Promise.all([
+  // Condition 5 (R14 RPC): ready insights, JD evidence, draft sections with AI content.
+  const [insights, evidence, drafts] = await Promise.all([
     count(supabase.from("insights").select("id", head).eq("application_project_id", applicationProjectId).eq("status", "ready")),
     count(supabase.from("evidence_links").select("id", head).eq("application_project_id", applicationProjectId).in("source_type", ["jd_requirement", "jd_sentence"])),
-    supabase.from("interview_sessions").select("id").eq("application_project_id", applicationProjectId),
     supabase.from("drafts").select("id").eq("application_project_id", applicationProjectId),
   ]);
-  if (sessions.error) throw mapDbError(sessions.error);
   if (drafts.error) throw mapDbError(drafts.error);
   if (insights > 0 || evidence > 0) return true;
-  const sessionIds = (sessions.data ?? []).map((s) => s.id);
   const draftIds = (drafts.data ?? []).map((d) => d.id);
-  const [questions, sections] = await Promise.all([
-    sessionIds.length ? count(supabase.from("interview_questions").select("id", head).in("session_id", sessionIds)) : 0,
-    draftIds.length ? count(supabase.from("draft_sections").select("id", head).in("draft_id", draftIds).not("ai_content", "is", null)) : 0,
-  ]);
-  return questions > 0 || sections > 0;
+  const sections = draftIds.length ? await count(supabase.from("draft_sections").select("id", head).in("draft_id", draftIds).not("ai_content", "is", null)) : 0;
+  return sections > 0;
 }
 
 async function loadJdRawTextLock(

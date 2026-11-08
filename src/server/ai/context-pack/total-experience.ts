@@ -31,7 +31,7 @@ export type TotalExperience = {
   asOfMonth: YearMonth;
 };
 
-/** No `complete` experience (and the "커리어 데이터 없음" interview path). */
+/** No `complete` experience (an empty career pack). */
 export function emptyTotalExperience(asOfMonth: YearMonth): TotalExperience {
   return { totalMonths: 0, openEndedExperienceCount: 0, asOfMonth };
 }

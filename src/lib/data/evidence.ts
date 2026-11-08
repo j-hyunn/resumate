@@ -166,22 +166,11 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
     }
     case "jd_requirement": {
       const r = db.jd_requirements.find((x) => x.id === sid)
-      // R11 최소 수정 (OD-I6): no project (detached interview evidence) → no link.
+      // No project → no link.
       return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["JD 요건"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
     }
     case "jd_sentence":
       return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
-    case "interview_answer": {
-      const a = db.interview_answers.find((x) => x.id === sid)
-      return {
-        source_label: e.source_label ?? "내 답변",
-        current_value: a?.answer_text ?? null,
-        path: ["모의 면접", "내 답변"],
-        href: a && e.application_project_id ? routes.interviewResult(e.application_project_id, a.session_id) : null,
-        to_career: false,
-        updated_at: a?.updated_at ?? null,
-      }
-    }
     case "user_note": {
       const s = db.draft_sections.find((x) => x.id === sid)
       return {

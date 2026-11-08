@@ -2,9 +2,9 @@
 
 /**
  * S-24 ② 블록 ② 모델 공급자 별 사용량 확인 = S-42 (UX v5.17 S-42 SD-A10~A12, F-AI-07;
- * design-system 5.11.2 `AiUsageByProvider`). 이번 달(KST)만, **공급자 탭 + 그 공급자의 기능별 표 7행**
+ * design-system 5.11.2 `AiUsageByProvider`). 이번 달(KST)만, **공급자 탭 + 그 공급자의 기능별 표 5행**
  * (열 = 기능 / 입력 비용 / 호출 수 / 출력 비용, 토큰은 비용 칸 둘째 줄). 합계 카드·`by_provider` 표 없음.
- * 원천: `get_ai_usage_summary`의 `providers[]` (DM v4.12 2.9.5) + 표시 7행 묶음 `USAGE_FEATURE_DISPLAY_GROUPS`.
+ * 원천: `get_ai_usage_summary`의 `providers[]` (DM v4.12 2.9.5) + 표시 5행 묶음 `USAGE_FEATURE_DISPLAY_GROUPS`.
  *
  * Never reads `?state=` (the dialog is outside <Suspense>); the AI 연결 탭 passes `preview`:
  * loading · usage-loading · error · usage-error · empty (이번 달 기록 없음) · ai-locked (연결 전)

@@ -49,7 +49,7 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
   let gateRequirements: GateRequirement[] = [];
   if (chat.returnTarget) {
     const [readiness, requirements] = await Promise.all([getDataReadiness(db), loadGateRequirements(db, chat.returnTarget.application_project_id)]);
-    const key = chat.returnTarget.feature === "insight" ? "insight" : chat.returnTarget.feature === "job_interview" ? "job_interview" : "draft";
+    const key = chat.returnTarget.feature === "insight" ? "insight" : "draft";
     const f = readiness.features[key];
     gate = { feature: chat.returnTarget.feature, missing: f.ready ? [] : f.missing };
     gateRequirements = requirements;

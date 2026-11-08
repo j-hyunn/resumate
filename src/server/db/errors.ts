@@ -135,7 +135,6 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // server-built arguments
   invalid_raw_text_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // QA-W0-05: program errors, unreachable from the app paths (server-built values, no user update grant)
-  invalid_error_code: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   job_description_immutable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sentences: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_extraction_result: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
@@ -164,29 +163,6 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
   jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요.", status: 409 },
   jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
-  // W0 Q53-3 begin_interview_evaluation / 다시 채점 route (DM 2.7.1)
-  interview_evaluation_input_only: { message: "남은 실패는 입력이 원인이라 다시 채점할 수 없어요. 새 면접에서 다시 답해 주세요.", status: 409 },
-  // R11 OD-I6 (DM 2.7.2): a session kept after its application project was deleted is read-only.
-  interview_session_read_only: { message: "자기소개서가 삭제된 면접 기록은 볼 수만 있어요.", status: 409 },
-  // S8 interviews (db notes)
-  interview_in_progress: { message: "이 자기소개서에 작성 중인 면접이 있어요. 이어서 쓰거나 그만둔 뒤 새로 시작해 주세요.", status: 409 },
-  session_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  invalid_interview_type: { message: "면접 유형을 골라 주세요." },
-  invalid_question_count: { message: "질문 수는 3, 5, 7 중에서 골라 주세요." },
-  invalid_data_sufficiency: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  interview_session_not_found: { message: "면접 세션을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  interview_answer_not_found: { message: "답변을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  interview_not_in_progress: { message: "이미 제출했거나 그만둔 면접이에요.", status: 409 },
-  interview_already_submitted: { message: "이미 제출한 면접이에요. 결과 화면에서 확인해 주세요.", status: 409 },
-  interview_not_ready: { message: "질문을 모두 만든 뒤에 제출할 수 있어요.", status: 409 },
-  interview_not_submitted: { message: "제출한 뒤에 볼 수 있어요.", status: 409 },
-  interview_generation_in_progress: { message: "질문을 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  interview_evaluation_in_progress: { message: "채점하고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  interview_questions_ready: { message: "질문을 이미 모두 만들었어요.", status: 409 },
-  interview_evaluation_not_needed: { message: "다시 채점할 답변이 없어요.", status: 409 },
-  interview_questions_incomplete: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_interview_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  answer_not_evaluable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // S9 delete_account: the server computes the hash, so a bad one is our bug.
   invalid_subject_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // R1 get_account_deletion_state / server-only key RPCs: the server passes the session user id,
@@ -265,21 +241,11 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_draft_sections: "invalid_input",
   invalid_draft_payload: "internal_error",
   invalid_raw_text_hash: "internal_error",
-  invalid_error_code: "internal_error",
   job_description_immutable: "internal_error",
   invalid_sentences: "internal_error",
   invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
   invalid_evidence_source: "internal_error",
-  session_id_conflict: "conflict",
-  invalid_interview_type: "invalid_input",
-  invalid_question_count: "invalid_input",
-  invalid_data_sufficiency: "internal_error",
-  interview_session_not_found: "not_found",
-  interview_answer_not_found: "not_found",
-  interview_questions_incomplete: "internal_error",
-  invalid_interview_payload: "internal_error",
-  answer_not_evaluable: "internal_error",
 };
 
 /** Raises whose `detail` names the offending field(s) (DM 2.5.1 R5-DB-8: comma-separated). */
@@ -298,8 +264,6 @@ const FIELD_DETAIL_RAISES = new Set([
 /** RPC `detail` → response `details` (machine data the screen uses to focus a field / show a conflict). */
 function raiseDetails(message: string, detail: string | null): Record<string, unknown> | undefined {
   if (!detail) return undefined;
-  // DM 2.7.1: the cause travels in the raise's detail.
-  if (message === "interview_evaluation_input_only") return { cause: detail };
   // DM 2.5.1: the row's current updated_at (ISO, UTC) — the screen offers "새로 불러오기 / 내 내용으로 저장".
   if (message === "stale_write") return { current_updated_at: detail };
   // R13 (QA-R13-01): save_profile_basics raises `duplicate_job_interest` with the pair's 1-based

@@ -121,7 +121,7 @@ function locked(f?: StructuredField<unknown>): boolean {
 /** Projected readiness if the current draft were saved (AI 명세 AI-12 ready_to_return) */
 export function projectedReady(db: MockDb, chat: WritingChat): boolean {
   const readiness = computeReadiness(db)
-  const key = chat.return_target ? (chat.return_target.feature === "job_interview" ? "job_interview" : chat.return_target.feature === "insight" ? "insight" : "draft") : "insight"
+  const key = chat.return_target ? (chat.return_target.feature === "insight" ? "insight" : "draft") : "insight"
   const f = readiness.features[key]
   if (f.ready) return true
   if (f.missing?.includes("complete_experience")) return false
@@ -150,7 +150,7 @@ export function projectedReady(db: MockDb, chat: WritingChat): boolean {
   return Boolean(name && role && detailOk && parentOk)
 }
 
-const FEATURE_LABEL = { insight: "인사이트", career_description: "경력기술서", cover_letter: "자소서 문항 답변", job_interview: "직무 면접" } as const
+const FEATURE_LABEL = { insight: "인사이트", career_description: "경력기술서", cover_letter: "자소서 문항 답변" } as const
 
 export async function planMockTurn(
   chatId: string,

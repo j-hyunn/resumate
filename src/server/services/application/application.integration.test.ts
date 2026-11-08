@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { CreateApplicationProjectInput, ListApplicationProjectsInput } from "@/lib/contracts/application";
+import { CreateApplicationProjectInput, ListApplicationProjectsInput, MoveApplicationStageInput } from "@/lib/contracts/application";
 import { ProviderError } from "@/server/ai/errors";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { createAiWriterClient } from "@/server/db/ai-writer";
@@ -138,10 +138,9 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(created).toMatchObject({ name: "가나다랩 – 데이터 엔지니어", nameSource: "user", warnings: ["short_jd"] });
   });
 
-  it("R11 OD-I6: deletion impact of an application project (cascade / kept counts); others → not_found", async () => {
+  it("deletion impact of an application project (R14 cascade keys only); others → not_found", async () => {
     await expect(getApplicationProjectDeletionImpact(user, projectA)).resolves.toEqual({
-      cascade: { insights: 0, drafts: 0, interview_sessions: 0, stage_events: expect.any(Number) },
-      kept: { interview_sessions: 0 },
+      cascade: { insights: 0, drafts: 0, stage_events: expect.any(Number) },
     });
     await expect(getApplicationProjectDeletionImpact(otherUser, projectA)).rejects.toMatchObject({ code: "not_found", status: 404 });
   });
@@ -196,17 +195,19 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(res.jd.lastFailure).toMatchObject({ code: "key_invalid", jobId: res.jobId });
   });
 
-  it("stage moves: interview prompt, closed + outcome, leaving closed clears it, history kept", async () => {
-    const toInterview = await moveApplicationStage(user, { id: projectA, toStage: "job_interview" });
-    expect(toInterview).toMatchObject({ stage: "job_interview", changed: true, interviewPrompt: { interviewType: "job", inProgressSessionId: null } });
-    const same = await moveApplicationStage(user, { id: projectA, toStage: "job_interview" });
+  it("stage moves: 4 stages, closed + outcome, leaving closed clears it, history kept", async () => {
+    const toAssignment = await moveApplicationStage(user, { id: projectA, toStage: "assignment" });
+    expect(toAssignment).toEqual({ applicationProjectId: projectA, stage: "assignment", stageOutcome: null, stageChangedAt: expect.any(String), changed: true });
+    const same = await moveApplicationStage(user, { id: projectA, toStage: "assignment" });
     expect(same).toMatchObject({ changed: false });
+    // R14 (RM-2): the removed interview stages are rejected by the input schema.
+    expect(MoveApplicationStageInput.safeParse({ id: projectA, toStage: "job_interview" }).success).toBe(false);
 
     await expect(moveApplicationStage(user, { id: projectA, toStage: "document", outcome: "passed" })).rejects.toMatchObject({ code: "invalid_outcome" });
     await expect(setApplicationOutcome(user, { id: projectA, outcome: "passed" })).rejects.toMatchObject({ code: "not_closed", status: 409 });
 
     const closed = await moveApplicationStage(user, { id: projectA, toStage: "closed", outcome: "passed" });
-    expect(closed).toMatchObject({ stage: "closed", stageOutcome: "passed", interviewPrompt: null });
+    expect(closed).toMatchObject({ stage: "closed", stageOutcome: "passed" });
     const cleared = await setApplicationOutcome(user, { id: projectA, outcome: null });
     expect(cleared).toMatchObject({ stageOutcome: null, changed: true });
     await setApplicationOutcome(user, { id: projectA, outcome: "failed" });
@@ -218,12 +219,12 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(events.data?.at(-1)).toMatchObject({ from_stage: "closed", to_stage: "document", from_outcome: "failed", to_outcome: null });
   });
 
-  it("board / list / update: six columns, counts, sort, inline edit", async () => {
+  it("board / list / update: four columns, counts, sort, inline edit", async () => {
     const board = await getBoard(user);
-    expect(board.columns.map((c) => c.stage)).toEqual(["before_apply", "document", "assignment", "job_interview", "culture_fit_interview", "closed"]);
+    expect(board.columns.map((c) => c.stage)).toEqual(["before_apply", "document", "assignment", "closed"]);
     expect(board.total).toBe(2);
     expect(board.columns.find((c) => c.stage === "document")!.cards.map((c) => c.id)).toEqual([projectA]);
-    expect(board.columns[0]!.cards[0]!.progress).toEqual({ insight: "none", draftCount: 0, interviewCount: 0, interviewInProgress: false });
+    expect(board.columns[0]!.cards[0]!.progress).toEqual({ insight: "none", draftCount: 0 });
 
     const byDeadline = await listApplicationProjects(user, ListApplicationProjectsInput.parse({ sort: "deadline" }));
     expect(byDeadline.map((p) => p.id)).toEqual([projectB, projectA]);
@@ -307,10 +308,8 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_failure_not_input" });
     await admin.from("ai_jobs").update({ error_code: "not_a_jd" }).eq("id", jobId);
 
-    // Condition 5 reads against the real tables: an empty session and a draft without AI content aren't results.
+    // Condition 5 reads against the real tables: a draft without AI content isn't a result.
     // (The positive rows need the AI writer's full flow; pgTAP covers them on the RPC, jdRawTextLockOf on the view.)
-    const session = await user.rpc("create_interview_session", { p_application_project_id: id, p_interview_type: "culture_fit", p_question_count: 3, p_data_sufficiency: "ok" });
-    expect(session.error).toBeNull();
     const draft = await user.rpc("create_cover_letter_draft", { p_application_project_id: id });
     expect(draft.error).toBeNull();
     await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });

@@ -8,7 +8,7 @@ import { routes } from "@/lib/routes"
  * md 3열) + 주 버튼 "시작하기". 일러스트·스크린샷 없음(G-12). Static, no data.
  */
 
-// 02 S-01 v5: "커리어를 정리하고 / 자기소개서를 모아 지원 현황 보드로 관리하고 / 원하면 내 AI 키를 연결해 인사이트·서류·면접까지"
+// 02 S-01 v5 (v5.19, RM-1): "커리어를 정리하고 / 자기소개서를 모아 지원 현황 보드로 관리하고 / 원하면 내 AI 키를 연결해 인사이트·서류까지"
 const VALUE_PROPS: ReadonlyArray<{ icon: LucideIcon; title: string; body: string }> = [
   {
     icon: Layers,
@@ -24,8 +24,8 @@ const VALUE_PROPS: ReadonlyArray<{ icon: LucideIcon; title: string; body: string
   {
     // [UI-가정] icon for the AI line (design-system lists Layers/Briefcase/KanbanSquare for the v1 lines)
     icon: Sparkles,
-    title: "원하면 내 AI 키를 연결해 인사이트·서류·면접까지",
-    body: "내 커리어를 근거로 강점·보완점, 서류 초안, 모의 면접을 준비해요",
+    title: "원하면 내 AI 키를 연결해 인사이트·서류까지",
+    body: "내 커리어를 근거로 강점·보완점과 서류 초안을 준비해요",
   },
 ]
 

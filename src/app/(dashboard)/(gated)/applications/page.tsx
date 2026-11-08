@@ -84,8 +84,8 @@ async function Screen({ searchParams }: Props) {
     return (
       <div className="space-y-4">
         <ApplicationFilters sort={sort} stage={stage} />
-        {/* v5.3 C-03: 면접 작업 진행(축약형)은 서버 값 — 진행 중이면 다시 읽는다 */}
-        <AutoRefresh active={rows.some((r) => r.interview_status.kind === "generating" || (r.insight_status.kind === "generating" && !r.insight_job_id))} />
+        {/* v5.3 C-03: 작업 id 없는 인사이트 진행(축약형)은 서버 값 — 진행 중이면 다시 읽는다 */}
+        <AutoRefresh active={rows.some((r) => r.insight_status.kind === "generating" && !r.insight_job_id)} />
         {rows.length === 0 ? (
           // [UI-가정] 필터 결과 없음 문구
           <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">이 전형 단계의 자기소개서가 없어요</p>

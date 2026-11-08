@@ -3,13 +3,11 @@ import { AI01_PROMPT_VERSION, AI01_SYSTEM } from "./AI-01";
 import { AI02_MATCH_PROMPT_VERSION, AI02_PROMPT_VERSION, AI02_SYNTHESIZE_PROMPT_VERSION, AI02_SYSTEM } from "./AI-02";
 import { AI03_PROMPT_VERSION, AI03_SYSTEM } from "./AI-03";
 import { AI04_ADJUST_PROMPT_VERSION, AI04_PROMPT_VERSION, AI04_SYSTEM } from "./AI-04";
-import { AI05_PROMPT_VERSION, AI05_SYSTEM } from "./AI-05";
-import { AI06_PROMPT_VERSION, AI06_SYSTEM } from "./AI-06";
-import { AI07_PROMPT_VERSION } from "./AI-07";
 import { AI11_PROMPT_VERSION } from "./AI-11";
 import { AI12_EXTRACT_PROMPT_VERSION, AI12_REPLY_PROMPT_VERSION } from "./AI-12";
 import { AI13_COMPOSE_PROMPT_VERSION, AI13_EXTRACT_PROMPT_VERSION, AI13_REPLY_PROMPT_VERSION } from "./AI-13";
 import { COMMON_PROMPT_VERSION, COMMON_SYSTEM_PROMPT } from "./common";
+import { PLACEHOLDER_TOKENS } from "../validation/placeholders";
 
 /**
  * (v4.12, SD-6 / AI spec 0.v412) No profile value may appear in any prompt
@@ -23,8 +21,6 @@ describe("prompt text carries no profile value (SD-6)", () => {
     ["AI-02", AI02_SYSTEM],
     ["AI-03", AI03_SYSTEM],
     ["AI-04", AI04_SYSTEM],
-    ["AI-05", AI05_SYSTEM],
-    ["AI-06", AI06_SYSTEM],
   ];
 
   it.each(SYSTEMS)("%s system never names a profile field or the PROFILE alias", (_, system) => {
@@ -50,44 +46,59 @@ describe("prompt text carries no profile value (SD-6)", () => {
     expect(AI04_SYSTEM).toContain("성장 방향은 <jd>의 주요 업무 문장(S 번호)과 스킬 근거로 씁니다");
   });
 
-  it("AI-05 culture-fit questions take their job vocabulary from the JD (SD-6)", () => {
-    expect(AI05_SYSTEM).toContain("직무 어휘는 <jd>의 직무명·요건 문장에서 가져옵니다");
+});
+
+/** (R14, AI spec v4.14 RM-1) The mock interview is gone from every prompt. */
+describe("prompt text carries no mock-interview rule (R14)", () => {
+  const SYSTEMS: Array<[string, string]> = [
+    ["common", COMMON_SYSTEM_PROMPT],
+    ["AI-01", AI01_SYSTEM],
+    ["AI-02", AI02_SYSTEM],
+    ["AI-03", AI03_SYSTEM],
+    ["AI-04", AI04_SYSTEM],
+  ];
+
+  it.each(SYSTEMS)("%s system never names the removed placeholder or <answer> block", (_, system) => {
+    expect(system).not.toContain("[사례 입력 필요]");
+    expect(system).not.toContain("<answer>");
   });
 
-  it("AI-05 states the fact-premise rule for every job question kind (A11)", () => {
-    expect(AI05_SYSTEM).toContain("모든 직무 질문(project_deep_dive, requirement_fit, gap_probe)");
-    expect(AI05_SYSTEM).toContain("사실을 전제하지 않고 묻습니다");
+  it("the common block lists exactly the five C-5 tokens", () => {
+    expect(COMMON_SYSTEM_PROMPT).toContain("자리 표시 (이 5개만 사용)");
+    for (const token of PLACEHOLDER_TOKENS) expect(COMMON_SYSTEM_PROMPT).toContain(token);
+    expect(PLACEHOLDER_TOKENS).toHaveLength(5);
   });
 });
 
-/** AI spec v4.12 0.v412 프롬프트 버전 표 (R13). The common suffix changes every stored string. */
-describe("prompt versions (R13)", () => {
+/**
+ * AI spec v4.14 0.v414 프롬프트 버전 표 (R14): `common.v3` → `common.v4`. The
+ * common suffix changes every stored string; AI-04 also bumps its own call
+ * version (empty-<user_sources> placeholder, R14 notes).
+ */
+describe("prompt versions (R14)", () => {
   it("bumps the common suffix", () => {
-    expect(COMMON_PROMPT_VERSION).toBe("common.v3");
+    expect(COMMON_PROMPT_VERSION).toBe("common.v4");
   });
 
   it.each<[string, string, string]>([
-    ["AI-02 match", AI02_MATCH_PROMPT_VERSION, "ai-02.match.v5+common.v3"],
-    ["AI-02 synthesize", AI02_SYNTHESIZE_PROMPT_VERSION, "ai-02.synthesize.v5+common.v3"],
-    ["AI-02 stored", AI02_PROMPT_VERSION, "ai-02.match.v5+ai-02.synthesize.v5+common.v3"],
-    ["AI-03", AI03_PROMPT_VERSION, "ai-03.generate.v4+common.v3"],
-    ["AI-04 generate", AI04_PROMPT_VERSION, "ai-04.generate.v4+common.v3"],
-    ["AI-04 adjust", AI04_ADJUST_PROMPT_VERSION, "ai-04.adjust.v4+common.v3"],
-    ["AI-05", AI05_PROMPT_VERSION, "ai-05.generate.v4+common.v3"],
-    ["AI-06", AI06_PROMPT_VERSION, "ai-06.evaluate.v4+common.v3"],
-    ["AI-12 reply", AI12_REPLY_PROMPT_VERSION, "ai-12.reply.v7+common.v3"],
-    ["AI-13 reply", AI13_REPLY_PROMPT_VERSION, "ai-13.reply.v3+common.v3"],
+    ["AI-04 generate", AI04_PROMPT_VERSION, "ai-04.generate.v5+common.v4"],
+    ["AI-04 adjust", AI04_ADJUST_PROMPT_VERSION, "ai-04.adjust.v5+common.v4"],
   ])("%s is bumped", (_, actual, expected) => {
     expect(actual).toBe(expected);
   });
 
   it.each<[string, string, string]>([
-    ["AI-01 extract", AI01_PROMPT_VERSION, "ai-01.extract.v1+common.v3"],
-    ["AI-07", AI07_PROMPT_VERSION, "ai-07.summarize.v1+common.v3"],
-    ["AI-11", AI11_PROMPT_VERSION, "ai-11.rank.v2+common.v3"],
-    ["AI-12 extract", AI12_EXTRACT_PROMPT_VERSION, "ai-12.extract.v7+common.v3"],
-    ["AI-13 extract", AI13_EXTRACT_PROMPT_VERSION, "ai-13.extract.v3+common.v3"],
-    ["AI-13 compose", AI13_COMPOSE_PROMPT_VERSION, "ai-13.compose.v2+common.v3"],
+    ["AI-01 extract", AI01_PROMPT_VERSION, "ai-01.extract.v1+common.v4"],
+    ["AI-02 match", AI02_MATCH_PROMPT_VERSION, "ai-02.match.v5+common.v4"],
+    ["AI-02 synthesize", AI02_SYNTHESIZE_PROMPT_VERSION, "ai-02.synthesize.v5+common.v4"],
+    ["AI-02 stored", AI02_PROMPT_VERSION, "ai-02.match.v5+ai-02.synthesize.v5+common.v4"],
+    ["AI-03", AI03_PROMPT_VERSION, "ai-03.generate.v4+common.v4"],
+    ["AI-11", AI11_PROMPT_VERSION, "ai-11.rank.v2+common.v4"],
+    ["AI-12 extract", AI12_EXTRACT_PROMPT_VERSION, "ai-12.extract.v7+common.v4"],
+    ["AI-12 reply", AI12_REPLY_PROMPT_VERSION, "ai-12.reply.v7+common.v4"],
+    ["AI-13 extract", AI13_EXTRACT_PROMPT_VERSION, "ai-13.extract.v3+common.v4"],
+    ["AI-13 reply", AI13_REPLY_PROMPT_VERSION, "ai-13.reply.v3+common.v4"],
+    ["AI-13 compose", AI13_COMPOSE_PROMPT_VERSION, "ai-13.compose.v2+common.v4"],
   ])("%s keeps its call version (only the common suffix moves)", (_, actual, expected) => {
     expect(actual).toBe(expected);
   });

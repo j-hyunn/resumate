@@ -90,7 +90,7 @@ export function JdRawEditProvider({
   children,
 }: {
   editable: boolean
-  /** `?edit=1` from a C-20 "공고 원문 고치기" (S-16 · S-17 · S-18 · S-33) */
+  /** `?edit=1` from a C-20 "공고 원문 고치기" (S-16 · S-17 · S-18) */
   initialEditing: boolean
   /** `?state=raw-saved` */
   initialSaved?: boolean
@@ -162,7 +162,7 @@ export function JdRawPanelTitle({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * S-15 "요건이 있는 공고" (Q53-9): reached from an input-caused 질문 생성·인사이트 failure. The text can't
+ * S-15 "요건이 있는 공고" (Q53-9): reached from an input-caused 인사이트 failure. The text can't
  * be edited (Q53-2 범위 밖), so this says what to do instead of a dead end. [가정 명세]
  */
 export function JdLockedNotice({ cause, hasResults = false }: { cause: AiErrorCode; hasResults?: boolean }) {

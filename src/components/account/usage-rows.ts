@@ -1,5 +1,5 @@
 /**
- * S-42 기능별 표 7행 (UX v5.17 SD-A11·A12, design-system 5.11.2). Pure helper (client-safe, unit-tested):
+ * S-42 기능별 표 5행 (UX v5.17 SD-A11·A12 · v5.19 RM-A2, design-system 5.11.2). Pure helper (client-safe, unit-tested):
  * 고른 공급자의 `providers[].byFeature`(저장 값 8개)를 `USAGE_FEATURE_DISPLAY_GROUPS`로 접는다.
  */
 import type { AiUsageSummary } from "@/lib/contracts/ai"
@@ -7,7 +7,7 @@ import { USAGE_FEATURE_DISPLAY_GROUPS } from "@/lib/data/usage-display"
 
 export interface UsageRow {
   label: string
-  /** 원래 7행 순서 */
+  /** 원래 5행 순서 */
   order: number
   inputCost: number
   outputCost: number
@@ -17,7 +17,7 @@ export interface UsageRow {
   outputTokens: number
 }
 
-/** 그 공급자의 `byFeature`(저장 값 8개)를 7행으로 접는다. 매핑에 없는 값은 표에 보이지 않는다 (UX S-42 `[가정]`) */
+/** 그 공급자의 `byFeature`(저장 값 6개)를 5행으로 접는다. 매핑에 없는 값은 표에 보이지 않는다 (UX S-42 `[가정]`) */
 export function usageRowsOf(provider: AiUsageSummary["providers"][number] | undefined): UsageRow[] {
   return USAGE_FEATURE_DISPLAY_GROUPS.map((g, order) => {
     const list = provider?.byFeature.filter((f) => g.features.includes(f.feature)) ?? []

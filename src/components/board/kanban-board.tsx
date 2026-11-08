@@ -1,11 +1,11 @@
 "use client"
 
 /**
- * S-39 지원 현황 보드 (02 S-39, FL-15/16, design-system 5.5, A-5).
+ * S-39 지원 현황 보드 (02 S-39, FL-15, design-system 5.5, A-5).
  *
- * - 6 fixed columns; cards ordered by stage_changed_at desc (D-26 (a)); optimistic moves go to top.
+ * - 4 fixed columns (v5.19, RM-2); cards ordered by stage_changed_at desc (D-26 (a)); optimistic moves go to top.
  * - Every move (drag & drop, card ⋯ "단계 이동", "다음 단계로") goes through the foundation's
- *   C-12 controller (useStageMove → request(to)) — C-13 / C-14 / 결과 지우기 확인 / ST-MOVE-FAILED
+ *   C-12 controller (useStageMove → request(to)) — C-13 / 결과 지우기 확인 / ST-MOVE-FAILED
  *   / aria-live live there.
  * - Controllers live in <ControllerHost>s rendered in a stable list (keyed by id), not inside the
  *   column a card sits in — so a card changing columns does not lose its dialogs mid-flow.
@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core"
-import { FileText, GripVertical, Lightbulb, MessagesSquare, MoreHorizontal, Plus } from "lucide-react"
+import { FileText, GripVertical, Lightbulb, MoreHorizontal, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -81,7 +81,6 @@ function ControllerHost({
     name: cardTitle(card).display,
     stage: card.stage,
     outcome: card.stage_outcome,
-    origin: "board",
     failMove,
     onMoved,
   })
@@ -454,10 +453,8 @@ function CardBody({
   link?: boolean
 }) {
   const { title, subtitle } = cardTitle(card)
-  const inProgress = card.in_progress_session
   // v5.3 C-03 진행 표시 우선순위 (F8, design-system 3.3 AiFeatureStatus): generating > present > none
   const insight = card.insight_status
-  const interview = card.interview_status
   const hasInsight = insight.kind === "present"
   return (
     <article className="group relative space-y-2 rounded-md border bg-card p-3 transition-colors duration-150 hover:border-foreground/20 hover:shadow-sm focus-within:ring-2 focus-within:ring-ring">
@@ -493,17 +490,8 @@ function CardBody({
           {card.draft_count}
           <span className="sr-only">서류 초안 {card.draft_count}개</span>
         </span>
-        {interview.kind === "generating" ? null : (
-          <span className="inline-flex items-center gap-1 tabular-nums">
-            <MessagesSquare className="size-3.5" aria-hidden />
-            {card.interview_session_count}
-            <span className="sr-only">면접 {card.interview_session_count}회</span>
-          </span>
-        )}
-        {inProgress ? <Badge variant="draft">작성 중</Badge> : null}
       </div>
       <FeatureStatusLines label="인사이트" status={insight} />
-      <FeatureStatusLines label="면접" status={interview} />
     </article>
   )
 }

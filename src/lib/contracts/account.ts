@@ -22,7 +22,6 @@ export type AccountDeletionSummary = {
     applicationProjects: number;
     insights: number;
     drafts: number;
-    interviewSessions: number;
     stageEvents: number;
   };
   aiConnection: {

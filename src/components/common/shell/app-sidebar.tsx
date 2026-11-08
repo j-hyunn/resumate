@@ -2,14 +2,14 @@
 
 /**
  * L-01 left menu (design-system 5.1), built on the shadcn sidebar-08 block: inset variant,
- * brand header, NavMain (커리어 · 자기소개서 관리 · 모의 면접 · 지원 현황, fixed order),
+ * brand header, NavMain (커리어 · 자기소개서 관리 · 지원 현황, fixed order, 3 menus — v5.19 RM-1),
  * NavSecondary pinned to the bottom, NavUser in the footer.
  * Unlike the block it collapses to an icon rail (collapsible="icon") — labels become tooltips
  * and count badges become a dot on the icon. Below lg (1024px) it renders as a left Sheet drawer.
  */
 import * as React from "react"
 import { usePathname } from "next/navigation"
-import { Briefcase, KanbanSquare, Layers, MessagesSquare, Settings, type LucideIcon } from "lucide-react"
+import { Briefcase, KanbanSquare, Layers, Settings, type LucideIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -36,7 +36,6 @@ import type { AiConnection } from "@/types/db"
 const MENU_ICONS: Record<MenuKey, LucideIcon> = {
   career: Layers,
   applications: Briefcase,
-  interviews: MessagesSquare,
   board: KanbanSquare,
 }
 
@@ -68,7 +67,6 @@ function hasMenuBadge(menu: MenuKey, badges: ShellBadges | null): boolean {
   if (!badges) return false
   if (menu === "career") return badges.career_active_chat
   if (menu === "applications") return badges.applications_running_jobs > 0
-  if (menu === "interviews") return badges.interviews_in_progress + badges.interviews_new_results > 0
   return false
 }
 
@@ -88,19 +86,6 @@ function MenuBadge({ menu, badges }: { menu: MenuKey; badges: ShellBadges | null
         <span className="sr-only">진행 중인 AI 작업 {badges.applications_running_jobs}개</span>
       </SidebarMenuBadge>
     )
-  if (menu === "interviews") {
-    // [UI-가정] 작성 중 세션 수와 새 채점 결과 수를 배지 하나로 합쳐 보이고 각 수는 스크린 리더 문구로 구분
-    const total = badges.interviews_in_progress + badges.interviews_new_results
-    if (total === 0) return null
-    return (
-      <SidebarMenuBadge>
-        {total}
-        <span className="sr-only">
-          작성 중 면접 {badges.interviews_in_progress}개, 새 채점 결과 {badges.interviews_new_results}개
-        </span>
-      </SidebarMenuBadge>
-    )
-  }
   return null
 }
 
@@ -133,7 +118,7 @@ function AppSidebarView({
   const close = () => {
     if (isMobile) setOpenMobile(false)
   }
-  // UQ-7: choosing a menu starts a fresh path → forget S-39 / S-37 origin
+  // UQ-7: choosing a menu starts a fresh path → forget the S-39 origin
   const onMenu = () => {
     clearNavOrigin()
     close()

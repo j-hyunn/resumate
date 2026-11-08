@@ -2,7 +2,8 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: 2026-11-05 (UI 40 런 기획 확인 U40-* — 3.21·4.15. 1장 결정 대기 0건)
+- 최종 갱신: 2026-11-05 (자기소개서 작성의 채팅형 전환 CL-* — 3.23·4.17. **1장 결정 대기 2건** — CL-Q1·CL-Q2)
+- 2026-11-05 입력(자기소개서 작성 채팅형): `_workspace/00_input/planning-decisions-cover-letter-chat.md`(사용자 확정 CL-1~CL-8, 2차 확정 CL-9·CL-10, 리더 판단 CL-A1~CL-A10, 미룬 결정 CL-Q1·CL-Q2). 사전 조사 `_workspace/cover-letter-chat/touchpoints_{prd,ux,ai,dm}.md`(편집 자리 245개), 회신 `dm_replies.md`(39건), 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). 반영 문서: PRD v4.15, UX v5.18, AI v4.13, DM v4.13
 - 2026-11-05 입력(열린 결정 일괄): `_workspace/00_input/open-decisions-2026-11-04.md`(통합 목록 48행, 원본 질문 출처·닫힌 근거), `_workspace/00_input/planning-decisions-open-decisions.md`(사용자 확정 OD-*), 리뷰 `_workspace/03_spec-reviewer_review_open-decisions.md`. 반영 문서: PRD v4.13, UX v5.13, AI v4.11, DM v4.11, `docs/legal/cross-border-transfer.md` 개정안 2026-11-05
 - 2026-11-04 입력(STAR 합친 제안·-음 체·민감정보): `_workspace/backend/R8/01_plan.md`(사용자 확정 RQ-4~RQ-6). 반영 문서: PRD v4.11, UX v5.11, AI v4.9, DM v4.9
 - 2026-11-04 입력(AI 작성 대화 질문 품질): `_workspace/backend/R7/01_plan.md`(사용자 확정 RQ-1~RQ-3). 반영 문서: AI v4.8(PRD·UX·DM 변경 없음)
@@ -12,7 +13,18 @@
 - 2026-11-02 입력(커리어 재설계): `_workspace/00_input/planning-decisions-career-redesign.md`(사용자 확정 CR-1~CR-14, 피그마 `GagTxDayknEFEa6qdSqQCc` 커리어 프레임 대조), 리뷰 `_workspace/03_spec-reviewer_review_career-redesign.md`(라운드 1~3 — 사용자 결정 10건 → 후속 결정 CR-15~CR-24, 대체·폐기 표기 목록, 이슈 R-CR-1~17 모두 해결). 반영 문서: PRD v4.5, UX v5.5, AI v4.5, DM v4.4
 - 2026-11-03 입력(프로젝트 추가·산출물 상세): `_workspace/00_input/planning-decisions-project-add-figma.md`(사용자 확정 PA-1~PA-4, 피그마 `1034:8565`·`1041:8783`·`1041:8904` 대조), 요청·회신 `_workspace/project-add-figma/`, 리뷰 `_workspace/03_spec-reviewer_review_project-add-figma.md`(라운드 2 + 리더 후속, 이슈 R-PA-1~15 모두 해결). 반영 문서: PRD v4.6, UX v5.6, AI v4.6, DM v4.5
 
-## 1. 결정 대기 (0건)
+## 1. 결정 대기 (2건)
+
+**자기소개서 작성 채팅형 전환 사이클에서 사용자가 추후 결정으로 미룬 2건**(2026-11-05). 네 문서 모두 양쪽 안을 나란히 적고 `[결정 필요]`로 남겼다 — 답을 가정한 자리는 없다.
+
+| ID | 질문 | 두 안 | 지금 문서가 쓰는 기본값 | 막혀 있는 것 |
+|----|------|-------|------------------------|---------------|
+| **CL-Q1** | 채팅형의 **토큰 비용**. 턴마다 커리어 팩을 다시 넣어 약 3배가 된다 — 경력기술서 $0.077 → **약 $0.29**, 자소서 3문항 $0.13 → **약 $0.37**, 예시 월 $1.5 → **약 $2.0~2.3** `[가정]` | (a) **질문 턴에는 요약형 팩만**(2k~5k)으로 약 $1.8 / (b) **모든 턴에 전체 팩** — 품질 우선 | **(b) 전체 팩.** PRD 6.5·AI 7장에 두 숫자를 모두 실었다. BYOK라 비용은 사용자 부담이므로 사용자 결정 전에 품질을 깎지 않았다 | 없음(문구·추정치만 바뀐다). 초안 제안 **6회** 상한은 산출물 대화와 같은 값으로 `[가정]` 적용 |
+| **CL-Q2** | 기존 초안 **이관 잔여 행** 처리. CL-A5의 "옮기지 못한 행은 읽기 전용으로 남긴다"가 테이블을 지운 뒤에는 불가능하다 | (a) **운영자 덤프 + 관찰 기간 안내 뒤 drop** / (b) **`drafts` 계열을 지우지 않고 읽기 전용 영구 보관** | 마이그레이션 **1~6단계(비파괴)와 관찰 기간까지만 확정** | **DM 11.8 7단계(테이블 3개 drop)가 막혀 있다.** (a)면 데이터 손실 안내 문구가 필요하고(F-DOC-04의 "기존 초안도 편집·복사" 약속), (b)면 UX에 "이전 형식 · 읽기 전용" 화면을 신설해야 한다 |
+
+이 사이클은 문서만 썼으므로 실제 데이터 손실 위험은 없다. **(b)를 고르면 기획을 더 고쳐야 한다**(UX 화면 신설).
+
+### 1.1 이전 결정 대기 (2026-11-05 전부 처리)
 
 2026-11-05에 남아 있던 결정 대기·출시 전 확정 항목을 모두 정했다(3.18). 아래는 처리 기록이다.
 
@@ -489,6 +501,38 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 리더 판단 SD-A1~SD-A19(`[가정]`, 입력 문서 3장·3.1절): 탭 4개 구성, **S-04 기본 프로필 편집 폐기**, S-25·S-41 유지, S-40 + S-42를 AI 연결 탭으로, AI 데이터 처리도 문서 페이지(`/policies/ai_data_use`), 선택 동의 토글 2개는 기존 `consents` 그대로, **`desired_job_title` 폐기(A17)**, **`get_data_readiness().profile_filled` 삭제(A18)**, 과거 `profile` 근거는 남기되 "원본으로 이동" 비활성(A19).
 
+### 3.23 사용자 확정 (2026-11-05, 자기소개서 작성의 채팅형 전환 — 사이클 cover-letter-chat)
+
+입력: `_workspace/00_input/planning-decisions-cover-letter-chat.md`. 3.22 SD-4가 "이 사이클 밖"으로 미뤄 둔 재기획이다. 사전 조사로 편집 자리 245개(PRD 24 / UX 60 / AI 69 / DM 92)를 먼저 짚었고, 리뷰는 `_workspace/03_spec-reviewer_review_cover-letter-chat.md`(1라운드, R-CL-1~6 전부 해소). 반영: PRD v4.15, UX v5.18, AI v4.13, DM v4.13.
+
+**1차 확정 (CL-1~CL-8)**
+
+| ID | 결정 |
+|----|------|
+| CL-1 | 대화 단위는 **서류별**이다. 한 자기소개서(지원 건)에 **경력기술서 대화**와 **자소서 문항 답변 대화**가 각각 있고, 자소서는 **문항 전체를 한 대화에서** 채운다(문항별로 쪼개지 않는다) |
+| CL-2 | 작성 방식은 **산출물 상세(S-44)와 같다** — 왼쪽 서류 본문 + 오른쪽 AI 패널, AI가 **항목별로 제안**하면 사용자가 **[반영]으로 그 항목에 붙여넣는다**. 현행 **포함 항목 설정(트리·최대 8개·"AI에게 맡기기"/"직접 고르기")과 문체(간결/상세) 선택 화면은 폐기**하고 대화 안에서 정한다 |
+| CL-3 | 데이터는 **`structured_draft`로 모양을 통일**하고 **`drafts`·`draft_sections`·`draft_section_sources`는 폐기**한다(파괴적 ★) |
+| CL-4 | **이미 만들어 둔 초안도 대화로 이어서 쓴다.** 새 작성 화면으로 열고 AI가 **지금 본문을 '현재 값'으로 읽어** 이어 간다. 읽기 전용으로 묶어 두지 않는다 |
+| CL-5 | **근거는 유지한다.** 섹션(문항)마다 근거를 두고 `evidence_links`에 연결한다. 근거 칩(C-01)·검증 V-1~V-9·숫자 가드·자리 표시·"원본 삭제됨"·면접 연결이 현행대로 간다. **AI-11(근거 자동 선택)도 유지**한다 |
+| CL-6 | **일괄 생성 버튼은 폐기**하고 대화 안으로 흡수한다. "새 경력기술서" / "전체 문항 생성" / "이 문항만 생성" 대신 대화 첫 턴에 AI가 전체 초안을 제안하고 **[반영]으로 항목마다 적용**한다 |
+| CL-7 | 화면 순서는 **자소서 문항을 먼저 설정하고, 그 뒤 "서류 작성 + AI 채팅" 화면이 열린다.** 문항 설정 단계(S-18)는 **진입 단계로 남고**, **S-19 초안 편집기는 폐기**되어 작성 + AI 채팅 화면으로 대체된다. **S-17 서류 초안 목록은 진입구로 유지**한다 |
+| CL-8 | 자소서 **문항(문장·글자 수 제한·추가·삭제·메모)은 작성 화면 안에서** 고친다. 기본 3문항·최대 10문항·문항 문장 1,000자·삭제 확인 규칙은 현행 그대로다. **AI 연결 없이도** 문항 편집은 된다 |
+
+**2차 확정 (CL-9·CL-10) — 사전 조사 뒤 리더가 물어 받은 것**
+
+세 담당(UX·AI·데이터)이 **각자 독립적으로 같은 모순**을 보고해서 사용자에게 물었다 — CL-3을 "본문·문항까지 대화의 `structured_draft`에"로 읽으면 ① 대화가 여러 개일 때(CL-A1) 어느 것이 정본인지 정의할 수 없고 ② 대화를 지우면 본문이 사라져 삭제 정책과 모순되고 ③ "대화가 없으면 문항도 없다"가 되어 **CL-8을 위반**한다. 본인 모델인 산출물 상세(S-44)도 실제로는 본문이 `project_deliverables.body`(대화 밖 정본)이고 `structured_draft`는 그 대화의 제안일 뿐이다.
+
+| ID | 결정 |
+|----|------|
+| **CL-9** | 서류 본문·문항의 **정본은 대화 밖 얇은 테이블 1개**(**`application_documents`**, 지원 프로젝트 × 서류 종류당 한 행, `structured_draft`와 같은 JSON 모양). 대화의 `structured_draft`에는 **제안만** 담고 섹션(문항)별 근거는 `evidence_links`에 둔다. `drafts` 계열 3개가 폐기되므로 테이블 수는 29 → **28**. **CL-3의 읽기를 좁힌다** — "통일"은 *모양*의 통일이고 저장 위치가 대화 안이라는 뜻이 아니다 |
+| **CL-10** | 자소서 초안 제안은 **한 턴에 최대 3문항**이다. 첫 턴 문구는 "먼저 1~3번 문항을"이고 이어서 다음 문항을 채운다. 현행 "전체 문항 생성"은 화면이 문항별 요청을 차례로 보내 함수 60초 한도를 피했으나 대화형에는 그 경로가 없다(문항당 10~25초) |
+
+**추후 결정 (CL-Q1·CL-Q2)**: 1장 참고. 사용자가 명시적으로 미뤘고 네 문서에 `[결정 필요]`로 남아 있다.
+
+**리더 판단 `[가정]` (CL-A1~CL-A10)**: PRD 9.8 표. 한 서류에 대화 여러 개(S-10·S-44 규칙) · 경력기술서도 같은 작성 화면 모양 · 문체는 대화로 지시하고 **정본 `meta.tone`**에 남김 · 스트리밍·검증·글자 수 규칙 현행 유지 · 기존 초안 1회 이관(**이관 대화는 만들지 않는다**) · 경력기술서 `composing` 폐기 · AI-03·AI-04는 폐기 대신 대화형 개정(AI-12·AI-13과 공통 규칙 `C-15` 공유) · 사용량 `feature` 8값 유지 · 화면 번호 S-45·S-46과 주소.
+
+**이 사이클이 폐기한 기존 결정**: `A4`(초안 실패 시 블록 미보존 — `structured_draft` 위에서 다시 씀) · `A13`(자리 이동) · **`A17`**(서류 톤 `concise`/`detailed`) · `A21`(생성 직후 안내 미저장 — 대화 기록으로 해소) · **`A23`**(AI-11 실패 시 직접 고름) · **`Q53-4`**(AI-11 자동 실행 예외) · **`Q53-7`**(경력기술서 `composing`) · **`F-DOC-05`**(다시 쓰기 지시, Should → F-DOC-11 흡수). 백엔드 후속 ★ A 결정분은 A23 폐기로 13건 → **12건**.
+
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
 기획에는 반영했고, 이미 구현된 백엔드(`claude/backend-byok`)를 후속 슬라이스에서 고쳐야 하는 항목이다. `resumate-backend`로 처리한다.
@@ -710,3 +754,48 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 - **UI** (resumate-ui): S-24를 탭 4개로 재구현(계정 / AI 연결 / 약관 / 개선 요청), 계정 탭 내 정보 섹션 저장 + 오류 6종, **S-04 폐기**와 `/career/profile` 리다이렉트, 위험 구역(로그아웃·회원 탈퇴), AI 연결 탭에 S-40 + S-42 통합(라디오 행·플랜 안내 문구·공급자 탭·교차 집계 표), 약관 탭 4문서 + 선택 동의 토글 2개, `/policies/ai_data_use` 페이지, 근거 칩 `profile`의 "원본으로 이동" 비활성. 문구는 UX v5.17
 - **남은 사용자 결정**: **SD-Q1(개선 요청 폼 주소) 1건뿐**. SD-Q2 · SD-Q3 (가)(나)(다) · D-DM-13 · D-DM-14 · D-DM-15는 2026-11-05에 모두 확정했다(3.22 후속 확정 표)
 - **출시 전 확인**: SD-Q3 (다)로 약관 탭에서 동의 이력 열람 경로가 사라지므로 **법무 확인 권장**(PIPA)
+
+### 4.17 자기소개서 작성 채팅형 전환 후속 (2026-11-05, CL-*) ★
+
+**이 사이클은 기획 문서만 고쳤다.** 코드·마이그레이션은 하나도 쓰지 않았다. 아래가 `resumate-backend`와 `resumate-ui`가 Phase 0에서 읽을 목록이다. **★ = 이미 구현된 것을 바꿔야 함.**
+
+**백엔드** (`resumate-backend`) — 상세는 데이터 모델 [11.8](04-data-model.md), 마이그레이션 8단계와 파괴적 여부까지 적혀 있다
+
+| # | 결정 | 할 일 | ★ | 파괴적 |
+|---|------|-------|---|--------|
+| 1 | CL-9 | **`application_documents` 신설** — 지원 프로젝트 × `document_kind` 2값당 한 행(`unique`), `body` jsonb(`sections[]`/`questions[]` + 슬롯별 `blocks[]`), `meta.tone`, `filled_slot_count`("서류 수"의 유일한 원천), `first_copied_at`, `migration_note` | ★ | 아니다 |
+| 2 | CL-1 | **`writing_chats` 대상 3분기** — `application_project_id`·`document_kind` 추가, **`project_id` not null 해제**(되돌릴 수 없는 제약 변경), 대상 배타 CHECK 3개, 인덱스 1개, 트리거·가드 교체 | ★ | 제약만 |
+| 3 | CL-1·CL-A8 | **`ai_jobs` CHECK 완화** — `target_type = 'writing_chat'`일 때 `application_project_id is null`을 `job_type`별로 나눈다(`writing_chat_turn`이면 null, `career_description`·`cover_letter`면 **not null**). `ai_jobs_career_description_in_flight_key` 인덱스와 거부 코드 `career_description_in_progress` **폐기** | ★ | 아니다 |
+| 4 | CL-2·CL-9 | **RPC 신설** — `save_application_document`(invoker, `p_meta`·`p_applied_proposals`·`p_expected_updated_at`→`stale_write`·`p_client_id`), `start_document_writing_chat`(definer, 3인자), 내부 헬퍼 `private.doc_replace_slot_evidence`. 저장 RPC는 **키·동의를 보지 않는다**(CL-8) | ★ | 아니다 |
+| 5 | CL-3 | **RPC 교체** — `apply_structured_draft_patch`에 서류 분기(`slot` 인자·`set_tone`), `get_deletion_impact`(새 `entity_type` `application_document`, 반환 키 `documents`·`document_chats`), `delete_career_item`, `get_account_deletion_summary` | ★ | 아니다 |
+| 6 | CL-5 | **근거** — `evidence_links.owner_type`에 `application_document` 추가(`draft_section`은 CHECK에 남기고 insert 트리거가 거부), `item_key` = `{slot}.blocks.{block_id}` / `{slot}.sources.{n}`. **사용자 세션 저장 RPC가 근거를 쓰는 첫 사례** | ★ | 아니다 |
+| 7 | CL-3·CL-6 | **서류 결과 RPC 폐기** — `begin`/`complete`/`fail_career_description`·`cover_letter`, 자소서 문항 사용자 RPC 일괄(`20261102000300`), `ai_jobs_release_drafts`, 딸린 헬퍼·트리거 4개(`private.education_display_name`·`trim_js_whitespace`는 남긴다) | ★ | 아니다 |
+| 8 | CL-A5 | **이관** — `drafts` + `draft_sections` → 정본 행 1개, `draft_section_sources` → `evidence_links`(섹션 id로 기존 `draft_sections.id`를 재사용하면 `owner_id`를 안 바꿔도 된다), `owner_type` 재지정. **이관 대화는 만들지 않는다** | ★ | 아니다 |
+| 9 | **CL-Q2** | **테이블 3개 drop**(`draft_section_sources` → `draft_sections` → `drafts`) | ★ | **예 — 사용자 결정 전까지 하지 않는다** |
+| 10 | CL-A7 | **AI 파이프라인** — AI-03·AI-04를 대화 턴으로 재구현(공통 규칙 `C-15`), 새 프롬프트 4개(`ai-03.extract/reply.v1`·`ai-04.extract/reply.v1`), `ai-03.compose`·`ai-04.compose` `prompt_version` +1, 스키마 AI-03 1→2 / AI-04 2→3, **한 턴 최대 3문항**(CL-10)과 60초 안의 호출 구성, 초안 턴 상한 **대화 전체 6회** | ★ | 아니다 |
+| 11 | — | `database.types.ts` 재생성(1단계 뒤·9단계 뒤 2회), pgTAP 신설(대상 3분기 CHECK, 서류 저장·근거 교체·`filled_slot_count`, 삭제 연쇄·영향 키, `ai_jobs` 조합) | | 아니다 |
+
+- **배포 순서 주의**: 비파괴(1~3)를 먼저 배포하고 **코드가 새 경로로 완전히 넘어간 것을 확인한 뒤** 이관(4~6 = 위 8번)을 돌리고, **파괴 단계(위 9번)는 별도 마이그레이션·별도 배포·별도 날짜**로 뺀다. 관찰 기간 최소 1주 `[가정]`.
+- **되돌릴 수 없는 지점 2개**: ① 테이블 drop ② `writing_chats.project_id` not null 해제(서류 대화 행이 생긴 뒤에는 복구 불가).
+- 프롬프트 `prompt_version`이 올라가 배포 시점에 동일 입력 재사용이 한 번 끊긴다. **서류 `input_hash` 재사용은 폐기**됐고 서류 쪽에 남는 재사용은 AI-11 하나뿐이다.
+
+**UI** (`resumate-ui`) — 상세는 유저 플로우 [S-45·S-46·S-17·S-18·C-05·C-11·C-18](02-user-flows.md)과 5.1k
+
+| # | 결정 | 할 일 |
+|---|------|-------|
+| 1 | CL-2·CL-7·CL-A2·CL-A10 | **S-45 경력기술서 작성**(`/applications/{id}/career-description`)·**S-46 자소서 문항 답변 작성**(`/applications/{id}/cover-letter`) **신설** — L-02 전체 페이지 + 왼쪽 본문(경력기술서 = 섹션별 블록 / 자소서 = 문항별 블록) + 오른쪽 "Resumate AI" 패널. S-44를 본으로 삼는다 |
+| 2 | CL-7 | **S-19 초안 편집기 폐기** — 화면·라우트 제거, 옛 주소는 종류를 판정해 S-45·S-46으로(판정 불가 시 S-17). ★ |
+| 3 | CL-2·CL-6 | **S-17 정리** ★ — 포함 항목 트리·8개 상한·"AI에게 맡기기"/"직접 고르기"·문체(간결/상세)·생성 버튼·`drafts.status` 5값·실패 초안 행·`composing` 행을 **모두 제거**하고 **서류 2종 고정 2행의 진입구**로 바꾼다 |
+| 4 | CL-7·CL-8 | **S-18**은 자소서 진입 단계로 남기고 생성 버튼 2개를 **[작성 시작]**으로 교체 ★. 문항 편집은 S-46 안에서도 된다. **[작성 시작]에서 요건 선행 추출**(키가 있을 때만, 없으면 그냥 넘어간다) |
+| 5 | CL-8 | **키 없는 경계 재구현** ★ — 키가 없으면 **오른쪽 AI 패널만** 잠기고(C-18) 왼쪽 본문 입력·문항 편집·저장하기·복사는 그대로 된다 |
+| 6 | CL-5 | **C-11 재구현** ★ — 체크 트리·다시 생성·`selection_origin`을 없애고 **읽기 전용 근거 목록 + 대화 지시**로. 근거는 `evidence_links` 행을 읽는다 |
+| 7 | CL-A6 | **"서류 초안 수" 셈법 교체** ★ — S-13·S-31·S-39 카드와 C-05 삭제 영향 N을 `filled_slot_count > 0`인 서류 수로. **"작성 중"(`composing`) 배지 제거** |
+| 8 | CL-1·CL-A1 | 패널에 대화 기록·"+ 새 대화"·"n/40"·초안 제안 남은 횟수 "n/6" `[가정]`. 상한에 닿으면 "남은 문항은 새 대화에서 이어 하기"(정본이 대화 밖이라 끊기지 않는다) |
+| 9 | CL-10 | 자소서 첫 턴 문구 **"먼저 1~3번 문항을"**과 이어 채우는 흐름, 문항마다 도는 스트리밍 표시 |
+| 10 | CL-2 | **`AI_FEATURE_NAMES` 상수에서 "AI 근거 선택" 제거** ★ — C-18 기능 이름이 "AI 작성 대화 — 서류"로 바뀐다 |
+| 11 | CL-6 | C-18 "서류 초안 생성 (S-17, S-18, S-19)" 진입점 제거 ★, C-05 삭제 영향 키 `drafts` → `documents`·`document_chats` |
+
+- **UI는 백엔드 1~8단계가 배포된 뒤에 붙인다**(정본 테이블·저장 RPC가 없으면 S-45·S-46이 동작하지 않는다).
+- **CL-Q2가 (b)로 정해지면 UI 작업이 하나 늘어난다** — "이전 형식 · 읽기 전용" 배지와 읽기 전용 화면 신설.
+
+**남은 사용자 결정**: **CL-Q1·CL-Q2 2건**(1장). CL-Q1은 문구·추정치만 바뀌므로 구현을 막지 않고, **CL-Q2는 테이블 drop을 막고 있다**.

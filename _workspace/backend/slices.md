@@ -47,4 +47,4 @@
 - 날짜 주의: R2~R5 행과 일부 결정 기록의 날짜(11-05~11-07), 마이그레이션 파일 타임스탬프(`20261109…`, `20261110…`)가 실제 날짜보다 앞서 있다. 새 마이그레이션은 가장 최근 파일보다 뒤 번호로 만든다(backend-context "Conventions").
 
 | UI32 교육 표시 이름 (+UI32-2 근거 라벨 백필) | done | DB 원격 반영 2026-11-04 · 코드 머지됨 (PR #29) |
-| 법무 문서 2종 시행 (UI42-7·UI42-8) | done 2026-11-08 | 마이그레이션 `20261113002900`(비파괴, `policy_versions` privacy·ai_data_use 2026-11-08 2행) **원격 미반영** — 앱 본문과 같은 머지 뒤에 올린다. pgTAP 3058 · vitest 2506 · build 통과, 브라우저 미확인. 상세 `_workspace/backend/release-2026-11-08/05_release.md` |
+| 법무 문서 2종 시행 (UI42-7·UI42-8) | done 2026-11-08 | 마이그레이션 `20261113002900`(비파괴, `policy_versions` privacy·ai_data_use 2026-11-08 2행) **원격 반영 2026-11-08** · 코드 머지됨 (PR #62 `9ffd881`, Vercel 운영 배포 성공). pgTAP 3058 · vitest 2506 · build 통과, **브라우저 미확인**. 상세 `_workspace/backend/release-2026-11-08/05_release.md` |

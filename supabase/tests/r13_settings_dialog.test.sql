@@ -8,11 +8,13 @@ insert into auth.users (id, email, aud, role) values
   ('a0000000-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated');
 
 -- ── ⑪ policy_versions.policy_type = 'ai_data_use' (D-UX-31, R-SD-14) ──
-select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 1,
-          'exactly one ai_data_use row');
+-- 2026-11-08: 본문 원문(docs/legal/ai-data-use.md)이 생겨 새 버전 행을 더했다 (UI42-8, 20261113002900).
+select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 2,
+          'ai_data_use rows: 2026-11-05 + 2026-11-08');
 select results_eq($$select version, requires_reconsent, document_path from public.policy_versions
-                     where policy_type = 'ai_data_use'$$,
-  $$values ('2026-11-05', false, '/policies/ai_data_use/2026-11-05')$$,
+                     where policy_type = 'ai_data_use' order by version$$,
+  $$values ('2026-11-05', false, '/policies/ai_data_use/2026-11-05'),
+           ('2026-11-08', false, '/policies/ai_data_use/2026-11-08')$$,
   'document_path follows /policies/{type}/{version}, no reconsent (R-SD-14)');
 select ok((select pg_get_constraintdef(oid) like '%ai_data_use%'
             from pg_constraint where conname = 'policy_versions_policy_type_check'),

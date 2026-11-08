@@ -3,7 +3,7 @@
 -- QA fix (QA-02, QA-03): Gemini paid / inactive Gemini free key, greetings through the start RPCs, UX v5.13 wording.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 
 -- 1. policy_versions 2026-11-05 (no reconsent) is the latest effective version of each type
 -- R13 added policy_type 'ai_data_use' with the same version string; this assertion stays about the R12 three.
@@ -16,7 +16,12 @@ select is((select array_agg(policy_type order by policy_type)
                     where effective_at <= now() and policy_type <> 'ai_data_use'
                     order by policy_type, effective_at desc) latest
             where version = '2026-11-05'),
-          array['cross_border_transfer', 'privacy', 'terms'], '2026-11-05 is the current version of all three');
+          array['cross_border_transfer', 'terms'], '2026-11-05 is still current for 약관·국외 이전');
+-- 처리방침만 2026-11-08로 개정됐다 (UI42-7, 20261113002900)
+select is((select version from public.policy_versions
+            where policy_type = 'privacy' and effective_at <= now()
+            order by effective_at desc limit 1),
+          '2026-11-08', 'privacy is current at 2026-11-08');
 
 -- 2. default draft titles (D-UX-23)
 select ok(private.draft_default_title('cover_letter') like '자소서 문항 답변 (____-__-__)', 'cover_letter default title');

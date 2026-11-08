@@ -153,3 +153,22 @@ supabase db push
 
 **2단(drop)은 아직이다.** 운영에서 1단이 정상인 것을 확인한 뒤, 위 "2단 — 파괴적 drop" 절차대로(`migration list --linked`에서 Local 전용이 `20261113002800` 하나인지 확인 → `db push --dry-run` → `db push`). 사용자 승인은 2026-11-05에 받았다(R13-U1).
 
+
+## 2단 결과 — 2026-11-08 반영 완료 (파괴적)
+
+`20261113002800_r13_drop_profile_legacy_columns.sql` (`profiles.total_years_of_experience` · `desired_job_title` · `interested_industries` drop). 사용자 승인: 2026-11-05 (R13-U1) + 2026-11-08 재확인("drop 진행").
+
+| 단계 | 결과 |
+|------|------|
+| 선행 조건 | 1단 15개(`…001500`~`002760`) 원격 반영 2026-11-06 · PR #58 `cd81538` 운영 배포 성공 — 둘 다 확인 |
+| 읽는 코드 | `src/` 전체에서 세 컬럼을 **읽는 코드 0건**. 남은 문자열 참조는 모두 주석(`career-rows.ts`·`contracts/profile.ts`·`data/evidence.ts`·AI-12/AI-13 프롬프트 헤더)이거나 `evidence_links.source_field`에 들어가는 **값**(테스트·마이그레이션) — 컬럼 의존 없음 |
+| 원격 의존성 | `pg_proc` 본문에 세 컬럼 이름이 있는 함수 **0건**, `pg_depend`로 본 뷰·인덱스·제약 **0건** → 연쇄 없는 단순 drop |
+| 삭제 전 값 덤프 | `profiles` **1행**뿐이고 세 컬럼 모두 비어 있었다 — `total_years_of_experience` null · `desired_job_title` null · `interested_industries` `[]`(빈 배열). **실제로 잃은 값 없음.** `interested_industry` 백필은 `…001900`에서 이미 끝남(원본이 빈 배열이라 백필 대상 0건, 1단 기록과 일치) |
+| 로컬 | 로컬 DB에는 R13 런에서 이미 적용돼 있었다(컬럼 0개, `schema_migrations` 마지막 = `20261113002800`). pgTAP **65 파일 3055건 전부 통과** |
+| 원격 적용 | **`db push`가 아니라 Supabase MCP `execute_sql`로 적용했다** — 이 워크트리는 `supabase link`가 안 돼 있고(`.temp`에 `project-ref` 없음) link에는 사용자가 직접 넣는 DB 비밀번호가 필요하다. 한 트랜잭션에서 ① `alter table … drop column` 3개 ② `supabase_migrations.schema_migrations`에 `('20261113002800','r13_drop_profile_legacy_columns', array[<DDL 본문>])` 1행 insert. `db push`가 하는 것과 같은 결과이고, 다음 `db push`가 이 파일을 다시 올리지 않도록 버전 행을 직접 넣었다 |
+| 적용 후 확인 | 원격 `profiles`에 세 컬럼 **0개** · `schema_migrations` 마지막 = `20261113002800` · `profiles` 1행 유지 |
+| advisors · security | **새 항목 없음.** 기존 그대로 — authenticated security definer RPC 23건(1단에서 늘어난 `compute_total_experience_months` 포함, 의도), `account_deletion_logs` 정책 없음 INFO, 유출 비밀번호 보호 WARN, MFA WARN |
+| 타입 | `database.types.ts`는 이미 세 컬럼이 없는 판이라 **재생성 불필요**. 로컬 재생성과 비교하면 `ai_provider_keys` 관련 반환 타입의 nullable 표기 1줄만 다른데, 이 drop과 무관한 기존 차이라 손대지 않았다 |
+| 코드·배포 | 이 마이그레이션에 딸린 코드 변경 없음(파일 자체가 이미 main에 있다). 새 머지·배포 없음 |
+
+**되돌릴 수 없는 지점 통과.** 세 컬럼은 영구 삭제됐다(원래 값이 비어 있어 실질 손실은 없었다).

@@ -162,7 +162,7 @@ describe("buildCareerPack (C-1 v4.5)", () => {
     expect(DELIVERABLE_PACK_MAX_CHARS).toBe(6000);
   });
 
-  it("limits deliverable bodies to the given projects (AI-06 C-1.1)", () => {
+  it("limits deliverable bodies to the given projects (C-1.1)", () => {
     const rows = careerRowsFixture();
     const none = buildCareerPack(rows, { asOf, deliverableProjectIds: new Set() });
     expect([...none.aliases.values()].some((e) => e.sourceType === "project_deliverable")).toBe(false);

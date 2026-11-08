@@ -31,7 +31,6 @@ import type {
 } from "@/types/db"
 import { refusalErrorCode } from "@/lib/data/ai-errors"
 import { consentRequired } from "./consent"
-import { regradeTargetIds } from "./grading"
 import { errorCategoryOf, failureCauseOf, failureTimestamps, nextQuotaReset } from "@/lib/data/ai-errors"
 import { newId, USER_ID } from "./ids"
 import type { MockDb } from "./fixtures"
@@ -84,8 +83,6 @@ export class MockAiError extends Error {
 
 const DEFAULT_DURATION: Partial<Record<AiJobType, number>> = {
   insight: 12_000,
-  interview_questions: 9_000,
-  interview_evaluation: 10_000,
   career_description: 8_000,
   cover_letter: 8_000,
   draft_source_ranking: 3_000,
@@ -96,10 +93,9 @@ const DEFAULT_DURATION: Partial<Record<AiJobType, number>> = {
 
 /**
  * Stage plan per job type (03 C-6 v4.3 "진행 단계 값"): insight prepare → match → synthesize →
- * (synthesize_regen) → validate; questions prepare → generate → complete; grading prepare →
- * evaluate → summarize → score → complete.
+ * (synthesize_regen) → validate.
  */
-export function stagePlan(jobType: AiJobType, units = 2, opts?: { regen?: boolean; summaryOnly?: boolean }): AiJobProgress[] {
+export function stagePlan(jobType: AiJobType, units = 2, opts?: { regen?: boolean }): AiJobProgress[] {
   const counted = (stage: AiProgressStage, n: number) =>
     Array.from({ length: n + 1 }, (_, i) => ({ stage, done: i, total: n }))
   switch (jobType) {
@@ -111,12 +107,6 @@ export function stagePlan(jobType: AiJobType, units = 2, opts?: { regen?: boolea
         ...(opts?.regen ? [{ stage: "synthesize_regen" as const }] : []),
         { stage: "validate" },
       ]
-    case "interview_questions":
-      return [{ stage: "prepare" }, ...counted("generate", units), { stage: "complete", done: units, total: units }]
-    case "interview_evaluation":
-      // Q53-5 "종합 평가 다시 정리": no answer is called, `evaluate` is not shown
-      if (opts?.summaryOnly) return [{ stage: "prepare" }, { stage: "summarize" }, { stage: "score" }, { stage: "complete" }]
-      return [{ stage: "prepare" }, ...counted("evaluate", units), { stage: "summarize" }, { stage: "score" }, { stage: "complete" }]
     case "career_description":
       return [{ stage: "generate" }, { stage: "validate" }]
     case "cover_letter":
@@ -168,13 +158,10 @@ export function retryGate(db: MockDb, job: AiJob) {
     throw MockAiError.refuse(forced)
   }
   const retryable =
-    (job.job_type === "insight" || job.job_type === "interview_questions" || job.job_type === "interview_evaluation") &&
+    job.job_type === "insight" &&
     job.status === "failed" &&
     !!job.error_code &&
-    errorCategoryOf(job.error_code) !== "input" &&
-    // Q53-5 (04 §2.7.1): a grading job with no 다시 채점 대상 never reopens on the same row — a provider
-    // change would reopen every answer (R-63). "종합 평가 다시 정리" is a new job instead.
-    !(job.job_type === "interview_evaluation" && job.target_id && regradeTargetIds(db, job.target_id).length === 0)
+    errorCategoryOf(job.error_code) !== "input"
   if (!retryable) throw MockAiError.refuse("ai_job_not_retryable")
   const key = activeKey(db)
   if (!key) throw MockAiError.refuse("key_missing")
@@ -186,7 +173,7 @@ export function retryGate(db: MockDb, job: AiJob) {
 export function createMockJob(db: MockDb, opts: MockJobOptions): AiJob {
   const key = assertAiRunnable(db, opts.path ?? "start")
   const now = new Date().toISOString()
-  const plan = stagePlan(opts.job_type, opts.units, { regen: opts.params?.mock_regen === true, summaryOnly: opts.params?.mock_summary_only === true })
+  const plan = stagePlan(opts.job_type, opts.units, { regen: opts.params?.mock_regen === true })
   const tier: ConnectionTier = key.connection_tier
   const base = opts.duration_ms ?? DEFAULT_DURATION[opts.job_type] ?? 8_000
   const job: AiJob = {
@@ -272,7 +259,7 @@ export function advanceMockJob(job: AiJob, db?: MockDb): boolean {
   const duration = typeof params.mock_duration_ms === "number" ? params.mock_duration_ms : 8_000
   const units = typeof params.mock_units === "number" ? params.mock_units : (job.progress?.total ?? 2)
   const injected = (params.mock_fail as AiErrorCode | null) ?? null
-  const plan = stagePlan(job.job_type, units, { regen: params.mock_regen === true, summaryOnly: params.mock_summary_only === true })
+  const plan = stagePlan(job.job_type, units, { regen: params.mock_regen === true })
   const elapsed = Date.now() - startedAt
   const fraction = Math.min(1, elapsed / duration)
   const now = new Date().toISOString()
@@ -340,7 +327,7 @@ export function retryMockJob(
   const duration = typeof params.mock_duration_ms === "number" ? params.mock_duration_ms : 8_000
   const now = new Date().toISOString()
   const restarted = !!key && (key.provider !== job.provider || key.connection_tier !== job.connection_tier)
-  // a `prepare` failure has no finished step to resume from (S-16 · S-20: `prepare`부터 다시)
+  // a `prepare` failure has no finished step to resume from (S-16: `prepare`부터 다시)
   const resumeFrom = !restarted && params.mock_fail_at_prepare !== true && job.error_code && job.error_code !== "canceled" ? 0.6 : 0
   Object.assign(job, {
     status: "queued",
@@ -385,8 +372,6 @@ const FEATURE_OF: Partial<Record<AiJobType, AiUsageFeature>> = {
   career_description: "career_description",
   draft_source_ranking: "career_description",
   cover_letter: "cover_letter",
-  interview_questions: "interview_questions",
-  interview_evaluation: "interview_evaluation",
   writing_chat_turn: "writing_chat",
   key_verification: "key_verification",
 }
@@ -397,8 +382,6 @@ const TOKENS: Partial<Record<AiUsageFeature, [number, number]>> = {
   insight: [11_500, 2_500],
   career_description: [10_500, 5_000],
   cover_letter: [9_000, 2_200],
-  interview_questions: [8_000, 2_000],
-  interview_evaluation: [11_500, 3_000],
   writing_chat: [4_000, 600],
   key_verification: [20, 5],
 }

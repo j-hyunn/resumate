@@ -25,7 +25,7 @@ export function gateReadinessPreview(base: DataReadiness, state: string | null):
     return {
       ...r,
       ai_connection: { active_provider: provider, key_status: "invalid", connection_tier: base.ai_connection.connection_tier ?? "free", consent_required: false },
-      features: { ...r.features, insight: form(r.features.insight), draft: form(r.features.draft), job_interview: form(r.features.job_interview) },
+      features: { ...r.features, insight: form(r.features.insight), draft: form(r.features.draft) },
     }
   }
   return r

@@ -28,7 +28,6 @@ export const ROUTES = {
 export const PROTECTED_PREFIXES = [
   "/career",
   "/applications",
-  "/interviews",
   "/board",
   "/settings",
   "/consent",

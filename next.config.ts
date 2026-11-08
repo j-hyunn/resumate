@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import { checkSiteUrlForBuild } from "./src/server/auth/site-url-build-check";
-import { CAREER_LEGACY_REDIRECTS } from "./src/lib/legacy-redirects";
+import { LEGACY_REDIRECTS } from "./src/lib/legacy-redirects";
 
 // Fail Vercel production builds without a usable NEXT_PUBLIC_SITE_URL (auth redirect origin).
 checkSiteUrlForBuild(process.env);
@@ -20,8 +20,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: "/policies", destination: "/policies/privacy", permanent: true },
-      // retired S-09 · S-34 edit pages → S-08 (UQ-428)
-      ...CAREER_LEGACY_REDIRECTS,
+      // retired S-09 · S-34 edit pages → S-08 (UQ-428); retired S-20 · S-22 · S-33 · S-37 → S-31 / S-13 (v5.19, RM-1)
+      ...LEGACY_REDIRECTS,
     ];
   },
   turbopack: {

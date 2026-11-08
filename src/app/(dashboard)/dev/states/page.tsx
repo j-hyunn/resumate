@@ -30,7 +30,7 @@ async function Screen() {
   ])
   const insightOwner = apps.find((a) => a.insight_state === "ready")
   const evidenceByKey = insightOwner ? await getEvidenceFor(insightOwner.id) : {}
-  const demo = apps.find((a) => a.stage === "job_interview") ?? apps[0]
+  const demo = apps.find((a) => a.stage === "document") ?? apps[0]
   return (
     <div className="space-y-8">
       <PageCrumbs items={[{ label: "개발용 상태 갤러리" }]} />
@@ -42,8 +42,7 @@ async function Screen() {
         insufficientNoExperience={insufficientReadinessPreview(readiness, { noExperience: true })}
         insufficientProjectFields={insufficientReadinessPreview(readiness, { projectFields: true })}
         evidence={Object.values(evidenceByKey).flat().slice(0, 6)}
-        demoApplication={{ id: demo.id, name: applicationDisplayName(demo.name, demo.name_source, demo.created_at), stage: "job_interview" }}
-        scoredSession={{ score_status: "pending_method", score_value: null, score_max: null, score_counted_count: 3, unanswered_count: 0, question_count: 3 }}
+        demoApplication={{ id: demo.id, name: applicationDisplayName(demo.name, demo.name_source, demo.created_at), stage: "document" }}
       />
     </div>
   )

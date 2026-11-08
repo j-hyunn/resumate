@@ -1,11 +1,13 @@
 # 화면 구현 현황
 - 기준 기획: PRD v4.6 / 플로우 v5.6 / AI v4.6 / 데이터 모델 v4.5 (PA-1~PA-4 반영, 2026-11-03 — 이번 런의 대상 화면만. 나머지 화면은 이전 기준 v5.4a 그대로) · **S-02만 PRD v4.7 / 플로우 v5.7 (D-09 변경 2026-11-04: Google 로그인만)** · **S-08 C-22·C-23만 PRD v4.9 / 플로우 v5.9 / 데이터 모델 v4.7 (D-UX-28 변경 2026-11-04: 독립 프로젝트 첫 저장 때 생성)** · **S-10·S-44·L-02·AI 패널만 PRD v4.12 / 플로우 v5.12 / AI v4.10 / 데이터 모델 v4.10 (UI 개정 ui-panel-doc UP-1~UP-13, 2026-11-04)**
+- **S-44 본문 칸 높이만 플로우 v5.19 (DH-1, 2026-11-08)**
 - **36 런(2026-11-05) 대상만 PRD v4.13 / 플로우 v5.13 / AI v4.11 / 데이터 모델 v4.11** (열린 결정 일괄 OD-*, decisions.md 3.18·4.12): C-05·C-14·C-17·C-18·C-19·C-20·C-21·S-10·S-44·S-18·S-22·S-33·S-37·S-39·S-40·S-24·S-30
 - **42 런(2026-11-06) 대상만 PRD v4.14 / 플로우 v5.17a / AI v4.12a / 데이터 모델 v4.12a** (새 설정 다이얼로그 SD-*, decisions.md 3.22·3.23·4.16): S-24·S-40·S-42·S-30·S-04(폐기)·C-01·C-02. **브라우저 미확인**(사용자 결정 2026-11-06 — Chrome 확장 미연결, 이번엔 건너뜀)
+- **44 런(2026-11-08) 대상만 PRD v4.16 / 플로우 v5.19 / AI v4.14 / 데이터 모델 v4.14** (AI 모의 면접 MVP 제외 RM-1~RM-5, decisions.md 4.21 UI 1~7, 보고 `_workspace/ui/44_frontend-engineer_report.md`): S-20·S-22·S-33·S-37·C-14·C-16·C-17 **폐기**(코드 삭제 + 옛 주소 308), L-01 메뉴 3개, S-39 4열, C-12 4값, S-13·S-31·S-25·S-24 ②·S-40·S-42(5행)·C-01·C-03·C-05·C-09·C-18~C-21·S-01 면접 부분 삭제. **UI QA 미실행 · 브라우저 미확인**
 - 디자인 시스템: **v5.12** (2026-11-06 설정 다이얼로그를 원본 화면 3장에 맞춤, 5.11 — 모서리 12px·틴트 10% 사용자 확정 DR-13·14) · v5.11 (탭 4개) · v5.7 (2026-11-05 OD-D4: 커리어 항목 추가·수정 모달 공통 규칙·C-24 폐기·되돌리기 삭제) · v5 (v4 = 사용자 지정 브랜드 토큰 2026-11-03, v5 = L-02·S-10·S-44·AI 패널·제안 카드 2026-11-03, v5.3 = C-23 소속 선택 전용 2026-11-04, v5.4 = 알림·경고 모달 공통 모양, v5.6 = S-02 헤더·카드 없는 배치 + L-02 새 행 안내(UQ-331~333) 2026-11-04, v5.5 = AI 패널·제안 확인 줄·문서형 마크다운 편집기·포커스·32px 2026-11-04) · 최종 갱신: 2026-11-04
-- 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). 38 런 추가: `ai-failed-daily-quota-reset`(C-20). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `generation-canceled`(S-33), `multi-detail`(S-36)
+- 실행: `pnpm install` → `pnpm dev` · 상태 미리보기: 각 화면 `?state=…`, 공통 상태 갤러리 `/dev/states`(개발 모드 전용). 38 런 추가: `ai-failed-daily-quota-reset`(C-20). W5 추가: `stopping`(S-19), `save-conflict`(커리어 폼, 첫 입력 뒤), `multi-detail`(S-36). (44 런) `generation-canceled`(S-33)·`interview-prompt`(C-14) 삭제
 
-> S-44 본문 칸 높이 고정 해제 (2026-11-05, 41 런, 사용자 요청, 기록 `_workspace/ui/41_s44-body-height.md`): `DocTextarea`에 `grow` 옵션을 만들어 S-44 본문 칸의 400px 상한·칸 안 스크롤을 없앴다 — 칸은 내용만큼 자라고(최소 `min-h-[24rem]`) 넘치는 만큼은 왼쪽 입력 영역이 스크롤한다. 근거 구간 강조·AI 채우기 스크롤도 그에 맞게 고쳤다. **S-10 STAR 칸은 400px 유지**(UP-9). design-system v5.10. lint·typecheck 통과, vitest 151 파일 2407건 통과. **UI QA 미실행 · 브라우저 미확인**.
+> S-44 본문 칸 높이 고정 해제 (2026-11-05, 41 런, 사용자 요청, 기록 `_workspace/ui/41_s44-body-height.md`): `DocTextarea`에 `grow` 옵션을 만들어 S-44 본문 칸의 400px 상한·칸 안 스크롤을 없앴다 — 칸은 내용만큼 자라고(최소 `min-h-[24rem]`) 넘치는 만큼은 왼쪽 입력 영역이 스크롤한다. 근거 구간 강조·AI 채우기 스크롤도 그에 맞게 고쳤다. **S-10 STAR 칸은 400px 유지**(UP-9). design-system v5.10. lint·typecheck 통과, vitest 151 파일 2407건 통과. **UI QA 미실행 · 브라우저 미확인**. 기획 반영 완료(2026-11-08, UX v5.19 DH-1, decisions 3.26).
 
 > **40 런 UI QA (2026-11-05, S-02·S-03·L-02·39 런 정리분, `_workspace/ui/40_ui-qa_review.md`·`40_frontend-engineer_fix_report.md`)**: Critical 0 · Major 2(UQ-420 게이트 → S-08 모달 저장 뒤 C-10 재판정·FL-13 다음 단계 누락 — 39 런 회귀, UQ-421 L-02 보존본이 다른 곳의 새 저장을 덮어씀) · Minor 9 — 모두 수정. 기획 확인 2건은 사용자 확정(U40-1·U40-2, decisions 3.21). 로그아웃·탈퇴 때 L-02 보존 입력과 S-14 공고 초안·복귀 대상 키도 지움(테마·AI 패널 설정은 유지). 옛 S-09·S-34 주소는 `next.config.ts` 308. lint·typecheck·build 통과, vitest 151 파일 2407건 통과. **브라우저 미확인** — 확인할 것은 리뷰 "브라우저 확인" 절(뒤로/앞으로 3개 브라우저, 두 탭 UQ-421 재현, 옛 주소 redirect, 게이트 → 모달 저장 뒤 C-10).
 
@@ -34,9 +36,9 @@
 
 | 화면 ID | 화면명 | 영역 | 라우트 | 상태 | 열린 이슈 | 마지막 QA |
 |---|---|---|---|---|---|---|
-| L-01 | 대시보드 셸 (sidebar-08·아이콘 레일·고정 헤더·NavAiStatus) | A0 | `(dashboard)/layout` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
+| L-01 | 대시보드 셸 (**메뉴 3개** 커리어·자기소개서 관리·지원 현황 — 44 런 RM-1, 모의 면접 메뉴·배지·이동 경로 마디 삭제 · sidebar-08·아이콘 레일·고정 헤더·NavAiStatus) | A0 | `(dashboard)/layout` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-28 | 오류 | A0 | not-found / error | QA 통과 (BYOK) | — | 2026-10-28 BYOK 통합 |
-| C-01~C-10, C-12~C-14, C-17~C-21, ST-* | 공통 컴포넌트·상태 뷰 (v2: C-18 AiLock · C-19 ProviderBadge · C-20 AiErrorNotice · C-21 DataUseConsent · AiRunButton) | A0 | `/dev/states` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
+| C-01~C-10, C-12·C-13, C-18~C-21, ST-* (~~C-14·C-16·C-17~~ 폐기 RM-1, 44 런 코드 삭제 — `interview-prompt-preview`·`score-display`·C-14 팝업·`AiLockDialog`) | 공통 컴포넌트·상태 뷰 (v2: C-18 AiLock · C-19 ProviderBadge · C-20 AiErrorNotice · C-21 DataUseConsent · AiRunButton) | A0 | `/dev/states` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-01 | 랜딩 | A1 | `/` | QA 통과 | — | 2026-10-25 R2 |
 | S-02 | 가입/로그인 | A1 | `/sign-in` | QA 통과 (mock·브라우저 미확인) — 40 런 UI QA + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 구현 수정 2026-11-04 사용자 요청) | (2026-11-04 사용자 요청) 상단 헤더·Card 제거 — `src/app/(bare)/sign-in`으로 옮겨 `(public)` 헤더를 피함(URL 그대로). 화면 가운데 심볼 `size-10` + 워드마크 `h-6` 가로 배치(누르면 S-01), 그 아래 제목 "Resumate에서 커리어 준비를 시작해요"·Google 버튼(부제 없음 — UX v5.13 OD-S3로 확정)·약관 안내 `[UI-가정]`. design-system 6 A1의 S-02 "Card max-w-md" 규칙과 달라짐 → ui-designer 반영 필요. 이전: 없음 (UQ-733은 design-system 6 A1에 `max-md:h-auto` 반영으로 해결). v5.7(D-09 변경 2026-11-04): Google 로그인만 남김. 이메일 매직 링크·재발송·링크 보냄·링크 만료 안내 삭제. 상태: 시작 실패 버튼 아래 한 줄, 콜백 실패(`?error=auth_callback`) 상단 경고 "로그인을 마치지 못했어요"(콜백 실패 때도 `?next=` 유지, UQ-732). `?state=` error · login-error · new-user · deletion-incomplete · loading (`sent`·`link-expired` 삭제). 보고: `_workspace/ui/R6_frontend-engineer-A1_report.md` · QA `_workspace/ui/R6_ui-qa_S-02_review.md`(UQ-725~732 해결) design-system 6장 A1은 v5.6에서 이 배치로 갱신(34 런). | 2026-11-04 (R6 QA 라운드 2: lint·typecheck·vitest·build 통과) |
 | S-03 | 동의 | A1 | `/consent` | QA 통과 (mock·브라우저 미확인) — 40 런 UI QA + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 구현 (#24), dev 서버 렌더 확인) | (플로우 v5.8, PT-5) 필수 "만 14세 이상이에요" 확인(모두 동의 포함, 저장 안 함). W5 QA 수정(QA-W5-08): 동의 뒤 이동 `next` 검사를 서버 계약판과 통일 | 2026-11-04 처리방침·약관 |
@@ -62,14 +64,14 @@
 | S-17 | 서류 초안 목록 | A3 | `/applications/[id]/drafts` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
 | S-18 | 자소서 문항 설정 | A3 | `/applications/[id]/drafts/[draftId]/questions` | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (v5.3))) | W5: 빈 문항 저장 건너뜀. W5 QA 수정(UQ-703): 화면에서 비운 문항이 있으면 "전체 문항 생성" 비활성, 전체 생성 전 입력 저장 — 브라우저 미확인 | 2026-11-02 W5 QA |
 | S-19 | 초안 편집기 | A3 | `/applications/[id]/drafts/[draftId]` | 구현 완료 (2026-11-04 마무리), QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53)) | 2026-11-04: ① 새로고침 후 재연결 — SSE는 다시 붙을 수 없어 진행 중인 `ai_jobs` 행을 따라가며 C-04 대기(작성 중 + 중단 + "화면을 떠나 있는 동안에도 계속 만들고 있어요" `[UI-가정]`)를 보이고, 끝나면 저장된 결과·C-20을 다시 읽는다. 경력기술서(초안 행·임시 행 모두)와 자소서 문항별. 재연결 중 중단 = 스트림 중단과 같은 서버 중단(Q53-7 이동 포함). 다른 곳에서 중단된 다시 생성은 원래 초안으로 이동. "전체 생성"의 남은 문항 대기열은 새로고침하면 이어지지 않는다 `[UI-가정]`. ② `done.draftId` — AI-03 첫 생성도 C-6 동일 입력 재사용 대상(서버: 임시 행 `draftId`가 있어도 "다시 생성"이 아니면 재사용). `done.draftId`가 지금 초안과 다르면 그 초안으로 이동 + "같은 설정으로 만든 초안이 있어 그 초안을 열었어요" `[UI-가정]`. ③ A3 UQ-84 (c)~(g) 정리 — (e)만 화면 수정(C-11 문항별 목록 라벨을 살아 있는 원본의 현재 이름으로, 원본 삭제·트리에 없음이면 저장 라벨), (c)(d)(f)(g)는 실제 백엔드에서 이미 해결돼 해당 없음(상세 `_workspace/ui/34_frontend-engineer-A3_s19-finish_report.md`). 실제 공급자 스트림 끝까지·브라우저 확인은 하지 않음(로컬 로그인이 Google 전용, 테스트 키 없음). 이전 W5 QA 수정(UQ-701, QA-W5-01, UQ-707)도 브라우저 미확인 | 2026-11-02 W5 QA |
-| S-20 | 면접 준비 | A4 | `/applications/[id]/interview` | QA 통과 (Q53) | — | 2026-10-30 Q53 |
-| S-33 | 면접 답변지 | A4 | `/applications/[id]/interview/[sessionId]` | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53))) | W5: 중단한 생성은 남은 질문으로 | 2026-10-30 Q53 |
-| S-22 | 면접 결과 | A4 | `/applications/[id]/interview/[sessionId]/result` · 자기소개서 삭제됨 세션 `/interviews/[sessionId]/result` (U36-1) | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53))) | W5: 일관성 메모 인용·근거 | 2026-10-30 Q53 |
-| S-37 | 모의 면접 전체 세션 | A4 | `/interviews` | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: W5 수정, QA 미검토 · 브라우저 미확인 (이전: QA 통과 (Q53))) | W5: 없는 세션 삭제는 안내 후 새로 읽기 | 2026-10-30 Q53 |
+| ~~S-20~~ | ~~면접 준비~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview` → S-31 `/applications/[id]` (`next.config.ts` 308, `legacy-redirects.ts`) | 폐기 | — | 2026-11-08 44 런 |
+| ~~S-33~~ | ~~면접 답변지~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview/[sessionId]` → S-31 (308) | 폐기 | — | 2026-11-08 44 런 |
+| ~~S-22~~ | ~~면접 결과~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview/[sessionId]/result` → S-31 · `/interviews/[sessionId]/result` → S-13 (308) | 폐기 | — | 2026-11-08 44 런 |
+| ~~S-37~~ | ~~모의 면접 전체 세션~~ — **폐기 (RM-1, 2026-11-08)**. 코드·L-01 메뉴 삭제, 옛 주소는 redirect | A4 | `/interviews` → S-13 `/applications` (308) | 폐기 | — | 2026-11-08 44 런 |
 | S-40 | AI 연결 | A1 | 설정 다이얼로그 **AI 연결 탭** 위쪽 — 공급자 라디오 행 3개(`ProviderRow`, 42 런에서 카드 대체) | QA 통과 (mock·브라우저 미확인) — 43 런(2026-11-06) 원본 화면 3장에 맞춤, UI QA 1라운드 Minor 6 수정 | 브라우저 미확인 | 2026-11-06 42 런 |
 | S-41 | 키 연결 단계 | A1 | `/settings/ai/connect` (집중 화면, `(focus)` 레이아웃) | QA 통과 (BYOK 신설) | — | 2026-10-28 BYOK 통합 |
-| S-42 | AI 사용량 | A1 | 설정 다이얼로그 **AI 연결 탭** 아래쪽 — 공급자 탭 + 기능 7행 교차 표(`getAiUsageSummaryV412`) | QA 통과 (mock·브라우저 미확인) — 43 런(2026-11-06) 원본 화면 3장에 맞춤, UI QA 1라운드 Minor 6 수정 | 브라우저 미확인 | 2026-11-06 42 런 |
-| S-39 | 지원 현황 보드 | A4 | `/board` | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: QA 통과 (Q53)) | — | 2026-10-30 Q53 |
+| S-42 | AI 사용량 | A1 | 설정 다이얼로그 **AI 연결 탭** 아래쪽 — 공급자 탭 + 기능 **5행** 교차 표(44 런, RM-A2: 면접 2행 삭제)(`getAiUsageSummaryV412`) | QA 통과 (mock·브라우저 미확인) — 43 런(2026-11-06) 원본 화면 3장에 맞춤, UI QA 1라운드 Minor 6 수정 | 브라우저 미확인 | 2026-11-06 42 런 |
+| S-39 | 지원 현황 보드 (**4열** — 44 런 RM-2, 카드의 면접 수·작성 중 배지·C-14 팝업 삭제) | A4 | `/board` | QA 통과 (mock·브라우저 미확인) — 38 런 UI QA 1라운드 + 수정(재검토 없이 lint·typecheck·test·build로 확인, 2026-11-05) (이전: 36 런 OD 후속 반영, UI QA 미검토) (이전: QA 통과 (Q53)) | — | 2026-10-30 Q53 |
 
 - BYOK 반영(2026-10-28): 기획 문서는 main(6fc33e7)에서 작업 트리로만 가져옴(커밋·main 병합 없음 — 사용자 결정: 백엔드 작업이 끝난 뒤 병합·실제 백엔드 연결). 디자인 시스템 v2 → 파운데이션 → A1~A4 → 영역 QA 1라운드(Major 4: UQ-200·230·320·321) → 수정·파운데이션 배치 → 통합 QA(1라운드 이슈 50건 중 46 해결·2 리더 결정·1 기획 대기·1 문서 정렬, 새 Minor 5) → 단일 정리 라운드(UQ-350~354) 처리. 정리 후 lint·typecheck·build 통과(리더 직접 실행), 정리 후 재검수는 하지 않음.
 - 통합 QA(2026-10-25): Critical 0 / Major 0 / Minor 8 → 단일 정리 라운드에서 모두 처리.
@@ -107,8 +109,8 @@
 - (디자인 P-21) C-22 명세 "작은 다이얼로그(좁은 화면은 시트)" vs 코드 `DropdownMenu`
 - (리더) 법무 문서의 "정량 성과" 잔여: 처리방침 1번 항목·이용약관 2조(이번에는 국외 이전·처리방침 6번만 고침)
 
-### 41 런(2026-11-05)에서 새로 생긴 것
-- (S-44·C-24) 본문 칸 높이: UX v5.12 S-44 본문 행·C-24 "본문 형식"·UP-9은 "내용 따라 늘다가 **400px에서 멈추고 칸 안에서 스크롤**"인데, 사용자 요청(2026-11-05)으로 S-44 본문은 상한 없이 자라도록 바꿨다(design-system v5.10). 기획 문서 반영과 **S-10 STAR 칸도 같이 풀 것인지**가 결정 필요 → `resumate-planning`
+### 41 런(2026-11-05)에서 새로 생긴 것 — **1건 닫힘 2026-11-08 (decisions.md 3.26, DH-1)**
+- ~~(S-44) 본문 칸 높이가 UX S-44 본문 행·UP-9의 "400px에서 칸 안 스크롤"과 어긋남~~ **닫힘 (DH-1, UX v5.19)**: S-44 본문은 상한 없이 자란다(구현과 같음). S-10 STAR 칸은 400px 유지 — 같이 풀 필요가 생기면 DH-2로 추가
 
 ### 37 런(2026-11-05)에서 새로 생긴 것 — **3건 모두 닫힘 2026-11-05 (decisions.md 3.19 U36-6~U36-8, 구현 그대로·법무 문서 유지)**
 - AI 기능·복귀 이름에서 `cover_letter`를 "자소서 문항 답변"으로 했다 `[UI-가정]`. 명세 C-18 표는 "자기소개서(문항 답변)", 기능 이름 목록은 "자기소개서"로 되어 있다
@@ -125,9 +127,9 @@
 
 | 화면 ID | 데이터 함수 | 필요한 계약 (문서 위치) |
 |---|---|---|
-| S-37·S-22·S-33 | `interview-rows.ts` `toRow`·`SESSION_SELECT` | `interview_sessions.application_project_id` null 허용, `company_name_snapshot`·`position_title_snapshot` (DM v4.11 11.6 #1~#6) |
-| C-05 | `deletion.ts` `getApplicationDeletionImpact` | RPC `get_deletion_impact('application_project')` `cascade.*`·`kept.interview_sessions` (#1~#6). 지금 실제 분기는 끝난 세션을 0개로 셈 |
-| C-05 | `deletion.ts` `toDeletionImpact` | `affected_results.detached_interview_sessions` (R-OD-5) |
+| ~~S-37·S-22·S-33~~ | ~~`interview-rows.ts`~~ | **폐기 (RM-1, 2026-11-08)** — 화면·데이터 계층 삭제 |
+| C-05 | `deletion.ts` `getApplicationDeletionImpact` | RPC `get_deletion_impact('application_project')` `cascade.*` (#1~#6). (RM-1, 2026-11-08) `kept.interview_sessions` 폐기 |
+| ~~C-05~~ | ~~`deletion.ts` `toDeletionImpact`~~ | ~~`affected_results.detached_interview_sessions` (R-OD-5)~~ **폐기 (RM-1, 2026-11-08)** |
 | S-10·S-44 | `writing-chat-turn-v45.ts` 다시 보내기 | 턴 라우트가 "마지막이 답 없는 사용자 메시지"를 다시 응답 (#11) |
 | S-10·S-44 | `career-v45.ts` `messagesOf` `turn_job` | 대화 상세 DTO에 실패 응답의 작업 상태(`canceled`/`failed`·원인) (#15) |
 | S-10·S-44 | `career-v45-save.ts` | `p_client_id` (#9) — 백엔드가 이 파일을 고침, UI 변경 없음 |

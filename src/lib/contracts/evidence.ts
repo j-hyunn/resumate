@@ -3,7 +3,7 @@ import { EVIDENCE_OWNER_TYPES, EVIDENCE_SOURCE_TYPES, type EvidenceOwnerType, ty
 /**
  * C-01 evidence chip / C-02 evidence panel read shape (UX v5, AI C-3, DM §2.8,
  * A.14). One chip = one `evidence_links` row plus the current state of its
- * source. Shared by insights (S6), drafts (S7), and interview results (S8).
+ * source. Shared by insights (S6), drafts (S7), and chat messages.
  */
 
 export { EVIDENCE_OWNER_TYPES, EVIDENCE_SOURCE_TYPES };
@@ -27,7 +27,6 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   skill: "스킬",
   jd_requirement: "JD 요건",
   jd_sentence: "공고 원문",
-  interview_answer: "내 답변",
   user_note: "내 메모",
 };
 

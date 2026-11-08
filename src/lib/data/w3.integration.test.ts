@@ -163,7 +163,7 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(jd).toMatchObject({ extraction_status: "pending", extraction_job_id: null, raw_text: KO_BACKEND.raw, raw_text_editable: false, raw_text_lock: "jd_raw_text_locked", requirements: [] });
     expect(jd?.tech_keywords).toEqual([]);
     const summary = await getApplicationProject(ap.id);
-    expect(summary).toMatchObject({ id: ap.id, deadline: "2026-12-31", stage: "before_apply", insight_state: "none", draft_count: 0, interview_session_count: 0, in_progress_session: null, running_job_ids: [], insight_job_id: null });
+    expect(summary).toMatchObject({ id: ap.id, deadline: "2026-12-31", stage: "before_apply", insight_state: "none", draft_count: 0, running_job_ids: [], insight_job_id: null });
     expect(summary?.job_description).toMatchObject({ extraction_status: "pending" });
     expect(summary?.insight_status).toMatchObject({ kind: "none", failure: null });
     expect((await listApplicationProjects()).map((a) => a.id)).toContain(ap.id);
@@ -560,7 +560,8 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(summary).toMatchObject({ insight_state: "ready", insight_job_id: null });
     expect(summary?.insight_status.kind).toBe("present");
     const impact = await (await deletion()).getApplicationDeletionImpact(project);
-    expect(impact).toMatchObject({ insights: 1, interview_sessions: 0, stage_events: 1 });
+    expect(impact).toMatchObject({ insights: 1, stage_events: 1 });
+    expect(impact).not.toHaveProperty("interview_sessions");
     await (await deletion()).deleteApplicationProject(project);
     expect(await getApplicationProject(project)).toBeNull();
   });

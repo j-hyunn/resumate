@@ -69,7 +69,7 @@ select w0t.mk(9, 'failed');                                -- 4: job pruned
 select w0t.mk(10, 'failed', 'failed', 'not_a_jd');         -- 3: a requirement exists
 select w0t.mk(11, 'succeeded');                            -- 3: succeeded with a requirement
 select w0t.mk(12, 'succeeded');                            -- 5: ready insight
-select w0t.mk(13, 'succeeded');                            -- 5: interview question
+select w0t.mk(13, 'succeeded');                            -- unused (R14: interview question check removed)
 select w0t.mk(14, 'succeeded');                            -- 5: draft section with ai_content
 select w0t.mk(15, 'succeeded');                            -- 5: jd_sentence evidence
 select w0t.mk(16, 'failed', 'failed', 'not_a_jd');         -- 6: unchanged
@@ -86,10 +86,6 @@ values ('a0000000-0000-0000-0000-000000000001', 'insight', w0t.pid(18), 'applica
 insert into public.insights (user_id, application_project_id, version_no, is_latest, status, result, match_stage_result, requirements_hash, completed_at,
                              schema_version, prompt_version, provider, model, model_tier, connection_tier, input_hash, career_snapshot_hash)
 values ('a0000000-0000-0000-0000-000000000001', w0t.pid(12), 1, true, 'ready', '{}', '{}', 'rh', now(), 1, 'p', 'gemini', 'm', 'default', 'free', 'i', 'c');
-insert into public.interview_sessions (id, user_id, application_project_id, interview_type, data_sufficiency)
-  values ('a0000000-5e55-0000-0000-000000000013', 'a0000000-0000-0000-0000-000000000001', w0t.pid(13), 'job', 'ok');
-insert into public.interview_questions (user_id, session_id, sequence, source_kind, anchor, question_text, intent)
-  values ('a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000013', 1, 'values', 'general', 'q', 'i');
 insert into public.drafts (id, user_id, application_project_id, draft_type, title, status)
   values ('a0000000-eeee-0000-0000-000000000014', 'a0000000-0000-0000-0000-000000000001', w0t.pid(14), 'cover_letter', 't', 'composing');
 insert into public.draft_sections (user_id, draft_id, sort_order, section_kind, question_text, count_basis, ai_content, status)
@@ -123,7 +119,6 @@ select throws_ok($$select w0t.edit(8)$$, 'P0001', 'jd_failure_not_input', '4: pr
 select throws_ok($$select w0t.edit(19)$$, 'P0001', 'jd_failure_not_input', '4: insufficient_data is out');
 select throws_ok($$select w0t.edit(9)$$, 'P0001', 'jd_failure_not_input', '4: job pruned, cause unknown');
 select throws_ok($$select w0t.edit(12)$$, 'P0001', 'jd_has_results', '5: ready insight');
-select throws_ok($$select w0t.edit(13)$$, 'P0001', 'jd_has_results', '5: interview question');
 select throws_ok($$select w0t.edit(14)$$, 'P0001', 'jd_has_results', '5: draft section ai_content');
 select throws_ok($$select w0t.edit(15)$$, 'P0001', 'jd_has_results', '5: JD evidence');
 select throws_ok($$select w0t.edit(16, '옛 원문')$$, 'P0001', 'jd_raw_text_unchanged', '6: same text');

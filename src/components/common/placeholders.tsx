@@ -28,7 +28,6 @@ export const PLACEHOLDER_TOKENS: readonly PlaceholderToken[] = [
   "[내용 확인 필요]",
   "[지원 동기 입력 필요]",
   "[계획 입력 필요]",
-  "[사례 입력 필요]",
 ]
 
 const TOKEN_RE = new RegExp(`(${PLACEHOLDER_TOKENS.map((t) => t.replace(/[[\]]/g, "\\$&")).join("|")})`, "g")

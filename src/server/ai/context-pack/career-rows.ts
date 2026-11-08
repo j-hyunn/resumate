@@ -1,7 +1,8 @@
 import type { Database } from "@/server/db/database.types";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { AppError } from "@/lib/contracts/errors";
-import { kstDateString, loadTotalExperience, type TotalExperience } from "./total-experience";
+import type { YearMonth } from "./months";
+import { emptyTotalExperience, kstDateString, loadTotalExperience, type TotalExperience } from "./total-experience";
 
 /**
  * Career rows for the Career Context Pack (C-1), read as app_ai_writer.
@@ -116,6 +117,19 @@ export type CareerRows = {
   skills: SkillRow[];
   projectSkills: ProjectSkillRow[];
 };
+
+/** No career data at all (tests and empty-pack paths). Moved here from the removed `context-pack/interview.ts` (R14). */
+export function emptyCareerRows(asOf: YearMonth): CareerRows {
+  return {
+    totalExperience: emptyTotalExperience(asOf),
+    experiences: [],
+    educations: [],
+    projects: [],
+    deliverables: [],
+    skills: [],
+    projectSkills: [],
+  };
+}
 
 /**
  * Loads the signed-in user's career rows (RLS scopes them via the JWT `sub`).

@@ -8,7 +8,7 @@ import { createDraftStore } from "@/server/services/drafts/db";
 import type { DraftAiDeps, DraftPipelines, PipelineStreamEvent, StreamDeps } from "@/server/services/drafts/types";
 import { fakeSupabase, type FakeDb } from "./fake-supabase";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "./job-fakes";
-import { emptyCareerRows } from "@/server/ai/context-pack/interview";
+import { emptyCareerRows } from "@/server/ai/context-pack/career-rows";
 
 /**
  * S7 draft service test kit: fake Supabase tables/RPCs (user and writer share
@@ -207,7 +207,7 @@ export function draftKit(opts: {
     getReadiness: async () =>
       ({
         features: {
-          draft: opts.readiness === false ? { ready: false, missing: ["experience"], data_sufficiency: "none" } : { ready: true, data_sufficiency: "ok" },
+          draft: opts.readiness === false ? { ready: false, missing: ["experience"] } : { ready: true },
         },
       }) as never,
     now: clock.now,

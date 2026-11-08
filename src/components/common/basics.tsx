@@ -58,8 +58,6 @@ const STAGE_DOT_CLASS: Record<ApplicationStage, string> = {
   before_apply: "bg-stage-before-apply",
   document: "bg-stage-document",
   assignment: "bg-stage-assignment",
-  job_interview: "bg-stage-job-interview",
-  culture_fit_interview: "bg-stage-culture-fit-interview",
   closed: "bg-stage-closed",
 }
 

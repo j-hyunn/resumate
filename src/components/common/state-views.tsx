@@ -33,7 +33,7 @@ export function EmptyState({
   actions,
   className,
 }: {
-  /** 커리어 Layers, 자기소개서 Briefcase, 면접 MessagesSquare, 보드 KanbanSquare */
+  /** 커리어 Layers, 자기소개서 Briefcase, 보드 KanbanSquare */
   icon?: LucideIcon
   title: React.ReactNode
   description?: React.ReactNode

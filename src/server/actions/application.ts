@@ -67,8 +67,8 @@ export async function updateApplicationProject(input: unknown): Promise<ActionRe
 }
 
 /**
- * C-05 자기소개서 삭제 확인 (R11 OD-I6, DM 2.7.2): `get_deletion_impact('application_project')` —
- * what is deleted with it and how many finished interviews stay read-only. No AI, no key needed.
+ * C-05 자기소개서 삭제 확인 (DM 2.7.2): `get_deletion_impact('application_project')` — what is deleted
+ * with it. No AI, no key needed.
  */
 export async function getApplicationProjectDeletionImpact(input: unknown): Promise<ActionResult<ApplicationProjectDeletionImpact>> {
   const parsed = ApplicationProjectIdInput.safeParse(input);
@@ -80,8 +80,7 @@ export async function getApplicationProjectDeletionImpact(input: unknown): Promi
 }
 
 /**
- * FL-06: cancel in-flight AI jobs, then delete (usage records stay). (R11 OD-I6) The DB trigger keeps the
- * project's `completed` interview sessions (read-only, snapshot names) and deletes the others.
+ * FL-06: cancel in-flight AI jobs, then delete (usage records stay). Children go with the FK cascade.
  */
 export async function deleteApplicationProject(input: unknown): Promise<ActionResult<DeleteApplicationProjectResult>> {
   const parsed = ApplicationProjectIdInput.safeParse(input);

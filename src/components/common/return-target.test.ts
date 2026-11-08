@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { CAREER_SAVED_EVENT, afterCareerItemSaved, markCareerReturn, readCareerReturn } from "./return-target"
+import { CAREER_SAVED_EVENT, afterCareerItemSaved, markCareerReturn, readCareerReturn, readNavOrigin, setNavOrigin } from "./return-target"
 
 function fakeWindow() {
   const data: Record<string, string> = {}
@@ -51,5 +51,24 @@ describe("afterCareerItemSaved (UQ-420, FL-13 D0 → D1)", () => {
     afterCareerItemSaved({ kind: "experience", id: "e9", created: true })
     expect(readCareerReturn()).toBeNull()
     expect(env.events).toEqual([CAREER_SAVED_EVENT])
+  })
+})
+
+describe("readNavOrigin (UQ-44-1)", () => {
+  const KEY = "resumate.nav-origin"
+  it("returns board for the same 자기소개서 only", () => {
+    setNavOrigin("board", "a1")
+    expect(readNavOrigin("a1")).toBe("board")
+    expect(readNavOrigin("a2")).toBeNull()
+  })
+  it("drops a value left by an older build (\"interviews\") and clears it", () => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ origin: "interviews", application_project_id: "a1" }))
+    expect(readNavOrigin("a1")).toBeNull()
+    expect(window.sessionStorage.getItem(KEY)).toBeNull()
+  })
+  it("drops broken JSON", () => {
+    window.sessionStorage.setItem(KEY, "{")
+    expect(readNavOrigin("a1")).toBeNull()
+    expect(window.sessionStorage.getItem(KEY)).toBeNull()
   })
 })

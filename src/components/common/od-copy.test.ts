@@ -13,7 +13,7 @@ describe("C-20 copy (v5.13)", () => {
   it("token note says 공급자 토큰 (Q-25)", () => {
     expect(retryTokenNote("다시 시도")).toBe("다시 시도하면 공급자 토큰을 다시 써요")
     expect(retryTokenNote("다시 보내기")).toBe("다시 보내면 공급자 토큰을 다시 써요")
-    expect(retryTokenNote("다시 채점")).toBe("다시 채점하면 공급자 토큰을 다시 써요")
+    expect(retryTokenNote("다시 생성")).toBe("다시 생성하면 공급자 토큰을 다시 써요")
   })
 })
 

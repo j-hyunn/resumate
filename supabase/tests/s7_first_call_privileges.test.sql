@@ -149,7 +149,7 @@ select results_eq($$select draft_type, status from public.drafts order by draft_
                            ('cover_letter', 'partially_failed')$$, 'authenticated: reads draft states');
 select is((public.get_deletion_impact('project', 'aaaaaaaa-3333-0000-0000-000000000001')
             -> 'affected_results' -> 'by_application_project' -> 0) - 'name',
-          '{"drafts": 1, "insights": 0, "draft_sections": 1, "interview_sessions": 0,
+          '{"drafts": 1, "insights": 0, "draft_sections": 1,
             "application_project_id": "aaaaaaaa-aaaa-0000-0000-000000000001"}'::jsonb,
           'authenticated: get_deletion_impact counts drafts / questions');
 select lives_ok($$select public.delete_career_item('project', 'aaaaaaaa-3333-0000-0000-000000000001', 'delete_projects', 'delete_results')$$,

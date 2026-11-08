@@ -23,7 +23,7 @@ import {
   readDevAiEnv,
 } from "./provider-context";
 import { decideRetry } from "./retry";
-import { loadActiveForPreview, loadRetryBlocked, retryPreviewOf, toAiJobStatusResponse } from "./status";
+import { loadActiveForPreview, retryPreviewOf, toAiJobStatusResponse } from "./status";
 import { parseRetryResult } from "./supabase-store";
 import { toUsageInsert } from "./supabase-usage";
 import type { JobRecord, NormalizedUsage, PriceRow } from "./types";
@@ -91,51 +91,11 @@ const base: JobRecord = {
   meta: { runBase: 1, waitBase: 0, retries: { match: { rate_limited: 2 } } },
 };
 
-describe("status response — evaluation with no re-grade target (Q53-5)", () => {
-  const evaluation: JobRecord = { ...base, jobType: "interview_evaluation", targetType: "interview_session", targetId: "s1" };
-  const db = (rows: unknown[] | Error) =>
-    ({
-      rpc: async () => {
-        if (rows instanceof Error) throw rows;
-        return { data: rows, error: null };
-      },
-    }) as unknown as Parameters<typeof loadRetryBlocked>[1];
-  const row = (regrade_target_count: number) => ({ session_id: "s1", decision: "resummarize", cause: null, regrade_target_count, succeeded_count: 1 });
-
+describe("status response — retry blocked", () => {
   it("a blocked job offers no retry", () => {
-    const res = toAiJobStatusResponse(evaluation, null, { provider: "gemini", connectionTier: "free" }, true);
+    const res = toAiJobStatusResponse(base, null, { provider: "gemini", connectionTier: "free" }, true);
     expect(res.canRetry).toBe(false);
     expect(res.retry).toBeNull();
-  });
-
-  it("QA-W0-04: a questions job past prepare is blocked once the JD left `succeeded`", async () => {
-    const jdDb = (extraction_status: string | Error) =>
-      ({
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => {
-                if (extraction_status instanceof Error) throw extraction_status;
-                return { data: { extraction_status }, error: null };
-              },
-            }),
-          }),
-        }),
-      }) as unknown as Parameters<typeof loadRetryBlocked>[1];
-    const questions = { ...evaluation, jobType: "interview_questions" as const, applicationProjectId: "ap1", stepOutputs: { prepare: {} } };
-    await expect(loadRetryBlocked(questions, jdDb("pending"))).resolves.toBe(true);
-    await expect(loadRetryBlocked(questions, jdDb("succeeded"))).resolves.toBe(false);
-    await expect(loadRetryBlocked({ ...questions, stepOutputs: {} }, jdDb("pending"))).resolves.toBe(false);
-    await expect(loadRetryBlocked(questions, jdDb(new Error("down")))).resolves.toBe(false);
-  });
-
-  it("loadRetryBlocked: only a failed, retryable evaluation with 0 targets; errors → false", async () => {
-    await expect(loadRetryBlocked(evaluation, db([row(0)]))).resolves.toBe(true);
-    await expect(loadRetryBlocked(evaluation, db([row(1)]))).resolves.toBe(false);
-    await expect(loadRetryBlocked(evaluation, db([]))).resolves.toBe(false);
-    await expect(loadRetryBlocked(evaluation, db(new Error("down")))).resolves.toBe(false);
-    await expect(loadRetryBlocked(base, db([row(0)]))).resolves.toBe(false);
-    await expect(loadRetryBlocked({ ...evaluation, status: "running", errorCode: null }, db([row(0)]))).resolves.toBe(false);
   });
 });
 
@@ -516,7 +476,7 @@ describe("usage summary mapping (DM 2.9.5 v4.12 providers[])", () => {
     expect(AiUsageSummarySchema.parse(s)).toEqual(s);
     expect(s.totals).toMatchObject({ inputCostUsd: 0.01, outputCostUsd: 0.0023, estimatedCostUsd: 0.0123, failedCalls: 1 });
     expect(s.providers[0]).toMatchObject({ provider: "gemini", connectionTiers: ["free", "paid"] });
-    // 7행 묶음은 화면 상수다 — RPC 응답은 저장 값 8개를 그대로 돌려준다 (AI C-13.1, SD-4)
+    // 5행 묶음(R14)은 화면 상수다 — RPC 응답은 저장 값을 그대로 돌려준다 (AI C-13.1, SD-4)
     expect(s.providers[0]!.byFeature.map((f) => f.feature)).toEqual(["insight", "cover_letter"]);
     expect(s.previousMonth).toBeNull();
   });

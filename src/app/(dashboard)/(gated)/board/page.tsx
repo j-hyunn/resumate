@@ -7,17 +7,14 @@ import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KanbanBoard, type BoardData } from "@/components/board/kanban-board"
-import { InterviewPromptPreview } from "@/components/board/interview-prompt-preview"
 import { getBoard } from "@/lib/data/applications"
-import { applicationDisplayName, STAGE_ORDER } from "@/lib/data/labels"
+import { STAGE_ORDER } from "@/lib/data/labels"
 import { getPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 
 /**
- * S-39 지원 현황 보드.
- * ?state=: loading · error · unauth · empty · move-failed (모든 이동이 실패 → 원위치 + 토스트) ·
- * ai-locked (카드를 인터뷰 열로 옮기면 C-14 키 없음 변형 — common stage-menu → AiLockDialog) ·
- * v5.3: interview-prompt (C-14 작성 중 세션: 마지막 활동 · 질문 만드는 중 · 유형 다름, 첫 카드 기준)
+ * S-39 지원 현황 보드 — 4열 (v5.19, RM-2: C-14 팝업 없음, 보드에 AI 잠금 상태 없음).
+ * ?state=: loading · error · unauth · empty · move-failed (모든 이동이 실패 → 원위치 + 토스트)
  */
 type Props = {
   params: Promise<Record<string, never>>
@@ -97,21 +94,7 @@ async function Screen({ searchParams }: Props) {
       ) : (
         <KanbanBoard board={board} failMove={state === "move-failed"} />
       )}
-      {state === "interview-prompt" ? <PromptPreview board={board} /> : null}
     </div>
   )
 }
 
-/** UQ-560: a card with a real in-progress session so "이어서 쓰기" opens that S-33 */
-function PromptPreview({ board }: { board: BoardData }) {
-  const cards = STAGE_ORDER.flatMap((st) => board[st])
-  const card = cards.find((c) => c.in_progress_session) ?? cards[0]
-  if (!card?.in_progress_session) return null
-  return (
-    <InterviewPromptPreview
-      applicationProjectId={card.id}
-      name={applicationDisplayName(card.name, card.name_source, card.created_at)}
-      session={card.in_progress_session}
-    />
-  )
-}

@@ -47,11 +47,11 @@ select set_eq(
       join pg_attribute a on a.attrelid = c.oid and a.attname = 'user_id' and a.attnum > 0 and not a.attisdropped
      where ns.nspname = 'public' and c.relkind in ('r', 'p')$$,
   array['ai_data_use_consents', 'ai_jobs', 'ai_provider_keys', 'ai_usage_records',
-        'answer_evaluations', 'application_projects', 'application_stage_events', 'consents',
+        'application_projects', 'application_stage_events', 'consents',
         'draft_section_sources', 'draft_sections', 'drafts', 'educations', 'evidence_links', 'experiences',
-        'insights', 'interview_answers', 'interview_questions', 'interview_sessions', 'jd_requirements',
+        'insights', 'jd_requirements',
         'job_descriptions', 'profile_job_interests', 'project_deliverables', 'project_skills', 'projects',
-        'session_feedbacks', 'skills',
+        'skills',
         'writing_chat_messages', 'writing_chats'],
   'public user_id tables = the list this test seeds (new table: seed it here and delete it in delete_account)');
 
@@ -114,8 +114,8 @@ insert into public.ai_jobs (id, user_id, job_type, application_project_id, targe
   ('a0000000-7777-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'insight',
    'a0000000-aaaa-0000-0000-000000000001', 'application_project', 'a0000000-aaaa-0000-0000-000000000001', 'succeeded', 1,
    'gemini', 'default', 'free'),
-  ('a0000000-7777-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'interview_evaluation',
-   'a0000000-aaaa-0000-0000-000000000002', 'interview_session', 'a0000000-5e55-0000-0000-000000000001', 'running', 1,
+  ('a0000000-7777-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'insight',
+   'a0000000-aaaa-0000-0000-000000000002', 'application_project', 'a0000000-aaaa-0000-0000-000000000002', 'running', 1,
    'gemini', 'default', 'free'),
   ('a0000000-7777-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'writing_chat_turn',
    null, 'writing_chat', 'a0000000-c4a7-0000-0000-000000000001', 'queued', 1, 'gemini', 'default', 'free'),
@@ -142,30 +142,11 @@ insert into public.draft_section_sources (user_id, draft_section_id, application
    'a0000000-1111-0000-0000-000000000001', null, 'a0000000-3333-0000-0000-000000000001',
    'primary', 'user', 0, 'A사 › P1');
 
-insert into public.interview_sessions (id, user_id, application_project_id, interview_type, question_count,
-                                       data_sufficiency, status, generation_status, question_provider, question_model,
-                                       submitted_at, evaluation_job_id) values
-  ('a0000000-5e55-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000002',
-   'job', 3, 'ok', 'evaluating', 'ready', 'gemini', 'm', now(), 'a0000000-7777-0000-0000-000000000002');
-insert into public.interview_questions (id, user_id, session_id, sequence, source_kind, anchor, question_text, intent) values
-  ('a0000000-9001-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   1, 'project_deep_dive', 'experience', 'q', 'i');
-insert into public.interview_answers (id, user_id, session_id, question_id, answer_text, status) values
-  ('a0000000-9002-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'a0000000-9001-0000-0000-000000000001', '답', 'submitted');
-insert into public.answer_evaluations (id, user_id, session_id, answer_id, status) values
-  ('a0000000-9003-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'a0000000-9002-0000-0000-000000000001', 'pending');
-insert into public.session_feedbacks (id, user_id, session_id, status) values
-  ('a0000000-9004-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'pending');
 insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id,
                                    source_field, quote) values
   ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 'insight',
    'a0000000-1a51-0000-0000-000000000001', 'strengths.0', 'project_deliverable', 'a0000000-4444-0000-0000-000000000001',
-   'body', 'body'),
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000002', 'interview_question',
-   'a0000000-9001-0000-0000-000000000001', 'question', 'project', 'a0000000-3333-0000-0000-000000000001', 'name', 'P1');
+   'body', 'body');
 
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id,
                                      key_last4, status) values
@@ -178,8 +159,8 @@ update public.profiles set active_ai_provider = 'gemini', display_name = 'A'
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
 values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-05', true),
-  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-08', true);
+  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-08', true),
+  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-08.1', true);
 insert into public.ai_usage_records (user_id, occurred_at, feature, job_type, ai_job_id, application_project_id, provider,
                                      model, model_tier, connection_tier, usage_source, outcome, price_table_version,
                                      estimated_cost_usd) values
@@ -203,7 +184,7 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('b0000000-9999-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03',
    'env-v1', 'bg01', 'valid');
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-05', true);
+  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-08', true);
 insert into public.writing_chats (id, user_id, project_id, status) values
   ('b0000000-c4a7-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
    'b0000000-3333-0000-0000-000000000001', 'active');
@@ -228,7 +209,7 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select is(public.get_account_deletion_summary(),
           '{"career": {"experiences": 1, "educations": 1, "projects": 2, "project_deliverables": 2,
                        "skills": 2, "writing_chats": 2},
-            "applications": {"application_projects": 2, "insights": 1, "drafts": 1, "interview_sessions": 1,
+            "applications": {"application_projects": 2, "insights": 1, "drafts": 1,
                              "application_stage_events": 1},
             "ai_connection": {"provider_keys": 2, "ai_data_use_consents": 1, "usage_records": 3,
                               "has_provider_keys": true}}'::jsonb,
@@ -238,7 +219,7 @@ select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-0000000
 select is(public.get_account_deletion_summary(),
           '{"career": {"experiences": 1, "educations": 0, "projects": 1, "project_deliverables": 0,
                        "skills": 0, "writing_chats": 1},
-            "applications": {"application_projects": 1, "insights": 0, "drafts": 0, "interview_sessions": 0,
+            "applications": {"application_projects": 1, "insights": 0, "drafts": 0,
                              "application_stage_events": 0},
             "ai_connection": {"provider_keys": 1, "ai_data_use_consents": 0, "usage_records": 1,
                               "has_provider_keys": true}}'::jsonb,
@@ -299,7 +280,7 @@ select is(public.delete_account('0123456789abcdef0123456789abcdef0123456789abcde
 select is(public.get_account_deletion_summary(),
           '{"career": {"experiences": 0, "educations": 0, "projects": 0, "project_deliverables": 0,
                        "skills": 0, "writing_chats": 0},
-            "applications": {"application_projects": 0, "insights": 0, "drafts": 0, "interview_sessions": 0,
+            "applications": {"application_projects": 0, "insights": 0, "drafts": 0,
                              "application_stage_events": 0},
             "ai_connection": {"provider_keys": 0, "ai_data_use_consents": 0, "usage_records": 0,
                               "has_provider_keys": false}}'::jsonb,

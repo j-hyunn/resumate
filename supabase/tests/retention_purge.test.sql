@@ -73,25 +73,6 @@ insert into public.draft_sections (id, user_id, draft_id, sort_order, section_ki
 values ('a0000000-5c00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
         'a0000000-cccc-0000-0000-000000000001', 0, 'cover_letter_question', 'q', 'with_spaces',
         'a0000000-7777-0000-0000-000000000001');
-insert into public.interview_sessions (id, user_id, application_project_id, interview_type, question_count,
-                                       data_sufficiency, status, generation_status, question_provider, question_model,
-                                       submitted_at, question_job_id, evaluation_job_id) values
-  ('a0000000-5e55-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'job', 3, 'ok', 'evaluating', 'ready', 'gemini', 'm', now(), 'a0000000-7777-0000-0000-000000000001',
-   'a0000000-7777-0000-0000-000000000001');
-insert into public.interview_questions (id, user_id, session_id, sequence, source_kind, anchor, question_text, intent,
-                                        ai_job_id) values
-  ('a0000000-9001-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   1, 'project_deep_dive', 'experience', 'q', 'i', 'a0000000-7777-0000-0000-000000000001');
-insert into public.interview_answers (id, user_id, session_id, question_id, answer_text, status) values
-  ('a0000000-9002-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'a0000000-9001-0000-0000-000000000001', '답', 'submitted');
-insert into public.answer_evaluations (id, user_id, session_id, answer_id, status, ai_job_id) values
-  ('a0000000-9003-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'a0000000-9002-0000-0000-000000000001', 'pending', 'a0000000-7777-0000-0000-000000000001');
-insert into public.session_feedbacks (id, user_id, session_id, status, ai_job_id) values
-  ('a0000000-9004-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-5e55-0000-0000-000000000001',
-   'pending', 'a0000000-7777-0000-0000-000000000001');
 
 -- Rows per (table, column) of every FK that references ai_jobs, matching p_job_id.
 create function pg_temp.job_refs(p_job_id uuid)
@@ -116,9 +97,8 @@ end;
 $$;
 
 select set_eq($$select ref from pg_temp.job_refs(null)$$,
-              array['insights.ai_job_id', 'drafts.ai_job_id', 'draft_sections.ai_job_id', 'interview_questions.ai_job_id',
-                    'answer_evaluations.ai_job_id', 'session_feedbacks.ai_job_id', 'interview_sessions.question_job_id',
-                    'interview_sessions.evaluation_job_id', 'job_descriptions.extraction_job_id'],
+              array['insights.ai_job_id', 'drafts.ai_job_id', 'draft_sections.ai_job_id',
+                    'job_descriptions.extraction_job_id'],
               'FKs referencing ai_jobs = the list this test covers (new FK: add a fixture row here)');
 select is_empty($$select ref from pg_temp.job_refs('a0000000-7777-0000-0000-000000000001') where n = 0$$,
                 'fixture: every ai_jobs FK column points at the job to purge');
@@ -129,17 +109,13 @@ select is_empty(
   'every ai_jobs FK is on delete set null (job column only)');
 create temp table ref_rows_before as
   select (select count(*) from public.insights) + (select count(*) from public.drafts)
-       + (select count(*) from public.draft_sections) + (select count(*) from public.interview_sessions)
-       + (select count(*) from public.interview_questions) + (select count(*) from public.answer_evaluations)
-       + (select count(*) from public.session_feedbacks) + (select count(*) from public.job_descriptions) as n;
+       + (select count(*) from public.draft_sections) + (select count(*) from public.job_descriptions) as n;
 
 select is(public.purge_old_ai_jobs((select v from t_now)), 2, 'jobs: 2 purged');
 select is_empty($$select ref, n from pg_temp.job_refs('a0000000-7777-0000-0000-000000000001') where n > 0$$,
                 'jobs: every referencing column of the purged job is now null');
 select is((select (select count(*) from public.insights) + (select count(*) from public.drafts)
-                + (select count(*) from public.draft_sections) + (select count(*) from public.interview_sessions)
-                + (select count(*) from public.interview_questions) + (select count(*) from public.answer_evaluations)
-                + (select count(*) from public.session_feedbacks) + (select count(*) from public.job_descriptions)),
+                + (select count(*) from public.draft_sections) + (select count(*) from public.job_descriptions)),
           (select n from ref_rows_before), 'jobs: no referencing result row was deleted');
 
 select results_eq($$select id::text from public.ai_jobs where user_id = 'a0000000-0000-0000-0000-000000000001'

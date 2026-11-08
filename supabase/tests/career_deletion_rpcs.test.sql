@@ -50,7 +50,7 @@ select set_config('t.c3', public.start_writing_chat('aaaaaaaa-3333-0000-0000-000
 -- ── get_deletion_impact ───────────────────────────────────────────────────
 select is(public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001'),
           '{"cascade": {"projects": 2, "project_deliverables": 0, "project_skills": 0, "writing_chats": 2},
-            "affected_results": {"by_application_project": [], "detached_interview_sessions": 0}}'::jsonb,
+            "affected_results": {"by_application_project": []}}'::jsonb,
           'experience (default delete_projects): its projects and their chats');
 select is(public.get_deletion_impact('experience', 'aaaaaaaa-1111-0000-0000-000000000001', 'delete_projects') -> 'cascade',
           '{"projects": 2, "project_deliverables": 0, "project_skills": 0, "writing_chats": 2}'::jsonb,
@@ -110,7 +110,7 @@ select is(public.delete_career_item('project_deliverable', 'aaaaaaaa-4444-0000-0
           '{"entity_type": "project_deliverable", "entity_id": "aaaaaaaa-4444-0000-0000-000000000001",
             "affiliation_mode": "delete_projects", "result_mode": "keep_results",
             "cascade": {"projects": 0, "project_deliverables": 0, "project_skills": 0, "writing_chats": 0},
-            "affected_results": {"by_application_project": [], "detached_interview_sessions": 0}}'::jsonb,
+            "affected_results": {"by_application_project": []}}'::jsonb,
           'delete project_deliverable returns the counted cascade and modes');
 select is((select status from public.projects where id = 'aaaaaaaa-3333-0000-0000-000000000004'), 'complete',
           'deleting a deliverable leaves the parent status');

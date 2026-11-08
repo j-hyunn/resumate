@@ -55,7 +55,7 @@ type Form = { title: string; body: string }
 type Preserved = { form: Form; applied: AppliedDeliverableProposal[] } & VersionedCopy
 
 /** S-44 G-2 안내 1줄 (CR-8, spec verbatim) */
-const NOTICE = "산출물은 인사이트·서류·면접에서 AI가 근거로 써요. 민감정보·회사 기밀·다른 사람의 개인정보는 쓰지 마세요"
+const NOTICE = "산출물은 인사이트·서류에서 AI가 근거로 써요. 민감정보·회사 기밀·다른 사람의 개인정보는 쓰지 마세요"
 // [UI-가정] spec marks the placeholder [가정]
 const BODY_PLACEHOLDER = "프로젝트에서 만든 결과물(기획서 요약, 설계 문서, 회고, 발표 내용 등)을 정리해 주세요"
 

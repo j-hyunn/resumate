@@ -76,8 +76,6 @@
   --stage-before-apply: oklch(0.62 0.01 260);
   --stage-document: oklch(0.60 0.13 240);
   --stage-assignment: oklch(0.62 0.12 200);
-  --stage-job-interview: oklch(0.55 0.16 275);
-  --stage-culture-fit-interview: oklch(0.62 0.15 350);
   --stage-closed: oklch(0.35 0.01 260);
 
   --chart-1: #15A76E;
@@ -166,8 +164,6 @@
   --stage-before-apply: oklch(0.62 0.01 260);
   --stage-document: oklch(0.70 0.11 240);
   --stage-assignment: oklch(0.72 0.10 200);
-  --stage-job-interview: oklch(0.70 0.13 275);
-  --stage-culture-fit-interview: oklch(0.72 0.13 350);
   --stage-closed: oklch(0.80 0.01 260);
 
   --chart-1: oklch(0.74 0.14 158);
@@ -259,8 +255,6 @@
   --color-stage-before-apply: var(--stage-before-apply);
   --color-stage-document: var(--stage-document);
   --color-stage-assignment: var(--stage-assignment);
-  --color-stage-job-interview: var(--stage-job-interview);
-  --color-stage-culture-fit-interview: var(--stage-culture-fit-interview);
   --color-stage-closed: var(--stage-closed);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

@@ -43,23 +43,18 @@ function rowsOf<T>(res: { data: T[] | null; error: Parameters<typeof mapDbError>
 async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProjectListItem[]): Promise<ApplicationSummary[]> {
   if (items.length === 0) return []
   const ids = items.map((i) => i.id)
-  const [projects, jds, insights, sessions, jobs] = await Promise.all([
+  const [projects, jds, insights, jobs] = await Promise.all([
     supabase.from("application_projects").select("*").in("id", ids),
     supabase.from("job_descriptions").select("id, application_project_id, company_name, position_title, extraction_status, raw_text_edited_at").in("application_project_id", ids),
     supabase.from("insights").select("id, application_project_id, status, is_latest, completed_at, updated_at, ai_job_id").in("application_project_id", ids),
-    supabase.from("interview_sessions").select("id, application_project_id, status, interview_type, answered_count, question_count, generation_status, last_activity_at, completed_at, updated_at").in("application_project_id", ids),
     supabase.from("ai_jobs").select(FEATURE_JOB_COLUMNS).in("application_project_id", ids).order("created_at", { ascending: true }),
   ])
-  const sessionRows = rowsOf(sessions)
-  const questions = sessionRows.length ? rowsOf(await supabase.from("interview_questions").select("id, session_id").in("session_id", sessionRows.map((s) => s.id))) : []
   const projectRows = rowsOf(projects) as unknown as ApplicationProject[]
   const db = {
     application_projects: projectRows,
     job_descriptions: rowsOf(jds),
     insights: rowsOf(insights),
     drafts: [],
-    interview_sessions: sessionRows,
-    interview_questions: questions,
     ai_jobs: rowsOf(jobs),
   } as unknown as MockDb
   return items.flatMap((item) => {
@@ -72,7 +67,6 @@ async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProje
         job_description: summary.job_description && { ...summary.job_description, extraction_status: item.extractionStatus },
         insight_state: item.progress.insight,
         draft_count: item.progress.draftCount,
-        interview_session_count: item.progress.interviewCount,
       },
     ]
   })

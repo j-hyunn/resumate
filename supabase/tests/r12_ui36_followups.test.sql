@@ -3,7 +3,7 @@
 -- QA fix (QA-02, QA-03): Gemini paid / inactive Gemini free key, greetings through the start RPCs, UX v5.13 wording.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 -- 1. policy_versions 2026-11-05 (no reconsent) is the latest effective version of each type
 -- R13 added policy_type 'ai_data_use' with the same version string; this assertion stays about the R12 three.
@@ -14,14 +14,14 @@ select is((select array_agg(policy_type order by policy_type)
              from (select distinct on (policy_type) policy_type, version
                      from public.policy_versions
                     where effective_at <= now() and policy_type <> 'ai_data_use'
-                    order by policy_type, effective_at desc) latest
-            where version = '2026-11-05'),
-          array['cross_border_transfer', 'terms'], '2026-11-05 is still current for 약관·국외 이전');
--- 처리방침만 2026-11-08로 개정됐다 (UI42-7, 20261113002900)
-select is((select version from public.policy_versions
-            where policy_type = 'privacy' and effective_at <= now()
-            order by effective_at desc limit 1),
-          '2026-11-08', 'privacy is current at 2026-11-08');
+                    order by policy_type, effective_at desc, version collate "C" desc) latest
+            where version = '2026-11-08'),
+          array['cross_border_transfer', 'terms'],
+          '2026-11-08 is current for 약관·국외 이전 (R14, RM-1)');
+-- 처리방침: 2026-11-08 (UI42-7, 20261113002900) 뒤 같은 시행일의 2026-11-08.1 (R14) — 동률은 버전 문자열로
+select is(private.current_policy_version('privacy'), '2026-11-08.1', 'privacy is current at 2026-11-08.1');
+select is(private.current_policy_version('ai_data_use'), '2026-11-08.1', 'ai_data_use is current at 2026-11-08.1');
+select is(private.current_policy_version('terms'), '2026-11-08', 'terms is current at 2026-11-08');
 
 -- 2. default draft titles (D-UX-23)
 select ok(private.draft_default_title('cover_letter') like '자소서 문항 답변 (____-__-__)', 'cover_letter default title');

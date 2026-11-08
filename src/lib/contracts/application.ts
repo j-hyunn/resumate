@@ -183,21 +183,6 @@ export const SetApplicationOutcomeInput = z.object({
 });
 export type SetApplicationOutcomeInput = z.input<typeof SetApplicationOutcomeInput>;
 
-export type InterviewPrompt = {
-  interviewType: "job" | "culture_fit";
-  /** C-14 "이어서 쓰기": this project's in-progress session (any type, at most one); null when none. */
-  inProgressSessionId: string | null;
-  /** S8: "작성 중인 면접이 있어요({유형}, n/N 작성)". Null when none. */
-  inProgressSession: {
-    sessionId: string;
-    interviewType: "job" | "culture_fit";
-    answeredCount: number;
-    questionCount: number;
-    generationStatus: "generating" | "ready" | "failed";
-    lastActivityAt: string | null;
-  } | null;
-};
-
 export type StageChangeResult = {
   applicationProjectId: string;
   stage: ApplicationStage;
@@ -206,10 +191,8 @@ export type StageChangeResult = {
   changed: boolean;
 };
 
-export type MoveApplicationStageResult = StageChangeResult & {
-  /** C-14 popup data when moved into an interview column; the screen picks the no-key variant itself. */
-  interviewPrompt: InterviewPrompt | null;
-};
+/** RPC move_application_stage result (R14 RM-2: stage fields only). */
+export type MoveApplicationStageResult = StageChangeResult;
 
 // ---------- reads (S-13 / S-39 / S-31 / S-15) ----------
 
@@ -223,15 +206,12 @@ export type ListApplicationProjectsInput = z.input<typeof ListApplicationProject
 export const INSIGHT_PROGRESS = ["none", "generating", "ready"] as const;
 
 /**
- * Feature progress per project (S-13 기능 진행, S-39 카드). S5 has no result
- * tables yet: fixed `none / 0 / 0 / false`; S6–S8 fill it (extension point
- * `loadProgress` in services/application/read.ts).
+ * Feature progress per project (S-13 기능 진행, S-39 카드), filled by
+ * `loadProgress` in services/application/read.ts.
  */
 export type ApplicationProgress = {
   insight: (typeof INSIGHT_PROGRESS)[number];
   draftCount: number;
-  interviewCount: number;
-  interviewInProgress: boolean;
 };
 
 type NameFields = {

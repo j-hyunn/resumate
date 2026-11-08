@@ -212,7 +212,6 @@ const GATE_FEATURE_LABEL: Record<string, string> = {
   insight: "인사이트",
   career_description: "경력기술서",
   cover_letter: "자소서 문항 답변", // U36-6 (UX v5.14): "자기소개서" is the application project (CR-23)
-  job_interview: "직무 면접",
 };
 
 const SLOT_LABEL: Record<string, string> = {

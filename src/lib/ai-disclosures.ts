@@ -63,8 +63,8 @@ export const DISCLOSURE_FACTS: Record<AiProviderName, Record<ConnectionTier, Dis
   openai: { free: OPENAI, paid: OPENAI },
 }
 
-/** C-21 "전송되는 데이터" — D-DM-12 (a): includes unsaved form content (OD-L2) */
-export const SENT_DATA_ITEMS = ["커리어 데이터(작성 중인(저장하지 않은) 내용 포함)", "공고 원문", "자소서 메모", "면접 답변", "AI 작성 대화"] as const
+/** C-21 "전송되는 데이터" — D-DM-12 (a): includes unsaved form content (OD-L2); (v5.19, RM-1) no 면접 답변 */
+export const SENT_DATA_ITEMS = ["커리어 데이터(작성 중인(저장하지 않은) 내용 포함)", "공고 원문", "자소서 메모", "AI 작성 대화"] as const
 
 /**
  * R-OD-15: the free-tier data-use sentence, the emphasized notice and its checkbox apply only where the

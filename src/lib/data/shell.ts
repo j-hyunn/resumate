@@ -3,7 +3,6 @@
  */
 import type { AiProviderName } from "@/types/db"
 import { mockRequest } from "@/lib/mock/store"
-import { hasNewResult } from "./interviews"
 import { previewOr } from "./source"
 import { isAppError } from "@/lib/contracts/errors"
 import { requireUser } from "@/server/auth/session"
@@ -64,10 +63,6 @@ export interface ShellBadges {
   career_active_chat: boolean
   /** 자기소개서 관리: 진행 중 AI 작업 수 */
   applications_running_jobs: number
-  /** 모의 면접: 작성 중 세션 수 */
-  interviews_in_progress: number
-  /** 모의 면접: 새 채점 결과 수 (A9: submitted + completed | evaluation_failed + result_viewed_at null) */
-  interviews_new_results: number
 }
 
 export async function getShellBadges(): Promise<ShellBadges> {
@@ -83,8 +78,6 @@ export async function getShellBadges(): Promise<ShellBadges> {
             j.job_type !== "jd_extraction" &&
             j.job_type !== "writing_chat_turn",
         ).length,
-        interviews_in_progress: db.interview_sessions.filter((s) => s.status === "in_progress").length,
-        interviews_new_results: db.interview_sessions.filter(hasNewResult).length,
       }
     },
     async () => {
@@ -92,8 +85,6 @@ export async function getShellBadges(): Promise<ShellBadges> {
       return {
         career_active_chat: rows.activeChat,
         applications_running_jobs: rows.runningApplicationJobs,
-        interviews_in_progress: rows.sessions.filter((s) => s.status === "in_progress").length,
-        interviews_new_results: rows.sessions.filter((s) => hasNewResult(s as Parameters<typeof hasNewResult>[0])).length,
       }
     },
   )

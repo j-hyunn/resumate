@@ -13,7 +13,6 @@ import type {
   DraftSection,
   DraftSectionSource,
   Insight,
-  InterviewSession,
   JdRequirement,
   JdRawTextRefusalCode,
   JobDescription,
@@ -26,8 +25,7 @@ import { newId, USER_ID } from "@/lib/mock/ids"
 import { activeKey, assertAiRunnable, createMockJob, MockAiError } from "@/lib/mock/ai"
 import { consentRequired } from "@/lib/mock/consent"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
-import { effectiveGenerationStatus, savedQuestionCount } from "@/lib/mock/grading"
-import { STAGE_ORDER, countsAsDraft, countsAsInterview, defaultApplicationName } from "./labels"
+import { STAGE_ORDER, countsAsDraft, defaultApplicationName } from "./labels"
 import { resolveAiFeatureStatus, type AiFeatureStatusView } from "./ai-feature-status"
 import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { refreshApplicationJobs } from "./ai-jobs"
@@ -53,23 +51,12 @@ export interface ApplicationSummary extends ApplicationProject {
   insight_state: "none" | "generating" | "ready"
   /** 서류 초안 수: 경력기술서 `composing` 제외 (S-17, Q53-7) */
   draft_count: number
-  /** 면접 세션 수: 질문 0개인 그만둔 세션 제외 (Q53-9) */
-  interview_session_count: number
-  in_progress_session:
-    | (Pick<InterviewSession, "id" | "interview_type" | "answered_count" | "question_count" | "last_activity_at"> & {
-        /** S-20 배너: 실효 generation_status (`generating`인데 작업이 끝난 행 = failed) */
-        effective_generation_status: InterviewSession["generation_status"]
-        saved_question_count: number
-      })
-    | null
   /** running async AI jobs on this project (C-03 축약형) */
   running_job_ids: string[]
   /** running AI-02 job (생성 중 incl. 재생성), else null — S-13 인사이트 칸 (A3 UQ-74) */
   insight_job_id: string | null
   /** v5.3 C-03 진행 표시 우선순위 — insight (S-13 / S-31 / S-39 / S-16): <AiFeatureStatus status={…} /> */
   insight_status: AiFeatureStatusView
-  /** v5.3 C-03 진행 표시 우선순위 — interview (latest session's question / grading job) */
-  interview_status: AiFeatureStatusView
 }
 
 /**
@@ -158,11 +145,11 @@ function completeJdExtraction(db: MockDb, jd: JobDescription, job: AiJob) {
 
 /**
  * D-30 / UQ-232: "요건 추출 먼저" as one server-side flow. Before an AI feature that needs
- * requirements (인사이트·서류·면접), a JD whose extraction has not succeeded (created without a key,
+ * requirements (인사이트·서류), a JD whose extraction has not succeeded (created without a key,
  * or failed) is extracted **inline** (AI-01, ~1.5 s mock) and only then does the caller create its
  * own job. Checks the key first (throws MockAiError before any change). No-op when already extracted.
  * `failed`: mock_controls.next_jd_extraction_failure — the `prepare` step failed with that cause, so the
- * caller's job ends there the same way, nothing saved (`fail_at_prepare`; S-16, S-20 → C-20 "입력 원인
+ * caller's job ends there the same way, nothing saved (`fail_at_prepare`; S-16 → C-20 "입력 원인
  * 실패의 이동", Q53-9).
  */
 export async function ensureJdRequirementsInDb(db: MockDb, applicationProjectId: string): Promise<{ ran: boolean; failed: AiErrorCode | null }> {
@@ -191,8 +178,6 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
   if (opts.advanceMock) advanceJdExtraction(db, ap.id)
   const jd = db.job_descriptions.find((j) => j.application_project_id === ap.id) ?? null
   const insights = db.insights.filter((i) => i.application_project_id === ap.id)
-  const sessions = db.interview_sessions.filter((s) => s.application_project_id === ap.id)
-  const inProgress = sessions.find((s) => s.status === "in_progress") ?? null
   return {
     ...ap,
     job_description: jd && {
@@ -207,16 +192,6 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
         ? "generating"
         : "none",
     draft_count: db.drafts.filter((d) => d.application_project_id === ap.id && countsAsDraft(d)).length,
-    interview_session_count: sessions.filter((s) => countsAsInterview(s, savedQuestionCount(db, s.id))).length,
-    in_progress_session: inProgress && {
-      id: inProgress.id,
-      interview_type: inProgress.interview_type,
-      answered_count: inProgress.answered_count,
-      question_count: inProgress.question_count,
-      last_activity_at: inProgress.last_activity_at,
-      effective_generation_status: effectiveGenerationStatus(db, inProgress),
-      saved_question_count: savedQuestionCount(db, inProgress.id),
-    },
     running_job_ids: db.ai_jobs
       .filter((j) => j.application_project_id === ap.id && (j.status === "queued" || j.status === "running") && j.job_type !== "jd_extraction")
       .map((j) => j.id),
@@ -225,7 +200,6 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
         (j) => j.application_project_id === ap.id && j.job_type === "insight" && (j.status === "queued" || j.status === "running"),
       )?.id ?? null,
     insight_status: insightFeatureStatus(db, ap.id),
-    interview_status: interviewFeatureStatus(db, ap.id),
   }
 }
 
@@ -253,21 +227,6 @@ export function insightFeatureStatus(db: MockDb, applicationProjectId: string): 
 /** C-03 / 04 §2.6.1 지난 실패 표시: failures that ended before this were about the previous 공고 원문 */
 function rawTextEditedAt(db: MockDb, applicationProjectId: string): string | null {
   return db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)?.raw_text_edited_at ?? null
-}
-
-export function interviewFeatureStatus(db: MockDb, applicationProjectId: string): AiFeatureStatusView {
-  const sessions = db.interview_sessions
-    .filter((s) => s.application_project_id === applicationProjectId && s.status !== "abandoned")
-    .sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at))
-  const session = sessions[0]
-  if (!session) return resolveAiFeatureStatus({ job: null, resultAt: null })
-  const done = sessions.find((s) => s.status === "completed")
-  return resolveAiFeatureStatus({
-    job: latestJob(db, applicationProjectId, ["interview_questions", "interview_evaluation"], session.id),
-    resultAt: done ? (done.completed_at ?? done.updated_at) : null,
-    resultPending: session.generation_status === "generating" || session.status === "evaluating",
-    failuresAfter: rawTextEditedAt(db, applicationProjectId),
-  })
 }
 
 export interface ListApplicationsOptions {
@@ -459,26 +418,7 @@ export async function moveApplicationStage(
       if (opts?.fail) throw new MoveFailedError()
       const ap = db.application_projects.find((a) => a.id === id)
       if (!ap) throw new MoveFailedError()
-      const promptFor = (stage: ApplicationStage): MoveApplicationStageResult["interview_prompt"] => {
-        if (stage !== "job_interview" && stage !== "culture_fit_interview") return null
-        const inProgress = db.interview_sessions.find((s) => s.application_project_id === id && s.status === "in_progress")
-        return {
-          interview_type: stage === "job_interview" ? "job" : "culture_fit",
-          in_progress_session_id: inProgress?.id ?? null,
-          // v4.2: details for C-14 (any interview type — one in-progress session per application)
-          in_progress_session: inProgress
-            ? {
-                session_id: inProgress.id,
-                interview_type: inProgress.interview_type,
-                answered_count: inProgress.answered_count,
-                question_count: inProgress.question_count,
-                generation_status: inProgress.generation_status,
-                last_activity_at: inProgress.last_activity_at,
-              }
-            : null,
-        }
-      }
-      if (ap.stage === toStage) return clone({ application_project: ap, interview_prompt: null })
+      if (ap.stage === toStage) return clone({ application_project: ap })
       const now = new Date().toISOString()
       const fromStage = ap.stage
       const fromOutcome = ap.stage_outcome
@@ -496,7 +436,7 @@ export async function moveApplicationStage(
         to_outcome: ap.stage_outcome,
         created_at: now,
       })
-      return clone({ application_project: ap, interview_prompt: promptFor(toStage) })
+      return clone({ application_project: ap })
     },
     () => realMoveApplicationStage(id, toStage, outcome),
   )
@@ -572,11 +512,9 @@ function jdRawTextLock(db: MockDb, jd: JobDescription): JdRawTextRefusalCode | n
   // 4. a failed extraction failed for an input cause (job gone after 90 days → cause unknown)
   if (failed && (!job || job.job_type !== "jd_extraction" || job.status !== "failed" || !isInputCausedJdFailure(job.error_code))) return "jd_failure_not_input"
   // 5. nothing was built from this text
-  const sessionIds = db.interview_sessions.filter((s) => s.application_project_id === apId).map((s) => s.id)
   const draftIds = db.drafts.filter((d) => d.application_project_id === apId).map((d) => d.id)
   const hasResults =
     db.insights.some((i) => i.application_project_id === apId && i.status === "ready") ||
-    db.interview_questions.some((q) => sessionIds.includes(q.session_id)) ||
     db.draft_sections.some((s) => draftIds.includes(s.draft_id) && s.ai_content) ||
     db.evidence_links.some((e) => e.application_project_id === apId && (e.source_type === "jd_requirement" || e.source_type === "jd_sentence"))
   return hasResults ? "jd_has_results" : null

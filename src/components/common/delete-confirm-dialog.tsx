@@ -29,7 +29,6 @@ import {
   getApplicationDeletionImpactAction,
   getDeletionImpactAction,
   getDraftDeletionImpactAction,
-  getInterviewSessionDeletionImpactAction,
   getRunningAiJobCountAction,
 } from "@/lib/data/actions"
 import { AI_PROVIDER_LABELS, AI_PROVIDERS } from "@/lib/mock/ai-providers"
@@ -54,7 +53,6 @@ export type DeleteTarget =
   | { kind: "application_project"; entity_id: string; label: string }
   /** K-3 (v5.13): the title follows the draft type; `label` = the draft's name */
   | { kind: "draft"; entity_id: string; label: string; draft_type: "career_description" | "cover_letter" }
-  | { kind: "interview_session"; entity_id: string; label: string }
   /** v5 C-05 "API 키 삭제" (S-40, D-36, NFR-KEY-06·09). `entity_id` = provider */
   | { kind: "api_key"; entity_id: AiProviderName; label?: string; is_active: boolean }
 
@@ -81,8 +79,6 @@ function targetName(t: DeleteTarget): string {
       return "자기소개서" // K-2 (v5.13, CR-23)
     case "draft":
       return t.draft_type === "cover_letter" ? "자소서 문항 답변" : "경력기술서" // K-3 (v5.13, D-UX-23)
-    case "interview_session":
-      return "면접 세션"
     case "api_key":
       return "API 키"
   }
@@ -93,7 +89,6 @@ type Impact =
   | { kind: "writing_chat"; data: DeletionImpact }
   | { kind: "application_project"; data: ApplicationDeletionImpact }
   | { kind: "draft"; data: { sections: number } }
-  | { kind: "interview_session"; data: { questions: number; answers: number } }
   | { kind: "api_key"; data: { running_jobs: number } }
 
 function CardRadio({ value, id, title, description }: { value: string; id: string; title: string; description?: string }) {
@@ -149,8 +144,6 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           return { kind: "application_project", data: await getApplicationDeletionImpactAction(target.entity_id) }
         case "draft":
           return { kind: "draft", data: await getDraftDeletionImpactAction(target.entity_id) }
-        case "interview_session":
-          return { kind: "interview_session", data: await getInterviewSessionDeletionImpactAction(target.entity_id) }
         case "api_key":
           return { kind: "api_key", data: { running_jobs: await getRunningAiJobCountAction(target.entity_id) } }
       }
@@ -208,8 +201,6 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
               ? `${applicationObjectPhrase(target.label, { quoted: true })} 삭제할까요?` // K-2 (v5.13) + U36-7 overlap rule
               : target.kind === "draft"
                 ? `'${target.label}'${objectParticle(target.label)} 삭제할까요?` // K-3 (v5.13)
-              : target.kind === "interview_session"
-                ? `'${target.label}' 면접 세션을 삭제할까요?` // K-3 (v5.13): particle fixed
               : target.kind === "api_key"
                 ? `${AI_PROVIDER_LABELS[target.entity_id]} 키를 삭제할까요? 즉시 영구 삭제되고 되돌릴 수 없어요.`
               : target.kind === "career" && target.entity_type === "project_deliverable"
@@ -255,7 +246,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
                   id="result-delete"
                   value="delete_results"
                   title="관련 결과도 함께 삭제"
-                  description="인사이트는 해당 버전, 경력기술서는 문서 전체, 자소서 문항 답변은 해당 문항의 생성 결과만(문항·글자 수·메모는 남음), 모의 면접은 세션 전체가 삭제돼요"
+                  description="인사이트는 해당 버전, 경력기술서는 문서 전체, 자소서 문항 답변은 해당 문항의 생성 결과만(문항·글자 수·메모는 남음) 삭제돼요"
                 />
               </RadioGroup>
               <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
@@ -314,9 +305,6 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
           `이 ${name}의 프로젝트 ${c.projects}개와 그 ${c.writing_chats > 0 ? `STAR·AI 대화 ${c.writing_chats}개가` : "STAR가"} 함께 삭제돼요`,
         )
     }
-    // OD-I6 / R-OD-5: completed sessions left after their 자기소개서 was deleted (0 → no line)
-    const detached = impact.data.affected_results.detached_interview_sessions
-    if (detached > 0) lines.push(`삭제된 자기소개서의 면접 기록 ${detached}개`)
     byAp = impact.data.affected_results.by_application_project
   }
   if (impact.kind === "writing_chat") {
@@ -325,11 +313,8 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
   }
   if (impact.kind === "application_project") {
     const d = impact.data
-    // K-2 / OD-I6 (v5.13): only unfinished sessions go; completed ones stay as read-only records
-    lines.push(
-      `JD·요건, 인사이트 ${d.insights}, 서류 초안 ${d.drafts}, 작성 중인 면접 ${d.interview_sessions}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`,
-    )
-    if (d.kept_interview_sessions > 0) lines.push(`끝난 모의 면접 ${d.kept_interview_sessions}개는 기록에 남아요`)
+    // K-2 (v5.13) · (v5.19, RM-1): everything under the 자기소개서 goes; spec copy verbatim
+    lines.push(`JD·요건, 인사이트 ${d.insights}, 서류 ${d.drafts}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
   }
   // K-3 (v5.13): a cover-letter draft's sections are its questions
   if (impact.kind === "draft" && target.kind === "draft")
@@ -338,8 +323,6 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
         ? `문항 ${impact.data.sections}개와 그 답변이 함께 삭제돼요`
         : "작성한 블록과 직접 고친 내용이 함께 삭제돼요",
     )
-  if (impact.kind === "interview_session")
-    lines.push(`질문 ${impact.data.questions}개와 작성한 답변 ${impact.data.answers}개가 함께 삭제돼요`)
   if (impact.kind === "api_key" && target.kind === "api_key") {
     if (impact.data.running_jobs > 0)
       lines.push(`진행 중인 AI 작업 ${impact.data.running_jobs}건은 실패로 끝나고 입력(답변·대화·문항)은 그대로 남아요`)
@@ -363,7 +346,7 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
           <ul className="list-disc space-y-1 pl-4">
             {byAp.map((ap) => (
               <li key={ap.application_project_id}>
-                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.drafts} · 면접 {ap.interview_sessions}
+                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.drafts}
               </li>
             ))}
           </ul>

@@ -277,7 +277,7 @@ export function InsightView(props: InsightViewProps) {
           <Card className="max-w-2xl gap-4 p-6">
             <h2 className="text-lg leading-7 font-semibold">이 공고에 내 커리어가 얼마나 맞는지 정리해 드려요</h2>
             <p className="text-base text-muted-foreground">
-              요건별 충족 판정, 핵심 강점, 보완점과 대응 방안, 지원 방향을 근거와 함께 보여 줘요. 인사이트 없이도 서류·면접은 바로 쓸 수 있어요
+              요건별 충족 판정, 핵심 강점, 보완점과 대응 방안, 지원 방향을 근거와 함께 보여 줘요. 인사이트 없이도 서류는 바로 쓸 수 있어요
             </p>
             {/* S-15 "이전 실패 안내" (Q53-2): extraction_status = 'pending'일 때만. 재추출 성공 뒤에는 문구 없이 버튼만 */}
             {props.rawTextEdited ? <p className="text-sm text-muted-foreground">공고를 고쳤어요. 생성하면 요건부터 다시 정리해요</p> : null}

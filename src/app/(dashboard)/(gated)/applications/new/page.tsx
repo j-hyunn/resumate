@@ -33,7 +33,7 @@ async function Screen({ searchParams }: Props) {
           { label: "자기소개서 추가" },
         ]}
       />
-      <PageHeader title="자기소개서 추가" description="공고를 붙여넣어 자기소개서를 만들어요. 이 자기소개서에서 인사이트·서류·면접을 준비할 수 있어요" />
+      <PageHeader title="자기소개서 추가" description="공고를 붙여넣어 자기소개서를 만들어요. 이 자기소개서에서 인사이트·서류를 준비할 수 있어요" />
       {state === "loading" ? (
         <FormSkeleton fields={3} />
       ) : state === "error" || state === "unauth" ? (

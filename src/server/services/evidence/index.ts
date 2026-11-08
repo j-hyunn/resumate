@@ -13,7 +13,7 @@ import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 
 /**
- * Shared C-01 evidence chip read (S6; reused by S7 drafts and S8 interviews).
+ * Shared C-01 evidence chip read (S6; reused by S7 drafts).
  *
  * Reads `evidence_links` of the given owners through the user session (RLS =
  * ownership), then looks up each source's current `updated_at` to decide the

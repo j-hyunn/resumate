@@ -3,7 +3,6 @@ import { ReadinessAiConnection } from "./ai-connection";
 import type { ProjectWritingChatSummary } from "./writing-chat";
 import {
   AFFILIATION_MODES,
-  DATA_SUFFICIENCIES,
   DELETABLE_ENTITY_TYPES,
   EDUCATION_TYPES,
   EMPLOYMENT_TYPES,
@@ -438,7 +437,6 @@ export const AffectedApplicationProject = z.object({
   insights: count,
   drafts: count,
   draft_sections: count,
-  interview_sessions: count,
 });
 
 /** RPC `get_deletion_impact` jsonb for career rows (DM §4.2). Snake_case as the RPC returns it. */
@@ -446,11 +444,6 @@ export const CareerDeletionImpact = z.object({
   cascade: DeletionCascadeCounts,
   affected_results: z.object({
     by_application_project: z.array(AffectedApplicationProject),
-    /**
-     * (R11 OD-I6, DM 2.7.2) Affected interview sessions kept after their application project was deleted
-     * (no project, so not in `by_application_project`). Screen: "삭제된 자기소개서의 면접 기록 {n}개".
-     */
-    detached_interview_sessions: count,
   }),
 });
 /**
@@ -464,13 +457,10 @@ export const WritingChatDeletionImpact = z.object({
 export type CareerDeletionImpact = z.infer<typeof CareerDeletionImpact>;
 
 /**
- * (R11 OD-I6, DM 2.7.2) `get_deletion_impact('application_project', id)` jsonb — C-05 for 자기소개서 삭제.
- * `cascade.interview_sessions` = sessions deleted with it (not `completed`; in-flight jobs get a cancel request),
- * `kept.interview_sessions` = `completed` sessions kept read-only ("끝난 모의 면접 {n}개는 기록에 남아요").
+ * `get_deletion_impact('application_project', id)` jsonb — C-05 for 자기소개서 삭제 (DM 2.7.2).
  */
 export const ApplicationProjectDeletionImpact = z.object({
-  cascade: z.object({ insights: count, drafts: count, interview_sessions: count, stage_events: count }),
-  kept: z.object({ interview_sessions: count }),
+  cascade: z.object({ insights: count, drafts: count, stage_events: count }),
 });
 export type ApplicationProjectDeletionImpact = z.infer<typeof ApplicationProjectDeletionImpact>;
 export type WritingChatDeletionImpact = z.infer<typeof WritingChatDeletionImpact>;
@@ -534,8 +524,6 @@ export const DataReadiness = z.object({
   features: z.object({
     insight: ReadinessFeature,
     draft: ReadinessFeature,
-    job_interview: ReadinessFeature,
-    culture_fit_interview: z.object({ ready: z.boolean(), data_sufficiency: z.enum(DATA_SUFFICIENCIES) }),
   }),
   /** DM §6 v4: AI connection state (F-AI-06 lock). */
   ai_connection: ReadinessAiConnection,

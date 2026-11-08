@@ -27,7 +27,6 @@ const db = {
   achievements: [],
   skills: [],
   jd_requirements: [],
-  interview_answers: [],
   draft_sections: [],
 } as unknown as MockDb;
 

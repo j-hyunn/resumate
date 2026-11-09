@@ -1,6 +1,6 @@
 ---
 name: ai-pipeline-impl
-description: "Guide for implementing Resumate AI features in code on the BYOK provider adapter layer (OpenAI / Gemini / Claude with the user's own key): tier → model mapping, canonical JSON schema → per-provider structured output, stream/usage/error normalization to the 7 failure causes, prompts with prompt_version, Career Context Pack and JD context builders with aliases (EXP-n, PRJ-n, DET-n, Sn, REQ-n), evidence validation V-1 … V-9 and number guard, placeholder rules, evidence_links storage mapping, input_hash reuse, prompt caching, streaming JSON → SSE block events, key verification calls, and fixture-based tests. Use whenever implementing or fixing AI-01 … AI-12 pipelines, provider adapters, prompts, validators, or LLM output parsing. Korean triggers: AI 기능 구현, 공급자 어댑터, 프롬프트 구현, 근거 검증 구현, LLM 호출 코드, 구조화 출력, 스트리밍 파싱, AI 작성 대화 구현, 면접 평가 구현, 키 검증 호출. Not for planning-stage AI feature design (use ai-feature-spec)."
+description: "Guide for implementing Resumate AI features in code on the BYOK provider adapter layer (OpenAI / Gemini / Claude with the user's own key): tier → model mapping, canonical JSON schema → per-provider structured output, stream/usage/error normalization to the 7 failure causes, prompts with prompt_version, Career Context Pack and JD context builders with aliases (EXP-n, PRJ-n, DET-n, Sn, REQ-n), evidence validation V-1 … V-9 and number guard, placeholder rules, evidence_links storage mapping, input_hash reuse, prompt caching, streaming JSON → SSE block events, key verification calls, and fixture-based tests. Use whenever implementing or fixing AI-01 … AI-12 pipelines, provider adapters, prompts, validators, or LLM output parsing. Korean triggers: AI 기능 구현, 공급자 어댑터, 프롬프트 구현, 근거 검증 구현, LLM 호출 코드, 구조화 출력, 스트리밍 파싱, AI 작성 대화 구현, 자기소개서 작성 대화 구현, 키 검증 호출. Not for planning-stage AI feature design (use ai-feature-spec)."
 ---
 
 # AI Pipeline Implementation
@@ -50,7 +50,7 @@ Run in this order, after parsing and before anything is stored or streamed as fi
 | V-2 | `field` allowed for its `source_type` | table from C-3 as a typed constant |
 | V-3 | `quote` is a substring of the source field after normalization | normalize whitespace + punctuation; partial-match threshold is a named constant (`[가정]` 70%); on adjust set `quote_adjusted: true` |
 | V-8 | `learnings` evidence only in C-9 allowed uses, never the sole evidence | runs before V-4 so the count is right |
-| V-7 | evidence within the selected sources (AI-03/AI-04) | needs the selection set as input |
+| V-7 | evidence within the selected sources (AI-04) | needs the selection set as input |
 | V-4 | items with 0 evidence: drop / downgrade to `no_evidence` / mark `evidence_check_needed` per item kind | item kind decides the action |
 | V-5 | every number in generated text exists in pack/JD/answers or the server-computed allowed list | one regeneration request per block, then replace with `[수치 확인 필요]`; numbers only in `learnings` don't count |
 

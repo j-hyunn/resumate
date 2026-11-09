@@ -1,6 +1,6 @@
 ---
 name: ux-flow-spec
-description: "Guide for writing and revising Resumate information architecture (IA), user flows, and screen specs (text wireframes). Defines flows and states (empty, AI loading, error) for onboarding, experience/project entry, JD registration and insights, career chat, and AI mock interview screens. Use for user flows, screen design, IA, sitemaps, screen lists, and UX flow revisions. Korean triggers: 유저 플로우, 화면 설계, 화면 명세, IA, 사이트맵, 화면 목록, UX 흐름 수정. Not for visual design (Figma, colors, component styling — use ui-design-system) or screen code (use ui-implementation)."
+description: "Guide for writing and revising Resumate information architecture (IA), user flows, and screen specs (text wireframes). Defines flows and states (empty, AI loading, error) for onboarding, experience/project entry, JD registration and insights, career chat, and 자기소개서 writing screens. Use for user flows, screen design, IA, sitemaps, screen lists, and UX flow revisions. Korean triggers: 유저 플로우, 화면 설계, 화면 명세, IA, 사이트맵, 화면 목록, UX 흐름 수정. Not for visual design (Figma, colors, component styling — use ui-design-system) or screen code (use ui-implementation)."
 ---
 
 # UX Flows & Screen Specs
@@ -17,11 +17,11 @@ The goal: an implementer can read only this document and know which screens exis
 
 ## Domain design points
 
-- **Onboarding = the biggest drop-off point.** P2 and P3 don't work on an empty profile. Design a path where the user sees first value with minimal input (today: career add → project → Resumate AI chat fills STAR → back to the feature through the data gate C-09/C-10), and state the number of steps. AI needs a connected key, so every AI entry point also defines its locked (C-18), consent (C-21), and provider-error (C-20) states.
-- **AI wait time.** Generating insights and interview feedback takes seconds to tens of seconds. State the response mode on every AI screen: streaming (chat, feedback text) / progress then complete (structured analysis) / background + notification (long jobs like resume parsing).
+- **Onboarding = the biggest drop-off point.** P2 doesn't work on an empty profile. Design a path where the user sees first value with minimal input (today: career add → project → Resumate AI chat fills STAR → back to the feature through the data gate C-09/C-10), and state the number of steps. AI needs a connected key, so every AI entry point also defines its locked (C-18), consent (C-21), and provider-error (C-20) states.
+- **AI wait time.** Generating insights and 자기소개서 drafts takes seconds to tens of seconds. State the response mode on every AI screen: streaming (chat, feedback text) / progress then complete (structured analysis) / background + notification (long jobs like resume parsing).
 - **Showing evidence.** Insight and feedback screens need a place to show "the experience items / JD sentences this judgment is based on". It's the core of trust.
 - **Editing AI output.** Users must be able to review and edit experience data that the AI structured. State the save model per screen — page save ("저장하기", AI [반영] only fills the form), section save, or autosave — because the UI implements exactly what the screen says.
-- **Mock interview sessions.** Define whether a session can be resumed after leaving mid-way, and the post-session report screen.
+- **자기소개서 writing.** Questions are set first (max 5, user char limits), then the writing page (S-46) opens with the Resumate AI panel. The canonical body lives outside the chat (CL-9) — say where each edit is saved and what survives deleting a chat.
 
 ## Document template
 

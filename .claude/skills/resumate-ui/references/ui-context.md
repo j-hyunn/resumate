@@ -22,7 +22,7 @@ Product context for the whole service: `.claude/skills/resumate-planning/referen
 ## Product shape the UI must know
 
 - **BYOK.** AI runs on the user's own key for one active provider (OpenAI / Gemini / Claude). There are no service usage limits, no "N회 남음", no "사용량이 차감되지 않았습니다". Failures are shown by the 7 provider error causes (AI spec C-11, UX C-20); the usage meter (S-42) shows tokens and estimated cost only.
-- **Menu (L-01, fixed order):** 커리어 / 자기소개서 관리 / 모의 면접 / 지원 현황. Sign-in lands on 커리어. Inside 자기소개서 관리, an application project is called **"자기소개서"** on screen (CR-23). Code folders still use `applications/` — routes don't follow menu labels.
+- **Menu (L-01, fixed order):** 커리어 / 자기소개서 관리 / 지원 현황 (모의 면접 removed, RM-1). Sign-in lands on 커리어. Inside 자기소개서 관리, an application project is called **"자기소개서"** on screen (CR-23). Code folders still use `applications/` — routes don't follow menu labels.
 - **Career (v5.5+):** S-08 is a two-column list (by start year) + detail. Project detail (S-10) and deliverable detail (S-44) are full pages in the L-02 shell with a "Resumate AI" side panel and page-level "저장하기" — [반영] only fills the form. S-11 정량 성과, S-35 상세 내용, S-36 AI 작성 대화 are 폐기 (redirects only).
 - **Settings (S-24)** is a dialog only (shadcn sidebar-13), opened from the shell or by URL `?settings={section}[&provider=]`. There is no settings page except `/settings/withdraw` (S-25) and the focus screen `/settings/ai/connect` (S-41).
 
@@ -53,10 +53,8 @@ src/
     (dashboard)/           L-01 sidebar shell (sidebar-08 inset, icon rail when collapsed)
       (gated)/             signed-in screens behind the consent gate
         career/            A2 — S-08 list+detail, S-04, S-09, S-34, S-12 (+ redirects of 폐기 screens)
-        applications/      A3 (menu 자기소개서 관리) — S-13, S-14, S-31, S-15, S-16, S-17~S-19
-          [id]/interview/  A4 — S-20, S-33, S-22 (nested under the application project)
-        interviews/        A4 — S-37
-        board/             A4 — S-39
+        applications/      A3 (menu 자기소개서 관리) — S-13, S-14, S-31, S-15, S-16, S-17~S-19 (planned: S-13 + add modal + S-46 with tabs; S-31·S-17·S-19 removed — decisions 4.23)
+        board/             A4 — S-39 (4 stages, RM-2)
       settings/withdraw/   A1 — S-25
       dev/states           state gallery (development only)
     (page)/                L-02 full-page shell (logo · [Resumate AI] · 저장하기 · account; no sidebar)
@@ -69,7 +67,7 @@ src/
     ui/                    shadcn primitives (generated; edit only to theme)
     common/                cross-area C-xx components and ST-xx state views (foundation owns)
       shell/               L-01 / L-02 parts, settings dialog (foundation owns)
-    career/ applications/ interviews/ board/ account/   area-specific components
+    career/ applications/ board/ account/   area-specific components
   lib/
     data/                  data layer: the only module screens import for reads/writes (see "Data layer")
     mock/                  fixtures + fake AI, used by previews and tests only
@@ -89,11 +87,11 @@ Screens are built in areas. Each area has one owner per run, and an owner only e
 
 | Area | Screens | Area-specific components |
 |------|---------|--------------------------|
-| A0 Foundation | L-01 shell, L-02 page shell, S-28 error, settings dialog frame, common C-01~C-10, C-12~C-14 (board stage menu, outcome dialog, interview popup), C-17 score display, C-18~C-21 (AI lock, provider badge, AI error notice, data-use consent), the AI run button, ST-* state views, data layer helpers, `types/db.ts`, `lib/routes.ts` | — |
+| A0 Foundation | L-01 shell, L-02 page shell, S-28 error, settings dialog frame, common C-01~C-10, C-12·C-13 (board stage menu, outcome dialog), C-18~C-21 (AI lock, provider badge, AI error notice, data-use consent), the AI run button, ST-* state views, data layer helpers, `types/db.ts`, `lib/routes.ts` | — |
 | A1 Account | S-01, S-02, S-03, S-24 (dialog sections), S-25, S-30, S-40~S-42 (AI connection, connect focus screen, usage meter) | — |
 | A2 Career | S-04, S-08, S-09, S-34, S-10, S-12, S-43 (독립 프로젝트), S-44 | C-15 source-utterance chip, C-22~C-25 career add/edit pieces, Resumate AI panel |
-| A3 Applications (자기소개서 관리) | S-13, S-14, S-31, S-15, S-16, S-17, S-18, S-19 | C-11 sources used |
-| A4 Interview & board | S-20, S-33, S-22, S-37, S-39 | C-16 자기소개서 picker dialog |
+| A3 Applications (자기소개서 관리) | S-13, S-14, S-31, S-15, S-16, S-17, S-18, S-19 → planned S-13, add modal, S-46 (tabs 자소서 / 채용 공고 / 인사이트) — decisions 4.23 | C-11 sources used |
+| A4 Board | S-39 | — |
 
 The screen list grows with the planning documents; when `02-user-flows.md` adds an ID, the leader assigns it to an area in the run brief and updates this table. A0 must be done (and pass QA) before A1–A4 start. A1–A4 are independent of each other and can run in parallel.
 

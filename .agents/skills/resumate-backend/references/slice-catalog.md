@@ -16,8 +16,8 @@ Section pointers are into `docs/planning/`; `DM §n` = `04-data-model.md`, `AI �
 | **S4 AI writing chat** | `writing_chats` (`message_count <= 40`, no usage event), `writing_chat_messages` (assistant rows carry provider meta); RPCs `append_writing_chat_message`, `apply_structured_draft_patch`, `set_writing_chat_affiliation`, `save_writing_chat`, `hand_off_writing_chat`; turn Route Handler (SSE; free tier: reply then extract, sequential); AI-12 extract + reply; `source_writing_chat_id` composite FKs | S3b | DM §2.5, §3.3–3.4; AI AI-12; DM §7 rows for 대화 | all |
 | **S5 application projects & JD** | `application_projects`, `application_stage_events`, `job_descriptions` (`extraction_provider` / `extraction_model`, `pending` / `default` names without a key), `jd_requirements`; `move_application_stage`, `set_application_outcome`; AI-01 JD requirement extraction (sync; right after creation with a key, otherwise on the first AI feature run, D-30); `application_project_id` FKs on `ai_jobs` / `evidence_links` / `ai_usage_records` | S3b | DM §2.6, A.5–A.7; AI AI-01 | db, api, ai |
 | **S6 insights** | `insights` (+ provider meta); AI-02 (async job: match → synthesize → validate; free tier sequential batches) | S5 | DM §2.7, A.8; AI AI-02 | ai, api, db |
-| **S7 documents** | `drafts`, `draft_sections` (+ provider meta), `draft_section_sources`; AI-11 ranking (sync), AI-03 career description (stream), AI-04 cover letter per question (stream) | S5 | DM A.9–A.11; AI §3 | ai, api, db |
-| **S8 mock interview** | `interview_sessions` (+ `question_provider` / `question_model` / `evaluation_provider` / `evaluation_model`), `interview_questions`, `interview_answers`, `answer_evaluations`, `session_feedbacks`; AI-05 (async), AI-06 + AI-07 (async on submit; free tier one answer per step); score placeholder until D-14 | S5 | DM A.12–A.13, §2.7; AI §4 | ai, api, db |
+| **S7 documents** | `drafts`, `draft_sections` (+ provider meta), `draft_section_sources`; AI-11 ranking (sync), AI-03 career description (stream), AI-04 cover letter per question (stream) — original plan; CF-1 removed AI-03/AI-11 and decisions 4.23 replaces the drafts trio with `application_documents` + the S-46 chat (DM 11.8·11.10) | S5 | DM A.9–A.11; AI §3 | ai, api, db |
+| ~~**S8 mock interview**~~ (removed — RM-1, R14 dropped the tables) | `interview_sessions` (+ `question_provider` / `question_model` / `evaluation_provider` / `evaluation_model`), `interview_questions`, `interview_answers`, `answer_evaluations`, `session_feedbacks`; AI-05 (async), AI-06 + AI-07 (async on submit; free tier one answer per step); score placeholder until D-14 | S5 | DM A.12–A.13, §2.7; AI §4 | ai, api, db |
 | **S9 account & retention** | `get_account_deletion_summary` (incl. keys, consents, usage records), account deletion (D-11 immediate, keys destroyed at once), 90-day cleanup for unlinked writing chats, `ai_jobs` 90-day and `ai_usage_records` 13-month retention (Vercel Cron) | S4 | DM §4.3–4.4, §7 (정기 배치), NFR-KEY-06 | db, api |
 
 ## Revision slices (R-n)
@@ -42,7 +42,7 @@ The initial wiring of all UI areas to the real backend ran as W0–W5 (2026-11-0
 | S3a, S3b | AI connection settings (key registration, active provider, consent), usage meter, AI lock states and F-AI-08 failure notices on every AI entry point |
 | S2, S4, R4, R5 | A2 career (R4/R5: S-08, S-10 project page, S-43, S-44 deliverable page + AI panel) |
 | S5, S6, S7 | A3 applications, A4 board |
-| S8 | A4 interview |
+| ~~S8~~ | ~~A4 interview~~ (removed, RM-1) |
 | S9 | A1 account (settings, deletion) |
 
 Should-priority items (career chat AI-09, STAR polish AI-08, retake, stage history) are added as extra slices only when the user asks.

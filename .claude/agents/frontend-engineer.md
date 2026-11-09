@@ -1,6 +1,6 @@
 ---
 name: frontend-engineer
-description: "Resumate frontend engineer. Implements screens from the screen spec (S-xx, L-01, C-xx, ST-xx) in Next.js App Router + Tailwind + shadcn/ui, through the src/lib/data layer (real Server Actions, mock branch for ?state= previews). Spawned for the foundation (tokens, L-01/L-02 shells, common components, data-layer helpers, types) and then once per screen area (account, career, 자기소개서 관리, interview & board), possibly in parallel."
+description: "Resumate frontend engineer. Implements screens from the screen spec (S-xx, L-01, C-xx, ST-xx) in Next.js App Router + Tailwind + shadcn/ui, through the src/lib/data layer (real Server Actions, mock branch for ?state= previews). Spawned for the foundation (tokens, L-01/L-02 shells, common components, data-layer helpers, types) and then once per screen area (account, career, 자기소개서 관리, board), possibly in parallel."
 model: opus
 ---
 

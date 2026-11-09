@@ -1,6 +1,6 @@
 ---
 name: prd-writing
-description: "Guide for writing and revising the Resumate PRD (product requirements document): personas, problem definition, functional requirements for the three pillars (career data / JD insights & chat / mock interview), MVP scope, MoSCoW priorities, success metrics, non-functional requirements, glossary. Use for PRD writing, requirements gathering, MVP scoping, feature prioritization, persona definition, and PRD revisions. Korean triggers: PRD 작성, 요구사항 정리, MVP 범위, 기능 우선순위, 페르소나, PRD 수정·보완. For screen design use ux-flow-spec; for DB design use data-model-spec."
+description: "Guide for writing and revising the Resumate PRD (product requirements document): personas, problem definition, functional requirements for the two pillars (career data / JD insights & 자기소개서), MVP scope, MoSCoW priorities, success metrics, non-functional requirements, glossary. Use for PRD writing, requirements gathering, MVP scoping, feature prioritization, persona definition, and PRD revisions. Korean triggers: PRD 작성, 요구사항 정리, MVP 범위, 기능 우선순위, 페르소나, PRD 수정·보완. For screen design use ux-flow-spec; for DB design use data-model-spec."
 ---
 
 # PRD Writing
@@ -17,7 +17,7 @@ The PRD is the reference for every planning document. Other teammates must be ab
 
 ## MVP criterion
 
-MVP = **the thinnest path that passes through each of the three pillars once**. Example: enter one experience → register one JD → view the insight → run one mock interview for that JD.
+MVP = **the thinnest path that passes through each of the two pillars once**. Example: enter one experience → register one JD → view the insight → draft one 자기소개서 for that JD.
 - Features not on this path are Should or lower.
 - Features that reduce input friction decide drop-off at the first step of the path, so seriously consider them as Must candidates (today that is the Resumate AI writing chat; resume upload parsing is `[보류]`).
 
@@ -27,8 +27,8 @@ These are easy to miss. Each must end up in the PRD as a conclusion or a `[결�
 - Target: new grads / experienced job changers / career switchers — which is the primary target?
 - Career input: manual entry, resume (PDF/DOCX) upload parsing, external integrations such as LinkedIn
 - JD input: pasted text, URL, image (screenshot)
-- Outputs: insights only, or also drafts of 자기소개서 / 경력기술서?
-- Mock interview format: text / voice, number of questions, follow-up questions, interview type (직무/인성)
+- Outputs: insights only, or also 자기소개서 drafts? (경력기술서 was removed 2026-11-08, CF-1)
+- Mock interview: removed from the MVP (2026-11-08, RM-1) — don't reintroduce it without a user decision
 - Privacy: collection consent, retention period, deletion scope on account deletion, notice that data is not used for AI training
 - AI cost model: BYOK — the user pays their provider. Requirements cover key connection, provider/tier data-use consent, the usage meter (tokens + estimated cost, not a bill), and per-cause error guidance. Service-side usage limits and cost ceilings were dropped (D-12, D-17); only quality/safety caps (e.g. 40 messages per chat) remain. Monetization may stay `[결정 필요]`
 
@@ -53,8 +53,7 @@ Describe the MVP path step by step
 ### P1. Career data management
 | ID | User story | Acceptance criteria | Priority | Notes |
 | F-P1-01 | {user} can {do what}, {why} | {verifiable condition} | Must | |
-### P2. JD insights & chat
-### P3. AI mock interview
+### P2. JD insights & 자기소개서
 ### AI connection (F-AI: keys, active provider, consent, usage meter, error guidance)
 ### Common (account, settings, privacy)
 
@@ -66,7 +65,7 @@ Describe the MVP path step by step
 
 ## 7. Success metrics
 | Metric | Definition | Target | Pillar |
-(e.g. career data completion rate, insight view rate per JD, mock interview completion rate, return rate)
+(e.g. career data completion rate, insight view rate per JD, 자기소개서 save/copy rate, return rate)
 
 ## 8. Glossary
 ## 9. Decisions needed

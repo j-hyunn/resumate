@@ -17,7 +17,7 @@ The goal: several engineers, building different areas in parallel, can each read
 
 ## Domain design points
 
-- **Long Korean text is the main content.** STAR fields, drafts, interview answers. Choose a Korean-first font stack (e.g. Pretendard with system fallbacks), body line-height around 1.6–1.7, comfortable measure for editors (~40–45 Korean characters per line ≈ 680–760px), and no letter-spacing tightening on Hangul.
+- **Long Korean text is the main content.** STAR fields, 자기소개서 answers. Choose a Korean-first font stack (e.g. Pretendard with system fallbacks), body line-height around 1.6–1.7, comfortable measure for editors (~40–45 Korean characters per line ≈ 680–760px), and no letter-spacing tightening on Hangul.
 - **AI state must be unmistakable.** Users wait seconds to tens of seconds and must know whether something is running, streaming, partially done, failed (and why — the 7 provider causes of C-20, such as rate limit, daily limit, billing, invalid key), locked because no key is connected (C-18), waiting for data-use consent (C-21), or blocked by insufficient data (C-09). Give each a distinct, consistent treatment. There are no service usage limits or "N회 남음" in this product (BYOK).
 - **The Resumate AI panel** (S-10, S-44) is a chat beside an editable page: proposal cards with [반영], source-utterance chips (C-15), the conversation list, and a resizable divider. Its thread uses the shadcn Chat components; define the card and chip styles on top of them rather than a separate chat look.
 - **Evidence is the trust mechanism.** C-01 evidence chips appear inside running text, tables, and cards. Design one compact chip with three statuses (정상 / 변경됨 / 원본 삭제됨) that stays readable inline, and make "회고 및 배운 점" chips distinguishable by label only (spec rule, no extra marker).
@@ -47,7 +47,7 @@ Write the document in Korean; translate the headings below. Keep token names, cl
 ## 3. 공통 컴포넌트 패턴 — 화면 명세의 모든 C-xx 각각: 구성 primitive · 시각 규칙 · 상태별 모습 · Tailwind 클래스 예시
 ## 4. 상태 패턴 — ST-xx 각각: 아이콘 · 색 · 레이아웃 · 문구 위치
 ## 5. 레이아웃 패턴 — L-01 셸·L-02 전체 페이지 셸(넓은/좁은 화면), AI 패널, 목록·상세, 편집기, 대화, 보드, 모달·시트
-## 6. 영역별 메모 — A1 계정 / A2 커리어 / A3 자기소개서 관리 / A4 면접·보드
+## 6. 영역별 메모 — A1 계정 / A2 커리어 / A3 자기소개서 관리 / A4 보드
 ## 7. 접근성 체크 기준
 ## 8. [가정] · 기획 확인 필요
 ## 9. 변경 이력

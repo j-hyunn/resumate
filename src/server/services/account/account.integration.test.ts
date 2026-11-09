@@ -96,7 +96,10 @@ describe.skipIf(!ready)("account deletion + retention (local stack)", { timeout:
     // S-25 summary (DM §4.3).
     const summary = await getAccountDeletionSummary(target.client);
     expect(summary).toEqual({
-      career: { experiences: 1, educations: 1, projects: 2, projectDeliverables: 1, skills: 1, writingChats: 1 },
+      // R15 (db notes §7): `career.writingChats` includes 서류 대화 (project chat + document chat = 2),
+      // and `applications.drafts` keeps its key name while counting 자기소개서 정본 with
+      // `filled_slot_count > 0` (DM §4.3 "반환 키 변경 없음").
+      career: { experiences: 1, educations: 1, projects: 2, projectDeliverables: 1, skills: 1, writingChats: 2 },
       applications: { applicationProjects: 1, insights: 1, drafts: 1, stageEvents: 1 },
       aiConnection: { providerKeys: 1, dataUseConsents: 1, usageRecords: 1 },
       recommendProviderKeyRevocation: true,

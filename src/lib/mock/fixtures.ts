@@ -93,6 +93,12 @@ export interface MockDb {
   /** non-user reference tables */
   ai_price_tables: AiPriceTable[]
   ai_disclosures: AiDisclosure[]
+  /**
+   * MOCK ONLY: S-46 자소서 작성 대화 (`writing_chats where application_project_id + document_kind`).
+   * 실제 읽기 계약이 아직 없어(`AnyWritingChatDto`에 서류 대화가 없다) mock만 들고 있다 — 뷰 모양
+   * 그대로 저장한다. 시작은 real 경로(`start_document_writing_chat`)가 있다.
+   */
+  cover_letter_chats: import("@/lib/data/cover-letter-chat-types").CoverLetterChatView[]
   /** MOCK ONLY: fake AI-12 turn memory per chat (lib/mock/writing-chat-turn.ts). No table. */
   mock_chat_turns: Record<string, import("./writing-chat-turn").ChatMemory>
   /** S-28 공급자별 장애 배너 (no table; service status) — affected providers */
@@ -746,6 +752,8 @@ export function createFixtures(): MockDb {
     application_project_id: IDS.ap(apN),
     raw_text: lines.join("\n"),
     raw_text_hash: `hash-${n}`,
+    // R15 (CF-10): the posting URL column; mock rows are pasted text, so null.
+    source_url: null,
     sentences: sentences(lines),
     detected_language: "ko",
     company_name: company,
@@ -988,6 +996,8 @@ export function createFixtures(): MockDb {
         applied_rev: null,
         applied_at: null,
         user_modified: false,
+        // (DM 2.8) 블록 근거 — 픽스처 블록은 비워 두고, 문항 근거는 `evidence_links` 행으로 둔다
+        evidence: [],
       },
     ],
   })
@@ -1497,6 +1507,7 @@ export function createFixtures(): MockDb {
     jd_requirements,
     insights,
     application_documents,
+    cover_letter_chats: [],
     drafts,
     draft_sections,
     draft_section_sources,

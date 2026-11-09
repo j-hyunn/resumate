@@ -9,7 +9,11 @@ import { COMMON_PROMPT_VERSION, commonSystemBlock } from "../common";
  * Bump the version when any text here changes (input_hash, ai_jobs.prompt_version).
  */
 
-export const AI01_PROMPT_VERSION = `ai-01.extract.v1+${COMMON_PROMPT_VERSION}`;
+/**
+ * v2 (R15, AI spec v4.15 CF-2·CF-A5·CF-10): `deadline` 추출 규칙과 "공고 하나의
+ * 본문만" 지시 추가 (schema_version 1 → 2).
+ */
+export const AI01_PROMPT_VERSION = `ai-01.extract.v2+${COMMON_PROMPT_VERSION}`;
 
 export const AI01_SYSTEM = `이 기능: JD 요건 추출
 역할: 한국 채용 공고 구조화 담당
@@ -33,6 +37,13 @@ export const AI01_SYSTEM = `이 기능: JD 요건 추출
 - company_name, position_title은 공고 원문에 나온 경우에만 {value, source_sids}로 답하고, 없으면 null입니다. <reference>의 값은 원문과 맞춰 보는 데만 쓰고, 원문에 없으면 그대로 옮기지 않습니다.
 - detected_language는 원문 주 언어의 ISO 639-1 코드(ko, en …)입니다.
 - is_likely_jd: 채용 공고로 보이면 true, 아니면(기사, 이력서, 무관한 글) false. 공고가 아니면 requirements는 빈 배열로 둡니다.
+- deadline: 지원(서류 접수) 마감 날짜가 원문에 적혀 있을 때만 {value: "YYYY-MM-DD", source_sids}로 답하고, 아니면 {value: null, source_sids: []}입니다.
+  - "상시 채용", "수시 채용", "채용 시 마감", "충원 시 마감", "공고일로부터 2주"처럼 날짜가 없거나 상대적이면 null입니다.
+  - 원문에 연도가 없으면 null입니다("12월 15일까지", "~12/15"). 오늘 날짜나 게시일로 연도를 추측하지 않습니다. 다만 같은 기간 표기 안에서 시작일에 연도가 있으면("2026.11.01 ~ 11.30") 끝 날짜에도 그 연도를 씁니다.
+  - 기간이면 끝 날짜를 씁니다. 시각은 버립니다("23:59까지", "24:00까지"는 그 날짜).
+  - 날짜가 여러 개면(서류 마감·면접 일정·입사 예정일, 1차·2차 마감) 서류 접수 마감을 고르고, 원문으로 가를 수 없으면 null로 두고 warnings에 "마감일이 여러 개로 보여 비워 두었어요"를 넣습니다.
+  - source_sids에는 그 날짜가 적힌 문장 ID를 넣습니다.
+- 공고 하나의 본문만 봅니다. 다른 공고 제목·추천 목록·광고·사이트 메뉴 문장은 요건이 아니라 other_sids입니다. 다른 포지션 문장이 섞인 것으로 보이면 warnings에 "복수 포지션이 섞인 공고로 보입니다"를 넣습니다.
 - warnings: 사용자가 알아야 할 점만 짧은 한국어 문장으로(예: "복수 포지션이 섞인 공고로 보입니다"). 없으면 빈 배열.
 
 카테고리 경계 사례 (가상의 예)

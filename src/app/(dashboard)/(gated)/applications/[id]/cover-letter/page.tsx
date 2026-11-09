@@ -4,6 +4,7 @@ import { PageShellSkeleton } from "@/components/common/shell/page-shell-skeleton
 import { getPreviewState, previewErrorCode } from "@/lib/preview-state"
 import { getApplicationProject, getJobDescription } from "@/lib/data/applications"
 import { getCoverLetterDocument } from "@/lib/data/cover-letters"
+import { getCoverLetterChat, listCoverLetterChats } from "@/lib/data/cover-letter-chats"
 import { getEvidence } from "@/lib/data/evidence"
 import { CoverLetterScreen, type CoverLetterTab } from "@/components/applications/cover-letter/cover-letter-screen"
 import { JdTab } from "@/components/applications/cover-letter/jd-tab"
@@ -57,6 +58,11 @@ async function Screen({ params, searchParams }: Props) {
   // 미리 보기: `questions*`는 정본 행을 무시하고 문항 설정 상태를 그린다 / `writing`은 그 반대가 없다
   const document = state?.startsWith("questions") || state === "extracting" || state?.startsWith("extract-failed") ? null : docRow
   const evidence = document ? await getEvidence("application_document", document.id) : {}
+  // 패널 — 대화 기록 목록과 `?chat=`으로 연 대화. 읽기 계약이 없는 real 경로에서는 목록이 비고
+  // 이번 방문에 시작한 대화만 패널이 들고 있다 (보고서 "백엔드 요청")
+  const chatIdParam = one(sp.chat)
+  const chats = document ? await listCoverLetterChats(id) : []
+  const openChat = chatIdParam ? await getCoverLetterChat(chatIdParam).catch(() => null) : null
 
   const tabParam = one(sp.tab)
   const initialTab: CoverLetterTab = tabParam === "jd" ? "jd" : tabParam === "insight" ? "insight" : "cover_letter"
@@ -76,6 +82,8 @@ async function Screen({ params, searchParams }: Props) {
         evidence,
         // 키가 있고 요건이 아직 없을 때만 [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 (FL-03)
         extract_first: run.extractFirst,
+        chats,
+        open_chat: openChat,
         preview: { state, extractFail: extractFirstPreviewFail(state) ?? previewErrorCode(state) },
       }}
       initialTab={initialTab}

@@ -7,14 +7,15 @@ import {
 } from "@/lib/contracts/enums";
 
 /**
- * AI-01 JD 요건 추출 model output, schema_version 1 (AI spec AI-01 "출력 스키마").
+ * AI-01 JD 요건 추출 model output, schema_version 2 (AI spec AI-01 "출력 스키마").
+ * (v4.15, CF-2) `deadline` {value, source_sids} added; schema_version 1 → 2.
  * Keys match the spec exactly. Canonical form (C-10.2): every key present,
  * absent values as explicit null, depth ≤ 5. Length / count limits are
  * enforced by zod after parsing (V-6); the server validator
  * (validation/jd-extraction.ts) then checks sentence ids and normalizes.
  */
 
-export const AI01_OUTPUT_SCHEMA_VERSION = 1;
+export const AI01_OUTPUT_SCHEMA_VERSION = 2;
 
 // Single list shared with the DB CHECK mirror (src/lib/contracts/enums.ts).
 export { REQUIREMENT_CATEGORIES, REQUIREMENT_IMPORTANCES, type RequirementCategory, type RequirementImportance };
@@ -42,6 +43,15 @@ export const SenioritySchema = z.object({
   source_sids: Sids,
 });
 
+/**
+ * (v4.15, CF-2) 지원 마감일. `value` = ISO date or null; null → empty sids.
+ * Server checks (AI-01 "deadline 서버 검증" 1~5) are in validation/jd-extraction.ts.
+ */
+export const DeadlineSchema = z.object({
+  value: z.string().max(20).nullable(),
+  source_sids: Sids,
+});
+
 export const RequirementOutputSchema = z.object({
   category: z.enum(REQUIREMENT_CATEGORIES),
   text: z.string().max(AI01_TEXT_MAX),
@@ -62,6 +72,7 @@ export const Ai01OutputSchema = z.object({
   company_name: NamedValueSchema.nullable(),
   position_title: NamedValueSchema.nullable(),
   seniority: SenioritySchema.nullable(),
+  deadline: DeadlineSchema.nullable(),
   requirements: z.array(RequirementOutputSchema).max(AI01_REQUIREMENTS_MAX),
   tech_keywords: z.array(TechKeywordSchema).max(AI01_TECH_KEYWORDS_MAX),
   other_sids: z.array(z.string().max(12)).max(AI01_OTHER_SIDS_MAX),
@@ -69,4 +80,5 @@ export const Ai01OutputSchema = z.object({
 });
 
 export type Ai01Output = z.infer<typeof Ai01OutputSchema>;
+export type Ai01Deadline = z.infer<typeof DeadlineSchema>;
 export type Ai01Requirement = z.infer<typeof RequirementOutputSchema>;

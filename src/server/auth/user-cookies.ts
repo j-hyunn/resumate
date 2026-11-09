@@ -1,7 +1,12 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { DELETED_ROWS_COOKIE, DELETED_ROWS_MAX_AGE_S, encodeDeletedRows, isDeletedRow } from "@/server/services/career/deleted-rows";
-import { PENDING_CAREER_DESCRIPTION_COOKIE } from "@/server/services/drafts/pending-cookie";
+/**
+ * R15 (CF-1): the 경력기술서 generation flow is gone and nothing writes this cookie any more,
+ * but existing browsers may still hold one — it stays in the clear list so sign-out and account
+ * deletion remove it. Drop the name in a later slice.
+ */
+export const PENDING_CAREER_DESCRIPTION_COOKIE = "resumate_pending_career_description";
 
 /** App cookies that hold one user's state (QA-W5-02, QA-W5-06). Cleared on sign-out and account deletion. */
 export const USER_SCOPED_COOKIES = [PENDING_CAREER_DESCRIPTION_COOKIE, DELETED_ROWS_COOKIE] as const;

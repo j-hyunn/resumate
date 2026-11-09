@@ -70,10 +70,20 @@ begin
   insert into public.insights (id, user_id, application_project_id, version_no) values (ins, u, ap, 1);
   insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
     values (u, ap, 'insight', ins, 'k', 'project', prj, 'action');
-  -- S7 drafts
-  insert into public.drafts (id, user_id, application_project_id, draft_type, title, status) values (drf, u, ap, 'career_description', '경력기술서', 'generating');
-  insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, experience_id) values (sec, u, drf, 0, 'experience', exp);
-  insert into public.draft_section_sources (user_id, draft_section_id, application_project_id, role, origin, experience_id)
-    values (u, sec, ap, 'primary', 'ai', exp);
+  -- R15 자기소개서 정본 (replaces the retired S7 drafts / draft_sections / draft_section_sources)
+  insert into public.application_documents (id, user_id, application_project_id, document_kind, body, meta, filled_slot_count)
+    values (drf, u, ap, 'cover_letter',
+            jsonb_build_object('questions', jsonb_build_array(jsonb_build_object(
+              'slot', 'q_1', 'question_id', sec, 'sort_order', 1, 'question_text', '지원 동기',
+              'answer_title', null, 'template_key', 'motivation', 'question_class', 'motivation',
+              'char_limit', 800, 'count_basis', 'with_spaces', 'user_note', null,
+              'body', '지원 동기를 씁니다.', 'blocks', '[]'::jsonb))),
+            jsonb_build_object('tone', 'concise'), 1);
+  insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
+    values (u, ap, 'application_document', drf, 'q_1.blocks.b1', 'project', prj, 'action');
+  insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id)
+    values (u, ap, 'application_document', drf, 'q_1.sources.0', 'user_note', sec);
+  -- 서류 대화 (writing_chats with project_id null, R15 D2)
+  insert into public.writing_chats (user_id, application_project_id, document_kind) values (u, ap, 'cover_letter');
 end $$;
 commit;

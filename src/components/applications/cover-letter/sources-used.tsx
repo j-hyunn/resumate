@@ -19,7 +19,7 @@ import * as React from "react"
 import { ChevronRight, ListChecks, Unlink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { EvidencePanel } from "@/components/common/evidence"
+import { EvidencePanel, useEvidencePanelOpen } from "@/components/common/evidence"
 import type { EvidenceView } from "@/lib/data/evidence"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +36,8 @@ export function sourcePathLine(item: EvidenceView): string {
 
 export function SourcesUsed({ items, questionNumber }: { items: EvidenceView[] | undefined; questionNumber: number }) {
   const [open, setOpen] = React.useState(false)
+  // 화면에 `<EvidenceProvider>`가 있으면 그 패널 하나를 쓰고, 없으면 아래에서 자기 패널을 띄운다
+  const shared = useEvidencePanelOpen()
   const [panel, setPanel] = React.useState<{ items: EvidenceView[]; focusId: string } | null>(null)
   const list = items ?? []
   // 0개면 트리거를 그리지 않는다 (3.10)
@@ -57,7 +59,7 @@ export function SourcesUsed({ items, questionNumber }: { items: EvidenceView[] |
                 <button
                   type="button"
                   className="-mx-2 w-full rounded-md px-2 text-left text-sm font-medium hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                  onClick={() => setPanel({ items: list, focusId: item.id })}
+                  onClick={() => (shared ? shared(list, item.id) : setPanel({ items: list, focusId: item.id }))}
                 >
                   {item.status === "deleted" ? (
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -74,8 +76,10 @@ export function SourcesUsed({ items, questionNumber }: { items: EvidenceView[] |
           </ul>
         </CollapsibleContent>
       </Collapsible>
-      {/* C-02 — 화면에 EvidenceProvider가 없어도 되게 이 컴포넌트가 직접 들고 있다 */}
-      <EvidencePanel open={panel !== null} onOpenChange={(o) => !o && setPanel(null)} items={panel?.items ?? []} focusId={panel?.focusId} />
+      {/* C-02 — `<EvidenceProvider>` 밖에서도 동작하게 대비용 패널을 들고 있다 */}
+      {shared ? null : (
+        <EvidencePanel open={panel !== null} onOpenChange={(o) => !o && setPanel(null)} items={panel?.items ?? []} focusId={panel?.focusId} />
+      )}
     </>
   )
 }

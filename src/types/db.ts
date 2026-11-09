@@ -110,13 +110,24 @@ export type DraftBlockKind = "header" | "summary" | "role_line" | "bullet" | "pa
 export type DraftSourceRole = "primary" | "supporting"
 export type DraftSourceOrigin = "ai" | "user"
 
+// --- R15 자기소개서 정본 (DM 2.7.3 / 2.5.0b) ---
+
+/** application_documents.document_kind CHECK — one value (CF-1·CF-A2). */
+export type ApplicationDocumentKind = "cover_letter"
+export type DocumentBlockType = "heading" | "paragraph" | "bullet_list" | "numbered_list" | "table" | "quote" | "code"
+export type DocumentBlockBasis = "new" | "current_body" | "user"
+/** application_documents.meta.tone: 간결 / 상세. */
+export type DocumentTone = "concise" | "detailed"
+/** structured_draft.document.questions[].draft.sources[].role (CF-S1). */
+export type DocumentSourceRole = "primary" | "supporting"
+
 export type EvidenceOwnerType =
   | "insight"
-  /** (v4.15, CF-1) 자소서 정본 문항·블록 근거 — `item_key` = `{slot}.blocks.{block_id}` / `{slot}.sources.{n}` */
-  | "application_document"
-  /** @deprecated 폐기된 `draft_sections` 시절 행 (DM 2.7.4) */
+  /** @deprecated R15: dropped from the CHECK by `20261113004500_r15_drop_drafts`; kept for the mock fixtures. */
   | "draft_section"
   | "chat_message"
+  /** (v4.15, CF-1) 자소서 정본 문항·블록 근거 — `item_key` = `{slot}.blocks.{block_id}` / `{slot}.sources.{n}` */
+  | "application_document"
 export type EvidenceSourceType =
   | "profile"
   | "experience"
@@ -822,18 +833,42 @@ export interface DraftOptions {
   tone?: DraftTone | null
 }
 
-/** drafts (A.9) */
-export type Draft = Row<"drafts", {
+/**
+ * drafts (A.9) — **retired table** (R15 `20261113004500_r15_drop_drafts`, CF-1·CF-M1).
+ *
+ * The 자기소개서 정본 is now `ApplicationDocument` below. These three shapes stay as hand-written
+ * interfaces, no longer derived from the generated types, so the old 서류 screens S-17 / S-19 and
+ * `src/lib/mock/` keep compiling while they run on `?state=` previews only
+ * (leader decision 2026-11-09 — the screens themselves are the UI session's to delete).
+ * Nothing on the server reads or writes them.
+ */
+export interface Draft {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  application_project_id: Uuid
   draft_type: DraftType
   title: string | null
   status: DraftStatus
   options: DraftOptions
+  insight_id: Uuid | null
+  ai_job_id: Uuid | null
+  input_hash: string | null
+  prompt_version: string | null
+  schema_version: number | null
+  career_snapshot_hash: string | null
+  regenerated_from_id: Uuid | null
+  completed_at: Timestamp | null
+  edited_at: Timestamp | null
+  first_copied_at: Timestamp | null
+  model: string | null
   provider: AiProviderName | null
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
   validation_report: Record<string, unknown> | null
   usage: Record<string, unknown> | null
-}, "run_generation">
+}
 
 /** C-05 placeholder tokens (03 C-5) */
 export type PlaceholderToken =
@@ -858,29 +893,65 @@ export interface DraftBlock {
   user_modified: boolean
 }
 
-/** draft_sections (A.10) */
-/** draft_sections (A.10) — v4: AI 출력 공통 메타 (문항 단위 재생성이 다른 공급자일 수 있음) */
-export type DraftSection = Row<"draft_sections", {
+/** draft_sections (A.10) — retired with `drafts` (see the note above). */
+export interface DraftSection {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  draft_id: Uuid
+  sort_order: number
   section_kind: DraftSectionKind
+  heading: string | null
+  question_text: string | null
+  char_limit: number | null
+  user_note: string | null
   template_key: CoverLetterTemplateKey | null
   count_basis: CountBasis | null
   source_selection_mode: SourceSelectionMode
   question_class: QuestionClass | null
   status: DraftSectionStatus
-  ai_content: { blocks: DraftBlock[]; } | null
-  edited_content: { blocks: DraftBlock[]; } | null
+  experience_id: Uuid | null
+  education_id: Uuid | null
+  ai_char_count: number | null
+  correction_applied: boolean
+  generation_no: number
+  sources_modified_at: Timestamp | null
+  ai_job_id: Uuid | null
+  input_hash: string | null
+  prompt_version: string | null
+  schema_version: number | null
+  career_snapshot_hash: string | null
+  model: string | null
+  ai_content: { blocks: DraftBlock[] } | null
+  edited_content: { blocks: DraftBlock[] } | null
   validation_report: Record<string, unknown> | null
   provider: AiProviderName | null
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
   usage: Record<string, unknown> | null
-}, "completed_at" | "run_generation">
+}
 
-/** draft_section_sources (A.11, DM v4.4: no `project_detail_ids`) */
-export type DraftSectionSourceRow = Row<"draft_section_sources", {
+/** draft_section_sources (A.11) — retired with `drafts` (see the note above). */
+export interface DraftSectionSourceRow {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  draft_section_id: Uuid
+  application_project_id: Uuid
+  experience_id: Uuid | null
+  education_id: Uuid | null
+  project_id: Uuid | null
+  requirement_ids: Uuid[]
+  rationale: string | null
+  reuse_reason: string | null
+  sort_order: number
+  source_deleted_at: Timestamp | null
+  source_label: string | null
   role: DraftSourceRole
   origin: DraftSourceOrigin
-}>
+}
 
 /**
  * @deprecated R4 shim: the current UI reads `project_detail_ids` (dropped in DM v4.4). The real data
@@ -889,138 +960,91 @@ export type DraftSectionSourceRow = Row<"draft_section_sources", {
 export type DraftSectionSource = DraftSectionSourceRow & { project_detail_ids: Uuid[] }
 
 // ---------------------------------------------------------------------------
-// 2.7.3 application_documents — 서류 정본 (DM v4.15, CF-1·CF-5·CF-6·CF-A2·CF-A4)
-//
-// 생성 타입 대기: 테이블은 DM 11.8/11.10 배포 전이라 `database.types.ts`에 없다. 그래서
-// 여기서는 `Row<>` 대신 손으로 적고, 배포 뒤 생성 타입 기준으로 다시 묶는다 (백엔드 요청).
+// 2.7.3 자기소개서 정본 (R15, DM 2.7.3 / 11.8 #1)
 // ---------------------------------------------------------------------------
 
-/** (v4.15, CF-A2) 서류 종류는 자소서 하나 — CHECK in ('cover_letter'), 지원 프로젝트당 정본 1행 */
-export type DocumentKind = "cover_letter"
+/** `application_documents.body.questions[].blocks[].evidence[]` (DM 2.8). */
+export interface ApplicationDocumentEvidence {
+  source_type: EvidenceSourceType
+  source_id: string
+  source_field?: string | null
+  source_locator?: Record<string, unknown> | null
+  quote?: string | null
+  label?: string | null
+}
 
-/** body.questions[].blocks[].basis (DM 2.7.3) — `user` = 사용자가 새로 쓴 블록 */
-export type CoverLetterBlockBasis = "new" | "current_body" | "user"
-
-/** body.questions[].blocks[] 원소 (DM 2.7.3). `type`은 2.5.0a 7종과 같다 */
-export interface CoverLetterBlock {
+/** `application_documents.body.questions[].blocks[]` (DM 2.5.0b / 2.7.3). */
+export interface ApplicationDocumentBlock {
   block_id: string
-  type: DeliverableBlockType
+  type: DocumentBlockType
   text: string
-  basis: CoverLetterBlockBasis
-  placeholders: Array<{ token: PlaceholderToken; hint: string }>
-  flags: DraftBlockFlag[]
-  /** 어느 대화의 몇 번째 제안에서 왔는지 (공급자·모델 배지의 원천) */
+  basis: DocumentBlockBasis | null
+  placeholders: string[]
+  flags: string[]
   applied_writing_chat_id: Uuid | null
   applied_rev: number | null
   applied_at: Timestamp | null
-  /** C-08 "편집됨" 배지 */
   user_modified: boolean
+  evidence: ApplicationDocumentEvidence[]
 }
 
-/**
- * body.questions[] 원소 (DM 2.7.3 · UX S-46). 배열 길이 ≤ 5 (CF-5).
- * `answer_title`은 글자 수(`char_limit` 대비)와 `filled_slot_count`에 넣지 않는다 (CF-6·CF-A4).
- */
-export interface CoverLetterQuestion {
-  /** `q_{n}` — 서류 안에서 유일, 재사용 없음 */
+/** One 자소서 문항 (`slot` = `q_{n}`); `sort_order` is re-numbered from 1 by the save RPC. */
+export interface ApplicationDocumentQuestion {
   slot: string
   question_id: Uuid
-  /** ≤ 1,000자 */
-  question_text: string
-  /** ≤ 100자, 한 줄 평문. null = 제목 없음 (CF-6) */
+  sort_order: number
+  question_text: string | null
+  /** CF-6: ≤ 100 chars, excluded from the char count and from `filled_slot_count`. */
   answer_title: string | null
   template_key: CoverLetterTemplateKey | null
-  /** AI 판정값 */
   question_class: QuestionClass | null
-  /** 1~10,000, 새 저장은 필수. DB 기본값 없음 — 화면이 800을 채운다 (CF-U2) */
-  char_limit: number
-  count_basis: CountBasis
-  /** ≤ 300자 */
+  char_limit: number | null
+  count_basis: CountBasis | null
   user_note: string | null
-  /** 마크다운 ≤ 8,000자 — `blocks[].text`로 조립한 파생 값 */
   body: string
-  blocks: CoverLetterBlock[]
-  sort_order: number
+  blocks: ApplicationDocumentBlock[]
 }
 
-/** application_documents.body (자소서. 경력기술서 `sections[]`는 v4.15 폐기, CF-1) */
-export interface CoverLetterBody {
-  questions: CoverLetterQuestion[]
-}
-
-/** application_documents.meta — 지금은 문체만 (CL-A3) */
-export interface ApplicationDocumentMeta {
-  tone?: DraftTone | null
-}
-
-/** application_documents (DM 2.7.3) */
-export interface ApplicationDocument extends BaseRow {
+/** application_documents (DM 2.7.3). One row per `(application_project_id, document_kind)`. */
+export interface ApplicationDocument {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
   application_project_id: Uuid
-  document_kind: DocumentKind
-  body: CoverLetterBody
-  /** 본문이 비어 있지 않은 문항 수 (제목만 있는 문항은 세지 않는다, CF-A4) */
+  /** CHECK: `cover_letter` only (CF-1·CF-A2 — the column stays for the retired 경력기술서). */
+  document_kind: ApplicationDocumentKind
+  body: { questions: ApplicationDocumentQuestion[] }
+  meta: { tone?: DocumentTone | null } | null
+  /** Questions with a non-blank `body`; the 서류 count uses `> 0` (CF-A14). */
   filled_slot_count: number
-  /** 문항 수 (생성 컬럼, 본문이 비어도 센다) — S-39 카드 판정에 쓴다 */
+  /** Generated column = `jsonb_array_length(body -> 'questions')`. */
   slot_count: number
-  meta: ApplicationDocumentMeta
+  /** S-46 "전체 복사"가 처음 눌린 시각 (PRD 7장 지표). 생성 타입에 있는 실제 컬럼이다 */
   first_copied_at: Timestamp | null
 }
 
-/** S-46 "저장하기" = `save_application_document` 한 번 (DM v4.15 — 본문 + 머리 제목·마감일) */
-export interface ApplicationValuesPatch {
-  /** ≤ 100자. 빈 문자열 = 이름 되돌리기 (서버 헬퍼가 정한다) */
-  name?: string
-  /** `null` = 비우기 */
-  deadline?: DateString | null
+/**
+ * **UI 전용 타입을 여기에 두지 않는다**: 저장 입력·반환·거부 코드·공고 가져오기·미리 보기는 R15가
+ * 들여온 계약이 정본이다 — `src/lib/contracts/application-document.ts`
+ * (`SaveApplicationDocumentInput`·`SaveApplicationDocumentResult`·`AppliedDocumentProposal`·
+ * `DocumentApplicationValues`·`DocumentSaveErrorCode`) · `src/lib/contracts/application.ts`
+ * (`ExtractJdPreviewResult`·`PreviewSkipReason`) · `src/lib/contracts/jd-fetch.ts`
+ * (`FetchJobDescriptionResult`·`JdFetchErrorCode`). 화면·데이터 계층은 그 파일에서 직접 import한다.
+ */
+
+// --- 자소서 흐름 이름 별칭 (UX S-46·S-13 문서가 "자소서"로 부르는 것들) ---------------
+// DB 행 모양의 정본은 위 `ApplicationDocument*` 타입이다. 아래는 화면 코드가 쓰는 별칭일 뿐이고
+// 같은 뜻의 손 타입을 따로 두지 않는다 (두 정의 공존 금지).
+export type DocumentKind = ApplicationDocumentKind
+export type CoverLetterBlock = ApplicationDocumentBlock
+export type CoverLetterQuestion = ApplicationDocumentQuestion
+export type CoverLetterBlockBasis = DocumentBlockBasis
+export interface CoverLetterBody {
+  questions: ApplicationDocumentQuestion[]
 }
-
-/** `p_applied_proposals` 원소 (S-46 반영 규칙) */
-export interface AppliedProposalRef {
-  writing_chat_id: Uuid
-  slot: string
-  rev: number
-}
-
-/** `save_application_document` 반환 (DM v4.15) */
-export interface SaveApplicationDocumentResult {
-  application_document_id: Uuid
-  document_kind: DocumentKind
-  filled_slot_count: number
-  slot_count: number
-  name: string | null
-  name_source: NameSource | null
-  deadline: DateString | null
-  updated_at: Timestamp
-  applied: AppliedProposalRef[]
-  skipped: Array<AppliedProposalRef & { reason: PageSaveSkipReason }>
-}
-
-/** 저장 거부 코드 — 페이지 저장 공통 + 문항 상한 (DM v4.15 `too_many_questions`) */
-export type ApplicationDocumentSaveErrorCode = PageSaveErrorCode | "too_many_questions"
-
-/** `POST /api/job-descriptions/fetch` 실패 코드 5종 + 주소 검사 (DM v4.15 11.10) */
-export type JdFetchErrorCode =
-  | "invalid_source_url"
-  | "fetch_blocked"
-  | "fetch_timeout"
-  | "fetch_too_large"
-  | "fetch_too_short"
-  | "fetch_failed"
-
-/** `POST /api/job-descriptions/fetch` 응답 (키 camelCase — R4-API-4 관례) */
-export interface JdFetchResult {
-  rawText: string
-  companyName: string | null
-  positionTitle: string | null
-}
-
-/** `POST /api/job-descriptions/extract-preview` 응답 (행 없는 AI-01, DM 2.6.2) */
-export interface JdExtractPreview {
-  previewJobId: Uuid
-  companyName: string | null
-  positionTitle: string | null
-  deadline: DateString | null
-  requirementCount: number
+export interface ApplicationDocumentMeta {
+  tone?: DocumentTone | null
 }
 
 // ---------------------------------------------------------------------------
@@ -1263,13 +1287,13 @@ export interface DeletionImpact {
     project_deliverables: number
   }
   affected_results: {
-    // [UI-가정] 04 says "v2 형식: 이름, insights, drafts, draft_sections"; key names follow that list.
+    // R15 D9: the 서류 keys are `documents` / `document_sections` (DM §4.2, db notes §7).
     by_application_project: Array<{
       application_project_id: Uuid
       name: string | null
       insights: number
-      drafts: number
-      draft_sections: number
+      documents: number
+      document_sections: number
     }>
   }
   /** entity_type = 'writing_chat' only */

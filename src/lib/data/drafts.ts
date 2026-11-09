@@ -33,22 +33,22 @@ import { formatPeriod } from "./labels"
 import { educationDisplayName } from "@/server/services/career/education-name"
 import { computeReadiness } from "./readiness"
 import { realRetryJdExtraction } from "./applications-real"
-import {
-  realAddCoverLetterQuestion,
-  realCareerDescriptionStreamPlan,
-  realCoverLetterStreamPlan,
-  realCreateCareerDescriptionDraft,
-  realCreateCoverLetterDraft,
-  realDeleteDraftSection,
-  realFinalizeCareerDescription,
-  realFinalizeCoverLetterSection,
-  realGetCareerSourceTree,
-  realMarkDraftCopied,
-  realRankDraftSources,
-  realSetSectionSources,
-  type RealStreamPlan,
-} from "./drafts-real"
+import { AppError } from "@/lib/contracts/errors"
 import { previewOr } from "./source"
+
+/**
+ * R15 (leader decision 2026-11-09): the real 서류 path is gone — `drafts-real.ts`,
+ * `src/server/services/drafts/*` and the three generation routes were retired with the
+ * `drafts` tables (CF-1·CF-M1, no observation-period read path).
+ *
+ * The 자기소개서 관리 screens are being rebuilt (S-13 + 추가 모달 + S-46, decisions 4.23), so
+ * these functions are **mock-only** again and the old screens S-17 / S-19 work under `?state=`
+ * previews only. Export names and signatures are unchanged.
+ */
+export interface RealStreamPlan {
+  generation_id: string
+  request: { endpoint: string; body: unknown }
+}
 
 const now = () => new Date().toISOString()
 
@@ -1053,88 +1053,106 @@ async function mockRetryJdExtraction(applicationProjectId: string): Promise<bool
 }
 
 // ---------------------------------------------------------------------------
-// W3 wiring: `?state=` previews stay on the store above, everything else is real (drafts-real.ts).
+// R15: 연결 대기 — `?state=` previews run on the mock store, the real branch refuses.
+// The 자기소개서 작성 화면 S-46 will be wired in a later slice, against
+// `save_application_document` / `start_document_writing_chat` and the chat turn route.
 // ---------------------------------------------------------------------------
 
+/** 연결 대기: there is no real 서류 path any more (CF-1·CF-M1). */
+function notConnected(): never {
+  throw new AppError("not_connected", "자기소개서 작성 화면이 새로 만들어지는 중이에요. 잠시 뒤 다시 시도해 주세요.", { status: 503 })
+}
+
+/** 연결 대기 */
 export function getCareerSourceTree(): Promise<SourceTree> {
-  return previewOr(mockGetCareerSourceTree, realGetCareerSourceTree)
+  return previewOr(mockGetCareerSourceTree, async () => notConnected())
 }
 
+/** 연결 대기 */
 export function rankDraftSources(applicationProjectId: string, opts?: { fail?: boolean }) {
-  return previewOr(() => mockRankDraftSources(applicationProjectId, opts), () => realRankDraftSources(applicationProjectId))
+  return previewOr(() => mockRankDraftSources(applicationProjectId, opts), async () => notConnected())
 }
 
+/** 연결 대기 */
 export function createCareerDescriptionDraft(applicationProjectId: string, options: DraftOptions, regeneratedFromId: string | null = null): Promise<Draft> {
-  return previewOr(
-    () => mockCreateCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId),
-    () => realCreateCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId),
-  )
+  return previewOr(() => mockCreateCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId), async () => notConnected())
 }
 
+/** 연결 대기 */
 export function createCoverLetterDraft(applicationProjectId: string): Promise<Draft> {
-  return previewOr(() => mockCreateCoverLetterDraft(applicationProjectId), () => realCreateCoverLetterDraft(applicationProjectId))
+  return previewOr(() => mockCreateCoverLetterDraft(applicationProjectId), async () => notConnected())
 }
 
+/** 연결 대기 */
 export function addCoverLetterQuestion(draftId: string): Promise<DraftSection | null> {
-  return previewOr(() => mockAddCoverLetterQuestion(draftId), () => realAddCoverLetterQuestion(draftId))
+  return previewOr(() => mockAddCoverLetterQuestion(draftId), async () => null)
 }
 
+/** 연결 대기 */
 export function deleteDraftSection(draftId: string, sectionId: string): Promise<boolean> {
-  return previewOr(() => mockDeleteDraftSection(draftId, sectionId), () => realDeleteDraftSection(sectionId))
+  return previewOr(() => mockDeleteDraftSection(draftId, sectionId), async () => false)
 }
 
-/**
- * Previews only. A real generation has no plan of blocks: it streams from the route (`prepareCareerDescriptionStream`).
- * Null here refuses the start, so a screen that hasn't moved to the stream plan shows a refusal, never a fake draft.
- */
+/** 연결 대기 */
 export function prepareCareerDescription(draftId: string): Promise<CareerDescriptionPlan | null> {
   return previewOr(() => mockPrepareCareerDescription(draftId), async () => null)
 }
 
+/** 연결 대기 */
 export function prepareCoverLetterSection(sectionId: string): Promise<CoverLetterSectionPlan | null> {
   return previewOr(() => mockPrepareCoverLetterSection(sectionId), async () => null)
 }
 
-/** The real AI-03 start: pass `request` to `stream.start({ ...request, discardOnError: true })`. Null on a preview. */
+/** 연결 대기 — the AI-03 stream route is retired; null refuses the start. */
 export function prepareCareerDescriptionStream(draftId: string): Promise<RealStreamPlan | null> {
-  return previewOr(async () => null, () => realCareerDescriptionStreamPlan(draftId))
+  void draftId
+  return Promise.resolve(null)
 }
 
-/** The real AI-04 start: pass `request` to `stream.start(request)`. Null on a preview. */
+/** 연결 대기 — the AI-04 section stream route is retired; null refuses the start. */
 export function prepareCoverLetterStream(sectionId: string): Promise<RealStreamPlan | null> {
-  return previewOr(async () => null, async () => realCoverLetterStreamPlan(sectionId))
+  void sectionId
+  return Promise.resolve(null)
 }
 
+/** 연결 대기 */
 export function finalizeCareerDescription(draftId: string, generationId: string, result: GenerationResult): Promise<CareerDescriptionStopped | null> {
-  return previewOr(() => mockFinalizeCareerDescription(draftId, generationId, result), () => realFinalizeCareerDescription(draftId, generationId, result))
+  return previewOr(() => mockFinalizeCareerDescription(draftId, generationId, result), async () => null)
 }
 
+/** 연결 대기 */
 export function finalizeCoverLetterSection(sectionId: string, generationId: string, result: GenerationResult): Promise<void> {
-  return previewOr(() => mockFinalizeCoverLetterSection(sectionId, generationId, result), () => realFinalizeCoverLetterSection(sectionId, generationId, result))
+  return previewOr(() => mockFinalizeCoverLetterSection(sectionId, generationId, result), async () => {})
 }
 
+/** 연결 대기 */
 export function setSectionSources(sectionId: string, selections: SourceSelection[]): Promise<DraftSectionSource[] | null> {
-  return previewOr(() => mockSetSectionSources(sectionId, selections), () => realSetSectionSources(sectionId, selections))
+  return previewOr(() => mockSetSectionSources(sectionId, selections), async () => null)
 }
 
+/** 연결 대기 */
 export function markDraftCopied(draftId: string): Promise<void> {
-  return previewOr(() => mockMarkDraftCopied(draftId), () => realMarkDraftCopied(draftId))
+  return previewOr(() => mockMarkDraftCopied(draftId), async () => {})
 }
 
-/** The real save (`saveSectionEdit`) already sets edited_at. */
+/** 연결 대기 */
 export function markDraftEdited(draftId: string): Promise<void> {
   return previewOr(() => mockMarkDraftEdited(draftId), async () => {})
 }
 
-/** A real run is finished by the route or the job sweep, whether or not the screen stayed. */
+/** 연결 대기 */
 export function settleAbandonedGeneration(draftId: string): Promise<void> {
   return previewOr(() => mockSettleAbandonedGeneration(draftId), async () => {})
 }
 
+/**
+ * **Wired, not 연결 대기**: this is JD requirement extraction (S-15 "요건 정리하기", D-30), not a
+ * 서류 function — it only lives in this file for historical reasons. It keeps its real path
+ * (`applications-real.ts`), so S-15 stays working. `[가정]` (R15 api notes).
+ */
 export function retryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
   return previewOr(() => mockRetryJdExtraction(applicationProjectId), () => realRetryJdExtraction(applicationProjectId))
 }
 
 /** "요건 정리하기" (S-15, D-30) — same as retryJdExtraction */
 export const runJdExtraction = retryJdExtraction
-

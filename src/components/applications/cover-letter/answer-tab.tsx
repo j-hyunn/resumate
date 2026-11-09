@@ -48,7 +48,6 @@ export function AnswerTab({
   evidence,
   onChange,
   onCopied,
-  panelOpen,
   onOpenPanel,
   /** 반영하지 않은 제안이 있는 문항 slot (패널이 붙으면 채워진다 — 지금은 빈 집합) */
   unappliedSlots,
@@ -61,7 +60,7 @@ export function AnswerTab({
   onChange: (next: QuestionForm[]) => void
   /** "전체 복사" 성공 때 `first_copied_at`을 남긴다 */
   onCopied: () => void
-  panelOpen: boolean
+  /** 패널을 열고 입력창에 포커스 ("AI와 초안 쓰기" · "AI 제안 있음") */
   onOpenPanel: () => void
   unappliedSlots?: Set<string>
   /** C-02 근거 구간 강조 (`?range=`) */
@@ -365,8 +364,6 @@ export function AnswerTab({
           setDeleting(null)
         }}
       />
-      {/* 패널이 닫혀 있고 제안이 있으면 머리 쪽 표식으로만 알린다 — 패널 자체는 화면이 들고 있다 */}
-      {panelOpen ? null : null}
     </div>
   )
 }

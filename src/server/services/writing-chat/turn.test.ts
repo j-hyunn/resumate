@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "@/lib/contracts/errors";
+import { ErrorEvent } from "@/lib/contracts/ai";
 import { WritingChatTurnEventSchema, type WritingChatTurnEvent } from "@/lib/contracts/writing-chat";
 import { resolveModel } from "@/server/ai/providers/models";
 import {
@@ -12,7 +13,7 @@ import {
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import type { LlmFactoryInput } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
-import { MemoryChatDb, fakeDeliverablePipelines, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
+import { MemoryChatDb, fakeDeliverablePipelines, fakeDocumentPipelines, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
 import { ProviderError } from "@/server/ai/errors";
 import { hasRoomForTurn, prepareTurn, remainingMessages, runTurn, type PreparedTurn } from "./turn";
 import type { TurnDeps } from "./types";
@@ -101,6 +102,7 @@ function setup(opts: {
     },
     pipelines,
     deliverablePipelines: fakeDeliverablePipelines(),
+    documentPipelines: fakeDocumentPipelines(),
     now: clock.now,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -196,6 +198,14 @@ describe("AI-12 turn — paid tier (parallel)", () => {
     expect(types(first.events)).toEqual(["turn_started", "draft_patch", "draft_flags", "error"]);
     const err = first.events.at(-1) as Extract<WritingChatTurnEvent, { type: "error" }>;
     expect(err.code).toBe("rate_limited");
+    /**
+     * QA-R15-02: the emitted object must satisfy `ErrorEvent` on its own — the SSE layer
+     * normalizes it on the way out, so a partial object here is checked by nothing.
+     */
+    expect(ErrorEvent.safeParse(err).success).toBe(true);
+    expect(WritingChatTurnEventSchema.safeParse(err).success).toBe(true);
+    expect(err).toMatchObject({ category: "provider_limit", failureCause: "rate_limited", retryable: true });
+    expect(err.message).toMatch(/[가-힣]/);
     // QA-S4-01: final retry_after per C-11.3 (rate limit: at least 1 min), not the short wait.
     expect(Date.parse(err.retryAfter!) - t.clock.ms()).toBeGreaterThanOrEqual(60_000);
     const failedJob = t.store.jobs.get((first.events[0] as Extract<WritingChatTurnEvent, { type: "turn_started" }>).jobId)!;

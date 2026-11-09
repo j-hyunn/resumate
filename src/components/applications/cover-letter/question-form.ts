@@ -43,7 +43,7 @@ export function seedQuestionForms(): QuestionForm[] {
   return COVER_LETTER_DEFAULT_QUESTIONS.map((q, i) => ({
     slot: `q_${i + 1}`,
     question_id: newQuestionId(),
-    question_text: q.question_text,
+    question_text: q.question_text ?? "",
     answer_title: "",
     char_limit: String(COVER_LETTER_DEFAULT_CHAR_LIMIT),
     count_basis: COVER_LETTER_DEFAULT_COUNT_BASIS,
@@ -76,10 +76,11 @@ export function toQuestionForms(body: CoverLetterBody): QuestionForm[] {
   return body.questions.map((q) => ({
     slot: q.slot,
     question_id: q.question_id,
-    question_text: q.question_text,
+    question_text: q.question_text ?? "",
     answer_title: q.answer_title ?? "",
     char_limit: String(q.char_limit ?? ""),
-    count_basis: q.count_basis,
+    // DB가 null을 허용하는 것이 정본이다 — 화면은 기본값으로 좁혀 쓴다 (기준 기본 = 공백 포함)
+    count_basis: q.count_basis ?? COVER_LETTER_DEFAULT_COUNT_BASIS,
     user_note: q.user_note ?? "",
     body: q.body,
     template_key: q.template_key,

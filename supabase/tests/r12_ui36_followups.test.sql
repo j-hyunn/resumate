@@ -3,7 +3,7 @@
 -- QA fix (QA-02, QA-03): Gemini paid / inactive Gemini free key, greetings through the start RPCs, UX v5.13 wording.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(22);
 
 -- 1. policy_versions 2026-11-05 (no reconsent) is the latest effective version of each type
 -- R13 added policy_type 'ai_data_use' with the same version string; this assertion stays about the R12 three.
@@ -23,9 +23,8 @@ select is(private.current_policy_version('privacy'), '2026-11-08.1', 'privacy is
 select is(private.current_policy_version('ai_data_use'), '2026-11-08.1', 'ai_data_use is current at 2026-11-08.1');
 select is(private.current_policy_version('terms'), '2026-11-08', 'terms is current at 2026-11-08');
 
--- 2. default draft titles (D-UX-23)
-select ok(private.draft_default_title('cover_letter') like '자소서 문항 답변 (____-__-__)', 'cover_letter default title');
-select ok(private.draft_default_title('career_description') like '경력기술서 (____-__-__)', 'career_description unchanged');
+-- 2. ~~default draft titles (D-UX-23)~~ — R15 (CL-3·CF-1): private.draft_default_title is dropped with the
+--    drafts tables; the cover letter of record has no title column (DM §2.7.3).
 
 -- 3. greeting gate label
 select ok(private.writing_chat_greeting(jsonb_populate_record(null::public.projects, '{"name":"P"}'), 'cover_letter', false)

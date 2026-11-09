@@ -236,13 +236,40 @@ export type UsageSource = (typeof USAGE_SOURCES)[number];
 export const USAGE_OUTCOMES = ["succeeded", "failed"] as const;
 export type UsageOutcome = (typeof USAGE_OUTCOMES)[number];
 
-/** evidence_links.owner_type CHECK (DM A.14). */
+/**
+ * evidence_links.owner_type CHECK (DM A.14; R15 D10 + the destructive step).
+ * The non-destructive step still allows `draft_section` (an insert trigger refuses it);
+ * after `20261113004500_r15_drop_drafts` the CHECK holds exactly these three
+ * (db notes ④). `application_document` is the 자기소개서 정본 (DM 2.7.3).
+ */
 export const EVIDENCE_OWNER_TYPES = [
   "insight",
-  "draft_section",
   "chat_message",
+  "application_document",
 ] as const;
 export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];
+
+/**
+ * `private.evidence_allowed_sources(owner_type)` (R15 D10, db notes ③) — the same list the
+ * insert trigger and `save_application_document` read. Outside the list → `invalid_evidence_source`
+ * (`P0001`, no longer a `23514` CHECK violation — spec-gaps R15-DB-9).
+ * `profile` is refused for every owner (SD-A19); `chat_message` is unconstrained (no producer).
+ */
+export const EVIDENCE_ALLOWED_SOURCE_TYPES = {
+  insight: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence"],
+  application_document: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence", "user_note"],
+} as const satisfies Partial<Record<EvidenceOwnerType, readonly string[]>>;
+
+/**
+ * `evidence_links.item_key` shapes for `owner_type = 'application_document'` (DM 2.8, CF-S1):
+ * a block's evidence and a question's source row. `slot` is `q_{n}` only.
+ */
+export function documentBlockItemKey(slot: string, blockId: string): string {
+  return `${slot}.blocks.${blockId}`;
+}
+export function documentSourceItemKey(slot: string, n: number): string {
+  return `${slot}.sources.${n}`;
+}
 
 /** evidence_links.source_type CHECK (DM §2.8). */
 export const EVIDENCE_SOURCE_TYPES = [
@@ -284,9 +311,19 @@ export type DraftFieldReview = (typeof DRAFT_FIELD_REVIEWS)[number];
 export const CLARIFICATION_KINDS = ["actor_ambiguous", "number_vague", "period_unclear"] as const;
 export type ClarificationKind = (typeof CLARIFICATION_KINDS)[number];
 
-/** writing_chats.return_target.feature (DM §2.5 v3.2, U-5; R14: 3 values). */
+/**
+ * `writing_chats.return_target.feature` table CHECK (DM §2.5 v3.2, U-5; R14: 3 values) —
+ * **unchanged** in R15 so existing rows stay valid (db notes ④).
+ */
 export const RETURN_TARGET_FEATURES = ["insight", "career_description", "cover_letter"] as const;
 export type ReturnTargetFeature = (typeof RETURN_TARGET_FEATURES)[number];
+
+/**
+ * What `start_writing_chat` accepts for `p_return_target.feature` after R15 D14:
+ * `career_description` is refused (`invalid_return_target`, 400) because 경력기술서 is gone (CF-1).
+ */
+export const START_WRITING_CHAT_RETURN_TARGET_FEATURES = ["insight", "cover_letter"] as const satisfies readonly ReturnTargetFeature[];
+export type StartWritingChatReturnTargetFeature = (typeof START_WRITING_CHAT_RETURN_TARGET_FEATURES)[number];
 
 /** structured_draft v3 `project` keys = projects period columns (DM 2.5 v4.4; `is_current` is never proposed). */
 export const DRAFT_PERIOD_FIELDS = ["start_month", "end_month"] as const;
@@ -317,6 +354,76 @@ export type DeliverableAppliedMode = (typeof DELIVERABLE_APPLIED_MODES)[number];
 /** AI-12 v4.5 slot ids (`requested_slot`; = ai-pipeline `SLOT_IDS`). */
 export const WRITING_CHAT_SLOTS = ["period", "situation", "task", "action", "result", "learnings"] as const;
 export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
+
+/**
+ * `ai_jobs.target_type` values (no global CHECK — a per-`job_type` combination CHECK, db notes ④).
+ * `jd_preview` is R15 (CF-A17): a row with no target yet, linked by `create_application_project`.
+ * `draft` / `draft_section` stay for rows inside the 90-day retention window.
+ */
+export const AI_JOB_TARGET_TYPES = [
+  "writing_chat",
+  "application_project",
+  "job_description",
+  "jd_preview",
+  "draft",
+  "draft_section",
+] as const;
+export type AiJobTargetType = (typeof AI_JOB_TARGET_TYPES)[number];
+
+// --- R15: 자기소개서 정본 (DM 2.7.3, 11.8 #1) ---
+
+/**
+ * `application_documents.document_kind` CHECK — **one value** (CF-1·CF-A2: 경력기술서 left the
+ * service; the column stays). `writing_chats.document_kind` is this list or null.
+ */
+export const APPLICATION_DOCUMENT_KINDS = ["cover_letter"] as const;
+export type ApplicationDocumentKind = (typeof APPLICATION_DOCUMENT_KINDS)[number];
+
+/** `application_documents.body.questions[].slot` (DM 2.7.3) — `q_1` … `q_999`. */
+export const DOCUMENT_SLOT_PATTERN = /^q_[0-9]{1,3}$/;
+
+/** `save_application_document` question cap (DM 2.9.4, CF-5 — was 10). */
+export const DOCUMENT_QUESTION_LIMIT = 5;
+
+/**
+ * `application_documents.body.questions[].blocks[].type` (DM 2.5.0b). A 자소서 answer is
+ * paragraphs in practice; the other kinds exist because the stored shape is shared.
+ */
+export const DOCUMENT_BLOCK_TYPES = ["heading", "paragraph", "bullet_list", "numbered_list", "table", "quote", "code"] as const;
+export type DocumentBlockType = (typeof DOCUMENT_BLOCK_TYPES)[number];
+
+/** `blocks[].basis` (DM 2.5.0b): 새로 쓴 / 지금 본문에서 / 사용자가 쓴. */
+export const DOCUMENT_BLOCK_BASES = ["new", "current_body", "user"] as const;
+export type DocumentBlockBasis = (typeof DOCUMENT_BLOCK_BASES)[number];
+
+/** `application_documents.meta.tone` (DM 2.7.3; = ai-pipeline `COVER_LETTER_TONES`). */
+export const DOCUMENT_TONES = ["concise", "detailed"] as const;
+export type DocumentTone = (typeof DOCUMENT_TONES)[number];
+
+/** `structured_draft.document.questions[].draft.sources[].role` (CF-S1, 2026-11-09). */
+export const DOCUMENT_SOURCE_ROLES = ["primary", "supporting"] as const;
+export type DocumentSourceRole = (typeof DOCUMENT_SOURCE_ROLES)[number];
+
+/**
+ * 서류 draft-turn style chips (AI-04): "글자 수 맞춰 줘" / "더 간결하게". A different vocabulary
+ * from the deliverable chat's `COMPOSE_STYLES`; the turn service checks it against the chat's target.
+ */
+export const DOCUMENT_COMPOSE_STYLES = ["fit_length", "shorter"] as const;
+export type DocumentComposeStyle = (typeof DOCUMENT_COMPOSE_STYLES)[number];
+
+/** CF-S1 `[가정]`: at most 5 question-level sources per slot. */
+export const DOCUMENT_SOURCE_LIMIT = 5;
+
+/** `structured_draft.document.question_edit_proposal[].op` (F-DOC-10 Could, `[가정]`). */
+export const DOCUMENT_QUESTION_EDIT_OPS = ["add", "update", "remove"] as const;
+export type DocumentQuestionEditOp = (typeof DOCUMENT_QUESTION_EDIT_OPS)[number];
+
+/**
+ * `save_application_document` skipped[].reason — the same six values and judgment order as the
+ * page save RPCs (DM 2.5.1 공통 규칙). There is no `applied_mode` for documents.
+ */
+export const DOCUMENT_SAVE_SKIP_REASONS = PAGE_SAVE_SKIP_REASONS;
+export type DocumentSaveSkipReason = PageSaveSkipReason;
 
 // --- S5: application projects & JD (DM §2.6, A.5–A.7, AI-01) ---
 

@@ -30,7 +30,12 @@ set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 
 select lives_ok($$select id, name, stage from public.application_projects$$, 'app_ai_writer: select project header');
-select lives_ok($$select * from public.job_descriptions$$, 'app_ai_writer: select job_descriptions');
+-- R15 (CF-10·CF-A16): the job_descriptions grant is column-level now — source_url is not readable by the AI
+-- role, so `select *` fails and the readable columns are listed instead.
+select lives_ok($$select id, raw_text, sentences, extraction_status, company_name, position_title
+                    from public.job_descriptions$$, 'app_ai_writer: select job_descriptions');
+select throws_ok($$select source_url from public.job_descriptions$$, '42501', null,
+                 'app_ai_writer cannot read job_descriptions.source_url');
 select lives_ok($$select * from public.jd_requirements$$, 'app_ai_writer: select jd_requirements');
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
                     provider, model_tier, connection_tier)
@@ -46,7 +51,7 @@ select is(public.apply_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-77
               "requirements":[{"category":"responsibility","content":"백엔드 개발","keywords":["백엔드"],"importance":"high","source_sids":["S1"]}],
               "tech_keywords":[],"other_sids":[],"warnings":[],"requirements_hash":"rh","extraction":{"schema_version":1}}',
             'anthropic', 'claude-haiku-5-5') ->> 'name',
-          '회사 – 백엔드', 'app_ai_writer: apply_jd_extraction');
+          '회사 자기소개서', 'app_ai_writer: apply_jd_extraction');
 select lives_ok($$select public.fail_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001')$$,
                 'app_ai_writer: fail_jd_extraction (no-op after success)');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000001', 1)$$, 'app_ai_writer: complete job');

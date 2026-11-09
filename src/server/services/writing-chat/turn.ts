@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { failureCauseOf, type StoredAiJobProgress } from "@/lib/contracts/ai";
-import { WRITING_CHAT_SLOTS, type AiErrorCode, type ModelTier } from "@/lib/contracts/enums";
+import { aiErrorEvent, failureCauseOf, type StoredAiJobProgress } from "@/lib/contracts/ai";
+import { DOCUMENT_COMPOSE_STYLES, WRITING_CHAT_SLOTS, type AiErrorCode, type AiJobType, type DocumentComposeStyle, type ModelTier } from "@/lib/contracts/enums";
+import { DocumentFormSnapshotSchema, type DocumentFormSnapshot } from "@/lib/contracts/application-document";
 import { AppError } from "@/lib/contracts/errors";
 import {
   DELIVERABLE_DRAFT_LIMIT,
+  DOCUMENT_SLOT_RE,
   DeliverableFormSnapshotSchema,
   DraftFieldPath,
   ProjectFormSnapshotSchema,
   WRITING_CHAT_MESSAGE_LIMIT,
   WRITING_CHAT_MESSAGE_MAX_CHARS,
   type AnyWritingChatTurnEvent,
+  type CoverLetterDraft,
   type DeliverableDraft,
   type DeliverableFormSnapshot,
   type ProjectFormSnapshot,
@@ -36,7 +39,23 @@ import { createPriceCache, createUsageRecorder } from "@/server/jobs/usage-recor
 import type { V9Flags } from "@/server/ai/validation/v9";
 import { applicableFields, diffDrafts, needsReviewCount } from "./draft";
 import { toMessageDto } from "./mappers";
-import type { ChatMessage, ChatSnapshot, DeliverableComposeOutcome, DeliverableExtractOutcome, Log, TurnDeps, TurnReplyEvent, TurnSnapshot, TurnTiming } from "./types";
+import { COVER_LETTER_DRAFT_LIMIT } from "@/server/ai/schemas/cover-letter-draft";
+import type {
+  ChatMessage,
+  ChatSnapshot,
+  DeliverableComposeOutcome,
+  DeliverableExtractOutcome,
+  DocumentComposeEvent,
+  DocumentComposeOutcome,
+  DocumentDecision,
+  DocumentExtractOutcome,
+  DocumentPlan,
+  Log,
+  TurnDeps,
+  TurnReplyEvent,
+  TurnSnapshot,
+  TurnTiming,
+} from "./types";
 
 /**
  * AI-12 conversation turn (F-P1-13, DM §3.3 / §7 대화 턴, AI C-11.3 / C-12 / C-13).
@@ -94,9 +113,10 @@ export type TurnRequest = {
   /** New user message; null = "다시 보내기" of the last failed reply. */
   content: string | null;
   requestedSlot: RequestedSlot | null;
-  /** Deliverable chats only (AI-13 chips). */
+  /** Deliverable chats only (AI-13 chips); 서류 대화 takes `compose_draft` too. */
   requestedAction?: DeliverableRequestedAction | null;
-  style?: ComposeStyle | null;
+  /** Deliverable or 서류 vocabulary; checked against the chat's target. */
+  style?: ComposeStyle | DocumentComposeStyle | null;
   /** Raw request value; validated against the chat's target (S-10 / S-44 shape) → `invalid_form_snapshot`. */
   formSnapshot?: unknown;
 };
@@ -126,14 +146,24 @@ function timingOf(deps: TurnDeps): TurnTiming {
   return { ...DEFAULT_TIMING, ...deps.timing };
 }
 
-function inFlightQuery(deps: TurnDeps, chatId: string) {
+/**
+ * One turn at a time per chat. R15 D3: a 서류 turn's `job_type` is `cover_letter` (the DB's
+ * per-`job_type` CHECK pairs it with `target_type = 'writing_chat'` + a non-null
+ * `application_project_id`), so the in-flight lookup must use the same type.
+ */
+function inFlightQuery(deps: TurnDeps, chatId: string, jobType: AiJobType) {
   return {
     userId: deps.userId,
-    jobType: "writing_chat_turn" as const,
+    jobType,
     target: { type: "writing_chat", id: chatId },
     inputHash: null,
     applicationProjectId: null,
   };
+}
+
+/** `ai_jobs.job_type` of one turn, by target (R15 D3; the 서류 턴 is `cover_letter`). */
+export function turnJobType(target: ChatTarget): AiJobType {
+  return target === "application_document" ? "cover_letter" : "writing_chat_turn";
 }
 
 const turnInProgress = () => new AppError("turn_in_progress", "이전 메시지에 대한 응답을 만들고 있어요. 잠시 후 다시 보내 주세요.", { status: 409 });
@@ -152,9 +182,18 @@ const draftLimitReached = () =>
 type TurnOptions = {
   requestedSlot: RequestedSlot | null;
   requestedAction: DeliverableRequestedAction | null;
-  style: ComposeStyle | null;
-  formSnapshot: ProjectFormSnapshot | DeliverableFormSnapshot | null;
+  style: ComposeStyle | DocumentComposeStyle | null;
+  formSnapshot: ProjectFormSnapshot | DeliverableFormSnapshot | DocumentFormSnapshot | null;
 };
+
+/** R15: the chat's target decides every option's vocabulary and the draft shape (DM 2.5 v4.15). */
+export type ChatTarget = "project" | "project_deliverable" | "application_document";
+
+export function chatTargetOf(chat: Pick<ChatSnapshot, "projectDeliverableId" | "applicationProjectId">): ChatTarget {
+  if (chat.projectDeliverableId !== null && chat.projectDeliverableId !== undefined) return "project_deliverable";
+  if (chat.applicationProjectId !== null && chat.applicationProjectId !== undefined) return "application_document";
+  return "project";
+}
 
 /**
  * Checks the request options against the chat's target (the route can't know it): AI-12 slots and
@@ -162,19 +201,27 @@ type TurnOptions = {
  * — S-10 header + STAR / S-44 {title, body}, DB length limits) → `invalid_form_snapshot`.
  */
 export function checkTurnOptions(chat: ChatSnapshot, req: TurnRequest): TurnOptions {
-  const deliverable = chat.projectDeliverableId !== null;
+  const target = chatTargetOf(chat);
   const slot = req.requestedSlot?.slot ?? null;
   const requestedAction = req.requestedAction ?? null;
   const style = req.style ?? null;
-  if (deliverable) {
+  if (target === "project_deliverable") {
     if (slot !== null && !isDeliverableSlot(slot)) throw new AppError("invalid_input");
+    // The deliverable vocabulary only (`fit_length` is 서류).
+    if (style !== null && style === "fit_length") throw new AppError("invalid_input");
+  } else if (target === "application_document") {
+    // R15: 서류 slots are `q_{n}` (DM 2.7.3) — a pattern, not a list.
+    if (slot !== null && !DOCUMENT_SLOT_RE.test(slot)) throw new AppError("invalid_input");
+    if (style !== null && !(DOCUMENT_COMPOSE_STYLES as readonly string[]).includes(style)) throw new AppError("invalid_input");
   } else {
     if (slot !== null && !(WRITING_CHAT_SLOTS as readonly string[]).includes(slot)) throw new AppError("invalid_input");
     if (requestedAction !== null || style !== null) throw new AppError("invalid_input");
   }
   let formSnapshot: TurnOptions["formSnapshot"] = null;
   if (req.formSnapshot !== undefined && req.formSnapshot !== null) {
-    const parsed = (deliverable ? DeliverableFormSnapshotSchema : ProjectFormSnapshotSchema).safeParse(req.formSnapshot);
+    const schema =
+      target === "project_deliverable" ? DeliverableFormSnapshotSchema : target === "application_document" ? DocumentFormSnapshotSchema : ProjectFormSnapshotSchema;
+    const parsed = schema.safeParse(req.formSnapshot);
     if (!parsed.success) throw invalidSnapshot();
     formSnapshot = parsed.data;
   }
@@ -234,8 +281,15 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
   if (!chat) throw new AppError("not_found");
   if (chat.status !== "active") throw closedChat();
   const options = checkTurnOptions(chat, req);
-  // AI-13: the draft chip at the limit is refused before anything is saved (DM §7, ai notes §3.3 ②).
-  if (options.requestedAction === "compose_draft" && (chat.deliverableDraft?.draft_count ?? 0) >= DELIVERABLE_DRAFT_LIMIT) throw draftLimitReached();
+  const target = chatTargetOf(chat);
+  const jobType = turnJobType(target);
+  // AI-13 / AI-04: the draft chip at the limit is refused before anything is saved
+  // (DM §7, ai notes §3.3 ②). The 서류 limit is per chat, not per slot (DM 2.9.4).
+  if (options.requestedAction === "compose_draft") {
+    const used = target === "application_document" ? (chat.documentDraft?.draft_count ?? 0) : (chat.deliverableDraft?.draft_count ?? 0);
+    const limit = target === "application_document" ? COVER_LETTER_DRAFT_LIMIT : DELIVERABLE_DRAFT_LIMIT;
+    if (used >= limit) throw draftLimitReached();
+  }
 
   let retryUser: ChatMessage | null = null;
   if (retry) {
@@ -246,7 +300,7 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
   }
 
   // One turn at a time per chat (DB: one in-flight job per user, type, target).
-  if (await deps.store.findInFlight(inFlightQuery(deps, chat.id))) throw turnInProgress();
+  if (await deps.store.findInFlight(inFlightQuery(deps, chat.id, jobType))) throw turnInProgress();
 
   // The connection is read here and fixed into the job (F-AI-03 (2)); never trusted from the client.
   let context;
@@ -267,8 +321,9 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
     await deps.store.insert({
       id: jobId,
       userId: deps.userId,
-      jobType: "writing_chat_turn",
-      applicationProjectId: null,
+      jobType,
+      // R15 D3: a 서류 turn carries its 지원 프로젝트 (the CHECK requires it for `cover_letter`).
+      applicationProjectId: target === "application_document" ? chat.applicationProjectId : null,
       targetType: "writing_chat",
       targetId: chat.id,
       provider: context.provider,
@@ -278,12 +333,12 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
       params: {
         retry,
         requested_slot: options.requestedSlot,
-        ...(chat.projectDeliverableId ? { target: "project_deliverable", requested_action: options.requestedAction, style: options.style } : {}),
+        ...(target === "project" ? {} : { target, requested_action: options.requestedAction, style: options.style }),
       },
       inputHash: null,
       promptVersion: null,
       model,
-      progress: { stage: chat.projectDeliverableId ? "extract" : "reply", done: 0, total: 2 },
+      progress: { stage: target === "project" ? "reply" : "extract", done: 0, total: 2 },
       meta: { runBase: 1, waitBase: 0, retries: {} },
     });
   } catch (err) {
@@ -395,7 +450,7 @@ export async function prepareTurn(deps: TurnDeps, req: TurnRequest): Promise<Pre
     connectionTier: context.connectionTier,
     retry,
     pending: pendingUserMessages.length,
-    target: chat.projectDeliverableId ? "project_deliverable" : "project",
+    target,
     formSnapshot: options.formSnapshot !== null,
   });
   return { kind: "ready", job, snapshot, assistant: { id: assistant.id, sequence: assistant.sequence }, retry, messageCount, startedAt: now().getTime() };
@@ -468,7 +523,9 @@ export async function runTurn(
   const deadline = turn.startedAt + timing.budgetMs - timing.settleReserveMs;
   const remaining = () => deadline - now().getTime();
   const userSeq = snapshot.userMessage.sequence;
-  const isDeliverable = chat.projectDeliverableId !== null;
+  const target = chatTargetOf(chat);
+  const isDeliverable = target === "project_deliverable";
+  const isDocument = target === "application_document";
 
   // Turn-level abort: client disconnect or a cancel request (stop button) → "canceled"; lost job → "lost".
   const turnAbort = new AbortController();
@@ -894,14 +951,222 @@ export async function runTurn(
     return { reply, draft, draftStatus: "updated", progress: { stage: "validate", done: extracted + (reply.ok ? 2 : 1), total: 3 }, extract: extractLabel };
   }
 
+  // ---------------- R15 서류 turn (AI-04, ai notes §2 (2)) ----------------
+
+  type DocumentExtractCall = { ok: true; value: DocumentExtractOutcome } | { ok: false; code: AiErrorCode };
+  type DocumentRun = {
+    reply: ReplyResult;
+    draft: CoverLetterDraft;
+    draftStatus: "updated" | "unchanged" | "failed";
+    progress: StoredAiJobProgress;
+    extract: string;
+  };
+
+  function emitDocumentFacts(before: CoverLetterDraft, stored: CoverLetterDraft, sensitiveAdded: number): void {
+    const known = new Set(before.facts.map((f) => f.id));
+    safeEmit({ type: "draft_patch", structuredDraft: stored, added: stored.facts.filter((f) => !known.has(f.id)).map((f) => f.id) });
+    safeEmit({
+      type: "draft_flags",
+      needsReview: stored.facts.filter((f) => f.review === "needs_review").map((f) => f.id),
+      sensitiveAdded: Math.max(sensitiveAdded, stored.sensitive_flags_count - before.sensitive_flags_count, 0),
+      sensitiveFlagsCount: stored.sensitive_flags_count,
+      clarifications: stored.clarifications,
+    });
+  }
+
+  /**
+   * One 서류 초안 call. The pipeline makes at most two provider calls of its own (schema retry) and
+   * one `adjust_length` inside, so C-11.3's immediate retry here only applies before the first block
+   * (a new `draft_started` tells the screen to start over).
+   */
+  async function runDocumentCompose(
+    decision: Extract<DocumentDecision, { action: "compose" }>,
+  ): Promise<{ ok: true; outcome: DocumentComposeOutcome } | { ok: false; reply: ReplyResult }> {
+    const retriesByCode: Partial<Record<AiErrorCode, number>> = {};
+    for (;;) {
+      const budget = Math.min(timing.composeTimeoutMs[tier], remaining());
+      const call = callSignal(turnAbort.signal, Math.max(budget, timing.minCallMs));
+      let blockShown = false;
+      let error: AiError | null = null;
+      let outcome: DocumentComposeOutcome | null = null;
+      try {
+        const llm = makeLlm("default", call.signal);
+        const stream = deps.documentPipelines.compose(
+          { jobId: job.id, llm, signal: call.signal, callKey: `cover_letter.turn.${userSeq}.compose`, snapshot },
+          decision,
+        );
+        let step = await stream.next();
+        while (!step.done) {
+          const ev = step.value;
+          if (ev.type === "draft_block") blockShown = true;
+          safeEmit(toDocumentSseEvent(ev));
+          step = await stream.next();
+        }
+        outcome = step.value;
+      } catch (err) {
+        error = toFailure(err, call.signal);
+      } finally {
+        call.clear();
+      }
+      if (outcome && !error) return { ok: true, outcome };
+      const err = error!;
+      noteKeyError(err);
+      const retries = retriesByCode[err.code] ?? 0;
+      const decided = blockShown ? null : decideRetry({ error: err, retriesSoFar: retries, waitUsedMs: 0, now: now(), random: () => 0 });
+      if (decided?.kind === "retry_now" && !turnAbort.signal.aborted && remaining() >= timing.minCallMs) {
+        retriesByCode[err.code] = retries + 1;
+        log("writing_chat.compose_retry", { jobId: job.id, code: err.code });
+        continue;
+      }
+      log("writing_chat.compose_failed", { jobId: job.id, code: err.code });
+      // A failed 초안 call leaves the previous proposals untouched (no patch is built).
+      return { ok: false, reply: await failReply("", err, retries, decided) };
+    }
+  }
+
+  async function runDocument(): Promise<DocumentRun> {
+    const dp = deps.documentPipelines;
+    let draft = chat.documentDraft!;
+    let updated = false;
+    let failed = false;
+    let extractLabel = "skipped";
+    const status = () => (updated ? "updated" : failed ? "failed" : "unchanged") as DocumentRun["draftStatus"];
+
+    const callExtract = (): Promise<DocumentExtractCall> | null =>
+      snapshot.pendingUserMessages.length === 0
+        ? null
+        : retryingCall("extract", timing.extractTimeoutMs[tier], (c) => dp.extract({ jobId: job.id, snapshot, ...c }));
+
+    async function storeExtract(r: DocumentExtractCall | null): Promise<{ extracted: DocumentExtractOutcome | null; stored: CoverLetterDraft | null; through: number | null }> {
+      if (!r) return { extracted: null, stored: null, through: null };
+      if (!r.ok) {
+        failed = true;
+        extractLabel = r.code;
+        return { extracted: null, stored: null, through: null };
+      }
+      const outcome = r.value;
+      if (outcome.skipped) return { extracted: outcome, stored: null, through: null };
+      const before = draft;
+      try {
+        const stored = outcome.patch === null ? null : (await deps.chats.applyDocumentPatch(chat.id, outcome.patch)).draft;
+        const through = outcome.processedThroughSequence ?? Math.max(...snapshot.pendingUserMessages.map((m) => m.sequence));
+        await deps.chats.markExtracted(chat.id, through);
+        extractLabel = "ok";
+        if (stored) {
+          draft = stored;
+          if (JSON.stringify(before) !== JSON.stringify(stored)) {
+            updated = true;
+            emitDocumentFacts(before, stored, outcome.sensitiveAdded);
+          }
+        }
+        return { extracted: outcome, stored, through };
+      } catch (err) {
+        // Not stored: the messages stay pending and are extracted again next turn.
+        failed = true;
+        extractLabel = "stalled";
+        log("writing_chat.extract_store_failed", { jobId: job.id, dbCode: err instanceof AppError ? String(err.code) : "unknown" });
+        return { extracted: outcome, stored: null, through: null };
+      }
+    }
+
+    const replyWith = (notices: readonly string[]) => runReply((c) => dp.reply({ jobId: job.id, snapshot, ...c }, notices));
+    const plan: DocumentPlan = await dp.plan(snapshot);
+
+    if (plan.kind === "question") {
+      // Same as AI-12 / AI-13: paid reply ∥ extract; free reply → spacing → extract (C-12).
+      let reply: ReplyResult;
+      if (tier === "free") {
+        await freeTierLeadSpacing();
+        reply = await replyWith([]);
+        if (reply.ok) await spaced(async () => storeExtract(await callExtract()));
+      } else {
+        const extractPromise = callExtract();
+        reply = await replyWith([]);
+        await storeExtract(extractPromise ? await extractPromise : null);
+      }
+      const done = (reply.ok ? 1 : 0) + (extractLabel === "ok" ? 1 : 0);
+      return { reply, draft, draftStatus: status(), progress: { stage: extractLabel === "ok" ? "extract" : "reply", done, total: 2 }, extract: extractLabel };
+    }
+
+    // 초안 turn (C-15): extract → patch → rebuilt context → decide → compose.
+    if (tier === "free") await freeTierLeadSpacing();
+    const ex = await storeExtract(await callExtract());
+    const decision = await dp.decide(snapshot, { stored: ex.stored, processedThroughSequence: ex.through, extracted: ex.extracted }, plan);
+    const extracted = extractLabel === "ok" ? 1 : 0;
+    const calledBefore = ex.extracted !== null && !ex.extracted.skipped;
+
+    if (decision.action === "reply") {
+      const reply = calledBefore && tier === "free" ? await spaced(() => replyWith(decision.notices)) : await replyWith(decision.notices);
+      return { reply, draft, draftStatus: status(), progress: { stage: "reply", done: extracted + (reply.ok ? 1 : 0), total: 2 }, extract: extractLabel };
+    }
+
+    if (calledBefore && tier === "free") await sleep(timing.freeTierSpacingMs, turnAbort.signal);
+    void deps.store.update(job.id, gen, { progress: { stage: "compose", done: extracted, total: 3 } }).catch(() => false);
+    const composed = await runDocumentCompose(decision);
+    if (!composed.ok) {
+      return { reply: composed.reply, draft, draftStatus: updated ? "updated" : "failed", progress: { stage: "compose", done: extracted, total: 3 }, extract: extractLabel };
+    }
+    void deps.store.update(job.id, gen, { progress: { stage: "validate", done: extracted + 1, total: 3 } }).catch(() => false);
+    const outcome = composed.outcome;
+    const validated: StoredAiJobProgress = { stage: "validate", done: extracted + 1, total: 3 };
+    try {
+      const res = await deps.chats.applyDocumentPatch(chat.id, outcome.patch);
+      if (res.rejected.some((r) => r.op === "replace_draft")) {
+        // The pipeline validates more strictly than the RPC, so this is our bug: keep the previous proposals.
+        log("writing_chat.draft_rejected", { jobId: job.id, reasons: [...new Set(res.rejected.map((r) => r.reason))].join(",") });
+        const reply = await failReply("", new AiError("schema_invalid", { retryable: false }), 0, null);
+        return { reply, draft, draftStatus: "failed", progress: validated, extract: extractLabel };
+      }
+      draft = res.draft;
+    } catch (err) {
+      if (err instanceof AppError && err.code === "writing_chat_draft_limit_reached") {
+        // Another tab used the last draft meanwhile: answer with the limit notice instead of an error.
+        const reply = await finishReply(DRAFT_LIMIT_MESSAGE, "default");
+        return { reply, draft, draftStatus: status(), progress: validated, extract: extractLabel };
+      }
+      log("writing_chat.draft_store_failed", { jobId: job.id, dbCode: err instanceof AppError ? String(err.code) : "unknown" });
+      const reply = await failReply("", new AiError("stalled", { retryable: false }), 0, null);
+      return { reply, draft, draftStatus: "failed", progress: validated, extract: extractLabel };
+    }
+    // One `draft_done` per question, built from the RPC answer (`rev`, `draft_count`) and the
+    // pipeline's result (ai notes §2 (3) step 7). A question the RPC didn't store sends none.
+    if (outcome.outcome === "draft") {
+      for (const q of outcome.questions) {
+        const stored = draft.document.questions.find((e) => e.slot === q.slot)?.draft ?? null;
+        if (!stored) continue;
+        safeEmit({
+          type: "draft_done",
+          slot: q.slot,
+          questionNo: q.questionNo,
+          answerTitle: q.answerTitle,
+          charCount: q.charCount,
+          charLimit: q.charLimit,
+          charAdjustNeeded: q.charAdjustNeeded,
+          correctionApplied: q.correctionApplied,
+          needsReviewBlockIds: q.needsReviewBlockIds,
+          droppedBlockCount: q.droppedBlockCount,
+          rev: stored.rev,
+          draftCount: draft.draft_count,
+        });
+      }
+    }
+    // No reply call on a 초안 turn: the fixed message is the assistant message (AI-04).
+    const reply = await finishReply(outcome.assistantMessage, "default");
+    return { reply, draft, draftStatus: "updated", progress: { stage: "validate", done: extracted + (reply.ok ? 2 : 1), total: 3 }, extract: extractLabel };
+  }
+
   // ---------------- run ----------------
 
   let reply: ReplyResult;
   let extract: ExtractResult = { ok: false, code: "skipped" };
   let deliverableRun: DeliverableRun | null = null;
+  let documentRun: DocumentRun | null = null;
   try {
     turnStarted();
-    if (isDeliverable) {
+    if (isDocument) {
+      documentRun = await runDocument();
+      reply = documentRun.reply;
+    } else if (isDeliverable) {
       deliverableRun = await runDeliverable();
       reply = deliverableRun.reply;
     } else if (tier === "free") {
@@ -934,7 +1199,7 @@ export async function runTurn(
   // QA-S4-05: updated / unchanged (nothing pending, or no change) / failed (retried next turn).
   let draftStatus: "updated" | "unchanged" | "failed" = !extract.ok && extract.code !== "skipped" ? "failed" : "unchanged";
   let draftAfter = chat.structuredDraft;
-  if (!isDeliverable && extract.ok) {
+  if (!isDeliverable && !isDocument && extract.ok) {
     draftAfter = extract.after;
     const diff = diffDrafts(extract.before, extract.after);
     if (diff.any) {
@@ -955,12 +1220,26 @@ export async function runTurn(
 
   const at = now().toISOString();
   const progress: StoredAiJobProgress =
-    deliverableRun?.progress ?? { stage: extract.ok ? "extract" : "reply", done: (reply.ok ? 1 : 0) + (extract.ok ? 1 : 0), total: 2 };
+    documentRun?.progress ?? deliverableRun?.progress ?? { stage: extract.ok ? "extract" : "reply", done: (reply.ok ? 1 : 0) + (extract.ok ? 1 : 0), total: 2 };
   if (reply.ok) {
     const room = hasRoomForTurn(turn.messageCount);
     // finish_assistant_message closes the chat once message_count > 38 (DM 2.5 v4.4).
     const closed = turn.messageCount > WRITING_CHAT_MESSAGE_LIMIT - MESSAGES_PER_TURN;
-    if (deliverableRun) {
+    if (documentRun) {
+      const d = documentRun.draft;
+      safeEmit({
+        type: "turn_done",
+        jobId: job.id,
+        messageCount: turn.messageCount,
+        remainingMessages: remainingMessages(turn.messageCount),
+        limitReached: !room,
+        closed,
+        draftStatus: documentRun.draftStatus,
+        draftCount: d.draft_count,
+        readyToReturn: false,
+        needsReviewCount: d.facts.filter((f) => f.review === "needs_review").length,
+      });
+    } else if (deliverableRun) {
       const d = deliverableRun.draft;
       safeEmit({
         type: "turn_done",
@@ -996,7 +1275,7 @@ export async function runTurn(
     const f = reply.failure;
     const canceled = f.code === "canceled" || lost;
     if (!lost) {
-      safeEmit({ type: "error", ...errorFields(f) } as AnyWritingChatTurnEvent);
+      safeEmit(turnErrorEvent(f));
       await deps.store
         .finish(job.id, gen, {
           status: canceled ? "canceled" : "failed",
@@ -1017,14 +1296,52 @@ export async function runTurn(
   log("writing_chat.turn_finished", {
     jobId: job.id,
     reply: reply.ok ? "ok" : reply.failure.code,
-    extract: deliverableRun ? deliverableRun.extract : extract.ok ? "ok" : extract.code,
+    extract: documentRun ? documentRun.extract : deliverableRun ? deliverableRun.extract : extract.ok ? "ok" : extract.code,
     calls: llms.length,
   });
 }
 
-/** Fields of the SSE `error` event; the SSE layer rebuilds the full shape from the code (QA-S3-02). */
-function errorFields(f: CallFailure): { code: AiErrorCode; retryAfter: string | null; quotaResetsAt: string | null } {
-  return { code: f.code, retryAfter: f.retryAfter, quotaResetsAt: f.quotaResetsAt };
+/**
+ * AI-04's compose events → the SSE contract (QA-R15-02).
+ *
+ * The pipeline hands the chosen sources over in the stored row's snake_case shape
+ * (`SelectedSourceView`), while the SSE contract is camelCase like every other event. This is the
+ * one place that renames them; an `as` cast used to hide the mismatch, which would have put
+ * snake_case keys on the wire for a camelCase contract.
+ */
+function toDocumentSseEvent(ev: DocumentComposeEvent): AnyWritingChatTurnEvent {
+  if (ev.type !== "sources_selected") return ev;
+  return {
+    type: "sources_selected",
+    slot: ev.slot,
+    questionNo: ev.questionNo,
+    questionClass: ev.questionClass,
+    sources: ev.sources.map((s) => ({
+      sortOrder: s.sort_order,
+      role: s.role,
+      experienceId: s.experience_id,
+      educationId: s.education_id,
+      projectId: s.project_id,
+      label: s.label,
+      rationale: s.rationale,
+      reuseReason: s.reuse_reason,
+      requirementIds: s.requirement_ids,
+    })),
+  };
+}
+
+/**
+ * The turn's `error` event, complete per the `ErrorEvent` contract (QA-R15-02).
+ *
+ * The SSE layer normalizes an `error` event on its way out (`normalizeErrorEvent`), so the wire
+ * shape was already right — but the object the turn emits is also read in-process (tests, and any
+ * consumer that isn't the SSE writer), and a partial object there means the contract is not
+ * actually checked anywhere. `aiErrorEvent` is the one place that maps a code to its C-11
+ * `category` / `failureCause`, its Korean message and `retryable`, so both callers use it and
+ * neither needs a cast.
+ */
+function turnErrorEvent(f: CallFailure): AnyWritingChatTurnEvent {
+  return aiErrorEvent(f.code, { retryAfter: f.retryAfter, quotaResetsAt: f.quotaResetsAt });
 }
 
 async function reportKeyStatus(deps: TurnDeps, jobId: string, reply: ReplyResult, keyErrors: AiError[], log: Log): Promise<void> {

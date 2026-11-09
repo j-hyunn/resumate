@@ -185,8 +185,14 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
   return { dirty, navigate, pending, saving, cancel, leaveWithoutSaving, saveAndLeave, reloadDiscarding }
 }
 
-/** 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>. */
-export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
+/**
+ * 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>.
+ *
+ * `hideSave`: "저장하고 나가기"를 두지 않는 화면용 (S-46 문항 설정 상태 — 저장 경로가
+ * [자기소개서 작성 시작] 하나라 이 자리에서 저장할 수 없다, CF-S3). 그러면 버튼 둘은
+ * "나가기" / "계속 작성"이다. 기본값은 지금 동작 그대로다.
+ */
+export function LeaveGuardDialog({ guard, hideSave = false }: { guard: LeaveGuardController; hideSave?: boolean }) {
   return (
     <AlertDialog open={guard.pending !== null} onOpenChange={(o) => !o && !guard.saving && guard.cancel()}>
       <AlertDialogContent className="sm:max-w-md">
@@ -198,12 +204,16 @@ export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
         {/* 2026-11 모달 개편: "계속 편집" is the top-right X (closes = stay); 2 buttons right-aligned */}
         <AlertDialogFooter>
           <Button variant="muted-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
-            저장하지 않고 나가기
+            {hideSave ? "나가기" : "저장하지 않고 나가기"}
           </Button>
-          <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
-            {guard.saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            저장하고 나가기
-          </Button>
+          {hideSave ? (
+            <Button onClick={guard.cancel}>계속 작성</Button>
+          ) : (
+            <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
+              {guard.saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
+              저장하고 나가기
+            </Button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -238,7 +248,24 @@ function useNarrow(query = "(max-width: 767px)"): boolean {
  * The page's only primary button (R-C8). Ctrl/⌘ + S saves (and never opens the browser's save dialog).
  * `savedAt` = the last successful save this visit ("저장됨 HH:MM" in idle / saved).
  */
-export function SaveButton({ state, onSave, savedAt, className }: { state: SaveUiState; onSave: () => void; savedAt: string | null; className?: string }) {
+export function SaveButton({
+  state,
+  onSave,
+  savedAt,
+  className,
+  hideTooltip = false,
+}: {
+  state: SaveUiState
+  onSave: () => void
+  savedAt: string | null
+  className?: string
+  /**
+   * 툴팁("저장하기 (⌘S)")을 끈다. S-46 문항 설정 상태는 ⌘S가 동작하지 않고, **비활성인 이유를
+   * 알리지 않는다**(v5.20 CF-S5 확정 2026-11-09 (사용자) — 툴팁·안내 줄·`aria-describedby` 모두 없다).
+   * 기본값은 지금 동작 그대로다(S-10·S-44).
+   */
+  hideTooltip?: boolean
+}) {
   const narrow = useNarrow()
   const enabled = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
   const showDot = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
@@ -296,7 +323,7 @@ export function SaveButton({ state, onSave, savedAt, className }: { state: SaveU
           </span>
         </TooltipTrigger>
         {/* [UI-가정] 툴팁 글자 */}
-        <TooltipContent>저장하기 ({shortcut})</TooltipContent>
+        {hideTooltip ? null : <TooltipContent>저장하기 ({shortcut})</TooltipContent>}
       </Tooltip>
     </div>
   )
@@ -451,12 +478,15 @@ export function PageShell({
   guard,
   save,
   aiReopen,
+  hideLeaveSave = false,
   children,
 }: {
   guard: LeaveGuardController
   /** <SaveButton … /> */
   save: React.ReactNode
   aiReopen?: AiReopenProps | null
+  /** 이탈 확인에 "저장하고 나가기"를 두지 않는다 (S-46 문항 설정 상태, CF-S3) */
+  hideLeaveSave?: boolean
   children: React.ReactNode
 }) {
   useToasterPosition("bottom-left")
@@ -474,7 +504,7 @@ export function PageShell({
           {children}
         </main>
       </div>
-      <LeaveGuardDialog guard={guard} />
+      <LeaveGuardDialog guard={guard} hideSave={hideLeaveSave} />
     </LeaveGuardContext.Provider>
   )
 }
@@ -547,8 +577,12 @@ export function CrumbRow({ back, items, current }: { back: { href: string; label
 // 입력 보존 (UX-7, 1.3a 입력 보존) — browser storage only, never the URL
 // ---------------------------------------------------------------------------
 
-/** 키: 기존 = 행 ID, 새 페이지 = 소속 ID(산출물은 프로젝트 ID) + "new" (1.3a). */
-export function preservationKey(kind: "project" | "deliverable", rowId: string | null, parentId: string): string {
+/**
+ * 키: 기존 = 행 ID, 새 페이지 = 소속 ID(산출물은 프로젝트 ID) + "new" (1.3a).
+ * `cover_letter`(S-46)는 행 ID 대신 **지원 프로젝트 ID**를 쓴다 — 지원 프로젝트당 정본 1행이라
+ * 서류 id가 주소에도 키에도 없다 (CF-A2, UX S-46 "입력 보존 키").
+ */
+export function preservationKey(kind: "project" | "deliverable" | "cover_letter", rowId: string | null, parentId: string): string {
   return `resumate:l02:${kind}:${rowId ?? `${parentId}:new`}`
 }
 

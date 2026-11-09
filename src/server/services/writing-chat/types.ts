@@ -1,5 +1,18 @@
-import type { AiErrorCode, AiProvider, ConnectionTier, ModelTier, WritingChatMessageRole, WritingChatMessageStatus, WritingChatStatus } from "@/lib/contracts/enums";
 import type {
+  AiErrorCode,
+  AiProvider,
+  ApplicationDocumentKind,
+  ConnectionTier,
+  DocumentComposeStyle,
+  ModelTier,
+  WritingChatMessageRole,
+  WritingChatMessageStatus,
+  WritingChatStatus,
+} from "@/lib/contracts/enums";
+import type { DocumentFormSnapshot } from "@/lib/contracts/application-document";
+import type { CoverLetterBlock } from "@/server/ai/schemas/cover-letter-draft";
+import type {
+  CoverLetterDraft,
   DeliverableDraft,
   DeliverableFormSnapshot,
   ProjectFormSnapshot,
@@ -47,9 +60,13 @@ export type ChatMessage = {
 export type ChatSnapshot = {
   id: string;
   userId: string;
-  projectId: string;
+  /** R15 D2: null on a 서류 대화 (DM 2.5: `project_id` is no longer not-null). */
+  projectId: string | null;
   /** null = STAR chat. */
   projectDeliverableId: string | null;
+  /** R15 D2: the 지원 프로젝트 of a 서류 대화 (with `documentKind`); null otherwise. */
+  applicationProjectId: string | null;
+  documentKind: ApplicationDocumentKind | null;
   /** First user message's first 30 chars (DB); null → "새 대화". */
   title: string | null;
   status: WritingChatStatus;
@@ -57,6 +74,8 @@ export type ChatSnapshot = {
   structuredDraft: StructuredDraft;
   /** DM 2.5.0 deliverable draft; null for STAR chats. */
   deliverableDraft: DeliverableDraft | null;
+  /** DM 2.5.0b 서류 draft (AI-04 proposals); null for the other targets. */
+  documentDraft: CoverLetterDraft | null;
   messageCount: number;
   /** spec-gaps 2026-10-30 ①: user messages with a higher sequence are not extracted yet. */
   lastExtractedSequence: number;
@@ -100,6 +119,8 @@ export interface TurnChatDb {
    * refused (`rejected`, logged without text). Throws `writing_chat_draft_limit_reached` (409).
    */
   applyDeliverablePatch(chatId: string, patch: unknown): Promise<{ draft: DeliverableDraft; rejected: { index: number; op: string; reason: string }[] }>;
+  /** Same RPC for a 서류 대화 (R15, DM 2.5.0b ops). Throws `writing_chat_draft_limit_reached` (409). */
+  applyDocumentPatch(chatId: string, patch: unknown): Promise<{ draft: CoverLetterDraft; rejected: { index: number; op: string; reason: string }[] }>;
   /** app_ai_writer RPC `mark_writing_chat_extracted` (only raises the mark). */
   markExtracted(chatId: string, sequence: number): Promise<void>;
 }
@@ -116,12 +137,13 @@ export type TurnSnapshot = {
   requestedSlot: RequestedSlot | null;
   /** Deliverable chats: chip action / draft style (AI-13). Always null on STAR chats. */
   requestedAction: DeliverableRequestedAction | null;
-  style: ComposeStyle | null;
+  /** Deliverable vocabulary or 서류 vocabulary, by the chat's target (checked in `checkTurnOptions`). */
+  style: ComposeStyle | DocumentComposeStyle | null;
   /**
    * The request's validated form snapshot (S-10 shape on STAR chats, S-44 on deliverable chats).
    * Lives only in memory for this turn: never stored, never logged (DM 2.5.1).
    */
-  formSnapshot: ProjectFormSnapshot | DeliverableFormSnapshot | null;
+  formSnapshot: ProjectFormSnapshot | DeliverableFormSnapshot | DocumentFormSnapshot | null;
   /** message_count including this reply (begin_assistant_message). */
   messageCountAfterReply: number;
   /** True when this turn's reply is the last that fits the 40-message limit (AI-12: summarize + 저장 안내). */
@@ -218,6 +240,97 @@ export interface DeliverablePipelines {
   compose(call: PipelineCall, style: ComposeStyle | null): AsyncGenerator<ComposeEvent, DeliverableComposeOutcome, void>;
 }
 
+// ---------- R15 서류 대화 (AI-04, DM 2.5.0b; ai notes §2 (2)) ----------
+
+/** What the AI-04 extract (정리) gave the runner (`patch` null = nothing to store). */
+export type DocumentExtractOutcome = {
+  skipped: boolean;
+  patch: unknown | null;
+  processedThroughSequence: number | null;
+  intent: "compose_draft" | null;
+  /** Sensitive items left out this turn (SSE draft_flags). */
+  sensitiveAdded: number;
+};
+
+/** `planCoverLetterTurn` (the draft-limit refusal happens in prepareTurn, before the message is saved). */
+export type DocumentPlan = { kind: "question" } | { kind: "compose"; source: "requested_action" | "text" };
+
+/**
+ * `composeDecision` after the facts are stored. `batch` is the pipeline's own question list and is
+ * opaque to the runner — it is handed straight back to `compose`; `slots` is what the runner logs.
+ */
+export type DocumentDecision =
+  | { action: "compose"; batch: unknown; slots: string[] }
+  | { action: "reply"; notices: string[] };
+
+/** One question of a draft turn, as `draft_done` needs it (the `rev` comes from the RPC). */
+export type DocumentComposedQuestion = {
+  slot: string;
+  questionNo: number;
+  /** CF-6: null when validation dropped the title (the body survives). */
+  answerTitle: string | null;
+  charCount: number;
+  charLimit: number | null;
+  charAdjustNeeded: boolean;
+  correctionApplied: boolean;
+  needsReviewBlockIds: string[];
+  droppedBlockCount: number;
+};
+
+export type DocumentComposeOutcome = {
+  outcome: "draft" | "empty";
+  /** `apply_structured_draft_patch` p_patch: one `replace_draft` per question (+ `count_draft`). */
+  patch: unknown;
+  questions: DocumentComposedQuestion[];
+  /** Fixed assistant message (stored as the reply; no reply call on a draft turn). */
+  assistantMessage: string;
+};
+
+/**
+ * Streaming events of a 서류 draft turn. The names are the existing ones (R15-L2); `slot` and
+ * `questionNo` tell the screen which question each one belongs to (a turn writes ≤ 3, CL-10).
+ */
+export type DocumentComposeEvent =
+  | { type: "draft_started"; attempt: number; reason: "initial" | "schema_retry"; slots: string[] }
+  | { type: "sources_selected"; slot: string; questionNo: number; questionClass: string; sources: DocumentSelectedSource[] }
+  | { type: "draft_block"; slot: string; questionNo: number; attempt: number; block: CoverLetterBlock }
+  | {
+      type: "adjusting_length";
+      questions: Array<{ slot: string; questionNo: number; charCount: number; charLimit: number; countBasis: "with_spaces" | "without_spaces"; reasons: Array<"length" | "numbers"> }>;
+    };
+
+export type DocumentSelectedSource = {
+  sort_order: number;
+  role: "primary" | "supporting";
+  experience_id: string | null;
+  education_id: string | null;
+  project_id: string | null;
+  label: string;
+  rationale: string;
+  reuse_reason: string | null;
+  requirement_ids: string[];
+};
+
+export interface DocumentPipelines {
+  /** Builds this turn's AI-04 context (career pack + JD requirements + the current 본문) and plans it. */
+  plan(snapshot: TurnSnapshot): Promise<DocumentPlan>;
+  /** AI-04 정리 (light tier). Throws AiError / ProviderError. */
+  extract(call: PipelineCall): Promise<DocumentExtractOutcome>;
+  /** Rebuilds the context from the stored draft after the facts patch, then decides compose vs reply. */
+  decide(
+    snapshot: TurnSnapshot,
+    after: { stored: CoverLetterDraft | null; processedThroughSequence: number | null; extracted: DocumentExtractOutcome | null },
+    plan: DocumentPlan,
+  ): Promise<DocumentDecision>;
+  /** AI-04 응답 (default tier) on the latest context, with the decision's notices. */
+  reply(call: PipelineCall, notices: readonly string[]): AsyncIterable<TurnReplyEvent>;
+  /**
+   * AI-04 초안 (default tier): one call for the whole batch, with a `adjust_length` call inside for
+   * the questions that need it (C-15: at most 3 provider calls in a 서류 draft turn).
+   */
+  compose(call: PipelineCall, decision: Extract<DocumentDecision, { action: "compose" }>): AsyncGenerator<DocumentComposeEvent, DocumentComposeOutcome, void>;
+}
+
 export type Log = (event: string, fields: Record<string, string | number | boolean | null>) => void;
 
 export type TurnDeps = {
@@ -236,6 +349,8 @@ export type TurnDeps = {
   pipelines: WritingChatPipelines;
   /** AI-13 (deliverable chats). */
   deliverablePipelines: DeliverablePipelines;
+  /** R15 AI-04 (서류 대화). */
+  documentPipelines: DocumentPipelines;
   now?: () => Date;
   newId?: () => string;
   /** Waits (C-12 free-tier call spacing). Resolves early when the signal aborts. */

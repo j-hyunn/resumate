@@ -73,3 +73,63 @@ describe("W0 refusals", () => {
     expect(mapDbError({ code: "42501", message: "not_authenticated" })).toMatchObject({ code: "unauthenticated", status: 401 });
   });
 });
+
+// ---------------- R15 자기소개서 관리 (CF-*, db notes ②) ----------------
+
+describe("R15 save_application_document refusals", () => {
+  it("too_many_questions: the raise detail '5,{current}' becomes details {limit, current} (R5-DB-8 shape)", () => {
+    const err = mapDbError({ code: "P0001", message: "too_many_questions", details: "5,3" });
+    expect(err).toMatchObject({ code: "too_many_questions", status: 400, details: { limit: 5, current: 3 } });
+    expect(err.message).toMatch(/[가-힣]/);
+    // The RPC uses `0` when there is no stored row yet.
+    expect(mapDbError({ code: "P0001", message: "too_many_questions", details: "5,0" }).details).toEqual({ limit: 5, current: 0 });
+  });
+
+  it("too_many_questions without a usable detail carries no details", () => {
+    expect(mapDbError({ code: "P0001", message: "too_many_questions" }).details).toBeUndefined();
+    expect(mapDbError({ code: "P0001", message: "too_many_questions", details: "oops" }).details).toBeUndefined();
+  });
+
+  /**
+   * R15-DB-9: the per-owner allowed-source check moved from a `23514` CHECK into the insert trigger,
+   * so this arrives as `P0001` with the `item_key` as its detail. It must stay a 400 the screen can
+   * act on, not the generic 500 the insight path used to give it.
+   */
+  it("invalid_evidence_source: P0001 → 400 with the item_key in details.field", () => {
+    const err = mapDbError({ code: "P0001", message: "invalid_evidence_source", details: "q_1.blocks.b1" });
+    expect(err).toMatchObject({ code: "invalid_evidence_source", status: 400, details: { field: "q_1.blocks.b1" } });
+    expect(err.message).toMatch(/[가-힣]/);
+    // V-8 last net: the detail names the field that was refused.
+    expect(mapDbError({ code: "P0001", message: "invalid_evidence_source", details: "q_2.blocks.b3.learnings" }).details).toMatchObject({
+      field: "q_2.blocks.b3.learnings",
+    });
+  });
+
+  it("invalid_slot → 400 under its own code with the slot in details.field", () => {
+    expect(mapDbError({ code: "P0001", message: "invalid_slot", details: "q_1" })).toMatchObject({ code: "invalid_slot", status: 400, details: { field: "q_1" } });
+  });
+
+  it("the other refusals keep the shared codes", () => {
+    expect(mapDbError({ code: "P0001", message: "application_project_not_found" })).toMatchObject({ code: "not_found", status: 404 });
+    expect(mapDbError({ code: "P0001", message: "stale_write", details: "2026-11-09T03:14:08.844340Z" })).toMatchObject({
+      code: "stale_write",
+      status: 409,
+      details: { current_updated_at: "2026-11-09T03:14:08.844340Z" },
+    });
+    expect(mapDbError({ code: "P0001", message: "invalid_fields", details: "questions.q_2.char_limit" })).toMatchObject({
+      code: "invalid_fields",
+      status: 400,
+      details: { field: "questions.q_2.char_limit" },
+    });
+    expect(mapDbError({ code: "P0001", message: "field_too_long", details: "questions.q_2.answer_title" })).toMatchObject({
+      code: "field_too_long",
+      status: 400,
+    });
+  });
+});
+
+describe("R15 create_application_project", () => {
+  it("invalid_source_url → 400 invalid_input (no row is built, so the screen may resend without the URL)", () => {
+    expect(mapDbError({ code: "P0001", message: "invalid_source_url" })).toMatchObject({ code: "invalid_input", status: 400 });
+  });
+});

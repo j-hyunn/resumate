@@ -64,9 +64,12 @@ export const REQUEST_SCOPED_JOB_TYPES: ReadonlySet<AiJobType> = new Set<AiJobTyp
   "key_verification", // QA-S3b-05: re-run from the connection screen
   "writing_chat_turn", // S4: "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1)
   "jd_extraction", // S5: POST /api/application-projects/{id}/jd-extraction again
-  "draft_source_ranking", // S7: POST /api/application-projects/{id}/draft-source-ranking
-  "career_description", // S7: POST /api/application-projects/{id}/career-descriptions
-  "cover_letter", // S7: POST /api/draft-sections/{id}/generate
+  // R15 (CF-1·CF-A3): the three S7 서류 routes are retired. `draft_source_ranking` and
+  // `career_description` stay in the list only for rows inside the 90-day retention window;
+  // `cover_letter` now means one 서류 대화 턴 (POST /api/writing-chats/{id}/turns).
+  "draft_source_ranking",
+  "career_description",
+  "cover_letter",
   // QA-S9-06: reserved DB values (Should features) with no producer yet. Kept out of the
   // generic retry / cron continue path until a feature defines how they run.
   "writing_assist",

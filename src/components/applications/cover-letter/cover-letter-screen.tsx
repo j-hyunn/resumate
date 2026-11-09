@@ -20,14 +20,6 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ArrowUpRight, MoreHorizontal, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -41,8 +33,8 @@ import {
   SaveButton,
   ShellBanners,
   StaleWriteDialog,
+  preservationKey,
   useLeaveGuard,
-  type LeaveGuardController,
   type SaveUiState,
 } from "@/components/common/shell/page-shell"
 import { ReturnBanner } from "@/components/common/return-banner"
@@ -52,13 +44,16 @@ import type { ApplicationDocument, DateString } from "@/types/db"
 import type { EvidenceView } from "@/lib/data/evidence"
 import { applicationDisplayName, formatRelative } from "@/lib/data/labels"
 import { COVER_LETTER_MAX_QUESTIONS } from "@/lib/data/cover-letter-defaults"
+import { PAGE_SAVE_SKIP_COPY } from "@/lib/data/career-v45-shared"
 import { QUESTION_MAX_NOTE } from "@/lib/data/cover-letter-copy"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { deleteApplicationAction, markCoverLetterCopiedAction, saveCoverLetterDocumentAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { useRestoreReturnParams } from "../shared"
 import { AnswerTab } from "./answer-tab"
-import { CoverLetterPanelPending } from "./panel-pending"
+import { CoverLetterPanel } from "./cover-letter-panel"
+import { useCoverLetterPanel } from "./use-cover-letter-panel"
+import type { QuestionFill } from "./question-proposal-card"
 import { QuestionSetup } from "./question-setup"
 import {
   isUntouchedSeed,
@@ -87,11 +82,14 @@ export interface CoverLetterScreenData {
   evidence: Record<string, EvidenceView[]>
   /** 키가 있고 요건이 아직 없다 → [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 */
   extract_first: boolean
+  /** 패널 머리 "대화 기록 목록" (이 자기소개서의 대화) */
+  chats: import("@/lib/data/cover-letter-chat-types").CoverLetterChatSummary[]
+  /** `?chat=`으로 연 대화 */
+  open_chat: import("@/lib/data/cover-letter-chat-types").CoverLetterChatView | null
   preview: { state: string | null; extractFail: import("@/types/db").AiErrorCode | null }
 }
 
 const PANEL_OPEN_KEY = "resumate:l02:cover_letter:panel"
-const PRESERVE_PREFIX = "resumate:l02:cover_letter"
 
 export function CoverLetterScreen({
   data,
@@ -133,6 +131,12 @@ export function CoverLetterScreen({
   const [savedAt, setSavedAt] = React.useState<string | null>(null)
   const [stale, setStale] = React.useState(previewState === "save-conflict")
   const [starting, setStarting] = React.useState(false)
+  /**
+   * 이번 방문에 [반영]한 제안 — **CF-S1: 저장 요청에 싣는 근거는 이것뿐이다**
+   * (`applied_proposals: [{writingChatId, slot, rev}]`). 서버가 그 제안의 `draft.sources[]`로
+   * `{slot}.sources.{n}` 근거를 다시 쓰고, 적용 제안이 없는 슬롯은 기존 근거를 유지한다.
+   */
+  const [applied, setApplied] = React.useState<Array<{ writingChatId: string; slot: string; rev: number }>>([])
   const [deleting, setDeleting] = React.useState<DeleteTarget | null>(null)
   const nameRef = React.useRef<HTMLInputElement | null>(null)
 
@@ -140,10 +144,12 @@ export function CoverLetterScreen({
   const bodyChanged = JSON.stringify(forms) !== baseline
   const headChanged = name !== headBaseline.name || deadline !== headBaseline.deadline
   // 손대지 않은 기본 3문항만 있는 새 화면은 "변경 없음" (UX S-46 `[가정]`)
-  const dirty = state === "questions" ? (!isUntouchedSeed(forms) && bodyChanged) || headChanged : bodyChanged || headChanged
+  const dirty =
+    state === "questions" ? (!isUntouchedSeed(forms) && bodyChanged) || headChanged : bodyChanged || headChanged || applied.length > 0
 
   // ---------- 입력 보존 (1.3a — "지원 프로젝트 ID + cover_letter") ----------
-  const preserveKey = `${PRESERVE_PREFIX}:${apId}`
+  // 1.3a 입력 보존 키 — "지원 프로젝트 ID + cover_letter" (공용 헬퍼, 파운데이션 후속 ③)
+  const preserveKey = preservationKey("cover_letter", apId, apId)
   const restored = React.useRef(false)
   React.useEffect(() => {
     if (restored.current) return
@@ -230,8 +236,8 @@ export function CoverLetterScreen({
         application_project_id: apId,
         body: toCoverLetterBody(current),
         expected_updated_at: opts.overwrite ? null : updatedAt,
-        // CF-S1: 근거를 싣지 않는다. 패널이 붙으면 반영한 제안만 여기로 간다
-        applied_proposals: [],
+        // CF-S1: 근거 목록을 싣지 않고 반영한 제안만 보낸다
+        applied_proposals: applied,
         application_values: Object.keys(values).length > 0 ? values : undefined,
       }).catch((e: unknown) => errorCode(e))
 
@@ -263,9 +269,9 @@ export function CoverLetterScreen({
         setSaveState("failed")
         return false
       }
-      // 반환 9키로 머리를 다시 그린다 (다시 읽지 않는다)
-      setUpdatedAt(r.updated_at)
-      setSavedAt(r.updated_at)
+      // 반환 9키(계약은 camelCase)로 머리를 다시 그린다 — 다시 읽지 않는다
+      setUpdatedAt(r.updatedAt)
+      setSavedAt(r.updatedAt)
       setBaseline(JSON.stringify(current))
       setName(r.name ?? "")
       setDeadline(r.deadline ?? "")
@@ -274,21 +280,25 @@ export function CoverLetterScreen({
       clearPreserved()
       setDoc((prev) =>
         prev
-          ? { ...prev, updated_at: r.updated_at, filled_slot_count: r.filled_slot_count, slot_count: r.slot_count }
+          ? { ...prev, updated_at: r.updatedAt, filled_slot_count: r.filledSlotCount, slot_count: r.slotCount }
           : ({
-              id: r.application_document_id,
+              id: r.applicationDocumentId,
               user_id: "",
-              created_at: r.updated_at,
-              updated_at: r.updated_at,
+              created_at: r.updatedAt,
+              updated_at: r.updatedAt,
               application_project_id: apId,
               document_kind: "cover_letter",
               body: toCoverLetterBody(current),
-              filled_slot_count: r.filled_slot_count,
-              slot_count: r.slot_count,
+              filled_slot_count: r.filledSlotCount,
+              slot_count: r.slotCount,
               meta: {},
               first_copied_at: null,
             } satisfies ApplicationDocument),
       )
+      // 서버가 건너뛴 제안(`skipped`)은 그 사유 문구를 알린다 (S-10 "저장 응답의 건너뜀"과 같은 규칙)
+      if (r.skipped.length > 0) toast(PAGE_SAVE_SKIP_COPY[r.skipped[0].reason])
+      // 반영된 제안은 이번 요청이 보낸 것만 비운다
+      setApplied((list) => list.filter((a) => !r.applied.some((x) => x.writingChatId === a.writingChatId && x.slot === a.slot)))
       if (opts.createRow) {
         // 정본 행이 생겼다 → 작성 상태(자소서 탭). 주소는 바뀌지 않는다
         setTab("cover_letter")
@@ -296,14 +306,71 @@ export function CoverLetterScreen({
       }
       return true
     },
-    [apId, name, deadline, headBaseline, updatedAt, clearPreserved],
+    [apId, name, deadline, headBaseline, updatedAt, applied, clearPreserved],
   )
 
   // ---------- 이탈 확인 ----------
-  // 문항 설정 상태에는 "저장하고 나가기"가 없다(저장 경로가 [자기소개서 작성 시작] 하나다, CF-S3) —
-  // 그래서 셸의 기본 다이얼로그를 띄우지 않고(`pending: null`) 같은 컨트롤러로 2버튼 확인을 직접 그린다.
+  // 문항 설정 상태에는 "저장하고 나가기"가 없다 — 저장 경로가 [자기소개서 작성 시작] 하나다 (CF-S3).
+  // 셸의 이탈 확인에 `hideLeaveSave`를 넘겨 버튼을 "나가기" / "계속 작성" 둘로 만든다 (파운데이션 후속 ②).
   const guard = useLeaveGuard({ dirty, onSave: () => runSave(), onDiscard: clearPreserved })
-  const shellGuard: LeaveGuardController = state === "questions" ? { ...guard, pending: null } : guard
+
+  // ---------- Resumate AI 패널 (작성 상태만) ----------
+  /** 턴마다 보내는 지금 폼 — 저장 전 값이 우선이고 저장·로그에 남지 않는다 (CL-4, DM 2.5.1) */
+  const formSnapshot = React.useMemo(
+    () =>
+      forms.map((f, i) => ({
+        slot: f.slot || `q_${i + 1}`,
+        question_text: f.question_text,
+        char_limit: Number(f.char_limit) || 0,
+        count_basis: f.count_basis,
+        user_note: f.user_note || null,
+        answer_title: f.answer_title || null,
+        body: f.body,
+      })),
+    [forms],
+  )
+  const panel = useCoverLetterPanel({
+    applicationProjectId: apId,
+    initialChats: data.chats,
+    initialChat: data.open_chat,
+    formSnapshot,
+    preview: {
+      state: previewState,
+      autoplay: previewState === "draft-stream" || previewState === "draft-failed" ? "draft" : null,
+      turnError: previewState === "draft-failed" ? "provider_unavailable" : null,
+    },
+    requirementsPending: data.extract_first,
+    onChatChange: (chatId) => {
+      // 연 대화는 주소에 남긴다 (`?chat=`) — 서버 재렌더가 일어나지 않게 replaceState만 쓴다
+      const url = new URL(window.location.href)
+      if (chatId) url.searchParams.set("chat", chatId)
+      else url.searchParams.delete("chat")
+      window.history.replaceState(window.history.state, "", url.pathname + url.search)
+    },
+  })
+
+  /** 제안 [반영] — 폼만 채우고(키 없이 가능) "저장하기"가 `applied_proposals`로 올린다 (UX-4) */
+  const onFill = React.useCallback(
+    (fills: QuestionFill[]) => {
+      setForms((list) =>
+        list.map((f) => {
+          const fill = fills.find((x) => x.slot === f.slot)
+          if (!fill) return f
+          // 제안에 제목이 있으면 제목도 교체, 없으면 지금 제목을 둔다 (CF-A4)
+          return { ...f, body: fill.body, answer_title: fill.answerTitle ?? f.answer_title }
+        }),
+      )
+      setApplied((list) => [
+        ...list.filter((a) => !fills.some((f) => f.slot === a.slot)),
+        ...fills.map((f) => ({ writingChatId: f.writingChatId, slot: f.slot, rev: f.rev })),
+      ])
+      setErrors({})
+      if (saveState !== "saving") setSaveState("idle")
+      // 되돌리기 없음 (OD-P2) — 정보 토스트만
+      toast(fills.length === 1 ? `${slotNumber(forms, fills[0].slot)}번 문항에 채웠어요` : `문항 ${fills.length}개에 채웠어요`)
+    },
+    [forms, saveState],
+  )
 
   // ---------- 패널 자리 ----------
   const placement = usePanelPlacement()
@@ -370,7 +437,7 @@ export function CoverLetterScreen({
                 <span className="text-sm text-muted-foreground">포지션 없음</span>
               )}
             </InlineField>
-            <InlineField label="공고">
+            <InlineField label="채용 공고">
               {data.source_url ? (
                 <Button variant="link" size="sm" className="h-auto px-0" asChild>
                   <a href={data.source_url} target="_blank" rel="noopener noreferrer">
@@ -422,6 +489,17 @@ export function CoverLetterScreen({
     </DocHead>
   )
 
+  /** 반영하지 않은 제안이 있는 문항 — 머리에 "AI 제안 있음" 표식 */
+  const unappliedSlots = React.useMemo(() => {
+    const out = new Set<string>()
+    for (const q of panel.chat?.structured_draft.document.questions ?? []) {
+      if (q.draft.applied_at) continue
+      if (applied.some((a) => a.slot === q.slot && a.rev === q.draft.rev)) continue
+      out.add(q.slot)
+    }
+    return out
+  }, [panel.chat, applied])
+
   const answerTab = (
     <AnswerTab
       forms={forms}
@@ -437,17 +515,29 @@ export function CoverLetterScreen({
         // `first_copied_at` 기록 (PRD 7장 지표). 실패해도 복사는 끝났으므로 조용히 넘긴다
         void markCoverLetterCopiedAction(apId).catch(() => null)
       }}
-      panelOpen={placement.wideOpen}
-      onOpenPanel={() => placement.setWideOpen(true)}
+      onOpenPanel={() => {
+        placement.setWideOpen(true)
+        panel.focusInput()
+      }}
+      unappliedSlots={unappliedSlots}
       highlight={highlight}
     />
   )
 
   return (
     <PageShell
-      guard={shellGuard}
+      guard={guard}
+      hideLeaveSave={state === "questions"}
       aiReopen={state === "writing" ? { visible: placement.mode === "wide" && !placement.wideOpen, onClick: () => placement.setWideOpen(true) } : null}
-      save={<SaveButton state={saveUi} savedAt={savedAt} onSave={() => state === "writing" && void runSave()} />}
+      save={
+        <SaveButton
+          state={saveUi}
+          savedAt={savedAt}
+          onSave={() => state === "writing" && void runSave()}
+          // CF-S3: 문항 설정 상태에서는 ⌘S가 동작하지 않고, **비활성인 이유를 알리지 않는다**(CF-S5)
+          hideTooltip={state === "questions"}
+        />
+      }
     >
       <CrumbRow
         back={fromBoard ? { href: routes.board(), label: "지원 현황" } : { href: routes.applications(), label: "자기소개서 관리" }}
@@ -523,31 +613,19 @@ export function CoverLetterScreen({
                     </TabsContent>
                   </>
                 }
-                aside={<CoverLetterPanelPending onClose={() => placement.setWideOpen(false)} />}
+                aside={
+                  <CoverLetterPanel
+                    panel={{ ...panel, hide: () => placement.setWideOpen(false) }}
+                    questions={forms.map((f, i) => ({ slot: f.slot || `q_${i + 1}`, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
+                    filled={applied.map((a) => ({ slot: a.slot, rev: a.rev }))}
+                    onFill={onFill}
+                  />
+                }
               />
             </div>
           </div>
         </Tabs>
       )}
-
-      {/* 문항 설정 상태의 이탈 확인 — "저장하고 나가기"를 둘 수 없다 (CF-S3) */}
-      <AlertDialog open={state === "questions" && guard.pending !== null} onOpenChange={(o) => !o && guard.cancel()}>
-        <AlertDialogContent className="sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>저장하지 않은 변경이 있어요</AlertDialogTitle>
-            <AlertDialogDescription>
-              {/* [UI-가정] 설명 줄 — 저장은 [자기소개서 작성 시작]에서만 된다 */}
-              지금 나가면 정한 문항이 남지 않아요. 저장은 &apos;자기소개서 작성 시작&apos;을 눌러야 돼요
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button variant="muted-ghost" onClick={guard.leaveWithoutSaving}>
-              나가기
-            </Button>
-            <Button onClick={guard.cancel}>계속 작성</Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <StaleWriteDialog
         open={stale}
@@ -628,4 +706,10 @@ function usePanelPlacement(): DocPanelPlacement {
 
 function errorCode(e: unknown): string {
   return typeof e === "object" && e !== null && "code" in e ? String((e as { code?: unknown }).code) : "save_failed"
+}
+
+/** 토스트에 쓰는 문항 번호 */
+function slotNumber(forms: QuestionForm[], slot: string): number {
+  const at = forms.findIndex((f) => f.slot === slot)
+  return at >= 0 ? at + 1 : 1
 }

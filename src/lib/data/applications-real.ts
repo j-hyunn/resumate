@@ -96,6 +96,9 @@ export async function realCreateApplicationProject(input: {
   deadline?: string | null
   company_name?: string | null
   position_title?: string | null
+  /** R15: the posting URL (CF-10) and the 요건 미리 보기 작업 (CF-A17), both optional. */
+  source_url?: string | null
+  preview_job_id?: string | null
 }): Promise<ApplicationProject> {
   const created = unwrap(
     await applicationActions.createApplicationProject({
@@ -105,6 +108,8 @@ export async function realCreateApplicationProject(input: {
       positionTitle: input.position_title ?? undefined,
       name: input.name ?? undefined,
       deadline: input.deadline ?? undefined,
+      sourceUrl: input.source_url ?? undefined,
+      previewJobId: input.preview_job_id ?? undefined,
     }),
   )
   const { supabase, user } = await requireConsentedUser()

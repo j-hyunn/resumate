@@ -2,25 +2,28 @@ import "server-only"
 /**
  * 자기소개서 흐름 data layer (UX v5.20 S-13 · S-14 · S-46, DM v4.15 2.6.2 · 2.7.3).
  *
- * 백엔드 슬라이스 R15가 아직 없어 여기 함수는 **mock 분기만** 동작한다. real 분기는
- * `// 연결 대기 (<문서 위치>)`로 두고 `notWired()`를 던진다 — 이름·시그니처는 그대로 두고
- * 백엔드가 몸통만 바꾼다 (ui-context "Data layer"). 각 함수의 대기 상태는
- * `_workspace/ui/46_frontend-engineer-A0_report.md` "백엔드 요청"에 적혀 있다.
+ * **R15 병합 뒤 실제 경로로 전환했다** — `fetchJobPosting` · `extractJdPreview` ·
+ * `saveCoverLetterDocument`는 real 분기가 돈다. `?state=` mock 분기는 그대로 둔다(이 프로젝트 방식).
+ * 아직 **연결 대기**인 것은 서버 읽기 자리가 없는 셋이다: `getCoverLetterDocument`(정본 행 읽기) ·
+ * `listCoverLetterSlotCounts`(S-39 `slot_count`·`filled_slot_count`) · `markCoverLetterCopied`
+ * (`first_copied_at`). 보고서 "백엔드 요청"에 적었다.
  *
- * **근거를 저장 요청에 싣지 않는다** (기획 PR #68 CF-S1): 문항 근거의 원천은 그 문항 초안
- * 제안의 `sources[]`이고, 저장 RPC가 `p_applied_proposals`로 받은 제안에서 `evidence_links`를
- * 만든다. 화면·데이터 계층은 근거 목록을 올려 보내지 않는다.
+ * **근거를 저장 요청에 싣지 않는다** (CF-S1): 문항 근거의 원천은 그 문항 초안 제안의 `sources[]`이고,
+ * 저장 RPC가 `p_applied_proposals`로 받은 제안에서 `evidence_links`를 만든다. 화면·데이터 계층은
+ * 근거 목록을 올려 보내지 않는다.
  */
-import type {
-  ApplicationDocument,
-  ApplicationValuesPatch,
-  AppliedProposalRef,
-  CoverLetterBody,
-  JdExtractPreview,
-  JdFetchResult,
-  SaveApplicationDocumentResult,
-  Uuid,
-} from "@/types/db"
+import type { ApplicationDocument, CoverLetterBody, Uuid } from "@/types/db"
+// 저장 입력·반환·거부 코드·가져오기·미리 보기의 **정본은 R15 계약**이다 (손 타입을 두지 않는다)
+import type { SaveApplicationDocumentResult } from "@/lib/contracts/application-document"
+import type { ExtractJdPreviewResult } from "@/lib/contracts/application"
+import type { FetchJobDescriptionResult } from "@/lib/contracts/jd-fetch"
+import { saveApplicationDocument as saveApplicationDocumentAction } from "@/server/actions/application-document"
+import { fetchJobDescription } from "@/server/services/job-description/fetch"
+import { extractJdPreview as extractJdPreviewService } from "@/server/services/application/preview"
+import { createJdPreviewDeps } from "@/server/jobs/jd-preview"
+import { logJobEvent } from "@/server/jobs/log"
+import { requireConsentedUser } from "@/server/auth/session"
+import { unwrap } from "./source"
 import { AppError } from "@/lib/contracts/errors"
 import { clone, mockRequest } from "@/lib/mock/store"
 import { newId, USER_ID } from "@/lib/mock/ids"
@@ -84,7 +87,7 @@ export async function listCoverLetters(): Promise<CoverLetterListRow[]> {
  *
  * 연결 대기: `POST /api/job-descriptions/fetch` (DM v4.15 11.10 · decisions 4.23 백엔드 8)
  */
-export async function fetchJobPosting(url: string): Promise<JdFetchResult> {
+export async function fetchJobPosting(url: string): Promise<FetchJobDescriptionResult> {
   return previewOr(
     async () => {
       await mockRequest()
@@ -99,8 +102,12 @@ export async function fetchJobPosting(url: string): Promise<JdFetchResult> {
         positionTitle: "결제 백엔드 엔지니어",
       }
     },
-    // 연결 대기 (DM v4.15 11.10 — POST /api/job-descriptions/fetch)
-    async () => notWired("공고 URL 가져오기"),
+    // real: `POST /api/job-descriptions/fetch`와 같은 서비스를 서버에서 바로 부른다 (AI 아님 — 키·동의 없이 된다).
+    // 실패 6종은 `jdFetchError()`가 `AppError`로 던지고 화면이 한 문구로 받는다 (CF-10).
+    async () => {
+      const { user } = await requireConsentedUser()
+      return fetchJobDescription({ url, userId: user.id }, { log: logJobEvent })
+    },
   )
 }
 
@@ -134,7 +141,7 @@ const MOCK_FETCHED_JD = [
  *
  * 연결 대기: `POST /api/job-descriptions/extract-preview` (DM v4.15 2.6.2)
  */
-export async function extractJdPreview(rawText: string): Promise<JdExtractPreview> {
+export async function extractJdPreview(rawText: string): Promise<ExtractJdPreviewResult> {
   return previewOr(
     async () => {
       const db = await mockRequest(600)
@@ -155,8 +162,12 @@ export async function extractJdPreview(rawText: string): Promise<JdExtractPrevie
         requirementCount: Math.min(lines.length, 6),
       }
     },
-    // 연결 대기 (DM v4.15 2.6.2 — POST /api/job-descriptions/extract-preview)
-    async () => notWired("공고 요건 미리 보기"),
+    // real: 행 없는 AI-01. Q53-1 게이트는 서비스가 409(`key_invalid`·`ai_consent_required`·`key_missing`)로
+    // 거부하고 `ai_jobs`·사용량에 0행을 남긴다 — `withAiGuard`가 그 거부를 `AiRejected`로 바꾼다.
+    async () => {
+      const { user } = await requireConsentedUser()
+      return extractJdPreviewService(createJdPreviewDeps(user.id), rawText)
+    },
   )
 }
 
@@ -219,10 +230,10 @@ export interface SaveCoverLetterInput {
   meta?: { tone?: "concise" | "detailed" | null }
   /** 기대 버전 = 서류 `updated_at`. 정본 행이 없는 첫 저장은 null */
   expected_updated_at: string | null
-  /** 반영한 제안 `[{writing_chat_id, slot, rev}]` */
-  applied_proposals?: AppliedProposalRef[]
+  /** 반영한 제안 `[{writingChatId, slot, rev}]` — CF-S1: 화면이 보내는 근거는 이것뿐이다 */
+  applied_proposals?: Array<{ writingChatId: string; slot: string; rev: number }>
   /** 머리 제목·마감일 — 바뀐 키만 (DM v4.15 `p_application_values`) */
-  application_values?: ApplicationValuesPatch
+  application_values?: { name?: string | null; deadline?: string | null }
   /** @deprecated R15: `p_client_id`는 받아도 무시된다 — 멱등 키로 쓰지 않는다 */
   client_id?: string
 }
@@ -242,7 +253,10 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           details: { limit: COVER_LETTER_MAX_QUESTIONS, current: storedCount },
         })
       // R15: `char_limit`은 필수 — 경로 `questions.q_n.char_limit` (화면이 기본 800을 채워 보낸다, CF-U2)
-      const badLimit = input.body.questions.findIndex((q) => !Number.isFinite(q.char_limit) || q.char_limit < 1 || q.char_limit > 10_000)
+      // `char_limit`은 DB에서 null을 허용하지만(정본) **새 저장은 필수**다 (R15 백엔드 #13)
+      const badLimit = input.body.questions.findIndex(
+        (q) => q.char_limit == null || !Number.isFinite(q.char_limit) || q.char_limit < 1 || q.char_limit > 10_000,
+      )
       if (badLimit >= 0)
         throw new AppError("invalid_fields", "글자 수 제한을 확인해 주세요", {
           status: 400,
@@ -296,20 +310,31 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
       ap.last_activity_at = now
       ap.updated_at = now
       return {
-        application_document_id: doc.id,
-        document_kind: "cover_letter" as const,
-        filled_slot_count: doc.filled_slot_count,
-        slot_count: doc.slot_count,
+        applicationDocumentId: doc.id,
+        documentKind: "cover_letter" as const,
+        filledSlotCount: doc.filled_slot_count,
+        slotCount: doc.slot_count,
         name: ap.name,
-        name_source: ap.name_source,
+        nameSource: ap.name_source,
         deadline: ap.deadline,
-        updated_at: doc.updated_at,
-        applied: input.applied_proposals ?? [],
+        updatedAt: doc.updated_at,
+        applied: (input.applied_proposals ?? []).map((a) => ({ writingChatId: a.writingChatId, slot: a.slot })),
         skipped: [],
       }
     },
-    // 연결 대기 (DM 2.7.3 — save_application_document + p_application_values)
-    async () => notWired("자소서 저장"),
+    // real: `save_application_document` 한 번 (본문 + 머리 제목·마감일). 반환 9키를 그대로 올린다
+    async () =>
+      unwrap(
+        await saveApplicationDocumentAction({
+          applicationProjectId: input.application_project_id,
+          documentKind: "cover_letter",
+          body: input.body,
+          meta: input.meta,
+          expectedUpdatedAt: input.expected_updated_at ?? undefined,
+          appliedProposals: input.applied_proposals,
+          applicationValues: input.application_values,
+        }),
+      ),
   )
 }
 

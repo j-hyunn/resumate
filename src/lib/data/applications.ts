@@ -43,7 +43,6 @@ import {
   realStartInsight,
   realUpdateFailedJdRawText,
 } from "./applications-real"
-import { realGetDraft, realListDrafts, realSaveDraftSection } from "./drafts-real"
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
@@ -301,19 +300,16 @@ export interface CreateApplicationInput {
   company_name?: string | null
   position_title?: string | null
   /**
-   * (v5.20, CF-10·CF-A16) S-14 ①의 공고 URL → `job_descriptions.source_url`.
-   * **연결 대기**: real 분기(`create_application_project`)에 `p_source_url`이 아직 없다 (백엔드 요청,
-   * DM v4.15 2.6.2 "생성 RPC 인자 추가"). mock 분기만 저장한다.
+   * R15 (CF-10·CF-A16·CF-A17): ①에서 붙여넣은 공고 URL(JD에 저장)과, 생성 RPC가 요건을 읽어 오는
+   * **요건 미리 보기 작업 id**다. 둘 다 선택이고 real 경로가 그대로 넘긴다.
+   * **이름 규칙(R15 D12)**: `name`이 있으면 그것 / 없고 회사명이 있으면 "{회사명} 자기소개서"(user,
+   * 키 연결과 무관) / 회사명도 없으면 키 없음은 기본 이름, 키 있음은 null(추출 대기).
    */
   source_url?: string | null
-  /**
-   * (v5.20, CF-A17) ① [다음]의 미리 보기 작업 id → `p_preview_job_id`. 원문이 같으면 서버가 같은
-   * 트랜잭션에서 요건·마감일을 적용한다. **연결 대기**: real 분기에 인자가 없다 (백엔드 요청).
-   */
   preview_job_id?: string | null
   /**
-   * mock 전용: 미리 보기가 찾은 마감일. real 경로에서는 서버가 미리 보기 작업 행의 출력에서 읽으므로
-   * 보내지 않는다 — mock은 작업 행 대신 모달이 들고 있던 값을 받는다 `[UI-가정]`.
+   * **mock 전용**: 미리 보기가 찾은 마감일. real 경로에서는 서버가 미리 보기 작업 행의 `output`에서
+   * 읽으므로 보내지 않는다 — mock은 작업 행이 없어 모달이 들고 있던 값을 받는다 `[UI-가정]`.
    */
   preview_deadline?: string | null
 }
@@ -398,7 +394,7 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     tech_keywords: [],
     requirements_hash: null,
     raw_text_edited_at: null,
-    // 연결 대기 (DM v4.15 2.6.2 — p_source_url / job_descriptions.source_url)
+    // R15: 생성 RPC가 `p_source_url`을 받는다 (CF-10·CF-A16)
     source_url: input.source_url?.trim() || null,
   })
   // (CF-A17 · R15) 미리 보기 적용: 서버가 원문을 다시 해시해 대조한다 — ②에서 공고 내용을 고치면
@@ -778,14 +774,22 @@ export function startInsight(applicationProjectId: string, opts?: { fail?: AiErr
   return previewOr(() => mockStartInsight(applicationProjectId, opts), () => realStartInsight(applicationProjectId))
 }
 
+/**
+ * R15: 서류 reads are **연결 대기** again (mock only). The `drafts` tables are dropped
+ * (CF-1·CF-M1) and the 자기소개서 정본 reads come with S-46 in a later slice; the retired
+ * S-17 / S-19 screens keep working under `?state=` previews only
+ * (leader decision 2026-11-09). Export names and signatures are unchanged.
+ */
 export function listDrafts(applicationProjectId: string): Promise<Draft[]> {
-  return previewOr(() => mockListDrafts(applicationProjectId), () => realListDrafts(applicationProjectId))
+  return previewOr(() => mockListDrafts(applicationProjectId), async () => [])
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function getDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
-  return previewOr(() => mockGetDraft(applicationProjectId, draftId), () => realGetDraft(applicationProjectId, draftId))
+  return previewOr(() => mockGetDraft(applicationProjectId, draftId), async () => null)
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function saveDraftSection(sectionId: string, patch: DraftSectionPatch, opts?: { fail?: boolean }): Promise<DraftSection | null> {
-  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), () => realSaveDraftSection(sectionId, patch))
+  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), async () => null)
 }

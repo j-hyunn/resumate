@@ -126,10 +126,10 @@ select throws_ok($$insert into public.evidence_links (application_project_id, ow
                  '23514', null, 'project_deliverable fields are title / body');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project_detail', gen_random_uuid(), 'action')$$,
-                 '23514', null, 'project_detail is no longer a source type (v4.4)');
+                 'P0001', 'invalid_evidence_source', 'project_detail is no longer a source type (v4.4) — R15: the per-owner allow list refuses it before the CHECK');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'achievement', gen_random_uuid(), 'description')$$,
-                 '23514', null, 'achievement is no longer a source type (v4.4)');
+                 'P0001', 'invalid_evidence_source', 'achievement is no longer a source type (v4.4) — R15: the per-owner allow list refuses it before the CHECK');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'project', 'a0000000-3333-0000-0000-000000000001', 'summary')$$,
                  '23514', null, 'project.summary is no longer an evidence field');
@@ -148,7 +148,7 @@ select throws_ok($$insert into public.evidence_links (application_project_id, ow
                  '23514', null, 'jd_sentence has no field');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id)
                    values ('c0000000-0000-0000-0000-000000000001', 'insight', gen_random_uuid(), 'k', 'writing_chat_message', gen_random_uuid())$$,
-                 '23514', null, 'writing_chat_message is not an evidence source (DM-15)');
+                 'P0001', 'invalid_evidence_source', 'writing_chat_message is not an evidence source (DM-15) — R15: the per-owner allow list refuses it before the CHECK');
 select throws_ok($$insert into public.evidence_links (application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)
                    values (gen_random_uuid(), 'writing_chat', gen_random_uuid(), 'k', 'skill', gen_random_uuid(), 'name')$$,
                  '23514', null, 'owner_type CHECK');

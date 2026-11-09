@@ -2,7 +2,7 @@
 -- app_ai_writer beyond the allow list. Update the allow lists only together with DM §5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(39);
 
 -- anon table privileges in public: only SELECT on policy_versions (+ S3b ai_disclosures, DM 2.11.6).
 select set_eq(
@@ -40,7 +40,8 @@ select is_empty(
 -- S5: + SELECT on job_descriptions, jd_requirements (application_projects is column-level without memo;
 --     JD extraction writes only through begin / apply / fail_jd_extraction).
 -- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
--- S7: + SELECT on drafts, draft_sections, draft_section_sources (writes only through the S7 definer RPCs).
+-- R15 (CL-9): + SELECT on application_documents (the turn's backup read of "the body right now"); the
+--     drafts tables are dropped. No write grant for app_ai_writer.
 -- S8: + SELECT on the 5 interview tables — R14 (RM-1): tables dropped.
 -- R4 (DM v4.4): project_details / achievements dropped, + SELECT on project_deliverables.
 select set_eq(
@@ -51,14 +52,21 @@ select set_eq(
                                  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p (privilege_type)
      where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
        and has_table_privilege('app_ai_writer', c.oid, p.privilege_type)
-       and not (c.relname = 'profiles' and p.privilege_type = 'SELECT')$$,
+       and not (c.relname = 'profiles' and p.privilege_type = 'SELECT')
+       -- R15 (CF-10): job_descriptions became column-level for app_ai_writer (source_url excluded).
+       and not (c.relname = 'job_descriptions' and p.privilege_type = 'SELECT')$$,
   array['experiences:SELECT', 'educations:SELECT', 'projects:SELECT', 'project_deliverables:SELECT',
         'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
-        'job_descriptions:SELECT', 'jd_requirements:SELECT', 'insights:SELECT',
-        'drafts:SELECT', 'draft_sections:SELECT', 'draft_section_sources:SELECT'],
-  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + draft tables only');
+        'jd_requirements:SELECT', 'insights:SELECT',
+        'application_documents:SELECT'],
+  'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + document tables only');
+
+-- R15 (CF-10·CF-A16): the posting URL is not an AI input.
+select ok(not has_column_privilege('app_ai_writer', 'public.job_descriptions', 'source_url', 'SELECT')
+          and has_column_privilege('app_ai_writer', 'public.job_descriptions', 'raw_text', 'SELECT'),
+          'app_ai_writer reads job_descriptions column by column, without source_url');
 
 -- profiles stays column-level for app_ai_writer (display_name excluded, A.1).
 select ok(not has_column_privilege('app_ai_writer', 'public.profiles', 'display_name', 'SELECT'),
@@ -141,78 +149,43 @@ select set_eq(
         'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
         'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction',
         'begin_insight', 'complete_insight', 'fail_insight',
-        'begin_career_description', 'complete_career_description', 'fail_career_description',
-        'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section',
         'retry_ai_job',
         -- R13: the context-pack assembly calls the total-experience-months wrapper through PostgREST.
         'compute_total_experience_months'],
-  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + S7 draft + R2 retry_ai_job (R14: interview RPCs dropped)');
+  'app_ai_writer can execute exactly the S2–S3b functions + the S4 assistant-message / extract / patch RPCs + S5 JD extraction + S6 insight + R2 retry_ai_job (R14: interview RPCs dropped, R15: draft RPCs dropped)');
 
--- S7 (DM §5, A.9–A.11): draft RPC execute matrix. Cover letter editing is user-session only; generation writes
--- are app_ai_writer only.
+-- R15 (DM §5, §2.5.1 / §2.7.3): the document RPC execute matrix. The save RPC is security INVOKER and
+-- authenticated-only; the chat starter is definer + ownership check; the internal helpers have no outside execute.
 select set_eq(
   $$select p.proname::text || ':' || r.rolname
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
-     where n.nspname = 'public'
-       and p.proname in ('create_cover_letter_draft', 'add_cover_letter_question', 'delete_cover_letter_question',
-                         'reorder_cover_letter_questions', 'set_section_sources',
-                         'begin_career_description', 'complete_career_description', 'fail_career_description',
-                         'begin_cover_letter_section', 'complete_cover_letter_section', 'fail_draft_section')
+     where n.nspname in ('public', 'private')
+       and p.proname in ('save_application_document', 'start_document_writing_chat',
+                         'doc_replace_slot_evidence', 'application_reset_name')
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
-  array['create_cover_letter_draft:authenticated', 'add_cover_letter_question:authenticated',
-        'delete_cover_letter_question:authenticated', 'reorder_cover_letter_questions:authenticated',
-        'set_section_sources:authenticated',
-        'begin_career_description:app_ai_writer', 'complete_career_description:app_ai_writer',
-        'fail_career_description:app_ai_writer', 'begin_cover_letter_section:app_ai_writer',
-        'complete_cover_letter_section:app_ai_writer', 'fail_draft_section:app_ai_writer'],
-  'S7 draft RPC execute matrix');
+  -- The save RPC is security INVOKER, so the caller must reach its definer helpers (same shape as
+  -- private.wc_mark_proposal_applied, R5): anon / app_ai_writer / app_key_reader never, authenticated yes.
+  array['save_application_document:authenticated', 'start_document_writing_chat:authenticated',
+        'doc_replace_slot_evidence:authenticated', 'application_reset_name:authenticated'],
+  'R15 document RPC execute matrix: authenticated only, and never anon / app_ai_writer / app_key_reader');
 
--- S7 (DM §5): user-session write privileges on the draft tables = drafts DELETE + UPDATE (title, edited_at,
--- first_copied_at), draft_sections UPDATE (question_text, char_limit, count_basis, user_note, edited_content).
-select set_eq(
-  $$select c.relname::text || ':' || p.privilege_type
-      from pg_class c
-      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
-     where c.oid in ('public.drafts'::regclass, 'public.draft_sections'::regclass,
-                     'public.draft_section_sources'::regclass)
-       and has_table_privilege('authenticated', c.oid, p.privilege_type)$$,
-  array['drafts:DELETE'],
-  'authenticated: table-level writes on draft tables = drafts DELETE only');
-select set_eq(
-  $$select c.relname::text || '.' || a.attname || ':' || p.privilege_type
-      from pg_class c
-      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
-      cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
-     where c.oid in ('public.drafts'::regclass, 'public.draft_sections'::regclass,
-                     'public.draft_section_sources'::regclass)
-       and has_column_privilege('authenticated', c.oid, a.attnum, p.privilege_type)$$,
-  array['drafts.title:UPDATE', 'drafts.edited_at:UPDATE', 'drafts.first_copied_at:UPDATE',
-        'draft_sections.question_text:UPDATE', 'draft_sections.char_limit:UPDATE',
-        'draft_sections.count_basis:UPDATE', 'draft_sections.user_note:UPDATE',
-        'draft_sections.edited_content:UPDATE'],
-  'authenticated: column writes on draft tables = DM §5 user columns only');
-
--- S7: no other API / app role writes the draft tables (service_role keeps SELECT / DELETE).
+-- R15 (DM §2.7.3): no role but the user session writes application_documents, and app_ai_writer cannot write it.
 select is_empty(
-  $$select r.rolname, c.oid::regclass::text, p.privilege_type
+  $$select r.rolname, p.privilege_type
       from pg_roles r
-      cross join (values ('public.drafts'::regclass), ('public.draft_sections'::regclass),
-                         ('public.draft_section_sources'::regclass)) c (oid)
-      cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
+      cross join lateral (values ('INSERT'), ('UPDATE'), ('TRUNCATE')) p (privilege_type)
      where r.rolname in ('anon', 'app_ai_writer', 'app_key_reader', 'authenticator', 'service_role')
-       and not (r.rolname = 'service_role' and p.privilege_type = 'DELETE')
-       and (has_table_privilege(r.oid, c.oid, p.privilege_type)
-            or (p.privilege_type in ('INSERT', 'UPDATE') and has_any_column_privilege(r.oid, c.oid, p.privilege_type)))$$,
-  'nobody but the user session (DM §5 columns) writes the draft tables directly');
+       and (has_table_privilege(r.oid, 'public.application_documents'::regclass, p.privilege_type)
+            or (p.privilege_type in ('INSERT', 'UPDATE')
+                and has_any_column_privilege(r.oid, 'public.application_documents'::regclass, p.privilege_type)))$$,
+  'nobody but the user session writes application_documents (app_ai_writer is SELECT only)');
 
--- S7: ai_content is never user-writable (AI original, AI-03 / AI-04 storage).
-select ok(not has_column_privilege('authenticated', 'public.draft_sections', 'ai_content', 'UPDATE')
-          and not has_column_privilege('authenticated', 'public.draft_sections', 'status', 'UPDATE')
-          and not has_column_privilege('authenticated', 'public.draft_sections', 'template_key', 'UPDATE')
-          and not has_column_privilege('authenticated', 'public.drafts', 'status', 'UPDATE')
-          and not has_column_privilege('authenticated', 'public.drafts', 'options', 'UPDATE'),
-          'authenticated cannot update ai_content / status / template_key / options');
+-- R15: the drafts tables and their RPCs are gone.
+select is_empty(
+  $$select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relname in ('drafts', 'draft_sections', 'draft_section_sources')$$,
+  'R15: the three drafts tables are dropped');
 
 -- S6 (DM §5, A.8): insight RPCs are app_ai_writer only.
 select set_eq(
@@ -339,6 +312,8 @@ select set_eq(
   array['sweep_stalled_ai_jobs(timestamp with time zone)',
         'claim_due_ai_jobs(timestamp with time zone,integer)',
         'purge_old_ai_jobs(timestamp with time zone,integer)',
+        -- R15 (CF-A17): the unused preview result cleanup, one line in the ai_jobs cron.
+        'purge_unused_jd_preview_outputs(timestamp with time zone,integer)',
         'purge_old_ai_usage_records(timestamp with time zone,integer)',
         'purge_old_account_deletion_logs(timestamp with time zone,integer)',
         'save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)',
@@ -358,14 +333,16 @@ select set_eq(
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and has_function_privilege('authenticated', p.oid, 'execute')$$,
-  array['add_cover_letter_question', 'append_writing_chat_message',
-        'apply_structured_draft_patch', 'create_application_project', 'create_cover_letter_draft',
-        'delete_account', 'delete_career_item', 'delete_cover_letter_question',
+  array['append_writing_chat_message',
+        'apply_structured_draft_patch', 'create_application_project',
+        'delete_account', 'delete_career_item',
         'delete_provider_key', 'get_account_deletion_summary', 'get_ai_usage_summary', 'get_consent_status',
         'get_data_readiness', 'get_deletion_impact',
         'move_application_stage', 'record_consents',
-        'reorder_cover_letter_questions', 'reorder_project_deliverables', 'request_ai_job_cancel',
-        'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome', 'set_section_sources',
+        'reorder_project_deliverables', 'request_ai_job_cancel',
+        -- R15 (CL-2·CL-9): the whole cover letter is saved by one RPC, and the document chat has its own starter.
+        'save_application_document', 'start_document_writing_chat',
+        'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome',
         'start_writing_chat',
         'update_failed_jd_raw_text', 'touch_last_active',
         'save_profile_basics', 'compute_total_experience_months'],

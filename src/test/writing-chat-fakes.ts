@@ -1,7 +1,25 @@
 import { AppError } from "@/lib/contracts/errors";
-import { parseDeliverableDraft, parseStructuredDraft, WRITING_CHAT_MESSAGE_LIMIT, type DeliverableDraft, type StructuredDraft } from "@/lib/contracts/writing-chat";
+import {
+  parseCoverLetterDraft,
+  parseDeliverableDraft,
+  parseStructuredDraft,
+  WRITING_CHAT_MESSAGE_LIMIT,
+  type CoverLetterDraft,
+  type DeliverableDraft,
+  type StructuredDraft,
+} from "@/lib/contracts/writing-chat";
 import { StoredBlockSchema } from "@/server/ai/schemas/deliverable-draft";
-import type { ChatMessage, ChatSnapshot, DeliverablePipelines, TurnChatDb, WritingChatPipelines } from "@/server/services/writing-chat/types";
+import { CoverLetterBlockSchema } from "@/server/ai/schemas/cover-letter-draft";
+import type {
+  ChatMessage,
+  ChatSnapshot,
+  DeliverablePipelines,
+  DocumentComposedQuestion,
+  DocumentPipelines,
+  DocumentSelectedSource,
+  TurnChatDb,
+  WritingChatPipelines,
+} from "@/server/services/writing-chat/types";
 
 /**
  * Test-only in-memory writing chat with the RPC semantics the turn relies on
@@ -33,6 +51,9 @@ export class MemoryChatDb implements TurnChatDb {
       projectId: "00000000-0000-4000-8000-00000000a001",
       projectDeliverableId: null,
       deliverableDraft: null,
+      applicationProjectId: null,
+      documentKind: null,
+      documentDraft: null,
       title: null,
       status: "active",
       structuredDraft: parseStructuredDraft({}),
@@ -162,6 +183,22 @@ export class MemoryChatDb implements TurnChatDb {
     return { draft: structuredClone(next), rejected: [] };
   }
 
+  /**
+   * R15: the fake applies a 서류 patch by replacing the draft with the value the test hands it
+   * (the real RPC rebuilds it from `blocks`), and refuses past the 6-draft chat limit.
+   */
+  async applyDocumentPatch(chatId: string, patch: unknown): Promise<{ draft: CoverLetterDraft; rejected: { index: number; op: string; reason: string }[] }> {
+    this.calls.push("applyDocumentPatch");
+    this.fail("applyDocumentPatch");
+    void chatId;
+    const next = parseCoverLetterDraft(patch);
+    if ((this.chat.documentDraft?.draft_count ?? 0) >= 6 && next.draft_count > 6) {
+      throw new AppError("writing_chat_draft_limit_reached", undefined, { status: 409 });
+    }
+    this.chat.documentDraft = next;
+    return { draft: structuredClone(next), rejected: [] };
+  }
+
   async markExtracted(chatId: string, sequence: number) {
     this.calls.push(`markExtracted:${sequence}`);
     this.fail("markExtracted");
@@ -271,7 +308,7 @@ export function fakeDeliverablePipelines(seen: { reply: number; extract: number;
       const draft = after.stored ?? snapshot.chat.deliverableDraft;
       if (plan.kind !== "compose") return { action: "reply", notices: [] };
       if ((draft?.draft_count ?? 0) >= 6) return { action: "reply", notices: ["draft_limit"] };
-      return { action: "compose", style: snapshot.style };
+      return { action: "compose", style: snapshot.style === "fit_length" ? null : snapshot.style };
     },
     reply(call, notices) {
       seen.reply += 1;
@@ -306,6 +343,132 @@ export function fakeDeliverablePipelines(seen: { reply: number; extract: number;
         patch: parsed.patch,
         validation: { needsReviewBlockIds: blocks.filter((b) => b.review === "needs_review").map((b) => b.block_id) },
         assistantMessage: blocks.length > 0 ? "초안을 만들었어요. 확인하고 반영 방식을 골라 주세요." : "초안을 만들 내용이 아직 부족해요.",
+      };
+    },
+  };
+}
+
+/**
+ * R15 AI-04 fake (서류 대화). The scripted `complete` body is
+ * `{ questions?: [{slot, questionNo, blocks?, answerTitle?}], patch }`; one `draft_done`-worth of
+ * data per question, so a test can drive a multi-question draft turn (CL-10 ≤ 3).
+ */
+export function fakeDocumentPipelines(
+  seen: { reply: number; extract: number; compose: number; notices: string[][]; snapshots: unknown[]; slots: string[][] } = {
+    reply: 0,
+    extract: 0,
+    compose: 0,
+    notices: [],
+    snapshots: [],
+    slots: [],
+  },
+  /**
+   * The 문항 the real pipeline reads from the 정본 (`application_documents.body.questions[]`),
+   * which this fake has no access to. Omitted: the slots the stored draft already has proposals for.
+   */
+  opts: { questionSlots?: readonly string[] } = {},
+): DocumentPipelines & { seen: typeof seen } {
+  return {
+    seen,
+    async plan(snapshot) {
+      seen.snapshots.push(snapshot.formSnapshot);
+      if (snapshot.requestedAction === "compose_draft") return { kind: "compose", source: "requested_action" };
+      return { kind: "question" };
+    },
+    async extract(call) {
+      seen.extract += 1;
+      const pending = call.snapshot.pendingUserMessages;
+      if (pending.length === 0) return { skipped: true, patch: null, processedThroughSequence: null, intent: null, sensitiveAdded: 0 };
+      const result = await call.llm.complete({
+        feature: "AI-04.extract",
+        promptVersion: "AI-04.extract.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: { type: "object" },
+        signal: call.signal,
+      });
+      const parsed = JSON.parse(result.text) as { patch?: unknown; intent?: "compose_draft" | null };
+      return {
+        skipped: false,
+        patch: parsed.patch ?? null,
+        processedThroughSequence: Math.max(...pending.map((m) => m.sequence)),
+        intent: parsed.intent ?? null,
+        sensitiveAdded: 0,
+      };
+    },
+    async decide(snapshot, after, plan) {
+      const draft = after.stored ?? snapshot.chat.documentDraft;
+      if (plan.kind !== "compose") return { action: "reply", notices: [] };
+      if ((draft?.draft_count ?? 0) >= 6) return { action: "reply", notices: ["draft_limit"] };
+      const slots = opts.questionSlots ? [...opts.questionSlots] : (draft?.document.questions ?? []).map((q) => q.slot);
+      if (slots.length === 0) return { action: "reply", notices: ["compose_insufficient"] };
+      return { action: "compose", batch: slots, slots };
+    },
+    reply(call, notices) {
+      seen.reply += 1;
+      seen.notices.push([...notices]);
+      return call.llm.stream({
+        feature: "AI-04.reply",
+        promptVersion: "AI-04.reply.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: null,
+        signal: call.signal,
+      });
+    },
+    async *compose(call, decision) {
+      seen.compose += 1;
+      seen.slots.push([...decision.slots]);
+      yield { type: "draft_started", attempt: 1, reason: "initial", slots: decision.slots };
+      const result = await call.llm.complete({
+        feature: "AI-04.compose",
+        promptVersion: "AI-04.compose.test",
+        callKey: call.callKey,
+        systemBlocks: [{ text: "s" }],
+        userBlocks: [{ text: "u" }],
+        outputSchema: { type: "object" },
+        signal: call.signal,
+      });
+      const parsed = JSON.parse(result.text) as {
+        questions?: Array<{
+          slot: string;
+          questionNo: number;
+          answerTitle?: string | null;
+          blocks?: unknown[];
+          questionClass?: string;
+          sources?: DocumentSelectedSource[];
+        }>;
+        patch: unknown;
+      };
+      const questions = parsed.questions ?? [];
+      const out: DocumentComposedQuestion[] = [];
+      for (const q of questions) {
+        const blocks = (q.blocks ?? []).map((b) => CoverLetterBlockSchema.parse(b));
+        // The real pipeline hands sources over in the stored row's snake_case shape
+        // (`SelectedSourceView`); the runner renames them for the SSE contract (QA-R15-02).
+        if (q.sources) {
+          yield { type: "sources_selected", slot: q.slot, questionNo: q.questionNo, questionClass: q.questionClass ?? "job_competency", sources: q.sources };
+        }
+        for (const block of blocks) yield { type: "draft_block", slot: q.slot, questionNo: q.questionNo, attempt: 1, block };
+        out.push({
+          slot: q.slot,
+          questionNo: q.questionNo,
+          answerTitle: q.answerTitle ?? null,
+          charCount: blocks.reduce((n, b) => n + b.text.length, 0),
+          charLimit: null,
+          charAdjustNeeded: false,
+          correctionApplied: false,
+          needsReviewBlockIds: blocks.filter((b) => b.review === "needs_review").map((b) => b.block_id),
+          droppedBlockCount: 0,
+        });
+      }
+      return {
+        outcome: out.length > 0 ? "draft" : "empty",
+        patch: parsed.patch,
+        questions: out,
+        assistantMessage: out.length > 0 ? "초안을 만들었어요. 확인하고 반영해 주세요." : "초안을 만들 내용이 아직 부족해요.",
       };
     },
   };

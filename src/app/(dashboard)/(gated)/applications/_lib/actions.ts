@@ -20,6 +20,8 @@ import { withAiGuard } from "@/lib/data/ai-guard"
 // `addQuestionAction`·`deleteQuestionAction`)은 S-46 문항 설정 상태가 `application_documents.body`를
 // 페이지 단위로 저장하면서 쓰는 화면이 없어졌다. JD 요건 추출만 남는다 (S-15·D-30 — 실제 경로 유지).
 import { retryJdExtraction } from "@/lib/data/drafts"
+import type { DocumentFormSnapshot } from "@/lib/contracts/application-document"
+import { deleteCoverLetterChat, startCoverLetterChat } from "@/lib/data/cover-letter-chats"
 import {
   extractJdPreview,
   fetchJobPosting,
@@ -172,4 +174,16 @@ export async function markCoverLetterCopiedAction(applicationProjectId: string) 
 /** S-39 카드 "자소서 작성 중 / 작성됨" (UI 5) */
 export async function listCoverLetterSlotCountsAction() {
   return listCoverLetterSlotCounts()
+}
+
+// --- S-46 자소서 작성 대화 (R15: 시작은 연결됨, 읽기는 연결 대기) ---------------------------
+
+/** 패널 "+ 새 대화" / 첫 메시지 — `start_document_writing_chat`. 정본 행을 만들지 않는다 (CF-S3) */
+export async function startCoverLetterChatAction(applicationProjectId: string, formSnapshot?: DocumentFormSnapshot) {
+  return startCoverLetterChat(applicationProjectId, formSnapshot)
+}
+
+/** 패널 ⋯ "이 대화 삭제" (C-05 `writing_chat`) */
+export async function deleteCoverLetterChatAction(chatId: string) {
+  return deleteCoverLetterChat(chatId)
 }

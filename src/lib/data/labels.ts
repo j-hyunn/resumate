@@ -260,7 +260,16 @@ export function kstToday(): string {
  * S-39 카드는 `filled_slot_count`·`slot_count`로 "자소서 작성 중 / 작성됨"만 보인다
  * (`coverLetterProgressLabel`, lib/data/cover-letters.ts). 폐기될 `drafts` 테이블 집계에만 남아 있다.
  */
-export function countsAsDraft(d: { draft_type: string; status: string }): boolean {
+/**
+ * "서류가 있다"의 셈법. R15 (DM v4.13 (7), CF-A14): a 자기소개서 정본 counts when at least one
+ * question has a written answer — `filled_slot_count > 0`. There is at most one row per
+ * 지원 프로젝트, so the count is 0 or 1.
+ *
+ * The old `drafts` shape (`{draft_type, status}`) is still accepted so the retired 서류 screens
+ * S-17 / S-19 keep compiling on `?state=` previews (leader decision 2026-11-09). `[가정]`
+ */
+export function countsAsDraft(d: { filled_slot_count: number } | { draft_type: string; status: string }): boolean {
+  if ("filled_slot_count" in d) return d.filled_slot_count > 0
   return !(d.draft_type === "career_description" && d.status === "composing")
 }
 
@@ -390,9 +399,11 @@ export const AI_TRAINING_NOTICE =
 export const AI_FEATURE_NAMES = {
   requirements: "요건 정리",
   insight: "인사이트",
-  // (v5.20, CF-U3 확정) 기능 이름 = "자소서" — 지원 건·서류 자체는 "자기소개서"(CR-23)이고 S-46의
-  // 탭 이름도 "자소서"다. (v5.20, CF-1) `career_description`(경력기술서)·`draft_source_ranking`
-  // (AI 근거 선택)은 기능이 없어져 표에서 뺐다.
+  // (v5.20, CF-U3 확정 2026-11-08 (사용자)) 기능 이름 = **"자소서"** — 지원 건·서류 자체는
+  // "자기소개서"(CR-23)이고 S-46의 탭 이름도 "자소서"다. v5.14의 "자소서 문항 답변"(U36-6)은 이것으로
+  // 대체됐다. (v5.20, CF-1) `career_description`(경력기술서)·`draft_source_ranking`(AI 근거 선택)은
+  // 기능이 없어져 표에서 뺐다 — 다만 그 `job_type`·사용량 `feature` 값은 이미 기록된 행 때문에
+  // **DB CHECK에 남아 있다**(CF-A3, decisions 4.23 백엔드 7).
   cover_letter: "자소서",
   writing_chat: "AI 작성 대화",
   // [UI-가정] S-42 entry (not in the leader list)

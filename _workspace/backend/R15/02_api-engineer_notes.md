@@ -339,3 +339,50 @@ QA의 임시 스모크를 정식 편입하고 **초안 턴(compose)을 더했다
 
 - **UI 요청**: S-46이 열 때 `getApplicationDocument` → 행이 있으면 그 `updated_at`을 기대 버전으로 들고 있을 것(이번 공백의 핵심 — 이게 빠지면 서버를 고쳐도 덮어쓰기는 남는다).
 - db 노트가 적은 같은 구조의 우회(`profile_job_interests` 직접 쓰기)는 R15 밖이라 손대지 않았다 — 리더 판단 대상.
+
+---
+
+## ⑪ R15 후속 3 (2026-11-09) — `draft_done.draft` · CF-S7 · `slot_high_water`
+
+- 검증: `pnpm typecheck` 통과 · `pnpm lint` 경고 0 · `pnpm test` **150파일 2,432건 전부 통과** (db `004690` 적용·타입 재생성 뒤).
+- `supabase/`·`docs/`·`src/lib/data/cover-letters.ts` 미수정. 커밋·원격 쓰기 없음.
+
+### UI에 넘길 변경점
+
+1. **서류 `draft_done`에 `draft` 필드 추가** — 그 슬롯의 **저장된 제안 객체**를 그대로 싣는다. `structured_draft.document.questions[].draft`와 같다(저장 모양, snake_case):
+   `{ answer_title, value, blocks[], sources[], char_count, char_limit_at_generation, char_adjust_needed, correction_applied, rev, generated_at, base_body_hash, replace_allowed, missing_slots[], dropped_block_count, applied_at, applied_rev }`
+   - **[반영]은 `draft_done.draft`를 읽어야 한다.** `draft_block`은 글자 수 보정 **전** 스트림이라 보정이 일어나면 문장이 다르다(`correctionApplied: true`).
+   - `value`는 DB가 보정 후 `blocks`로 다시 조립한 값이다. `base_body_hash`도 여기 있으니 **`form_snapshot` 본문으로 해시를 다시 만들 필요가 없다.**
+   - 기존 바깥 필드(`slot`·`questionNo`·`answerTitle`·`charCount`·`charLimit`·`charAdjustNeeded`·`correctionApplied`·`needsReviewBlockIds`·`droppedBlockCount`·`rev`·`draftCount`)는 **그대로**다(camelCase). `rev === draft.rev`.
+2. **저장 반환 11키** — `saveApplicationDocument`의 `data`에 **`slotHighWater: number`** 추가.
+3. **`getApplicationDocument`의 행에 `slot_high_water: number`** 추가(`ApplicationDocument` 타입도).
+4. **새 문항 번호는 `slot_high_water + 1`부터** 매긴다. 지운 번호를 새 문항에 다시 쓰면 `invalid_slot`(400, `details.field` = 그 slot)이다. 저장돼 있던 문항을 고치는 저장은 영향이 없다.
+5. **CF-S7**: 정본 행이 있으면 저장에 **`expectedUpdatedAt`이 필수**다. null이면 `stale_write`(409, `details.current_updated_at`). **"내 내용으로 저장"은 그 `current_updated_at`을 실어 다시 보낸다.** 첫 저장(행 없음)은 null이어도 통과한다.
+6. 오류 우선순위가 바뀌었다(db): **`stale_write`(409)가 문항 오류(400)보다 먼저** 나온다. 화면이 409를 받으면 문항 오류는 아직 판정되지 않은 상태다.
+
+### 2. `draft_done.draft` — 리더 판정(S-44와 계약 맞춤, 새 이벤트 이름 없음)
+
+- 계약 `DocumentDraftDoneEvent`에 `draft: CoverLetterQuestionDraftSchema`를 더했다. 산출물 `draft_done.body`와 같은 관례다.
+- **"저장된 값"을 싣는다**: 러너는 이미 패치 RPC의 **응답**(`res.draft`, DB가 쓴 뒤의 `structured_draft`)에서 그 슬롯의 `rev`를 읽고 있었다. 같은 객체를 `draft`로 싣는다. 파이프라인이 패치 전에 들고 있던 객체(`value` 없음)는 쓰지 않는다. 다시 읽기 왕복이 없다.
+- **통합 테스트로 보정 경로를 덮었다**: `char_limit` 1,000에 한 문장 초안 → 범위 밖 → 보정 호출 1회. 단정:
+  - `adjusting_length`가 나오고 `correctionApplied: true`다.
+  - **`draft_block` 텍스트(보정 전) ≠ `draft_done.draft.blocks`(보정 후)**이고, 후자에 보정 문장이 들어 있다.
+  - **`draft_done.draft`가 DB `structured_draft`의 그 슬롯 초안과 깊은 비교로 같다**("SSE 초안 == 저장 초안"). `value`도 같고 보정 문장을 포함한다. `correction_applied: true`다.
+  - 안쪽 키가 저장 모양(`base_body_hash` 존재)이고 바깥에 snake_case 키(`draft_count`)가 새지 않는다.
+- QA-02 회귀 단정(`sources_selected` 키에 `_` 없음)은 그대로 통과한다. 그 단정은 **`sources_selected` 이벤트**만 본다. `draft_done.draft`는 저장 모양을 일부러 그대로 싣는 자리다(⑩ "키 케이스 판단"과 같은 규칙: 저장 초안은 snake_case, 독립 표시 payload는 camelCase).
+
+### 1. CF-S7 = (a)
+
+- `stale_write` → `details.current_updated_at` 변환은 **이미 있었다**(`src/server/db/errors.ts` `raiseDetails`). 확인만 했고 바꾸지 않았다.
+- **회귀 확인**: `src/`에서 같은 서류를 기대 버전 없이 두 번 저장하는 곳은 **없었다**. 통합 테스트는 각 `it`이 새 지원 프로젝트를 만들어 한 번 저장한다. 다시 저장하는 유일한 자리(⑩ 복사 기록의 `resaved`)는 이미 `expectedUpdatedAt`을 보낸다. 실제 RPC를 쓰는 통합 테스트는 `004690` 뒤에도 수정 없이 전부 통과했다. 깨진 것은 `save.test.ts` 가짜 RPC 픽스처 4건뿐이고, 원인은 CF-S7이 아니라 **반환 11번째 키(`slot_high_water`)가 계약에서 필수**가 된 것이다. 픽스처를 실제 반환 모양으로 맞췄다. **단정은 약하게 하지 않았다**(오히려 "옛 RPC 반환(10키)이면 500" 단정을 더했다).
+- 400/409 겹침 순서를 단정하는 서류 테스트는 `src/`에 없다(그 우선순위는 db pgTAP이 덮는다).
+- **새 통합 테스트**(실제 RPC):
+  - 첫 저장(행 없음 + null) 통과.
+  - **행 있음 + null → `stale_write` 409, `details.current_updated_at` = 첫 저장의 `updated_at`. body·`updated_at` 불변.**
+  - **"내 내용으로 저장" = 그 값을 실어 다시 보내면 통과하고, 그 내용이 정본이 된다.**
+
+### 3. `slot_high_water`
+
+- `getApplicationDocument`의 명시 select에 추가했다. `ApplicationDocument`(`src/types/db.ts`)에 `slot_high_water: number`(not null default 0)를 넣었다. 저장 반환 계약 `SaveApplicationDocumentRpcResult`에 `slot_high_water`, 서비스 결과에 `slotHighWater`를 넣었다.
+- **같은 통합 테스트**: 첫 저장 `q_1..q_3` → 3(반환·읽기 둘 다) → `q_3`을 지우고 저장해도 3 유지 → **`q_3`을 새 문항으로 다시 넣으면 `invalid_slot`(`details.field = "q_3"`), 아무것도 안 바뀜**(`slot_count` 2 유지) → `q_4`는 통과하고 4가 된다.
+- `DocumentQuestion`은 `.strict()`라 `sort_order`를 받지 않는다. 지시대로 **바꾸지 않았다**(순서 = 받은 배열 순서, 2.5.1).

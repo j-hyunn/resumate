@@ -56,6 +56,7 @@ export async function saveApplicationDocument(
     documentKind: r.document_kind as ApplicationDocumentKind,
     filledSlotCount: r.filled_slot_count,
     slotCount: r.slot_count,
+    slotHighWater: r.slot_high_water,
     name: r.name,
     nameSource: r.name_source as NameSource | null,
     deadline: r.deadline,

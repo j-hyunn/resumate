@@ -20,7 +20,8 @@ import type { ApplicationDocument } from "@/types/db";
  */
 
 /** Every column the screen uses (DM 2.7.3). `body` / `meta` are the stored jsonb as is. */
-const DOCUMENT_COLUMNS = "id, user_id, created_at, updated_at, application_project_id, document_kind, body, meta, filled_slot_count, slot_count, first_copied_at";
+const DOCUMENT_COLUMNS =
+  "id, user_id, created_at, updated_at, application_project_id, document_kind, body, meta, filled_slot_count, slot_count, first_copied_at, slot_high_water";
 
 function isDocumentKind(v: string): v is ApplicationDocumentKind {
   return (APPLICATION_DOCUMENT_KINDS as readonly string[]).includes(v);
@@ -59,6 +60,7 @@ export async function getApplicationDocument(
     // Generated column `jsonb_array_length(body -> 'questions')`; null only if `body` were null (it is not null).
     slot_count: data.slot_count ?? 0,
     first_copied_at: data.first_copied_at,
+    slot_high_water: data.slot_high_water,
   };
 }
 

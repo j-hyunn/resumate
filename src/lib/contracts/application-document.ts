@@ -110,12 +110,13 @@ export type SaveApplicationDocumentInput = z.input<typeof SaveApplicationDocumen
 const nullableString = z.string().nullable().catch(null);
 const skipReason = z.enum(PAGE_SAVE_SKIP_REASONS);
 
-/** RPC `save_application_document` jsonb — the 10 keys of db notes ②-1. */
+/** RPC `save_application_document` jsonb — the 11 keys of db notes ②-1 + R15 후속 3 (`slot_high_water`). */
 export const SaveApplicationDocumentRpcResult = z.object({
   application_document_id: z.string(),
   document_kind: z.string(),
   filled_slot_count: z.number().int(),
   slot_count: z.number().int(),
+  slot_high_water: z.number().int().nonnegative(),
   name: nullableString,
   name_source: nullableString,
   deadline: nullableString,
@@ -131,6 +132,11 @@ export type SaveApplicationDocumentResult = {
   filledSlotCount: number;
   /** Generated column = the number of questions. */
   slotCount: number;
+  /**
+   * R15 후속 3: the largest slot number ever saved. Number the next **new** question
+   * `slot_high_water + 1` — a new question at or below it is refused (`invalid_slot`).
+   */
+  slotHighWater: number;
   name: string | null;
   nameSource: NameSource | null;
   deadline: string | null;

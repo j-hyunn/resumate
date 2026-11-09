@@ -310,7 +310,9 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
-                    '{"questions":[{"slot":"q_1","question_text":"q","char_limit":800,"count_basis":"with_spaces",
+                    -- The body carries the question_id the q_1 proposal was written for (QA-07 rule 4).
+                    '{"questions":[{"slot":"q_1","question_id":"a0000000-e5e5-0000-0000-000000000001",
+                                    "question_text":"q","char_limit":800,"count_basis":"with_spaces",
                                     "body":"새 본문","blocks":[]}]}',
                     null, null,
                     format('[{"writing_chat_id":"%s","slot":"q_1","rev":2},

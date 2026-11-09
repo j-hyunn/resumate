@@ -1,18 +1,18 @@
-# R15 백엔드 QA 리포트 (라운드 1 + 라운드 2 + 후속 라운드)
+# R15 백엔드 QA 리포트 (라운드 1 + 라운드 2 + 후속 라운드 + 후속 라운드 2)
 
-## 최종 판정 (후속 라운드 반영, 2026-11-09)
+## 최종 판정 (후속 라운드 2 재확인 반영, 2026-11-09)
 
 | 심각도 | 열림 | 닫힘 | 합계 |
 |--------|------|------|------|
 | **Critical** | **0** | 1 (QA-01) | 1 |
-| **Major** | **0** | 2 (QA-02 · R15-API-7) | 2 |
-| **Minor** | **0** | 4 (QA-03 · **QA-04** · QA-05 · QA-06) | 4 |
+| **Major** | **0** | 3 (QA-02 · R15-API-7 · **QA-07**) | 3 |
+| **Minor** | **0** | 5 (QA-03 · QA-04 · QA-05 · QA-06 · **QA-08**) | 5 |
 
-**열린 항목 0건.** 2라운드 끝에 유일하게 열려 있던 **QA-04가 닫혔다**(남았던 전역 단정 3개가 전부 픽스처 범위로 좁혀졌다 — 후속 라운드 F-D에서 확인). 후속 변경분(쓰기 가드 · 첫 복사 RPC · 읽기 4건)에서 **새 결함 0건**.
+**열린 항목 0건.** 후속 라운드 2에서 찾은 **QA-07·QA-08이 둘 다 닫혔다** — 내 재현 스크립트를 그대로 다시 돌려 확인했다(G-R 절). 수정이 만든 새 결함 0건, 산출물·STAR 패치 회귀 없음, 새 definer 헬퍼는 우회 경로가 아니다. 파이프라인 "알려진 한계"(미저장 슬롯 제안에 `question_id`가 없을 수 있다)는 **실제로는 생기지 않는다**(G-R4).
 
-최종 검사 수치(후속 라운드, **다른 사용자 잔여 행을 심은 상태 · `db reset` 없이**): typecheck **통과** · lint **통과** · Vitest **150파일 2,429건 통과** · pgTAP **65파일 2,649 단정 전부 통과** · 쓰기 가드 실공격(REST·RPC) **전부 차단** · 로컬 스모크 3경로(서류 턴 · 초안 턴 compose · 미리 보기·생성 적용)는 2라운드에 통과.
+최종 검사 수치(재확인, **다른 사용자 잔여 행을 심은 상태 · `db reset` 없이**): typecheck **통과** · lint **통과** · Vitest **150파일 2,432건 통과** · pgTAP **66파일 2,708 단정 전부 통과**(+20 — QA-07·08 단정 편입) · 로컬 스모크 4경로는 후속 라운드 2에 통과 · 동시 첫 저장 25/25 정상.
 
-> 이전 판정 기록: 2라운드 종료 시점에는 Minor 1건(QA-04) 열림으로 넘겼다. 그 기록은 아래 "라운드 2" 절에 그대로 둔다.
+> 이전 판정 기록: 2라운드 종료 시 Minor 1건(QA-04) 열림 → 후속 라운드 0건 → 후속 라운드 2에서 Major 1(QA-07)·Minor 1(QA-08) 열림 → 재확인에서 0건. 각 기록은 아래 해당 절에 그대로 둔다.
 
 ---
 
@@ -508,3 +508,190 @@
 - 내가 만든 사용자 3명(`qa-guard-*`·`qa-leftover-*`·`qa-ver-*`)과 그 행을 전부 지웠다. 끝 상태: 사용자 0 · `application_documents` 0 · `writing_chats` 0 · `ai_jobs` 0 · `ai_usage_records` 0 · `evidence_links` 0. 내 것이 아닌 사용자는 없었다.
 - 작업 트리에 내 파일 0개. `db reset`은 쓰지 않았다.
 - 검증 스크립트·출력: `/private/tmp/claude-501/-Users-jehyun-Resumate--claude-worktrees-cover-letter-backend-ef4d68/cdfbb6b0-f08f-43f1-a316-88fd59d80f25/scratchpad/guard-attack.mjs` · `…/guard-attack.out` · `…/run-checks-fu.log`
+
+---
+
+# 후속 라운드 2 — CF-S7 · 슬롯 재사용 금지 · `draft_done.draft` (2026-11-09)
+
+대상: 새 마이그레이션 `20261113004690_r15_document_save_null_expected.sql`(서류 저장 RPC 재정의 + `slot_high_water` 컬럼 + `updated_at` 트리거 교체) + api `draft_done.draft`·`slotHighWater`. 근거 문서: `decisions.md` "CF-S7"·"R15 후속 3 리더 판정 2건", db "R15 후속 3" 절·api ⑪절.
+**코드는 고치지 않았다.** 검증은 사용자 세션 REST(supabase-js), `app_ai_writer` 역할의 실제 패치 RPC, 실제 의존 Vitest 스모크로 했다. 원격에는 아무것도 하지 않았다.
+
+## G-0. 결과 요약
+
+| 영역 | 판정 | 새 결함 |
+|------|------|---------|
+| A. CF-S7 덮어쓰기 방지 | **통과** — 행 있음 + null → `stale_write`, 아무것도 안 바뀜 · 우회 0 · **동시 첫 저장 25/25 정상** | 0 |
+| B. 슬롯 재사용 금지 | **부분 통과** — 순차 경로는 설계대로. **같은 요청 안의 교체는 뚫린다** | **QA-07 (Major)** · **QA-08 (Minor)** |
+| C. `draft_done.draft` | **통과** — 보정 뒤 저장본과 의미 필드 전부 일치, 보정 전 `draft_block`과 다름 | 0 (관찰 1) |
+| D. 전체 회귀 | **통과** — 잔여 행 상태에서 reset 없이 4검사 통과 · 순서·커밋 파일 무변경 | 0 |
+
+## G-A. CF-S7 — 덮어쓰기가 정말 막혔는가
+
+사용자 세션 REST로 재현했다. 근거: 스크래치패드 `cfs7.out`.
+
+| # | 시도 | 결과 |
+|---|------|------|
+| A1 | 첫 저장(행 없음 + null) | **성공**, 반환 **11키**(`slot_high_water` 포함) |
+| A2 | **행 있음 + null** — 3문항으로 바꾼 `body` + `p_meta` + `p_application_values`(이름·마감일) + `p_applied_proposals` 함께 | **`stale_write`**, detail = 현재 `updated_at`(정확히 일치) |
+| A2c | 그 뒤 상태 | **전부 그대로** — `body`·`meta`·`filled_slot_count`·`slot_high_water`·`updated_at`·근거 행 수·**지원 프로젝트 이름·마감일** |
+| A3 | 기대 버전 우회: 먼 미래(`9999-…`) / 먼 과거(`1970-…`) / 다른 오프셋의 epoch / `infinity` / `-infinity` | **모두 `stale_write`** |
+| A3 | 잘못된 형식(`not-a-date`·빈 문자열) | `22007` 형변환 거부 — RPC에 들어가지 못한다(쓰기 없음). api는 zod `z.iso.datetime`이 먼저 막는다 |
+| A3 | 마이크로초를 ms로 자른 값 | **`stale_write`** — 정밀도까지 엄격(우회 아님. api는 문자열을 그대로 왕복한다) |
+| A3 | null + `p_client_id`(서류는 무시) | **`stale_write`** |
+| A3z | 모든 우회 시도 뒤 | **그대로** |
+| A4 | 같은 순간을 `+09:00` 오프셋으로 | **성공** — 거짓 충돌이 없다 |
+| A5 | 행 있음 + null + **6문항**(400 모양) / 오래된 버전 + 잘못된 슬롯 | **둘 다 `stale_write`** — 검사 위치 이동으로 **409가 400보다 먼저** 나온다(설계대로) |
+| **A6** | **동시 첫 저장** — 같은 사용자의 독립 클라이언트 2개(두 탭), 같은 지원 건, 둘 다 null, 행 없음, `Promise.all` | **25회 반복 25/25: 정확히 하나 성공 + 하나 `stale_write`.** 500 **0건**, `ok+ok` **0건**. **25/25 모두 정본이 성공한 쪽 내용**(문항 수·문구 태그로 확인) |
+| A7 | 다른 저장 RPC 3종은 null로 여전히 덮어쓰는가 | `save_project_deliverable` null 두 번 → **둘 다 성공** · `save_profile_basics` null 두 번 → **둘 다 성공**. `save_project_page`는 내 픽스처(독립 프로젝트)가 대상이 아니라(`project_not_affiliated`) 실행으로는 못 봤고, **소스로 확인**: 세 함수 모두 `p_expected_updated_at is not null and …`이고 **`004690`은 세 함수를 재정의하지 않는다**(재정의는 `save_application_document`·`application_documents_set_updated_at` 둘뿐) |
+
+**동시 첫 저장이 맞는 이유(코드 확인)**: 두 번째 트랜잭션은 `application_projects … for update`에서 첫 번째가 커밋할 때까지 기다리고, READ COMMITTED에서 **다음 문장(`application_documents … for update`)이 새 스냅숏**을 잡아 첫 번째의 행을 본다 → `found` + null → `stale_write`. 2차 방어 `exception when unique_violation`(439행)은 이 경로에서 실행되지 않았다(첫 방어가 25/25 막았다).
+
+**검사 위치 이동의 회귀 없음**: 기대 버전 검사가 행 잠금 직후(207~217행)로 올라가, 문항 검사·근거 쓰기·반영됨 기록보다 먼저다. A2가 `p_applied_proposals`를 함께 보냈는데 **반영됨 기록도 쓰이지 않았다**(2.5.1 "아무것도 쓰지 않는다").
+
+## G-B. 슬롯 재사용 금지
+
+근거: 스크래치패드 `slot.out`. 대화 제안은 **실제 패치 RPC**(`app_ai_writer`, `apply_structured_draft_patch` `replace_draft`)로 만들었다 — 저장된 제안은 `rev: 1`과 옛 `q_3`의 `question_id`를 갖는다.
+
+**양성 대조**(별도 픽스처): 같은 질문에 그 제안을 적용 → **`applied`**. 즉 아래의 `skipped`·`applied`는 제안이 잘못 만들어져서가 아니다.
+
+### 순차 경로 — 설계대로 동작
+
+| # | 단계 | 결과 |
+|---|------|------|
+| B1 | `q_3` 지우고 저장 | 성공, `slot_high_water` 3 유지 |
+| B2 | `q_3`를 새 문항으로 다시 넣기 | **`invalid_slot [q_3]`**, **아무것도 안 바뀜** |
+| B3 | `q_4` 추가 | 성공, `slot_high_water` 4(반환값도 4) |
+| B4 | 옛 제안을 `q_4`로 적용 시도(`{chat, slot: q_4, rev: 1}`) | **`skipped: not_found`** — 옛 제안이 새 문항에 붙지 않는다 |
+| B7 | REST로 `slot_high_water`를 0으로 직접 낮추기 | **`direct_write_not_allowed`**(쓰기 가드), 값 4 그대로 |
+| — | `slot_high_water`만 바뀐 update(소유자 SQL) | **`updated_at` 그대로**(트리거 제외 목록에 들어갔다). 내용이 바뀌는 저장은 여전히 올린다(G-C의 [반영] 저장에서 확인) |
+
+### QA-07 [Major] 같은 요청 안의 교체가 슬롯 재사용 금지를 뚫는다
+
+- 담당: **db-engineer**
+- 판정 근거: 서버는 **슬롯 이름만** 본다. `004690:233-237`
+  ```sql
+  if not (v_reuse = any (v_stored_slots)) and substr(v_reuse, 3)::integer <= v_high then
+    raise exception using errcode = 'P0001', message = 'invalid_slot', detail = v_reuse;
+  ```
+  `v_stored_slots`는 저장된 본문의 **슬롯 이름 목록**이다. 보낸 `q_3`의 `question_id`가 저장된 `q_3`와 달라도 "기존 슬롯"으로 통과한다.
+- 재현(실제 REST + 실제 제안):
+
+  | 변형 | 한 요청의 내용 | 결과 |
+  |------|----------------|------|
+  | S-swap | 저장된 `q_3` 대신 **다른 `question_id`**·다른 문구의 `q_3` + 옛 제안 `{chat, q_3, rev 1}` | **성공 · `applied`** · 저장된 `q_3`는 **새 `question_id`·새 문구**인데 본문은 **옛 질문용 AI 제안 문장** |
+  | S-swapnull | 같은 교체, **`question_id` 생략** | **성공 · `applied`** · 서버가 **기존 슬롯에 새 uuid를 발급**했다 |
+
+  두 경우 모두 대화에 남은 옛 제안의 `question_id`는 **옛 값**이다 — 서버가 비교할 정보를 갖고 있다.
+- 왜 문제인가: `004690` 머리 주석이 밝힌 이 규칙의 목적이 정확히 "the chat's OLD q_3 proposal would attach to the new question"을 막는 것이다(DM §2.5.0b "번호는 그 서류에서 한 번 쓰면 재사용하지 않는다"). 순차 경로(B2)는 막지만 **한 요청 안에서는 그대로 일어난다**. 부수 효과: `question_id`를 생략하면 **기존 문항의 정체가 저장마다 바뀐다** → `user_note` 근거의 `source_id`(= `question_id`)가 옛 값을 가리키게 된다.
+- 도달 가능성: **올바른 화면에서는 생기지 않는다** — api 계약(`application-document.ts:137`)이 새 문항 번호를 `slot_high_water + 1`로 매기라고 하고, 화면이 `getApplicationDocument`의 `question_id`를 왕복하면 같은 슬롯에 다른 질문이 들어갈 일이 없다. **`question_id`를 왕복하지 않는 클라이언트·옛 탭·화면 버그 하나면** 조용히 일어나고, 사용자에게는 아무 오류도 보이지 않는다. 남의 데이터 침해는 아니다. 리더가 Minor로 낮출 수 있는 경계에 있다.
+- 수정 제안(택1): ① **저장된 슬롯의 `question_id`와 보낸 `question_id`가 다르면 새 문항으로 보고** 같은 `invalid_slot`을 낸다. ② `question_id`가 생략된 **기존 슬롯은 저장된 `question_id`를 이어받는다**(새 uuid는 새 슬롯에만). ③ 최소한 반영됨 판정에서 **제안의 `question_id` ≠ 본문의 `question_id`이면 `skipped: proposal_changed`**. ①+② 조합을 권한다.
+- 상태: **열림**
+
+### QA-08 [Minor] 본문에 없는 슬롯의 제안이 `applied`로 기록된다
+
+- 담당: **db-engineer**
+- 재현: 저장된 `q_1·q_2·q_3` + `q_3` 제안(근거 `sources` 1개 포함). 한 저장에서 `q_3`를 지우면서 `p_applied_proposals: [{chat, q_3, rev 1}]`를 보냄 → **`applied`**. 대화의 `q_3` 제안에 `applied_at`·`applied_rev = 1`이 찍힌다(B5·B5').
+- 영향: **근거 행은 쓰이지 않았다**(`evidence_links` 0행 — 보내지 않은 슬롯 삭제 규칙이 이긴다). 지원 프로젝트 삭제 영향 수도 정상. **틀리는 것은 대화의 "반영됨" 표시뿐**이다(이제 없는 문항에 반영됐다고 보인다). 화면 흐름: [반영]을 눌러 놓고 저장 전에 그 문항을 지우면 생긴다.
+- 범위: **`004690`이 만든 것이 아니다**(반영됨 판정은 `003700`부터 같다). 슬롯 삭제가 가능한 서류에만 있는 경우다.
+- 수정 제안: 반영됨 판정에서 **슬롯이 이번에 저장되는 본문에 없으면 `skipped: not_found`**.
+- 상태: **열림**
+
+## G-C. `draft_done.draft` — 보정 뒤에도 저장본을 싣는가
+
+실제 의존 스모크(로컬 스택 + `createDocumentPipelines` + 실제 패치 RPC): 문항 `char_limit 100`(공백 포함), 첫 초안 문단 약 40자(범위 밖) → 보정 호출이 약 100자 문단을 돌려준다.
+
+| 확인 | 결과 |
+|------|------|
+| 보정이 실제로 일어났나 | **예** — `adjusting_length` 이벤트 · `draft_done.correctionApplied = true` |
+| `draft_done.draft` = DB 저장본 | **의미 필드 전부 일치** — `value`·`rev`·`base_body_hash`·`answer_title`·`sources`·`char_count`·`char_adjust_needed`·`correction_applied`·블록(`block_id`·`type`·`text`·`basis`·`review`·`evidence`) |
+| 보정 전 `draft_block`과 다른가 | **다르다** — `draft_block.block.text` = 보정 전 짧은 문장, `draft_done.draft.blocks[0].text` = 보정 뒤 문장. `draft.value`도 보정 뒤 문장 |
+| `draft_done.rev === draft.rev` | **같다** |
+| 키 케이스 | 바깥 필드 `_` 포함 키 **0개**(camelCase), `draft` 안은 저장 모양(`char_count`·`blocks`·`value`·`rev`) |
+| QA-02 회귀 단정(`sources_selected` 키에 `_` 없음) | **통과** |
+| 새로 고침 경로 | `getWritingChat` DTO의 같은 슬롯 `draft`가 `draft_done.draft`와 **완전히 같다** |
+| **[반영] 끝까지** | `draft_done.draft.value`로 본문을 채우고 `{chat, q_1, rev}`로 저장 → **`applied`**, 저장된 본문 = **보정 뒤 문장**(보정 전 문장 아님), `updated_at` 오름 |
+
+**관찰(결함 아님)**: 바이트 단위로는 블록 키 2개가 다르다 — `draft_done.draft`에는 `requirement_ids: []`가 있고 DB 저장본에는 없으며, DB 저장본에는 `source_project_fields: []`가 있고 `draft_done.draft`에는 없다. 원인은 패치 RPC 응답을 `parseCoverLetterDraft`(TS `CoverLetterBlockSchema`)로 한 번 거르기 때문이고, **새로 고침 DTO(`mappers.ts:102`)도 똑같이 거른다** — 화면은 실시간·새로 고침 양쪽에서 **같은 모양**을 본다. 두 키 모두 서류 블록에서는 늘 빈 배열이고 [반영]이 쓰지 않는다. 계약 주석(`writing-chat.ts:781-786`)의 "exactly as … holds it"은 "TS 스키마로 정규화한 저장본"이 정확한 표현이다. 이슈로 올리지 않았다.
+
+## G-D. 전체 회귀
+
+| 검사 | 결과 |
+|------|------|
+| `run-checks.sh` — **잔여 행 상태, reset 없이** | **typecheck · lint · Vitest(150/2,432) · pgTAP(66/2,688) 전부 통과** |
+| 심은 잔여 행 | 사용자 3명 — `application_documents` 32 · `writing_chats` 6 · `ai_jobs` 1(queued) · `ai_usage_records` 1 · `jd_requirements` 1 |
+| 파일 순서 | `…004680` → **`…004690`** → **`…004700_r15_drop_drafts`**(파괴, 마지막). `004690`에 `DESTRUCTIVE` 표식 없음 |
+| 커밋된 마이그레이션 무변경 | `git diff --stat HEAD -- supabase/migrations/` **비어 있음**. 미추적 새 파일은 **`004690` 하나** |
+| 생성 타입 | `gen types --local`이 `database.types.ts`와 **동일**(`slot_high_water` 반영) |
+| api 계약 | 저장 결과 zod가 **11키**(`slot_high_water`) — 실제 서비스 경유 저장이 스모크에서 성공했다. `stale_write` → 409 + `details.current_updated_at` |
+
+## G-E. 정리
+
+- 내가 만든 사용자 3명(`qa-cfs7-*`·`qa-slot-*`·`qa-leftover-*`)과 그 행을 전부 지웠다(스모크 사용자는 테스트가 스스로 지웠다). 끝 상태: 사용자 0 · 정본 0 · 대화 0 · 작업 0 · 사용량 0 · 근거 0 · 요건 0 · 지원 프로젝트 0 · 프로젝트 0. 내 것이 아닌 사용자는 없었다.
+- 작업 트리에 내 파일 0개. `db reset`은 쓰지 않았다.
+- 스크립트·출력(스크래치패드 `/private/tmp/claude-501/-Users-jehyun-Resumate--claude-worktrees-cover-letter-backend-ef4d68/cdfbb6b0-f08f-43f1-a316-88fd59d80f25/scratchpad/`): `cfs7.mjs`·`cfs7.out`(A) · `slot-common.mjs`·`slot.out`(B) · `qa-r15-smoke.integration.test.ts`(C 포함 4 describe) · `run-checks-fu2.log`(D)
+- **제안**: QA-07 수정 때 스크래치패드 `slot.out`의 S-swap·S-swapnull 두 경우를 pgTAP로 옮기면 회귀 방어가 된다(지금 `r15_document_save_versions.test.sql`은 순차 경로만 본다).
+
+## G-R. 재확인 — QA-07·QA-08 수정 (2026-11-09)
+
+db가 `004690`을 직접 고쳤다(미커밋 파일). 로컬 DB를 **마이그레이션 파일로 다시 만든 뒤**(`supabase db reset` — 살아 있는 함수 = 파일임을 보장) 후속 라운드 2의 **같은 시나리오**를 다시 돌렸다. 시나리오는 이번에 파일로 남겼다(스크래치패드 `slot-step1.mjs`·`slot-plant.sh`·`slot-step2.mjs`, 출력 `slot-r3.out`). 제안은 이번에도 **실제 패치 RPC**(`app_ai_writer`)로 만들었다.
+
+### G-R1. 같은 재현의 전후 비교
+
+| 시나리오 | 후속 라운드 2 (수정 전) | 재확인 (수정 후) | 판정 |
+|----------|------------------------|-----------------|------|
+| **양성 대조** — 같은 질문에 그 제안 적용 | `applied` | **`applied`** | 정상 제안을 막지 않는다 |
+| B1 `q_3` 삭제 | 성공, high 3 | 성공, high 3 | 변화 없음 |
+| B2 `q_3` 새 문항으로 재추가 | `invalid_slot`, 불변 | **`invalid_slot`, 불변** | 변화 없음 |
+| B3 `q_4` 추가 | 성공, high 4 | 성공, high 4 | 변화 없음 |
+| B4 옛 제안을 `q_4`로 | `skipped: not_found` | **`skipped: not_found`** | 변화 없음 |
+| **B5 (QA-08)** 본문에 `q_3` 없이 `q_3` 제안 청구 | **`applied`**, `applied_rev = 1` | **`skipped: not_found`**, **`applied_at`·`applied_rev` 없음** | **닫힘** |
+| B7 REST로 `slot_high_water` 낮추기 | `direct_write_not_allowed` | **`direct_write_not_allowed`** | 변화 없음 |
+| **S-swap (QA-07)** 같은 번호 + **다른 `question_id`** + 옛 제안 청구 | 성공·**`applied`**, 새 질문에 옛 문장 | **`invalid_slot [q_3]`**, **행 그대로**, 옛 제안 **적용 안 됨** | **닫힘** (규칙 1) |
+| **S-swapnull (QA-07)** 같은 번호 + **`question_id` 생략** | 성공·`applied`, **새 uuid 발급** | 성공·`applied`, **저장된 `question_id`를 물려받음**(새 uuid 없음) | **닫힘** (규칙 2) — 아래 해석 |
+
+**S-swapnull의 해석**: 수정 뒤 `question_id`를 생략한 기존 슬롯은 **"같은 질문, 문구만 고침"**으로 읽힌다(저장된 id를 물려받는다). 그 질문 자신의 제안(제안의 `question_id` = 물려받은 id)을 적용하는 것은 정상 흐름이다 — 사용자가 문항 문구를 다듬고 그 문항의 AI 초안을 반영하는 경우와 같다. 수정 전의 문제는 ① **기존 문항에 새 uuid가 발급돼 정체가 바뀌는 것**(`user_note` 근거가 옛 id를 가리킴)과 ② 다른 질문을 같은 번호에 넣을 수 있는 것이었는데, ①은 규칙 2가, ②는 규칙 1(다른 `question_id` → `invalid_slot`)이 막는다. "다른 질문"을 같은 번호에 넣는 길은 이제 없다.
+
+### G-R2. 새 definer 헬퍼 `private.doc_proposal_question_id` — 우회 경로가 아니다
+
+| 확인 | 결과 |
+|------|------|
+| 정의 | `security definer` · `search_path = ''` · 인자 `(p_writing_chat_id, p_application_project_id, p_document_kind, p_slot)` → `uuid` |
+| 소유자 검사 | 함수 안 `where w.id = ? and w.user_id = auth.uid() and w.application_project_id = ? and w.document_kind = ?` — `auth.uid()`가 null이면 `not_authenticated` |
+| **남의 대화 읽기** | 같은 트랜잭션에서 소유자 A는 자기 제안의 `question_id`를 받고, **사용자 B로 바꿔 같은 인자를 넣으면 `null`** |
+| REST 노출 | `.rpc("doc_proposal_question_id")` → **`PGRST202`**(public에 없다) · `.schema("private").rpc(...)` → **`PGRST106 Invalid schema`** |
+| execute 권한 | `authenticated`만(invoker 저장 RPC가 부르기 때문 — R15-DB-2와 같은 모양). `anon`·`app_ai_writer`·`app_key_reader`·`service_role` 없음 |
+| 돌려주는 것 | uuid 하나뿐(형식 검사 통과한 것만) — 제안 본문·근거는 내보내지 않는다 |
+
+### G-R3. 범위 밖 수정(6번) `wc_patch_document`의 회귀 — 없음
+
+- `004690`이 정의하는 함수는 **4개뿐**: `application_documents_set_updated_at` · `doc_proposal_question_id` · `save_application_document` · `wc_patch_document`. **`wc_patch_deliverable`·`wc_patch_star`·`apply_structured_draft_patch_impl`·`apply_structured_draft_patch`는 재정의하지 않는다**(0건) → 산출물·STAR 패치는 바뀌지 않았다.
+- `wc_patch_document`를 직전 정의(`004660`)와 공백 무시로 diff — **차이는 한 덩어리(190행)뿐**: `replace_draft`가 유효한 `question_id`를 실으면 그 슬롯의 저장 `question_id`를 따라 바꾼다. 그 밖은 같다.
+- **R15-API-7 유지**: 서류 `draft_count`는 여전히 루프 **밖에서 한 번**(`if v_draft_turn then … + 1`, 340행). 산출물은 여전히 루프 **안**(연산당, `wc_patch_deliverable:147`).
+- 산출물·STAR 대화의 기존 테스트(Vitest `deliverable-chat`·`writing-chat`·`turn`, pgTAP `writing_chats`·`r5_*`)가 전부 통과.
+
+### G-R4. 알려진 한계 판정 — **실제로는 생기지 않는다** (막을 필요 없음)
+
+질문: 미저장 슬롯(폼 스냅숏에만 있는 문항)의 초안 턴이 `replace_draft`에 `question_id`를 싣지 않아 규칙 4의 비교가 건너뛰어지는가.
+
+- **미저장 슬롯은 초안 컨텍스트에 아예 들어가지 않는다.** `mergeQuestions`(`src/server/ai/context-pack/cover-letter-chat.ts:213-234`)는 **저장된 정본 행만** 순회한다(`rows.slice(0, MAX_QUESTIONS).map(...)`). 스냅숏은 **같은 슬롯의 값을 덮어쓸 뿐** 새 문항을 추가하지 않는다. 그래서 모델이 그 슬롯의 초안을 쓸 일이 없고, 제안도 생기지 않는다.
+- **저장된 행은 늘 `question_id`를 갖는다**: 로더 `documentQuestionRows`가 `question_id`가 문자열이 아닌 행을 건너뛴다(`src/server/services/writing-chat/pipelines.ts:418`). 컨텍스트 타입의 `questionId`도 필수(`string`, `cover-letter-chat.ts:144`).
+- 실행 확인: 저장 행 `q_1·q_2` + 스냅숏 `q_2`(수정)·`q_4`(미저장)로 `mergeQuestions`를 돌린 임시 단위 테스트 → 결과 슬롯 **`["q_1","q_2"]`**(스냅숏 전용 `q_4`는 빠짐), 모든 행에 36자 `question_id`, `q_2` 문구는 스냅숏 값으로 덮임. (테스트는 확인 뒤 지웠다.)
+- 결론: `cover-letter-patch.ts:148`의 조건부(`questionId`가 있을 때만)는 **실제로는 늘 참**이다. 규칙 4는 비교를 건너뛰지 않는다. 저장된 슬롯은 규칙 1·2가 지킨다. **막을 필요가 없다.**
+- 참고(결함 아님, 제품 판단): 저장 전 새 문항은 AI 초안 대상이 아니라는 뜻이기도 하다. 그것이 의도한 UX인지는 UX 몫이다 — 이번 수정과는 무관하다.
+
+### G-R5. 전체 회귀
+
+| 검사 | 결과 |
+|------|------|
+| `run-checks.sh` — **잔여 행 상태, reset 없이** | **typecheck · lint · Vitest(150/2,432) · pgTAP(66/2,708) 전부 통과** |
+| 심은 잔여 행 | 다른 사용자 2명 — `application_documents` 5 · `writing_chats` 5 · `ai_jobs` 1(queued) · `ai_usage_records` 1 · `jd_requirements` 1 |
+| pgTAP 증가분 | +20 단정 — `r15_document_save_versions.test.sql:229-353`에 **S-swap·S-swapnull·QA-08·규칙 4**가 들어갔다(후속 라운드 2 제안 반영) |
+| 파일 순서 | `…004680` → `…004690` → **`…004700_r15_drop_drafts`**(파괴, 마지막) |
+| 커밋된 마이그레이션 무변경 | `git diff --stat HEAD -- supabase/migrations/` **비어 있음**, 미추적 새 파일은 `004690` 하나 |
+| 생성 타입 | `gen types --local`과 **동일** |
+
+### G-R6. 정리
+
+- 내 사용자 2명(`qa-slot-a-*`·`qa-slot-b-*`)과 그 행을 전부 지웠다. 끝 상태: 사용자 0 · 정본 0 · 대화 0 · 작업 0 · 사용량 0 · 요건 0 · 지원 프로젝트 0. 내 것이 아닌 사용자는 없었다.
+- `db reset`은 재확인 시작 때 **한 번** 썼다(수정된 `004690`을 파일에서 다시 적용하려고 — 공유 로컬 스택, UI 세션 허락 범위). "reset 없이 통과" 검사는 그 뒤에 잔여 행을 심고 따로 돌렸다.
+- 작업 트리에 내 파일 0개. 원격 쓰기 0건.

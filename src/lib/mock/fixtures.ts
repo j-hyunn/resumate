@@ -1020,6 +1020,8 @@ export function createFixtures(): MockDb {
       slot_count: 3,
       meta: { tone: "concise" },
       first_copied_at: null,
+      // R15 후속 3: 쓴 적 있는 최고 번호 (q_1~q_3)
+      slot_high_water: 3,
     },
     {
       ...base(IDS.adoc(2), 2, 0),
@@ -1036,6 +1038,7 @@ export function createFixtures(): MockDb {
       slot_count: 3,
       meta: { tone: "concise" },
       first_copied_at: daysAgo(1),
+      slot_high_water: 3,
     },
   ]
 

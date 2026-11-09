@@ -124,6 +124,12 @@ export type CoverLetterTurnEvent =
       droppedBlockCount: number
       rev: number
       draftCount: number
+      /**
+       * R15 후속 3: 그 슬롯의 **저장된** 제안(snake_case — 보정 뒤 `blocks`·`value`·`base_body_hash`·
+       * `answer_title`·`sources`·`rev`). **[반영]은 이것을 읽는다.** `draft_block`은 글자 수 보정 **전** 문장이라
+       * 스트리밍 표시에만 쓴다. `rev === draft.rev`.
+       */
+      draft: CoverLetterProposalDraft
     }
   | { type: "turn_done"; messageCount: number; remainingMessages: number; limitReached: boolean; draftStatus: "updated" | "unchanged" | "failed"; draftCount: number }
   | { type: "error"; errorCode: AiErrorCode; provider: AiProviderName | null; retryAfter: string | null; quotaResetsAt: string | null }

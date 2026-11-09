@@ -10,6 +10,7 @@
  * 초안 상한은 **턴 6회**(문항당이 아니다, DM 2.9.4) — 한 턴이 문항 3개를 써도 `draftCount`는 1만 는다.
  */
 import type { AiErrorCode } from "@/types/db"
+import { computeBodyHash } from "@/lib/body-hash"
 import {
   COVER_LETTER_DRAFT_SLOTS_PER_TURN,
   type CoverLetterProposalBlock,
@@ -216,6 +217,8 @@ export async function* mockCoverLetterTurn(opts: MockCoverLetterTurnOptions): As
       rev: 1,
       // 한 턴 = 1회 (문항 수와 무관)
       draftCount: opts.draftCount + 1,
+      // R15 후속 3: 저장된 제안 그대로 — `base_body_hash`는 **서버 값**(이 턴이 본 본문의 해시)이다
+      draft: { ...entry.draft, base_body_hash: await computeBodyHash(q.body) },
     }
   }
 

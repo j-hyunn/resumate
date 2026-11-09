@@ -204,3 +204,46 @@ describe("슬롯 발급은 지금 화면의 모든 슬롯을 본다 (UQ-756·757
     expect(invalidSlotCopy(null)).toContain("문항 키가 겹쳐")
   })
 })
+
+// ---------------------------------------------------------------------------
+// R15 후속 3 — 슬롯 정체는 번호 + question_id. 기존 문항은 읽어 온 id를 그대로 보낸다
+// ---------------------------------------------------------------------------
+describe("question_id는 정본·입력 보존을 지나도 잃지 않는다 (R15 후속 3)", () => {
+  const storedBody = {
+    questions: [
+      { slot: "q_1", question_id: "11111111-1111-4111-8111-000000000001", sort_order: 1, question_text: "가", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces" as const, user_note: null, body: "", blocks: [] },
+      { slot: "q_3", question_id: "11111111-1111-4111-8111-000000000003", sort_order: 2, question_text: "나", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces" as const, user_note: null, body: "", blocks: [] },
+    ],
+  }
+
+  it("정본에서 온 문항은 저장 입력에 읽어 온 question_id를 그대로 싣는다 (새로 만들지 않는다)", () => {
+    const sent = toCoverLetterBody(toQuestionForms(storedBody))
+    expect(sent.questions.map((q) => [q.slot, q.question_id])).toEqual([
+      ["q_1", "11111111-1111-4111-8111-000000000001"],
+      ["q_3", "11111111-1111-4111-8111-000000000003"],
+    ])
+  })
+
+  it("입력 보존(JSON 왕복)으로 되살린 문항도 같은 question_id를 싣는다", () => {
+    const preserved = JSON.parse(JSON.stringify(toQuestionForms(storedBody))) as ReturnType<typeof toQuestionForms>
+    expect(toCoverLetterBody(preserved).questions.map((q) => q.question_id)).toEqual([
+      "11111111-1111-4111-8111-000000000001",
+      "11111111-1111-4111-8111-000000000003",
+    ])
+  })
+
+  it("새 문항만 새 question_id를 받는다", () => {
+    const fresh = newQuestionForm("q_4")
+    expect(fresh.question_id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(fresh.question_id).not.toBe("11111111-1111-4111-8111-000000000001")
+  })
+
+  it("slot_high_water를 저장 응답으로 받으면 다음 번호는 그것 + 1 (지운 최고 번호도 다시 쓰지 않는다)", () => {
+    // 읽은 행: q_1·q_2만 남았고 slot_high_water = 3
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: { body: { questions: [{ slot: "q_1" }, { slot: "q_2" }] } } }), { highWater: 3 })
+    expect(slots.allocate()).toBe("q_4")
+    // 저장 응답이 더 큰 값을 알려 오면 그것을 따른다
+    slots.markHighWater(9)
+    expect(slots.allocate()).toBe("q_10")
+  })
+})

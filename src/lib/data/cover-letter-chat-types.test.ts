@@ -105,3 +105,23 @@ describe("서류 초안 턴 (계약 모양 회귀 단정)", () => {
     expect((events.at(-1) as { draftCount: number }).draftCount).toBe(3)
   })
 })
+
+describe("서류 draft_done.draft — [반영]은 저장된 제안을 읽는다 (R15 후속 3)", () => {
+  it("draft_done이 그 슬롯의 저장된 제안을 싣고 rev가 같다 · base_body_hash는 서버 값이다", async () => {
+    const events = await collect(
+      mockCoverLetterTurn({ questions: QUESTIONS.slice(0, 1), draftTurn: true, draftCount: 0, draft: emptyCoverLetterDraft(), stepMs: 0 }),
+    )
+    const done = events.find((e) => e.type === "draft_done") as unknown as {
+      rev: number
+      draft: { rev: number; blocks: Array<{ block_id: string }>; value: string; base_body_hash: string | null; sources: unknown[] }
+    }
+    expect(done.draft.rev).toBe(done.rev)
+    expect(done.draft.blocks.length).toBeGreaterThan(0)
+    expect(done.draft.value).toBe(done.draft.blocks.map((b) => (b as unknown as { text: string }).text).join("\n\n"))
+    expect(done.draft.base_body_hash).toMatch(/^sha256:/)
+    expect(done.draft.sources.length).toBeGreaterThan(0)
+    // 저장 모양(snake_case)
+    expect(Object.keys(done.draft)).toContain("base_body_hash")
+    expect(Object.keys(done.draft.blocks[0])).toContain("block_id")
+  })
+})

@@ -296,6 +296,8 @@ export async function* realCoverLetterTurn(request: RealStreamRequest, signal: A
           droppedBlockCount: Number(ev.droppedBlockCount ?? 0),
           rev: Number(ev.rev ?? 1),
           draftCount: Number(ev.draftCount ?? 0),
+          // 저장된 제안 — 저장 모양(snake_case) 그대로 통과 (`draft_block.block`과 같은 규칙)
+          draft: ev.draft as never,
         }
         break
       case "turn_done":

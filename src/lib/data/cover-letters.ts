@@ -246,6 +246,11 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
       const ap = db.application_projects.find((a) => a.id === input.application_project_id)
       if (!ap) throw new AppError("not_found", "자기소개서를 찾을 수 없어요")
       let doc = db.application_documents.find((d) => d.application_project_id === ap.id) ?? null
+      // CF-S7 (확정 2026-11-09, 사용자 — R15 후속 3에서 서버에 들어왔다): **행이 있는데 기대 버전이 null이어도**
+      // `stale_write`다. 행이 없을 때만 기대 버전 없이 만든다. **409가 문항 오류(400)보다 먼저 나온다**(RPC와 같은 순서)
+      if (doc && (input.expected_updated_at == null || doc.updated_at !== input.expected_updated_at))
+        // 화면이 "내 내용으로 저장"에서 이 값을 기대 버전으로 다시 보낸다 (UQ-741 — null로 덮지 않게)
+        throw new AppError("stale_write", "다른 곳에서 내용이 바뀌었어요", { status: 409, details: { current_updated_at: doc.updated_at } })
       // R15: 5 초과이고 **저장돼 있던 수보다 많을 때만** 거부한다. `current` = 저장돼 있던 문항 수(행 없으면 0)
       const storedCount = doc?.slot_count ?? 0
       if (input.body.questions.length > COVER_LETTER_MAX_QUESTIONS && input.body.questions.length > storedCount)
@@ -263,6 +268,20 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           throw new AppError("invalid_slot", "문항 키가 올바르지 않아요", { status: 400, details: { field: q.slot } })
         seen.add(q.slot)
       }
+      // R15 후속 3 — 슬롯 정체는 **번호 + `question_id`**다(RPC와 같다):
+      // · 저장돼 있던 슬롯인데 `question_id`가 다르면 `invalid_slot` / 생략하면 저장된 id를 물려받는다
+      // · 저장돼 있지 않은 **새** 슬롯의 번호가 `slot_high_water` 이하이면 `invalid_slot`(이미 쓴 번호 — 재사용 금지)
+      const storedById = new Map((doc?.body.questions ?? []).map((q) => [q.slot, q.question_id] as const))
+      const highWater = doc?.slot_high_water ?? 0
+      for (const q of input.body.questions) {
+        const storedId = storedById.get(q.slot)
+        if (storedId !== undefined) {
+          if (q.question_id && q.question_id !== storedId)
+            throw new AppError("invalid_slot", "문항 키가 올바르지 않아요", { status: 400, details: { field: q.slot } })
+        } else if (slotNo(q.slot) <= highWater) {
+          throw new AppError("invalid_slot", "이미 쓴 문항 키예요", { status: 400, details: { field: q.slot } })
+        }
+      }
       const badLimit = input.body.questions.find(
         (q) => q.char_limit == null || !Number.isFinite(q.char_limit) || q.char_limit < 1 || q.char_limit > 10_000,
       )
@@ -271,16 +290,14 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           status: 400,
           details: { field: `questions.${badLimit.slot}.char_limit` },
         })
-      // CF-S7 (확정 2026-11-09, 사용자): **행이 있는데 기대 버전이 null이어도** `stale_write`다 — 행이 없을 때만
-      // 기대 버전 없이 만든다. 문항 설정 상태의 [작성 시작]도 같은 충돌 다이얼로그를 거친다(서버 RPC와 같다)
-      if (doc && (input.expected_updated_at == null || doc.updated_at !== input.expected_updated_at))
-        // 화면이 "내 내용으로 저장"에서 이 값을 기대 버전으로 다시 보낸다 (UQ-741 — null로 덮지 않게)
-        throw new AppError("stale_write", "다른 곳에서 내용이 바뀌었어요", { status: 409, details: { current_updated_at: doc.updated_at } })
       const now = new Date().toISOString()
       // 순서는 `sort_order`만으로 나타낸다 — 보낸 순서대로 1부터 (RPC와 같다)
       const body: CoverLetterBody = {
-        questions: input.body.questions.map((q, i) => ({ ...q, sort_order: i + 1 })),
+        // `question_id`를 생략한 저장된 슬롯은 저장된 id를 물려받는다
+        questions: input.body.questions.map((q, i) => ({ ...q, question_id: q.question_id || storedById.get(q.slot) || newId(), sort_order: i + 1 })),
       }
+      // `greatest(기존, 이번 body의 최대 번호)` — 지워도 내려가지 않는다
+      const nextHighWater = Math.max(highWater, ...body.questions.map((q) => slotNo(q.slot)), 0)
       // 보내지 않은 슬롯 = 지운 문항 → 그 슬롯의 근거 행도 지운다 (RPC `doc_replace_slot_evidence`와 같다).
       // 남은 슬롯의 근거는 그대로다 — 적용 제안이 없는 슬롯(손편집만)은 기존 근거를 유지한다 (CF-S2)
       if (doc) {
@@ -302,6 +319,7 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           slot_count: body.questions.length,
           meta: { tone: input.meta?.tone ?? null },
           first_copied_at: null,
+          slot_high_water: nextHighWater,
         }
         db.application_documents.push(doc)
       } else {
@@ -311,6 +329,7 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           slot_count: body.questions.length,
           meta: { ...doc.meta, ...(input.meta ?? {}) },
           updated_at: now,
+          slot_high_water: nextHighWater,
         })
       }
       // 머리 제목·마감일은 같은 요청에서 — 한쪽만 저장되는 경우가 없다 (v5.20 정정)
@@ -340,10 +359,12 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
         deadline: ap.deadline,
         updatedAt: doc.updated_at,
         applied: (input.applied_proposals ?? []).map((a) => ({ writingChatId: a.writingChatId, slot: a.slot })),
-        skipped: [],
+        skipped: [] as SaveApplicationDocumentResult["skipped"],
+        // R15 후속 3: 11번째 키 — 다음 새 문항 번호는 이것 + 1부터
+        slotHighWater: doc.slot_high_water,
       }
     },
-    // real: `save_application_document` 한 번 (본문 + 머리 제목·마감일). 반환 9키를 그대로 올린다
+    // real: `save_application_document` 한 번 (본문 + 머리 제목·마감일). 반환 11키를 그대로 올린다
     async () =>
       unwrap(
         await saveApplicationDocumentAction({
@@ -389,4 +410,9 @@ export function toDocumentBody(body: CoverLetterBody): { questions: Array<Omit<C
         return q
       }),
   }
+}
+
+/** `q_{n}`의 n (형식은 위에서 이미 검사했다) */
+function slotNo(slot: string): number {
+  return Number(slot.slice(2))
 }

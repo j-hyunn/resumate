@@ -19,7 +19,6 @@ import { useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
-import { computeBodyHash } from "@/lib/body-hash"
 import { shouldAdoptReread } from "./panel-rules"
 import {
   COVER_LETTER_DRAFT_LIMIT,
@@ -117,15 +116,11 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const [chats, setChats] = React.useState(opts.initialChats)
   const [chat, setChat] = React.useState(opts.initialChat)
   /**
-   * 지금 열린 대화 id — 늦게 도착한 응답(턴 뒤 다시 읽기 · 기록에서 열기)이 **그 사이 연 다른 대화를
-   * 옛 대화로 덮지 않게** 응답을 반영하기 전에 이 값과 대조한다 (UQ-760).
+   * 마지막으로 **열기를 요청한** 대화 id (UQ-760). R15 후속 3에서 턴 뒤 다시 읽기는 걷었고, 다시 읽기가 남은
+   * 길은 "기록에서 열기"다. 그 응답이 늦게 오면 그 사이 다른 대화를 또 열었거나 "+ 새 대화"로 비웠을 수
+   * 있으므로, 반영하기 전에 이 값과 대조한다(`shouldAdoptReread`). 빠르게 두 번 열면 마지막 것만 반영된다.
    */
-  const openChatIdRef = React.useRef<string | null>(opts.initialChat?.id ?? null)
-  React.useEffect(() => {
-    openChatIdRef.current = chat?.id ?? null
-  }, [chat?.id])
-  /** 기록에서 열기 요청의 순번 — 빠르게 두 번 누르면 마지막 요청만 반영한다 */
-  const openSeq = React.useRef(0)
+  const openRequestRef = React.useRef<string | null>(null)
   const [messages, setMessages] = React.useState<CoverLetterPanelMessage[]>(
     () => opts.initialChat?.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, status: m.status })) ?? [],
   )
@@ -201,13 +196,11 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const chips = coverLetterChips({ total: opts.formSnapshot.length, firstDraftDone: draftCount > 0 })
 
   /**
-   * 문항별 임시 블록 — `draft_block`을 **시도(attempt)별로** 모은다. `draft_started`의 attempt 2(스키마
-   * 재시도)는 attempt 1의 블록을 버린다. 서류 `draft_done`은 블록을 싣지 않으므로(메타만 온다 — 계약
-   * `DocumentDraftDoneEvent`) 그 문항의 확정 제안은 **여기 모은 마지막 시도의 블록**이다.
+   * 문항별 임시 블록 — `draft_block`을 **시도(attempt)별로** 모아 **스트리밍 보기에만** 쓴다. attempt 2(스키마
+   * 재시도)는 attempt 1의 블록을 버린다. `draft_block`은 글자 수 보정 **전** 문장이라 제안으로 올리지 않는다 —
+   * 제안은 `draft_done.draft`(저장본)다 (R15 후속 3).
    */
   const pendingBlocks = React.useRef<Record<string, { attempt: number; blocks: CoverLetterProposalBlock[] }>>({})
-  /** 이번 턴이 보낸 `form_snapshot` 본문의 해시 (`base_body_hash`, OD-P5 정규화 — 서버와 같은 함수) */
-  const baseHashes = React.useRef<Record<string, string>>({})
   const replyRef = React.useRef("")
 
   const applyEvent = React.useCallback((ev: CoverLetterTurnEvent) => {
@@ -245,40 +238,15 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
         setPhase("adjusting")
         break
       case "draft_done": {
-        // 확정 — 임시 보기를 지우고 모은 블록을 그 문항의 제안으로 올린다 (통째로 교체)
+        // 확정 — 임시 보기를 지우고 **서버가 저장한 제안**(`draft_done.draft`)을 그 문항의 제안으로 둔다(통째로 교체).
+        // 보정 뒤 `blocks`·`value`, 서버의 `base_body_hash`, `answer_title`, `sources`(CF-S1), `rev`가 모두 저장본과 같다
         setProvisional(null)
         setDraftCount(ev.draftCount)
-        const blocks = pendingBlocks.current[ev.slot]?.blocks ?? []
         delete pendingBlocks.current[ev.slot]
-        const needsReview = new Set(ev.needsReviewBlockIds)
-        const finalBlocks = blocks.map((b) => (needsReview.has(b.block_id) ? { ...b, review: "needs_review" as const } : b))
-        const baseHash = baseHashes.current[ev.slot] ?? null
         setChat((c) => {
           if (!c) return c
           const existing = c.structured_draft.document.questions.find((q) => q.slot === ev.slot)
-          const entry = {
-            slot: ev.slot,
-            question_id: existing?.question_id ?? `qid-${ev.slot}`,
-            draft: {
-              answer_title: ev.answerTitle,
-              value: finalBlocks.map((b) => b.text).join("\n\n"),
-              blocks: finalBlocks,
-              // 저장된 근거 목록은 이 이벤트에 없다 — 남은 값을 두고, 표시 카드는 `sources_selected`에서 온다
-              sources: existing?.draft.sources ?? [],
-              char_count: ev.charCount,
-              char_limit_at_generation: ev.charLimit,
-              char_adjust_needed: ev.charAdjustNeeded,
-              correction_applied: ev.correctionApplied,
-              rev: ev.rev,
-              generated_at: existing?.draft.generated_at ?? new Date().toISOString(),
-              base_body_hash: baseHash,
-              replace_allowed: true,
-              missing_slots: existing?.draft.missing_slots ?? [],
-              dropped_block_count: ev.droppedBlockCount,
-              applied_at: null,
-              applied_rev: null,
-            },
-          }
+          const entry = { slot: ev.slot, question_id: existing?.question_id ?? `qid-${ev.slot}`, draft: ev.draft }
           return {
             ...c,
             draft_count: ev.draftCount,
@@ -339,9 +307,6 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       setPhase(options.draftTurn ? "drafting" : "replying")
       replyRef.current = ""
       pendingBlocks.current = {}
-      // 이 턴이 보는 본문(form_snapshot)의 해시 — 반영 때 "초안을 만든 뒤 답변이 바뀌었어요" 판정에 쓴다 (UQ-747)
-      const hashes = await Promise.all(opts.formSnapshot.map(async (q) => [q.slot, await computeBodyHash(q.body)] as const))
-      baseHashes.current = Object.fromEntries(hashes)
       const slowTimer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS)
       let sawError = false
       try {
@@ -382,16 +347,9 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
         if (sawError && options.draftTurn) setDraftFailed(true)
         setLastDraftOk(options.draftTurn && !sawError)
       }
-      // 실제 경로: 턴이 끝나면 **저장된 대화**로 다시 맞춘다. 서류 `draft_done`이 아직 확정 블록을 싣지
-      // 않아 화면이 `draft_block`(임시)으로 제안을 만들었는데, 글자 수 보정이 있으면 저장본과 다를 수 있다.
-      // 저장된 제안은 늘 DTO의 `structuredDraft`에서 읽는다. 다시 읽기가 실패하면 화면이 만든 제안을 둔다
-      if (!previewState && !ac.signal.aborted) {
-        const r = await getCoverLetterChatAction(target.id, opts.applicationProjectId).catch(() => null)
-        // UQ-760: 응답이 왔을 때 **지금 열린 대화가 그 턴의 대화일 때만** 반영한다
-        if (r && !("error" in r) && shouldAdoptReread(openChatIdRef.current, target.id, r.data.id)) adoptChat(r.data)
-      }
+      // (R15 후속 3) 턴 뒤 저장 대화를 다시 읽던 보정용 우회는 걷었다 — `draft_done.draft`가 저장본이다
     },
-    [adoptChat, applyEvent, draftCount, opts.applicationProjectId, opts.formSnapshot, opts.preview.turnError, previewState],
+    [applyEvent, draftCount, opts.formSnapshot, opts.preview.turnError, previewState],
   )
 
   const ensureChat = React.useCallback(async (): Promise<CoverLetterChatView | null> => {
@@ -440,6 +398,8 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
 
   const newChat = React.useCallback(() => {
     abort.current?.abort()
+    // 늦게 오는 "기록에서 열기" 응답이 비운 패널을 다시 채우지 않게
+    openRequestRef.current = null
     setChat(null)
     setMessages([])
     setReply("")
@@ -456,11 +416,11 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     (summary: CoverLetterChatSummary) => {
       if (chat?.id === summary.id) return
       abort.current?.abort()
-      const seq = ++openSeq.current
+      openRequestRef.current = summary.id
       void (async () => {
         const r = await getCoverLetterChatAction(summary.id, opts.applicationProjectId).catch(() => null)
-        // 그 사이 다른 대화를 또 열었으면 이 응답은 버린다 (UQ-760과 같은 경쟁)
-        if (seq !== openSeq.current) return
+        // 그 사이 다른 대화를 또 열었거나 비웠으면 이 응답은 버린다 (UQ-760)
+        if (openRequestRef.current !== summary.id) return
         if (!r || "error" in r) {
           toast("대화를 열지 못했어요. 다시 시도해 주세요")
           return
@@ -472,6 +432,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
         setDraftFailed(false)
         setLastDraftOk(false)
         setPhase("idle")
+        if (!shouldAdoptReread(openRequestRef.current, summary.id, r.data.id)) return
         adoptChat(r.data)
         opts.onChatChange(r.data.id)
       })()

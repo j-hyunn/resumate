@@ -94,15 +94,23 @@ export function nextSlot(used: Iterable<string>): string {
 export function createSlotAllocator(
   initiallyUsed: Iterable<string>,
   /**
-   * 정본이 기억하는 **쓴 적 있는 최고 번호**(`application_documents.slot_high_water`, 다음 백엔드 커밋).
+   * 정본이 기억하는 **쓴 적 있는 최고 번호**(`application_documents.slot_high_water`, R15 후속 3).
    * 서버는 저장한 번호를, 화면은 저장하지 않은 번호(열린 제안·이번 방문 발급분)를 맡는다 — 새 번호는
    * `max(highWater, 열린 제안, 이번 방문 발급분) + 1`. 값이 없으면 0이다.
    */
   opts: { highWater?: number } = {},
-): { allocate: (inUse?: Iterable<string>) => string; markUsed: (slots: Iterable<string>) => void } {
+): {
+  allocate: (inUse?: Iterable<string>) => string
+  markUsed: (slots: Iterable<string>) => void
+  /** 저장 응답의 `slotHighWater`를 넣는다(내려가지 않는다) */
+  markHighWater: (n: number) => void
+} {
   const used = new Set<string>()
-  const highWater = Math.max(0, Math.floor(opts.highWater ?? 0))
-  if (highWater > 0) used.add(`q_${highWater}`)
+  const markHighWater = (n: number) => {
+    const hw = Math.max(0, Math.floor(n))
+    if (hw > 0) used.add(`q_${hw}`)
+  }
+  markHighWater(opts.highWater ?? 0)
   const markUsed = (slots: Iterable<string>) => {
     for (const s of slots) if (slotNumber(s) !== null) used.add(s)
   }
@@ -120,6 +128,7 @@ export function createSlotAllocator(
       return slot
     },
     markUsed,
+    markHighWater,
   }
 }
 

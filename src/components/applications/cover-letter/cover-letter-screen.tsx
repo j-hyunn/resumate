@@ -121,8 +121,9 @@ export function CoverLetterScreen({
   const [slots] = React.useState(() =>
     createSlotAllocator(
       slotsInUse({ forms: [], document: data.document, chat: data.open_chat }),
-      // 연결 대기: `application_documents.slot_high_water`(다음 백엔드 커밋)가 들어오면 그 값을 넘긴다
-      { highWater: 0 },
+      // R15 후속 3: 읽은 정본의 `slot_high_water` — 서버는 저장한 번호를, 화면은 저장하지 않은 번호를 맡는다.
+      // 새 번호 = max(slot_high_water, 열린 제안, 이번 방문 발급분) + 1. 행이 없으면 0
+      { highWater: data.document?.slot_high_water ?? 0 },
     ),
   )
   // 발급할 때마다 **지금 화면의 모든 슬롯**을 한 함수(`slotsInUse`)로 모아 넘긴다 — 입력 보존으로 되살린
@@ -299,8 +300,11 @@ export function CoverLetterScreen({
           case "invalid_slot": {
             // 슬롯이 겹치거나 형식이 아니다 (UQ-756처럼 실제로 생길 수 있다). "저장 실패"로 뭉개지 않고
             // 어느 문항인지 알린다 — 그대로 다시 눌러도 같은 거부라 "다시 시도"가 아니라 검증 오류로 둔다
+            // `details.field` = 거부된 그 slot (겹침 · 번호 + question_id 불일치 · 서버가 이미 쓴 번호 — R15 후속 3)
             const field = result?.error.details?.field
             const at = typeof field === "string" ? current.findIndex((f) => f.slot === field) : -1
+            // 그 번호는 이제 "쓴 번호"다 — 지우고 다시 추가하면 그보다 큰 번호를 받는다
+            if (typeof field === "string") slots.markUsed([field])
             setPageError(invalidSlotCopy(at >= 0 ? at + 1 : null))
             setSaveState("invalid")
             return false
@@ -317,7 +321,9 @@ export function CoverLetterScreen({
       }
       const r = result.data
       staleVersion.current = null
-      // 반환 9키(계약은 camelCase)로 머리를 다시 그린다 — 다시 읽지 않는다
+      // 반환 11키(계약은 camelCase)로 머리를 다시 그린다 — 다시 읽지 않는다
+      // R15 후속 3: 서버의 최고 번호를 발급기에 넣는다 — 다음 새 문항은 이것 + 1부터
+      slots.markHighWater(r.slotHighWater)
       setUpdatedAt(r.updatedAt)
       setSavedAt(r.updatedAt)
       setBaseline(JSON.stringify(current))
@@ -328,7 +334,7 @@ export function CoverLetterScreen({
       clearPreserved()
       setDoc((prev) =>
         prev
-          ? { ...prev, updated_at: r.updatedAt, filled_slot_count: r.filledSlotCount, slot_count: r.slotCount }
+          ? { ...prev, updated_at: r.updatedAt, filled_slot_count: r.filledSlotCount, slot_count: r.slotCount, slot_high_water: r.slotHighWater }
           : ({
               id: r.applicationDocumentId,
               user_id: "",
@@ -341,6 +347,7 @@ export function CoverLetterScreen({
               slot_count: r.slotCount,
               meta: {},
               first_copied_at: null,
+              slot_high_water: r.slotHighWater,
             } satisfies ApplicationDocument),
       )
       // 서버가 건너뛴 제안(`skipped`)은 그 사유 문구를 알린다 (S-10 "저장 응답의 건너뜀"과 같은 규칙)
@@ -354,7 +361,7 @@ export function CoverLetterScreen({
       }
       return true
     },
-    [apId, name, deadline, headBaseline, updatedAt, applied, clearPreserved],
+    [apId, name, deadline, headBaseline, updatedAt, applied, clearPreserved, slots],
   )
 
   // ---------- 이탈 확인 ----------

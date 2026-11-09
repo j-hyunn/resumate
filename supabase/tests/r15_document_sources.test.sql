@@ -6,6 +6,25 @@ create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
 select no_plan();
 
+-- R15 후속 3 (CF-S7 = (a)): with a document row present, a null expected version is now a stale_write. These
+-- assertions are about the other rules, so every save here goes through this thin wrapper, which sends the
+-- version the caller last saw — what the screen does — when the test passes null. Explicit versions (the stale
+-- tests) pass through untouched; the null rule itself is asserted against the real RPC in
+-- r15_document_save_versions.test.sql.
+create schema r15s;
+grant usage on schema r15s to authenticated;
+create function r15s.save(p_application_project_id uuid, p_document_kind text, p_body jsonb,
+  p_meta jsonb default null, p_expected_updated_at timestamptz default null, p_applied_proposals jsonb default null,
+  p_client_id uuid default null, p_application_values jsonb default null)
+returns jsonb language sql as $$
+  select public.save_application_document(p_application_project_id, p_document_kind, p_body, p_meta,
+    coalesce(p_expected_updated_at,
+             (select d.updated_at from public.application_documents d
+               where d.application_project_id = p_application_project_id and d.document_kind = p_document_kind)),
+    p_applied_proposals, p_client_id, p_application_values);
+$$;
+grant execute on function r15s.save(uuid, text, jsonb, jsonb, timestamptz, jsonb, uuid, jsonb) to authenticated;
+
 insert into auth.users (id, email, aud, role) values
   ('a0000000-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated');
 insert into public.application_projects (id, user_id, name, name_source) values
@@ -84,7 +103,7 @@ select set_config('t.body', $json${"questions":[
    "blocks":[{"block_id":"b1","type":"paragraph","text":"본문"}]},
   {"slot":"q_2","question_text":"q2","char_limit":800,"count_basis":"with_spaces","body":"본문 2",
    "blocks":[{"block_id":"c1","type":"paragraph","text":"본문 2"}]}]}$json$, true);
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     current_setting('t.body')::jsonb, null, null,
                     format('[{"writing_chat_id":"%s","slot":"q_1","rev":1}]', current_setting('t.chat'))::jsonb
                   )::text, true);
@@ -113,7 +132,7 @@ select 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-00000000
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 -- Save again, with no applied proposals at all, and a changed block in each slot.
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     $json${"questions":[
                       {"slot":"q_1","question_text":"q1","char_limit":800,"count_basis":"with_spaces",
                        "body":"고친 본문",
@@ -131,7 +150,7 @@ select results_eq($$select item_key from public.evidence_links
                   'no applied proposal: the sources rows of both slots survive, the block rows are rewritten');
 
 -- ── a slot that is not sent loses both kinds ──
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[{"slot":"q_2","question_text":"q2","char_limit":800,
                                     "count_basis":"with_spaces","body":"본문 2","blocks":[]}]}'
                   )::text, true);
@@ -161,7 +180,7 @@ select is(public.apply_structured_draft_patch(current_setting('t.chat2')::uuid,
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[{"slot":"q_2","question_text":"q2","char_limit":800,
                                     "count_basis":"with_spaces","body":"새 본문","blocks":[]}]}',
                     null, null,
@@ -190,7 +209,7 @@ select ok((select not (structured_draft #> '{document,questions,0,draft}' ? 'sou
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[{"slot":"q_2","question_text":"q2","char_limit":800,
                                     "count_basis":"with_spaces","body":"또 새 본문","blocks":[]}]}',
                     null, null,
@@ -215,7 +234,7 @@ select is(public.apply_structured_draft_patch(current_setting('t.chat2')::uuid,
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[{"slot":"q_2","question_text":"q2","char_limit":800,
                                     "count_basis":"with_spaces","body":"세 번째 본문","blocks":[]}]}',
                     null, null,

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
+import { CoverLetterDraftSchema } from "@/server/ai/schemas/cover-letter-draft";
 import { DocumentTurnEventSchema, DocumentWritingChatDto, type DocumentTurnEvent } from "@/lib/contracts/writing-chat";
 import { ProviderError } from "@/server/ai/errors";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
@@ -404,6 +405,149 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
   }, 60_000);
 
   /**
+   * R15 후속 3 (리더 판정): `draft_done.draft` is the slot's **stored** proposal.
+   *
+   * `draft_block` streams before the 글자 수 보정, so when a correction runs, the blocks the screen
+   * collected are the pre-correction text. [반영] must take `draft_done.draft` instead — and that
+   * object must be exactly what the patch RPC stored (the DB rebuilds `value` from `blocks`), or the
+   * screen and the save RPC would disagree about "the proposal".
+   */
+  it("draft_done carries the stored proposal: after a 글자 수 보정 it differs from draft_block and equals the DB", async () => {
+    const projectId = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectId, rawText: KO_BACKEND.raw, companyName: "에이비씨페이" }));
+    await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      // A 1,000-char limit and a one-sentence first draft → out of the ±10 % range → one adjust call.
+      body: { questions: [{ slot: "q_1", question_text: "직무 역량을 써 주세요", char_limit: 1000, template_key: "job_competency", body: "" }] },
+    } as never);
+    const chat = await startDocumentWritingChat(user, { applicationProjectId: projectId, documentKind: "cover_letter" } as never);
+
+    const evidence = [{ source_type: "project", ref: "PRJ-1", field: "action", quote: ACTION }];
+    const corrected = `${ACTION}. 문제를 발견한 뒤에는 원인을 하나씩 좁혀 가며 가설을 세우고 검증했습니다. `.repeat(12).trim();
+    extracts.push({ json: { ...extractOut, intent: "compose_draft" } });
+    replies.push({ json: composeOutput(["q_1"]) });
+    replies.push({
+      json: {
+        schema_version: 4,
+        draft_type: "cover_letter",
+        turn_kind: "adjust_length",
+        questions: [
+          {
+            question_slot: "q_1",
+            paragraphs: [{ block_id: "q_1-p1", text: corrected, evidence, source_fact_ids: [], source_body_quotes: [], requirement_refs: [], placeholders: [] }],
+          },
+        ],
+      },
+    });
+    const d = deps();
+    const prepared = await prepareTurn(d, { chatId: chat.writingChatId, requestedSlot: null, requestedAction: "compose_draft", content: "초안 만들어 주세요." } as TurnRequest);
+    if (prepared.kind !== "ready") throw new Error(`blocked ${prepared.code}`);
+    const events: DocumentTurnEvent[] = [];
+    await runTurn(d, prepared, (e) => events.push(e as DocumentTurnEvent), new AbortController().signal);
+    if (events.some((e) => e.type === "error")) throw new Error(`EVENTS=${JSON.stringify(events)}\nLOGS=${logs.join("\n")}`);
+    for (const e of events) expect(DocumentTurnEventSchema.safeParse(e).success).toBe(true);
+
+    // The correction ran.
+    expect(events.some((e) => e.type === "adjusting_length")).toBe(true);
+    const done = events.find((e): e is Extract<DocumentTurnEvent, { type: "draft_done" }> => e.type === "draft_done")!;
+    expect(done.correctionApplied).toBe(true);
+
+    // draft_block (provisional, pre-correction) ≠ draft_done.draft.blocks (corrected).
+    const streamed = events.filter((e): e is Extract<DocumentTurnEvent, { type: "draft_block" }> => e.type === "draft_block").map((e) => e.block.text);
+    const final = done.draft.blocks.map((b) => b.text);
+    expect(streamed.length).toBeGreaterThan(0);
+    expect(final).not.toEqual(streamed);
+    expect(final.join("")).toContain("가설을 세우고 검증했습니다");
+
+    // SSE draft == the draft the patch RPC stored (value rebuilt by the DB from the corrected blocks).
+    const row = await admin.from("writing_chats").select("structured_draft").eq("id", chat.writingChatId).single();
+    const storedDraft = CoverLetterDraftSchema.parse(row.data?.structured_draft).document.questions.find((q) => q.slot === "q_1")!.draft;
+    expect(done.draft).toEqual(storedDraft);
+    expect(done.draft.value).toBe(storedDraft.value);
+    expect(done.draft.value).toContain("가설을 세우고 검증했습니다");
+    expect(done.draft.correction_applied).toBe(true);
+    expect(done.rev).toBe(done.draft.rev);
+    // The outer fields are camelCase; the stored draft inside keeps its snake_case keys (no rename).
+    expect(Object.keys(done.draft)).toContain("base_body_hash");
+    expect(Object.keys(done)).not.toContain("draft_count");
+  }, 60_000);
+
+  /**
+   * R15 후속 3 — CF-S7 = (a) (사용자 확정 2026-11-09) and the slot high-water mark (db `004690`).
+   *
+   * CF-S7: once the 정본 row exists, a save **without** an expected version is a `stale_write`
+   * (409, `details.current_updated_at`), not a silent overwrite — this is the server half of the
+   * "re-opened 자소서 overwritten with the default questions" path. "내 내용으로 저장" resends with
+   * that `current_updated_at`. The first save (no row + null) still passes.
+   *
+   * Slots: a deleted slot number is never handed to a new question again (DM 2.5.0b) — otherwise an
+   * old proposal for `q_3` left in a chat would attach itself to the new `q_3`.
+   */
+  it("CF-S7: row + null expected version → stale_write with current_updated_at; resending it saves. Slot numbers are not reused", async () => {
+    const { getApplicationDocument } = await import("@/server/services/application-document/read");
+    const projectId = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectId, rawText: KO_BACKEND.raw, companyName: "에이비씨페이" }));
+    const q = (slot: string, body = "") => ({ slot, question_text: `${slot} 문항`, char_limit: 800, body });
+
+    // First save: no row + null → passes (unchanged rule).
+    const first = await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      body: { questions: [q("q_1", "첫 답변"), q("q_2"), q("q_3")] },
+    } as never);
+    expect(first.slotHighWater).toBe(3);
+    expect((await getApplicationDocument(user, projectId))!.slot_high_water).toBe(3);
+
+    // Row exists + null → stale_write, with the row's current version in details; nothing is written.
+    const blind = saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      body: { questions: [q("q_1", "다른 탭이 덮어쓰려던 내용")] },
+    } as never);
+    await expect(blind).rejects.toMatchObject({ code: "stale_write", status: 409 });
+    const err = (await blind.catch((e: unknown) => e)) as { details?: { current_updated_at?: string } };
+    expect(Date.parse(err.details!.current_updated_at!)).toBe(Date.parse(first.updatedAt));
+    const untouched = (await getApplicationDocument(user, projectId))!;
+    expect(untouched.body.questions.map((x) => x.slot)).toEqual(["q_1", "q_2", "q_3"]);
+    expect(untouched.body.questions[0]!.body).toBe("첫 답변");
+    expect(Date.parse(untouched.updated_at)).toBe(Date.parse(first.updatedAt));
+
+    // "내 내용으로 저장": resend with current_updated_at → passes, and that content becomes the 정본.
+    const mine = await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      expectedUpdatedAt: err.details!.current_updated_at,
+      // Drop q_3 (and keep q_1 / q_2).
+      body: { questions: [q("q_1", "내 내용으로 저장한 답변"), q("q_2")] },
+    } as never);
+    expect((await getApplicationDocument(user, projectId))!.body.questions[0]!.body).toBe("내 내용으로 저장한 답변");
+    // Deleting q_3 does not lower the mark.
+    expect(mine.slotHighWater).toBe(3);
+
+    // Re-adding q_3 as a NEW question → invalid_slot (and nothing is written).
+    await expect(
+      saveApplicationDocument(user, {
+        applicationProjectId: projectId,
+        documentKind: "cover_letter",
+        expectedUpdatedAt: mine.updatedAt,
+        body: { questions: [q("q_1", "내 내용으로 저장한 답변"), q("q_2"), q("q_3")] },
+      } as never),
+    ).rejects.toMatchObject({ code: "invalid_slot", status: 400, details: { field: "q_3" } });
+    expect((await getApplicationDocument(user, projectId))!.slot_count).toBe(2);
+
+    // q_4 (= slot_high_water + 1) is accepted and moves the mark.
+    const next = await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      expectedUpdatedAt: mine.updatedAt,
+      body: { questions: [q("q_1", "내 내용으로 저장한 답변"), q("q_2"), q("q_4")] },
+    } as never);
+    expect(next.slotHighWater).toBe(4);
+    expect((await getApplicationDocument(user, projectId))!.slot_high_water).toBe(4);
+  }, 60_000);
+
+  /**
    * R15 후속 — the reads S-46 / S-39 call (DM 7장 25행 · 33행), against real rows and real RLS.
    *
    * The data-loss path this closes: with no 정본 read, S-46 always opened in 문항 설정 상태 and its
@@ -441,7 +585,7 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
     expect(doc).not.toBeNull();
     expect(doc!.id).toBe(saved.applicationDocumentId);
     expect(Date.parse(doc!.updated_at)).toBe(Date.parse(saved.updatedAt));
-    expect(doc).toMatchObject({ application_project_id: projectId, document_kind: "cover_letter", slot_count: 3, filled_slot_count: 1, first_copied_at: null });
+    expect(doc).toMatchObject({ application_project_id: projectId, document_kind: "cover_letter", slot_count: 3, filled_slot_count: 1, first_copied_at: null, slot_high_water: 3 });
     expect(doc!.body.questions.map((q) => q.slot)).toEqual(["q_1", "q_2", "q_3"]);
     expect(doc!.body.questions[0]!.body).toBe("이미 쓴 답변입니다.");
 

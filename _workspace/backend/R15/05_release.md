@@ -220,3 +220,13 @@ cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv /t
 
 ### 후속 QA 결과 (2026-11-09)
 Critical 0 · Major 0 · Minor 0 — **열린 항목 없음**. 쓰기 가드는 실제 PostgREST 경로로 15가지 공격을 막았고(직접 insert·update·upsert·`set_config` 호출·`pg_catalog` 경유·GraphQL 없음), 플래그가 RPC 밖으로 새지 않는다. pgTAP **65파일 2,658**, Vitest **150파일 2,429**, typecheck·lint 통과.
+
+### 갱신 2 (2026-11-09) — 비파괴 1개 추가: `004690`
+
+| # | 파일 | 내용 | 파괴 | 왜 코드보다 먼저인가 |
+|---|------|------|------|---------------------|
+| 20 | `20261113004690_r15_document_save_null_expected` | ① **CF-S7**(사용자 확정): 정본 행이 있는데 기대 버전 null이면 `stale_write` — 서류 RPC만 ② **슬롯 번호 재사용 금지**: 컬럼 `slot_high_water` + 슬롯 정체를 번호·`question_id`로 판정(QA-07) ③ 지운 슬롯 제안을 반영됨으로 기록하지 않음(QA-08) ④ 패치 RPC가 다음 초안에서 `question_id` 갱신 | 아니다(컬럼 추가 + 함수 교체, 기존 행 `slot_high_water` 백필 — 원격에 서류 행 0이라 실질 영향 없음) | 새 코드의 저장 반환이 `slot_high_water`(11키)를 기대한다. 옛 코드는 아직 서류를 저장하지 않으므로 먼저 올라가도 깨지는 것이 없다 |
+
+**1.5단계 갱신**: 비파괴 **`004670`·`004680`·`004690`** 세 개를 파괴 파일을 빼낸 상태로 한 번에 push한다. 확인 기준도 바뀐다 — `list_migrations` 마지막이 **`20261113004690`**.
+
+**후속 라운드 2 QA (2026-11-09)**: Critical 0 · Major 0 · Minor 0 — **R15 열린 항목 없음**. CF-S7 동시 첫 저장 25회 독립 재현(매번 성공 1·`stale_write` 1, 500 0건), 기대 버전 우회 시도 전부 실패, 슬롯 S-swap·S-swapnull 재현 후 닫힘, `draft_done.draft`가 보정 후 저장본과 일치. pgTAP **66파일 2,708**, Vitest **150파일 2,432**, typecheck·lint 통과(잔여 행 심은 상태, reset 없이).

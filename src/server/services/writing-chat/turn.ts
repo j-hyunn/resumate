@@ -1128,8 +1128,8 @@ export async function runTurn(
       const reply = await failReply("", new AiError("stalled", { retryable: false }), 0, null);
       return { reply, draft, draftStatus: "failed", progress: validated, extract: extractLabel };
     }
-    // One `draft_done` per question, built from the RPC answer (`rev`, `draft_count`) and the
-    // pipeline's result (ai notes §2 (3) step 7). A question the RPC didn't store sends none.
+    // One `draft_done` per question, built from the RPC answer (`rev`, `draft_count`, the stored
+    // `draft`) and the pipeline's result (ai notes §2 (3) step 7). A question the RPC didn't store sends none.
     if (outcome.outcome === "draft") {
       for (const q of outcome.questions) {
         const stored = draft.document.questions.find((e) => e.slot === q.slot)?.draft ?? null;
@@ -1147,6 +1147,10 @@ export async function runTurn(
           droppedBlockCount: q.droppedBlockCount,
           rev: stored.rev,
           draftCount: draft.draft_count,
+          // R15 후속 3: the stored proposal from the patch RPC's answer (`value` rebuilt by the DB from
+          // the corrected blocks) — never the pipeline's pre-patch object, which would disagree with
+          // what the save RPC later reads back as "the proposal".
+          draft: stored,
         });
       }
     }

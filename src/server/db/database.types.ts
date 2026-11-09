@@ -149,14 +149,14 @@ isOneToOne: false
                   ]
                 },"application_documents": {
                   Row: {
-                    "application_project_id": string,"body": NonNullable<Json>,"created_at": string,"document_kind": string,"filled_slot_count": number,"first_copied_at": string | null,"id": string,"meta": NonNullable<Json>,"slot_count": number | null,"updated_at": string,"user_id": string
+                    "application_project_id": string,"body": NonNullable<Json>,"created_at": string,"document_kind": string,"filled_slot_count": number,"first_copied_at": string | null,"id": string,"meta": NonNullable<Json>,"slot_count": number | null,"slot_high_water": number,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "application_project_id": string,"body"?: NonNullable<Json>,"created_at"?: string,"document_kind": string,"filled_slot_count"?: number,"first_copied_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"slot_count"?: never,"updated_at"?: string,"user_id"?: string
+                    "application_project_id": string,"body"?: NonNullable<Json>,"created_at"?: string,"document_kind": string,"filled_slot_count"?: number,"first_copied_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"slot_count"?: never,"slot_high_water"?: number,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "application_project_id"?: string,"body"?: NonNullable<Json>,"created_at"?: string,"document_kind"?: string,"filled_slot_count"?: number,"first_copied_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"slot_count"?: never,"updated_at"?: string,"user_id"?: string
+                    "application_project_id"?: string,"body"?: NonNullable<Json>,"created_at"?: string,"document_kind"?: string,"filled_slot_count"?: number,"first_copied_at"?: string | null,"id"?: string,"meta"?: NonNullable<Json>,"slot_count"?: never,"slot_high_water"?: number,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

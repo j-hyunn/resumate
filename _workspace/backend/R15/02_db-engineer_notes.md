@@ -1,7 +1,7 @@
 # R15 db-engineer 노트 — 자기소개서 관리 DB (cover-letter-chat 11.8 + cover-letter-flow 11.10)
 
 - 날짜: 2026-11-09 · 기준 판: **DM v4.15** (+ **CF-S1** 2026-11-09 사용자 결정, 문서 반영은 **PR #68 미머지** — 이 워크트리 `docs/planning/`에는 없다)
-- 로컬 적용: **완료** (`supabase db reset` 성공, `supabase test db` **65파일 2,658 단정 전부 통과**)
+- 로컬 적용: **완료** (`supabase db reset` 성공, `supabase test db` **66파일 2,708 단정 전부 통과**)
 - 원격: **미반영**. `db push`·MCP `apply_migration`·쓰기 `execute_sql`은 하지 않았다. 파괴 마이그레이션은 **사용자 승인 뒤 코드 배포가 끝난 다음** push.
 - `src/server/db/database.types.ts` 재생성 완료(최종 상태 1개 파일, 생성기 원본 포맷 그대로 — `oxfmt`를 돌리면 전 파일이 리포맷돼 diff가 2,000줄 늘어난다).
 
@@ -433,3 +433,79 @@ public.mark_application_document_copied(
 
 ### 참고 (`src/` — 손대지 않음)
 `src/` 안의 `2026-11-08` 언급은 주석과 목·테스트 데이터뿐이고(`services/shell/index.ts:46`·`lib/data/account.ts:46` 주석, `shell/index.test.ts`, `lib/mock/fixtures.ts`), 서버 코드는 판을 정렬로 고른다. **앱 본문 `src/components/account/policy-content.ts`(UI 소유)는 이 마이그레이션과 같은 머지로 나가야 한다**(마이그레이션 머리 주석과 같다).
+
+
+---
+
+## R15 후속 3 (2026-11-09) — 서류 저장의 기대 버전 null (CF-S7 = (a)) · 슬롯 번호 재사용 금지
+
+### 마이그레이션
+| 번호 | 파일 | 내용 | 파괴 | 원격 |
+|------|------|------|------|------|
+| **20261113004690** | `r15_document_save_null_expected` | `application_documents.slot_high_water` 신설 + 백필 · `private.application_documents_set_updated_at` 교체(`slot_high_water`도 메타) · **`save_application_document` 교체**(`004670` 판에서 시작) | 아니다 | **미반영** |
+
+순서: `004680` < **`004690`** < `004700`(파괴, 마지막). 원격 적용분(`004660`까지)·`004670`·`004680`은 고치지 않았다. **다른 저장 RPC 3종(`save_project_page`·`save_project_deliverable`·`save_profile_basics`)은 바꾸지 않았다.**
+
+### 1. CF-S7 = (a) — 행이 있는데 기대 버전이 null이면 `stale_write`
+| 경우 | 결과 |
+|------|------|
+| 정본 행 있음 + `p_expected_updated_at` **null** | **`stale_write`**(409), raise detail = 현재 `updated_at`(ISO 8601 UTC, R5-DB-8 같은 형식) → api `details.current_updated_at` |
+| 행 없음 + null | 통과(첫 저장) — 그대로 |
+| 행 있음 + 값 | 비교 — 다르면 `stale_write`, 같으면 진행 — 그대로 |
+- **"내 내용으로 저장"**은 null 대신 `stale_write`의 `current_updated_at`을 실어 다시 보낸다(화면 흐름). DB 할 일은 거부뿐이다.
+- **검사 위치를 앞으로 옮겼다**: 이전에는 쓰기 블록 안(문항 검사 뒤)에 있었다. 지금은 **정본 행을 `for update`로 잡은 직후** 검사한다 → 문항 검사·근거 쓰기·반영됨 기록·이름/마감일보다 먼저다. `stale_write`면 아무것도 쓰지 않는다. 쓰기 블록 안의 옛 검사는 지웠다(행이 잠겨 있어 그사이 바뀔 수 없다). **바뀐 것은 400 문항 오류와 409 `stale_write`가 겹칠 때의 우선순위뿐이다**(이제 `stale_write`가 먼저). 인자 모양 검사(`p_document_kind`·`p_body` 모양·`p_meta`·`p_application_values`)는 잠금 전이라 여전히 그보다 먼저다.
+- **동시 첫 저장 — 확인 결과 (실제 두 세션으로 돌렸다)**: 두 탭이 동시에 첫 저장을 하면 **두 번째는 `stale_write`를 받는다.** 500이 새지 않는다. 다만 막는 지점은 유니크 키가 아니다. **저장 RPC가 먼저 잡는 `application_projects` 행 잠금**이다. B는 A가 커밋할 때까지 그 잠금에서 기다린다. 이어지는 정본 `select … for update`는 새 문장이라(READ COMMITTED) A의 행을 본다 → 행 있음 + null → `stale_write`(detail = A의 `updated_at`)다. 저장된 것은 A의 내용이다.
+  - 재현: A `begin; save(…); pg_sleep(3); commit;`를 백그라운드로 돌리고, 1초 뒤 B가 같은 지원 프로젝트에 첫 저장 → B: `ERROR: P0001: stale_write / 상세정보: 2026-11-09T09:05:45.687131Z`, 저장값 `A의 답변`.
+  - **2차 방어선도 넣었다**: insert가 `unique_violation`에 걸리면(위 잠금 순서가 앞으로 바뀌는 경우 등) 그 행을 다시 읽어 **`stale_write`**로 돌려준다. 이전에는 `23505`가 그대로 500으로 샜을 것이다.
+
+### 2. 슬롯 번호 재사용 금지 (DM §2.5.0b "번호는 한 번 쓰면 재사용하지 않는다")
+- **컬럼 `application_documents.slot_high_water integer not null default 0`**, `CHECK (slot_high_water >= 0)` `[가정: 이름]`. 지금까지 저장된 가장 큰 슬롯 번호다. `meta`에는 넣지 않았다(`p_meta`는 `{tone}`만 받는 계약). **사용자가 직접 쓸 수 없다**(쓰기 가드, 낮추는 직접 update는 `direct_write_not_allowed`).
+- 저장 RPC: **저장돼 있던 `body`에 없는 슬롯(= 새 문항)은 번호가 `slot_high_water`보다 커야 한다** → 아니면 **`invalid_slot`**(raise detail = 그 slot). 저장돼 있던 슬롯은 검사하지 않는다. 쓴 뒤 `slot_high_water = greatest(기존, p_body 최대 번호)`. 첫 저장은 0이라 어떤 번호든 통과하고 그 최대가 기록된다. 형식이 틀린 슬롯은 아래 모양 검사에 맡긴다(어차피 `invalid_slot`).
+- **검사 순서**: 기대 버전(CF-S7) → **슬롯 재사용** → 나머지 문항 검사(문항 수·형식·길이 …). `stale_write`·`invalid_slot`이면 아무것도 쓰지 않는다.
+- **반환 키에 `slot_high_water`를 넣었다** → 반환 **11키**(`application_document_id, document_kind, filled_slot_count, slot_count, slot_high_water, name, name_source, deadline, updated_at, applied, skipped`). 저장 직후 다시 읽지 않아도 된다.
+- **`updated_at`**: 전용 트리거 `private.application_documents_set_updated_at`의 예외 목록에 `slot_high_water`를 더했다(`updated_at`·`first_copied_at`·`slot_count`·`slot_high_water` 외 변화가 있을 때만 올린다). 그래서 백필이 기대 버전을 깨지 않는다.
+- **백필**: 기존 행의 `slot_high_water`를 현재 `body`의 최대 슬롯 번호로 채우는 `update` 1문장(원격엔 행이 없다 — 로컬·향후 대비). 마이그레이션 소유자 권한이라 쓰기 가드(API 역할만)를 건너뛰고, 위 트리거 때문에 `updated_at`은 그대로다.
+- 이것이 막는 경로: `q_3`을 지우고 저장 → 다음 방문에서 새 문항이 `q_3`을 다시 받으면, 그 대화에 남은 **옛 `q_3` 제안**이 같은 `slot`·`rev`로 [반영]·저장을 통과해 새 문항에 붙는다. 이제 새 문항은 `q_4` 이상이어야 한다. → **화면은 새 문항 번호를 `slot_high_water + 1`부터 매겨야 한다**(UI·api가 정본 읽기로 받는다).
+
+### 타입
+`database.types.ts` 재생성 — `application_documents`의 Row·Insert·Update에 `slot_high_water` 추가(3줄 변경). **api-engineer가 기다리던 타입이다.** RPC 시그니처는 그대로다(반환 jsonb 키만 늘었다).
+
+### pgTAP
+- **신설 `r15_document_save_versions.test.sql` (30)** — 실제 RPC로 검증:
+  - CF-S7: 행 있음 + null → `stale_write`이고 detail이 현재 `updated_at`이다. **아무것도 바뀌지 않는다**: body·meta·카운트·`slot_high_water`·`updated_at`·근거 행·반영됨 기록(제안에 `applied_at` 없음)·이름/마감일을 스냅숏과 비교했다. `stale_write`가 문항 오류보다 먼저다. 틀린 값 → `stale_write`. **"내 내용으로 저장"**: `current_updated_at`을 실어 다시 보내면 통과하고 그 내용이 정본이 된다. 맞는 값 → 통과. 행 없음 + null → 통과.
+  - 슬롯: 첫 저장 `q_1..q_3` → `3`(반환·저장). `q_3`을 지워도 `3` 유지. **`q_3`을 새 문항으로 다시 넣으면 `invalid_slot|q_3`이고 아무것도 안 바뀐다**(`updated_at`도). `q_4`는 통과하고 `4`가 된다. 저장돼 있던 슬롯을 고치는 저장은 통과한다. 기대 버전 오류가 슬롯 검사보다 먼저다. 직접 update로 낮출 수 없다.
+  - **`slot_high_water`만 바뀐 update는 `updated_at`을 올리지 않는다**: 2020년 고정값으로도 확인했다(`now()`는 트랜잭션 시각이라 가려진다).
+  - 다른 저장 RPC 회귀 없음: `save_project_page`·`save_project_deliverable`·`save_profile_basics`는 null로 여전히 덮어쓴다(셋 다 두 번째 저장을 null로 보내 통과).
+- **기존 테스트 수정**: `r15_application_documents`(27곳)·`r15_document_sources`(6곳)의 저장 호출을 얇은 래퍼 `r15s.save`로 돌렸다. 래퍼는 테스트가 null을 넘기면 **그 서류의 현재 `updated_at`**(화면이 보내는 값)을 넣고, 명시한 값(`stale` 단정들)은 그대로 넘긴다. 단정은 하나도 지우거나 약하게 하지 않았다. null 규칙 자체는 위 새 파일이 실제 RPC로 검증한다. 반환 모양 단정 3건에 `slot_high_water`를 더했다(삭제된 `q_1..q_3` 뒤 `3` 유지가 그대로 드러난다).
+- 전체: **66파일 2,688 단정 통과**. 다른 사용자 잔여 행(`slot_high_water = 7`인 서류 포함)을 넣고 다시 돌려도 통과했다.
+
+
+### R15 후속 3 — QA 후속 라운드 2 수정 (QA-07 [Major] · QA-08 [Minor])
+
+**`20261113004690`을 직접 고쳤다**(아직 미커밋·미push라 새 파일을 만들지 않았다). `004660`까지(원격)·`004670`·`004680`은 그대로이고, `004700`(파괴)은 여전히 마지막이다.
+
+**QA-07 — 슬롯의 정체 = 번호 + `question_id`** (리더 판정). 예전 재사용 검사는 슬롯 이름만 비교했다. 그래서 같은 `q_3`에 다른 문항을 앉히면 "기존 `q_3`"으로 통과했다.
+1. **저장된 슬롯과 번호가 같은데 `question_id`가 다르면** 새 문항이 쓰인 번호에 앉은 것으로 본다 → **`invalid_slot`**(detail = 그 slot). uuid가 아닌 `question_id`는 아래 모양 검사(`invalid_fields`)로 넘긴다.
+2. **번호가 같은데 `question_id`가 없으면** 저장된 `question_id`를 **물려받는다**. 새 uuid를 만들지 않는다. 그래서 `user_note` 근거가 계속 같은 문항을 가리킨다.
+3. **저장된 body에 없는 새 슬롯**은 지금처럼 번호가 `slot_high_water`보다 커야 한다. `question_id`가 없으면 서버가 만든다.
+4. **반영됨 기록 방어**: 제안에 저장된 `question_id`와 이번 body의 그 슬롯 `question_id`가 다르면 → **`skipped: not_found`** `[가정]`(2.5.1 "대화가 이 대상의 것이 아님"이다. `proposal_changed`는 `rev` 불일치용이다). 1번으로는 못 막는 **이번 방문에 추가한, 아직 저장 안 된 슬롯**을 막는다. 제안의 `question_id`는 새 definer 헬퍼 **`private.doc_proposal_question_id(chat, project, kind, slot) returns uuid`**로 읽는다(`authenticated`만 execute, 소유 검사 포함).
+   - **제안에 `question_id`가 없으면 비교하지 않는다.** 그런 제안은 사실상 없다. ① 11.8은 R15 전까지 미배포였고, 서류 대화 행은 R15 코드가 배포된 뒤에만 생긴다(원격엔 코드가 아직 없다). ② 파이프라인은 `replace_draft`에 `question_id`를 싣는다(`src/server/ai/storage/cover-letter-patch.ts:148`, 읽기만 했다).
+   - **패치 RPC도 함께 고쳤다**: `private.wc_patch_document`가 같은 슬롯의 다음 `replace_draft`에서 **`question_id`를 새 값으로 바꾼다**(op에 uuid가 실렸을 때). 예전에는 슬롯을 처음 만들 때만 썼다. 그러면 아직 저장 안 된 슬롯에서 문항을 바꾼 뒤 새 문항으로 만든 초안이 옛 id로 비교돼 잘못 `not_found`가 됐을 것이다. 정의는 `004660` 판(턴당 `draft_count`)에서 시작했고 이 한 곳만 바꿨다.
+
+**QA-08**: 제안의 슬롯이 **이번 저장의 body에 없으면 `skipped: not_found`**다. 예전에는 지운 문항의 제안이 `applied`로 기록됐다(`003700`부터 있던 문제다).
+
+**순서**: 기대 버전(CF-S7) → 슬롯 정체·재사용(1·2·3) → 나머지 문항 검사 → 쓰기 → 반영됨 기록(QA-08 → 4 → `wc_mark_proposal_applied`). 거부(`stale_write`·`invalid_slot`)면 아무것도 쓰지 않는다. `skipped`는 저장을 막지 않는다. 반영됨 기록 쪽 새 판정은 기존 예외 블록 안에서 돌아서, 헬퍼가 실패하면 `mark_failed`가 된다.
+
+**시그니처·반환 키는 그대로다.** `database.types.ts`는 재생성해도 동일하다(새 헬퍼는 `private`라 타입에 안 나온다).
+
+**pgTAP** — `r15_document_save_versions.test.sql`에 20건을 더했다(30 → **50**). 제안은 모두 **`app_ai_writer`가 실제 패치 RPC로 만든 것**이다.
+- **S-swap**: 같은 번호 + 다른 `question_id`(+ 다른 문구 + 옛 제안) → `invalid_slot|q_3`이고, 저장된 `q_3`·`updated_at`·제안 `applied_at`이 그대로다.
+- **S-swapnull**: `question_id`를 빼고 보내면 저장된 id를 물려받는다. `user_note` 근거 행이 살아 있고(`source_deleted_at` null), **양성 대조**로 같은 문항용 제안은 `applied`다.
+- **이번 방문에 추가한 `q_4`**(제안은 문항 A용, body는 문항 B) → `skipped: not_found`이고 저장은 성공한다. **QA-08**(같은 저장에서 `q_2`를 지우고 그 제안을 보냄) → `skipped: not_found`. 둘 다 `applied_at`이 남지 않는다.
+- **회귀 없음**: 같은 번호 + 같은 `question_id`로 고친 `q_1` 제안은 `applied`다. 패치 RPC의 `question_id` 갱신 뒤 문항 B용 새 초안(`rev 2`)은 `applied`다.
+
+**기존 테스트 2곳 수정**(의미는 그대로다):
+- `r15_application_documents`의 `user_note` 단정: 새 `question_id`를 기존 `q_2`에 앉히던 픽스처를 새 번호 `q_4`로 바꿨다. 이제는 그것 자체가 swap이라 `invalid_slot`이다. 그 뒤 반환 모양 단정의 `slot_high_water`를 3 → 4로 바꿨다.
+- `r15_document_writing_chat`의 반영됨 기록 픽스처: 저장 body에 제안과 같은 `question_id`를 실었다. 예전에는 body가 id를 안 보내 서버가 새 uuid를 만들었는데, 그게 바로 4번 규칙에 걸리는 모양이었다.
+
+전체 **66파일 2,708 단정 통과**. `question_id`가 없는 제안이 든 다른 사용자 잔여 행(대화 포함)을 넣고 다시 돌려도 통과했다.

@@ -20,6 +20,8 @@ const okRow = {
   document_kind: "cover_letter",
   filled_slot_count: 1,
   slot_count: 2,
+  // R15 후속 3: the RPC's 11th key (db `004690`).
+  slot_high_water: 2,
   name: "에이비씨페이 자기소개서",
   name_source: "user",
   deadline: "2026-12-01",
@@ -48,6 +50,7 @@ describe("saveApplicationDocument", () => {
       documentKind: "cover_letter",
       filledSlotCount: 1,
       slotCount: 2,
+      slotHighWater: 2,
       name: "에이비씨페이 자기소개서",
       nameSource: "user",
       deadline: "2026-12-01",
@@ -99,7 +102,7 @@ describe("saveApplicationDocument", () => {
   });
 
   it("a question list of length 0 is a valid shape (the RPC decides, R5-API-2)", async () => {
-    const db = fakeSupabase({}, () => ({ ...okRow, filled_slot_count: 0, slot_count: 0 }));
+    const db = fakeSupabase({}, () => ({ ...okRow, filled_slot_count: 0, slot_count: 0, slot_high_water: 0 }));
     const input = SaveApplicationDocumentInput.parse({ applicationProjectId: PROJECT, documentKind: "cover_letter", body: { questions: [] } });
     await expect(saveApplicationDocument(db.client as UserSupabaseClient, input)).resolves.toMatchObject({ slotCount: 0 });
   });
@@ -133,6 +136,14 @@ describe("saveApplicationDocument", () => {
       status: 400,
       details: { limit: 5, current: 2 },
     });
+  });
+
+  it("an answer missing slot_high_water (an RPC older than 004690) is our bug (500), never a user error", async () => {
+    const { slot_high_water: _dropped, ...older } = okRow;
+    void _dropped;
+    const db = fakeSupabase({}, () => older);
+    const input = SaveApplicationDocumentInput.parse({ applicationProjectId: PROJECT, documentKind: "cover_letter", body });
+    await expect(saveApplicationDocument(db.client as UserSupabaseClient, input)).rejects.toMatchObject({ code: "internal_error", status: 500 });
   });
 
   it("an answer that isn't the documented shape is our bug (500), never a user error", async () => {

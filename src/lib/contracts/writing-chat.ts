@@ -18,6 +18,7 @@ import {
   CoverLetterBlockSchema,
   CoverLetterClarificationStoredSchema,
   CoverLetterDraftSchema,
+  CoverLetterQuestionDraftSchema,
   parseCoverLetterDraft as parseStoredCoverLetterDraft,
   type CoverLetterDraft as CoverLetterDraftType,
 } from "@/server/ai/schemas/cover-letter-draft";
@@ -776,6 +777,18 @@ export const DocumentDraftDoneEvent = z.object({
   rev: z.number().int().positive(),
   /** Draft proposals used in this chat (DM 2.9.4: 6 per chat, not per slot). */
   draftCount: z.number().int().nonnegative(),
+  /**
+   * R15 후속 3 (리더 판정): the slot's **stored** proposal as
+   * `structured_draft.document.questions[].draft` holds it after the patch RPC, parsed through
+   * `CoverLetterQuestionDraftSchema` — so every field [반영] reads is identical to the stored copy
+   * (QA follow-up round 2), but the schema normalizes always-empty optional arrays (e.g.
+   * `requirement_ids` / `source_project_fields`), exactly as the reload DTO does. The same role as
+   * the deliverable `draft_done.body`. `draft_block` is provisional (it streams **before** the
+   * 글자 수 보정), so [반영] must read this: corrected `blocks`, the `value` the DB rebuilt from
+   * them, `base_body_hash`, `answer_title`, `sources` (CF-S1) and `rev`.
+   * Inside it is the stored shape (snake_case), like `draft_block.block`; the outer fields are camelCase.
+   */
+  draft: CoverLetterQuestionDraftSchema,
 });
 
 export const DocumentTurnDoneEvent = z.object({

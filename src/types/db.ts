@@ -1015,6 +1015,12 @@ export interface ApplicationDocument {
   slot_count: number
   /** First [복사] (`mark_application_document_copied`); set once, never moves `updated_at`. */
   first_copied_at: Timestamp | null
+  /**
+   * R15 후속 3 (db `004690`, DM 2.5.0b "번호는 한 번 쓰면 재사용하지 않는다"): the largest slot
+   * number ever saved. A **new** question must be numbered above it (else `invalid_slot`), so the
+   * screen numbers new questions from `slot_high_water + 1` — even after the highest one was deleted.
+   */
+  slot_high_water: number
 }
 
 // ---------------------------------------------------------------------------

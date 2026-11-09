@@ -238,3 +238,34 @@ R13의 `profile_job_interests`도 **같은 구조**다 — 저장 RPC `save_prof
 **구현**: `20261113004680_r15_policy_versions_cf1.sql`(R14 `20261113002950` 패턴 — 새 행만, `on conflict do nothing`). 번호는 `004670` 뒤·파괴 `004700` 앞. **QA 진행 중이라 스크래치패드에 준비만 했다** → QA 뒤 db-engineer가 넣고 현재 판을 박아 둔 pgTAP 7곳(`policy_versions` 개수 17→20, `consents`·`r12_ui36_followups`·`account_deletion`·`r13_settings_dialog`·`r14_remove_mock_interview`·`signup_consent_ai_gate`)을 고친다. 앱 코드 `src/server/services/shell/index.ts`는 **주석만** 걸려 변경 없음(테스트는 자체 픽스처).
 
 **릴리스 결합**: UI 소유 `src/components/account/policy-content.ts`와 **같은 머지**. 마이그레이션은 코드 배포 전에 push되므로 **push ~ 머지 사이 화면이 옛 본문에 새 시행일**을 보인다(R14와 같은 창 — push 직후 머지).
+
+## 2026-11-09 CF-S7 (사용자 확정) — 서류 저장의 기대 버전 null
+
+UQ-741 회부 결과 **(a) 확정**. `save_application_document`만: **정본 행이 있는데 `p_expected_updated_at`이 null이면 `stale_write`**(409, `details.current_updated_at`). 행 없음 + null(첫 저장)은 통과. 다른 저장 RPC 3종(`save_project_page`·`save_project_deliverable`·`save_profile_basics`)은 변경 없음. "내 내용으로 저장"은 `stale_write`의 `current_updated_at`을 실어 재전송(UI 커밋 `f56775e`에 이미 반영). 문서는 PR #68(DM 2.5.1 "기대 버전" 행 서류 예외, UX S-46, decisions 3.28 CF-S7·4.23 백엔드 #16·UI #12). → 새 비파괴 `20261113004690`.
+
+## 2026-11-09 R15 후속 3 리더 판정 2건 (UI QA 라운드 1에서 나온 백엔드 요청)
+
+**① 슬롯 번호 재사용 금지 수단 — `application_documents.slot_high_water`** (UQ-740 수정 중 발견)
+DM 2.5.0b "번호는 그 서류에서 한 번 쓰면 재사용하지 않는다"는 **이미 정해진 규칙**인데 정본에 지킬 수단이 없었다 — 지우고 **저장한** 번호는 `body`에서 사라져 다음 방문의 화면이 알 수 없다. 그러면 옛 대화의 같은 번호 제안이 새 문항에 붙어 같은 `slot`·`rev`로 [반영]·저장이 통과한다(근거 행은 저장 때 지워지지만 제안은 `structured_draft`에 남는다). **판정**: 규칙을 지키는 수단이라 구현 세부로 정했다 — 컬럼 `slot_high_water integer not null default 0` `[가정: 이름]`. 저장 RPC가 **저장돼 있던 body에 없는 새 슬롯**의 번호가 이 값 이하이면 `invalid_slot`, 쓴 뒤 `greatest(기존, 이번 최대 번호)`. `meta`에 두지 않은 이유: `p_meta`는 `{tone}`만 받는 계약(2.5.1). `updated_at` 트리거 예외 목록에 추가(메타라 기대 버전을 깨지 않게). CF-S7과 같은 함수라 **같은 마이그레이션 `004690`**. 화면은 `max(slot_high_water, 열린 제안, 이번 방문 발급분) + 1`로 새 번호를 정한다.
+
+**② 서류 `draft_done`에 확정 초안 `draft`** — 틀린 문장을 [반영]할 수 있던 자리
+산출물 `draft_done`은 `body: StoredDraftBodySchema`를 싣고 계약 주석이 "`draft_block`은 임시 — `draft_done.body`가 정본"인데, **서류 `draft_done`에는 확정 초안이 없었다**. 화면이 임시 `draft_block`을 모아 제안을 만들기 때문에 **글자 수 보정(`correctionApplied`)이 일어나면 [반영]이 보정 전 문장을 채운다**. `base_body_hash`도 없어 화면이 재계산했다. **판정**: S-44와 계약을 맞추는 구현 세부(새 이벤트 이름 없음, R15-L2와 같은 종류) — 서류 `draft_done`에 그 슬롯의 **저장된** 초안 객체를 `draft`로 싣는다(저장 모양 snake_case). **DB가 `value`를 블록으로 재조립하므로 파이프라인 객체가 아니라 패치 적용 뒤 저장본**을 싣는다 — 통합 테스트로 "SSE 초안 == 저장 초안" 단정.
+
+## 2026-11-09 R15 후속 3 QA — 슬롯 정체는 번호 + `question_id` (QA-07·QA-08, 리더 판정)
+
+**QA 후속 라운드 2 결과**: CF-S7·`draft_done.draft` 통과(동시 첫 저장 25회 독립 재현 — 매번 성공 1·`stale_write` 1, 500 0건, 이중 성공 0건. 우회 시도: 먼 미래·과거·`±infinity`·형식 오류·밀리초 절삭·`p_client_id` 모두 실패). 슬롯 재사용 규칙에 Major 1·Minor 1.
+
+**QA-07 (Major)** — 재사용 검사가 **슬롯 이름만** 본다(`004690:233-237`). 같은 `q_3` 이름에 다른 `question_id`가 오면 "기존 `q_3`"으로 통과해 **옛 문항의 AI 제안이 새 문항에 `applied`**된다(S-swap). `question_id`를 빼면 서버가 기존 슬롯에 새 uuid를 발급해 정체가 바뀌고 `user_note` 근거가 끊긴다(S-swapnull). 실제 패치 RPC(`app_ai_writer`)로 만든 제안으로 사용자 세션 REST에서 끝까지 재현됐다. 올바른 UI는 닿지 않지만 옛 탭·버그 화면·`question_id`를 빼는 클라이언트가 조용히 일으킨다. 교차 사용자 영향 없음.
+
+**QA-08 (Minor)** — 한 저장에서 지운 슬롯의 제안을 같이 보내면 "반영됨"으로 기록된다(`003700`부터). 근거 행은 생기지 않음.
+
+**판정**: DM 2.5.0b 재사용 금지와 2.5.1 반영됨 기록을 제대로 지키는 **구현 수정** — 기획에 올리지 않았다.
+1. 저장된 슬롯과 같은 번호 + **다른 `question_id`** → 새 문항으로 보고 `invalid_slot`.
+2. 저장된 슬롯과 같은 번호 + **`question_id` 생략** → 저장된 id를 **물려받는다**(새 uuid 금지).
+3. 저장된 body에 없는 새 슬롯은 지금처럼 번호 > `slot_high_water`.
+4. 심층 방어: 제안의 저장된 `question_id` ≠ 이번 body 그 슬롯의 `question_id` → `skipped: not_found` `[가정: 사유]`(2.5.1 "대화가 이 대상의 것이 아님" — `proposal_changed`는 `rev` 차이용). 이번 방문에 추가해 아직 저장되지 않은 슬롯은 1로 막히지 않으므로 필요하다.
+5. QA-08: 제안의 슬롯이 이번 저장된 body에 없으면 `skipped: not_found`.
+
+**마이그레이션**: `004690`은 아직 커밋·원격 push 전이라 **그 파일을 고친다**(새 파일 없음).
+
+**관찰 (결함 아님)**: `draft_done.draft`와 저장본은 [반영]이 읽는 모든 필드가 같지만, TS 스키마 정규화로 항상 빈 배열인 키 2개(`requirement_ids`·`source_project_fields`)가 바이트 단위로 다르다. 다시 읽기 DTO도 같은 정규화를 거친다. 계약 주석 "exactly as … holds it"이 과장이라 리더가 문구를 고쳤다(`src/lib/contracts/writing-chat.ts`).

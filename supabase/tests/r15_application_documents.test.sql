@@ -4,6 +4,25 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
+-- R15 후속 3 (CF-S7 = (a)): with a document row present, a null expected version is now a stale_write. These
+-- assertions are about the other rules, so every save here goes through this thin wrapper, which sends the
+-- version the caller last saw — what the screen does — when the test passes null. Explicit versions (the stale
+-- tests) pass through untouched; the null rule itself is asserted against the real RPC in
+-- r15_document_save_versions.test.sql.
+create schema r15s;
+grant usage on schema r15s to authenticated;
+create function r15s.save(p_application_project_id uuid, p_document_kind text, p_body jsonb,
+  p_meta jsonb default null, p_expected_updated_at timestamptz default null, p_applied_proposals jsonb default null,
+  p_client_id uuid default null, p_application_values jsonb default null)
+returns jsonb language sql as $$
+  select public.save_application_document(p_application_project_id, p_document_kind, p_body, p_meta,
+    coalesce(p_expected_updated_at,
+             (select d.updated_at from public.application_documents d
+               where d.application_project_id = p_application_project_id and d.document_kind = p_document_kind)),
+    p_applied_proposals, p_client_id, p_application_values);
+$$;
+grant execute on function r15s.save(uuid, text, jsonb, jsonb, timestamptz, jsonb, uuid, jsonb) to authenticated;
+
 insert into auth.users (id, email, aud, role) values
   ('a0000000-0000-0000-0000-000000000001', 'a@example.test', 'authenticated', 'authenticated'),
   ('b0000000-0000-0000-0000-000000000002', 'b@example.test', 'authenticated', 'authenticated');
@@ -112,63 +131,63 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 
 -- document_kind check and a missing project.
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001',
                      'career_description', '{"questions":[]}')$$,
                  'P0001', 'invalid_fields', 'p_document_kind other than cover_letter -> invalid_fields');
-select throws_ok($$select public.save_application_document('b0000000-aaaa-0000-0000-000000000002', 'cover_letter',
+select throws_ok($$select r15s.save('b0000000-aaaa-0000-0000-000000000002', 'cover_letter',
                      '{"questions":[]}')$$,
                  'P0001', 'application_project_not_found', 'another user''s project -> application_project_not_found');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"items":[]}')$$,
                  'P0001', 'invalid_fields', 'p_body without questions -> invalid_fields');
 
 -- Create (DM §2.5.1 "정본 행이 생기는 때": this RPC is the only creator). Length-0 questions is accepted.
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[]}')::text, true);
 select is((current_setting('t.r')::jsonb) - 'application_document_id' - 'updated_at',
-          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"name":"가 지원","name_source":"user",
+          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"slot_high_water":0,"name":"가 지원","name_source":"user",
             "deadline":null,"applied":[],"skipped":[]}'::jsonb,
-          'create: the 10 return keys, empty questions accepted');
+          'create: the 11 return keys (R15 후속 3: + slot_high_water), empty questions accepted');
 select is((select count(*)::int from public.application_documents
             where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'), 1, 'exactly one row created');
 
 -- Question validation.
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"s_1","question_text":"q","char_limit":800,"count_basis":"with_spaces"}]}')$$,
                  'P0001', 'invalid_slot', 'slot must match ^q_[0-9]{1,3}$ (CF-1: no s_{n})');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_1","char_limit":800,"count_basis":"with_spaces"},
                                     {"slot":"q_1","char_limit":800,"count_basis":"with_spaces"}]}')$$,
                  'P0001', 'invalid_slot', 'duplicate slot -> invalid_slot');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_1","question_text":"q","count_basis":"with_spaces"}]}')$$,
                  'P0001', 'invalid_fields', 'char_limit is required on a new save (R-CF-16)');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_1","char_limit":null,"count_basis":"with_spaces"}]}')$$,
                  'P0001', 'invalid_fields', 'char_limit null -> invalid_fields');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_1","char_limit":10001,"count_basis":"with_spaces"}]}')$$,
                  'P0001', 'invalid_fields', 'char_limit over 10,000 -> invalid_fields');
-select throws_ok(format($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001',
+select throws_ok(format($$select r15s.save('a0000000-aaaa-0000-0000-000000000001',
                      'cover_letter', '{"questions":[{"slot":"q_1","char_limit":800,"count_basis":"with_spaces",
                      "answer_title":"%s"}]}')$$, repeat('가', 101)),
                  'P0001', 'field_too_long', 'answer_title over 100 -> field_too_long (CF-6·CF-A4 ④)');
-select throws_ok(format($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001',
+select throws_ok(format($$select r15s.save('a0000000-aaaa-0000-0000-000000000001',
                      'cover_letter', '{"questions":[{"slot":"q_1","char_limit":800,"count_basis":"with_spaces",
                      "question_text":"%s"}]}')$$, repeat('가', 1001)),
                  'P0001', 'field_too_long', 'question_text over 1,000 -> field_too_long');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_1","char_limit":800,"count_basis":"sometimes"}]}')$$,
                  'P0001', 'invalid_fields', 'count_basis outside the list -> invalid_fields');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[]}', '{"tone":"formal"}')$$,
                  'P0001', 'invalid_fields', 'p_meta.tone outside the list -> invalid_fields');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[]}', '{"font":"a"}')$$,
                  'P0001', 'invalid_fields', 'p_meta accepts only tone');
 
 -- 문항 <= 5 (CF-5): refused only when the save RAISES the count above 5.
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      (select jsonb_build_object('questions', jsonb_agg(jsonb_build_object(
                         'slot', 'q_' || n, 'char_limit', 800, 'count_basis', 'with_spaces')))
                         from generate_series(1, 6) n))$$,
@@ -179,7 +198,7 @@ declare
   v_msg text;
   v_detail text;
 begin
-  perform public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter', p_body);
+  perform r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter', p_body);
   return null;
 exception when others then
   get stacked diagnostics v_msg = message_text, v_detail = pg_exception_detail;
@@ -204,7 +223,7 @@ select set_config('t.body', $json${"questions": [
    "template_key": "job_competency", "body": "답변 2", "blocks": []},
   {"slot": "q_3", "question_text": "제목만", "char_limit": 500, "count_basis": "with_spaces",
    "answer_title": "제목만 있음", "body": "   ", "blocks": []}]}$json$, true);
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     current_setting('t.body')::jsonb, '{"tone":"concise"}')::text, true);
 -- (v4.15, CF-A4) a question whose body is empty is not counted even with an answer_title.
 select is((current_setting('t.r')::jsonb) -> 'filled_slot_count', '2'::jsonb,
@@ -239,7 +258,7 @@ select is((select source_snapshot_at from public.evidence_links
 -- Stale write.
 select set_config('t.ts', (select updated_at::text from public.application_documents
                             where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'), true);
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[]}', null, '2020-01-01T00:00:00Z')$$,
                  'P0001', 'stale_write', 'a wrong expected version -> stale_write, nothing written');
 select is((select slot_count from public.application_documents
@@ -247,7 +266,7 @@ select is((select slot_count from public.application_documents
           'stale_write wrote nothing');
 
 -- A slot that is not sent is deleted, and its evidence with it.
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[{"slot":"q_2","question_text":"직무 역량","char_limit":1000,
                                     "count_basis":"without_spaces","body":"답변 2","blocks":[]}]}',
                     null, current_setting('t.ts')::timestamptz)::text, true);
@@ -257,7 +276,7 @@ select is((select count(*)::int from public.evidence_links
           'the deleted slot''s evidence rows are gone');
 
 -- V-8 last safety net (DM §2.8): a job_competency question may not cite project.learnings.
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_2","question_text":"직무 역량","char_limit":1000,
                        "count_basis":"without_spaces","body":"답변","question_class":"job_competency",
                        "blocks":[{"block_id":"b1","type":"paragraph","text":"답변",
@@ -265,7 +284,7 @@ select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0
                                       "source_field":"learnings","quote":"지표부터 본다"}]}]}]}')$$,
                  'P0001', 'invalid_evidence_source', 'job_competency question + project.learnings refused (V-8)');
 -- An allowed source list violation uses the same list as the insert trigger.
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[{"slot":"q_2","question_text":"q","char_limit":1000,
                        "count_basis":"without_spaces","body":"답변",
                        "blocks":[{"block_id":"b1","type":"paragraph","text":"답변",
@@ -279,8 +298,10 @@ select is((select body -> 'questions' -> 0 ->> 'question_text' from public.appli
 
 -- user_note evidence whose question is gone is stored as "원본 삭제됨" (the RPC judges — AI 요청 4).
 select set_config('t.qid', gen_random_uuid()::text, true);
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
-                    format($json${"questions":[{"slot":"q_2","question_text":"q","char_limit":1000,
+-- A NEW question (fresh question_id) goes on a new number, q_4: the same number with another question_id is a
+-- reused slot and would be invalid_slot (R15 후속 3, QA-07).
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+                    format($json${"questions":[{"slot":"q_4","question_text":"q","char_limit":1000,
                       "count_basis":"with_spaces","question_id":"%s","body":"답변",
                       "blocks":[{"block_id":"b1","type":"paragraph","text":"답변",
                         "evidence":[{"source_type":"user_note","source_id":"%s","quote":"메모"},
@@ -299,28 +320,28 @@ select results_eq($$select source_id::text, quote, source_deleted_at is not null
 -- p_application_values (CF-A11): name / deadline in the same transaction.
 select set_config('t.ts', (select updated_at::text from public.application_documents
                             where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'), true);
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[]}', null, null, null, null, '{"deadline":"2026-02-30"}')$$,
                  'P0001', 'invalid_fields', 'a calendar-invalid deadline -> invalid_fields');
-select throws_ok($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select throws_ok($$select r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                      '{"questions":[]}', null, null, null, null, '{"memo":"x"}')$$,
                  'P0001', 'invalid_fields', 'p_application_values accepts only name / deadline');
-select throws_ok(format($$select public.save_application_document('a0000000-aaaa-0000-0000-000000000001',
+select throws_ok(format($$select r15s.save('a0000000-aaaa-0000-0000-000000000001',
                      'cover_letter', '{"questions":[]}', null, null, null, null,
                      '{"name":"%s"}')$$, repeat('가', 101)),
                  'P0001', 'field_too_long', 'name over 100 -> field_too_long (application.name)');
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[]}', null, null, null, null,
                     '{"name":"  내가 쓴 이름  ","deadline":"2026-12-01"}')::text, true);
 select is((current_setting('t.r')::jsonb) - 'application_document_id' - 'updated_at',
-          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"name":"내가 쓴 이름",
+          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"slot_high_water":4,"name":"내가 쓴 이름",
             "name_source":"user","deadline":"2026-12-01","applied":[],"skipped":[]}'::jsonb,
-          'p_application_values: name (user) and deadline written, returned in the same call');
+          'p_application_values: name (user) and deadline written, returned in the same call (slot_high_water stays 4 after q_1..q_4 were deleted)');
 -- An empty name goes back to the default name rule through private.application_reset_name.
-select set_config('t.r', public.save_application_document('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
                     '{"questions":[]}', null, null, null, null, '{"name":"   "}')::text, true);
 select is((current_setting('t.r')::jsonb) - 'application_document_id' - 'updated_at' - 'deadline',
-          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"name":"에이비씨페이 자기소개서",
+          '{"document_kind":"cover_letter","filled_slot_count":0,"slot_count":0,"slot_high_water":4,"name":"에이비씨페이 자기소개서",
             "name_source":"user","applied":[],"skipped":[]}'::jsonb,
           'an empty name returns to "{회사명} 자기소개서" (the company name source decides name_source)');
 

@@ -148,12 +148,27 @@ cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && supab
 supabase migration list
 ```
 
-## 7. push 뒤 확인 (리더가 읽기 전용으로 수행)
+## 7. 1단계 결과 — **적용 완료 2026-11-09**
 
-- [ ] Supabase MCP `list_migrations` — 마지막이 1단계 뒤 `20261113004660`, 2단계 뒤 `20261113004700`
-- [ ] `get_advisors`(security·performance) — **새 항목만** 본다. 기존에 받아들인 것은 다시 보고하지 않는다: authenticated용 SECURITY DEFINER RPC WARN(설계), `account_deletion_logs` 정책 없음(service role 전용, 의도)
+사용자가 권한을 허용해 리더가 `supabase db push`를 실행했다(이 워크트리에서, 링크는 `supabase link --project-ref rxtnguarpotkcgdazkbw`로 먼저 걸었다 — 비밀번호를 묻지 않았다). **파괴 파일은 빼낸 상태로 올렸고 push 뒤 복원했다**(작업 트리 clean, 161개).
+
+| 항목 | 결과 |
+|------|------|
+| 적용 | **비파괴 17개 전부 성공** (`20261113003100` ~ `20261113004660`). 오류·롤백 없음 |
+| `list_migrations` (MCP, 읽기 전용) | 원격 **160개**, 마지막 **`20261113004660_r15_document_draft_count_per_turn`**. R15 17개가 모두 올라갔고 **`20261113004700`(파괴)만 미적용** — 의도한 상태 |
+| `get_advisors` security | **WARN 18 + INFO 1.** 새 항목은 **`start_document_writing_chat` 1건**(authenticated가 부를 수 있는 SECURITY DEFINER — 다른 두 시작 RPC와 **같은 설계**이고 함수 안에서 소유자를 검사한다). `create_application_project`는 10인자로 바뀌어 같은 항목이 다시 잡혔다(기존 항목). `account_deletion_logs` 정책 없음(INFO)은 service role 전용으로 의도대로. **설계 밖 신규 지적 0건** |
+| 그중 2단계가 없앨 것 | 18건 중 **5건이 옛 서류 RPC**(`add_cover_letter_question`·`create_cover_letter_draft`·`delete_cover_letter_question`·`reorder_cover_letter_questions`·`set_section_sources`)다 → 파괴 단계 뒤 **13건으로 줄어든다** |
+| `get_advisors` performance | **INFO만**(unindexed FK 34 · unused index 34). WARN 이상 없음. R15가 더한 인덱스(`application_documents_user_id_idx`·`writing_chats_application_document_last_activity_idx`·`application_projects_user_id_created_at_idx`)가 "unused"로 잡히는 것은 **기능이 아직 화면에 붙지 않아 쿼리가 없기 때문**이고 정상이다 |
+| Auth 쪽 WARN 2건 | `auth_leaked_password_protection`·`auth_insufficient_mfa_options` — **R15와 무관**하고, 로그인이 Google 단일(D-09)이라 비밀번호 인증 경로가 없어 이 앱 흐름에는 해당하지 않는다. 기록만 남긴다 |
+
+## 8. 남은 확인 (2단계 뒤에 수행)
+
+- [ ] 코드 배포(PR #69 머지, UI PR과 함께 — 5. 참조)
+- [ ] 2단계 파괴 push — **사용자 확인 뒤.** 가드가 멈추면 2.의 "가드가 멈추면" 절차
+- [ ] `list_migrations` — 마지막이 `20261113004700`
+- [ ] `get_advisors` — SECURITY DEFINER WARN이 **18 → 13**으로 줄었는지(옛 서류 RPC 5건 drop 확인), 새 항목 없는지
 - [ ] Vercel 배포 상태와 런타임 오류(읽기 전용)
-- [ ] `slices.md`의 R15 "원격" 열에 날짜 기록
+- [ ] `slices.md`의 R15 "원격" 열에 2단계 날짜 기록
 
 ## 8. 아직 하지 않은 것
 

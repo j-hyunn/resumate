@@ -62,7 +62,9 @@ async function Screen({ params, searchParams }: Props) {
   // 이번 방문에 시작한 대화만 패널이 들고 있다 (보고서 "백엔드 요청")
   const chatIdParam = one(sp.chat)
   const chats = document ? await listCoverLetterChats(id) : []
-  const openChat = chatIdParam ? await getCoverLetterChat(chatIdParam).catch(() => null) : null
+  // `?chat=`이 다른 지원 건의 대화면 열지 않는다(UQ-758) — 대화 없이 화면은 정상으로 연다.
+  // 이 `catch → null`은 **대화**에만 있다. 정본 읽기(`getCoverLetterDocument`)에는 두지 않는다
+  const openChat = chatIdParam ? await getCoverLetterChat(chatIdParam, id).catch(() => null) : null
 
   const tabParam = one(sp.tab)
   const initialTab: CoverLetterTab = tabParam === "jd" ? "jd" : tabParam === "insight" ? "insight" : "cover_letter"

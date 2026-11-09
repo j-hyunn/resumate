@@ -66,16 +66,19 @@ export async function listCoverLetterChats(applicationProjectId: string): Promis
  * `DocumentWritingChatDto`를 준다. **저장된 제안은 늘 이 DTO의 `structuredDraft`에서 읽는다**
  * (SSE `sources_selected`는 따로 나가는 표시 카드다). 서류 대화가 아니면 `not_found`.
  */
-export async function getCoverLetterChat(chatId: string): Promise<CoverLetterChatView | null> {
+export async function getCoverLetterChat(chatId: string, applicationProjectId: string): Promise<CoverLetterChatView | null> {
   return previewOr(
     async () => {
       const db = await mockRequest()
       const chat = db.cover_letter_chats.find((c) => c.id === chatId)
-      return chat ? clone(chat) : null
+      return chat && chat.application_project_id === applicationProjectId ? clone(chat) : null
     },
     async () => {
       const dto = unwrap(await getWritingChat({ writingChatId: chatId }))
       if (dto.target !== "application_document") throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+      // UQ-758: RLS는 다른 **사용자**만 막는다. 같은 사용자의 **다른 지원 건** 대화를 열면 그 제안이 이 화면의
+      // 엉뚱한 문항에 반영될 수 있으므로 열지 않는다 (`null` = 대화 없이 화면은 정상으로)
+      if (dto.applicationProjectId !== applicationProjectId) return null
       return toChatView(dto)
     },
   )
@@ -99,7 +102,8 @@ export async function startCoverLetterChat(applicationProjectId: string, formSna
         await startDocumentWritingChat({ applicationProjectId, documentKind: "cover_letter", formSnapshot }),
       )
       const dto = unwrap(await getWritingChat({ writingChatId }))
-      if (dto.target !== "application_document") throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+      if (dto.target !== "application_document" || dto.applicationProjectId !== applicationProjectId)
+        throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
       return toChatView(dto)
     },
   )

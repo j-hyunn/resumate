@@ -64,7 +64,7 @@ beforeEach(() => vi.clearAllMocks())
 describe("서류 대화 읽기 (R15 후속)", () => {
   it("열기: structuredDraft를 snake_case 그대로 쓰고, 초안 상한은 턴 수(draftCount)를 그대로 받는다", async () => {
     chatActions.getWritingChat.mockResolvedValue({ data: dto })
-    const view = await getCoverLetterChat(CHAT)
+    const view = await getCoverLetterChat(CHAT, AP)
     expect(view?.structured_draft).toBe(storedDraft)
     expect(view?.structured_draft.document.questions[0].draft.sources[0]).toEqual({ source_type: "project", source_id: "p", role: "primary" })
     expect(view?.draft_count).toBe(2)
@@ -73,7 +73,18 @@ describe("서류 대화 읽기 (R15 후속)", () => {
 
   it("서류 대화가 아니면 not_found — 다른 패널의 대화를 열지 않는다", async () => {
     chatActions.getWritingChat.mockResolvedValue({ data: { ...dto, target: "project" } })
-    await expect(getCoverLetterChat(CHAT)).rejects.toMatchObject({ code: "not_found" })
+    await expect(getCoverLetterChat(CHAT, AP)).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("UQ-758: 같은 사용자의 **다른 지원 건** 대화는 열지 않는다 (null — 화면은 대화 없이 정상)", async () => {
+    chatActions.getWritingChat.mockResolvedValue({ data: { ...dto, applicationProjectId: "00000000-0000-4000-8000-0000000000a2" } })
+    await expect(getCoverLetterChat(CHAT, AP)).resolves.toBeNull()
+  })
+
+  it("UQ-758: 시작한 대화가 이 지원 건 것이 아니면 거부한다", async () => {
+    docActions.startDocumentWritingChat.mockResolvedValue({ data: { writingChatId: CHAT } })
+    chatActions.getWritingChat.mockResolvedValue({ data: { ...dto, applicationProjectId: "00000000-0000-4000-8000-0000000000a2" } })
+    await expect(startCoverLetterChat(AP)).rejects.toMatchObject({ code: "not_found" })
   })
 
   it("목록: camelCase 요약을 화면 요약으로", async () => {

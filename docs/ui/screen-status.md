@@ -62,16 +62,16 @@
 | ~~S-11~~ | ~~정량 성과 (모달)~~ — 폐기(UX v5.5, CR-11) | A2 | — (옛 `?achievement=`는 S-09 redirect가 버림) | 폐기 — 2026-11-05 39 런에서 코드 삭제(`achievement-list`·`achievement-dialog`, C-07 G-3, C-05 상세 내용·정량 성과 삭제 대상, S-25 "상세 내용·정량 성과" 줄 → "산출물") | 옛 `achievement` 근거 칩 = "원본 삭제됨" `[UI-가정]` | 2026-11-05 39 런 |
 | S-12 | 스킬 목록 | A2 | `/career/skills` | QA 통과 | — | 2026-10-25 R2 |
 | ~~S-36~~ | ~~AI 작성 대화~~ — 폐기(CR-5). S-10·S-44 Resumate AI 패널로 대체, 옛 URL은 redirect | A2 | `/career/writing-chats/**` → S-10 / S-08 | 폐기 | — | 2026-11-03 PA 통합 |
-| S-13 | 자기소개서 목록 (**v5.20 재작성**, CF-3·CF-9·CF-A8·CF-A14 — 이름·포지션·만든 날·마감 D-day(값 있을 때만), `created_at desc` "최근 작성 순" 고정 표기, 행 ⋯ 삭제만. 단계 칩·기능 진행·"보드로 보기" 없음) | A3 | `/applications` | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: 목록 연결됨(`listApplicationProjects` 위 뷰 모델) | 2026-11-09 45 런 QA 라운드 1 |
-| S-14 | 자기소개서 추가 — **2단계 모달** (`AddApplicationDialog`, **v5.20 재작성** CF-8·CF-10·CF-A6·CF-A17 — ① 공고 URL 또는 직접 입력 → [다음](가져오기 → 미리 보기 추출, Q53-1 게이트) ② 기업명·포지션명·공고 내용. "AI 없이 계속" 없음 CF-U1) | A3 | `/applications?new=1` · 보드 위 `?new=1&from=board` (옛 `/applications/new` → 308) | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: 가져오기·미리 보기 추출·생성(`p_source_url`·`p_preview_job_id`·`preview_skip_reason`) 연결됨 | 2026-11-09 45 런 QA 라운드 1 |
+| S-13 | 자기소개서 목록 (**v5.20 재작성**, CF-3·CF-9·CF-A8·CF-A14 — 이름·포지션·만든 날·마감 D-day(값 있을 때만), `created_at desc` "최근 작성 순" 고정 표기, 행 ⋯ 삭제만. 단계 칩·기능 진행·"보드로 보기" 없음) | A3 | `/applications` | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: 목록 연결됨(`listApplicationProjects` 위 뷰 모델) | 2026-11-09 45 런 QA 라운드 2 |
+| S-14 | 자기소개서 추가 — **2단계 모달** (`AddApplicationDialog`, **v5.20 재작성** CF-8·CF-10·CF-A6·CF-A17 — ① 공고 URL 또는 직접 입력 → [다음](가져오기 → 미리 보기 추출, Q53-1 게이트) ② 기업명·포지션명·공고 내용. "AI 없이 계속" 없음 CF-U1) | A3 | `/applications?new=1` · 보드 위 `?new=1&from=board` (옛 `/applications/new` → 308) | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: 가져오기·미리 보기 추출·생성(`p_source_url`·`p_preview_job_id`·`preview_skip_reason`) 연결됨 | 2026-11-09 45 런 QA 라운드 2 |
 | ~~S-31~~ | ~~지원 프로젝트 허브~~ — **폐기 (v5.20, CF-7)** | A3 | `/applications/{id}` → S-46 308 | 폐기 — 2026-11-09 45 런 코드 삭제 | — | 2026-11-09 45 런 |
-| S-15 | 채용 공고 — **S-46 왼쪽 탭** (v5.20 재정의, CF-7·CF-A12 — 별도 화면 아님, ID 유지) | A3 | `/applications/{id}/cover-letter?tab=jd` (옛 `/applications/{id}/jd` → 308) | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: JD 요건 추출 연결됨(`runJdExtraction`·`retryJdExtraction` 보존) | 2026-11-09 45 런 QA 라운드 1 |
-| S-16 | 인사이트 — **S-46 왼쪽 탭** (v5.20 재정의, CF-7·CF-A12 — 별도 화면 아님, ID 유지) | A3 | `/applications/{id}/cover-letter?tab=insight` (옛 `/applications/{id}/insight` → 308) | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: 기존 인사이트 경로 그대로 | 2026-11-09 45 런 QA 라운드 1 |
+| S-15 | 채용 공고 — **S-46 왼쪽 탭** (v5.20 재정의, CF-7·CF-A12 — 별도 화면 아님, ID 유지) | A3 | `/applications/{id}/cover-letter?tab=jd` (옛 `/applications/{id}/jd` → 308) | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: JD 요건 추출 연결됨(`runJdExtraction`·`retryJdExtraction` 보존) | 2026-11-09 45 런 QA 라운드 2 |
+| S-16 | 인사이트 — **S-46 왼쪽 탭** (v5.20 재정의, CF-7·CF-A12 — 별도 화면 아님, ID 유지) | A3 | `/applications/{id}/cover-letter?tab=insight` (옛 `/applications/{id}/insight` → 308) | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: 기존 인사이트 경로 그대로 | 2026-11-09 45 런 QA 라운드 2 |
 | ~~S-17~~ | ~~서류 초안 목록~~ — **폐기 (v5.20, CF-1·CF-7)** | A3 | `/applications/{id}/drafts` → S-46 308 | 폐기 — 2026-11-09 45 런 코드 삭제 | — | 2026-11-09 45 런 |
 | S-18 | 자소서 문항 설정 → **S-46의 문항 설정 상태** (v5.20 재정의, CF-5·CF-A10·CF-A11 — 별도 화면 아님) | A3 | S-46과 같은 주소(정본 행 없음) · 옛 `/applications/{id}/drafts/{draftId}/questions` → S-46 308 | S-46 행 참조 | — | 2026-11-09 45 런 |
 | ~~S-19~~ | ~~초안 편집기~~ — **폐기 (v5.18 CL-7 · v5.20 CF-1)** | A3 | `/applications/{id}/drafts/{draftId}` → S-46 308 | 폐기 — 2026-11-09 45 런 코드 삭제 | — | 2026-11-09 45 런 |
 | ~~S-45~~ | ~~경력기술서 작성~~ — **폐기 (v5.20, CF-1)** | A3 | `/applications/{id}/career-description` → S-46 308 | 폐기 — 구현된 적 없음(리다이렉트만, 45 런) | — | 2026-11-09 45 런 |
-| S-46 | 자기소개서 작성 (**L-02**, v5.20 재작성 — 한 주소 두 상태: 문항 설정 / 작성, 정본 행 유무로 판정 CF-A11. 왼쪽 탭 **자소서 · 채용 공고(S-15) · 인사이트(S-16)**. 문항 최대 5개 CF-5, 글자 수 제한 기본 800자 CF-U2, 답변 제목 CF-6(글자 수 미포함), 오른쪽 Resumate AI 패널 + `QuestionProposalCard`. **CF-S1·S2** 근거를 저장 요청에 싣지 않음·C-11 경로 한 줄 / **CF-S3·S5** 문항 설정 상태 저장하기 비활성·⌘S 끔·이유 안내 없음 / **CF-S4** 머리 라벨 "채용 공고") | A3 | `/applications/{id}/cover-letter` (옛 `/career-description`·`/drafts/**`·`/interview/**` → 308, MRG-UX-1) | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: 저장(9키)·서류 대화 시작·턴 SSE 연결됨. **정본 읽기 연결 대기** — 지금 실제 환경에서 S-46은 오류 화면(아래 연결 대기 #1) | 2026-11-09 45 런 QA 라운드 1 |
+| S-46 | 자기소개서 작성 (**L-02**, v5.20 재작성 — 한 주소 두 상태: 문항 설정 / 작성, 정본 행 유무로 판정 CF-A11. 왼쪽 탭 **자소서 · 채용 공고(S-15) · 인사이트(S-16)**. 문항 최대 5개 CF-5, 글자 수 제한 기본 800자 CF-U2, 답변 제목 CF-6(글자 수 미포함), 오른쪽 Resumate AI 패널 + `QuestionProposalCard`. **CF-S1·S2** 근거를 저장 요청에 싣지 않음·C-11 경로 한 줄 / **CF-S3·S5** 문항 설정 상태 저장하기 비활성·⌘S 끔·이유 안내 없음 / **CF-S4** 머리 라벨 "채용 공고") | A3 | `/applications/{id}/cover-letter` (옛 `/career-description`·`/drafts/**`·`/interview/**` → 308, MRG-UX-1) | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: **연결됨**(R15 + 후속 `56ba1bf` — 정본 읽기·저장·첫 복사·서류 대화 시작·턴·목록·열기·삭제). 남은 것: CF-S7 RPC·`slot_high_water`·`draft_done.draft`(백엔드 `004690` 대기), 다시 연 대화의 근거 목록 라벨. **브라우저로 실제 데이터 확인은 안 했다** | 2026-11-09 45 런 QA 라운드 2 |
 | ~~S-20~~ | ~~면접 준비~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview` → S-31 `/applications/[id]` (`next.config.ts` 308, `legacy-redirects.ts`) | 폐기 | — | 2026-11-08 44 런 |
 | ~~S-33~~ | ~~면접 답변지~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview/[sessionId]` → S-31 (308) | 폐기 | — | 2026-11-08 44 런 |
 | ~~S-22~~ | ~~면접 결과~~ — **폐기 (RM-1, 2026-11-08)**. 코드 삭제, 옛 주소는 redirect | A4 | `/applications/[id]/interview/[sessionId]/result` → S-31 · `/interviews/[sessionId]/result` → S-13 (308) | 폐기 | — | 2026-11-08 44 런 |
@@ -79,7 +79,7 @@
 | S-40 | AI 연결 | A1 | 설정 다이얼로그 **AI 연결 탭** 위쪽 — 공급자 라디오 행 3개(`ProviderRow`, 42 런에서 카드 대체) | QA 통과 (mock·브라우저 미확인) — 43 런(2026-11-06) 원본 화면 3장에 맞춤, UI QA 1라운드 Minor 6 수정 | 브라우저 미확인 | 2026-11-06 42 런 |
 | S-41 | 키 연결 단계 | A1 | `/settings/ai/connect` (집중 화면, `(focus)` 레이아웃) | QA 통과 (BYOK 신설) | — | 2026-10-28 BYOK 통합 |
 | S-42 | AI 사용량 | A1 | 설정 다이얼로그 **AI 연결 탭** 아래쪽 — 공급자 탭 + 기능 **5행** 교차 표(44 런, RM-A2: 면접 2행 삭제)(`getAiUsageSummaryV412`) | QA 통과 (mock·브라우저 미확인) — 43 런(2026-11-06) 원본 화면 3장에 맞춤, UI QA 1라운드 Minor 6 수정 | 브라우저 미확인 | 2026-11-06 42 런 |
-| S-39 | 지원 현황 보드 (**4열** — 44 런 RM-2. **45 런**: 카드 → S-46, 서류 표시는 배지 하나 **"자소서 작성 중 / 작성됨"**(숫자 없음, CF-3·R-CF-21, `filled_slot_count`·`slot_count`), 인사이트 표시 유지, 면접 수 없음, "지원 전 +" = S-14 모달) | A4 | `/board` | 구현 완료 · UI QA 라운드 1 수정 중 (mock·브라우저 미확인) | 실제 백엔드: 카드·단계 이동 연결됨. **배지용 문항 수는 연결 대기**(아래 #2 — 실제 환경에서는 배지가 접힌다). 브라우저: mock `?state=default`·`cl-pending`은 A4가 확인 | 2026-11-09 45 런 QA 라운드 1 |
+| S-39 | 지원 현황 보드 (**4열** — 44 런 RM-2. **45 런**: 카드 → S-46, 서류 표시는 배지 하나 **"자소서 작성 중 / 작성됨"**(숫자 없음, CF-3·R-CF-21, `filled_slot_count`·`slot_count`), 인사이트 표시 유지, 면접 수 없음, "지원 전 +" = S-14 모달) | A4 | `/board` | QA 통과 (mock·브라우저 미확인) — 45 런 UI QA 2라운드(라운드 1 Critical 1·Major 2 → 해소, 라운드 2 Major 1 → 해소, 재검은 리더가 코드·테스트로 확인) | 실제 백엔드: 카드·단계 이동·배지용 문항 수(`listDocumentSlotCounts`) **연결됨**. 브라우저: mock `?state=default`·`cl-pending`은 A4가 확인 | 2026-11-09 45 런 QA 라운드 2 |
 
 - BYOK 반영(2026-10-28): 기획 문서는 main(6fc33e7)에서 작업 트리로만 가져옴(커밋·main 병합 없음 — 사용자 결정: 백엔드 작업이 끝난 뒤 병합·실제 백엔드 연결). 디자인 시스템 v2 → 파운데이션 → A1~A4 → 영역 QA 1라운드(Major 4: UQ-200·230·320·321) → 수정·파운데이션 배치 → 통합 QA(1라운드 이슈 50건 중 46 해결·2 리더 결정·1 기획 대기·1 문서 정렬, 새 Minor 5) → 단일 정리 라운드(UQ-350~354) 처리. 정리 후 lint·typecheck·build 통과(리더 직접 실행), 정리 후 재검수는 하지 않음.
 - 통합 QA(2026-10-25): Critical 0 / Major 0 / Minor 8 → 단일 정리 라운드에서 모두 처리.
@@ -97,7 +97,7 @@
 
 ## 기획 확인 필요 (누적)
 
-### 45 런 (2026-11-09, 자기소개서 관리 흐름 재설계) — **9건 모두 닫힘** (사용자 확정 CF-S2~CF-S6, 기획 PR #68 — 미머지) · UQ-741도 **CF-S7로 확정**(백엔드 RPC 변경 대기)
+### 45 런 (2026-11-09, 자기소개서 관리 흐름 재설계) — **9건 모두 닫힘** (사용자 확정 CF-S2~CF-S6, 기획 PR #68 — 미머지) · UQ-741도 **CF-S7로 확정**(백엔드 RPC 변경 대기) · **UQ-761 1건 열림**
 - ~~**P-28** S-46 근거 목록(C-11)이 보일 값~~ **확정 CF-S2**: 경로 한 줄만("회사명/교육 표시 이름 › 프로젝트명"), 주 근거 먼저, 배지·rationale 없음
 - ~~**P-29** 문항 설정 상태에서 "저장하기"만 눌렀을 때 전환 시점~~ **확정 CF-S3**: 문항 설정 상태에서 저장하기 비활성·⌘S 끔, 첫 저장은 [자기소개서 작성 시작]뿐 (DM 2.5.1 잔여 문장도 PR #68에서 정정)
 - ~~**P-30** 작성 상태에서 문항 설정으로 돌아갈 입구~~ **결정 불필요** — 작성 상태의 "문항 편집"(CL-8)으로 해소
@@ -107,6 +107,7 @@
 - ~~**UQ-753** PR #68 UX S-46 "저장하기 → 이 상태에 남는다" 행이 CF-S3와 어긋남~~ **정정됨 (기획, PR #68)** — UX 행을 취소선 + CF-S3·S5 문장으로, DM 667행은 이미 정정돼 있었음. 구현 변경 없음
 - ~~**UQ-754** 법무 문서에 "경력기술서"가 남아 있음~~ **확정 CF-S6 (사용자 2026-11-09)** — 법무 3종 2026-11-09 개정판("경력기술서·자기소개서 초안" → "자기소개서 초안", 재동의 없음). **45 런 `policy-content.ts` 본문 4곳 반영**(4.23 UI #11). 시행일은 `policy_versions` 2026-11-09 행 — **백엔드 몫(4.23 백엔드 #15), 같은 머지 필요**
 - ~~**UQ-755** S-25 탈퇴 요약 "초안 {n}" 라벨~~ **결정 불필요** — UX S-25에 이미 "자소서 {n}"(R-CF-12). **45 런 라벨 반영**(`deletion-summary.tsx`, 키 `drafts`는 유지)
+- **UQ-761 (열림, 기획 확인 미전달 — 세션 간 메시지 한도)** 문항 설정 상태 탭이 CF-S7 다이얼로그에서 "내 내용으로 저장"을 고르면 다른 탭 정본의 q_1~q_3 근거 행이 CF-S1 "기존 행 유지" 규칙 때문에 빈 기본 문항에 남는다. 선택지(비우기·유지·문항 설정 상태에서 "내 내용으로 저장" 빼기)는 공유 노트 `cl-ui_to-backend_pending.md`
 
 ### 42 런 (2026-11-06, 새 설정 다이얼로그) — **모두 확정 2026-11-06 (사용자, UI42-1~8 — decisions.md 3.24, UX v5.17b 5.1k)**. 화면 반영됨(GPT 표기 통일·확정 태그). 남은 것은 법무 확인 2건(처리방침 개정·AI 데이터 처리 본문 — `docs/legal/drafts/`, 미시행)
 - **P-22** 미저장 확인의 버튼 문구가 "…닫기"인데 탭 전환·회원 탈퇴로 떴을 때도 같은 문구인가
@@ -141,16 +142,23 @@
 - ~~(A3) S-13 페이지 제목~~ **닫힘 (U38-2, "자기소개서 관리")**
 - ~~(A3) S-16 데이터 부족 안내 문구~~ **닫힘 (U38-3, "프로젝트·STAR·산출물을 더 채우면 더 정확해져요")**
 
-## 백엔드 연결 대기 (45 런, 2026-11-09) — **R15 누락 4건, 백엔드 수정 중 · 1번 해소 전 UI PR·PR #69 머지 보류**
+## 백엔드 연결 대기 (45 런, 2026-11-09) — **R15 누락 4건은 모두 연결됨**(백엔드 `56ba1bf` → UI `c7afdfe`). **남은 것은 표 아래 "남은 연결 대기"** — 두 PR(UI·#69)은 CF-S7까지 정리된 뒤 같은 릴리스로 머지
 > R15(`dba1bff`)를 병합해 공고 가져오기·미리 보기 추출·생성(`p_source_url`·`p_preview_job_id`)·정본 저장(9키)·서류 대화 시작·턴 SSE는 **실제 경로로 연결했다**. 아래 4건은 화면이 부를 서버 함수 자체가 없어 연결하지 못했다 — 백엔드가 "DM 7장 25·33행이 정해 둔 읽기를 R15가 빠뜨렸다"고 확인했다. UI는 이름·시그니처를 맞춘 stub(`notWired`)을 두었다. 새 마이그레이션 `20261113004670`(비파괴)도 코드 배포 전에 원격 push해야 한다.
 
 | # | 화면 ID | 데이터 함수 (UI stub) | 필요한 계약 (백엔드가 만드는 것) | 지금 실제 환경 증상 |
 |---|---|---|---|---|
-| 1 | S-46 | `getCoverLetterDocument(apId): Promise<ApplicationDocument \| null>` | `getApplicationDocument` 서비스·액션 — 행 또는 `null` (DM 7장 25행) | **S-46이 늘 오류 화면**(실제 분기가 throw, page가 catch 안 함 — UQ-743). 덮어쓰기는 일어나지 않음. **규칙: 읽기 실패를 `null`로 접지 않는다**(접으면 빈 기본 문항으로 기존 정본을 덮어씀) |
-| 2 | S-39 | `listCoverLetterSlotCounts()` | `listDocumentSlotCounts` → `Record<apId, {slot_count, filled_slot_count}>` (DM 7장 33행; 기존 `loadDocumentCounts`는 0/1만) | 배지가 접힘(보드는 정상) |
-| 3 | S-46 | `markCoverLetterCopied()` | RPC `mark_application_document_copied` — 한 번 기록되면 불변, 행 없으면 `null`, `updated_at` 안 올림 | 첫 복사가 기록되지 않음(복사는 동작) |
-| 4 | S-46 패널 | 서류 대화 읽기 | `DocumentWritingChatDto`를 `AnyWritingChatDto`에 추가, 서류별 대화 목록·상세 | 새로 고침하면 대화·미반영 제안이 화면에서 사라짐(서버에는 남음) |
+| ~~1~~ **연결됨** | S-46 | `getCoverLetterDocument(apId): Promise<ApplicationDocument \| null>` | `getApplicationDocument` 서비스·액션 — 행 또는 `null` (DM 7장 25행) | **S-46이 늘 오류 화면**(실제 분기가 throw, page가 catch 안 함 — UQ-743). 덮어쓰기는 일어나지 않음. **규칙: 읽기 실패를 `null`로 접지 않는다**(접으면 빈 기본 문항으로 기존 정본을 덮어씀) |
+| ~~2~~ **연결됨** | S-39 | `listCoverLetterSlotCounts()` | `listDocumentSlotCounts` → `Record<apId, {slot_count, filled_slot_count}>` (DM 7장 33행; 기존 `loadDocumentCounts`는 0/1만) | 배지가 접힘(보드는 정상) |
+| ~~3~~ **연결됨** | S-46 | `markCoverLetterCopied()` | RPC `mark_application_document_copied` — 한 번 기록되면 불변, 행 없으면 `null`, `updated_at` 안 올림 | 첫 복사가 기록되지 않음(복사는 동작) |
+| ~~4~~ **연결됨** | S-46 패널 | 서류 대화 읽기 | `DocumentWritingChatDto`를 `AnyWritingChatDto`에 추가, 서류별 대화 목록·상세 | 새로 고침하면 대화·미반영 제안이 화면에서 사라짐(서버에는 남음) |
 | — | S-46 | 저장 | ~~**UQ-741**~~ **확정 CF-S7 (사용자 2026-11-09)** — 서류 RPC만 "정본 행 있음 + 기대 버전 null → `stale_write`"(첫 저장 통과, S-10·S-44·프로필 불변). UI: "내 내용으로 저장"은 `details.current_updated_at` 재전송(반영됨), 문항 설정 상태의 [자기소개서 작성 시작]도 같은 충돌 다이얼로그. **백엔드 RPC 변경 대기** | 백엔드 변경 전까지는 두 탭·미리 열어 둔 탭에서 조용한 덮어쓰기 가능 |
+
+**남은 연결 대기 (45 런 종료 시점)** — 화면 결함 아님, 입력 자리만 열어 둠
+- CF-S7 서류 RPC 변경("정본 행 있음 + 기대 버전 null → `stale_write`") — 백엔드 `20261113004690`. **mock은 이미 이 규칙**(라운드 2 수정). 백엔드 변경 전까지는 두 탭·미리 열어 둔 탭에서 조용한 덮어쓰기 가능.
+- `application_documents.slot_high_water` — 같은 `004690`. 화면은 `createSlotAllocator({ highWater })` 자리만 열어 둠(지금 0).
+- 서류 `draft_done.draft`(저장된 확정 초안) — 같은 묶음. 그 전까지 화면은 턴 뒤 저장 대화를 다시 읽어 제안을 저장본으로 맞춘다.
+- 다시 연 대화의 제안 카드 "근거 목록" 라벨(저장된 `draft.sources`에 라벨 없음) — **백엔드 요청 미전달**(세션 간 메시지 한도, 공유 노트 `cl-ui_to-backend_pending.md`).
+- **UQ-759** 실제 경로에서 `invalid_source_url`이 `invalid_input`으로 바뀌고 스킴 대소문자를 구분 — S-14 "주소 없이 만들기"가 mock에서만 뜸. **백엔드 요청 미전달**(같은 노트).
 
 ## 백엔드 연결 대기 (36 런, 2026-11-05) — **모두 연결됨 2026-11-05** (아래 표는 기록)
 > **2026-11-05 main 병합(#47·#49 R11) 뒤 연결함**: 스냅샷 필드(`interview-rows.ts`, 서버 `sessionProjectName`), `get_deletion_impact('application_project')`(`getApplicationDeletionImpact` → `getApplicationProjectDeletionImpact` 액션), `detached_interview_sessions`, 대화 DTO `turnFailure` → `turn_job`, 다시 보내기 라우트(서버 쪽만 바뀜), `p_client_id`(`career-v45-save.ts`가 새 페이지의 `client_id`를 `clientId`로 보냄), `ai_disclosures v2026-11-05`(버전 문자열 일치). mock 자기소개서 삭제도 남는 세션의 `application_project_id`를 null로 둔다. 아래 표의 `policy_versions` 2026-11-05 행 3개·자소서 초안 기본 제목·AI-12 `GATE_FEATURE_LABEL`도 **백엔드 R12(`20261113001300`)로 처리됨**(원격 반영 2026-11-05, PR #50 `5c0933a` 운영 배포). 해시 정규화(#10)는 백엔드가 공통 함수로 처리. lint·typecheck·build 통과, vitest 146 파일 2381건 모두 통과(36 런의 로컬 통합 테스트 4건 실패 해소). 브라우저 미확인.
@@ -170,5 +178,6 @@
 | C-21 | `ai_disclosures` | `v2026-11-05` 6행, Claude `requires_reconsent = true` (#12). 화면 상수는 반영됨 |
 
 ## [UI-가정] 요약
+- (45 런) 목록은 각 보고서에: `_workspace/ui/46_frontend-engineer-A0_report.md`(9건, 모두 순수 화면 세부) · `47`·`49`·`51`·`52`·`54`(A3) · `48`(A4) · `45_ui-designer_cover-letter_notes.md`. 대표: 모달 주소 `?new=1`, 탭·대화 쿼리 이름, 기준 기본값 `with_spaces`, `preview_skip_reason` 토스트·`invalid_slot` 문구
 - (39 런) S-08 `?new={kind}` = 그 종류의 추가 모달을 한 번 열고 주소에서 뺀다(C-09 "경력 먼저 입력하기" = S-08 + S-09 새 경력의 주소). 폐기된 `achievement` 근거 칩은 "원본 삭제됨"과 같게(링크 없음) 보인다
 - 디자인 시스템 G-1~G-13, 각 영역 보고서(`_workspace/ui/0{2,3}_frontend-engineer-*_report.md`)의 [UI-가정] 목록 참고. 대부분 K-1(v3 원문 부재)에서 나온 문구·구성 가정

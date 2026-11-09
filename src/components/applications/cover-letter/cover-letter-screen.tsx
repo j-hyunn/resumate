@@ -58,7 +58,9 @@ import { QuestionSetup } from "./question-setup"
 import { expectedVersion } from "./save-version"
 import {
   createSlotAllocator,
+  invalidSlotCopy,
   isUntouchedSeed,
+  slotsInUse,
   newQuestionForm,
   nextSlot,
   seedQuestionForms,
@@ -118,15 +120,15 @@ export function CoverLetterScreen({
   // 이번 방문에 발급한 것(지운 것 포함). 그래서 문항을 지우고 다시 넣어도 번호를 다시 쓰지 않는다.
   const [slots] = React.useState(() =>
     createSlotAllocator(
-      [
-        ...(data.document?.body.questions.map((q) => q.slot) ?? []),
-        ...(data.open_chat?.structured_draft.document.questions.map((q) => q.slot) ?? []),
-      ],
+      slotsInUse({ forms: [], document: data.document, chat: data.open_chat }),
       // 연결 대기: `application_documents.slot_high_water`(다음 백엔드 커밋)가 들어오면 그 값을 넘긴다
       { highWater: 0 },
     ),
   )
-  const allocateSlot = slots.allocate
+  // 발급할 때마다 **지금 화면의 모든 슬롯**을 한 함수(`slotsInUse`)로 모아 넘긴다 — 입력 보존으로 되살린
+  // 문항(UQ-756)과 기록에서 연 대화의 제안(UQ-757)도 이 길로 "쓴 번호"가 된다. 값은 이벤트 때 ref로 읽는다
+  const slotSourcesRef = React.useRef<Parameters<typeof slotsInUse>[0]>({ forms: [], document: data.document, chat: data.open_chat })
+  const allocateSlot = React.useCallback(() => slots.allocate(slotsInUse(slotSourcesRef.current)), [slots])
 
   // ---------- 폼 ----------
   const [doc, setDoc] = React.useState<ApplicationDocument | null>(data.document)
@@ -187,6 +189,8 @@ export function CoverLetterScreen({
         window.localStorage.removeItem(preserveKey)
         return
       }
+      // 되살린 문항의 슬롯도 "쓴 번호"다 (UQ-756) — 같은 수집 함수를 지난다
+      slots.markUsed(slotsInUse({ forms: copy.forms }))
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration 뒤 한 번만 되살린다
       setForms(copy.forms)
       setName(copy.name)
@@ -194,7 +198,7 @@ export function CoverLetterScreen({
     } catch {
       /* storage unavailable */
     }
-  }, [preserveKey, data.document?.updated_at])
+  }, [preserveKey, data.document?.updated_at, slots])
   React.useEffect(() => {
     try {
       if (dirty) window.localStorage.setItem(preserveKey, JSON.stringify({ forms, name, deadline, base_updated_at: updatedAt }))
@@ -292,10 +296,15 @@ export function CoverLetterScreen({
             setPageError(code === "field_too_long" ? "글자 수 한도를 넘은 칸이 있어요" : "글자 수 제한을 확인해 주세요")
             setSaveState("invalid")
             return false
-          case "invalid_slot":
-            // 화면이 슬롯을 다시 매기지 않으므로 생기지 않아야 하는 거부다 — 입력을 지키고 다시 시도하게 둔다
-            setSaveState("failed")
+          case "invalid_slot": {
+            // 슬롯이 겹치거나 형식이 아니다 (UQ-756처럼 실제로 생길 수 있다). "저장 실패"로 뭉개지 않고
+            // 어느 문항인지 알린다 — 그대로 다시 눌러도 같은 거부라 "다시 시도"가 아니라 검증 오류로 둔다
+            const field = result?.error.details?.field
+            const at = typeof field === "string" ? current.findIndex((f) => f.slot === field) : -1
+            setPageError(invalidSlotCopy(at >= 0 ? at + 1 : null))
+            setSaveState("invalid")
             return false
+          }
           case "not_found":
           case "application_project_not_found":
             toast("자기소개서를 찾을 수 없어요")
@@ -387,6 +396,11 @@ export function CoverLetterScreen({
       window.history.replaceState(window.history.state, "", url.pathname + url.search)
     },
   })
+
+  // 발급기가 읽는 "지금 화면의 슬롯" — 폼·정본·열린 대화가 바뀔 때마다 맞춘다 (UQ-756·757)
+  React.useEffect(() => {
+    slotSourcesRef.current = { forms, document: doc, chat: panel.chat }
+  }, [forms, doc, panel.chat])
 
   /** 제안 [반영] — 폼만 채우고(키 없이 가능) "저장하기"가 `applied_proposals`로 올린다 (UX-4) */
   const onFill = React.useCallback(
@@ -761,3 +775,4 @@ function slotNumber(forms: QuestionForm[], slot: string): number {
   const at = forms.findIndex((f) => f.slot === slot)
   return at >= 0 ? at + 1 : 1
 }
+

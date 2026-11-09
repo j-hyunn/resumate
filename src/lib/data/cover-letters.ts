@@ -271,7 +271,9 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
           status: 400,
           details: { field: `questions.${badLimit.slot}.char_limit` },
         })
-      if (doc && input.expected_updated_at && doc.updated_at !== input.expected_updated_at)
+      // CF-S7 (확정 2026-11-09, 사용자): **행이 있는데 기대 버전이 null이어도** `stale_write`다 — 행이 없을 때만
+      // 기대 버전 없이 만든다. 문항 설정 상태의 [작성 시작]도 같은 충돌 다이얼로그를 거친다(서버 RPC와 같다)
+      if (doc && (input.expected_updated_at == null || doc.updated_at !== input.expected_updated_at))
         // 화면이 "내 내용으로 저장"에서 이 값을 기대 버전으로 다시 보낸다 (UQ-741 — null로 덮지 않게)
         throw new AppError("stale_write", "다른 곳에서 내용이 바뀌었어요", { status: 409, details: { current_updated_at: doc.updated_at } })
       const now = new Date().toISOString()

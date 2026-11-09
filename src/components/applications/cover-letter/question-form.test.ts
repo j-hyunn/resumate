@@ -3,7 +3,9 @@ import {
   allClipboardText,
   countChars,
   createSlotAllocator,
+  invalidSlotCopy,
   isUntouchedSeed,
+  slotsInUse,
   newQuestionForm,
   nextSlot,
   slotNumber,
@@ -151,5 +153,54 @@ describe("S-46 슬롯 키는 안정 키다 (UQ-740)", () => {
     // 남은 슬롯이 더 크면 그쪽을 따른다
     expect(createSlotAllocator(["q_9"], { highWater: 3 }).allocate()).toBe("q_10")
     expect(createSlotAllocator(["q_1"]).allocate()).toBe("q_2")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UQ-756·757 — 발급기에 번호가 들어오는 길은 `slotsInUse()` 하나를 지난다
+// ---------------------------------------------------------------------------
+describe("슬롯 발급은 지금 화면의 모든 슬롯을 본다 (UQ-756·757)", () => {
+  const stored = { body: { questions: [{ slot: "q_1" }, { slot: "q_2" }, { slot: "q_3" }] } }
+
+  it("UQ-756 재현 순서: q_4 추가 → 저장 없이 새로 고침 → 입력 보존 복원 → '+ 문항 추가'는 q_4가 아니라 q_5", () => {
+    // 방문 1: 정본 q_1~q_3에서 문항 하나 추가 → q_4 (저장하지 않는다)
+    const visit1 = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    const added = visit1.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))
+    expect(added).toBe("q_4")
+    const preserved = [...seedQuestionForms(), newQuestionForm(added)]
+
+    // 방문 2(새로 고침): 발급기는 정본만 알고 시작한다. 입력 보존이 q_4가 든 폼을 되살렸다
+    const visit2 = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    const next = visit2.allocate(slotsInUse({ forms: preserved, document: stored }))
+    // 예전 코드는 여기서 q_4를 한 번 더 발급해 저장이 invalid_slot으로 막혔다
+    expect(next).toBe("q_5")
+    expect(new Set([...preserved.map((f) => f.slot), next]).size).toBe(preserved.length + 1)
+  })
+
+  it("UQ-756: 복원분을 markUsed로 미리 넣어도 같은 함수를 지나 같은 결과다", () => {
+    const visit = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    visit.markUsed(slotsInUse({ forms: [newQuestionForm("q_4")] }))
+    expect(visit.allocate()).toBe("q_5")
+  })
+
+  it("UQ-757: 기록에서 나중에 연 대화의 제안 슬롯도 쓴 번호다 (첫 렌더의 open_chat만이 아니다)", () => {
+    // 첫 렌더에는 열린 대화가 없었다
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: stored, chat: null }))
+    // 나중에 연 대화에 지워진 문항 q_6의 제안이 남아 있다
+    const laterChat = { structured_draft: { document: { questions: [{ slot: "q_6" }] } } }
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored, chat: laterChat }))).toBe("q_7")
+  })
+
+  it("한 번 발급한 번호는 그 문항을 지워도 다시 주지 않는다 (지금 화면에 없어도)", () => {
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))).toBe("q_4")
+    // q_4를 지운 화면에서 다시 추가
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))).toBe("q_5")
+  })
+
+  it("invalid_slot 문구는 원인을 알린다 — '저장 실패'로 뭉개지 않는다 (UQ-756)", () => {
+    expect(invalidSlotCopy(4)).toContain("문항 4")
+    expect(invalidSlotCopy(4)).toContain("지우고 다시 추가")
+    expect(invalidSlotCopy(null)).toContain("문항 키가 겹쳐")
   })
 })

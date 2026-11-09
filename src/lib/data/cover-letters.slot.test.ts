@@ -123,3 +123,29 @@ describe("실제 저장 입력은 계약 모양 그대로다", () => {
     expect(parsed.success).toBe(true)
   })
 })
+
+describe("CF-S7 — 행이 있는데 기대 버전 null이면 stale_write (mock이 서버 규칙과 같다)", () => {
+  it("정본 행이 있는데 기대 버전 없이 저장하면 거부하고 지금 버전을 돌려준다 (빈 기본 문항으로 덮지 않는다)", async () => {
+    const db = store.db!
+    const before = structuredClone(stored(db))
+    await expect(
+      saveCoverLetterDocument({ application_project_id: AP, body: { questions: [] }, expected_updated_at: null }),
+    ).rejects.toMatchObject({ code: "stale_write", details: { current_updated_at: before.updated_at } })
+    expect(stored(db).body).toEqual(before.body)
+  })
+
+  it("'내 내용으로 저장'(받은 지금 버전을 다시 보냄)은 통과한다", async () => {
+    const db = store.db!
+    const current = stored(db).updated_at
+    const r = await saveCoverLetterDocument({ application_project_id: AP, body: stored(db).body, expected_updated_at: current })
+    expect(r.slotCount).toBe(3)
+  })
+
+  it("행이 없으면 기대 버전 null로 만든다 (첫 저장 = [자기소개서 작성 시작])", async () => {
+    const db = store.db!
+    const apNoDoc = IDS.ap(3)
+    expect(db.application_documents.some((d) => d.application_project_id === apNoDoc)).toBe(false)
+    const r = await saveCoverLetterDocument({ application_project_id: apNoDoc, body: { questions: stored(db).body.questions.slice(0, 1) }, expected_updated_at: null })
+    expect(r.slotCount).toBe(1)
+  })
+})

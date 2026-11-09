@@ -206,9 +206,10 @@ export async function startCoverLetterChatAction(applicationProjectId: string, f
  * 패널 기록 목록에서 대화를 열거나 턴이 끝난 뒤 **저장된 제안으로 다시 맞출 때** (R15 후속 `getWritingChat`).
  * `ActionResult`로 돌려준다 — 던진 오류는 경계에서 `code`를 잃는다.
  */
-export async function getCoverLetterChatAction(chatId: string) {
+export async function getCoverLetterChatAction(chatId: string, applicationProjectId: string) {
   return runAction(async () => {
-    const chat = await getCoverLetterChat(chatId)
+    // UQ-758: 이 지원 건의 대화가 아니면 열지 않는다
+    const chat = await getCoverLetterChat(chatId, applicationProjectId)
     if (!chat) throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
     return chat
   })

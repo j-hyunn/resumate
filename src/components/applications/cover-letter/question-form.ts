@@ -99,7 +99,7 @@ export function createSlotAllocator(
    * `max(highWater, 열린 제안, 이번 방문 발급분) + 1`. 값이 없으면 0이다.
    */
   opts: { highWater?: number } = {},
-): { allocate: () => string; markUsed: (slots: Iterable<string>) => void } {
+): { allocate: (inUse?: Iterable<string>) => string; markUsed: (slots: Iterable<string>) => void } {
   const used = new Set<string>()
   const highWater = Math.max(0, Math.floor(opts.highWater ?? 0))
   if (highWater > 0) used.add(`q_${highWater}`)
@@ -108,13 +108,35 @@ export function createSlotAllocator(
   }
   markUsed(initiallyUsed)
   return {
-    allocate: () => {
+    /**
+     * `inUse` = **발급하는 그 순간 화면에 있는 모든 슬롯**(`slotsInUse()`가 모은다 — 지금 폼 · 정본 · 열린
+     * 대화의 제안). 발급기가 따로 기억하지 못한 길(입력 보존 복원 · 기록에서 연 대화 — UQ-756·757)로
+     * 들어온 번호도 이렇게 매번 한 함수를 지나 "쓴 번호"가 된다.
+     */
+    allocate: (inUse?: Iterable<string>) => {
+      if (inUse) markUsed(inUse)
       const slot = nextSlot(used)
       used.add(slot)
       return slot
     },
     markUsed,
   }
+}
+
+/**
+ * 발급 순간 "쓴 번호"로 칠 슬롯을 **한 곳에서** 모은다 (UQ-756·757): 지금 폼(입력 보존으로 되살린 문항 포함) ·
+ * 저장된 정본 · 지금 열린 대화의 제안. 번호가 들어오는 길을 이 함수 하나로 모아, 새 길이 생겨도 빠뜨리지 않게 한다.
+ */
+export function slotsInUse(sources: {
+  forms: ReadonlyArray<{ slot: string }>
+  document?: { body: { questions: ReadonlyArray<{ slot: string }> } } | null
+  chat?: { structured_draft: { document: { questions: ReadonlyArray<{ slot: string }> } } } | null
+}): string[] {
+  return [
+    ...sources.forms.map((f) => f.slot),
+    ...(sources.document?.body.questions.map((q) => q.slot) ?? []),
+    ...(sources.chat?.structured_draft.document.questions.map((q) => q.slot) ?? []),
+  ]
 }
 
 /** "+ 문항 추가": 빈 문항 하나 (글자 수 제한 800 미리 채움). `slot`은 발급기에서 받는다 */
@@ -249,4 +271,14 @@ export function questionClipboardText(f: QuestionForm, index: number): string {
 
 export function allClipboardText(forms: QuestionForm[]): string {
   return forms.map((f, i) => questionClipboardText(f, i + 1)).join("\n\n---\n\n")
+}
+
+/**
+ * `invalid_slot` 거부 문구 `[UI-가정]` — 문항 키가 겹치거나 형식이 아닐 때. 문항을 지우고 다시 넣으면 새 키를 받는다.
+ * (UQ-756 — 예전에는 "저장 실패"로만 보여 원인을 알 수 없었다)
+ */
+export function invalidSlotCopy(questionNo: number | null): string {
+  return questionNo
+    ? `문항 ${questionNo}의 키가 다른 문항과 겹쳐 저장하지 못했어요. 그 문항을 지우고 다시 추가해 주세요`
+    : "문항 키가 겹쳐 저장하지 못했어요. 마지막에 추가한 문항을 지우고 다시 추가해 주세요"
 }

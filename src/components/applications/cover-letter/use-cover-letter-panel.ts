@@ -20,6 +20,7 @@ import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
 import { computeBodyHash } from "@/lib/body-hash"
+import { shouldAdoptReread } from "./panel-rules"
 import {
   COVER_LETTER_DRAFT_LIMIT,
   COVER_LETTER_MESSAGE_LIMIT,
@@ -115,6 +116,16 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const [open, setOpen] = React.useState(true)
   const [chats, setChats] = React.useState(opts.initialChats)
   const [chat, setChat] = React.useState(opts.initialChat)
+  /**
+   * 지금 열린 대화 id — 늦게 도착한 응답(턴 뒤 다시 읽기 · 기록에서 열기)이 **그 사이 연 다른 대화를
+   * 옛 대화로 덮지 않게** 응답을 반영하기 전에 이 값과 대조한다 (UQ-760).
+   */
+  const openChatIdRef = React.useRef<string | null>(opts.initialChat?.id ?? null)
+  React.useEffect(() => {
+    openChatIdRef.current = chat?.id ?? null
+  }, [chat?.id])
+  /** 기록에서 열기 요청의 순번 — 빠르게 두 번 누르면 마지막 요청만 반영한다 */
+  const openSeq = React.useRef(0)
   const [messages, setMessages] = React.useState<CoverLetterPanelMessage[]>(
     () => opts.initialChat?.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, status: m.status })) ?? [],
   )
@@ -375,11 +386,12 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       // 않아 화면이 `draft_block`(임시)으로 제안을 만들었는데, 글자 수 보정이 있으면 저장본과 다를 수 있다.
       // 저장된 제안은 늘 DTO의 `structuredDraft`에서 읽는다. 다시 읽기가 실패하면 화면이 만든 제안을 둔다
       if (!previewState && !ac.signal.aborted) {
-        const r = await getCoverLetterChatAction(target.id).catch(() => null)
-        if (r && !("error" in r)) adoptChat(r.data)
+        const r = await getCoverLetterChatAction(target.id, opts.applicationProjectId).catch(() => null)
+        // UQ-760: 응답이 왔을 때 **지금 열린 대화가 그 턴의 대화일 때만** 반영한다
+        if (r && !("error" in r) && shouldAdoptReread(openChatIdRef.current, target.id, r.data.id)) adoptChat(r.data)
       }
     },
-    [adoptChat, applyEvent, draftCount, opts.formSnapshot, opts.preview.turnError, previewState],
+    [adoptChat, applyEvent, draftCount, opts.applicationProjectId, opts.formSnapshot, opts.preview.turnError, previewState],
   )
 
   const ensureChat = React.useCallback(async (): Promise<CoverLetterChatView | null> => {
@@ -444,8 +456,11 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     (summary: CoverLetterChatSummary) => {
       if (chat?.id === summary.id) return
       abort.current?.abort()
+      const seq = ++openSeq.current
       void (async () => {
-        const r = await getCoverLetterChatAction(summary.id).catch(() => null)
+        const r = await getCoverLetterChatAction(summary.id, opts.applicationProjectId).catch(() => null)
+        // 그 사이 다른 대화를 또 열었으면 이 응답은 버린다 (UQ-760과 같은 경쟁)
+        if (seq !== openSeq.current) return
         if (!r || "error" in r) {
           toast("대화를 열지 못했어요. 다시 시도해 주세요")
           return
@@ -526,3 +541,4 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
 }
 
 export type { CoverLetterStructuredDraft }
+

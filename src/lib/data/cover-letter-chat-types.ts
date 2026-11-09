@@ -11,6 +11,7 @@
  * 둘을 같은 규칙으로 다루면 깨진다(백엔드가 한 번 결함을 냈던 자리다).
  */
 import type { AiErrorCode, AiProviderName, ConnectionTier, ModelTier } from "@/types/db"
+import type { CoverLetterDraft } from "@/lib/contracts/writing-chat"
 
 /** 대화 전체 초안 **턴** 상한 — DM 2.9.4 "6 per chat, not per slot". 한 턴이 3문항을 써도 1회다 */
 export const COVER_LETTER_DRAFT_LIMIT = 6
@@ -20,78 +21,31 @@ export const COVER_LETTER_MESSAGE_LIMIT = 40
 export const COVER_LETTER_DRAFT_SLOTS_PER_TURN = 3
 
 // ---------------------------------------------------------------------------
-// 저장된 제안 (structured_draft.document.questions[])
+// 저장된 제안 (structured_draft) — **정본은 계약 타입**이다
+//
+// R15 후속: 서류 대화 DTO(`DocumentWritingChatDto`)의 `structuredDraft`는 **저장 jsonb 그대로
+// snake_case**이고 그 모양은 `CoverLetterDraft`(`src/lib/contracts/writing-chat.ts` ←
+// `src/server/ai/schemas/cover-letter-draft.ts`)다. 화면이 따로 손 타입을 두면 저장 모양과 어긋나므로
+// (앞 런의 `facts[].fact_id`가 실제로는 `id`였다) **그 타입을 그대로 별칭으로 쓴다**(type-only import라
+// 클라이언트 번들에 서버 코드가 들어가지 않는다).
 // ---------------------------------------------------------------------------
 
-/** `blocks[]` 원소 — 저장 모양이라 **snake_case**다 */
-export interface CoverLetterProposalBlock {
-  block_id: string
-  type: "paragraph"
-  text: string
-  basis: "new" | "current_body" | null
-  source_fact_ids: string[]
-  source_body_quotes: string[]
-  requirement_ids: string[]
-  placeholders: Array<{ token: string; hint: string | null }>
-  flags: string[]
-  review: "ok" | "accepted" | "needs_review" | "rejected"
-  review_reason: string | null
-  /** 저장 때 `{slot}.blocks.{block_id}` 근거가 되는 값 (화면은 출처 칩으로만 쓴다) */
-  evidence: Array<{ source_type: string; source_id: string; source_field?: string | null; label?: string | null; quote?: string | null }>
-}
-
-/** 한 문항의 제안 (`document.questions[].draft`) */
-export interface CoverLetterProposalDraft {
-  /** CF-6 — 글자 수·보정 대상이 아니다. null = 제목 제안 없음 */
-  answer_title: string | null
-  value: string
-  blocks: CoverLetterProposalBlock[]
-  char_count: number
-  char_limit_at_generation: number | null
-  char_adjust_needed: boolean
-  correction_applied: boolean
-  rev: number
-  base_body_hash: string | null
-  replace_allowed: boolean
-  missing_slots: string[]
-  dropped_block_count: number
-  applied_at: string | null
-  applied_rev: number | null
-}
-
-export interface CoverLetterProposalQuestion {
-  slot: string
-  question_id: string
-  draft: CoverLetterProposalDraft
-}
-
-/** `facts[]` 가운데 화면이 쓰는 부분 */
-export interface CoverLetterFactView {
-  fact_id: string
-  text: string
-  review: "ok" | "accepted" | "needs_review" | "rejected"
-}
-
-export interface CoverLetterStructuredDraft {
-  schema_version: number
-  target: "cover_letter"
-  facts: CoverLetterFactView[]
-  document: { questions: CoverLetterProposalQuestion[] }
-  meta: { tone_requested: string | null }
-  clarifications: Array<{ kind: string; slot: string | null; note: string | null }>
-  sensitive_flags_count: number
-  /** 쓴 초안 **턴** 수 — 남은 횟수 = 6 − `draft_count` */
-  draft_count: number
-}
+export type CoverLetterStructuredDraft = CoverLetterDraft
+export type CoverLetterProposalQuestion = CoverLetterDraft["document"]["questions"][number]
+export type CoverLetterProposalDraft = CoverLetterProposalQuestion["draft"]
+/** `blocks[]` 원소 — 저장 모양이라 **snake_case**다 (`block_id`·`source_fact_ids` …) */
+export type CoverLetterProposalBlock = CoverLetterProposalDraft["blocks"][number]
+export type CoverLetterFactView = CoverLetterDraft["facts"][number]
 
 /** 빈 `structured_draft` — 방금 시작한 대화 (AI-04 schema 4). 순수하므로 여기 둔다 */
 export function emptyCoverLetterDraft(): CoverLetterStructuredDraft {
+  // 저장 jsonb의 기본값과 같은 모양 (`CoverLetterDraftSchema`의 default)
   return {
-    schema_version: 4,
+    schema_version: 1,
     target: "cover_letter",
     facts: [],
-    document: { questions: [] },
-    meta: { tone_requested: null },
+    document: { questions: [], question_edit_proposal: [] },
+    meta: { tone_requested: null, tone_requested_at: null },
     clarifications: [],
     sensitive_flags_count: 0,
     draft_count: 0,

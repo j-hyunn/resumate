@@ -121,7 +121,8 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
 
   if (proposals.length === 0 && !drafting && !panel.draftFailed) return null
 
-  const reviewState = (b: CoverLetterProposalBlock): CoverLetterProposalBlock["review"] => accepted[b.block_id] ?? b.review
+  /** 저장 상태(`ok`·`needs_review`·`accepted`) + 이 카드에서만 고른 [빼기](`rejected`, 저장하지 않는다) */
+  const reviewState = (b: CoverLetterProposalBlock): CoverLetterProposalBlock["review"] | "rejected" => accepted[b.block_id] ?? b.review
   const slotFilled = (slot: string, rev: number) => filled.some((f) => f.slot === slot && f.rev === rev)
 
   const buildFill = (p: CoverLetterProposalQuestion): QuestionFill | null => {
@@ -343,7 +344,7 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-1 pt-1">
                 {facts.map((f) => (
-                  <p key={f.fact_id} className="text-sm">
+                  <p key={f.id} className="text-sm">
                     {f.text}
                   </p>
                 ))}

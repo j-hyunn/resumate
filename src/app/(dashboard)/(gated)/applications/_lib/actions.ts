@@ -21,8 +21,8 @@ import { withAiGuard } from "@/lib/data/ai-guard"
 // 페이지 단위로 저장하면서 쓰는 화면이 없어졌다. JD 요건 추출만 남는다 (S-15·D-30 — 실제 경로 유지).
 import { retryJdExtraction } from "@/lib/data/drafts"
 import type { DocumentFormSnapshot } from "@/lib/contracts/application-document"
-import { isAppError, runAction } from "@/lib/contracts/errors"
-import { deleteCoverLetterChat, startCoverLetterChat } from "@/lib/data/cover-letter-chats"
+import { AppError, isAppError, runAction } from "@/lib/contracts/errors"
+import { deleteCoverLetterChat, getCoverLetterChat, startCoverLetterChat } from "@/lib/data/cover-letter-chats"
 import {
   extractJdPreview,
   fetchJobPosting,
@@ -159,7 +159,7 @@ export async function startInsightAction(applicationProjectId: string, fail?: Ai
 
 // --- S-46 문항 설정 (옛 S-18 — A3가 다시 쓴다) ------------------------------------------------
 
-// --- S-14 ① JD 입력 · S-46 자소서 정본 (v5.20 — 연결 대기, lib/data/cover-letters.ts) ----------
+// --- S-14 ① JD 입력 · S-46 자소서 정본 (v5.20 — 실제 경로, lib/data/cover-letters.ts) ----------
 
 /** S-14 ① [다음]: 공고 URL 가져오기 (AI 아님). 실패는 throw → 화면이 "가져오지 못했어요" 한 문구로 */
 export async function fetchJobPostingAction(url: string) {
@@ -195,11 +195,23 @@ export async function listCoverLetterSlotCountsAction() {
   return listCoverLetterSlotCounts()
 }
 
-// --- S-46 자소서 작성 대화 (R15: 시작은 연결됨, 읽기는 연결 대기) ---------------------------
+// --- S-46 자소서 작성 대화 (R15 + 후속: 시작·열기·목록·삭제 모두 실제 경로) -------------------
 
 /** 패널 "+ 새 대화" / 첫 메시지 — `start_document_writing_chat`. 정본 행을 만들지 않는다 (CF-S3) */
 export async function startCoverLetterChatAction(applicationProjectId: string, formSnapshot?: DocumentFormSnapshot) {
   return startCoverLetterChat(applicationProjectId, formSnapshot)
+}
+
+/**
+ * 패널 기록 목록에서 대화를 열거나 턴이 끝난 뒤 **저장된 제안으로 다시 맞출 때** (R15 후속 `getWritingChat`).
+ * `ActionResult`로 돌려준다 — 던진 오류는 경계에서 `code`를 잃는다.
+ */
+export async function getCoverLetterChatAction(chatId: string) {
+  return runAction(async () => {
+    const chat = await getCoverLetterChat(chatId)
+    if (!chat) throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+    return chat
+  })
 }
 
 /** 패널 ⋯ "이 대화 삭제" (C-05 `writing_chat`) */

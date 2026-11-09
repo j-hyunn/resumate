@@ -63,7 +63,7 @@ function mockBlocks(slot: string, questionText: string, limit: number): CoverLet
       flags: [],
       review: "ok",
       review_reason: null,
-      evidence: [{ source_type: "project", source_id: "prj-1", label: "결제 승인 API 성능 개선" }],
+      evidence: [{ source_type: "project", source_id: "prj-1", source_field: "result", source_locator: null, quote: null, label: "결제 승인 API 성능 개선" }],
     },
     {
       block_id: `${slot}-b2`,
@@ -117,7 +117,7 @@ export async function* mockCoverLetterTurn(opts: MockCoverLetterTurnOptions): As
   // 초안 턴 — 한 턴 최대 3문항 (CL-10). 아직 비어 있는 문항부터
   const targets = opts.questions.filter((q) => !q.body.trim()).slice(0, COVER_LETTER_DRAFT_SLOTS_PER_TURN)
   const slots = (targets.length > 0 ? targets : opts.questions.slice(0, COVER_LETTER_DRAFT_SLOTS_PER_TURN)).map((q) => q.slot)
-  const working: CoverLetterStructuredDraft = { ...opts.draft, document: { questions: [...opts.draft.document.questions] } }
+  const working: CoverLetterStructuredDraft = { ...opts.draft, document: { ...opts.draft.document, questions: [...opts.draft.document.questions] } }
   yield { type: "draft_patch", structuredDraft: working, added: [] }
   yield { type: "draft_flags", needsReview: [], sensitiveAdded: 0, sensitiveFlagsCount: working.sensitive_flags_count }
   await sleep(step, opts.signal)
@@ -182,11 +182,17 @@ export async function* mockCoverLetterTurn(opts: MockCoverLetterTurnOptions): As
         answer_title: slot === "q_1" ? "결제 장애를 줄인 경험" : null,
         value: blocks.map((b) => b.text).join("\n\n"),
         blocks,
+        // (CF-S1) 이 제안이 고른 문항 근거 — 저장 때 `{slot}.sources.{n}` 행이 된다 (주 근거 먼저)
+        sources: [
+          { source_type: "project", source_id: "prj-1", role: "primary" as const },
+          { source_type: "experience", source_id: "exp-1", role: "supporting" as const },
+        ],
         char_count: charCount,
         char_limit_at_generation: q.char_limit,
         char_adjust_needed: charCount > q.char_limit,
         correction_applied: charCount > q.char_limit,
         rev: 1,
+        generated_at: new Date().toISOString(),
         base_body_hash: null,
         replace_allowed: true,
         missing_slots: slot === "q_3" ? ["구체적인 성과 수치"] : [],

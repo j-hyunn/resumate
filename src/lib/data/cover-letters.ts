@@ -2,11 +2,9 @@ import "server-only"
 /**
  * 자기소개서 흐름 data layer (UX v5.20 S-13 · S-14 · S-46, DM v4.15 2.6.2 · 2.7.3).
  *
- * **R15 병합 뒤 실제 경로로 전환했다** — `fetchJobPosting` · `extractJdPreview` ·
- * `saveCoverLetterDocument`는 real 분기가 돈다. `?state=` mock 분기는 그대로 둔다(이 프로젝트 방식).
- * 아직 **연결 대기**인 것은 서버 읽기 자리가 없는 셋이다: `getCoverLetterDocument`(정본 행 읽기) ·
- * `listCoverLetterSlotCounts`(S-39 `slot_count`·`filled_slot_count`) · `markCoverLetterCopied`
- * (`first_copied_at`). 보고서 "백엔드 요청"에 적었다.
+ * **모든 함수가 실제 경로다** (R15 + R15 후속): `fetchJobPosting` · `extractJdPreview` ·
+ * `saveCoverLetterDocument` · `getCoverLetterDocument` · `listCoverLetterSlotCounts` ·
+ * `markCoverLetterCopied`. `?state=` mock 분기는 그대로 둔다(이 프로젝트 방식).
  *
  * **근거를 저장 요청에 싣지 않는다** (CF-S1): 문항 근거의 원천은 그 문항 초안 제안의 `sources[]`이고,
  * 저장 RPC가 `p_applied_proposals`로 받은 제안에서 `evidence_links`를 만든다. 화면·데이터 계층은
@@ -17,7 +15,12 @@ import type { ApplicationDocument, CoverLetterBody, Uuid } from "@/types/db"
 import type { SaveApplicationDocumentResult } from "@/lib/contracts/application-document"
 import type { ExtractJdPreviewResult } from "@/lib/contracts/application"
 import type { FetchJobDescriptionResult } from "@/lib/contracts/jd-fetch"
-import { saveApplicationDocument as saveApplicationDocumentAction } from "@/server/actions/application-document"
+import {
+  getApplicationDocument as getApplicationDocumentAction,
+  listDocumentSlotCounts as listDocumentSlotCountsAction,
+  markApplicationDocumentCopied as markApplicationDocumentCopiedAction,
+  saveApplicationDocument as saveApplicationDocumentAction,
+} from "@/server/actions/application-document"
 import { fetchJobDescription } from "@/server/services/job-description/fetch"
 import { extractJdPreview as extractJdPreviewService } from "@/server/services/application/preview"
 import { createJdPreviewDeps } from "@/server/jobs/jd-preview"
@@ -50,10 +53,6 @@ import {
 export * from "./cover-letter-copy"
 import { previewOr } from "./source"
 
-/** real 분기가 아직 없는 함수의 공통 거부 — 화면은 ST-ERROR로 떨어진다 */
-function notWired(what: string): never {
-  throw new AppError("wiring_pending", `${what}은(는) 아직 백엔드에 연결되지 않았어요`, { status: 503, details: { what } })
-}
 
 // ---------------------------------------------------------------------------
 // S-13 자기소개서 목록
@@ -85,7 +84,7 @@ export async function listCoverLetters(): Promise<CoverLetterListRow[]> {
  * S-14 ① [다음]의 URL 가져오기. **AI 실행이 아니다** (키 불필요, 사용량 미터에 남지 않는다 — CF-A16).
  * 실패 코드 5종(`fetch_*`)은 화면에서 나누지 않고 한 문구로 알린다 (UX S-14 `[가정]`).
  *
- * 연결 대기: `POST /api/job-descriptions/fetch` (DM v4.15 11.10 · decisions 4.23 백엔드 8)
+ * 실제: `POST /api/job-descriptions/fetch`의 서비스 (DM v4.15 11.10 · decisions 4.23 백엔드 8)
  */
 export async function fetchJobPosting(url: string): Promise<FetchJobDescriptionResult> {
   return previewOr(
@@ -139,7 +138,7 @@ const MOCK_FETCHED_JD = [
  * Q53-1 게이트를 여기서 판정한다 (CF-A6 · R-CF-4): 동의 필요·키 무효면 거부하고 ①에 머문다.
  * 활성 공급자가 없으면 돌리지 않고 호출하는 쪽이 바로 ②로 간다 (CL-8 · D-30).
  *
- * 연결 대기: `POST /api/job-descriptions/extract-preview` (DM v4.15 2.6.2)
+ * 실제: `POST /api/job-descriptions/extract-preview`의 서비스 (DM v4.15 2.6.2)
  */
 export async function extractJdPreview(rawText: string): Promise<ExtractJdPreviewResult> {
   return previewOr(
@@ -179,7 +178,10 @@ export async function extractJdPreview(rawText: string): Promise<ExtractJdPrevie
  * S-46: 이 지원 프로젝트의 자소서 정본 1행 (`document_kind = 'cover_letter'`, CF-A2).
  * `null`이면 **문항 설정 상태**, 있으면 **작성 상태**로 연다 (CF-A11).
  *
- * 연결 대기: `application_documents` 읽기 (DM 2.7.3)
+ * ⚠ **`null`은 "행 없음"만 뜻한다.** 읽기 오류를 `null`로 접으면 문항 설정 상태로 열려 [자기소개서 작성
+ * 시작]이 빈 기본 문항으로 기존 정본을 덮는다 — 그래서 `{error}`는 `unwrap`이 **던진다**(페이지가 오류
+ * 상태로 간다). 호출하는 쪽도 `catch → null`을 두지 않는다. 읽은 행의 `updated_at`은 다음 저장의
+ * 기대 버전이 된다.
  */
 export async function getCoverLetterDocument(applicationProjectId: Uuid): Promise<ApplicationDocument | null> {
   return previewOr(
@@ -188,8 +190,8 @@ export async function getCoverLetterDocument(applicationProjectId: Uuid): Promis
       const doc = db.application_documents.find((d) => d.application_project_id === applicationProjectId)
       return doc ? clone(doc) : null
     },
-    // 연결 대기 (DM 2.7.3 — application_documents select)
-    async () => notWired("자소서 정본 읽기"),
+    // real: `getApplicationDocument` (R15 후속). 오류는 던진다 — `null`로 접지 않는다
+    async () => unwrap(await getApplicationDocumentAction({ applicationProjectId, documentKind: "cover_letter" })),
   )
 }
 
@@ -197,8 +199,7 @@ export async function getCoverLetterDocument(applicationProjectId: Uuid): Promis
  * S-39: 보드 카드가 `body` jsonb를 읽지 않도록 수만 모아 온다.
  * 표시 없음 = 행 없음 또는 `filled_slot_count = 0` / "자소서 작성 중" = 0 < filled < slot /
  * "자소서 작성됨" = filled = slot (slot > 0) — DM 2.7.3 `[가정]`(CF-A14).
- *
- * 연결 대기: `application_documents` 수 조회 (DM 2.7.3)
+ * 행 없는 프로젝트는 키가 없다(= 표시 없음).
  */
 export async function listCoverLetterSlotCounts(): Promise<Record<Uuid, CoverLetterSlotCounts>> {
   return previewOr(
@@ -211,8 +212,8 @@ export async function listCoverLetterSlotCounts(): Promise<Record<Uuid, CoverLet
         ]),
       )
     },
-    // 연결 대기 (DM 2.7.3 — application_documents 수 조회)
-    async () => notWired("자소서 작성 상태 조회"),
+    // real: `listDocumentSlotCounts` (R15 후속) — `body`를 읽지 않고 두 수만
+    async () => unwrap(await listDocumentSlotCountsAction()),
   )
 }
 
@@ -221,7 +222,7 @@ export async function listCoverLetterSlotCounts(): Promise<Record<Uuid, CoverLet
  * `p_applied_proposals`로 반영한 제안을 보내면 서버가 `evidence_links`를 만든다 —
  * **근거 목록은 보내지 않는다** (CF-S1).
  *
- * 연결 대기: `save_application_document(… p_application_values)` (DM 2.7.3 · v4.15 2.5.1)
+ * 실제: `save_application_document(… p_application_values)` (DM 2.7.3 · v4.15 2.5.1)
  */
 export interface SaveCoverLetterInput {
   application_project_id: Uuid
@@ -359,16 +360,20 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
   )
 }
 
-/** S-46 "전체 복사" 기록 (`first_copied_at`, PRD 7장 지표). 연결 대기 (DM 2.7.3) */
-export async function markCoverLetterCopied(applicationProjectId: Uuid): Promise<void> {
+/**
+ * S-46 "전체 복사" 기록 (`first_copied_at`, PRD 7장 지표). 처음 값만 남는다. 행이 없으면 `null`.
+ * `updated_at`을 움직이지 않아 다음 저장의 기대 버전을 깨지 않는다 (R15 후속).
+ */
+export async function markCoverLetterCopied(applicationProjectId: Uuid): Promise<string | null> {
   return previewOr(
     async () => {
       const db = await mockRequest(0)
       const doc = db.application_documents.find((d) => d.application_project_id === applicationProjectId)
       if (doc && !doc.first_copied_at) doc.first_copied_at = new Date().toISOString()
+      return doc?.first_copied_at ?? null
     },
-    // 연결 대기 (DM 2.7.3 — application_documents.first_copied_at)
-    async () => notWired("복사 기록"),
+    // real: `markApplicationDocumentCopied` (R15 후속)
+    async () => unwrap(await markApplicationDocumentCopiedAction({ applicationProjectId, documentKind: "cover_letter" })).firstCopiedAt,
   )
 }
 

@@ -145,4 +145,11 @@ describe("S-46 슬롯 키는 안정 키다 (UQ-740)", () => {
     expect(back.map((f) => f.question_id)).toEqual([extra.question_id, a.question_id, c.question_id])
     void b
   })
+  it("정본의 최고 번호(slot_high_water)를 받으면 그보다 큰 번호부터 준다 — 없으면 0", () => {
+    // 정본에는 q_1·q_2만 남았지만 q_7까지 쓴 적이 있다 → 다음은 q_8
+    expect(createSlotAllocator(["q_1", "q_2"], { highWater: 7 }).allocate()).toBe("q_8")
+    // 남은 슬롯이 더 크면 그쪽을 따른다
+    expect(createSlotAllocator(["q_9"], { highWater: 3 }).allocate()).toBe("q_10")
+    expect(createSlotAllocator(["q_1"]).allocate()).toBe("q_2")
+  })
 })

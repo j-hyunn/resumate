@@ -2,15 +2,10 @@ import "server-only"
 /**
  * S-46 자소서 작성 대화 data layer (UX v5.20 S-46 "Resumate AI 패널", DM 2.5.0b · 11.8 #4; AI-04).
  *
- * **R15가 들여온 것과 아직 없는 것**
- * - **있다**: 대화 시작 `start_document_writing_chat`(server action `startDocumentWritingChat`) ·
- *   턴 라우트 `POST /api/writing-chats/{id}/turns`(서류 턴 SSE, `DocumentTurnEvent`) ·
- *   저장 `save_application_document`.
- * - **없다**: 서류 대화를 **읽는** 계약 — `AnyWritingChatDto`는 `project` · `project_deliverable`
- *   두 값뿐이고 `getWritingChat`·대화 기록 목록에 서류 분기가 없다. 그래서 `listCoverLetterChats`·
- *   `getCoverLetterChat`의 real 분기는 **연결 대기**다(보고서 "백엔드 요청"). 시작한 대화는 방금 만든
- *   것이라 빈 뷰를 화면이 그대로 들고 쓸 수 있어, **이번 방문 안에서는 real 경로로도 대화가 돈다** —
- *   새로 고침한 뒤 기록을 다시 여는 길만 막혀 있다.
+ * **모두 실제 경로다** (R15 + R15 후속): 시작 `startDocumentWritingChat` · 턴 라우트
+ * `POST /api/writing-chats/{id}/turns`(서류 턴 SSE) · 목록 `listDocumentWritingChats` · 열기
+ * `getWritingChat`(서류 대화면 `DocumentWritingChatDto`) · 삭제 `deleteWritingChat`. 새로 고침해도 대화와
+ * 반영하지 않은 제안이 돌아온다. `?state=` mock 분기는 그대로 둔다.
  *
  * **CF-S1**: 저장 요청에 근거를 싣지 않는다. 패널이 [반영]한 제안을
  * `applied_proposals: [{writingChatId, slot, rev}]`로만 넘기고, 표시용 근거 칩은 `sources_selected`
@@ -20,6 +15,8 @@ import { AppError } from "@/lib/contracts/errors"
 import { clone, mockRequest } from "@/lib/mock/store"
 import { newId } from "@/lib/mock/ids"
 import { startDocumentWritingChat } from "@/server/actions/application-document"
+import { deleteWritingChat, getWritingChat, listDocumentWritingChats } from "@/server/actions/writing-chat"
+import type { DocumentWritingChatDto, ProjectWritingChatSummary } from "@/lib/contracts/writing-chat"
 import type { DocumentFormSnapshot } from "@/lib/contracts/application-document"
 import {
   COVER_LETTER_MESSAGE_LIMIT,
@@ -31,9 +28,6 @@ import { previewOr, unwrap } from "./source"
 
 export * from "./cover-letter-chat-types"
 
-function notWired(what: string): never {
-  throw new AppError("wiring_pending", `${what}은(는) 아직 백엔드에 연결되지 않았어요`, { status: 503, details: { what } })
-}
 
 function newChatView(id: string, applicationProjectId: string): CoverLetterChatView {
   const now = new Date().toISOString()
@@ -52,10 +46,7 @@ function newChatView(id: string, applicationProjectId: string): CoverLetterChatV
   }
 }
 
-/**
- * 패널 머리 "대화 기록 목록" — 이 자기소개서의 대화(최근 활동 순).
- * 연결 대기: 서류 대화를 읽는 계약이 없다 (`AnyWritingChatDto`에 서류 분기 없음).
- */
+/** 패널 머리 "대화 기록 목록" — 이 자기소개서의 대화(최근 활동 순, R15 후속 `listDocumentWritingChats`). */
 export async function listCoverLetterChats(applicationProjectId: string): Promise<CoverLetterChatSummary[]> {
   return previewOr(
     async () => {
@@ -65,14 +56,15 @@ export async function listCoverLetterChats(applicationProjectId: string): Promis
         .sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at))
         .map(({ id, title, status, message_count, last_activity_at }) => ({ id, title, status, message_count, last_activity_at }))
     },
-    // 연결 대기 (DM 2.5.0b — 서류 대화 목록 읽기 계약 없음)
-    async () => [],
+    async () =>
+      unwrap(await listDocumentWritingChats({ applicationProjectId, documentKind: "cover_letter" })).map(toSummary),
   )
 }
 
 /**
- * 연 대화(`?chat=`) 열기 — 메시지·제안 카드.
- * 연결 대기: 같은 이유로 real 분기가 없다. 이번 방문에 시작한 대화는 화면이 들고 있다.
+ * 연 대화(`?chat=`) 열기·새로 고침 — 메시지·제안 카드. 서류 대화면 `getWritingChat`이
+ * `DocumentWritingChatDto`를 준다. **저장된 제안은 늘 이 DTO의 `structuredDraft`에서 읽는다**
+ * (SSE `sources_selected`는 따로 나가는 표시 카드다). 서류 대화가 아니면 `not_found`.
  */
 export async function getCoverLetterChat(chatId: string): Promise<CoverLetterChatView | null> {
   return previewOr(
@@ -81,8 +73,11 @@ export async function getCoverLetterChat(chatId: string): Promise<CoverLetterCha
       const chat = db.cover_letter_chats.find((c) => c.id === chatId)
       return chat ? clone(chat) : null
     },
-    // 연결 대기 (DM 2.5.0b — `getWritingChat`에 서류 분기 없음)
-    async () => notWired("자소서 대화 열기"),
+    async () => {
+      const dto = unwrap(await getWritingChat({ writingChatId: chatId }))
+      if (dto.target !== "application_document") throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+      return toChatView(dto)
+    },
   )
 }
 
@@ -98,25 +93,28 @@ export async function startCoverLetterChat(applicationProjectId: string, formSna
       db.cover_letter_chats.push(chat)
       return clone(chat)
     },
-    // real: 시작은 연결됐다. 방금 만든 대화라 메시지·제안이 없어 빈 뷰가 곧 그 대화다
+    // real: 시작 → 그 대화를 읽어 서버가 정한 값(제목·상한·잠금)으로 연다
     async () => {
       const { writingChatId } = unwrap(
         await startDocumentWritingChat({ applicationProjectId, documentKind: "cover_letter", formSnapshot }),
       )
-      return newChatView(writingChatId, applicationProjectId)
+      const dto = unwrap(await getWritingChat({ writingChatId }))
+      if (dto.target !== "application_document") throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+      return toChatView(dto)
     },
   )
 }
 
-/** 패널 ⋯ "이 대화 삭제" (C-05 `writing_chat`). 연결 대기: 서류 대화 삭제 계약이 없다 */
+/** 패널 ⋯ "이 대화 삭제" (C-05 `writing_chat`) — 대화 대상과 관계없는 `deleteWritingChat` */
 export async function deleteCoverLetterChat(chatId: string): Promise<void> {
   return previewOr(
     async () => {
       const db = await mockRequest(150)
       db.cover_letter_chats = db.cover_letter_chats.filter((c) => c.id !== chatId)
     },
-    // 연결 대기 (DM 2.5 — 서류 대화 삭제)
-    async () => notWired("자소서 대화 삭제"),
+    async () => {
+      unwrap(await deleteWritingChat({ writingChatId: chatId }))
+    },
   )
 }
 
@@ -139,5 +137,38 @@ export function coverLetterTurnRequest(
       style: body.style ?? null,
       formSnapshot: body.formSnapshot,
     },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DTO → 화면 뷰 (R15 후속). DTO 자체 필드는 camelCase, **`structuredDraft`는 저장 jsonb 그대로 snake_case**
+// (산출물 DTO와 같은 관례) — 그래서 `structuredDraft`는 바꾸지 않고 그대로 넘긴다.
+// ---------------------------------------------------------------------------
+
+export function toSummary(s: ProjectWritingChatSummary): CoverLetterChatSummary {
+  return { id: s.id, title: s.title, status: s.status, message_count: s.messageCount, last_activity_at: s.lastActivityAt }
+}
+
+export function toChatView(dto: DocumentWritingChatDto): CoverLetterChatView {
+  return {
+    id: dto.id,
+    application_project_id: dto.applicationProjectId,
+    title: dto.title,
+    status: dto.status,
+    message_count: dto.messageCount,
+    last_activity_at: dto.lastActivityAt,
+    // 저장된 제안 — 그대로 (snake_case)
+    structured_draft: dto.structuredDraft,
+    messages: dto.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      status: m.status === "failed" ? "failed" : m.status === "streaming" ? "pending" : "ok",
+      created_at: m.createdAt,
+    })),
+    // 초안 상한은 **턴** 6회 (`draftLimit: 6`) — 남은 횟수 = 6 − draftCount
+    draft_count: dto.draftCount,
+    remaining_messages: dto.remainingMessages,
+    limit_reached: dto.limitReached,
   }
 }

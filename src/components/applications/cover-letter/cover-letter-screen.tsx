@@ -55,6 +55,7 @@ import { CoverLetterPanel } from "./cover-letter-panel"
 import { useCoverLetterPanel } from "./use-cover-letter-panel"
 import type { QuestionFill } from "./question-proposal-card"
 import { QuestionSetup } from "./question-setup"
+import { expectedVersion } from "./save-version"
 import {
   createSlotAllocator,
   isUntouchedSeed,
@@ -116,10 +117,14 @@ export function CoverLetterScreen({
   // 이 서류에서 쓴 적 있는 번호를 모두 기억한다: 저장된 정본 · 기본 3문항 · 열려 있는 대화의 제안 ·
   // 이번 방문에 발급한 것(지운 것 포함). 그래서 문항을 지우고 다시 넣어도 번호를 다시 쓰지 않는다.
   const [slots] = React.useState(() =>
-    createSlotAllocator([
-      ...(data.document?.body.questions.map((q) => q.slot) ?? []),
-      ...(data.open_chat?.structured_draft.document.questions.map((q) => q.slot) ?? []),
-    ]),
+    createSlotAllocator(
+      [
+        ...(data.document?.body.questions.map((q) => q.slot) ?? []),
+        ...(data.open_chat?.structured_draft.document.questions.map((q) => q.slot) ?? []),
+      ],
+      // 연결 대기: `application_documents.slot_high_water`(다음 백엔드 커밋)가 들어오면 그 값을 넘긴다
+      { highWater: 0 },
+    ),
   )
   const allocateSlot = slots.allocate
 
@@ -257,7 +262,7 @@ export function CoverLetterScreen({
 
       // 기대 버전: 행이 있으면 늘 보낸다. "내 내용으로 저장"은 충돌 때 받은 지금 버전을 보낸다(null 아님).
       // 행이 없을 때(첫 저장)만 null이다 — 그때는 덮을 정본이 없다.
-      const expected = opts.overwrite ? (staleVersion.current ?? updatedAt) : updatedAt
+      const expected = expectedVersion({ rowUpdatedAt: updatedAt, overwrite: Boolean(opts.overwrite), staleVersion: staleVersion.current })
       const result = await saveCoverLetterDocumentAction({
         application_project_id: apId,
         body: toCoverLetterBody(current),
@@ -677,7 +682,8 @@ export function CoverLetterScreen({
         onOpenChange={setStale}
         onOverwrite={() => {
           setStale(false)
-          void runSave({ overwrite: true })
+          // CF-S7: 문항 설정 상태의 [작성 시작]도 같은 다이얼로그다 — 거기서 "내 내용으로 저장"이면 작성 상태로 간다
+          void runSave({ overwrite: true, createRow: state === "questions" })
         }}
         onReload={guard.reloadDiscarding}
       />

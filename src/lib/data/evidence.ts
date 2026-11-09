@@ -175,7 +175,8 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       // (v5.20, CF-1 · R15) `source_id`는 자소서 정본의 `body.questions[].question_id`다 — 테이블
       // 조인으로 풀 수 없어서 **화면(여기)이 문항 번호·메모를 조립한다**(백엔드가 못 하는 자리라고
       // 알려 온 자리다). 폐기된 `draft_sections`는 더 보지 않는다.
-      const doc = db.application_documents.find((d) => d.body.questions.some((q) => q.question_id === sid))
+      // 실제 경로의 `loadEvidenceRows`는 `application_documents`를 싣지 않는다 — 없으면 라벨만 기본값으로 둔다
+      const doc = (db.application_documents ?? []).find((d) => d.body.questions.some((q) => q.question_id === sid))
       const at = doc ? doc.body.questions.findIndex((q) => q.question_id === sid) : -1
       const q = doc && at >= 0 ? doc.body.questions[at] : null
       return {

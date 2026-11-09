@@ -91,8 +91,18 @@ export function nextSlot(used: Iterable<string>): string {
  * 슬롯 발급기 — 화면이 한 방문 동안 하나를 들고 있다. 발급한 번호는 그 문항을 지워도 기억해서
  * 다시 내주지 않는다.
  */
-export function createSlotAllocator(initiallyUsed: Iterable<string>): { allocate: () => string; markUsed: (slots: Iterable<string>) => void } {
+export function createSlotAllocator(
+  initiallyUsed: Iterable<string>,
+  /**
+   * 정본이 기억하는 **쓴 적 있는 최고 번호**(`application_documents.slot_high_water`, 다음 백엔드 커밋).
+   * 서버는 저장한 번호를, 화면은 저장하지 않은 번호(열린 제안·이번 방문 발급분)를 맡는다 — 새 번호는
+   * `max(highWater, 열린 제안, 이번 방문 발급분) + 1`. 값이 없으면 0이다.
+   */
+  opts: { highWater?: number } = {},
+): { allocate: () => string; markUsed: (slots: Iterable<string>) => void } {
   const used = new Set<string>()
+  const highWater = Math.max(0, Math.floor(opts.highWater ?? 0))
+  if (highWater > 0) used.add(`q_${highWater}`)
   const markUsed = (slots: Iterable<string>) => {
     for (const s of slots) if (slotNumber(s) !== null) used.add(s)
   }

@@ -33,7 +33,7 @@ import {
   type CoverLetterStructuredDraft,
   type CoverLetterTurnEvent,
 } from "@/lib/data/cover-letter-chat-types"
-import { deleteCoverLetterChatAction, startCoverLetterChatAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
+import { deleteCoverLetterChatAction, getCoverLetterChatAction, startCoverLetterChatAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** 한 턴이 끝나기 전의 임시 블록 (`draft_block`) — `draft_done`이 확정하면 버린다 */
 export interface ProvisionalBlocks {
@@ -252,11 +252,14 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
               answer_title: ev.answerTitle,
               value: finalBlocks.map((b) => b.text).join("\n\n"),
               blocks: finalBlocks,
+              // 저장된 근거 목록은 이 이벤트에 없다 — 남은 값을 두고, 표시 카드는 `sources_selected`에서 온다
+              sources: existing?.draft.sources ?? [],
               char_count: ev.charCount,
               char_limit_at_generation: ev.charLimit,
               char_adjust_needed: ev.charAdjustNeeded,
               correction_applied: ev.correctionApplied,
               rev: ev.rev,
+              generated_at: existing?.draft.generated_at ?? new Date().toISOString(),
               base_body_hash: baseHash,
               replace_allowed: true,
               missing_slots: existing?.draft.missing_slots ?? [],
@@ -271,7 +274,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
             structured_draft: {
               ...c.structured_draft,
               draft_count: ev.draftCount,
-              document: { questions: [...c.structured_draft.document.questions.filter((q) => q.slot !== ev.slot), entry] },
+              document: { ...c.structured_draft.document, questions: [...c.structured_draft.document.questions.filter((q) => q.slot !== ev.slot), entry] },
             },
           }
         })
@@ -296,6 +299,16 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       default:
         break
     }
+  }, [])
+
+  /** 저장된 대화(DTO)로 패널을 다시 맞춘다 — 제안·메시지·상한의 정본은 DTO다 (R15 후속) */
+  const adoptChat = React.useCallback((view: CoverLetterChatView) => {
+    setChat(view)
+    setMessages(view.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, status: m.status })))
+    setDraftCount(view.draft_count)
+    setChats((list) =>
+      list.map((c) => (c.id === view.id ? { ...c, title: view.title, status: view.status, message_count: view.message_count, last_activity_at: view.last_activity_at } : c)),
+    )
   }, [])
 
   const runTurn = React.useCallback(
@@ -358,8 +371,15 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
         if (sawError && options.draftTurn) setDraftFailed(true)
         setLastDraftOk(options.draftTurn && !sawError)
       }
+      // 실제 경로: 턴이 끝나면 **저장된 대화**로 다시 맞춘다. 서류 `draft_done`이 아직 확정 블록을 싣지
+      // 않아 화면이 `draft_block`(임시)으로 제안을 만들었는데, 글자 수 보정이 있으면 저장본과 다를 수 있다.
+      // 저장된 제안은 늘 DTO의 `structuredDraft`에서 읽는다. 다시 읽기가 실패하면 화면이 만든 제안을 둔다
+      if (!previewState && !ac.signal.aborted) {
+        const r = await getCoverLetterChatAction(target.id).catch(() => null)
+        if (r && !("error" in r)) adoptChat(r.data)
+      }
     },
-    [applyEvent, draftCount, opts.formSnapshot, opts.preview.turnError, previewState],
+    [adoptChat, applyEvent, draftCount, opts.formSnapshot, opts.preview.turnError, previewState],
   )
 
   const ensureChat = React.useCallback(async (): Promise<CoverLetterChatView | null> => {
@@ -422,13 +442,26 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
 
   const openChat = React.useCallback(
     (summary: CoverLetterChatSummary) => {
-      const found = chats.find((c) => c.id === summary.id)
-      if (!found) return
-      // 연결 대기: 서류 대화를 읽는 계약이 없어 이번 방문에 시작한 대화만 다시 열 수 있다
       if (chat?.id === summary.id) return
-      toast("다른 대화를 여는 기능은 아직 연결되지 않았어요")
+      abort.current?.abort()
+      void (async () => {
+        const r = await getCoverLetterChatAction(summary.id).catch(() => null)
+        if (!r || "error" in r) {
+          toast("대화를 열지 못했어요. 다시 시도해 주세요")
+          return
+        }
+        setReply("")
+        setSources({})
+        setProvisional(null)
+        setFailure(null)
+        setDraftFailed(false)
+        setLastDraftOk(false)
+        setPhase("idle")
+        adoptChat(r.data)
+        opts.onChatChange(r.data.id)
+      })()
     },
-    [chat?.id, chats],
+    [adoptChat, chat?.id, opts],
   )
 
   const deleteChat = React.useCallback(

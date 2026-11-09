@@ -50,8 +50,9 @@ function BoardSkeleton() {
 }
 
 /**
- * 자소서 작성 상태는 보드의 곁가지 표시다 — `listCoverLetterSlotCounts()`는 아직 real 분기가 없어
- * (`application_documents` 연결 대기, DM 2.7.3) 실패하면 배지만 접고 보드는 그대로 보인다. [UI-가정]
+ * 자소서 작성 상태는 보드의 곁가지 표시다 — `listCoverLetterSlotCounts()`는 R15 후속
+ * `listDocumentSlotCounts`로 연결됐다(행 없는 프로젝트는 키가 없다 = 배지 없음). 이 읽기가 실패해도
+ * 배지만 접고 보드는 그대로 보인다(정본 판정이 아니라 접어도 덮어쓰기 위험이 없다) [UI-가정].
  */
 async function readCoverLetterLabels(): Promise<CoverLetterLabelMap> {
   let counts

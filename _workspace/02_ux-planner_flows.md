@@ -1754,7 +1754,7 @@ S-09 "프로젝트"·S-34 "진행 프로젝트" 섹션의 2열 카드(좁은 화
   - 저장 = **`save_application_document(p_application_project_id, p_document_kind, p_body, p_meta, p_expected_updated_at, p_applied_proposals, p_client_id)`**(DM v4.13 확정, `p_document_kind = 'cover_letter'`, `p_meta`는 문체만) 의 마지막 인자 **`p_application_values {name, deadline}`**(머리의 제목·마감일, 바뀐 키만 — DM v4.15 확정). **한 번의 "저장하기" = RPC 한 번**이라 본문과 이름·마감일 중 한쪽만 저장되는 경우가 없고, `stale_write`면 이름·마감일도 쓰지 않는다(v5.20 정정 — 앞서 적은 "두 쓰기를 차례로 보낸다"를 대체). 이름·마감일만 바꾼 두 탭은 나중 저장이 이긴다 `[가정]`(기대 버전이 서류 `updated_at` 하나). `p_body`의 문항 원소에 **`answer_title`**이 들어간다(CF-A4). 반환 `{application_document_id, document_kind, filled_slot_count, slot_count, name, name_source, deadline, updated_at, applied, skipped}`(DM v4.15 — 머리는 돌려받은 `name`·`deadline`으로 다시 그린다).
   - **저장 단위는 페이지 단위 "저장하기"**(문항 전체 + 제목·답변 전체 한 번). 문항이 최대 5개라 요청은 작다(CF-5).
   - `field_too_long`(문항 문장 1,000자·메모 300자·제목 100자·답변 8,000자 등 DM 4.5 상한) → 그 칸 아래 "{n}자까지 쓸 수 있어요". 문항 수는 추가 버튼에서 막고, 서버도 문항을 늘리는 저장을 `too_many_questions`로 거부한다(DM v4.15) — 화면은 "문항 편집"의 같은 문구를 보인다.
-  - 다른 곳에서 바뀜(`stale_write`)은 S-10과 같은 처리("내 내용으로 저장" / "새로 불러오기").
+  - 다른 곳에서 바뀜(`stale_write`)은 S-10과 같은 처리("내 내용으로 저장" / "새로 불러오기"). **(v5.20, CF-S7 — 확정 2026-11-09 (사용자))** 다만 S-46의 "내 내용으로 저장"은 기대 버전을 비우지 않고 `stale_write` 응답의 `current_updated_at`을 실어 다시 보낸다(서버가 행이 있는데 null인 저장을 거부한다 — DM 2.5.1). 문항 설정 상태에서 연 탭이 [자기소개서 작성 시작]을 눌렀는데 다른 탭이 이미 정본을 만들었으면 같은 다이얼로그가 뜬다.
   - 저장 성공 → "저장하기" 옆 C-06 "저장됨 HH:MM".
   - 입력 보존 키(1.3a): "지원 프로젝트 ID + `cover_letter`" 그대로. 머리 제목·마감일도 보존 대상이다 `[가정]`.
 - 상태(페이지): 문항 설정 상태(위) / 작성 상태: 로딩 / 정상 / 답변 없음(빈 상태) / 저장하지 않은 변경 있음 / 저장 중 / 검증 오류 / 저장 실패(ST-SAVE-FAILED, 입력 유지) / 다른 곳에서 바뀜 / 찾을 수 없음(ST-NOTFOUND → S-13) / 권한 없음(S-28).

@@ -19,6 +19,7 @@ import { useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
+import { computeBodyHash } from "@/lib/body-hash"
 import {
   COVER_LETTER_DRAFT_LIMIT,
   COVER_LETTER_MESSAGE_LIMIT,
@@ -71,6 +72,12 @@ export interface CoverLetterPanelController {
   failure: AiErrorInfo | null
   /** 초안 턴이 실패했다 (지금 본문·이전 제안 유지, 횟수 줄지 않음) */
   draftFailed: boolean
+  /** 방금 초안 턴이 끝났고 아직 제안이 없는 문항이 남았다 → "다음 문항도 이어서 써 볼까요?" (UQ-748) */
+  offerNext: boolean
+  /** "AI 제안 있음" → 그 문항의 [자세히] 자리로 (UQ-749) — 카드가 읽어 펼치고 스크롤한다 */
+  /** 같은 문항을 다시 눌러도 다시 펼치도록 요청마다 `seq`가 는다 */
+  focusRequest: { slot: string; seq: number } | null
+  revealSlot: (slot: string) => void
   draftCount: number
   draftRemaining: number
   draftLimitReached: boolean
@@ -116,6 +123,8 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const [slow, setSlow] = React.useState(false)
   const [failure, setFailure] = React.useState<AiErrorInfo | null>(null)
   const [draftFailed, setDraftFailed] = React.useState(opts.preview.state === "draft-failed")
+  const [lastDraftOk, setLastDraftOk] = React.useState(false)
+  const [focusRequest, setFocusRequest] = React.useState<{ slot: string; seq: number } | null>(null)
   const [sources, setSources] = React.useState<Record<string, CoverLetterSourceCard[]>>({})
   const [provisional, setProvisional] = React.useState<ProvisionalBlocks | null>(null)
   const [draftCount, setDraftCount] = React.useState(
@@ -180,12 +189,24 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const offer = firstTurnOffer(opts.formSnapshot.length)
   const chips = coverLetterChips({ total: opts.formSnapshot.length, firstDraftDone: draftCount > 0 })
 
+  /**
+   * 문항별 임시 블록 — `draft_block`을 **시도(attempt)별로** 모은다. `draft_started`의 attempt 2(스키마
+   * 재시도)는 attempt 1의 블록을 버린다. 서류 `draft_done`은 블록을 싣지 않으므로(메타만 온다 — 계약
+   * `DocumentDraftDoneEvent`) 그 문항의 확정 제안은 **여기 모은 마지막 시도의 블록**이다.
+   */
+  const pendingBlocks = React.useRef<Record<string, { attempt: number; blocks: CoverLetterProposalBlock[] }>>({})
+  /** 이번 턴이 보낸 `form_snapshot` 본문의 해시 (`base_body_hash`, OD-P5 정규화 — 서버와 같은 함수) */
+  const baseHashes = React.useRef<Record<string, string>>({})
+  const replyRef = React.useRef("")
+
   const applyEvent = React.useCallback((ev: CoverLetterTurnEvent) => {
     switch (ev.type) {
       case "reply_delta":
-        setReply((r) => r + ev.text)
+        replyRef.current += ev.text
+        setReply(replyRef.current)
         break
       case "reply_done":
+        replyRef.current = ev.text
         setReply(ev.text)
         break
       case "draft_patch":
@@ -198,61 +219,78 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       case "draft_started":
         setPhase("drafting")
         setProvisional(null)
+        // 새 시도가 시작된 문항은 앞 시도의 블록을 버린다
+        for (const slot of ev.slots) pendingBlocks.current[slot] = { attempt: ev.attempt, blocks: [] }
         break
-      case "draft_block":
+      case "draft_block": {
         setSlow(false)
-        setProvisional((p) => (p && p.slot === ev.slot ? { ...p, blocks: [...p.blocks, ev.block] } : { slot: ev.slot, questionNo: ev.questionNo, blocks: [ev.block] }))
+        const prev = pendingBlocks.current[ev.slot]
+        const blocks = prev && prev.attempt === ev.attempt ? [...prev.blocks, ev.block] : [ev.block]
+        pendingBlocks.current[ev.slot] = { attempt: ev.attempt, blocks }
+        setProvisional({ slot: ev.slot, questionNo: ev.questionNo, blocks })
         break
+      }
       case "adjusting_length":
         setPhase("adjusting")
         break
-      case "draft_done":
-        // 확정 — 임시 블록을 버린다 (통째로 교체)
+      case "draft_done": {
+        // 확정 — 임시 보기를 지우고 모은 블록을 그 문항의 제안으로 올린다 (통째로 교체)
         setProvisional(null)
         setDraftCount(ev.draftCount)
+        const blocks = pendingBlocks.current[ev.slot]?.blocks ?? []
+        delete pendingBlocks.current[ev.slot]
+        const needsReview = new Set(ev.needsReviewBlockIds)
+        const finalBlocks = blocks.map((b) => (needsReview.has(b.block_id) ? { ...b, review: "needs_review" as const } : b))
+        const baseHash = baseHashes.current[ev.slot] ?? null
         setChat((c) => {
           if (!c) return c
+          const existing = c.structured_draft.document.questions.find((q) => q.slot === ev.slot)
           const entry = {
             slot: ev.slot,
-            question_id: `qid-${ev.slot}`,
+            question_id: existing?.question_id ?? `qid-${ev.slot}`,
             draft: {
               answer_title: ev.answerTitle,
-              value: "",
-              blocks: [],
+              value: finalBlocks.map((b) => b.text).join("\n\n"),
+              blocks: finalBlocks,
               char_count: ev.charCount,
               char_limit_at_generation: ev.charLimit,
               char_adjust_needed: ev.charAdjustNeeded,
               correction_applied: ev.correctionApplied,
               rev: ev.rev,
-              base_body_hash: null,
+              base_body_hash: baseHash,
               replace_allowed: true,
-              missing_slots: [],
+              missing_slots: existing?.draft.missing_slots ?? [],
               dropped_block_count: ev.droppedBlockCount,
               applied_at: null,
               applied_rev: null,
             },
           }
-          const existing = c.structured_draft.document.questions.find((q) => q.slot === ev.slot)
-          const merged = existing ? { ...existing, draft: { ...existing.draft, ...entry.draft, blocks: existing.draft.blocks, value: existing.draft.value } } : entry
           return {
             ...c,
             draft_count: ev.draftCount,
             structured_draft: {
               ...c.structured_draft,
               draft_count: ev.draftCount,
-              document: { questions: [...c.structured_draft.document.questions.filter((q) => q.slot !== ev.slot), merged] },
+              document: { questions: [...c.structured_draft.document.questions.filter((q) => q.slot !== ev.slot), entry] },
             },
           }
         })
         break
-      case "turn_done":
+      }
+      case "turn_done": {
         setPhase("idle")
         setDraftCount(ev.draftCount)
-        setMessages((list) => [...list, { id: `a-${Date.now()}`, role: "assistant", content: "", status: "ok" }])
+        // 이 턴의 AI 답을 대화에 남기고 스트리밍 줄은 비운다
+        const text = replyRef.current
+        replyRef.current = ""
+        setReply("")
+        if (text) setMessages((list) => [...list, { id: `a-${Date.now()}`, role: "assistant", content: text, status: "ok" }])
         break
+      }
       case "error":
         setPhase("idle")
         setProvisional(null)
+        pendingBlocks.current = {}
         setFailure({ code: ev.errorCode, provider: ev.provider, retryAfter: ev.retryAfter, quotaResetsAt: ev.quotaResetsAt })
         break
       default:
@@ -271,9 +309,15 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       abort.current = ac
       setFailure(null)
       setDraftFailed(false)
+      setLastDraftOk(false)
       setReply("")
       setSlow(false)
       setPhase(options.draftTurn ? "drafting" : "replying")
+      replyRef.current = ""
+      pendingBlocks.current = {}
+      // 이 턴이 보는 본문(form_snapshot)의 해시 — 반영 때 "초안을 만든 뒤 답변이 바뀌었어요" 판정에 쓴다 (UQ-747)
+      const hashes = await Promise.all(opts.formSnapshot.map(async (q) => [q.slot, await computeBodyHash(q.body)] as const))
+      baseHashes.current = Object.fromEntries(hashes)
       const slowTimer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS)
       let sawError = false
       try {
@@ -312,6 +356,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       } finally {
         window.clearTimeout(slowTimer)
         if (sawError && options.draftTurn) setDraftFailed(true)
+        setLastDraftOk(options.draftTurn && !sawError)
       }
     },
     [applyEvent, draftCount, opts.formSnapshot, opts.preview.turnError, previewState],
@@ -423,6 +468,15 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     slow,
     failure,
     draftFailed,
+    offerNext:
+      lastDraftOk &&
+      phase === "idle" &&
+      opts.formSnapshot.some((q) => !(chat?.structured_draft.document.questions ?? []).some((p) => p.slot === q.slot)),
+    focusRequest,
+    revealSlot: (slot: string) => {
+      setOpen(true)
+      setFocusRequest((r) => ({ slot, seq: (r?.seq ?? 0) + 1 }))
+    },
     draftCount,
     draftRemaining,
     draftLimitReached,

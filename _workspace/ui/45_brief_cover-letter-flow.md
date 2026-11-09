@@ -99,3 +99,40 @@
   (이 PR에서 `drafts.ts`·픽스처를 걷으면 함께 사라진다).
 - 반대로 **실제 경로(`*-real.ts`·서버 호출)에 하나라도 남으면 파괴 push 직후 500**이다 — 여기를 본다.
 - `drafts.ts`를 걷을 때 **`retryJdExtraction`·`runJdExtraction`은 보존**한다(JD 요건 추출, S-15·D-30).
+
+## 연결 대기 4건 — 백엔드가 R15 누락으로 확인, 수정 중 (2026-11-09)
+UI 연결 중 찾은 계약 공백 4건(보고서 49)은 **R15가 빠뜨린 것**이다 — DM 7장 25행 "서류 작성 화면 조회"·33행 "보드 조회"가 이미 정해 둔 읽기다.
+**백엔드 판단: 1번이 해소되기 전에는 UI PR·PR #69를 머지하지 않는다.** 4건 모두 함께 넣는다.
+
+| # | 공백 | 백엔드가 만드는 것 | UI stub (이름·시그니처 그대로) |
+|---|---|---|---|
+| 1 | 정본 읽기 없음 → 실제 환경에서 S-46이 늘 문항 설정 상태, **기존 정본 덮어쓰기 위험** | `getApplicationDocument` 서비스·액션, 행 또는 `null` | `getCoverLetterDocument(applicationProjectId): Promise<ApplicationDocument \| null>` |
+| 2 | 보드용 문항 수 없음(`loadDocumentCounts`는 0/1) | `listDocumentSlotCounts` → `Record<apId, {slot_count, filled_slot_count}>`, 인자 없음, `body` 안 읽음 | `listCoverLetterSlotCounts()` |
+| 3 | `first_copied_at` 쓰기 없음 | RPC `mark_application_document_copied(p_application_project_id, p_document_kind default 'cover_letter') returns timestamptz` + 액션. 한 번 기록되면 불변, 행 없으면 `null`, **`updated_at`을 올리지 않는다**(복사만으로 다른 탭 저장이 `stale_write` 되지 않게) | `markCoverLetterCopied()` |
+| 4 | 서류 대화 읽기 DTO 없음 → 새로 고침하면 대화가 화면에서 사라짐 | `DocumentWritingChatDto`(CF-S1 `draft.sources[]`·`answer_title`)를 `AnyWritingChatDto`에 추가, 서류별 대화 목록(`last_activity_at desc`)·상세(메시지 + `structured_draft`) | 신설 |
+
+- **경계**: `src/lib/data/cover-letters.ts`는 **UI 소유** — 백엔드는 만들지도 고치지도 않는다. 백엔드는 서버 서비스·액션·계약만 만들고 **export 이름·시그니처·반환 모양 목록**을 준다. UI는 stub의 `notWired(...)` 자리를 그것으로 바꾼다.
+- 새 마이그레이션 `20261113004670`(비파괴, 파괴 `004700`보다 앞) — **이것도 코드 배포 전에 원격 push**해야 한다(백엔드 체크리스트).
+- 백엔드가 함께 찾은 **쓰기 우회**: `authenticated`가 `application_documents`에 insert·update 권한이 있어 저장 RPC를 거치지 않고 REST로 자기 행을 직접 쓸 수 있었다(상한·필수·정합성 우회, RLS로 교차 침해는 아님). 트랜잭션 로컬 플래그 없는 쓰기를 거부하는 트리거로 막는다. **UI는 직접 쓰지 않으므로 화면 영향 없음.**
+
+### ⚠ UI 규칙 — 읽기 실패를 "행 없음"으로 접지 않는다
+**S-46의 문항 설정 상태는 `getCoverLetterDocument`가 `null`(행 없음)일 때만 들어간다.**
+읽기 **실패**(네트워크·서버 오류·`wiring_pending` 503)를 `null`로 접으면 1번의 덮어쓰기가 그대로 다시 생긴다 → **실패는 오류 상태로 보인다.**
+(S-39 보드의 `listCoverLetterSlotCounts` 실패는 배지만 접는 것이 의도된 동작이다 — 덮어쓰기 위험이 없어 이 규칙의 예외다.)
+
+## UQ-741 — 기획 확인 대기 (2026-11-09)
+저장 RPC가 "행 있음 + 기대 버전 null"이면 검사 없이 덮어쓰는 것은 버그가 아니라 **DM 2.5.1 공통 규칙**이다(저장 RPC 5개 공통,
+"내 내용으로 저장"이 이 인자 없이 다시 보낸다). 서류만 "없으면 만들고 있으면 고친다"라 null 하나가 "첫 저장"과 "강제 덮어쓰기" 두 뜻을 갖는다 —
+정본이 생기기 전에 연 탭은 보낼 `updated_at`이 없어 **화면 쪽에서는 고칠 수 없다.** 백엔드가 기획 세션에 **권고 (a)**로 올렸다:
+서류 RPC만 "행 있음 + 기대 버전 null → `stale_write`", 첫 저장(행 없음)은 null 통과, "내 내용으로 저장"은 `details.current_updated_at`을 기대 버전으로 재전송, S-10·S-44·프로필 불변.
+**두 PR(UI·#69)은 이 건까지 정리된 뒤 머지한다.**
+
+**(a) 확정 시 UI 할 일** (읽기 연결과 함께): 문항 설정 상태의 [자기소개서 작성 시작]이 `stale_write`를 받으면
+"그 사이 다른 탭이 정본을 만들었다"는 뜻이다 → **덮어쓸지 묻지 말고 정본을 다시 읽어 작성 상태로 연다**(백엔드 제안, 최종 문구·흐름은 UI 판단).
+작성 상태의 `stale_write`는 지금대로 C-05 충돌 확인("내 내용으로 저장"은 `current_updated_at` 재전송).
+
+## UQ-741 → **CF-S7 확정** (사용자 2026-11-09, decisions 4.23 UI #12, 기획 PR #68)
+서버가 자기소개서 저장에서 **"정본 행이 있는데 기대 버전 null"을 `stale_write`로 거부**한다(첫 저장 = 행 없음은 통과). 다른 화면(S-10·S-44·프로필)은 변경 없음.
+- S-46 **"내 내용으로 저장"**은 기대 버전을 비우지 않고 **`stale_write` 응답의 `details.current_updated_at`을 실어 다시 보낸다.** (QA 1 수정에서 반영됨 — 51 보고서)
+- **문항 설정 상태에서 연 탭의 [자기소개서 작성 시작]도, 다른 탭이 먼저 정본을 만들었으면 같은 충돌 다이얼로그를 받는다.**
+  → **위 "UQ-741 — 기획 확인 대기" 절의 "(a) 확정 시 UI 할 일"(덮어쓸지 묻지 말고 다시 읽어 작성 상태로 연다 — 백엔드 제안)은 이 확정으로 대체한다.** 정본은 기획 결정이다: **같은 다이얼로그.**

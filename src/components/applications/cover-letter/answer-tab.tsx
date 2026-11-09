@@ -44,24 +44,30 @@ const PLACEHOLDER_RE = /\[[^[\]]*확인[^[\]]*\]/
 
 export function AnswerTab({
   forms,
+  allocateSlot,
   errors,
   evidence,
   onChange,
   onCopied,
   onOpenPanel,
+  onRevealProposal,
   /** 반영하지 않은 제안이 있는 문항 slot (패널이 붙으면 채워진다 — 지금은 빈 집합) */
   unappliedSlots,
   highlight,
 }: {
   forms: QuestionForm[]
+  /** 새 문항의 슬롯 — 화면의 발급기가 준다 (안정 키, 재사용 금지 — UQ-740) */
+  allocateSlot: () => string
   errors: Record<number, QuestionErrors>
   /** `getEvidence("application_document", docId)` — 키는 `{slot}.sources.{n}` / `{slot}.blocks.{block_id}` */
   evidence: Record<string, EvidenceView[]>
   onChange: (next: QuestionForm[]) => void
   /** "전체 복사" 성공 때 `first_copied_at`을 남긴다 */
   onCopied: () => void
-  /** 패널을 열고 입력창에 포커스 ("AI와 초안 쓰기" · "AI 제안 있음") */
+  /** 패널을 열고 입력창에 포커스 ("AI와 초안 쓰기") */
   onOpenPanel: () => void
+  /** "AI 제안 있음" → 패널을 열고 그 문항의 제안 [자세히] 자리로 (UP-4 · UQ-749) */
+  onRevealProposal: (slot: string) => void
   unappliedSlots?: Set<string>
   /** C-02 근거 구간 강조 (`?range=`) */
   highlight?: { slot: string; start: number; end: number } | null
@@ -169,7 +175,7 @@ export function AnswerTab({
                 {isEditing ? null : <p className="min-w-0 flex-1 text-base font-semibold">{f.question_text || "문항을 입력해 주세요"}</p>}
                 <span className="ml-auto flex shrink-0 items-center gap-1">
                   {hasProposal ? (
-                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={onOpenPanel}>
+                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onRevealProposal(f.slot)}>
                       <Badge variant="ai">
                         <Sparkles className="size-3" aria-hidden />
                         AI 제안 있음
@@ -345,7 +351,7 @@ export function AnswerTab({
           className="w-full border-dashed"
           disabled={full}
           onClick={() => {
-            const next = newQuestionForm()
+            const next = newQuestionForm(allocateSlot())
             onChange([...forms, next])
             setEditing((s) => ({ ...s, [next.question_id]: true }))
             window.setTimeout(() => flashElement(document.getElementById(`qa-${next.question_id}-edit-text`)), 60)

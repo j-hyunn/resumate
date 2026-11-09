@@ -253,34 +253,37 @@ export function SaveButton({
   onSave,
   savedAt,
   className,
-  hideTooltip = false,
+  noShortcut = false,
 }: {
   state: SaveUiState
   onSave: () => void
   savedAt: string | null
   className?: string
   /**
-   * 툴팁("저장하기 (⌘S)")을 끈다. S-46 문항 설정 상태는 ⌘S가 동작하지 않고, **비활성인 이유를
-   * 알리지 않는다**(v5.20 CF-S5 확정 2026-11-09 (사용자) — 툴팁·안내 줄·`aria-describedby` 모두 없다).
-   * 기본값은 지금 동작 그대로다(S-10·S-44).
+   * 이 화면 상태에는 저장 단축키가 **없다** — ⌘S·Ctrl+S 처리, `aria-keyshortcuts`, 툴팁("저장하기 (⌘S)")을
+   * 모두 끈다. S-46 문항 설정 상태가 쓴다: 그 상태는 ⌘S가 동작하지 않고(CF-S3) **비활성인 이유를
+   * 알리지 않는다**(CF-S5 — 툴팁·안내 줄·`aria-describedby` 없음). 동작하지 않는 단축키를 화면 낭독기에
+   * 알리지 않게 `aria-keyshortcuts`도 뺀다(UQ-750). 기본값은 지금 동작 그대로다(S-10·S-44).
    */
-  hideTooltip?: boolean
+  noShortcut?: boolean
 }) {
   const narrow = useNarrow()
   const enabled = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
   const showDot = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
   const enabledRef = React.useRef(enabled)
   const saveRef = React.useRef(onSave)
+  const noShortcutRef = React.useRef(noShortcut)
   React.useEffect(() => {
     enabledRef.current = enabled
     saveRef.current = onSave
-  }, [enabled, onSave])
+    noShortcutRef.current = noShortcut
+  }, [enabled, onSave, noShortcut])
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "s" || e.altKey || e.shiftKey) return
       e.preventDefault()
-      if (enabledRef.current) saveRef.current()
+      if (enabledRef.current && !noShortcutRef.current) saveRef.current()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -307,7 +310,7 @@ export function SaveButton({
               className="min-w-[6.5rem]"
               disabled={!enabled}
               onClick={onSave}
-              aria-keyshortcuts={isMac() ? "Meta+S" : "Control+S"}
+              aria-keyshortcuts={noShortcut ? undefined : isMac() ? "Meta+S" : "Control+S"}
             >
               {state === "saving" ? (
                 <>
@@ -323,7 +326,7 @@ export function SaveButton({
           </span>
         </TooltipTrigger>
         {/* [UI-가정] 툴팁 글자 */}
-        {hideTooltip ? null : <TooltipContent>저장하기 ({shortcut})</TooltipContent>}
+        {noShortcut ? null : <TooltipContent>저장하기 ({shortcut})</TooltipContent>}
       </Tooltip>
     </div>
   )

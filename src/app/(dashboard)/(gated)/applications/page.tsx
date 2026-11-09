@@ -53,7 +53,8 @@ async function Screen({ searchParams }: Props) {
         <EmptyState
           icon={Briefcase}
           title="아직 자기소개서가 없어요"
-          description="지원하려는 공고를 붙여넣어 첫 자기소개서를 추가해 보세요. 커리어 정리 전에도 추가할 수 있어요"
+          // UX v5.20 S-13 상태 "빈 상태" 문구 그대로 (UQ-744 — "붙여넣어"를 URL 입력에 맞게 "넣어"로)
+          description="지원하려는 공고를 넣어 첫 자기소개서를 만들어 보세요. 커리어 정리 전에도 만들 수 있어요"
           actions={<AddApplicationLauncher.Button />}
         />
       )

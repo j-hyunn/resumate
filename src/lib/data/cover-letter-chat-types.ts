@@ -209,6 +209,8 @@ export function coverLetterChips(state: { total: number; firstDraftDone: boolean
 }
 
 export const PANEL_COPY = {
+  /** 초안 턴이 끝났는데 아직 제안이 없는 문항이 남았을 때 (UX v5.20 S-46 "첫 턴 제안" `[가정]` 문구 그대로) */
+  continueNext: "다음 문항도 이어서 써 볼까요?",
   /** 초안 턴 상한 (대화 전체 6회, 턴 기준) */
   draftLimitReached: "이 대화에서는 초안을 더 만들 수 없어요. 새 대화에서 이어 가세요",
   messageLimitReached: "이 대화는 메시지 한도에 닿았어요. 새 대화에서 이어 가세요",

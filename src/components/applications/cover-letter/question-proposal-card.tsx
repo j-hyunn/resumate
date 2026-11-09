@@ -36,6 +36,7 @@ import { SourceChips } from "@/components/common/source-chip"
 import { CHIP_CLASS } from "@/components/common/evidence"
 import { StreamingCaret } from "@/components/common/streaming"
 import { cn } from "@/lib/utils"
+import { computeBodyHash } from "@/lib/body-hash"
 import {
   COVER_LETTER_DRAFT_LIMIT,
   PANEL_COPY,
@@ -80,7 +81,23 @@ function bodyOf(blocks: CoverLetterProposalBlock[]): string {
 export function QuestionProposalCard({ panel, questions, filled, onFill }: QuestionProposalCardProps) {
   const [detailsOpen, setDetailsOpen] = React.useState(false)
   const [accepted, setAccepted] = React.useState<Record<string, "accepted" | "rejected">>({})
-  const [confirm, setConfirm] = React.useState<{ fills: QuestionFill[]; overwriting: number } | null>(null)
+  const [confirm, setConfirm] = React.useState<{ fills: QuestionFill[]; overwriting: number; changedSinceDraft: boolean } | null>(null)
+  const listRef = React.useRef<HTMLOListElement | null>(null)
+
+  // "AI 제안 있음" → [자세히]를 그 문항 자리로 펼친다 (UP-4 · UQ-749)
+  const focusRequest = panel.focusRequest
+  React.useEffect(() => {
+    if (!focusRequest) return
+    const focusSlot = focusRequest.slot
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 바깥(문항 머리 표식)에서 온 요청을 한 번 반영한다
+    setDetailsOpen(true)
+    const t = window.setTimeout(() => {
+      const el = listRef.current?.querySelector<HTMLElement>(`[data-slot="${CSS.escape(focusSlot)}"]`)
+      el?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+      el?.focus({ preventScroll: true })
+    }, 60)
+    return () => window.clearTimeout(t)
+  }, [focusRequest])
   const chat = panel.chat
   const draft = chat?.structured_draft
   const proposals = draft?.document.questions ?? []
@@ -127,14 +144,24 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
     setConfirm(null)
   }
 
-  const requestApply = (fills: QuestionFill[]) => {
+  const requestApply = async (fills: QuestionFill[]) => {
     // 이미 제목·내용이 있는 문항은 확인 한 줄 (UX S-46 반영 규칙)
-    const overwriting = fills.filter((f) => {
+    const filledQuestions = fills.filter((f) => {
       const q = questions.find((x) => x.slot === f.slot)
       return Boolean(q && (q.body.trim() || q.answer_title.trim()))
-    }).length
-    if (overwriting === 0) return applyNow(fills)
-    setConfirm({ fills, overwriting })
+    })
+    if (filledQuestions.length === 0) return applyNow(fills)
+    // `base_body_hash`가 지금 답변의 해시와 다르면(초안을 만든 뒤 답변을 고쳤다) 문구를 바꾼다 (UQ-747).
+    // 해시는 서버와 같은 정규화(OD-P5)로 **문항별** 계산한다
+    const changed = await Promise.all(
+      filledQuestions.map(async (f) => {
+        const base = proposals.find((p) => p.slot === f.slot)?.draft.base_body_hash ?? null
+        const q = questions.find((x) => x.slot === f.slot)
+        if (!base || !q) return false
+        return (await computeBodyHash(q.body)) !== base
+      }),
+    )
+    setConfirm({ fills, overwriting: filledQuestions.length, changedSinceDraft: changed.some(Boolean) })
   }
 
   const applicable = proposals.map(buildFill).filter((f): f is QuestionFill => f !== null && !slotFilled(f.slot, f.rev))
@@ -188,7 +215,7 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
       {proposals.length > 0 && !drafting ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" disabled={applicable.length === 0} onClick={() => requestApply(applicable)}>
+            <Button size="sm" disabled={applicable.length === 0} onClick={() => void requestApply(applicable)}>
               모두 반영 ({applicable.length})
             </Button>
             <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -202,17 +229,18 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
           </div>
 
           {detailsOpen ? (
-            <ol className="space-y-3">
+            <ol ref={listRef} className="space-y-3">
               {proposals
                 .slice()
-                .sort((a, b) => a.slot.localeCompare(b.slot, "en", { numeric: true }))
+                // 화면의 문항 순서(`sort_order`)대로 — 슬롯 번호는 순서가 아니다 (UQ-740)
+                .sort((a, b) => orderOf(questions, a.slot) - orderOf(questions, b.slot))
                 .map((p) => {
                   const index = questions.findIndex((q) => q.slot === p.slot)
                   const q = questions[index]
                   const locked = slotFilled(p.slot, p.draft.rev)
                   const fill = buildFill(p)
                   return (
-                    <li key={p.slot} className="space-y-2 rounded-md border p-3">
+                    <li key={p.slot} data-slot={p.slot} tabIndex={-1} className="space-y-2 rounded-md border p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 space-y-0.5">
                           <p className="text-xs font-medium text-muted-foreground tabular-nums">문항 {index >= 0 ? index + 1 : "?"}</p>
@@ -295,7 +323,7 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
                         </p>
                       ) : null}
 
-                      <Button size="sm" variant="outline" disabled={locked || !fill} onClick={() => fill && requestApply([fill])}>
+                      <Button size="sm" variant="outline" disabled={locked || !fill} onClick={() => fill && void requestApply([fill])}>
                         반영
                       </Button>
                     </li>
@@ -331,9 +359,12 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
           <AlertDialogHeader>
             <AlertDialogTitle>이 문항을 AI 초안으로 바꿀까요?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm && confirm.fills.length > 1
-                ? `답변이 있는 문항 ${confirm.overwriting}개는 바뀌어요`
-                : "지금 쓴 답변은 제안으로 바뀌어요. 되돌릴 수 없어요"}
+              {confirm?.changedSinceDraft
+                ? // UX v5.20 S-46 반영 규칙 문구 그대로 (`base_body_hash`가 다를 때)
+                  "초안을 만든 뒤 답변이 바뀌었어요. 바꾸면 바뀐 내용도 사라져요"
+                : confirm && confirm.fills.length > 1
+                  ? `답변이 있는 문항 ${confirm.overwriting}개는 바뀌어요`
+                  : "지금 쓴 답변은 제안으로 바뀌어요. 되돌릴 수 없어요"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -344,6 +375,12 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
       </AlertDialog>
     </div>
   )
+}
+
+/** 문항의 화면 순서 (없는 슬롯은 맨 뒤) */
+function orderOf(questions: Array<{ slot: string }>, slot: string): number {
+  const at = questions.findIndex((q) => q.slot === slot)
+  return at >= 0 ? at : Number.MAX_SAFE_INTEGER
 }
 
 /** "{n}번~{m}번 문항 초안을 만들었어요. 문항마다 반영할까요?" */

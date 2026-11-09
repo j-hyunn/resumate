@@ -50,6 +50,7 @@ import { applicationDeletedToast, applicationDisplayName, STAGE_LABELS, STAGE_OR
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { deleteApplicationProjectAction } from "./actions"
+import { BoardAddButton } from "./board-add-button"
 
 export type BoardData = Record<ApplicationStage, ApplicationSummary[]>
 
@@ -310,12 +311,11 @@ export function KanbanBoard({ board, coverLetterLabels, failMove }: { board: Boa
         {STAGE_ORDER.map((stage) => (
           <TabsContent key={stage} value={stage} className="space-y-2 pt-2">
             {stage === "before_apply" ? (
-              <Button asChild variant="outline" className="h-11 w-full">
-                <Link href={routes.applicationNew({ from: "board" })}>
-                  <Plus aria-hidden />
-                  자기소개서 추가
-                </Link>
-              </Button>
+              // UQ-742: 보드 위에서 S-14 모달을 연다 (S-13으로 이동하지 않는다)
+              <BoardAddButton variant="outline" className="h-11 w-full">
+                <Plus aria-hidden />
+                자기소개서 추가
+              </BoardAddButton>
             ) : null}
             <ul className="space-y-2" aria-label={`${STAGE_LABELS[stage]} ${columns[stage].length}개`}>
               {columns[stage].length === 0 ? <EmptyColumn /> : null}
@@ -388,11 +388,10 @@ function BoardColumn({
           {count}
         </Badge>
         {stage === "before_apply" ? (
-          <Button asChild variant="ghost" size="icon-sm" className="ml-auto">
-            <Link href={routes.applicationNew({ from: "board" })} aria-label="자기소개서 추가">
-              <Plus aria-hidden />
-            </Link>
-          </Button>
+          // UQ-742: 보드 위에서 S-14 모달을 연다 (S-13으로 이동하지 않는다)
+          <BoardAddButton variant="ghost" size="icon-sm" className="ml-auto" aria-label="자기소개서 추가">
+            <Plus aria-hidden />
+          </BoardAddButton>
         ) : null}
       </div>
       <ul className="flex-1 space-y-2 overflow-y-auto p-0.5" aria-label={`${STAGE_LABELS[stage]} ${count}개`}>

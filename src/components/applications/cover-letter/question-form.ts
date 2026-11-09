@@ -55,10 +55,62 @@ export function seedQuestionForms(): QuestionForm[] {
   }))
 }
 
-/** "+ 문항 추가": 빈 문항 하나 (글자 수 제한 800 미리 채움) */
-export function newQuestionForm(): QuestionForm {
+// ---------------------------------------------------------------------------
+// 슬롯 키 (DM v4.15 2.5.1 "슬롯 키 `slot` (확정)")
+//
+// `slot`은 서류 안에서 문항을 가리키는 **짧은 안정 키** `q_{n}`이다. `p_applied_proposals`·
+// `evidence_links.item_key`(`{slot}.sources.{n}`·`{slot}.blocks.{id}`)·모델 입출력이 모두 이 키를 쓴다.
+// 그래서 **문항이 처음 생길 때 한 번 정하고 그 뒤로 바꾸지 않는다**. 번호는 그 서류에서 한 번 쓰면
+// **재사용하지 않는다**(지워진 슬롯의 근거 행과 섞이지 않게). 화면 순서는 **`sort_order`만**으로 나타낸다.
+// 저장 RPC는 받은 `slot`을 그대로 쓰고 다시 매기지 않는다. `q_1, q_3`처럼 빈 번호가 있는 정본은 정상이다.
+// ---------------------------------------------------------------------------
+
+const SLOT_RE = /^q_([0-9]{1,3})$/
+
+/** `q_{n}`의 n (형식이 아니면 null) */
+export function slotNumber(slot: string): number | null {
+  const m = SLOT_RE.exec(slot)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * 다음 슬롯 = 지금까지 **이 서류에서 쓴 적 있는** 번호의 최댓값 + 1.
+ * `used`에는 저장된 정본의 슬롯 · 이번 방문에 만든(지운 것 포함) 슬롯 · 대화 제안이 가리키는 슬롯을
+ * 모두 넣는다 — 지금 폼에 남은 문항만 보면 방금 지운 번호를 다시 쓰게 된다.
+ */
+export function nextSlot(used: Iterable<string>): string {
+  let max = 0
+  for (const s of used) {
+    const n = slotNumber(s)
+    if (n !== null && n > max) max = n
+  }
+  return `q_${max + 1}`
+}
+
+/**
+ * 슬롯 발급기 — 화면이 한 방문 동안 하나를 들고 있다. 발급한 번호는 그 문항을 지워도 기억해서
+ * 다시 내주지 않는다.
+ */
+export function createSlotAllocator(initiallyUsed: Iterable<string>): { allocate: () => string; markUsed: (slots: Iterable<string>) => void } {
+  const used = new Set<string>()
+  const markUsed = (slots: Iterable<string>) => {
+    for (const s of slots) if (slotNumber(s) !== null) used.add(s)
+  }
+  markUsed(initiallyUsed)
   return {
-    slot: "",
+    allocate: () => {
+      const slot = nextSlot(used)
+      used.add(slot)
+      return slot
+    },
+    markUsed,
+  }
+}
+
+/** "+ 문항 추가": 빈 문항 하나 (글자 수 제한 800 미리 채움). `slot`은 발급기에서 받는다 */
+export function newQuestionForm(slot: string): QuestionForm {
+  return {
+    slot,
     question_id: newQuestionId(),
     question_text: "",
     answer_title: "",
@@ -72,8 +124,9 @@ export function newQuestionForm(): QuestionForm {
   }
 }
 
+/** 정본 → 폼. 화면 순서는 `sort_order`이고 `slot`은 받은 그대로 둔다 (UQ-740) */
 export function toQuestionForms(body: CoverLetterBody): QuestionForm[] {
-  return body.questions.map((q) => ({
+  return [...body.questions].sort((a, b) => a.sort_order - b.sort_order).map((q) => ({
     slot: q.slot,
     question_id: q.question_id,
     question_text: q.question_text ?? "",
@@ -89,11 +142,14 @@ export function toQuestionForms(body: CoverLetterBody): QuestionForm[] {
   }))
 }
 
-/** 저장 입력 — `slot`·`sort_order`는 순서대로 다시 매긴다(서버도 같은 규칙) */
+/**
+ * 저장 입력 — **`slot`은 그대로 보내고 `sort_order`만 화면 순서로 매긴다**(UQ-740).
+ * 순서를 바꾸거나 문항을 지워도 남은 문항의 슬롯이 바뀌지 않아야 근거·제안이 제 문항에 붙어 있다.
+ */
 export function toCoverLetterBody(forms: QuestionForm[]): CoverLetterBody {
   return {
     questions: forms.map((f, i): CoverLetterQuestion => ({
-      slot: `q_${i + 1}`,
+      slot: f.slot,
       question_id: f.question_id,
       question_text: f.question_text.trim(),
       answer_title: f.answer_title.trim() || null,

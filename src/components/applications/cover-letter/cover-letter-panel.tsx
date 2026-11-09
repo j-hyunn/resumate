@@ -158,6 +158,9 @@ export function CoverLetterPanel({
             {/* 제안 카드 (3.26) — 마지막 AI 턴 바로 아래 확인 줄 (UP-4) */}
             <QuestionProposalCard panel={panel} questions={questions} filled={filled} onFill={onFill} />
 
+            {/* 초안 턴이 끝났는데 남은 문항이 있으면 (UX v5.20 S-46 "첫 턴 제안" — UQ-748) */}
+            {panel.offerNext && !panel.draftLimitReached ? <p className="text-sm leading-[1.7]">{PANEL_COPY.continueNext}</p> : null}
+
             {/* 실패한 턴 (초안 실패는 카드가 그린다) */}
             {panel.failure && !panel.draftFailed ? <AiErrorNotice {...panel.failure} size="inline" onRetry={panel.retry} /> : null}
 

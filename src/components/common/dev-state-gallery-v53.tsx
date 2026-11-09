@@ -103,7 +103,8 @@ const COVER_LETTER_LINKS: Array<{ label: string; href: string }> = [
   // S-39 카드 서류 표시
   { label: "S-39 보드 (자소서 작성 중 / 작성됨)", href: routes.board() },
   { label: "S-39 보드 (자소서 수 연결 대기 — 배지 없음)", href: `${routes.board()}?state=cl-pending` },
-  { label: "S-39 보드 (지원 전 + → 추가 모달)", href: routes.applicationNew({ from: "board" }) },
+  // UQ-742: 보드 위에서 모달이 열린다 — 보드로 가서 "지원 전" 열 "+"를 누른다
+  { label: "S-39 보드 (지원 전 + → 보드 위 추가 모달)", href: routes.board() },
 ]
 
 const REFUSALS: Array<{ state: string; code: AiRetryRefusalCode }> = [

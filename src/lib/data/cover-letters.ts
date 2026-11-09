@@ -254,19 +254,37 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
         })
       // R15: `char_limit`은 필수 — 경로 `questions.q_n.char_limit` (화면이 기본 800을 채워 보낸다, CF-U2)
       // `char_limit`은 DB에서 null을 허용하지만(정본) **새 저장은 필수**다 (R15 백엔드 #13)
-      const badLimit = input.body.questions.findIndex(
+      // (UQ-740 · DM 2.5.1) 슬롯은 **안정 키**다 — 받은 그대로 쓰고 다시 매기지 않는다(RPC와 같다).
+      // 형식(`^q_[0-9]{1,3}$`)이 아니거나 한 요청 안에서 겹치면 `invalid_slot` (details.field = 그 슬롯)
+      const seen = new Set<string>()
+      for (const q of input.body.questions) {
+        if (!/^q_[0-9]{1,3}$/.test(q.slot) || seen.has(q.slot))
+          throw new AppError("invalid_slot", "문항 키가 올바르지 않아요", { status: 400, details: { field: q.slot } })
+        seen.add(q.slot)
+      }
+      const badLimit = input.body.questions.find(
         (q) => q.char_limit == null || !Number.isFinite(q.char_limit) || q.char_limit < 1 || q.char_limit > 10_000,
       )
-      if (badLimit >= 0)
+      if (badLimit)
         throw new AppError("invalid_fields", "글자 수 제한을 확인해 주세요", {
           status: 400,
-          details: { fields: [`questions.q_${badLimit + 1}.char_limit`] },
+          details: { field: `questions.${badLimit.slot}.char_limit` },
         })
       if (doc && input.expected_updated_at && doc.updated_at !== input.expected_updated_at)
-        throw new AppError("stale_write", "다른 곳에서 내용이 바뀌었어요")
+        // 화면이 "내 내용으로 저장"에서 이 값을 기대 버전으로 다시 보낸다 (UQ-741 — null로 덮지 않게)
+        throw new AppError("stale_write", "다른 곳에서 내용이 바뀌었어요", { status: 409, details: { current_updated_at: doc.updated_at } })
       const now = new Date().toISOString()
+      // 순서는 `sort_order`만으로 나타낸다 — 보낸 순서대로 1부터 (RPC와 같다)
       const body: CoverLetterBody = {
-        questions: input.body.questions.map((q, i) => ({ ...q, slot: `q_${i + 1}`, sort_order: i + 1 })),
+        questions: input.body.questions.map((q, i) => ({ ...q, sort_order: i + 1 })),
+      }
+      // 보내지 않은 슬롯 = 지운 문항 → 그 슬롯의 근거 행도 지운다 (RPC `doc_replace_slot_evidence`와 같다).
+      // 남은 슬롯의 근거는 그대로다 — 적용 제안이 없는 슬롯(손편집만)은 기존 근거를 유지한다 (CF-S2)
+      if (doc) {
+        const docId = doc.id
+        db.evidence_links = db.evidence_links.filter(
+          (e) => e.owner_type !== "application_document" || e.owner_id !== docId || seen.has(e.item_key.split(".")[0]),
+        )
       }
       if (!doc) {
         doc = {
@@ -328,7 +346,10 @@ export async function saveCoverLetterDocument(input: SaveCoverLetterInput): Prom
         await saveApplicationDocumentAction({
           applicationProjectId: input.application_project_id,
           documentKind: "cover_letter",
-          body: input.body,
+          // 계약 `DocumentQuestion`은 `.strict()`이고 **`sort_order`를 받지 않는다** — 서버가 보낸 순서대로
+          // 1부터 다시 매긴다. 화면의 `sort_order`를 실으면 모든 저장이 `invalid_input`으로 거부된다.
+          // `slot`은 그대로 보낸다 (안정 키, UQ-740)
+          body: toDocumentBody(input.body),
           meta: input.meta,
           expectedUpdatedAt: input.expected_updated_at ?? undefined,
           appliedProposals: input.applied_proposals,
@@ -349,4 +370,16 @@ export async function markCoverLetterCopied(applicationProjectId: Uuid): Promise
     // 연결 대기 (DM 2.7.3 — application_documents.first_copied_at)
     async () => notWired("복사 기록"),
   )
+}
+
+/** 저장 입력 → 계약 `DocumentBody` 모양 (`sort_order` 제외 — 순서는 배열 순서가 정한다) */
+export function toDocumentBody(body: CoverLetterBody): { questions: Array<Omit<CoverLetterBody["questions"][number], "sort_order">> } {
+  return {
+    questions: [...body.questions]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(({ sort_order: _omit, ...q }) => {
+        void _omit
+        return q
+      }),
+  }
 }

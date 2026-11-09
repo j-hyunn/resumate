@@ -28,6 +28,7 @@ import { newQuestionForm } from "./question-form"
 
 export function QuestionSetup({
   applicationProjectId,
+  allocateSlot,
   forms,
   errors,
   onChange,
@@ -38,6 +39,8 @@ export function QuestionSetup({
   focusIndex,
 }: {
   applicationProjectId: string
+  /** 새 문항의 슬롯 — 화면의 발급기가 준다 (안정 키, 재사용 금지 — UQ-740) */
+  allocateSlot: () => string
   forms: QuestionForm[]
   errors: Record<number, QuestionErrors>
   onChange: (next: QuestionForm[]) => void
@@ -73,7 +76,7 @@ export function QuestionSetup({
   })
 
   const patch = (i: number, p: Partial<QuestionForm>) => onChange(forms.map((f, idx) => (idx === i ? { ...f, ...p } : f)))
-  const add = () => onChange([...forms, newQuestionForm()])
+  const add = () => onChange([...forms, newQuestionForm(allocateSlot())])
   const remove = (i: number) => onChange(forms.filter((_, idx) => idx !== i))
   const full = forms.length >= COVER_LETTER_MAX_QUESTIONS
 

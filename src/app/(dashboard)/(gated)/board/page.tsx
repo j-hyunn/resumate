@@ -7,6 +7,7 @@ import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KanbanBoard, type BoardData, type CoverLetterLabelMap } from "@/components/board/kanban-board"
+import { BoardAddButton } from "@/components/board/board-add-button"
 import { getBoard } from "@/lib/data/applications"
 import { coverLetterProgressLabel, listCoverLetterSlotCounts } from "@/lib/data/cover-letters"
 import { STAGE_ORDER } from "@/lib/data/labels"
@@ -104,12 +105,11 @@ async function Screen({ searchParams }: Props) {
           title="자기소개서를 추가하면 여기서 전형 단계를 관리할 수 있어요"
           actions={
             <>
-              <Button asChild className="max-md:h-8">
-                <Link href={routes.applicationNew({ from: "board" })}>
-                  <Plus aria-hidden />
-                  자기소개서 추가
-                </Link>
-              </Button>
+              {/* UQ-742: 보드 위에서 S-14 모달을 연다 — S-13으로 이동하지 않는다 */}
+              <BoardAddButton className="max-md:h-8">
+                <Plus aria-hidden />
+                자기소개서 추가
+              </BoardAddButton>
               <Button asChild variant="outline" className="max-md:h-8">
                 <Link href={routes.applications()}>자기소개서 관리로</Link>
               </Button>

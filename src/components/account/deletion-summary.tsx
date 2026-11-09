@@ -3,7 +3,7 @@
  * (`rounded-md bg-muted p-3 text-sm`, design-system 6 A1). Server- and client-safe.
  *
  * 02 S-25: 커리어 — 경력 N, 교육 N, 프로젝트 N, 산출물 N, 스킬 N, AI 작성 대화 N (v5.5) /
- *          자기소개서 N개 — 인사이트 N, 초안 N, 전형 이력 (v5.19, RM-1) /
+ *          자기소개서 N개 — 인사이트 N, 자소서 N, 전형 이력 (v5.19, RM-1 · v5.20 R-CF-12) /
  *          (v5) AI 연결 — 등록한 API 키 N개(즉시 파기), 토큰 사용 기록, AI 연결 동의 이력 (UQ-200)
  *          + "공급자 사이트에서도 키를 폐기하는 것을 권해요" (NFR-KEY-09) with provider dashboard links.
  */
@@ -26,7 +26,8 @@ export function DeletionSummary({ summary, runningAiJobs = 0 }: { summary: Accou
   ]
   const apps: Array<[string, number]> = [
     ["인사이트", a.insights],
-    ["초안", a.drafts],
+    // UX S-25 (R-CF-12, UQ-755): "자소서 {n}" = 자소서가 작성된 지원 건 수. 계약 키는 DM §4.3대로 `drafts` 유지
+    ["자소서", a.drafts],
     ["전형 이력", a.application_stage_events],
   ]
   const ai: Array<[string, number]> = [

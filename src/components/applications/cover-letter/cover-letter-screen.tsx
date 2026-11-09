@@ -56,8 +56,10 @@ import { useCoverLetterPanel } from "./use-cover-letter-panel"
 import type { QuestionFill } from "./question-proposal-card"
 import { QuestionSetup } from "./question-setup"
 import {
+  createSlotAllocator,
   isUntouchedSeed,
   newQuestionForm,
+  nextSlot,
   seedQuestionForms,
   toCoverLetterBody,
   toQuestionForms,
@@ -110,16 +112,33 @@ export function CoverLetterScreen({
   const apId = data.application_project_id
   const previewState = data.preview.state
 
+  // ---------- 슬롯 발급기 (UQ-740 · DM 2.5.1 "안정 키, 재사용 금지") ----------
+  // 이 서류에서 쓴 적 있는 번호를 모두 기억한다: 저장된 정본 · 기본 3문항 · 열려 있는 대화의 제안 ·
+  // 이번 방문에 발급한 것(지운 것 포함). 그래서 문항을 지우고 다시 넣어도 번호를 다시 쓰지 않는다.
+  const [slots] = React.useState(() =>
+    createSlotAllocator([
+      ...(data.document?.body.questions.map((q) => q.slot) ?? []),
+      ...(data.open_chat?.structured_draft.document.questions.map((q) => q.slot) ?? []),
+    ]),
+  )
+  const allocateSlot = slots.allocate
+
   // ---------- 폼 ----------
   const [doc, setDoc] = React.useState<ApplicationDocument | null>(data.document)
-  const [forms, setForms] = React.useState<QuestionForm[]>(() => previewForms(data.document, previewState))
-  const [baseline, setBaseline] = React.useState<string>(() => JSON.stringify(previewForms(data.document, previewState)))
+  // 첫 폼은 **한 번만** 만든다 — 만들 때마다 새 `question_id`가 생겨 기준선과 어긋나지 않게
+  const [initialForms] = React.useState<QuestionForm[]>(() => {
+    const forms = previewForms(data.document, previewState)
+    slots.markUsed(forms.map((f) => f.slot))
+    return forms
+  })
+  const [forms, setForms] = React.useState<QuestionForm[]>(initialForms)
+  const [baseline, setBaseline] = React.useState<string>(() => JSON.stringify(initialForms))
   const [name, setName] = React.useState(data.name ?? "")
   const [deadline, setDeadline] = React.useState(data.deadline ?? "")
   const [headBaseline, setHeadBaseline] = React.useState({ name: data.name ?? "", deadline: data.deadline ?? "" })
   const [updatedAt, setUpdatedAt] = React.useState<string | null>(data.document?.updated_at ?? null)
   const [errors, setErrors] = React.useState<Record<number, QuestionErrors>>(() =>
-    previewState === "questions-invalid" ? validateQuestions(previewForms(data.document, previewState)).errors : {},
+    previewState === "questions-invalid" ? validateQuestions(initialForms).errors : {},
   )
   const [focusIndex, setFocusIndex] = React.useState<number | null>(null)
   const [nameError, setNameError] = React.useState<string | null>(null)
@@ -204,6 +223,10 @@ export function CoverLetterScreen({
     formsRef.current = forms
   }, [forms])
 
+  // "다른 곳에서 바뀜"의 지금 버전 — "내 내용으로 저장"이 이 값을 기대 버전으로 다시 보낸다.
+  // 정본이 있는 상태에서 **기대 버전 null을 보내는 길을 두지 않는다**(UQ-741: RPC는 null이면 검사 없이 덮는다)
+  const staleVersion = React.useRef<string | null>(null)
+
   const runSave = React.useCallback(
     async (opts: { overwrite?: boolean; createRow?: boolean } = {}): Promise<boolean> => {
       const current = formsRef.current
@@ -232,31 +255,44 @@ export function CoverLetterScreen({
       if (name !== headBaseline.name) values.name = name
       if (deadline !== headBaseline.deadline) values.deadline = (deadline || null) as DateString | null
 
-      const r = await saveCoverLetterDocumentAction({
+      // 기대 버전: 행이 있으면 늘 보낸다. "내 내용으로 저장"은 충돌 때 받은 지금 버전을 보낸다(null 아님).
+      // 행이 없을 때(첫 저장)만 null이다 — 그때는 덮을 정본이 없다.
+      const expected = opts.overwrite ? (staleVersion.current ?? updatedAt) : updatedAt
+      const result = await saveCoverLetterDocumentAction({
         application_project_id: apId,
         body: toCoverLetterBody(current),
-        expected_updated_at: opts.overwrite ? null : updatedAt,
+        expected_updated_at: expected,
         // CF-S1: 근거 목록을 싣지 않고 반영한 제안만 보낸다
         applied_proposals: applied,
         application_values: Object.keys(values).length > 0 ? values : undefined,
-      }).catch((e: unknown) => errorCode(e))
+      }).catch(() => null)
 
-      if (typeof r === "string") {
-        switch (r) {
-          case "stale_write":
+      if (!result || "error" in result) {
+        const code = result?.error.code ?? "save_failed"
+        switch (code) {
+          case "stale_write": {
+            const current = result?.error.details?.current_updated_at
+            staleVersion.current = typeof current === "string" ? current : null
             setSaveState("stale")
             setStale(true)
             return false
+          }
           case "too_many_questions":
             setPageError(QUESTION_MAX_NOTE)
             setSaveState("invalid")
             return false
           case "invalid_fields":
+          case "field_too_long":
             // 서버도 `char_limit`을 필수로 본다 — 같은 검증을 화면에서 이미 했으므로 안내만
-            setPageError("글자 수 제한을 확인해 주세요")
+            setPageError(code === "field_too_long" ? "글자 수 한도를 넘은 칸이 있어요" : "글자 수 제한을 확인해 주세요")
             setSaveState("invalid")
             return false
+          case "invalid_slot":
+            // 화면이 슬롯을 다시 매기지 않으므로 생기지 않아야 하는 거부다 — 입력을 지키고 다시 시도하게 둔다
+            setSaveState("failed")
+            return false
           case "not_found":
+          case "application_project_not_found":
             toast("자기소개서를 찾을 수 없어요")
             setSaveState("failed")
             return false
@@ -265,10 +301,8 @@ export function CoverLetterScreen({
             return false
         }
       }
-      if (!r) {
-        setSaveState("failed")
-        return false
-      }
+      const r = result.data
+      staleVersion.current = null
       // 반환 9키(계약은 camelCase)로 머리를 다시 그린다 — 다시 읽지 않는다
       setUpdatedAt(r.updatedAt)
       setSavedAt(r.updatedAt)
@@ -318,8 +352,8 @@ export function CoverLetterScreen({
   /** 턴마다 보내는 지금 폼 — 저장 전 값이 우선이고 저장·로그에 남지 않는다 (CL-4, DM 2.5.1) */
   const formSnapshot = React.useMemo(
     () =>
-      forms.map((f, i) => ({
-        slot: f.slot || `q_${i + 1}`,
+      forms.map((f) => ({
+        slot: f.slot,
         question_text: f.question_text,
         char_limit: Number(f.char_limit) || 0,
         count_basis: f.count_basis,
@@ -503,6 +537,7 @@ export function CoverLetterScreen({
   const answerTab = (
     <AnswerTab
       forms={forms}
+      allocateSlot={allocateSlot}
       errors={errors}
       evidence={data.evidence}
       onChange={(next) => {
@@ -519,6 +554,12 @@ export function CoverLetterScreen({
         placement.setWideOpen(true)
         panel.focusInput()
       }}
+      onRevealProposal={(slot) => {
+        // 좁은 화면이면 시트를 열고, 넓은 화면이면 패널을 연 뒤 그 문항의 제안 자리로 간다 (UQ-749)
+        if (placement.mode === "narrow") placement.setSheetOpen(true)
+        else placement.setWideOpen(true)
+        panel.revealSlot(slot)
+      }}
       unappliedSlots={unappliedSlots}
       highlight={highlight}
     />
@@ -534,8 +575,9 @@ export function CoverLetterScreen({
           state={saveUi}
           savedAt={savedAt}
           onSave={() => state === "writing" && void runSave()}
-          // CF-S3: 문항 설정 상태에서는 ⌘S가 동작하지 않고, **비활성인 이유를 알리지 않는다**(CF-S5)
-          hideTooltip={state === "questions"}
+          // CF-S3: 문항 설정 상태에는 ⌘S가 없다 — 툴팁·`aria-keyshortcuts`도 없고 비활성 이유도 알리지 않는다
+          // (CF-S5 · UQ-750)
+          noShortcut={state === "questions"}
         />
       }
     >
@@ -556,6 +598,7 @@ export function CoverLetterScreen({
           <div className="mx-auto w-full max-w-prose-edit">
             <QuestionSetup
               applicationProjectId={apId}
+              allocateSlot={allocateSlot}
               forms={forms}
               errors={errors}
               onChange={(next) => {
@@ -616,7 +659,7 @@ export function CoverLetterScreen({
                 aside={
                   <CoverLetterPanel
                     panel={{ ...panel, hide: () => placement.setWideOpen(false) }}
-                    questions={forms.map((f, i) => ({ slot: f.slot || `q_${i + 1}`, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
+                    questions={forms.map((f) => ({ slot: f.slot, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
                     filled={applied.map((a) => ({ slot: a.slot, rev: a.rev }))}
                     onFill={onFill}
                   />
@@ -669,7 +712,9 @@ function previewForms(doc: ApplicationDocument | null, state: string | null): Qu
   }
   if (state === "questions-max") {
     const forms = seedQuestionForms()
-    while (forms.length < COVER_LETTER_MAX_QUESTIONS) forms.push({ ...newQuestionForm(), question_text: `추가 문항 ${forms.length + 1}` })
+    // 기본 3문항(q_1~q_3) 다음 번호를 받는다 (q_4·q_5)
+    while (forms.length < COVER_LETTER_MAX_QUESTIONS)
+      forms.push({ ...newQuestionForm(nextSlot(forms.map((f) => f.slot))), question_text: `추가 문항 ${forms.length + 1}` })
     return forms
   }
   if (!doc) return seedQuestionForms()
@@ -704,9 +749,6 @@ function usePanelPlacement(): DocPanelPlacement {
   return { mode, setMode, wideOpen, setWideOpen: setOpen, sheetOpen, setSheetOpen, width, setWidth }
 }
 
-function errorCode(e: unknown): string {
-  return typeof e === "object" && e !== null && "code" in e ? String((e as { code?: unknown }).code) : "save_failed"
-}
 
 /** 토스트에 쓰는 문항 번호 */
 function slotNumber(forms: QuestionForm[], slot: string): number {

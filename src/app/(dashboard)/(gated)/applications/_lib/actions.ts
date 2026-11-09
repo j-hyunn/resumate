@@ -21,6 +21,7 @@ import { withAiGuard } from "@/lib/data/ai-guard"
 // 페이지 단위로 저장하면서 쓰는 화면이 없어졌다. JD 요건 추출만 남는다 (S-15·D-30 — 실제 경로 유지).
 import { retryJdExtraction } from "@/lib/data/drafts"
 import type { DocumentFormSnapshot } from "@/lib/contracts/application-document"
+import { isAppError, runAction } from "@/lib/contracts/errors"
 import { deleteCoverLetterChat, startCoverLetterChat } from "@/lib/data/cover-letter-chats"
 import {
   extractJdPreview,
@@ -48,10 +49,24 @@ export async function createApplicationAction(input: {
   /** mock 전용: 미리 보기가 찾은 마감일 (real 경로는 서버가 작업 행에서 읽는다) */
   preview_deadline?: string | null
   fail?: boolean
-}): Promise<CreateApplicationOutcome | AiRejected> {
+}): Promise<CreateApplicationOutcome | AiRejected | { refused: "invalid_source_url" }> {
   if (input.fail) throw new Error("save failed (mock)")
   const raw = input.raw_text.trim()
   if (!raw) throw new Error("raw_text required")
+  try {
+    return await createApplicationGuarded(input, raw)
+  } catch (e) {
+    // `invalid_source_url`(400)은 값으로 돌려준다 — 던지면 Server Action 경계에서 `code`를 잃어
+    // 화면이 "주소 없이 만들기"를 띄울 수 없다 (UX S-14 "주소 저장 불가")
+    if (isAppError(e) && e.code === "invalid_source_url") return { refused: "invalid_source_url" }
+    throw e
+  }
+}
+
+async function createApplicationGuarded(
+  input: Parameters<typeof createApplicationAction>[0],
+  raw: string,
+): Promise<CreateApplicationOutcome | AiRejected> {
   // (v5.20, CF-A7) 이름 규칙 "{기업 명} 자기소개서"는 data layer(createApplicationProject)가 정한다
   // Q53-1: key_invalid / ai_consent_required come back as `{ rejected, refusal }` with no row (경로 ⑥)
   return withAiGuard(async () => {
@@ -161,9 +176,13 @@ export async function getCoverLetterDocumentAction(applicationProjectId: string)
   return getCoverLetterDocument(applicationProjectId)
 }
 
-/** S-46 "저장하기" / [자기소개서 작성 시작] — 본문 + 머리 제목·마감일을 한 번에 (DM v4.15) */
+/**
+ * S-46 "저장하기" / [자기소개서 작성 시작] — 본문 + 머리 제목·마감일을 한 번에 (DM v4.15).
+ * **`ActionResult`로 돌려준다**: Server Action에서 던진 오류는 경계를 넘으며 `code`·`details`를 잃어
+ * (메시지만 남는다) 화면이 `stale_write`·`too_many_questions`·`invalid_slot`을 가를 수 없었다.
+ */
 export async function saveCoverLetterDocumentAction(input: SaveCoverLetterInput) {
-  return saveCoverLetterDocument(input)
+  return runAction(() => saveCoverLetterDocument(input))
 }
 
 /** S-46 "전체 복사" (`first_copied_at`, PRD 7장 지표) */

@@ -7,52 +7,15 @@
  * `saveCoverLetterDocument` 등)는 `cover-letters.ts`에 그대로 남는다.
  * 호환을 위해 `cover-letters.ts`가 이 모듈을 다시 내보낸다.
  */
-import type { ApplicationDocument, CoverLetterBody, CoverLetterQuestion, CountBasis, DateString, NameSource, Uuid } from "@/types/db"
-import {
-  COVER_LETTER_DEFAULT_CHAR_LIMIT,
-  COVER_LETTER_DEFAULT_COUNT_BASIS,
-  COVER_LETTER_DEFAULT_QUESTIONS,
-} from "./cover-letter-defaults"
+import type { ApplicationDocument, CoverLetterBody, CountBasis, DateString, NameSource, Uuid } from "@/types/db"
 
 // ---------------------------------------------------------------------------
 // 문항 헬퍼
 // ---------------------------------------------------------------------------
 
-/** 기본 3문항 (문구 OD-D1 K-28, 글자 수 제한 800 = CF-U2) */
-export function seedCoverLetterQuestions(): CoverLetterQuestion[] {
-  return COVER_LETTER_DEFAULT_QUESTIONS.map((q, i) => ({
-    slot: `q_${i + 1}`,
-    question_id: crypto.randomUUID(),
-    question_text: q.question_text,
-    answer_title: null,
-    template_key: q.template_key,
-    question_class: q.template_key,
-    char_limit: COVER_LETTER_DEFAULT_CHAR_LIMIT,
-    count_basis: COVER_LETTER_DEFAULT_COUNT_BASIS,
-    user_note: null,
-    body: "",
-    blocks: [],
-    sort_order: i + 1,
-  }))
-}
-
-/** "+ 문항 추가": 빈 문항 하나 (글자 수 제한 800 미리 채움) */
-export function newCoverLetterQuestion(sortOrder: number): CoverLetterQuestion {
-  return {
-    slot: `q_${sortOrder}`,
-    question_id: crypto.randomUUID(),
-    question_text: "",
-    answer_title: null,
-    template_key: null,
-    question_class: null,
-    char_limit: COVER_LETTER_DEFAULT_CHAR_LIMIT,
-    count_basis: COVER_LETTER_DEFAULT_COUNT_BASIS,
-    user_note: null,
-    body: "",
-    blocks: [],
-    sort_order: sortOrder,
-  }
-}
+// (UQ-740) `seedCoverLetterQuestions`·`newCoverLetterQuestion(sortOrder)`는 지웠다 — 슬롯을
+// 순서에서 계산해 "안정 키, 재사용 금지"(DM 2.5.1)를 어겼고 쓰는 곳도 없었다. 문항 폼과 슬롯 발급은
+// `src/components/applications/cover-letter/question-form.ts`가 맡는다.
 
 /** S-46 두 상태 판정 (CF-A11): 정본 행이 없으면 문항 설정, 있으면 작성 */
 export type CoverLetterScreenState = "questions" | "writing"

@@ -48,7 +48,7 @@ import { JD_FETCH_FAILED_MESSAGE } from "@/lib/data/cover-letter-copy"
 import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
-import { keepsFormDraftOnLeave } from "./form-draft"
+import { keepsFormDraftOnLeave, previewRefusalAction } from "./form-draft"
 import { createApplicationAction, extractJdPreviewAction, fetchJobPostingAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** v5.3 S-14: 지원 기업·지원 포지션 각 200자 (구현 값 `[가정]`) */
@@ -98,6 +98,17 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
   const [closeConfirm, setCloseConfirm] = React.useState(pv === "close-confirm")
   const [restored, setRestored] = React.useState(false)
   const [urlTouched, setUrlTouched] = React.useState(false)
+
+  // 단계가 바뀌면 포커스를 옮긴다 (UQ-746): ②로 가면 ② 첫 칸(지원 기업), ①로 돌아오면 쓰던 입력칸.
+  // 누른 버튼이 사라져 포커스가 다이얼로그로 떨어지면 화면 낭독기가 단계 전환을 알기 어렵다.
+  const stepRef = React.useRef(step)
+  React.useEffect(() => {
+    if (stepRef.current === step) return
+    stepRef.current = step
+    const id = step === 1 ? "add-ap-company" : document.getElementById("add-ap-url")?.hasAttribute("disabled") ? "add-ap-direct" : "add-ap-url"
+    const t = window.setTimeout(() => document.getElementById(id)?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [step])
 
   const keyless = connection !== null && !connection.active_provider
   const keyInvalid = connection?.key_status === "invalid"
@@ -209,14 +220,22 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       setPhase("extracting")
       const r = await extractJdPreviewAction(text).catch(() => null)
       if (r && isAiRejected(r)) {
-        // 경로 ⑥: 화면 판정과 서버 판정이 어긋났다 — ①에 머문다
-        setPhase("idle")
+        // 경로 ⑥: 화면 판정과 서버 판정이 어긋났다(다른 탭에서 키·동의가 바뀜 등). **원인별로** 처리한다
+        // (UQ-751 · UX S-14 Q53-1 표 · R15: 409 `key_invalid`·`ai_consent_required`, 그 밖은 C-20)
         notifyAiConnectionChanged()
-        if (r.refusal === "key_invalid") setKeyInvalidShown(true)
-        else consent.open(() => void goNext())
-        return
-      }
-      if (r) preview = r
+        const action = previewRefusalAction(r.refusal)
+        if (action === "stay_key_invalid") {
+          setPhase("idle")
+          setKeyInvalidShown(true)
+          return
+        }
+        if (action === "consent") {
+          setPhase("idle")
+          consent.open(() => void goNext())
+          return
+        }
+        if (action === "step2_with_notice") setExtractFailed(true)
+      } else if (r) preview = r
       // AI-01이 실패하면 막지 않고 ②로 간다 (UX S-14 `[가정]`) — ② 머리에 C-20 축약
       else setExtractFailed(true)
     }
@@ -258,9 +277,10 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       source_url: opts.withoutUrl ? null : urlTrimmed || null,
       preview_job_id: previewJobId,
       preview_deadline: previewDeadline,
-    }).catch((e: unknown) => (isInvalidSourceUrl(e) ? "invalid_source_url" : null))
+    }).catch(() => null)
 
-    if (result === "invalid_source_url") {
+    // `invalid_source_url`(400)은 값으로 온다 — 던진 오류는 Server Action 경계에서 `code`를 잃는다
+    if (result && "refused" in result) {
       setPhase("idle")
       setInvalidUrlRefused(true)
       return
@@ -316,7 +336,10 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
   return (
     <>
       <Dialog open={open} onOpenChange={close}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl max-sm:h-dvh max-sm:max-w-none max-sm:rounded-none">
+        <DialogContent
+          // 좁은 화면(<640)은 **전체 화면 시트**(UX S-14 · 5.6.2) — 높이 제한은 넓은 화면에서만 (UQ-745)
+          className="overflow-y-auto sm:max-h-[85dvh] sm:max-w-2xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:rounded-none"
+        >
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">자기소개서 작성</DialogTitle>
             <DialogDescription className="sr-only">공고 URL 또는 공고 내용으로 새 자기소개서를 만들어요</DialogDescription>
@@ -585,9 +608,6 @@ function LengthWarning({ text }: { text: string }) {
   )
 }
 
-function isInvalidSourceUrl(e: unknown): boolean {
-  return typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "invalid_source_url"
-}
 
 // ---------------------------------------------------------------------------
 // `?state=` 미리 보기

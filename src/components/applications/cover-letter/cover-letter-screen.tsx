@@ -672,7 +672,7 @@ export function CoverLetterScreen({
 
       <StaleWriteDialog
         open={stale}
-        entity="deliverable"
+        entity="cover_letter"
         busy={saveState === "saving"}
         onOpenChange={setStale}
         onOverwrite={() => {

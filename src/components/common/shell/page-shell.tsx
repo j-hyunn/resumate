@@ -377,15 +377,20 @@ export function StaleWriteDialog({
   onOpenChange,
 }: {
   open: boolean
-  entity: "project" | "deliverable"
+  entity: "project" | "deliverable" | "cover_letter"
   busy?: boolean
-  /** "내 내용으로 저장" = the same request with p_expected_updated_at = null */
+  /**
+   * "내 내용으로 저장" = the same request again. S-10·S-44: with p_expected_updated_at = null. S-46 (`cover_letter`,
+   * CF-S7): with the `stale_write` reply's `details.current_updated_at` — the 자기소개서 save RPC refuses null on an
+   * existing row, because there null would mean both "first save" and "force overwrite".
+   */
   onOverwrite: () => void
   /** "새로 불러오기" = drop unsaved edits and the [반영] memory, read again */
   onReload: () => void
   onOpenChange: (open: boolean) => void
 }) {
-  const what = entity === "project" ? "이 프로젝트가" : "이 산출물이"
+  // (45 런) S-46도 이 다이얼로그를 쓴다 — "산출물"로 보이지 않게 (CF-U3: 서류 이름 "자기소개서")
+  const what = entity === "project" ? "이 프로젝트가" : entity === "cover_letter" ? "이 자기소개서가" : "이 산출물이"
   const keepRef = React.useRef<HTMLButtonElement | null>(null)
   return (
     <AlertDialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>

@@ -104,6 +104,9 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_company_name: { message: "회사명은 200자 이하로 입력해 주세요." },
   invalid_position_title: { message: "포지션명은 200자 이하로 입력해 주세요." },
   invalid_stage: { message: "입력값을 확인해 주세요." },
+  // R15 (DM 11.10 #1·#2, CF-10): `p_source_url` is not http(s) or longer than 2,048 — the RPC
+  // builds no row, so the screen may resend the same `p_id` without the URL.
+  invalid_source_url: { message: "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요." },
   invalid_outcome: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요." },
   not_closed: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요.", status: 409 },
   already_extracted: { message: "이미 요건을 정리한 공고예요.", status: 409 },
@@ -114,24 +117,19 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   insight_in_progress: { message: "인사이트를 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
   jd_not_extracted: { message: "공고 요건을 먼저 정리해야 해요.", status: 409 },
   invalid_insight_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_evidence_source: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  // S7 drafts (db notes "RPC 시그니처와 반환 형태")
-  draft_not_found: { message: "초안을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  section_not_found: { message: "문항을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
-  draft_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  section_id_conflict: { message: "다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  invalid_title: { message: "제목은 1자 이상 100자 이하로 입력해 주세요." },
-  invalid_question: { message: "문항은 1자 이상 1,000자 이하, 글자 수는 1~10,000자로 입력해 주세요." },
-  question_limit_reached: { message: "문항은 10개까지 추가할 수 있어요.", status: 409 },
-  last_question: { message: "문항은 최소 1개가 있어야 해요.", status: 409 },
-  section_generating: { message: "이 문항의 초안을 만들고 있어요. 생성이 끝난 뒤 다시 시도해 주세요.", status: 409 },
-  section_in_progress: { message: "이 문항의 초안을 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  invalid_section_order: { message: "문항 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  invalid_sources: { message: "사용할 경력·프로젝트를 확인해 주세요." },
-  source_not_found: { message: "완료된 경력·교육·프로젝트만 고를 수 있어요. 새로고침 후 다시 시도해 주세요.", status: 409 },
-  invalid_draft_options: { message: "포함할 항목을 확인해 주세요." },
-  invalid_draft_sections: { message: "포함할 항목을 확인해 주세요." },
-  invalid_draft_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
+  /**
+   * R15-DB-9: the per-owner allowed-source check moved from a `23514` CHECK into
+   * `private.evidence_links_check_source`, so this is now a `P0001` raise whose detail is the
+   * offending `item_key` (`q_1.blocks.b1`, or `… + '.learnings'` for the V-8 last net).
+   * The evidence itself is server-built (an AI proposal), but the user can act on it — the
+   * answer is 400 with the slot to look at, not a bare 500 (db notes ②-1).
+   */
+  invalid_evidence_source: { message: "근거로 쓸 수 없는 항목이 있어 저장하지 않았어요. 새로고침 후 다시 시도해 주세요.", status: 400 },
+  // R15 save_application_document (db notes ②-1)
+  invalid_slot: { message: "문항 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요." },
+  too_many_questions: { message: "문항은 5개까지 쓸 수 있어요." },
+  // R15 (QA-R15-03): the S7 서류 거부 코드 16개는 `20261113004700`이 그 함수들을 drop해 고아가 됐다
+  // (로컬 DB `pg_proc` 전수 확인: raise하는 함수 0개). 남은 패치 거부 코드는 아래 그대로 쓰인다.
   // server-built arguments
   invalid_raw_text_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // QA-W0-05: program errors, unreachable from the app paths (server-built values, no user update grant)
@@ -229,23 +227,14 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_company_name: "invalid_input",
   invalid_position_title: "invalid_input",
   invalid_stage: "invalid_input",
-  draft_not_found: "not_found",
-  section_not_found: "not_found",
-  draft_id_conflict: "conflict",
-  section_id_conflict: "conflict",
-  invalid_title: "invalid_input",
-  invalid_question: "invalid_input",
-  invalid_section_order: "conflict",
-  invalid_sources: "invalid_input",
-  invalid_draft_options: "invalid_input",
-  invalid_draft_sections: "invalid_input",
-  invalid_draft_payload: "internal_error",
   invalid_raw_text_hash: "internal_error",
   job_description_immutable: "internal_error",
   invalid_sentences: "internal_error",
   invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
-  invalid_evidence_source: "internal_error",
+  invalid_source_url: "invalid_input",
+  // R15: `invalid_slot`, `too_many_questions` and `invalid_evidence_source` keep their own codes
+  // (unknown code → 400) so S-46 can tell the three apart; see src/lib/contracts/application-document.ts.
 };
 
 /** Raises whose `detail` names the offending field(s) (DM 2.5.1 R5-DB-8: comma-separated). */
@@ -259,6 +248,10 @@ const FIELD_DETAIL_RAISES = new Set([
   // `duplicate_job_interest` is NOT here: its detail is the pair's 1-based position, not a field name
   // (see raiseDetails below — QA-R13-01).
   "invalid_profile_option",
+  // R15 save_application_document: the dot path of the offending question / block, or the slot
+  // itself (`invalid_slot`), or the `item_key` (`invalid_evidence_source`) — db notes ②-1.
+  "invalid_slot",
+  "invalid_evidence_source",
 ]);
 
 /** RPC `detail` → response `details` (machine data the screen uses to focus a field / show a conflict). */
@@ -274,6 +267,13 @@ function raiseDetails(message: string, detail: string | null): Record<string, un
     const position = Number(detail);
     if (!Number.isInteger(position) || position < 1) return undefined;
     return { field: `job_interests.${position}`, sortOrder: position };
+  }
+  // R15 (db notes ⑧, R5-DB-8 shape): `save_application_document` raises the question cap with the
+  // detail string `'5,{current}'`, where `current` is the number of questions already stored.
+  if (message === "too_many_questions") {
+    const [limit, current] = detail.split(",").map((v) => Number(v.trim()));
+    if (!Number.isInteger(limit) || !Number.isInteger(current)) return undefined;
+    return { limit, current };
   }
   if (FIELD_DETAIL_RAISES.has(message)) {
     const fields = detail.split(",").map((f) => f.trim()).filter(Boolean);

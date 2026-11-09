@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { aiErrorEvent } from "@/lib/contracts/ai";
 import { AppError, errorResponse } from "@/lib/contracts/errors";
 import { WRITING_CHAT_TURN_TERMINAL_EVENTS, WritingChatRetryInput, WritingChatTurnInput } from "@/lib/contracts/writing-chat";
 import { requireConsentedUser } from "@/server/auth/session";
 import { createWritingChatTurnDeps } from "@/server/jobs/writing-chat-turn";
-import { createSseResponse, type SseEvent } from "@/server/sse";
+import { createSseResponse } from "@/server/sse";
 import { prepareTurn, runTurn } from "@/server/services/writing-chat/turn";
 
 export const maxDuration = 60;
@@ -51,7 +52,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/writing-cha
 
     const options = { requestSignal: request.signal, terminalEvents: WRITING_CHAT_TURN_TERMINAL_EVENTS };
     if (prepared.kind === "blocked") {
-      return createSseResponse(async ({ emit }) => emit({ type: "error", code: prepared.code } as SseEvent), options);
+      // QA-R15-02: the gate's `error` event is built by the one place that maps a code to its
+      // C-11 category / failure cause / Korean message / retryable, so it satisfies `ErrorEvent`
+      // in-process too (the SSE layer would normalize it, but then nothing type-checks the shape).
+      return createSseResponse(async ({ emit }) => emit(aiErrorEvent(prepared.code)), options);
     }
     return createSseResponse(({ emit, signal }) => runTurn(deps, prepared, emit, signal), options);
   } catch (err) {

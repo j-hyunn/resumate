@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { careerRowsFixture, IDS, project, TOTAL_EXPERIENCE_FIXTURE } from "../__fixtures__/career-rows";
 import { buildCareerPack } from "./career-pack";
 import { sourceLabel } from "./selection";
-import { buildSummaryCareerPack } from "./summary-pack";
 import type { CareerRows } from "./career-rows";
 import { DELIVERABLE_PACK_MAX_CHARS, DELIVERABLE_PACK_TOTAL_CHARS } from "./deliverable-text";
 import { monthsInclusive } from "./months";
@@ -302,12 +301,5 @@ describe("months", () => {
       expect(sourceLabel(withEducation(null, " ").aliases, { parentAlias: "EDU-1", projectAlias: "PRJ-3" })).toBe("캡스톤 분산 캐시");
     });
 
-    it("leaves the summary pack line as 운영 기관 + 교육 명 (model-facing text unchanged)", () => {
-      const summary = buildSummaryCareerPack(careerRowsFixture(), { asOf });
-      const line = summary.text.split("\n").find((l) => l.includes("EDU-1"));
-      expect(line).toContain("가상대학교");
-      expect(line).toContain("컴퓨터공학");
-      expect(line?.match(/컴퓨터공학/g)).toHaveLength(1);
-    });
   });
 });

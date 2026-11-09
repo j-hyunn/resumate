@@ -110,10 +110,23 @@ export type DraftBlockKind = "header" | "summary" | "role_line" | "bullet" | "pa
 export type DraftSourceRole = "primary" | "supporting"
 export type DraftSourceOrigin = "ai" | "user"
 
+// --- R15 자기소개서 정본 (DM 2.7.3 / 2.5.0b) ---
+
+/** application_documents.document_kind CHECK — one value (CF-1·CF-A2). */
+export type ApplicationDocumentKind = "cover_letter"
+export type DocumentBlockType = "heading" | "paragraph" | "bullet_list" | "numbered_list" | "table" | "quote" | "code"
+export type DocumentBlockBasis = "new" | "current_body" | "user"
+/** application_documents.meta.tone: 간결 / 상세. */
+export type DocumentTone = "concise" | "detailed"
+/** structured_draft.document.questions[].draft.sources[].role (CF-S1). */
+export type DocumentSourceRole = "primary" | "supporting"
+
 export type EvidenceOwnerType =
   | "insight"
+  /** @deprecated R15: dropped from the CHECK by `20261113004500_r15_drop_drafts`; kept for the mock fixtures. */
   | "draft_section"
   | "chat_message"
+  | "application_document"
 export type EvidenceSourceType =
   | "profile"
   | "experience"
@@ -813,18 +826,42 @@ export interface DraftOptions {
   tone?: DraftTone | null
 }
 
-/** drafts (A.9) */
-export type Draft = Row<"drafts", {
+/**
+ * drafts (A.9) — **retired table** (R15 `20261113004500_r15_drop_drafts`, CF-1·CF-M1).
+ *
+ * The 자기소개서 정본 is now `ApplicationDocument` below. These three shapes stay as hand-written
+ * interfaces, no longer derived from the generated types, so the old 서류 screens S-17 / S-19 and
+ * `src/lib/mock/` keep compiling while they run on `?state=` previews only
+ * (leader decision 2026-11-09 — the screens themselves are the UI session's to delete).
+ * Nothing on the server reads or writes them.
+ */
+export interface Draft {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  application_project_id: Uuid
   draft_type: DraftType
   title: string | null
   status: DraftStatus
   options: DraftOptions
+  insight_id: Uuid | null
+  ai_job_id: Uuid | null
+  input_hash: string | null
+  prompt_version: string | null
+  schema_version: number | null
+  career_snapshot_hash: string | null
+  regenerated_from_id: Uuid | null
+  completed_at: Timestamp | null
+  edited_at: Timestamp | null
+  first_copied_at: Timestamp | null
+  model: string | null
   provider: AiProviderName | null
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
   validation_report: Record<string, unknown> | null
   usage: Record<string, unknown> | null
-}, "run_generation">
+}
 
 /** C-05 placeholder tokens (03 C-5) */
 export type PlaceholderToken =
@@ -849,35 +886,134 @@ export interface DraftBlock {
   user_modified: boolean
 }
 
-/** draft_sections (A.10) */
-/** draft_sections (A.10) — v4: AI 출력 공통 메타 (문항 단위 재생성이 다른 공급자일 수 있음) */
-export type DraftSection = Row<"draft_sections", {
+/** draft_sections (A.10) — retired with `drafts` (see the note above). */
+export interface DraftSection {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  draft_id: Uuid
+  sort_order: number
   section_kind: DraftSectionKind
+  heading: string | null
+  question_text: string | null
+  char_limit: number | null
+  user_note: string | null
   template_key: CoverLetterTemplateKey | null
   count_basis: CountBasis | null
   source_selection_mode: SourceSelectionMode
   question_class: QuestionClass | null
   status: DraftSectionStatus
-  ai_content: { blocks: DraftBlock[]; } | null
-  edited_content: { blocks: DraftBlock[]; } | null
+  experience_id: Uuid | null
+  education_id: Uuid | null
+  ai_char_count: number | null
+  correction_applied: boolean
+  generation_no: number
+  sources_modified_at: Timestamp | null
+  ai_job_id: Uuid | null
+  input_hash: string | null
+  prompt_version: string | null
+  schema_version: number | null
+  career_snapshot_hash: string | null
+  model: string | null
+  ai_content: { blocks: DraftBlock[] } | null
+  edited_content: { blocks: DraftBlock[] } | null
   validation_report: Record<string, unknown> | null
   provider: AiProviderName | null
   model_tier: ModelTier | null
   connection_tier: ConnectionTier | null
   usage: Record<string, unknown> | null
-}, "completed_at" | "run_generation">
+}
 
-/** draft_section_sources (A.11, DM v4.4: no `project_detail_ids`) */
-export type DraftSectionSourceRow = Row<"draft_section_sources", {
+/** draft_section_sources (A.11) — retired with `drafts` (see the note above). */
+export interface DraftSectionSourceRow {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  draft_section_id: Uuid
+  application_project_id: Uuid
+  experience_id: Uuid | null
+  education_id: Uuid | null
+  project_id: Uuid | null
+  requirement_ids: Uuid[]
+  rationale: string | null
+  reuse_reason: string | null
+  sort_order: number
+  source_deleted_at: Timestamp | null
+  source_label: string | null
   role: DraftSourceRole
   origin: DraftSourceOrigin
-}>
+}
 
 /**
  * @deprecated R4 shim: the current UI reads `project_detail_ids` (dropped in DM v4.4). The real data
  * layer fills it with `[]`. Use `DraftSectionSourceRow`. Delete in the UI rework.
  */
 export type DraftSectionSource = DraftSectionSourceRow & { project_detail_ids: Uuid[] }
+
+// ---------------------------------------------------------------------------
+// 2.7.3 자기소개서 정본 (R15, DM 2.7.3 / 11.8 #1)
+// ---------------------------------------------------------------------------
+
+/** `application_documents.body.questions[].blocks[].evidence[]` (DM 2.8). */
+export interface ApplicationDocumentEvidence {
+  source_type: EvidenceSourceType
+  source_id: string
+  source_field?: string | null
+  source_locator?: Record<string, unknown> | null
+  quote?: string | null
+  label?: string | null
+}
+
+/** `application_documents.body.questions[].blocks[]` (DM 2.5.0b / 2.7.3). */
+export interface ApplicationDocumentBlock {
+  block_id: string
+  type: DocumentBlockType
+  text: string
+  basis: DocumentBlockBasis | null
+  placeholders: string[]
+  flags: string[]
+  applied_writing_chat_id: Uuid | null
+  applied_rev: number | null
+  applied_at: Timestamp | null
+  user_modified: boolean
+  evidence: ApplicationDocumentEvidence[]
+}
+
+/** One 자소서 문항 (`slot` = `q_{n}`); `sort_order` is re-numbered from 1 by the save RPC. */
+export interface ApplicationDocumentQuestion {
+  slot: string
+  question_id: Uuid
+  sort_order: number
+  question_text: string | null
+  /** CF-6: ≤ 100 chars, excluded from the char count and from `filled_slot_count`. */
+  answer_title: string | null
+  template_key: CoverLetterTemplateKey | null
+  question_class: QuestionClass | null
+  char_limit: number | null
+  count_basis: CountBasis | null
+  user_note: string | null
+  body: string
+  blocks: ApplicationDocumentBlock[]
+}
+
+/** application_documents (DM 2.7.3). One row per `(application_project_id, document_kind)`. */
+export interface ApplicationDocument {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  application_project_id: Uuid
+  /** CHECK: `cover_letter` only (CF-1·CF-A2 — the column stays for the retired 경력기술서). */
+  document_kind: ApplicationDocumentKind
+  body: { questions: ApplicationDocumentQuestion[] }
+  meta: { tone?: DocumentTone | null } | null
+  /** Questions with a non-blank `body`; the 서류 count uses `> 0` (CF-A14). */
+  filled_slot_count: number
+  /** Generated column = `jsonb_array_length(body -> 'questions')`. */
+  slot_count: number
+}
 
 // ---------------------------------------------------------------------------
 // 2.8 근거
@@ -1119,13 +1255,13 @@ export interface DeletionImpact {
     project_deliverables: number
   }
   affected_results: {
-    // [UI-가정] 04 says "v2 형식: 이름, insights, drafts, draft_sections"; key names follow that list.
+    // R15 D9: the 서류 keys are `documents` / `document_sections` (DM §4.2, db notes §7).
     by_application_project: Array<{
       application_project_id: Uuid
       name: string | null
       insights: number
-      drafts: number
-      draft_sections: number
+      documents: number
+      document_sections: number
     }>
   }
   /** entity_type = 'writing_chat' only */

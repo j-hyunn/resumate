@@ -14,7 +14,6 @@ import { mockV45DeletionImpact, mockV45Delete } from "@/lib/mock/career-v45"
 import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
 import * as applicationActions from "@/server/actions/application"
-import * as draftActions from "@/server/actions/draft"
 import {
   DeleteCareerItemInput,
   DeletionImpactInput,
@@ -27,7 +26,6 @@ import { AppError, invalid } from "@/lib/contracts/errors"
 import { requireConsentedUser } from "@/server/auth/session"
 import { rememberDeletedRow } from "@/server/auth/user-cookies"
 import * as career from "@/server/services/career"
-import { mapDbError } from "@/server/db/errors"
 import { isPreviewRequest, previewOr, unwrap } from "./source"
 
 interface CascadeSet {
@@ -268,8 +266,10 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     application_project_id: apId,
     name: db.application_projects.find((a) => a.id === apId)?.name ?? null,
     insights: b.insights.size,
-    drafts: b.drafts.size,
-    draft_sections: b.sections.size,
+    // R15 D9 key names (`documents` / `document_sections`); the mock store still buckets the
+    // retired `drafts` rows until the UI session adds `application_documents`. 연결 대기
+    documents: b.drafts.size,
+    document_sections: b.sections.size,
   }))
   return impact
 }
@@ -372,10 +372,14 @@ async function mockDeleteCareerItem(entityType: DeletionEntityType, entityId: st
   }
 }
 
-/** C-05 자기소개서 삭제 counts (DM 2.7.2 `get_deletion_impact('application_project')`) */
+/**
+ * C-05 자기소개서 삭제 counts (DM 2.7.2 `get_deletion_impact('application_project')`).
+ * R15 D9: `drafts` → `documents` (0 or 1, `filled_slot_count > 0`) + `document_chats` (서류 대화).
+ */
 export interface ApplicationDeletionImpact {
   insights: number
-  drafts: number
+  documents: number
+  document_chats: number
   stage_events: number
 }
 
@@ -385,7 +389,9 @@ export async function getApplicationDeletionImpact(applicationProjectId: string)
       const db = await mockRequest(400)
       return {
         insights: db.insights.filter((i) => i.application_project_id === applicationProjectId).length,
-        drafts: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
+        // 연결 대기: the mock store has no `application_documents` yet (the UI session adds it with S-46).
+        documents: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
+        document_chats: 0,
         stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
       }
     },
@@ -394,7 +400,8 @@ export async function getApplicationDeletionImpact(applicationProjectId: string)
       const r = unwrap(await applicationActions.getApplicationProjectDeletionImpact({ id: applicationProjectId }))
       return {
         insights: r.cascade.insights,
-        drafts: r.cascade.drafts,
+        documents: r.cascade.documents,
+        document_chats: r.cascade.document_chats,
         stage_events: r.cascade.stage_events,
       }
     },
@@ -437,27 +444,32 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   }
 }
 
-/** C-05 초안: 하위 개수 */
-export async function getDraftDeletionImpact(draftId: string): Promise<{ sections: number }> {
-  if (!(await isPreviewRequest())) {
-    const { supabase } = await requireConsentedUser()
-    const { count, error } = await supabase.from("draft_sections").select("id", { count: "exact", head: true }).eq("draft_id", draftId)
-    if (error) throw mapDbError(error)
-    return { sections: count ?? 0 }
-  }
-  const db = await mockRequest(300)
-  return { sections: db.draft_sections.filter((s) => s.draft_id === draftId).length }
+/**
+ * C-05 초안: 하위 개수 — **연결 대기** (R15). The `drafts` tables are dropped (CF-1·CF-M1) and
+ * the new 자기소개서 정본 has no separate delete: `save_application_document` with the slot left
+ * out removes it. Mock only, so the retired S-17 / S-19 screens still work under `?state=`.
+ */
+export function getDraftDeletionImpact(draftId: string): Promise<{ sections: number }> {
+  return previewOr(
+    async () => {
+      const db = await mockRequest(300)
+      return { sections: db.draft_sections.filter((s) => s.draft_id === draftId).length }
+    },
+    async () => ({ sections: 0 }),
+  )
 }
 
-export async function deleteDraft(draftId: string): Promise<void> {
-  if (!(await isPreviewRequest())) {
-    unwrap(await draftActions.deleteDraft({ draftId }))
-    return
-  }
-  const db = await mockRequest()
-  const sectionIds = db.draft_sections.filter((s) => s.draft_id === draftId).map((s) => s.id)
-  db.drafts = db.drafts.filter((d) => d.id !== draftId)
-  db.draft_sections = db.draft_sections.filter((s) => s.draft_id !== draftId)
-  db.draft_section_sources = db.draft_section_sources.filter((s) => !sectionIds.includes(s.draft_section_id))
-  db.evidence_links = db.evidence_links.filter((e) => !(e.owner_type === "draft_section" && sectionIds.includes(e.owner_id)))
+/** 연결 대기 — see `getDraftDeletionImpact`. */
+export function deleteDraft(draftId: string): Promise<void> {
+  return previewOr(
+    async () => {
+      const db = await mockRequest()
+      const sectionIds = db.draft_sections.filter((s) => s.draft_id === draftId).map((s) => s.id)
+      db.drafts = db.drafts.filter((d) => d.id !== draftId)
+      db.draft_sections = db.draft_sections.filter((s) => s.draft_id !== draftId)
+      db.draft_section_sources = db.draft_section_sources.filter((s) => !sectionIds.includes(s.draft_section_id))
+      db.evidence_links = db.evidence_links.filter((e) => !(e.owner_type === "draft_section" && sectionIds.includes(e.owner_id)))
+    },
+    async () => {},
+  )
 }

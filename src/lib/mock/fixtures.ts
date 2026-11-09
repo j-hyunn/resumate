@@ -741,6 +741,8 @@ export function createFixtures(): MockDb {
     application_project_id: IDS.ap(apN),
     raw_text: lines.join("\n"),
     raw_text_hash: `hash-${n}`,
+    // R15 (CF-10): the posting URL column; mock rows are pasted text, so null.
+    source_url: null,
     sentences: sentences(lines),
     detected_language: "ko",
     company_name: company,

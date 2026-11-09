@@ -103,8 +103,10 @@ export function fakeSupabase(
       try {
         return { data: await rpc(name, args), error: null };
       } catch (err) {
-        const e = err as { code?: string; message?: string };
-        return { data: null, error: { code: e.code ?? "P0001", message: e.message ?? "error" } };
+        // `details` carries the RPC's raise detail (field path / `'5,{current}'` / updated_at),
+        // which `mapDbError` turns into the response's `details` — tests need it to travel.
+        const e = err as { code?: string; message?: string; details?: string; hint?: string };
+        return { data: null, error: { code: e.code ?? "P0001", message: e.message ?? "error", details: e.details ?? null, hint: e.hint ?? null } };
       }
     },
   };

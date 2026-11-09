@@ -1,5 +1,5 @@
+import { PENDING_CAREER_DESCRIPTION_COOKIE } from "@/server/auth/user-cookies";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PENDING_CAREER_DESCRIPTION_COOKIE } from "@/server/services/drafts/pending-cookie";
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>(), deleted: [] as string[] }));
 vi.mock("next/headers", () => ({

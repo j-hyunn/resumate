@@ -47,8 +47,8 @@ select set_eq(
       join pg_attribute a on a.attrelid = c.oid and a.attname = 'user_id' and a.attnum > 0 and not a.attisdropped
      where ns.nspname = 'public' and c.relkind in ('r', 'p')$$,
   array['ai_data_use_consents', 'ai_jobs', 'ai_provider_keys', 'ai_usage_records',
-        'application_projects', 'application_stage_events', 'consents',
-        'draft_section_sources', 'draft_sections', 'drafts', 'educations', 'evidence_links', 'experiences',
+        'application_documents', 'application_projects', 'application_stage_events', 'consents',
+        'educations', 'evidence_links', 'experiences',
         'insights', 'jd_requirements',
         'job_descriptions', 'profile_job_interests', 'project_deliverables', 'project_skills', 'projects',
         'skills',
@@ -130,17 +130,13 @@ insert into public.insights (id, user_id, application_project_id, version_no, is
 values ('a0000000-1a51-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
         'a0000000-aaaa-0000-0000-000000000001', 1, true, 'ready', '{}', '{}', 'rh', 'ch', 'ih', 1, 'pv', 'gemini', 'm',
         'default', 'free', now(), 'a0000000-7777-0000-0000-000000000001');
-insert into public.drafts (id, user_id, application_project_id, draft_type, title, status) values
-  ('a0000000-cccc-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'cover_letter', '자소서', 'composing');
-insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, question_text, count_basis) values
-  ('a0000000-5c00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-cccc-0000-0000-000000000001',
-   0, 'cover_letter_question', 'q', 'with_spaces');
-insert into public.draft_section_sources (user_id, draft_section_id, application_project_id, experience_id, education_id,
-                                          project_id, role, origin, sort_order, source_label) values
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-5c00-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'a0000000-1111-0000-0000-000000000001', null, 'a0000000-3333-0000-0000-000000000001',
-   'primary', 'user', 0, 'A사 › P1');
+-- R15: the cover letter of record replaces the drafts tables. filled_slot_count > 0 so it counts in the summary.
+insert into public.application_documents (id, user_id, application_project_id, document_kind, body, filled_slot_count)
+values ('a0000000-cccc-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
+        'a0000000-aaaa-0000-0000-000000000001', 'cover_letter',
+        '{"questions": [{"slot": "q_1", "question_id": "a0000000-5c00-0000-0000-000000000001",
+                         "question_text": "q", "char_limit": 800, "count_basis": "with_spaces",
+                         "body": "답변", "blocks": [], "sort_order": 1}]}'::jsonb, 1);
 
 insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id,
                                    source_field, quote) values

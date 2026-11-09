@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import {
+  JD_SOURCE_URL_MAX,
   applicationDisplayName,
   jdInputWarnings,
   type CreateApplicationProjectInput,
@@ -7,6 +8,7 @@ import {
   type DeleteApplicationProjectResult,
   type MoveApplicationStageInput,
   type MoveApplicationStageResult,
+  type PreviewSkipReason,
   type SetApplicationOutcomeInput,
   type StageChangeResult,
   type UpdateApplicationProjectInput,
@@ -21,6 +23,7 @@ import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { requestCancel } from "@/server/services/ai-jobs";
+import { normalizeJdRawText } from "./raw-text";
 
 /**
  * S5 writes through the user session (DM §5: career-side writes are the
@@ -45,17 +48,26 @@ export async function createApplicationProject(
   supabase: UserSupabaseClient,
   input: z.output<typeof CreateApplicationProjectInput>,
 ): Promise<CreateApplicationProjectResult> {
+  // A3 (R15): one normalized string feeds the split, the hash and the stored raw text — the same
+  // function the preview route uses, so `p_preview_job_id` can match (D11 hash recomputation).
+  const rawText = normalizeJdRawText(input.rawText);
   // C-2: deterministic server split; offsets index the raw text exactly as stored (never trimmed).
-  const sentences = splitJdSentences(input.rawText);
+  const sentences = splitJdSentences(rawText);
+  if (input.sourceUrl && input.sourceUrl.length > JD_SOURCE_URL_MAX) {
+    // Same rule as `job_descriptions_source_url_check`; caught before the RPC so no row is attempted.
+    throw new AppError("invalid_source_url", "공고 주소를 확인해 주세요.", { status: 400 });
+  }
   const { data, error } = await supabase.rpc("create_application_project", {
     p_id: input.id,
-    p_raw_text: input.rawText,
-    p_raw_text_hash: sha256Hex(input.rawText),
+    p_raw_text: rawText,
+    p_raw_text_hash: sha256Hex(rawText),
     p_sentences: sentences as unknown as Json,
     ...(input.companyName ? { p_company_name: input.companyName } : {}),
     ...(input.positionTitle ? { p_position_title: input.positionTitle } : {}),
     ...(input.name ? { p_name: input.name } : {}),
     ...(input.deadline ? { p_deadline: input.deadline } : {}),
+    ...(input.sourceUrl ? { p_source_url: input.sourceUrl } : {}),
+    ...(input.previewJobId ? { p_preview_job_id: input.previewJobId } : {}),
   });
   if (error) throw mapDbError(error);
   const row = obj(data);
@@ -72,9 +84,13 @@ export async function createApplicationProject(
     displayName: applicationDisplayName(name, input.companyName ?? null, input.positionTitle ?? null),
     extractionStatus,
     // The DB applies the same rule as check_ai_run_allowed (active provider, key not invalid, consent).
+    // D-30: with a usable preview applied there is nothing left to extract.
     shouldExtract: row.ai_run_allowed === true && (extractionStatus === "pending" || extractionStatus === "failed"),
     created: row.created !== false,
-    warnings: jdInputWarnings(input.rawText),
+    // R15 D11: whether the `jd_preview` job's output was applied, and why it wasn't.
+    previewApplied: row.preview_applied === true,
+    previewSkipReason: str(row.preview_skip_reason) as PreviewSkipReason | null,
+    warnings: jdInputWarnings(rawText),
   };
 }
 
@@ -90,11 +106,13 @@ export async function updateFailedJdRawText(
   supabase: UserSupabaseClient,
   input: z.output<typeof UpdateFailedJdRawTextInput>,
 ): Promise<UpdateFailedJdRawTextResult> {
+  // A3 (R15): the edit path normalizes with the same function as creation.
+  const rawText = normalizeJdRawText(input.rawText);
   const { data, error } = await supabase.rpc("update_failed_jd_raw_text", {
     p_application_project_id: input.id,
-    p_raw_text: input.rawText,
-    p_raw_text_hash: sha256Hex(input.rawText),
-    p_sentences: splitJdSentences(input.rawText) as unknown as Json,
+    p_raw_text: rawText,
+    p_raw_text_hash: sha256Hex(rawText),
+    p_sentences: splitJdSentences(rawText) as unknown as Json,
   });
   if (error) throw mapDbError(error);
   const row = obj(data);
@@ -107,7 +125,7 @@ export async function updateFailedJdRawText(
     extractionStatus: "pending",
     rawTextEditedAt,
     aiRunAllowed: row.ai_run_allowed === true,
-    warnings: jdInputWarnings(input.rawText),
+    warnings: jdInputWarnings(rawText),
   };
 }
 

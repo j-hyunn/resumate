@@ -1,373 +1,265 @@
 import { describe, expect, it } from "vitest";
-import { a, AS_OF, careerRowsFixture, IDS, JD_ID, JD_UPDATED_AT, jdParts, koText } from "../__fixtures__/S7/drafts";
-import { AiError } from "../errors";
+import { coverLetterContext, questionRow } from "../__fixtures__/S7/cover-letter-chat";
+import { a, IDS } from "../__fixtures__/S7/drafts";
+import type { CoverLetterChatContext } from "../context-pack/cover-letter-chat";
+import { selectDraftBatch } from "../context-pack/cover-letter-chat";
 import { createFakeLlm, type FakeLlmResponse } from "../fake-llm";
-import { toCanonicalJsonSchema } from "../providers/schema";
-import { Ai04AdjustOutputSchema, Ai04OutputSchema } from "../schemas/AI-04";
-import type { CompleteCoverLetterSectionPayload } from "../storage/drafts";
-import type { AiStreamEvent } from "../streaming/events";
-import { countChars, isLengthOutOfRange } from "../validation/drafts";
-import {
-  AI04_ADJUST_PROMPT_VERSION,
-  AI04_PROMPT_VERSION,
-  buildCoverLetterContext,
-  computeCoverLetterInputHash,
-  paragraphBlockId,
-  streamCoverLetterSection,
-  type CoverLetterQuestion,
-  type CoverLetterView,
-  type UserSourceInput,
-} from "./AI-04";
+import { AI04_OUTPUT_SCHEMA_VERSION } from "../schemas/AI-04";
+import { countChars } from "../validation/drafts";
+import { compose, coverLetterCallKey, planCoverLetterTurn, type ComposeEvent, type ComposeResult } from "./AI-04";
 
-const SECTION_ID = "91000000-0000-4000-8000-000000000001";
+/**
+ * AI-04 초안 턴 (R15): 문항 배열 · 답변 제목(CF-6) · 글자 수 보정.
+ * 실제 공급자 API를 부르지 않는다 — 가짜 SDK(createFakeLlm)만 쓴다.
+ */
 
-function question(over: Partial<CoverLetterQuestion> = {}): CoverLetterQuestion {
-  return { section_id: SECTION_ID, question_text: "직무 역량", template_key: "job_competency", char_limit: null, count_basis: "with_spaces", user_note: null, ...over };
-}
+const BODY_TEXT = "결제 승인 API의 응답 시간을 1.2초에서 0.7초로 줄였습니다. 병목 쿼리를 분석해 인덱스를 재설계했습니다.";
 
-function context(q = question(), mode: "ai" | "user" = "ai", userSources: UserSourceInput[] = [], otherSections: Array<{ question_text: string; primary_project_ids: string[] }> = []) {
-  const jd = jdParts();
-  return buildCoverLetterContext({
-    careerRows: careerRowsFixture(),
-    asOf: AS_OF,
-    jobDescriptionId: JD_ID,
-    jobDescriptionUpdatedAt: JD_UPDATED_AT,
-    sentences: jd.sentences,
-    companySids: ["S1"],
-    requirements: jd.requirements,
-    positionTitle: jd.positionTitle,
-    question: q,
-    mode,
-    userSources,
-    otherSections,
-  });
-}
-
-type Ctx = ReturnType<typeof context>;
-
-async function run(ctx: Ctx, responses: FakeLlmResponse[]) {
-  const llm = createFakeLlm(responses, { chunkSize: 13 });
-  const persisted: CompleteCoverLetterSectionPayload[] = [];
-  const events: AiStreamEvent[] = [];
-  for await (const e of streamCoverLetterSection({ context: ctx }, { llm, now: () => new Date("2026-10-29T00:00:00.000Z"), persist: async (p) => (persisted.push(p), { resultId: SECTION_ID }) })) {
-    events.push(e);
-  }
-  const validated = events.find((e) => e.type === "validated") as Extract<AiStreamEvent, { type: "validated" }> | undefined;
-  return { llm, events, persisted, payload: persisted[0], view: validated?.result as CoverLetterView | undefined };
-}
-
-function paragraph(id: string, text: string, evidence: unknown[], extra: Record<string, unknown> = {}) {
-  return { block_id: id, text, evidence, requirement_refs: [], placeholders: [], ...extra };
-}
-
-function source(ctx: Ctx, projectId: string, extra: Record<string, unknown> = {}) {
+function source(ctx: CoverLetterChatContext, projectId: string) {
   const prj = a(ctx.aliases, "project", projectId);
   return {
     project_ref: prj,
     experience_ref: null,
     education_ref: null,
     role: "primary",
-    rationale: "관련이 큽니다",
+    rationale: "직무 역량 요건과 가장 가깝습니다",
     requirement_refs: ["REQ-1"],
     reuse_reason: null,
     evidence: [{ source_type: "project", ref: prj, field: "name", quote: null }],
-    ...extra,
   };
 }
 
-function output(ctx: Ctx, over: Record<string, unknown> = {}) {
-  return { schema_version: 2, question_ref: "CLQ-1", question_class: "job_competency", selection_mode: "ai", sources: [], paragraphs: [], notes_for_user: [], ...over };
+function paragraph(ctx: CoverLetterChatContext, projectId: string, text = BODY_TEXT) {
+  const prj = a(ctx.aliases, "project", projectId);
+  return {
+    block_id: "p1",
+    text,
+    evidence: [{ source_type: "project", ref: prj, field: "name", quote: null }],
+    source_fact_ids: [],
+    source_body_quotes: [],
+    requirement_refs: ["REQ-1"],
+    placeholders: [],
+  };
 }
 
-describe("streamCoverLetterSection (AI-04)", () => {
-  it("job_competency: sources_selected first, V-7 on paragraphs, persisted payload", async () => {
-    const ctx = context(question({ template_key: null, user_note: "결제 도메인에 계속 있고 싶다" }));
-    const pay = a(ctx.aliases, "project", IDS.prjPay);
-    const settle = a(ctx.aliases, "project", IDS.prjSettle);
-    const side = a(ctx.aliases, "project", IDS.prjSide);
-    const out = output(ctx, {
-      question_class: "job_competency",
-      sources: [
-        source(ctx, IDS.prjPay, {
-          experience_ref: "EXP-9", // wrong parent → corrected
-          evidence: [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }],
-        }),
-        source(ctx, IDS.prjSide, { role: "primary", evidence: [] }), // no evidence → dropped (V-4)
-      ],
-      paragraphs: [
-        paragraph("q-p1", "저는 결제 승인 API의 병목을 찾아 응답 시간을 1.2초에서 0.7초로 줄였습니다.", [
-          { source_type: "project", ref: pay, field: "result", quote: "응답 시간이 0.7초로 줄었다" },
-        ]),
-        // A sibling project and a dropped source's project are outside the sources → V-7 removal → flagged.
-        paragraph("q-p2", "배치를 청크 단위로 재설계하고 자동 기록 기능을 만들었습니다.", [
-          { source_type: "project", ref: settle, field: "action", quote: "정산 배치를 청크 단위로 재설계했다" },
-          { source_type: "project", ref: side, field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" },
-        ]),
-        paragraph("q-p3", "결제 도메인에서 계속 성장하고 싶습니다.", [{ source_type: "user_note", ref: "NOTE-1", field: null, quote: "결제 도메인에 계속 있고 싶다" }]),
-      ],
-    });
-    const { events, payload, view, llm } = await run(ctx, [{ json: out }]);
+function composeOutput(ctx: CoverLetterChatContext, questions: Array<Record<string, unknown>>) {
+  return { schema_version: AI04_OUTPUT_SCHEMA_VERSION, draft_type: "cover_letter", turn_kind: "compose", questions };
+}
 
-    const types = events.map((e) => e.type);
-    const selectedAt = types.indexOf("sources_selected");
-    expect(selectedAt).toBeGreaterThanOrEqual(0);
-    expect(selectedAt).toBeLessThan(types.indexOf("block_started"));
-    expect(types.slice(-2)).toEqual(["validated", "done"]);
-    expect(types).not.toContain("adjusting_length");
+function question(ctx: CoverLetterChatContext, slot: string, over: Record<string, unknown> = {}) {
+  const projectId = ctx.pack.aliases.get("PRJ-1")!.id;
+  return {
+    question_slot: slot,
+    question_class: "job_competency",
+    sources: [source(ctx, projectId)],
+    paragraphs: [paragraph(ctx, projectId)],
+    answer_title: "응답 시간을 0.7초로 줄인 병목 분석",
+    notes_for_user: [],
+    ...over,
+  };
+}
 
-    const selected = events[selectedAt] as Extract<AiStreamEvent, { type: "sources_selected" }>;
-    expect(selected.sources).toEqual([
-      {
-        sort_order: 0,
-        role: "primary",
-        project_id: IDS.prjPay,
-        experience_id: IDS.expA,
-        education_id: null,
-        label: "예시페이 › 결제 승인 API 개선",
-        rationale: "관련이 큽니다",
-        reuse_reason: null,
-        requirement_ids: [jdParts().requirements[0].id],
-      },
-    ]);
-    expect(selected.questionClass).toBe("job_competency");
+async function run(ctx: CoverLetterChatContext, responses: FakeLlmResponse[], batchSlots?: string[]) {
+  const llm = createFakeLlm(responses, { chunkSize: 23 });
+  const batch = batchSlots ? ctx.questions.filter((q) => batchSlots.includes(q.slot)) : selectDraftBatch(ctx);
+  const events: ComposeEvent[] = [];
+  const it = compose(ctx, { llm }, { batch });
+  let next = await it.next();
+  while (!next.done) {
+    events.push(next.value);
+    next = await it.next();
+  }
+  return { llm, events, result: next.value as ComposeResult };
+}
 
-    expect(payload.question_class).toBe("job_competency");
-    expect(payload.sources).toHaveLength(1);
-    expect(payload.blocks.map((b) => b.block_id)).toEqual([1, 2, 3].map((n) => paragraphBlockId(SECTION_ID, n)));
-    expect(payload.blocks.every((b) => b.block_kind === "paragraph")).toBe(true);
-    expect(payload.blocks[0].flags).toEqual([]);
-    expect(payload.blocks[1].flags).toEqual(["evidence_check_needed"]);
-    expect(payload.blocks[2].flags).toEqual([]);
-    const noteRow = payload.evidence.find((e) => e.source_type === "user_note");
-    expect(noteRow).toMatchObject({ source_id: SECTION_ID, source_field: null, item_key: paragraphBlockId(SECTION_ID, 3) });
-    expect(payload.evidence.find((e) => e.item_key === "sources.0")).toMatchObject({ source_id: IDS.prjPay, source_field: "action" });
-    expect(selected.sources[0]).not.toHaveProperty("project_detail_ids");
-    expect(payload.sources[0]).not.toHaveProperty("project_detail_ids");
-    expect(payload.ai_char_count).toBe(countChars(payload.blocks.map((b) => b.text).join("\n"), "with_spaces"));
-    expect(payload.correction_applied).toBe(false);
-    expect(payload.char_adjust_needed).toBe(false);
-    expect(payload.meta).toMatchObject({ prompt_version: AI04_PROMPT_VERSION, schema_version: 2, model_tier: "default" });
-    expect(payload.meta.validation_report).toMatchObject({
-      evidence_removed_v7_scope: 2,
-      source_parent_corrected: 1,
-      sources_dropped_no_evidence: 1,
-    });
-    expect(JSON.stringify(payload.blocks)).not.toContain('"evidence"');
-    expect(view?.blocks).toEqual(payload.blocks);
+describe("compose (초안 턴)", () => {
+  it("keeps a grounded answer_title and puts it on the replace_draft op (CF-6)", async () => {
+    const ctx = coverLetterContext({}, 3);
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1")]) }], ["q_1"]);
 
-    // Prompt: data blocks, note as data, class rule for a user-added question.
-    const text = llm.requests[0].userBlocks.map((b) => b.text).join("\n");
-    expect(text).toContain('<note ref="NOTE-1">');
-    expect(text).toContain("사용자 추가 문항(유형을 분류하세요)");
-    expect(llm.requests[0].userBlocks[0].cache).toBe(true);
+    expect(result.outcome).toBe("draft");
+    expect(result.questions[0].answerTitle).toBe("응답 시간을 0.7초로 줄인 병목 분석");
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    expect(op).toBeDefined();
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
+    expect(op.slot).toBe("q_1");
+    expect(op.draft.answer_title).toBe("응답 시간을 0.7초로 줄인 병목 분석");
+    expect(op.draft.blocks[0].block_id).toBe("q_1.1");
   });
 
-  it("motivation without a note keeps [지원 동기 입력 필요]; template key fixes the class; count rule truncates", async () => {
-    const ctx = context(question({ question_text: "지원 동기", template_key: "motivation" }));
-    const out = output(ctx, {
-      question_class: "experience_story", // overridden by template_key
-      sources: [source(ctx, IDS.prjPay), source(ctx, IDS.prjSide, { role: "supporting", evidence: [{ source_type: "project", ref: a(ctx.aliases, "project", IDS.prjSide), field: "description", quote: "문자 파싱으로 자동 기록을 만들었다" }] })],
-      paragraphs: [
-        paragraph("q-p1", "[지원 동기 입력 필요] 그리고 결제 백엔드 공고에 끌렸습니다.", [{ source_type: "jd_sentence", ref: "S1", field: null, quote: null }], {
-          placeholders: [{ token: "[지원 동기 입력 필요]", hint: "이 회사를 고른 개인적 이유" }],
-        }),
-      ],
-    });
-    const { payload } = await run(ctx, [{ json: out }]);
-    expect(payload.question_class).toBe("motivation");
-    expect(payload.sources).toHaveLength(1); // motivation: 0~1 project
-    expect(payload.blocks[0].text).toContain("[지원 동기 입력 필요]");
-    expect(payload.blocks[0].placeholders).toEqual([{ token: "[지원 동기 입력 필요]", hint: "이 회사를 고른 개인적 이유" }]);
-    // JD evidence alone does not support a claim about the user → flagged, placeholder not stripped.
-    expect(payload.blocks[0].flags).toEqual(["evidence_check_needed"]);
-    expect(payload.meta.validation_report).toMatchObject({ question_class_overridden: 1, sources_truncated: 1 });
+  it("drops only the title when it claims a number the body does not have — the body survives", async () => {
+    const ctx = coverLetterContext({}, 3);
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1", { answer_title: "응답 시간 40% 단축" })]) }], ["q_1"]);
+
+    expect(result.questions[0].answerTitle).toBeNull();
+    expect(result.questions[0].titleRejected).toBe("numbers");
+    expect(result.questions[0].blocks).toHaveLength(1);
+    expect(result.questions[0].blocks[0].text).toContain("0.7초");
+    expect(result.validationReport.answer_title_dropped).toBe(1);
+    expect(result.assistantMessage).toContain("1번 문항 제목은");
   });
 
-  it("learnings: reflection allowed in future_plan, removed in job_competency (V-8)", async () => {
-    const reflect = (ctx: Ctx) => {
-      const pay = a(ctx.aliases, "project", IDS.prjPay);
-      return output(ctx, {
-        question_class: ctx.question.template_key,
+  it("asks for no title when the question already has one (사용자 제목을 덮지 않는다)", async () => {
+    const ctx = coverLetterContext({ questions: [questionRow(1, { answer_title: "내가 쓴 제목" })] });
+    const { llm, result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1")]) }], ["q_1"]);
+
+    expect(result.questions[0].answerTitle).toBeNull();
+    expect(result.questions[0].titleRejected).toBeNull();
+    const task = llm.requests[0].userBlocks.map((b) => b.text).join("\n");
+    expect(task).toContain("제목이 이미 있으므로 answer_title은 null입니다");
+  });
+
+  it("leaves the answer_title out of the char count and out of the adjust call (CF-6)", async () => {
+    // 제한 1,000자 · 본문 한 문단: 보정이 필요하므로 adjust 호출이 한 번 더 간다.
+    const ctx = coverLetterContext({ questions: [questionRow(1, { char_limit: 1000 })] });
+    const long = `${BODY_TEXT} `.repeat(6).trim();
+    const adjusted = {
+      schema_version: AI04_OUTPUT_SCHEMA_VERSION,
+      draft_type: "cover_letter",
+      turn_kind: "adjust_length",
+      questions: [{ question_slot: "q_1", paragraphs: [paragraph(ctx, ctx.pack.aliases.get("PRJ-1")!.id, long)] }],
+    };
+    const { events, result, llm } = await run(
+      ctx,
+      [{ json: composeOutput(ctx, [question(ctx, "q_1", { answer_title: "응답 시간을 0.7초로 줄인 병목 분석" })]) }, { json: adjusted }],
+      ["q_1"],
+    );
+
+    expect(events.some((e) => e.type === "adjusting_length")).toBe(true);
+    expect(llm.requests).toHaveLength(2);
+    const adjustBlocks = llm.requests[1].userBlocks.map((b) => b.text).join("\n");
+    expect(adjustBlocks).toContain("답변 제목은 담지 않습니다");
+    expect(adjustBlocks).not.toContain("응답 시간을 0.7초로 줄인 병목 분석");
+
+    const q = result.questions[0];
+    const bodyOnly = q.blocks.map((b) => b.text).join("\n");
+    expect(q.charCount).toBe(countChars(bodyOnly, "with_spaces"));
+    // 제목을 더한 길이보다 반드시 짧다 (제목이 글자 수에 들어가지 않는다).
+    expect(q.charCount).toBeLessThan(countChars(bodyOnly + (q.answerTitle ?? ""), "with_spaces"));
+    expect(q.correctionApplied).toBe(true);
+  });
+
+  it("writes one replace_draft per question of the turn (문항 배열)", async () => {
+    const ctx = coverLetterContext({}, 5);
+    const batch = selectDraftBatch(ctx).map((q) => q.slot);
+    expect(batch).toEqual(["q_1", "q_2", "q_3"]);
+    const { result, events } = await run(ctx, [{ json: composeOutput(ctx, batch.map((slot) => question(ctx, slot))) }]);
+
+    expect(result.patch.ops.filter((o) => o.op === "replace_draft")).toHaveLength(3);
+    expect(result.questions.map((q) => q.slot)).toEqual(batch);
+    expect(events.filter((e) => e.type === "sources_selected").map((e) => (e as { slot: string }).slot)).toEqual(batch);
+    expect(events.filter((e) => e.type === "draft_block")).toHaveLength(3);
+    expect(result.assistantMessage).toContain("1~3번 문항 초안을 만들었어요");
+  });
+
+  it("ignores a question the turn did not ask for (모델이 문항을 만들지 못한다)", async () => {
+    const ctx = coverLetterContext({}, 3);
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1"), question(ctx, "q_777")]) }], ["q_1"]);
+
+    expect(result.questions.map((q) => q.slot)).toEqual(["q_1"]);
+    expect(result.validationReport.questions_dropped_unknown_slot).toBe(1);
+  });
+
+  it("counts the turn only (count_draft) when nothing survives validation", async () => {
+    const ctx = coverLetterContext({}, 3);
+    const empty = question(ctx, "q_1", { paragraphs: [{ ...paragraph(ctx, ctx.pack.aliases.get("PRJ-1")!.id, "   "), evidence: [] }] });
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [empty]) }], ["q_1"]);
+
+    expect(result.outcome).toBe("empty");
+    expect(result.patch.ops).toEqual([{ op: "count_draft" }]);
+    expect(result.assistantMessage).toBe("초안을 만들 내용이 아직 부족해요.");
+  });
+
+  // V-8 (C-9): 배운 점은 job_competency 문항에서 근거가 될 수 없다 — 저장 RPC의
+  // 마지막 안전망(`source_type='project' AND source_field='learnings'` 거부)과 같은 규칙이다.
+  it("refuses a learnings evidence in a job_competency question and keeps it in a future_plan one (V-8)", async () => {
+    const learningsEvidence = (ctx: CoverLetterChatContext) => [
+      { source_type: "project", ref: a(ctx.aliases, "project", IDS.prjPay), field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" },
+    ];
+
+    const competency = coverLetterContext({ questions: [questionRow(1, { template_key: "job_competency" })] });
+    const withLearnings = (ctx: CoverLetterChatContext) =>
+      question(ctx, "q_1", {
         sources: [source(ctx, IDS.prjPay)],
-        paragraphs: [paragraph("q-p1", "측정 없이 최적화하면 안 된다는 것을 배웠습니다.", [{ source_type: "project", ref: pay, field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" }])],
+        paragraphs: [{ ...paragraph(ctx, IDS.prjPay, "측정의 중요성을 배웠습니다. 그 뒤 지표를 먼저 봅니다."), evidence: learningsEvidence(ctx) }],
+        answer_title: null,
       });
-    };
-    const plan = context(question({ question_text: "입사 후 포부", template_key: "future_plan" }));
-    const ok = await run(plan, [{ json: reflect(plan) }]);
-    expect(ok.payload.blocks[0].flags).toEqual([]);
-    expect(ok.payload.evidence.some((e) => e.source_field === "learnings")).toBe(true);
+    const a1 = await run(competency, [{ json: composeOutput(competency, [withLearnings(competency)]) }], ["q_1"]);
+    expect(a1.result.questions[0].blocks[0]?.evidence ?? []).toHaveLength(0);
 
-    const comp = context();
-    const bad = await run(comp, [{ json: reflect(comp) }]);
-    expect(bad.payload.blocks[0].flags).toEqual(["evidence_check_needed"]);
-    expect(bad.payload.evidence.some((e) => e.source_field === "learnings")).toBe(false);
-    expect(bad.payload.meta.validation_report).toMatchObject({ evidence_removed_v8_learnings: 1 });
+    const plan = coverLetterContext({ questions: [questionRow(1, { template_key: "future_plan" })] });
+    const a2 = await run(plan, [{ json: composeOutput(plan, [withLearnings(plan)]) }], ["q_1"]);
+    expect(a2.result.questions[0].blocks[0].evidence.some((e) => e.source_field === "learnings")).toBe(true);
   });
 
-  it("user mode: keeps the user's list, drops model sources outside it", async () => {
-    const userSources: UserSourceInput[] = [{ experience_id: null, education_id: null, project_id: IDS.prjEdu, role: "primary" }];
-    const ctx = context(question(), "user", userSources);
-    const capstone = a(ctx.aliases, "project", IDS.prjEdu);
-    const out = output(ctx, {
-      selection_mode: "user",
-      sources: [
-        source(ctx, IDS.prjEdu, { rationale: "캐시 일관성 경험", evidence: [{ source_type: "project", ref: capstone, field: "situation", quote: "캐시 무효화가 늦었다" }] }),
-        { ...source(ctx, IDS.prjEdu), project_ref: "PRJ-42" }, // not in the user's list (not even in the user-mode pack)
-      ],
-      paragraphs: [paragraph("q-p1", "쓰기 시 무효화 메시지를 발행해 캐시 일관성을 맞췄습니다.", [{ source_type: "project", ref: capstone, field: "action", quote: "쓰기 시 무효화 메시지를 발행했다" }])],
+  // (CF-S1, 2026-11-09 사용자 결정 — 문서 PR #68 미머지) 문항 근거는 제안에 실려 저장된다.
+  it("carries the question sources on replace_draft, always with the key present (CF-S1)", async () => {
+    const ctx = coverLetterContext({ questions: [questionRow(1, { template_key: "job_competency" })] });
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1")]) }], ["q_1"]);
+
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
+    expect(op.draft.sources).toEqual([{ source_type: "project", source_id: ctx.pack.aliases.get("PRJ-1")!.id, role: "primary" }]);
+    expect(result.questions[0].storedSources).toEqual(op.draft.sources);
+  });
+
+  it("sends an empty sources array (not a missing key) when the question legitimately selected none", async () => {
+    // motivation 문항은 프로젝트 0개가 정상이다 (AI-04 문항 유형별 규칙).
+    const ctx = coverLetterContext({ questions: [questionRow(1, { template_key: "motivation" })] });
+    const prj = a(ctx.aliases, "project", IDS.prjPay);
+    const noSources = question(ctx, "q_1", {
+      question_class: "motivation",
+      sources: [],
+      paragraphs: [{ ...paragraph(ctx, IDS.prjPay), evidence: [{ source_type: "project", ref: prj, field: "name", quote: null }] }],
     });
-    const { payload, llm } = await run(ctx, [{ json: out }]);
-    expect(payload.sources).toEqual([
-      expect.objectContaining({ project_id: IDS.prjEdu, education_id: IDS.edu, role: "primary", rationale: "캐시 일관성 경험" }),
-    ]);
-    expect(payload.meta.validation_report).toMatchObject({ sources_dropped_not_in_user_list: 1 });
-    // User-mode pack holds only the selection (+ profile).
-    expect(llm.requests[0].userBlocks[0].text).not.toContain("결제 승인 API 개선");
-    expect(llm.requests[0].userBlocks.map((b) => b.text).join("\n")).toContain("<user_sources>");
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [noSources]) }], ["q_1"]);
+
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
+    // 키가 **있고** 값이 빈 배열이다 — db는 이것을 "근거 행 없음으로 교체"로 읽는다.
+    expect(Object.prototype.hasOwnProperty.call(op.draft, "sources")).toBe(true);
+    expect(op.draft.sources).toEqual([]);
   });
 
-  it("length correction: adjusting_length → adjust call → validated (correction_applied)", async () => {
-    const ctx = context(question({ char_limit: 100 }));
-    const pay = a(ctx.aliases, "project", IDS.prjPay);
-    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
-    const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", `${koText(290)} 처리량 4321배`, ev)] });
-    const fixed = { schema_version: 2, paragraphs: [paragraph("q-p1", koText(95), ev)] };
-    const { events, payload, llm } = await run(ctx, [{ json: long }, { json: fixed }]);
+  // db-engineer R15 노트 ②-5 대조: `{op, slot, question_id?, draft}` 모양이고
+  // `value`는 보내지 않는다(DB가 blocks로 재조립), `char_limit_at_generation`은
+  // null이면 키를 두지 않는다(db가 null을 invalid_value로 본다).
+  it("matches the RPC payload shape of replace_draft", async () => {
+    const ctx = coverLetterContext({ questions: [questionRow(1, { char_limit: null })] });
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1")]) }], ["q_1"]);
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
 
-    const types = events.map((e) => e.type);
-    expect(types.slice(-3)).toEqual(["adjusting_length", "validated", "done"]);
-    expect(events.find((e) => e.type === "adjusting_length")).toMatchObject({ charLimit: 100, countBasis: "with_spaces", reasons: ["length", "numbers"] });
-    expect(llm.requests[1]).toMatchObject({ callKey: "cover_letter.adjust", promptVersion: AI04_ADJUST_PROMPT_VERSION, reasoningLevel: "low" });
-    const adjustText = llm.requests[1].userBlocks.map((b) => b.text).join("\n");
-    expect(adjustText).toContain("<draft>");
-    expect(adjustText).toContain("4321배");
-    // Same cache prefix as the generate call (C-8).
-    expect(llm.requests[1].userBlocks[0].text).toBe(llm.requests[0].userBlocks[0].text);
-    expect(payload.correction_applied).toBe(true);
-    expect(payload.char_adjust_needed).toBe(false);
-    expect(payload.ai_char_count).toBe(95);
-    expect(payload.meta.prompt_version).toContain("ai-04.adjust.v5");
-    expect(payload.meta.usage?.inputTokens).toBe(200);
+    expect(Object.keys(op).sort()).toEqual(["draft", "op", "question_id", "slot"]);
+    expect(op.question_id).toBe(ctx.questions[0].questionId);
+    expect(Object.prototype.hasOwnProperty.call(op.draft, "value")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(op.draft, "char_limit_at_generation")).toBe(false);
+    expect(op.draft.blocks.length).toBeGreaterThan(0);
+    expect(op.draft.blocks.every((b) => b.block_id.length <= 50 && /^[A-Za-z0-9_.:-]{1,64}$/.test(b.block_id))).toBe(true);
+    expect(op.draft.blocks.every((b) => b.review === "ok" || b.review === "needs_review")).toBe(true);
+    expect(op.draft.blocks.every((b) => b.basis === "new" || b.basis === "current_body")).toBe(true);
+    expect(typeof op.draft.char_count).toBe("number");
+    expect(typeof op.draft.base_body_hash).toBe("string");
+    expect(op.draft.missing_slots).toEqual([]);
+    expect(op.draft.dropped_block_count).toBeLessThanOrEqual(999);
   });
 
-  it("correction still out of range → char_adjust_needed; correction failure keeps the draft", async () => {
-    const ctx = context(question({ char_limit: 100 }));
-    const pay = a(ctx.aliases, "project", IDS.prjPay);
-    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
-    const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", koText(300), ev)] });
-
-    const still = await run(ctx, [{ json: long }, { json: { schema_version: 2, paragraphs: [paragraph("q-p1", koText(200), ev)] } }]);
-    expect(still.payload).toMatchObject({ correction_applied: true, char_adjust_needed: true, ai_char_count: 200 });
-
-    const failed = await run(ctx, [{ json: long }, { error: "rate_limited" }]);
-    expect(failed.events.at(-1)?.type).toBe("done");
-    expect(failed.payload).toMatchObject({ correction_applied: false, char_adjust_needed: true, ai_char_count: 300 });
-    expect(failed.payload.meta.validation_report).toMatchObject({ length_adjust_failed: 1 });
-  });
-
-  it("QA-S7-10: a cancel during the runner's spacing wait before the adjust call (plain AiError) ends the run, nothing persisted", async () => {
-    const ctx = context(question({ char_limit: 100 }));
-    const pay = a(ctx.aliases, "project", IDS.prjPay);
-    const ev = [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }];
-    const long = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", koText(300), ev)] });
-    const fake = createFakeLlm([{ json: long }], { chunkSize: 13 });
-    // The job runner's free-tier spaceCall throws AiError("canceled") (not a ProviderError) before the call goes out.
-    const llm = { ...fake, complete: async () => Promise.reject(new AiError("canceled")) };
-    const persisted: CompleteCoverLetterSectionPayload[] = [];
-    const events: AiStreamEvent[] = [];
-    for await (const e of streamCoverLetterSection({ context: ctx }, { llm, persist: async (p) => (persisted.push(p), { resultId: SECTION_ID }) })) {
-      events.push(e);
-    }
-    expect(events.map((e) => e.type)).toContain("adjusting_length");
-    expect(events.at(-1)).toMatchObject({ type: "error", code: "canceled" });
-    expect(persisted).toEqual([]);
-  });
-
-  it("invented numbers without a correction call are replaced and flagged", async () => {
-    const ctx = context();
-    const pay = a(ctx.aliases, "project", IDS.prjPay);
-    const out = output(ctx, {
-      sources: [source(ctx, IDS.prjPay)],
-      paragraphs: [paragraph("q-p1", "처리량을 4321배로 늘렸습니다.", [{ source_type: "project", ref: pay, field: "action", quote: "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다" }])],
-    });
-    const { payload, events } = await run(ctx, [{ json: out }]);
-    const completed = events.find((e) => e.type === "block_completed") as Extract<AiStreamEvent, { type: "block_completed" }>;
-    expect((completed.block as { text: string }).text).toBe("처리량을 4321배로 늘렸습니다.");
-    expect(payload.blocks[0]).toMatchObject({ text: "처리량을 [수치 확인 필요]로 늘렸습니다.", flags: ["number_check_needed"] });
-  });
-
-  it("reuse of another question's primary project without a reason is reported", async () => {
-    const ctx = context(question(), "ai", [], [{ question_text: "지원 동기", primary_project_ids: [IDS.prjPay] }]);
-    const out = output(ctx, { sources: [source(ctx, IDS.prjPay)], paragraphs: [paragraph("q-p1", "본문", [])] });
-    const { payload, llm } = await run(ctx, [{ json: out }]);
-    expect(payload.meta.validation_report).toMatchObject({ reuse_without_reason: 1 });
-    expect(llm.requests[0].userBlocks.map((b) => b.text).join("\n")).toContain("<other_questions>");
+  it("uses the turn-numbered call keys (C-13)", () => {
+    expect(coverLetterCallKey(2, "compose")).toBe("cover_letter.turn.2.compose");
+    expect(coverLetterCallKey(2, "adjust_length")).toBe("cover_letter.turn.2.adjust_length");
   });
 });
 
-describe("AI-04 schema misses", () => {
-  it("no paragraph → schema_invalid error, nothing persisted", async () => {
-    const ctx = context();
-    const { events, persisted } = await run(ctx, [{ json: output(ctx, { paragraphs: [] }) }]);
-    expect(events.at(-1)).toMatchObject({ type: "error", code: "schema_invalid", retryable: true });
-    expect(persisted).toEqual([]);
-  });
-});
-
-describe("AI-04 helpers", () => {
-  it.each([
-    ["가 나\n다", "with_spaces", 5],
-    ["가 나\n다", "without_spaces", 3],
-    ["[수치 입력 필요]", "without_spaces", 8],
-  ] as const)("countChars(%j, %s) = %i", (text, basis, n) => {
-    expect(countChars(text, basis)).toBe(n);
+describe("planCoverLetterTurn", () => {
+  it("refuses a requested draft once the chat used its six draft proposals", () => {
+    const ctx = coverLetterContext({
+      requestedAction: "compose_draft",
+      structuredDraft: { target: "cover_letter", draft_count: 6 },
+    });
+    expect(planCoverLetterTurn(ctx)).toEqual({ kind: "reject_draft_limit" });
   });
 
-  it.each([
-    [89, 100, true],
-    [90, 100, false],
-    [110, 100, false],
-    [111, 100, true],
-    [5000, null, false],
-  ] as const)("isLengthOutOfRange(%i, %s) = %s", (count, limit, out) => {
-    expect(isLengthOutOfRange(count, limit)).toBe(out);
-  });
-
-  it("input hash covers question, note, limit, mode and user sources", () => {
-    const base = {
-      provider: "anthropic" as const,
-      model: "m",
-      careerSnapshotHash: "c",
-      requirementsHash: "r",
-      question: question({ char_limit: 500 }),
-      mode: "ai" as const,
-      userSources: [],
-    };
-    const h = computeCoverLetterInputHash(base);
-    expect(computeCoverLetterInputHash({ ...base, question: question({ char_limit: 600 }) })).not.toBe(h);
-    expect(computeCoverLetterInputHash({ ...base, question: question({ char_limit: 500, user_note: "메모" }) })).not.toBe(h);
-    expect(computeCoverLetterInputHash({ ...base, mode: "user" })).not.toBe(h);
-  });
-
-  it("user-mode hash: user sources count; a stale v4.4 project_detail_ids key is ignored", () => {
-    const src: UserSourceInput = { experience_id: null, education_id: null, project_id: IDS.prjEdu, role: "primary" };
-    const base = {
-      provider: "anthropic" as const,
-      model: "m",
-      careerSnapshotHash: "c",
-      requirementsHash: "r",
-      question: question(),
-      mode: "user" as const,
-      userSources: [src],
-    };
-    const h = computeCoverLetterInputHash(base);
-    const stale = { ...src, project_detail_ids: ["40000000-0000-4000-8000-000000000004"] } as unknown as UserSourceInput;
-    expect(computeCoverLetterInputHash({ ...base, userSources: [stale] })).toBe(h);
-    expect(computeCoverLetterInputHash({ ...base, userSources: [{ ...src, project_id: IDS.prjPay }] })).not.toBe(h);
-  });
-
-  it("schemas are canonical (C-10.2)", () => {
-    expect(() => toCanonicalJsonSchema(Ai04OutputSchema)).not.toThrow();
-    expect(() => toCanonicalJsonSchema(Ai04AdjustOutputSchema)).not.toThrow();
+  it("is a question turn when nothing asked for a draft", () => {
+    expect(planCoverLetterTurn(coverLetterContext())).toEqual({ kind: "question" });
   });
 });

@@ -20,6 +20,7 @@ describe("toApplyJdExtractionPayload (apply_jd_extraction p_result)", () => {
     expect(Object.keys(payload).sort()).toEqual(
       [
         "company_name",
+        "deadline",
         "detected_language",
         "extraction",
         "is_likely_jd",
@@ -38,7 +39,7 @@ describe("toApplyJdExtractionPayload (apply_jd_extraction p_result)", () => {
     expect(payload.position_title).toEqual({ value: "백엔드 엔지니어 (결제)", source_sids: ["S1"] });
     expect(typeof payload.detected_language === "string" && payload.detected_language.length <= 16).toBe(true);
     expect(payload.requirements_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(payload.extraction.schema_version).toBe(1);
+    expect(payload.extraction.schema_version).toBe(2);
     expect(payload.extraction.validation_report.requirements_kept).toBe(6);
   });
 

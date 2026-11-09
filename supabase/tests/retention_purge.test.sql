@@ -66,13 +66,7 @@ insert into public.job_descriptions (id, user_id, application_project_id, raw_te
                                      extraction_job_id) values
   ('a0000000-1d00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
    'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]', 'a0000000-7777-0000-0000-000000000001');
-insert into public.drafts (id, user_id, application_project_id, draft_type, title, status, ai_job_id) values
-  ('a0000000-cccc-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'cover_letter', '자소서', 'composing', 'a0000000-7777-0000-0000-000000000001');
-insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, question_text, count_basis, ai_job_id)
-values ('a0000000-5c00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-        'a0000000-cccc-0000-0000-000000000001', 0, 'cover_letter_question', 'q', 'with_spaces',
-        'a0000000-7777-0000-0000-000000000001');
+-- R15: the drafts tables are gone; application_documents has no ai_job_id column (DM §2.7.3).
 
 -- Rows per (table, column) of every FK that references ai_jobs, matching p_job_id.
 create function pg_temp.job_refs(p_job_id uuid)
@@ -97,8 +91,7 @@ end;
 $$;
 
 select set_eq($$select ref from pg_temp.job_refs(null)$$,
-              array['insights.ai_job_id', 'drafts.ai_job_id', 'draft_sections.ai_job_id',
-                    'job_descriptions.extraction_job_id'],
+              array['insights.ai_job_id', 'job_descriptions.extraction_job_id'],
               'FKs referencing ai_jobs = the list this test covers (new FK: add a fixture row here)');
 select is_empty($$select ref from pg_temp.job_refs('a0000000-7777-0000-0000-000000000001') where n = 0$$,
                 'fixture: every ai_jobs FK column points at the job to purge');
@@ -108,14 +101,12 @@ select is_empty(
        and (con.confdeltype <> 'n' or cardinality(con.confdelsetcols) <> 1)$$,
   'every ai_jobs FK is on delete set null (job column only)');
 create temp table ref_rows_before as
-  select (select count(*) from public.insights) + (select count(*) from public.drafts)
-       + (select count(*) from public.draft_sections) + (select count(*) from public.job_descriptions) as n;
+  select (select count(*) from public.insights) + (select count(*) from public.job_descriptions) as n;
 
 select is(public.purge_old_ai_jobs((select v from t_now)), 2, 'jobs: 2 purged');
 select is_empty($$select ref, n from pg_temp.job_refs('a0000000-7777-0000-0000-000000000001') where n > 0$$,
                 'jobs: every referencing column of the purged job is now null');
-select is((select (select count(*) from public.insights) + (select count(*) from public.drafts)
-                + (select count(*) from public.draft_sections) + (select count(*) from public.job_descriptions)),
+select is((select (select count(*) from public.insights) + (select count(*) from public.job_descriptions)),
           (select n from ref_rows_before), 'jobs: no referencing result row was deleted');
 
 select results_eq($$select id::text from public.ai_jobs where user_id = 'a0000000-0000-0000-0000-000000000001'
@@ -176,6 +167,8 @@ select set_eq(
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['purge_old_ai_jobs:service_role',
         'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role',
+        -- R15 (CF-A17): the unused preview result cleanup.
+        'purge_unused_jd_preview_outputs:service_role',
         'purge_inactive_account:service_role'],
   'purge RPCs: service_role only');
 select is_empty($$select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace

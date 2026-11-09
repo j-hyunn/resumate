@@ -45,7 +45,8 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '에이비씨페이 백엔드' || chr(10) || 'Java 경험',
             'hash1', (select v from t_s), null, null, null, '2026-11-30') - 'job_description_id',
           '{"application_project_id":"a0000000-aaaa-0000-0000-000000000001","name":null,"name_source":"default",
-            "extraction_status":"pending","ai_run_allowed":false,"created":true}'::jsonb
+            "extraction_status":"pending","ai_run_allowed":false,"created":true,
+            "preview_applied":false,"preview_skip_reason":null}'::jsonb
             || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
           'no key, no company/position -> default name (KST date)');
 select is((select array[stage, coalesce(stage_outcome, '-'), deadline::text] from public.application_projects
@@ -62,7 +63,8 @@ select is((select array[raw_text_hash, extraction_status, coalesce(company_name,
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000002', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '  에이비씨페이 ', '백엔드 엔지니어', null, null)
             ->> 'name',
-          '에이비씨페이 – 백엔드 엔지니어', 'no key + company and position -> composed name');
+          -- R15 (CF-9·CF-A7): "{회사명} 자기소개서"; the position title is not part of the name any more.
+          '에이비씨페이 자기소개서', 'no key + company -> "{회사명} 자기소개서"');
 select is((select name_source from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000002'),
           'user', 'composed key-less name is user-sourced [가정 2]');
 select is((select array[company_name, company_name_source, position_title, position_title_source] from public.job_descriptions
@@ -71,22 +73,26 @@ select is((select array[company_name, company_name_source, position_title, posit
 
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '에이비씨페이', null, null, null) ->> 'name_source',
-          'default', 'no key + company only -> default name');
+          -- R15 (CF-9): a company name alone now names the application (user).
+          'user', 'no key + company only -> user-sourced "{회사명} 자기소개서"');
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, null, '  내 지원  ', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true}'::jsonb,
+          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true,
+            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
           'user name wins');
+-- R15 (CF-A7 `[가정]`): the company name is cut to its first 94 characters (' 자기소개서' is 6) -> 100 total.
 select is(char_length(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]', repeat('가', 80), repeat('나', 80), null, null) ->> 'name'),
-          100, 'composed name cut to 100 chars');
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]', repeat('가', 120), repeat('나', 80), null, null) ->> 'name'),
+          100, 'company name cut to 94 chars -> name is 100 chars');
 
 -- Idempotent replay: same id returns the stored row; inputs are ignored.
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '다른 원문', 'h2',
             '[{"sid":"S1","text":"다른","start":0,"end":2}]', null, null, '다른 이름', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":false}'::jsonb,
-          'replay with the same id returns the existing row (created=false)');
+          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":false,
+            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
+          'replay with the same id returns the existing row (created=false); the preview is not applied again');
 select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000004'),
           1, 'replay did not create a second JD');
 select is((select count(*)::int from public.application_stage_events where application_project_id = 'a0000000-aaaa-0000-0000-000000000004'),
@@ -178,8 +184,17 @@ set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","r
 select is(public.create_application_project('b0000000-aaaa-0000-0000-000000000001', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션', null, null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":null,"name_source":null,"extraction_status":"pending","ai_run_allowed":true,"created":true}'::jsonb,
-          'usable key -> name waits for extraction (null) even with company / position');
+          -- R15 (CF-9 ★): a company name names the application right away, key or no key. Only without one
+          -- does the name still wait for the extraction.
+          '{"name":"회사 자기소개서","name_source":"user","extraction_status":"pending","ai_run_allowed":true,
+            "created":true,"preview_applied":false,"preview_skip_reason":null}'::jsonb,
+          'usable key + company -> "{회사명} 자기소개서" (user) right away');
+select is(public.create_application_project('b0000000-aaaa-0000-0000-00000000000b', '원문', 'h',
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, '포지션', null, null)
+            - 'job_description_id' - 'application_project_id',
+          '{"name":null,"name_source":null,"extraction_status":"pending","ai_run_allowed":true,"created":true,
+            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
+          'usable key, no company -> the name still waits for the extraction (null)');
 select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h',
                    '[{"sid":"S1","text":"원문","start":0,"end":2}]')$$,
                  'P0001', 'application_project_id_conflict', 'another user''s id refused');

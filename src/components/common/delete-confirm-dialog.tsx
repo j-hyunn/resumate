@@ -314,7 +314,7 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
   if (impact.kind === "application_project") {
     const d = impact.data
     // K-2 (v5.13) · (v5.19, RM-1): everything under the 자기소개서 goes; spec copy verbatim
-    lines.push(`JD·요건, 인사이트 ${d.insights}, 서류 ${d.drafts}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
+    lines.push(`JD·요건, 인사이트 ${d.insights}, 서류 ${d.documents}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
   }
   // K-3 (v5.13): a cover-letter draft's sections are its questions
   if (impact.kind === "draft" && target.kind === "draft")
@@ -346,7 +346,7 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
           <ul className="list-disc space-y-1 pl-4">
             {byAp.map((ap) => (
               <li key={ap.application_project_id}>
-                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.drafts}
+                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.documents}
               </li>
             ))}
           </ul>

@@ -257,7 +257,16 @@ export function kstToday(): string {
  * "서류 초안 수" (S-13 · S-31 · S-39, C-05 N): 경력기술서 `composing` (첫 생성 중단, Q53-7) has no user
  * content and isn't counted. 자소서 `composing` holds written questions and is.
  */
-export function countsAsDraft(d: { draft_type: string; status: string }): boolean {
+/**
+ * "서류가 있다"의 셈법. R15 (DM v4.13 (7), CF-A14): a 자기소개서 정본 counts when at least one
+ * question has a written answer — `filled_slot_count > 0`. There is at most one row per
+ * 지원 프로젝트, so the count is 0 or 1.
+ *
+ * The old `drafts` shape (`{draft_type, status}`) is still accepted so the retired 서류 screens
+ * S-17 / S-19 keep compiling on `?state=` previews (leader decision 2026-11-09). `[가정]`
+ */
+export function countsAsDraft(d: { filled_slot_count: number } | { draft_type: string; status: string }): boolean {
+  if ("filled_slot_count" in d) return d.filled_slot_count > 0
   return !(d.draft_type === "career_description" && d.status === "composing")
 }
 
@@ -374,7 +383,8 @@ export const AI_FEATURE_NAMES = {
   career_description: "경력기술서",
   // UX v5.14 U36-6: C-18 기능 이름 = "자소서 문항 답변" ("자기소개서"는 지원 건 이름, CR-23)
   cover_letter: "자소서 문항 답변",
-  draft_source_ranking: "AI 근거 선택",
+  // R15 (CL-2): "AI 근거 선택" removed — AI-11 is retired (CF-1). The `draft_source_ranking`
+  // job_type / feature value stays in the DB CHECK for rows already recorded (CF-A3).
   writing_chat: "AI 작성 대화",
   // [UI-가정] S-42 entry (not in the leader list)
   usage: "AI 사용량",

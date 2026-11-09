@@ -39,6 +39,11 @@ const ACTIVE = new Set(["queued", "running"]);
 
 export class MemoryJobStore implements JobStore {
   readonly jobs = new Map<string, JobRecord>();
+  /**
+   * Last `output` written per job. `JobRecord` doesn't carry the column (the runner never reads
+   * it back), but R15's 요건 미리 보기 stores its validated result there, so tests need to see it.
+   */
+  readonly outputs = new Map<string, unknown>();
   /** Set to make the next N calls of a method throw. */
   failNext: Partial<Record<keyof JobStore, number>> = {};
 
@@ -54,7 +59,7 @@ export class MemoryJobStore implements JobStore {
 
   private apply(job: JobRecord, patch: JobPatch) {
     const { output, usage, model, promptVersion, ...rest } = patch;
-    void output;
+    if (output !== undefined) this.outputs.set(job.id, output);
     void usage;
     void model;
     void promptVersion;

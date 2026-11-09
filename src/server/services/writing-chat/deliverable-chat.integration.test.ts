@@ -15,7 +15,7 @@ import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { editDeliverableDraft, getWritingChat, listDeliverableWritingChats, startDeliverableWritingChat, startWritingChat } from "./chat";
 import { createTurnChatDb } from "./db";
-import { createDeliverablePipelines, createWritingChatPipelines } from "./pipelines";
+import { createDeliverablePipelines, createDocumentPipelines, createWritingChatPipelines } from "./pipelines";
 import { prepareTurn, runTurn, type TurnRequest } from "./turn";
 import type { TurnDeps } from "./types";
 
@@ -105,6 +105,7 @@ describe.skipIf(!ready)("AI-13 deliverable chat + page save (local stack)", () =
         input.tier === "light" ? scriptedLlmFactory(extractAdapter.adapter, Date.now)(input) : scriptedLlmFactory(replyAdapter.adapter, Date.now)(input),
       pipelines: createWritingChatPipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
       deliverablePipelines: createDeliverablePipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
+      documentPipelines: createDocumentPipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
       log,
     };
   }

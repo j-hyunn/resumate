@@ -14,11 +14,19 @@ import {
   type DeliverableDraft as DeliverableDraftType,
 } from "@/server/ai/schemas/deliverable-draft";
 import { COMPOSE_STYLES, DELIVERABLE_REQUESTED_ACTIONS, DELIVERABLE_SLOTS, WRITING_KINDS } from "@/server/ai/context-pack/deliverable-slots";
+import {
+  CoverLetterBlockSchema,
+  CoverLetterClarificationStoredSchema,
+  CoverLetterDraftSchema,
+  parseCoverLetterDraft as parseStoredCoverLetterDraft,
+  type CoverLetterDraft as CoverLetterDraftType,
+} from "@/server/ai/schemas/cover-letter-draft";
 import { AiErrorCodeSchema, AiJobStatusSchema, AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
 import {
   APPLY_PROPOSAL_FIELDS,
   CLASSIFICATION_FIELDS,
   COMPETENCIES,
+  DOCUMENT_COMPOSE_STYLES,
   DRAFT_PERIOD_FIELDS,
   EXPERIENCE_TYPES,
   KEY_STATUSES,
@@ -87,12 +95,32 @@ export function parseDeliverableDraft(value: unknown): DeliverableDraft {
   return parseStoredDeliverableDraft(value);
 }
 
+// ---------- 서류 대화 structured_draft (R15, DM 2.5.0b, AI-04) ----------
+
+export const CoverLetterDraft = CoverLetterDraftSchema;
+export type CoverLetterDraft = CoverLetterDraftType;
+export const CoverLetterDraftBlock = CoverLetterBlockSchema;
+
+/** Parses the stored jsonb of a 서류 대화. Throws on a malformed value (server bug). */
+export function parseCoverLetterDraft(value: unknown): CoverLetterDraft {
+  return parseStoredCoverLetterDraft(value);
+}
+
+/**
+ * 서류 대화 slot keys: `q_1` … `q_999` (DM 2.7.3). Unlike the STAR / deliverable slots this is a
+ * pattern, not a list, so `requested_slot` takes a plain string the turn service checks.
+ */
+export const DOCUMENT_SLOT_RE = /^q_[0-9]{1,3}$/;
+export const DocumentSlotSchema = z.string().regex(DOCUMENT_SLOT_RE);
+
 /** AI-13 slot keys (`requested_slot` of a deliverable chat). */
 export const DeliverableSlotSchema = z.enum(DELIVERABLE_SLOTS);
 export const WritingKindSchema = z.enum(WRITING_KINDS);
 /** AI-13 chips: "지금까지 내용으로 초안 만들기" / "프로젝트 내용을 바탕으로" (R5-AI-2). */
 export const DeliverableRequestedActionSchema = z.enum(DELIVERABLE_REQUESTED_ACTIONS);
 export const ComposeStyleSchema = z.enum(COMPOSE_STYLES);
+/** 서류 대화 style chips (R15, AI-04): a different vocabulary from the deliverable chat's. */
+export const DocumentComposeStyleSchema = z.enum(DOCUMENT_COMPOSE_STYLES);
 
 // ---------- form snapshot (DM 2.5.1, AI DA-15 — never stored, never logged) ----------
 
@@ -252,7 +280,7 @@ export type ReviewDraftFieldInput = z.input<typeof ReviewDraftFieldInput>;
  * (`period` … `learnings`), deliverable chats AI-13 slots; the turn service checks the slot against
  * the chat's target (`invalid_input`).
  */
-export const RequestedSlot = z.object({ slot: z.union([z.enum(WRITING_CHAT_SLOTS), DeliverableSlotSchema]) });
+export const RequestedSlot = z.object({ slot: z.union([z.enum(WRITING_CHAT_SLOTS), DeliverableSlotSchema, DocumentSlotSchema]) });
 export type RequestedSlot = z.infer<typeof RequestedSlot>;
 
 /** Fields shared by a new message and "다시 보내기" (AI-13 options are refused on STAR chats). */
@@ -260,8 +288,8 @@ const turnOptions = {
   requestedSlot: RequestedSlot.nullable().default(null),
   /** Deliverable chats only: chip action (`compose_draft` at draft_count 6 → 409 before the message is saved). */
   requestedAction: DeliverableRequestedActionSchema.nullable().default(null),
-  /** Deliverable chats only: draft style chip. */
-  style: ComposeStyleSchema.nullable().default(null),
+  /** Draft style chip; the vocabulary depends on the chat's target (deliverable / 서류). */
+  style: z.union([ComposeStyleSchema, DocumentComposeStyleSchema]).nullable().default(null),
   /**
    * The page form's unsaved values (S-10 / S-44 shape by the chat's target). Validated by the turn
    * service once the target is known → `invalid_form_snapshot` (400). Never stored or logged.
@@ -594,5 +622,157 @@ export const DELIVERABLE_TURN_EVENT_TYPES = [
   "error",
 ] as const satisfies readonly DeliverableTurnEvent["type"][];
 
+// ---------- SSE turn events of a 서류 대화 (R15, AI-04; leader decision R15-L2) ----------
+//
+// The event NAMES are the deliverable turn's (no new names were invented); a 서류 draft turn
+// writes up to three questions in one call (CL-10), so `sources_selected`, `draft_started`,
+// `draft_block`, `adjusting_length` and `draft_done` carry a `slot` (`q_{n}`) and the screen's
+// question number `questionNo`. `useAiStream`'s return shape does not change.
+//
+// Question turn: turn_started → reply_delta* → reply_done → draft_patch → draft_flags → turn_done.
+// Draft turn:    turn_started → draft_patch → draft_flags →
+//                (per question) sources_selected → draft_started → draft_block* →
+//                [adjusting_length] → (per question) draft_done →
+//                reply_done (fixed message) → turn_done.
+// Exactly one terminal: turn_done or error.
+
+/** The facts / tone patch the RPC stored (authoritative 서류 draft). */
+export const DocumentDraftPatchEvent = z.object({
+  type: z.literal("draft_patch"),
+  structuredDraft: CoverLetterDraftSchema,
+  /** Fact ids added this turn (card highlight). */
+  added: z.array(z.string()),
+});
+
+/** AI-04 flags (ids / counts only). */
+export const DocumentDraftFlagsEvent = z.object({
+  type: z.literal("draft_flags"),
+  /** Fact ids still needs_review. */
+  needsReview: z.array(z.string()),
+  sensitiveAdded: z.number().int().nonnegative(),
+  sensitiveFlagsCount: z.number().int().nonnegative(),
+  clarifications: z.array(CoverLetterClarificationStoredSchema),
+});
+
+/** The sources AI-04 chose for one question (display only; the stored rows come from the save RPC). */
+export const DocumentSourcesSelectedEvent = z.object({
+  type: z.literal("sources_selected"),
+  slot: DocumentSlotSchema,
+  questionNo: z.number().int().positive(),
+  questionClass: z.string(),
+  /** Display cards (C-11 근거 칩). The stored `{slot}.sources.{n}` rows come from the save RPC (CF-S1). */
+  sources: z.array(
+    z.object({
+      sortOrder: z.number().int().nonnegative(),
+      role: z.enum(["primary", "supporting"]),
+      experienceId: uuid.nullable(),
+      educationId: uuid.nullable(),
+      projectId: uuid.nullable(),
+      /** "회사명 › 프로젝트명" (server-built from the rows). */
+      label: z.string(),
+      rationale: z.string(),
+      reuseReason: z.string().nullable(),
+      requirementIds: z.array(uuid),
+    }),
+  ),
+});
+
+/** A compose call starts. attempt 2 = schema retry: drop the blocks of attempt 1. */
+export const DocumentDraftStartedEvent = z.object({
+  type: z.literal("draft_started"),
+  attempt: z.number().int().positive(),
+  reason: z.enum(["initial", "schema_retry"]),
+  /** The questions this call writes (CL-10: at most 3). */
+  slots: z.array(DocumentSlotSchema),
+});
+
+/** One paragraph that passed validation (provisional — `draft_done` is authoritative). */
+export const DocumentDraftBlockEvent = z.object({
+  type: z.literal("draft_block"),
+  slot: DocumentSlotSchema,
+  questionNo: z.number().int().positive(),
+  attempt: z.number().int().positive(),
+  block: CoverLetterBlockSchema,
+});
+
+/** Right before the length-correction call, for the questions that need it. */
+export const DocumentAdjustingLengthEvent = z.object({
+  type: z.literal("adjusting_length"),
+  questions: z.array(
+    z.object({
+      slot: DocumentSlotSchema,
+      questionNo: z.number().int().positive(),
+      charCount: z.number().int().nonnegative(),
+      charLimit: z.number().int().positive(),
+      countBasis: z.enum(["with_spaces", "without_spaces"]),
+      reasons: z.array(z.enum(["length", "numbers"])),
+    }),
+  ),
+});
+
+/** One question's stored proposal (the RPC's `rev` / `draft_count` + the pipeline's result). */
+export const DocumentDraftDoneEvent = z.object({
+  type: z.literal("draft_done"),
+  slot: DocumentSlotSchema,
+  questionNo: z.number().int().positive(),
+  /** CF-6: null when the title was dropped by validation (the body survives). */
+  answerTitle: z.string().nullable(),
+  charCount: z.number().int().nonnegative(),
+  charLimit: z.number().int().positive().nullable(),
+  charAdjustNeeded: z.boolean(),
+  correctionApplied: z.boolean(),
+  needsReviewBlockIds: z.array(z.string()),
+  droppedBlockCount: z.number().int().nonnegative(),
+  /** `structured_draft.document.questions[].draft.rev` (per slot, monotonic). */
+  rev: z.number().int().positive(),
+  /** Draft proposals used in this chat (DM 2.9.4: 6 per chat, not per slot). */
+  draftCount: z.number().int().nonnegative(),
+});
+
+export const DocumentTurnDoneEvent = z.object({
+  type: z.literal("turn_done"),
+  jobId: uuid,
+  messageCount: z.number().int(),
+  remainingMessages: z.number().int().nonnegative(),
+  limitReached: z.boolean(),
+  closed: z.boolean(),
+  draftStatus: z.enum(["updated", "unchanged", "failed"]),
+  draftCount: z.number().int().nonnegative(),
+  /** 서류 대화 has no return target (`start_document_writing_chat` takes none). */
+  readyToReturn: z.literal(false),
+  needsReviewCount: z.number().int().nonnegative(),
+});
+
+export const DocumentTurnEventSchema = z.discriminatedUnion("type", [
+  TurnStartedEvent,
+  ReplyDeltaEvent,
+  ReplyDoneEvent,
+  DocumentDraftPatchEvent,
+  DocumentDraftFlagsEvent,
+  DocumentSourcesSelectedEvent,
+  DocumentDraftStartedEvent,
+  DocumentDraftBlockEvent,
+  DocumentAdjustingLengthEvent,
+  DocumentDraftDoneEvent,
+  DocumentTurnDoneEvent,
+  ErrorEvent,
+]);
+export type DocumentTurnEvent = z.infer<typeof DocumentTurnEventSchema>;
+
+export const DOCUMENT_TURN_EVENT_TYPES = [
+  "turn_started",
+  "reply_delta",
+  "reply_done",
+  "draft_patch",
+  "draft_flags",
+  "sources_selected",
+  "draft_started",
+  "draft_block",
+  "adjusting_length",
+  "draft_done",
+  "turn_done",
+  "error",
+] as const satisfies readonly DocumentTurnEvent["type"][];
+
 /** Any event of the turn route (the chat's target picks the set). */
-export type AnyWritingChatTurnEvent = WritingChatTurnEvent | DeliverableTurnEvent;
+export type AnyWritingChatTurnEvent = WritingChatTurnEvent | DeliverableTurnEvent | DocumentTurnEvent;

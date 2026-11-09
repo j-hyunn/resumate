@@ -430,13 +430,17 @@ export const DeletionCascadeCounts = z.object({
   writing_chats: count,
 });
 
-/** Per application project, only those with ≥ 1 (DM §4.2). */
+/**
+ * Per application project, only those with ≥ 1 (DM §4.2; R15 D9 renamed the 서류 keys).
+ * `documents` = 자기소개서 정본 rows that cite the career row, `document_sections` = the number of
+ * its 문항 slots (the key name is kept from v4.15 although slots are no longer "sections").
+ */
 export const AffectedApplicationProject = z.object({
   application_project_id: z.guid(),
   name: z.string(),
   insights: count,
-  drafts: count,
-  draft_sections: count,
+  documents: count,
+  document_sections: count,
 });
 
 /** RPC `get_deletion_impact` jsonb for career rows (DM §4.2). Snake_case as the RPC returns it. */
@@ -460,7 +464,8 @@ export type CareerDeletionImpact = z.infer<typeof CareerDeletionImpact>;
  * `get_deletion_impact('application_project', id)` jsonb — C-05 for 자기소개서 삭제 (DM 2.7.2).
  */
 export const ApplicationProjectDeletionImpact = z.object({
-  cascade: z.object({ insights: count, drafts: count, stage_events: count }),
+  /** R15 D9: `documents` is 0 or 1 (`filled_slot_count > 0`), `document_chats` = 서류 대화 수. */
+  cascade: z.object({ insights: count, documents: count, document_chats: count, stage_events: count }),
 });
 export type ApplicationProjectDeletionImpact = z.infer<typeof ApplicationProjectDeletionImpact>;
 export type WritingChatDeletionImpact = z.infer<typeof WritingChatDeletionImpact>;

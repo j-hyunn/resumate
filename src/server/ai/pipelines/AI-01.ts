@@ -43,6 +43,12 @@ export type Ai01Input = {
   /** User-entered values only (*_source = 'user'); reference for the model. */
   companyName: string | null;
   positionTitle: string | null;
+  /**
+   * (v4.15, CF-A5) 추출 기준일 (Asia/Seoul, `YYYY-MM-DD`) for the `deadline`
+   * window check. **Never goes into the prompt** — the model must not learn
+   * today's date (AI-01 입력 컨텍스트). Omitted = the window is not checked.
+   */
+  today?: string | null;
 };
 
 export type Ai01Deps = {
@@ -75,8 +81,10 @@ export async function extractJdRequirements(input: Ai01Input, deps: Ai01Deps): P
   let validated: JdValidationResult | null = null;
   let emptyRetries = 0;
 
+  const sentenceText = (sid: string) => input.sentences.find((s) => s.sid === sid)?.text ?? null;
+
   const accept = (value: Ai01Output): boolean => {
-    const result = validateJdExtraction(value, sentenceIds);
+    const result = validateJdExtraction(value, sentenceIds, { sentenceText, today: input.today ?? null });
     validated = result;
     if (result.value.requirements.length > 0) return true;
     // [가정 S5-4] Not a JD and nothing usable → stop (no retry); a likely JD with
@@ -126,6 +134,26 @@ export async function extractJdRequirements(input: Ai01Input, deps: Ai01Deps): P
     promptVersion: AI01_PROMPT_VERSION,
     meta: structured.meta,
     attempts: structured.attempts,
+  };
+}
+
+/**
+ * (v4.15, CF-A17) 미리 보기 응답 `POST /api/job-descriptions/extract-preview`
+ * 가 돌려줄 요약 — 요건 본문은 서버(`ai_jobs.output`)에만 남는다.
+ * `deadline` is the validated value even when it is out of the window
+ * (`usable: false`); the create RPC decides whether it reaches the row.
+ */
+export function jdPreviewSummary(result: JdExtractionResult): {
+  companyName: string | null;
+  positionTitle: string | null;
+  deadline: string | null;
+  requirementCount: number;
+} {
+  return {
+    companyName: result.output.company_name?.value ?? null,
+    positionTitle: result.output.position_title?.value ?? null,
+    deadline: result.output.deadline?.usable ? result.output.deadline.value : null,
+    requirementCount: result.output.requirements.length,
   };
 }
 

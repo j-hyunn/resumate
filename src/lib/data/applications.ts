@@ -42,7 +42,6 @@ import {
   realStartInsight,
   realUpdateFailedJdRawText,
 } from "./applications-real"
-import { realGetDraft, realListDrafts, realSaveDraftSection } from "./drafts-real"
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
@@ -294,6 +293,15 @@ export interface CreateApplicationInput {
    */
   company_name?: string | null
   position_title?: string | null
+  /**
+   * R15 (CF-10·CF-A7): the posting URL the user pasted in 단계 1 (stored on the JD), and the
+   * 요건 미리 보기 job the create RPC reads the requirements from (CF-A17). Both optional; the
+   * real path passes them through, the mock store ignores them. The new S-14 2단계 모달 fills them.
+   * **Name rule (R15 D12)**: `name` given → that; else a company name → "{회사명} 자기소개서"
+   * (user), whether or not a key is connected; else no key → the default name, key → null.
+   */
+  source_url?: string | null
+  preview_job_id?: string | null
 }
 
 async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<ApplicationProject> {
@@ -348,6 +356,8 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     application_project_id: ap.id,
     raw_text: input.raw_text,
     raw_text_hash: `hash-${jdId}`,
+    // R15 (CF-10): posting URL column; the mock create path pastes text.
+    source_url: null,
     sentences: splitJdSentences(input.raw_text),
     detected_language: "ko",
     company_name: company,
@@ -733,14 +743,22 @@ export function startInsight(applicationProjectId: string, opts?: { fail?: AiErr
   return previewOr(() => mockStartInsight(applicationProjectId, opts), () => realStartInsight(applicationProjectId))
 }
 
+/**
+ * R15: 서류 reads are **연결 대기** again (mock only). The `drafts` tables are dropped
+ * (CF-1·CF-M1) and the 자기소개서 정본 reads come with S-46 in a later slice; the retired
+ * S-17 / S-19 screens keep working under `?state=` previews only
+ * (leader decision 2026-11-09). Export names and signatures are unchanged.
+ */
 export function listDrafts(applicationProjectId: string): Promise<Draft[]> {
-  return previewOr(() => mockListDrafts(applicationProjectId), () => realListDrafts(applicationProjectId))
+  return previewOr(() => mockListDrafts(applicationProjectId), async () => [])
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function getDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
-  return previewOr(() => mockGetDraft(applicationProjectId, draftId), () => realGetDraft(applicationProjectId, draftId))
+  return previewOr(() => mockGetDraft(applicationProjectId, draftId), async () => null)
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function saveDraftSection(sectionId: string, patch: DraftSectionPatch, opts?: { fail?: boolean }): Promise<DraftSection | null> {
-  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), () => realSaveDraftSection(sectionId, patch))
+  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), async () => null)
 }

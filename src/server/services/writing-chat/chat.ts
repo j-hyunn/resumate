@@ -144,6 +144,8 @@ export function toWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): Writi
   const open = chat.status === "active";
   const last = chat.messages[chat.messages.length - 1];
   const replyRunning = last?.role === "assistant" && last.status === "streaming";
+  // R15 D2: `projectId` is nullable now, but a STAR chat always has one.
+  if (!chat.projectId) throw internal(new Error("not a project chat"));
   return {
     id: chat.id,
     projectId: chat.projectId,
@@ -170,7 +172,7 @@ export function toWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): Writi
 /** S-44 panel DTO of a deliverable chat (AI-13). Chips are the screen's (`deliverableChips`, R-PA-5). */
 export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): DeliverableWritingChatDto {
   const draft = chat.deliverableDraft;
-  if (!draft || !chat.projectDeliverableId) throw internal(new Error("not a deliverable chat"));
+  if (!draft || !chat.projectDeliverableId || !chat.projectId) throw internal(new Error("not a deliverable chat"));
   const room = hasRoomForTurn(chat.messageCount);
   const open = chat.status === "active";
   const last = chat.messages[chat.messages.length - 1];

@@ -1,19 +1,18 @@
-# R15 백엔드 QA 리포트 (라운드 1 + 라운드 2)
+# R15 백엔드 QA 리포트 (라운드 1 + 라운드 2 + 후속 라운드)
 
-## 최종 판정 (2라운드 종료 — 마지막 라운드)
+## 최종 판정 (후속 라운드 반영, 2026-11-09)
 
 | 심각도 | 열림 | 닫힘 | 합계 |
 |--------|------|------|------|
 | **Critical** | **0** | 1 (QA-01) | 1 |
 | **Major** | **0** | 2 (QA-02 · R15-API-7) | 2 |
-| **Minor** | **1** (QA-04) | 3 (QA-03 · QA-05 · QA-06) | 4 |
+| **Minor** | **0** | 4 (QA-03 · **QA-04** · QA-05 · QA-06) | 4 |
 
-**Critical·Major 열린 항목 없음 → 슬라이스를 done으로 올릴 수 있다.**
+**열린 항목 0건.** 2라운드 끝에 유일하게 열려 있던 **QA-04가 닫혔다**(남았던 전역 단정 3개가 전부 픽스처 범위로 좁혀졌다 — 후속 라운드 F-D에서 확인). 후속 변경분(쓰기 가드 · 첫 복사 RPC · 읽기 4건)에서 **새 결함 0건**.
 
-**열린 항목 1건 (미해결로 넘김)**
-- **QA-04 [Minor] 담당 db — pgTAP 3개 단정이 아직 전역 `count(*)`다.** 12개 쿼리를 좁힌 수정은 유효하지만, 다른 사용자의 잔여 행이 로컬 DB에 있으면 **아직 3개 단정이 깨진다**: `r15_document_writing_chat.test.sql:358`(R15 파일) · `jd_extraction.test.sql:349` · `ai_usage_cost_backfill.test.sql:108-110`. 코드 결함이 아니라 테스트 위생 문제이고, **깨끗한 DB에서는 64파일 2,613 단정 전부 통과**한다. 상세는 "2라운드" 절.
+최종 검사 수치(후속 라운드, **다른 사용자 잔여 행을 심은 상태 · `db reset` 없이**): typecheck **통과** · lint **통과** · Vitest **150파일 2,429건 통과** · pgTAP **65파일 2,649 단정 전부 통과** · 쓰기 가드 실공격(REST·RPC) **전부 차단** · 로컬 스모크 3경로(서류 턴 · 초안 턴 compose · 미리 보기·생성 적용)는 2라운드에 통과.
 
-최종 검사 수치: typecheck **통과** · lint **통과** · Vitest **149파일 2,418건 통과** · pgTAP **64파일 2,613 단정**(깨끗한 DB 통과 / 잔여 행 있으면 3건 실패) · 로컬 스모크 **3경로 전부 통과**(서류 턴 · 초안 턴 compose · 미리 보기·생성 적용).
+> 이전 판정 기록: 2라운드 종료 시점에는 Minor 1건(QA-04) 열림으로 넘겼다. 그 기록은 아래 "라운드 2" 절에 그대로 둔다.
 
 ---
 
@@ -407,3 +406,105 @@
   (api가 같은 범위를 정식 편입했으므로 참고용)
 
 **제안**: ③의 초안 턴 케이스는 api가 편입한 `document-chat.integration.test.ts`와 겹치는 부분이 있지만, **`sources_selected`의 와이어 키에 `_`가 없다**는 단정(QA-02 정정분의 회귀 방어)은 따로 둘 가치가 있다.
+
+---
+
+# 후속 라운드 — 쓰기 가드 · 첫 복사 RPC · 읽기 4건 (2026-11-09)
+
+대상: 새 마이그레이션 `20261113004670_r15_document_write_guard_and_copy.sql` + api 후속(`application-document/read.ts`·`save.ts`·`chat.ts`·계약·`types/db.ts`). 판정 기록은 `decisions.md` "R15 후속", 담당 노트는 db "R15 후속" 절·api ⑩절.
+**코드는 고치지 않았다.** 검증 스크립트는 저장소 밖에 두고 돌린 뒤 지웠다. 원격은 **읽기 전용 조회만** 했다(`list_projects`·`list_migrations`·`list_extensions`).
+
+## F-0. 결과 요약
+
+| 영역 | 판정 | 새 결함 |
+|------|------|---------|
+| A. 쓰기 가드 | **통과** — 실공격 15가지 전부 차단, 플래그 누수 없음 | 0 |
+| B. 첫 복사 RPC | **통과** — 1회 기록 · `null` 2경우 · `updated_at` 불변 · 내용 저장은 여전히 올림 | 0 |
+| C. 읽기 4건 | **통과** — 오류가 `null`로 접히는 서버 자리 없음 · 보드는 `body`를 읽지 않음 · 교차 사용자 격리 | 0 |
+| D. 전체 회귀 | **통과** — 잔여 행 상태에서 reset 없이 4검사 통과 · 순서·원격 상태 정상 | 0 |
+
+## F-A. 쓰기 가드 — 우회 경로를 직접 찾았다
+
+로그인한 사용자 세션 클라이언트(supabase-js, 실제 PostgREST)로 공격했다. 근거: 스크래치패드 `guard-attack.out`.
+
+| # | 시도 | 결과 |
+|---|------|------|
+| 1 | REST `insert` — 6문항(`too_many_questions`를 건너뛸 모양) + `filled_slot_count: 99` | **`P0001 direct_write_not_allowed`**, 행 안 생김 |
+| 2 | REST `update` — `body` / `filled_slot_count` / `first_copied_at` / `meta` / **`updated_at`만** / **`user_id`를 B로 바꾸기** | **6개 전부 `direct_write_not_allowed`**, 행 바이트 단위 불변 |
+| 2b | REST `update` — 생성 컬럼 `slot_count` | Postgres가 먼저 거부(`428C9 … can only be updated to DEFAULT`) |
+| 3 | REST `upsert` — `onConflict`(= `ON CONFLICT DO UPDATE`) / `ignoreDuplicates`(= `DO NOTHING`) | **둘 다 `direct_write_not_allowed`** (BEFORE INSERT가 먼저 돈다), 행 불변·새 행 없음 |
+| 4 | **`.rpc("set_config", {…'on'…})`로 플래그 켜기** | **`PGRST202` 함수 없음** — `set_config`는 `pg_catalog`에 있고 PostgREST는 `public`·`graphql_public`만 노출(`supabase/config.toml:13`) |
+| 4b | `.schema("pg_catalog").rpc("set_config")` | **`PGRST106 Invalid schema`** |
+| 4c | `.rpc("current_setting")` | `PGRST202` |
+| 5 | GraphQL 변경(`/graphql/v1`) | 로컬: `pg_graphql` 미설치. **원격도 `installed_version: null`**(읽기 조회) → 운영에 두 번째 쓰기 진입점이 없다. 설치되더라도 행 트리거는 진입점과 무관하게 돈다 |
+| 8 | B가 A의 행 select / update / delete | 0행(RLS), A의 행 그대로 |
+| 9 | **A가 자기 행 REST delete** | **허용**(DM §2.7.3 "delete 본인") |
+
+**플래그 누수 — 한 트랜잭션 안에서 `authenticated`로 확인(psql, `request.jwt.claims` 설정):**
+- 저장 RPC 성공 직후 `current_setting('app.application_document_write')` = **`off`**, 같은 트랜잭션의 직접 update → **거부**.
+- **플래그 창 안에서 RPC가 raise**(`stale_write`)하고 호출자가 savepoint로 잡은 뒤 → **`off`**(서브트랜잭션 롤백이 GUC를 되돌린다), 직접 update → **거부**.
+- 복사 RPC 직후 → **`off`**, 직접 update → **거부**.
+- 저장 RPC의 플래그 창(`004670` 465~486행)에 **조기 `return`이 없다** — 경로는 insert / stale raise / update뿐.
+
+**우회 가능한 다른 자리 전수 조사(로컬 DB `pg_proc`):**
+- 플래그를 만지는 함수는 **3개뿐** — `guard_write`(트리거) · `save_application_document` · `mark_application_document_copied`(둘 다 invoker).
+- `authenticated`가 실행할 수 있는 public·private 함수 중 **`set_config`를 리터럴이 아닌 이름으로 부르는 것 0개**.
+- `application_documents`를 쓰는 **definer 함수는 `private.reset_application_document_slots` 1개**. 가드를 건너뛰지만(설계대로 — 소유자로 돈다) ① `private`은 PostgREST에 노출되지 않고 ② 모든 조회·쓰기가 `user_id = auth.uid()`로 묶여 **자기 행의 지정 슬롯을 비우는 일만** 하며 ③ `filled_slot_count`를 다시 센다. 호출자는 invoker `delete_career_item` 하나. 결함 아님.
+- **쓰기 권한을 가진 역할**: `authenticated`(가드 목록 안) · 소유자 `postgres`뿐. `service_role`은 select·delete, `app_ai_writer`는 select. 컬럼 단위 쓰기 grant 없음.
+- 트리거 순서: `application_documents_guard_write`가 `…_set_updated_at`보다 **먼저**(둘 다 BEFORE, 이름순).
+
+**delete 경로 정상**: REST delete(본인) 허용 · 지원 프로젝트 cascade와 `delete_career_item` definer 경로는 pgTAP `r15_document_write_guard.test.sql`가 단정하고 통과.
+
+**배포 순서 위험 없음**: `src/` 어디에도 `from("application_documents")` 뒤 `insert`/`update`/`upsert`가 **0건**(테스트 포함) → `004670`을 코드보다 먼저 원격에 올려도 배포된 코드가 깨지지 않는다.
+
+**`save_application_document` 회귀 없음**: `003700`(유일한 이전 정의)과 `004670`의 함수 본문을 공백 무시로 diff — **차이는 `set_config` 2줄 + 주석 2줄뿐**. 로컬 DB의 살아 있는 본문은 `004670` 파일과 같다.
+
+## F-B. 첫 복사 RPC `mark_application_document_copied`
+
+| 확인 | 결과 |
+|------|------|
+| 두 번 부르면 같은 값 · 저장된 값 = 반환값 | **그렇다** |
+| 행 없는 프로젝트 | **`null`** |
+| B가 A의 프로젝트로 호출 | **`null`**, A의 `first_copied_at` **불변** |
+| `p_document_kind` 밖 값 | `invalid_fields` |
+| **복사가 `updated_at`을 올리지 않는다** | **그렇다** |
+| **핵심 회귀 — 복사 뒤, 복사 전 기대 버전으로 내용 저장** | **성공**(`stale_write` 아님) → `updated_at`이 **오른다** → `first_copied_at` 유지 → 그 옛 버전은 **이제 `stale_write`** |
+| 내용이 같은 저장(저장된 `body`를 그대로 되보냄) | `updated_at` **유지** (R5-DB-11) |
+| `meta`만 바꾼 저장 | `updated_at` **오른다** |
+| 키 순서만 다른 같은 `body` | `updated_at` **유지**(jsonb 의미 비교) |
+| api 반환 타입 | `save.ts:109-110` — `data as string \| null`, 빈 문자열도 `null`, **`error`는 `mapDbError`로 던진다**(접지 않는다). 생성 타입 `Returns: string`과의 함정을 처리했다 |
+
+> 처음 돌린 내 시나리오에서 "변경 없는 저장인데 `updated_at`이 올랐다"가 나왔지만 **내 테스트 오류**였다 — `question_id` 없이 보내 서버가 새 uuid를 만들어 본문이 실제로 바뀌었다. 저장된 `body`를 그대로 되보내 다시 확인했고 위 표가 그 결과다.
+
+## F-C. 읽기 4건 — 데이터 손실 방지
+
+- **오류가 `null`로 접히는 서버 자리 없음**: `getApplicationDocument`·`listDocumentSlotCounts` 모두 `if (error) throw mapDbError(error)`이고 `null`은 **`!data`(행 없음)일 때만**이다. 액션 래퍼 `runAction`(`src/lib/contracts/errors.ts:128-134`)은 예외를 **`{ error }`**로 돌려주며 `{ data: null }`과 구분된다. `.maybeSingle()`은 `unique (application_project_id, document_kind)`로 다중 행 오류가 날 수 없다.
+- **보드는 `body`를 읽지 않는다**: select = `application_project_id, slot_count, filled_slot_count`(`read.ts`). 두 값은 생성 컬럼·저장 RPC 값 그대로.
+- **`getWritingChat` 서류 분기**: `chat.ts:259-262` — 산출물 → **서류** → STAR 순. 대상 배타 CHECK 때문에 세 대상이 겹치지 않아 순서가 안전하다. **STAR 목록 `listProjectWritingChats`는 `project_id = ?`(서류 대화는 `project_id` null)라 서류 대화가 섞이지 않는다.** 산출물·STAR 읽기 회귀는 기존 통합 테스트(`deliverable-chat`·`writing-chat`)가 통과로 보인다.
+- **교차 사용자**: `document-chat.integration.test.ts:507-521`이 두 번째 사용자에게 정본 `null`·보드 키 없음·근거 `{}`·대화 목록 `[]`·상세 `not_found`·복사 `null`(원래 행 불변)을 단정하고 통과. 내 REST 공격(#8)도 같은 결과.
+- **키 케이스**: `DocumentWritingChatDto.structuredDraft`는 `CoverLetterDraftSchema`(저장 모양 snake_case — AI·저장과 **같은 스키마**)로 고정, DTO 자기 필드는 camelCase. SSE `sources_selected`(camelCase 표시 카드)와는 **다른 payload**라 어긋나지 않는다. **QA-02 정정분 회귀 단정이 정식 편입됐다** — `document-chat.integration.test.ts:353·357`이 `sources_selected` 키에 `_`가 0개임을 단정(2라운드 제안 반영).
+
+**관찰(결함 아님)**: `CoverLetterDraftSchema`의 `sources`는 `.default([])`라 저장된 초안에 `sources` 키가 **없을 때**도 DTO에는 `[]`로 보인다. CF-S1에서 "키 없음 = 기존 행 유지 / 빈 배열 = 삭제"는 다른 뜻이지만, 이 파싱(`parseCoverLetterDraft`)은 **읽기 경로에서만**(DTO 매퍼·패치 결과 되읽기·AI 컨텍스트) 쓰이고, 쓰기는 파이프라인 결과로 따로 조립되며 저장 RPC는 `sources`를 DB에서 직접 읽는다(`private.doc_proposal_sources`). **저장 의미는 보존된다.** 초안 턴은 블록이 남은 문항마다 키를 항상 싣기 때문에 실제로는 거의 생기지 않는다. 표시만의 모호함이라 이슈로 올리지 않았다.
+
+## F-D. 전체 회귀
+
+| 검사 | 결과 |
+|------|------|
+| `run-checks.sh` — **잔여 행 상태, reset 없이** | **typecheck · lint · Vitest(150/2,429) · pgTAP(65/2,649) 전부 통과** |
+| 심은 잔여 행 | 다른 사용자 3명 — `application_documents` 1(`first_copied_at` 채움) · `writing_chats` 1 · `ai_jobs` 1(queued, 하트비트 없음) · `ai_usage_records` 1 · `jd_requirements` 1 · `evidence_links[application_document]` 1 |
+| **QA-04 닫힘 확인** | 2라운드에 남긴 3단정이 전부 좁혀졌다: `r15_document_writing_chat.test.sql:360-362`(`where application_project_id = <픽스처>`) · `ai_usage_cost_backfill.test.sql:110-113`(`and user_id = <픽스처>`) · `jd_extraction.test.sql:352-353`(`>= 1` — sweep은 DB 전체를 세므로 `where`로 못 좁힌다. **바로 다음 단정이 픽스처 JD의 `extraction_status`로 우리 작업이 실제로 닫혔는지 확인**하므로 약해진 만큼 보완된다) |
+| 파일 순서 | `…004650` → `…004660` → **`…004670`** → **`…004700_r15_drop_drafts`**(파괴, 마지막). `004670`에 `DESTRUCTIVE` 표식 없음 |
+| **원격 적용분 무변경** | `git diff HEAD -- supabase/migrations/` = **0**(추적 파일 diff 없음). 새 파일은 `004670` 하나(미추적) |
+| **원격 상태(읽기 전용)** | 원격 마지막 적용 = **`20261113004660`**, R15 비파괴 17개 적용됨, **`004670`·`004700` 없음** → `004670`이 원격 마지막 번호보다 뒤라 `db push`가 받는다 |
+| 생성 타입 | `gen types --local`이 `database.types.ts`와 **동일** |
+
+## F-E. 범위 밖 관찰 (리더 판단 대상 — R15 결함 아님)
+
+- **`profile_job_interests`도 같은 구조의 직접 쓰기 우회가 가능해 보인다**(db 노트가 이미 올린 건). 구조로 확인한 것: `authenticated`에 INSERT·DELETE grant, 가드 트리거 없음(트리거는 값 검사 `validate_profile_options` 하나), 제약은 `unique (user_id, job_family, job_role)`과 `sort_order` 1~2 CHECK뿐이고 **`(user_id, sort_order)` 유일성이 없다** → 서로 다른 쌍을 2개 넘게 넣어 상한을 건너뛸 수 있는 모양이다. **실제 공격으로는 재현하지 않았다**(R15 밖). 같은 패턴(트랜잭션 로컬 플래그 + 가드 트리거)으로 막을 수 있다.
+- **UI 요청(UI 세션)**: ① `src/lib/data/cover-letters.ts`(이 워크트리에 없다)의 `getCoverLetterDocument`가 액션의 **`{ error }`를 `null`로 접지 않을 것** — 접으면 서버를 고친 의미가 사라지고 문항 설정 상태로 열려 덮어쓰기가 되살아난다. ② S-46이 연 정본의 **`updated_at`을 다음 저장의 `expectedUpdatedAt`으로** 보낼 것(api 노트 ⑩ "열린 것"과 같다).
+
+## F-F. 정리
+
+- 내가 만든 사용자 3명(`qa-guard-*`·`qa-leftover-*`·`qa-ver-*`)과 그 행을 전부 지웠다. 끝 상태: 사용자 0 · `application_documents` 0 · `writing_chats` 0 · `ai_jobs` 0 · `ai_usage_records` 0 · `evidence_links` 0. 내 것이 아닌 사용자는 없었다.
+- 작업 트리에 내 파일 0개. `db reset`은 쓰지 않았다.
+- 검증 스크립트·출력: `/private/tmp/claude-501/-Users-jehyun-Resumate--claude-worktrees-cover-letter-backend-ef4d68/cdfbb6b0-f08f-43f1-a316-88fd59d80f25/scratchpad/guard-attack.mjs` · `…/guard-attack.out` · `…/run-checks-fu.log`

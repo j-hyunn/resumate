@@ -1,13 +1,25 @@
 import type { z } from "zod";
-import { AI_ERROR_CODES, AI_JOB_STATUSES, type AiErrorCode, type AiJobStatus, type AiProvider, type ConnectionTier, type KeyStatus, type WritingChatStatus } from "@/lib/contracts/enums";
+import {
+  AI_ERROR_CODES,
+  AI_JOB_STATUSES,
+  type AiErrorCode,
+  type AiJobStatus,
+  type AiProvider,
+  type ApplicationDocumentKind,
+  type ConnectionTier,
+  type KeyStatus,
+  type WritingChatStatus,
+} from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import {
   DELIVERABLE_DRAFT_LIMIT,
+  DOCUMENT_DRAFT_LIMIT,
   WRITING_CHAT_MESSAGE_LIMIT,
   type AnyWritingChatDto,
   type ApplyDraftEditInput,
   type DeliverableDraftEditResult,
   type DeliverableWritingChatDto,
+  type DocumentWritingChatDto,
   type DraftEditResult,
   type DraftFieldPath,
   type ProjectWritingChatSummary,
@@ -201,9 +213,41 @@ export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: ChatDtoEx
   };
 }
 
+/** S-46 panel DTO of a 서류 대화 (AI-04, R15 후속). Mirrors `toDeliverableWritingChatDto`. */
+export function toDocumentWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): DocumentWritingChatDto {
+  const draft = chat.documentDraft;
+  if (!draft || !chat.applicationProjectId || !chat.documentKind) throw internal(new Error("not a document chat"));
+  const room = hasRoomForTurn(chat.messageCount);
+  const open = chat.status === "active";
+  const last = chat.messages[chat.messages.length - 1];
+  const replyRunning = last?.role === "assistant" && last.status === "streaming";
+  return {
+    id: chat.id,
+    target: "application_document",
+    applicationProjectId: chat.applicationProjectId,
+    documentKind: chat.documentKind,
+    title: chat.title,
+    status: chat.status,
+    structuredDraft: draft,
+    draftCount: draft.draft_count,
+    draftLimit: DOCUMENT_DRAFT_LIMIT,
+    messageCount: chat.messageCount,
+    messageLimit: WRITING_CHAT_MESSAGE_LIMIT,
+    remainingMessages: remainingMessages(chat.messageCount),
+    limitReached: !open || !room,
+    lastActivityAt: chat.lastActivityAt,
+    lastAppliedAt: chat.lastAppliedAt,
+    createdAt: chat.createdAt,
+    messages: toMessageDtos(chat.messages, extra.failures),
+    connection: extra.connection,
+    needsReviewCount: draft.facts.filter((f) => f.review === "needs_review").length,
+    canSend: open && room && extra.connection.lock === null && !replyRunning,
+  };
+}
+
 /**
- * S-10 / S-44 패널: messages, proposal card, provider badge (opening a chat from the history list).
- * The DTO follows the chat's target (`target: "project" | "project_deliverable"`).
+ * S-10 / S-44 / S-46 패널: messages, proposal card, provider badge (opening a chat from the history list).
+ * The DTO follows the chat's target (`target: "project" | "project_deliverable" | "application_document"`).
  */
 export async function getWritingChat(supabase: UserSupabaseClient, userId: string, chatId: string, now: Date = new Date()): Promise<AnyWritingChatDto> {
   const chat = await loadChatSnapshot(supabase, chatId);
@@ -212,7 +256,10 @@ export async function getWritingChat(supabase: UserSupabaseClient, userId: strin
     readChatConnection(supabase, userId, now),
     settleOrphanedStreaming(supabase, chat).then(() => loadTurnFailures(supabase, chat)),
   ]);
-  return chat.projectDeliverableId ? toDeliverableWritingChatDto(chat, { connection, failures }) : toWritingChatDto(chat, { connection, failures });
+  if (chat.projectDeliverableId) return toDeliverableWritingChatDto(chat, { connection, failures });
+  // R15 후속: a 서류 대화 used to fall through to the STAR DTO and fail ("not a project chat").
+  if (chat.applicationProjectId) return toDocumentWritingChatDto(chat, { connection, failures });
+  return toWritingChatDto(chat, { connection, failures });
 }
 
 const SUMMARY_COLUMNS = "id, title, status, last_activity_at, last_applied_at, message_count" as const;
@@ -236,6 +283,25 @@ export async function listDeliverableWritingChats(supabase: UserSupabaseClient, 
     .from("writing_chats")
     .select(SUMMARY_COLUMNS)
     .eq("project_deliverable_id", projectDeliverableId)
+    .order("last_activity_at", { ascending: false });
+  if (error) throw mapDbError(error);
+  return toSummaries(data ?? []);
+}
+
+/**
+ * S-46 패널 대화 기록 목록 (DM 7장 25행): the 서류's chats
+ * `where application_project_id = ? and document_kind = ?` `order by last_activity_at desc`.
+ */
+export async function listDocumentWritingChats(
+  supabase: UserSupabaseClient,
+  applicationProjectId: string,
+  documentKind: ApplicationDocumentKind = "cover_letter",
+): Promise<ProjectWritingChatSummary[]> {
+  const { data, error } = await supabase
+    .from("writing_chats")
+    .select(SUMMARY_COLUMNS)
+    .eq("application_project_id", applicationProjectId)
+    .eq("document_kind", documentKind)
     .order("last_activity_at", { ascending: false });
   if (error) throw mapDbError(error);
   return toSummaries(data ?? []);

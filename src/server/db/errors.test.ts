@@ -133,3 +133,11 @@ describe("R15 create_application_project", () => {
     expect(mapDbError({ code: "P0001", message: "invalid_source_url" })).toMatchObject({ code: "invalid_input", status: 400 });
   });
 });
+
+describe("R15 후속 application_documents direct-write guard", () => {
+  it("direct_write_not_allowed → 403 forbidden with a Korean message (never reached by the app's own paths)", () => {
+    const err = mapDbError({ code: "P0001", message: "direct_write_not_allowed" });
+    expect(err).toMatchObject({ code: "forbidden", status: 403 });
+    expect(err.message).toMatch(/[가-힣]/);
+  });
+});

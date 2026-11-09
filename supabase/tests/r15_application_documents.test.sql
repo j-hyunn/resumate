@@ -85,7 +85,15 @@ select is((select count(*)::int from public.application_documents
 select throws_ok($$insert into public.application_documents (user_id, application_project_id, document_kind)
                    values ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
                            'cover_letter')$$,
-                 '42501', null, 'B cannot insert a row for A');
+                 -- R15 후속 (A): the write guard trigger refuses any direct user-session write first.
+                 'P0001', 'direct_write_not_allowed', 'B cannot insert a row for A (write guard)');
+-- And even with the RPC's transaction-local flag on, RLS still refuses B a row of A (the flag is not a bypass).
+select set_config('app.application_document_write', 'on', true);
+select throws_ok($$insert into public.application_documents (user_id, application_project_id, document_kind)
+                   values ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
+                           'cover_letter')$$,
+                 '42501', null, 'with the flag on, RLS still refuses B a row of A');
+select set_config('app.application_document_write', 'off', true);
 select is((select count(*)::int from public.application_documents
             where id = 'a0000000-dddd-0000-0000-000000000001'), 0, 'B cannot update A''s row (invisible)');
 reset role;

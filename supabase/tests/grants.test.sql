@@ -342,6 +342,8 @@ select set_eq(
         'reorder_project_deliverables', 'request_ai_job_cancel',
         -- R15 (CL-2·CL-9): the whole cover letter is saved by one RPC, and the document chat has its own starter.
         'save_application_document', 'start_document_writing_chat',
+        -- R15 후속 (B): S-46 [복사] stamps first_copied_at.
+        'mark_application_document_copied',
         'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome',
         'start_writing_chat',
         'update_failed_jd_raw_text', 'touch_last_active',

@@ -84,3 +84,28 @@ export async function startDocumentWritingChat(
   if (typeof data !== "string" || data.length === 0) throw internal(data);
   return { writingChatId: data };
 }
+
+/**
+ * R15 후속 — S-46 [복사] → `mark_application_document_copied` (security invoker, db `004670`).
+ *
+ * Records the **first** copy only: once set, `first_copied_at` never changes and the RPC answers
+ * the stored value on every later call. It **does not move `updated_at`** (a table-specific
+ * trigger skips it when only `first_copied_at` changed), so a tab holding the expected version
+ * can still save after a copy — no `stale_write`.
+ *
+ * `null` = no 정본 row yet (nothing to copy) or someone else's row (RLS hides it — not an error).
+ * The generated type says `string`; the RPC really returns null in those cases (db notes R15 후속 B).
+ */
+export async function markApplicationDocumentCopied(
+  supabase: UserSupabaseClient,
+  applicationProjectId: string,
+  documentKind: ApplicationDocumentKind = "cover_letter",
+): Promise<{ firstCopiedAt: string | null }> {
+  const { data, error } = await supabase.rpc("mark_application_document_copied", {
+    p_application_project_id: applicationProjectId,
+    p_document_kind: documentKind,
+  });
+  if (error) throw mapDbError(error);
+  const value = data as string | null;
+  return { firstCopiedAt: typeof value === "string" && value.length > 0 ? value : null };
+}

@@ -176,3 +176,47 @@ supabase migration list
 - **브라우저 미확인** — 서류 작성 화면이 없으므로 UI 세션의 화면이 붙은 뒤에 가능하다
 - **출시 전 법무 확인(사용자 몫)**: 사람인·잡코리아 이용약관의 자동 수집 제한(CF-10, PRD NFR-PRV-12)
 - 남는 제약 2건(결함 아님, 코드 주석·`spec-gaps.md`): URL 가져오기 요청 제한이 프로세스 안 슬라이딩 윈도라 **Vercel에서 람다마다 따로 센다**(기획이 수치를 `[가정: 수치]`로 비워 둔 자리) · `fetch`가 소켓 주소 훅을 주지 않아 **DNS 리바인딩 창이 남는다**
+
+## 9. 갱신 (2026-11-09) — 1단계 뒤 생긴 비파괴 2개 + 결정 대기 1건
+
+1단계(비파괴 17개)를 원격에 올린 뒤, UI 세션이 실제 경로를 연결하면서 서버 읽기 공백 4건을 찾았다. 그 4건을 고치면서 **원격에 아직 없는 비파괴 마이그레이션 2개**가 생겼다. 둘 다 **코드 배포 전에 push**해야 한다.
+
+| # | 파일 | 내용 | 파괴 | 왜 코드보다 먼저인가 |
+|---|------|------|------|---------------------|
+| 18 | `20261113004670_r15_document_write_guard_and_copy` | ① **직접 쓰기 차단 트리거**(`application_documents`) ② 첫 복사 RPC `mark_application_document_copied` ③ `updated_at` 트리거 교체(복사만 한 update는 `updated_at` 불변) | 아니다 | 새 코드의 `markApplicationDocumentCopied`가 이 RPC를 부른다. 가드는 `src/`에 직접 쓰기 호출이 0건이라(QA 확인) 먼저 올라가도 기존 코드가 깨지지 않는다 |
+| 19 | `20261113004680_r15_policy_versions_cf1` | 법무 3종(terms·privacy·ai_data_use) **2026-11-09판** 행, `requires_reconsent = false` (CF-S6) | 아니다 | UI 소유 `src/components/account/policy-content.ts`와 **같은 머지** — 아래 ⚠ 참조 |
+
+**⚠ 화면이 잠깐 어긋나는 구간**: `004680`은 코드 배포 전에 올라가고 본문(`policy-content.ts`)은 머지 때 나간다. 그래서 **push부터 머지까지는 S-30 머리글이 새 시행일(2026-11-09)인데 본문은 옛 판**이다. R14와 같은 구간이다 → **push 직후 바로 머지한다.** 재동의는 생기지 않는다(세 행 모두 `requires_reconsent = false`, pgTAP로 확인 — 옛 판 동의자의 필수 `needs_consent` 0건).
+
+**⏳ 결정 대기 — UQ-741**: 서류 저장 RPC가 기대 버전이 null이면 기존 정본을 덮어쓴다. DM §2.5.1 공통 규칙에 적힌 계약이라 백엔드가 바꾸지 않고 기획 세션에 넘겼다(권고 (a): 서류 RPC만 "행이 있는데 null이면 `stale_write`"). **확정되면 새 비파괴 마이그레이션 1개가 더 생긴다**(`004690` 자리, 파괴보다 앞). **두 PR 머지는 이 건이 정리된 뒤에 한다.**
+
+### 갱신된 전체 순서
+
+1. ~~1단계: 비파괴 17개~~ — **완료 2026-11-09**
+2. **1.5단계: 비파괴 `004670`·`004680`** (+ UQ-741이 확정되면 그 파일) — 파괴 파일을 빼낸 상태로 `db push`
+3. **코드 배포**: PR #69 + UI PR **함께 머지** (`004680` push 직후)
+4. **2단계: 파괴 `004700`** — 코드 배포 뒤, **사용자 확인 뒤**
+
+### 1.5단계 명령
+
+링크는 이미 걸려 있다(2026-11-09, 이 워크트리). 1단계와 같은 절차다.
+
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv supabase/migrations/20261113004700_r15_drop_drafts.sql /tmp/20261113004700_r15_drop_drafts.sql.hold
+```
+
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && supabase db push
+```
+
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv /tmp/20261113004700_r15_drop_drafts.sql.hold supabase/migrations/20261113004700_r15_drop_drafts.sql
+```
+
+### 1.5단계 뒤 확인 (읽기 전용)
+- [ ] `list_migrations` 마지막이 `20261113004680`(UQ-741 파일이 들어가면 그 번호)
+- [ ] `get_advisors` security — 새 RPC `mark_application_document_copied`는 **security invoker**라 SECURITY DEFINER WARN에 **새로 잡히지 않아야** 한다. 18건 그대로인지 본다
+- [ ] 2단계 뒤에는 SECURITY DEFINER WARN이 18 → 13으로 준다(옛 서류 RPC 5건 drop)
+
+### 후속 QA 결과 (2026-11-09)
+Critical 0 · Major 0 · Minor 0 — **열린 항목 없음**. 쓰기 가드는 실제 PostgREST 경로로 15가지 공격을 막았고(직접 insert·update·upsert·`set_config` 호출·`pg_catalog` 경유·GraphQL 없음), 플래그가 RPC 밖으로 새지 않는다. pgTAP **65파일 2,658**, Vitest **150파일 2,429**, typecheck·lint 통과.

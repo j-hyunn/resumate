@@ -1,13 +1,18 @@
 "use server";
 
 import {
+  ApplicationDocumentIdInput,
+  ApplicationDocumentTargetInput,
   SaveApplicationDocumentInput,
   StartDocumentWritingChatInput,
   type SaveApplicationDocumentResult,
   type StartDocumentWritingChatResult,
 } from "@/lib/contracts/application-document";
+import type { EvidenceChip } from "@/lib/contracts/evidence";
+import type { ApplicationDocument } from "@/types/db";
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import { requireConsentedUser } from "@/server/auth/session";
+import * as reads from "@/server/services/application-document/read";
 import * as documents from "@/server/services/application-document/save";
 
 /**
@@ -45,5 +50,53 @@ export async function startDocumentWritingChat(input: unknown): Promise<ActionRe
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return documents.startDocumentWritingChat(supabase, parsed.data);
+  });
+}
+
+// ---------------- R15 후속: reads (DM 7장 25행 · 33행) ----------------
+
+/**
+ * S-46 정본 1행. `null` = no row yet → 문항 설정 상태. When a row comes back the screen opens in
+ * 작성 상태 and sends its `updated_at` as the next save's `expectedUpdatedAt` — that is what keeps a
+ * re-opened 자기소개서 from being overwritten with the default questions.
+ */
+export async function getApplicationDocument(input: unknown): Promise<ActionResult<ApplicationDocument | null>> {
+  const parsed = ApplicationDocumentTargetInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return reads.getApplicationDocument(supabase, parsed.data.applicationProjectId, parsed.data.documentKind);
+  });
+}
+
+/** S-46 근거 칩 of one 정본 row, grouped by `item_key` (`{slot}.blocks.{block_id}` / `{slot}.sources.{n}`). */
+export async function listApplicationDocumentEvidence(input: unknown): Promise<ActionResult<Record<string, EvidenceChip[]>>> {
+  const parsed = ApplicationDocumentIdInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return reads.listApplicationDocumentEvidence(supabase, parsed.data.applicationDocumentId);
+  });
+}
+
+/** S-39 카드 문항 수: every 자기소개서 of the user, keyed by `application_project_id`. No input. */
+export async function listDocumentSlotCounts(): Promise<ActionResult<Record<string, reads.DocumentSlotCounts>>> {
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return reads.listDocumentSlotCounts(supabase);
+  });
+}
+
+/**
+ * S-46 [복사] → the first-copy record. Answers the stored `first_copied_at` (the first value on
+ * every later call), or `null` when there is no 정본 row yet. Never moves `updated_at`, so it never
+ * breaks the next save's expected version.
+ */
+export async function markApplicationDocumentCopied(input: unknown): Promise<ActionResult<{ firstCopiedAt: string | null }>> {
+  const parsed = ApplicationDocumentTargetInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return documents.markApplicationDocumentCopied(supabase, parsed.data.applicationProjectId, parsed.data.documentKind);
   });
 }

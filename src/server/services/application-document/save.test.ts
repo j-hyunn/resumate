@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SaveApplicationDocumentInput, StartDocumentWritingChatInput } from "@/lib/contracts/application-document";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { fakeSupabase } from "@/test/fake-supabase";
-import { saveApplicationDocument, startDocumentWritingChat } from "./save";
+import { markApplicationDocumentCopied, saveApplicationDocument, startDocumentWritingChat } from "./save";
 
 /**
  * A5 (R15): the 자기소개서 정본 save / 서류 대화 start actions. The RPC owns every rule
@@ -176,5 +176,25 @@ describe("startDocumentWritingChat", () => {
     const db = fakeSupabase({}, () => null);
     const input = StartDocumentWritingChatInput.parse({ applicationProjectId: PROJECT, documentKind: "cover_letter" });
     await expect(startDocumentWritingChat(db.client as UserSupabaseClient, input)).rejects.toMatchObject({ code: "internal_error", status: 500 });
+  });
+});
+
+describe("markApplicationDocumentCopied (R15 후속)", () => {
+  it("sends the target and answers the stored first_copied_at", async () => {
+    const db = fakeSupabase({}, () => "2026-11-09T05:00:00.000Z");
+    await expect(markApplicationDocumentCopied(db.client as UserSupabaseClient, PROJECT)).resolves.toEqual({ firstCopiedAt: "2026-11-09T05:00:00.000Z" });
+    expect(db.rpcCalls).toEqual([{ name: "mark_application_document_copied", args: { p_application_project_id: PROJECT, p_document_kind: "cover_letter" } }]);
+  });
+
+  it("null from the RPC (no row yet / someone else's row) is a null value, not an error", async () => {
+    const db = fakeSupabase({}, () => null);
+    await expect(markApplicationDocumentCopied(db.client as UserSupabaseClient, PROJECT)).resolves.toEqual({ firstCopiedAt: null });
+  });
+
+  it("invalid_fields from the RPC is mapped", async () => {
+    const db = fakeSupabase({}, () => {
+      throw raised("invalid_fields", "document_kind");
+    });
+    await expect(markApplicationDocumentCopied(db.client as UserSupabaseClient, PROJECT)).rejects.toMatchObject({ code: "invalid_fields", status: 400 });
   });
 });

@@ -9,13 +9,15 @@ insert into auth.users (id, email, aud, role) values
 
 -- ── ⑪ policy_versions.policy_type = 'ai_data_use' (D-UX-31, R-SD-14) ──
 -- 2026-11-08: 본문 원문(docs/legal/ai-data-use.md)이 생겨 새 버전 행을 더했다 (UI42-8, 20261113002900).
-select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 3,
-          'ai_data_use rows: 2026-11-05 + 2026-11-08 + 2026-11-08.1 (R14)');
+-- 2026-11-09: CF-S6 (R15) — 경력기술서 문구 삭제 개정판.
+select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 4,
+          'ai_data_use rows: 2026-11-05 + 2026-11-08 + 2026-11-08.1 (R14) + 2026-11-09 (R15, CF-S6)');
 select results_eq($$select version, requires_reconsent, document_path from public.policy_versions
                      where policy_type = 'ai_data_use' order by version$$,
   $$values ('2026-11-05', false, '/policies/ai_data_use/2026-11-05'),
            ('2026-11-08', false, '/policies/ai_data_use/2026-11-08'),
-           ('2026-11-08.1', false, '/policies/ai_data_use/2026-11-08.1')$$,
+           ('2026-11-08.1', false, '/policies/ai_data_use/2026-11-08.1'),
+           ('2026-11-09', false, '/policies/ai_data_use/2026-11-09')$$,
   'document_path follows /policies/{type}/{version}, no reconsent (R-SD-14)');
 select ok((select pg_get_constraintdef(oid) like '%ai_data_use%'
             from pg_constraint where conname = 'policy_versions_policy_type_check'),

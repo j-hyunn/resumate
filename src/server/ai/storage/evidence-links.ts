@@ -20,12 +20,17 @@ import type { ValidatedEvidence } from "../validation/evidence";
 
 export type EvidenceLinkInsert = Database["public"]["Tables"]["evidence_links"]["Insert"];
 
-export const EVIDENCE_OWNER_TYPES = [
-  "insight",
-  "draft_section",
-  // (R14, AI spec v4.14 RM-1) interview_question / answer_evaluation / session_feedback removed.
-  "chat_message",
-] as const;
+/**
+ * Owners this **AI-side** row builder may target — not the DB's full `evidence_links_owner_type_check`
+ * list (that one is `src/lib/contracts/enums.ts`).
+ *
+ * - (R14, AI spec v4.14 RM-1) interview_question / answer_evaluation / session_feedback removed.
+ * - (R15, UQ-752) `draft_section` removed — the table is dropped (CF-M1, `20261113004700`).
+ * - `application_document` is **deliberately absent**: 서류 evidence is written by the user-session save
+ *   RPC `save_application_document` from the applied proposal (CF-S1), never by an AI path. Adding it here
+ *   would open a second, unvalidated write route.
+ */
+export const EVIDENCE_OWNER_TYPES = ["insight", "chat_message"] as const;
 export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];
 
 export type EvidenceOwner = {

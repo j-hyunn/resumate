@@ -175,3 +175,66 @@ UI 세션(`local_7e541d52-…`, worktree `cover-letter-ui-469976`)이 전달한 
 **문서 정정 결과 (2026-11-09)**: DM 2.5.1 "정본 행이 생기는 때"에 남아 있던 "문항 설정 상태의 '저장하기'만 누른 경우는 행이 생기므로 다음 방문은 작성 상태다" 문장이 CF-S3와 어긋난다는 것을 내가 지적했고, UI 세션이 기획 세션에 올려 **PR #68에 정정이 추가**됐다 — 그 문장은 취소선 처리되고 CF-S3 문장(화면 게이트·RPC 변경 없음·첫 저장 = [자기소개서 작성 시작])으로 교체, UX S-46 상단 바에도 "문항 설정 상태에서는 비활성·⌘S도 꺼짐" 표기. **즉 R15의 판단(RPC 그대로)이 정본이 됐다.**
 
 **UI 세션과의 계약 합의**: 정본 키는 `get_deletion_impact` → `documents`·`document_chats`, 커리어 결과 영향 → `documents`·`document_sections`, 단 **`get_account_deletion_summary`는 반환 키 `drafts` 유지**(DM §4.3). `src/lib/data/drafts.ts`와 픽스처는 drop 커밋과 같은 머지에서 UI 세션이 걷되 **`retryJdExtraction`·`runJdExtraction`은 보존**(JD 요건 추출, S-15·D-30). UI 세션은 서버 통합 테스트를 돌리지 않으므로 공유 로컬 Supabase의 `db reset`은 이쪽이 자유롭게 쓴다. **R15 커밋 뒤 UI 세션에 알릴 것.**
+
+## 2026-11-09 R15 후속 — 읽기 공백 4건 + 쓰기 우회 1건 (UI 세션 연결 중 발견)
+
+**발견 경로**: 자소서 UI 세션(`local_7e541d52-…`)이 R15를 실제 경로에 연결하다가 **화면이 부를 서버 함수가 없는 자리** 4건을 보고했다. 리더가 코드로 4건 모두 확인했다.
+
+**판정: 기획 공백이 아니라 R15 계획의 누락이다.** DM 7장 25행 "서류 작성 화면 조회"(정본 1행 + 그 서류의 대화 목록 + 연 대화의 메시지·`structured_draft` + `application_document` 근거 + JD 머리)와 33행 "보드 조회"(`filled_slot_count`·`slot_count`)가 이미 정해 둔 읽기다. 계획서 1-E가 "연결(wiring)은 하지 않는다"를 **"UI가 부를 서버 읽기도 만들지 않는다"로 잘못 넓혔다** — 연결은 `src/lib/data/`를 실제 경로로 바꾸는 일이고, 서버 서비스·액션은 R15 범위였다.
+
+| # | 공백 | 영향 | 처리 |
+|---|------|------|------|
+| 1 | 사용자 세션으로 **정본 1행을 읽는 서비스·액션이 없다** | S-46이 늘 문항 설정 상태로 열려, 이미 쓴 자소서 위에 빈 기본 문항으로 [작성 시작]을 누르면 **정본을 덮어쓴다**(기대 버전 null = 덮어씀, 2.5.1). **코드 배포 순간 생기는 데이터 손실 경로** | `getApplicationDocument` → 행 또는 `null` |
+| 2 | `loadDocumentCounts`가 0/1만 준다 | S-39 카드 "작성 중/작성됨"을 가를 수 없다 | `listDocumentSlotCounts` → `{slot_count, filled_slot_count}`, `body` 미독 |
+| 3 | `first_copied_at`을 쓰는 경로가 없다 | 첫 복사 지표(PRD 7장) 미기록. 옛 `drafts_keep_first_copied_at`은 파괴 단계가 drop한다 | RPC `mark_application_document_copied` — 한 번만 기록, **`updated_at` 불변**(기대 버전 보호), 행 없으면 `null` |
+| 4 | 서류 대화 DTO·목록·상세가 없다(`AnyWritingChatDto`에 서류 분기 없음) | 새로 고침하면 대화와 미반영 제안이 화면에서 사라지고, 초안 6회를 쓴 대화를 다시 열 수 없다(서버 데이터는 남는다) | `DocumentWritingChatDto` + 목록·상세, 산출물 대화 읽기 관례 그대로 |
+
+**릴리스 판단**: **1이 해소되기 전에는 두 PR(#69 + UI)을 머지하지 않는다.** 4는 체감이 커서 함께, 2·3도 작아서 함께 넣는다.
+
+### 쓰기 우회 (리더 발견, 위 작업 중)
+
+**문제**: `20261113003100`이 `authenticated`에 `application_documents`의 **insert·update grant + RLS `insert_own`·`update_own`**을 둔다(저장 RPC가 `security invoker`라 필요했다 — R15-DB-1/2). 그 결과 로그인한 사용자가 **저장 RPC를 거치지 않고 REST로 자기 행을 직접 쓸 수 있다** — 문항 ≤ 5·`char_limit` 필수·슬롯 형식·`answer_title` ≤ 100·**`filled_slot_count`와 `body`의 정합성**을 모두 건너뛴다. 다른 사용자 행은 RLS가 막으므로 **교차 사용자 침해는 아니고 자기 행 무결성 문제**다. DM 2.7.3은 "insert·update = `save_application_document`"만 쓰기 경로로 둔다.
+
+**판정 (리더)**: 저장 RPC는 **문서(2.5.1 공통 규칙)대로 `security invoker`를 유지**하고, **트랜잭션 로컬 설정 플래그 없이는 쓰기를 거부하는 `BEFORE INSERT OR UPDATE` 트리거**를 단다. 저장·복사 RPC만 플래그를 세운다. **delete는 막지 않는다**(DM 2.7.3 "delete 본인", 지원 프로젝트 cascade). 문서의 두 문장("invoker"·"쓰기는 RPC로만")을 둘 다 만족하는 **구현 세부**이므로 기획 세션에 올리지 않았다.
+
+**마이그레이션**: 1단계 17개가 **원격에 이미 적용**됐으므로 기존 파일을 고치지 않고 **새 비파괴 파일 `20261113004670`** 하나로 한다(A 가드·B 복사 RPC·C 읽기 RLS 확인). **파괴 `004700`은 계속 마지막이다.** 이 파일도 **코드 배포 전에 push**해야 한다 → `05_release.md`를 고친다.
+
+**경계**: `src/lib/data/cover-letters.ts`는 UI 세션 브랜치 소유(stub이 이름·시그니처까지 맞춰져 있다)라 백엔드가 만들지 않는다. 백엔드는 서버 서비스·액션·계약만 만들고 export 목록을 UI에 넘긴다.
+
+**UI에 덧붙인 주의**: 문항 설정 상태는 `getCoverLetterDocument`가 **`null`일 때만** 들어가야 한다 — 읽기 **실패**를 `null`로 접으면 같은 덮어쓰기가 다시 생긴다.
+
+### R15 후속 db 결과 (2026-11-09)
+- 새 비파괴 `20261113004670_r15_document_write_guard_and_copy.sql` — 원격 미적용, **코드 배포 전에 push**. 순서 `004660`(원격) → `004670` → `004700`(파괴, 마지막). 원격 적용분 17개는 무변경(리더 확인).
+- **A 쓰기 가드**: 트리거 `application_documents_guard_write`, 트랜잭션 로컬 플래그 `app.application_document_write`, 거부 `direct_write_not_allowed`(P0001 → api **403**, 리더 승인). delete는 허용. 플래그가 켜져도 RLS는 그대로(남의 행 insert는 `42501`). `delete_career_item`의 definer 헬퍼는 소유자로 돌아 가드에 걸리지 않음(pgTAP 확인).
+- **B 복사 RPC** `mark_application_document_copied` — 한 번만 기록, 행 없음·남의 행은 `null`, **`updated_at` 불변**(전용 트리거가 `updated_at`·`first_copied_at`·`slot_count` 외 변화가 없으면 유지). ⚠ 생성 타입은 `Returns: string`이지만 **실제 `null`이 온다** → api는 `string | null`로 받는다.
+- **C 읽기 RLS**: 빠진 정책 없음, 새로 연 것 없음(4종 모두 `user_id = auth.uid()`).
+- pgTAP **65파일 2,649 단정**, 잔여 행을 심은 상태로도 통과.
+
+### R15 범위 밖 후속 후보 — `profile_job_interests` 쓰기 우회 (db-engineer 관찰)
+R13의 `profile_job_interests`도 **같은 구조**다 — 저장 RPC `save_profile_basics`가 `security invoker`이고 `authenticated`에 insert grant가 있어, 로그인한 사용자가 RPC를 거치지 않고 REST로 자기 관심 직무 행을 직접 쓸 수 있다(상한·검증 우회, 자기 행 무결성 문제 — 교차 사용자 침해 아님). **R15 범위가 아니라 이 슬라이스에서 고치지 않는다.** 같은 가드 패턴(`004670`)으로 막을 수 있다. 다른 invoker 저장 RPC 대상 테이블도 같은 감사가 필요하다 — 별도 슬라이스 후보.
+
+## 2026-11-09 UQ-741 — 서류 저장의 기대 버전 null = 덮어쓰기 (기획 회부, 미결)
+
+**발견**: UI 세션 UI QA UQ-741(Major). `save_application_document`가 행이 있어도 `p_expected_updated_at`이 null이면 검사 없이 덮어쓴다.
+
+**판정: 버그가 아니라 문서에 적힌 공통 계약**이라 리더가 바꾸지 않았다. DM §2.5.1 공통 규칙 "기대 버전": "null이면 덮어쓴다(화면 '내 내용으로 저장'은 이 인자 없이 다시 보낸다)". 저장 RPC 5개가 같은 규칙을 쓴다(리더 코드 확인: `save_project_page`·`save_project_deliverable`·`save_profile_basics`·`save_application_document`·R11 `p_client_id` 판).
+
+**서류에만 생기는 모호함**: S-10·S-44는 만들기와 고치기가 인자로 갈리고(대상 id null + `p_client_id`) 화면이 늘 `updated_at`을 들고 있어, null은 "내 내용으로 저장"에서만 나온다. 서류는 "행이 없으면 만들고 있으면 고친다"(구분 인자 없음)라서 **null이 "첫 저장"과 "강제 덮어쓰기" 두 뜻**을 갖는다. 행이 생기기 전에 연 탭은 보낼 `updated_at`이 없어서 **화면에서 고칠 수 없다** → 두 탭 경로로 정본이 빈 기본 문항으로 조용히 덮인다.
+
+**회부**: 기획 검토 세션(`local_6c265c4a-…`)에 선택지 4개와 구현 영향을 올렸다. **권고 (a)** — 서류 RPC만 "행이 있는데 null이면 `stale_write`", 첫 저장은 지금처럼, "내 내용으로 저장"은 `stale_write`의 `details.current_updated_at`을 다시 보낸다, S-10·S-44·프로필은 변경 없음. 확정되면 R15 후속 묶음에 새 비파괴 마이그레이션(`004700`보다 앞 번호)으로 넣는다. **두 PR 머지는 이 건 정리 뒤.**
+
+**정정 (UI QA)**: 공백 1번(정본 읽기 없음)의 현재 증상은 "늘 문항 설정 상태"가 아니라 **"S-46이 늘 오류 화면"**이다(`notWired`가 throw하고 page가 catch하지 않는다). 그래서 **현재 코드로는 덮어쓰기가 일어나지 않는다.** 위험은 "읽기를 연결할 때 실패를 `null`로 처리하면 생기는 경로"였고, UI가 `catch → null`을 넣지 않기로 했다.
+
+**UQ-752 (Minor)**: `src/server/ai/storage/evidence-links.ts:23`의 쓰는 곳 없는 타입 목록에 옛 `drafts` 이름 잔여. 런타임 영향 없음. QA가 끝난 뒤 정리한다.
+
+**파괴 전 점검 — 충족 (UI 세션 판정, 그쪽 브랜치 기준)**: 실제 경로에서 옛 `drafts`·`draft_sections`·`draft_section_sources` 참조 0건(`.from(...)` 0, 옛 RPC 호출 0, `drafts-real.ts`·`services/drafts/`·옛 생성 라우트 없음). 이름만 걸리는 실제 경로 파일 4곳은 안전 판정. `retryJdExtraction`·`runJdExtraction` 보존(`drafts.ts:1153-1158`).
+
+## 2026-11-09 CF-S6 (사용자 확정) — 법무 3종 2026-11-09판 `policy_versions` 행
+
+**출처**: 기획 검토 세션 회신. decisions 4.23 백엔드 #15, 문서 반영은 **PR #68(미머지)** — 이 워크트리 `docs/`에는 없다.
+
+**원문 확인 (리더, PR #68 브랜치 `docs/legal/` 읽기 전용)**: terms·privacy·ai_data_use 모두 **버전 `2026-11-09`, 시행일 2026-11-09, 재동의 없음**(경력기술서 삭제 — 제공 서비스·수집 항목 축소). cross_border_transfer는 대상 아님. 원격 직전 판은 terms `2026-11-08`, privacy·ai_data_use `2026-11-08.1`. 새 판의 시행일이 더 늦어 R14 동률 정렬과 무관하다.
+
+**구현**: `20261113004680_r15_policy_versions_cf1.sql`(R14 `20261113002950` 패턴 — 새 행만, `on conflict do nothing`). 번호는 `004670` 뒤·파괴 `004700` 앞. **QA 진행 중이라 스크래치패드에 준비만 했다** → QA 뒤 db-engineer가 넣고 현재 판을 박아 둔 pgTAP 7곳(`policy_versions` 개수 17→20, `consents`·`r12_ui36_followups`·`account_deletion`·`r13_settings_dialog`·`r14_remove_mock_interview`·`signup_consent_ai_gate`)을 고친다. 앱 코드 `src/server/services/shell/index.ts`는 **주석만** 걸려 변경 없음(테스트는 자체 픽스처).
+
+**릴리스 결합**: UI 소유 `src/components/account/policy-content.ts`와 **같은 머지**. 마이그레이션은 코드 배포 전에 push되므로 **push ~ 머지 사이 화면이 옛 본문에 새 시행일**을 보인다(R14와 같은 창 — push 직후 머지).

@@ -1013,6 +1013,8 @@ export interface ApplicationDocument {
   filled_slot_count: number
   /** Generated column = `jsonb_array_length(body -> 'questions')`. */
   slot_count: number
+  /** First [복사] (`mark_application_document_copied`); set once, never moves `updated_at`. */
+  first_copied_at: Timestamp | null
 }
 
 // ---------------------------------------------------------------------------

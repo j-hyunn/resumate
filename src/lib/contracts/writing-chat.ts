@@ -23,6 +23,7 @@ import {
 } from "@/server/ai/schemas/cover-letter-draft";
 import { AiErrorCodeSchema, AiJobStatusSchema, AiProviderSchema, ConnectionTierSchema, ErrorEvent, ModelTierSchema } from "./ai";
 import {
+  APPLICATION_DOCUMENT_KINDS,
   APPLY_PROPOSAL_FIELDS,
   CLASSIFICATION_FIELDS,
   COMPETENCIES,
@@ -423,8 +424,56 @@ export const DeliverableWritingChatDto = z.object({
 });
 export type DeliverableWritingChatDto = z.infer<typeof DeliverableWritingChatDto>;
 
-/** Either panel's opened chat (`getWritingChat` answers by the chat's target). */
-export type AnyWritingChatDto = WritingChatDto | DeliverableWritingChatDto;
+/** 서류 대화 drafts per chat — **초안 턴 6회** (DM 2.9.4, AI 명세 C-14; R15-API-7 판정: 턴당 1). */
+export const DOCUMENT_DRAFT_LIMIT = 6;
+
+/**
+ * One 서류 대화 for the S-46 panel (R15 후속, DM 7장 25행). Same shape and conventions as
+ * `DeliverableWritingChatDto`; the target is `(applicationProjectId, documentKind)` and there is no
+ * project.
+ *
+ * **Key case**: like every chat DTO, `structuredDraft` is the **stored jsonb as is** (snake_case —
+ * `draft_count`, `document.questions[].draft.sources[]` `{source_type, source_id, role}`,
+ * `answer_title`, block `source_fact_ids` …), the same object the SSE `draft_patch` event carries.
+ * The DTO's own fields are camelCase. The only camelCase rename of draft-derived data is the SSE
+ * `sources_selected` display card (`DocumentSourcesSelectedEvent`), which is a separate payload —
+ * the screen reads the stored proposal from `structuredDraft`, never from that event.
+ */
+export const DocumentWritingChatDto = z.object({
+  id: uuid,
+  target: z.literal("application_document"),
+  applicationProjectId: uuid,
+  documentKind: z.enum(APPLICATION_DOCUMENT_KINDS),
+  title: z.string().nullable(),
+  status: z.enum(WRITING_CHAT_STATUSES),
+  structuredDraft: CoverLetterDraftSchema,
+  /** structured_draft.draft_count (초안 턴 수); the screen shows 6 − draftCount. */
+  draftCount: z.number().int().nonnegative(),
+  draftLimit: z.literal(DOCUMENT_DRAFT_LIMIT),
+  messageCount: z.number().int(),
+  messageLimit: z.literal(WRITING_CHAT_MESSAGE_LIMIT),
+  remainingMessages: z.number().int().nonnegative(),
+  limitReached: z.boolean(),
+  lastActivityAt: isoDateTime,
+  lastAppliedAt: isoDateTime.nullable(),
+  createdAt: isoDateTime,
+  messages: z.array(WritingChatMessageDto),
+  connection: WritingChatConnection,
+  /** Facts still needs_review ("검토가 필요한 항목 N개"). */
+  needsReviewCount: z.number().int().nonnegative(),
+  canSend: z.boolean(),
+});
+export type DocumentWritingChatDto = z.infer<typeof DocumentWritingChatDto>;
+
+/** Any panel's opened chat (`getWritingChat` answers by the chat's target). */
+export type AnyWritingChatDto = WritingChatDto | DeliverableWritingChatDto | DocumentWritingChatDto;
+
+/** S-46 패널 대화 기록 목록 input: the 서류's chats (DM 7장 25행). */
+export const DocumentWritingChatsInput = z.object({
+  applicationProjectId: uuid,
+  documentKind: z.enum(APPLICATION_DOCUMENT_KINDS).default("cover_letter"),
+});
+export type DocumentWritingChatsInput = z.input<typeof DocumentWritingChatsInput>;
 
 /** S-10 패널 대화 기록 목록 (DM §7: id, title, status, message_count, last_activity_at, last_applied_at). */
 export const ProjectWritingChatSummary = z.object({

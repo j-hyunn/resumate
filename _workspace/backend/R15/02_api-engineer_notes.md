@@ -265,3 +265,77 @@ QA의 임시 스모크를 정식 편입하고 **초안 턴(compose)을 더했다
 
 겹치지 않으므로 **편입했다**. 기존 50건 중 SSRF 단위 테스트는 `lookup`을 주입해 **차단 목록만** 보고 운영 해석 경로를 타지 않는다. 이 파일은 `fetchJobDescription`을 **기본 deps 그대로** 불러, 주입 lookup으로는 재현할 수 없는 형태를 덮는다: 10진·8진 IPv4(`2130706433`·`0177.0.0.1`), 미지정 주소(`[::]`·`0.0.0.0`), 끝점 호스트(`LOCALHOST.`), IPv4-mapped 루프백, `file:`·`gopher:`·자격증명 URL. **로그 키가 정확히 5개**(`event`·`host`·`code`·`bytes`·`elapsedMs`)인지도 본다. 모든 케이스가 fetch 전에 거부되므로 외부 트래픽·플레이크 없음.
 
+
+---
+
+## ⑩ R15 후속 (2026-11-09) — 읽기 쪽 공백 4건 + 복사 기록 + 직접 쓰기 거부 매핑
+
+- 검증: `pnpm typecheck` 통과 · `pnpm lint` 경고 0 · `pnpm test` **150파일 2,429건 전부 통과** (db `20261113004670` 적용·타입 재생성 뒤).
+- **`src/lib/data/cover-letters.ts`는 만들지도 고치지도 않았다**(UI 세션 소유). 서버 쪽(`src/server/services/**`·`src/server/actions/**`·`src/lib/contracts/**`)과 `src/types/db.ts`(필드 1개 추가)만 손댔다. 마이그레이션·`supabase/` 미수정.
+
+### UI가 부를 서버 export 목록 (UI 세션에 그대로 전달)
+
+모든 액션은 `"use server"`, 동의 확인된 사용자 세션(RLS = 본인 것만), 반환은 `ActionResult<T>` = `{ data: T } | { error: { code, message, details? } }`. **AI 키·동의·활성 공급자를 보지 않는다.**
+
+| UI stub (cover-letters.ts) | 부를 서버 액션 | 입력 | `data` 모양 |
+|---|---|---|---|
+| `getCoverLetterDocument(applicationProjectId)` | **`getApplicationDocument`** — `@/server/actions/application-document` | `{ applicationProjectId: uuid, documentKind?: "cover_letter" }` | **`ApplicationDocument \| null`** (`@/types/db`) — 행 그대로(snake_case): `id`·`user_id`·`created_at`·**`updated_at`**·`application_project_id`·`document_kind`·`body {questions[]}`·`meta {tone?}`·`filled_slot_count`·`slot_count`·**`first_copied_at`**. `null` = 행 없음 → 문항 설정 상태 |
+| `listCoverLetterSlotCounts()` | **`listDocumentSlotCounts`** — 같은 파일 | **없음**(인자 없이 호출) | **`Record<application_project_id, { slot_count: number; filled_slot_count: number }>`** — 행이 없는 프로젝트는 키가 없다 |
+| `markCoverLetterCopied(applicationProjectId)` | **`markApplicationDocumentCopied`** — 같은 파일 | `{ applicationProjectId: uuid, documentKind?: "cover_letter" }` | **`{ firstCopiedAt: string \| null }`** — 저장된 첫 값(두 번째 호출도 첫 값). `null` = 정본 행 없음(복사할 본문 없음). stub이 `Promise<void>`면 값을 버리면 된다 |
+| (근거 칩) | **`listApplicationDocumentEvidence`** — 같은 파일 | `{ applicationDocumentId: uuid }` (= `getApplicationDocument`의 `id`) | **`Record<item_key, EvidenceChip[]>`** — `item_key` = `{slot}.blocks.{block_id}`(블록 근거) / `{slot}.sources.{n}`(문항 근거, CF-S1). 각 목록 `sort_order` 순. `EvidenceChip`은 인사이트와 같은 계약(`@/lib/contracts/evidence`) |
+| (대화 기록 목록) | **`listDocumentWritingChats`** — `@/server/actions/writing-chat` | `{ applicationProjectId: uuid, documentKind?: "cover_letter" }` | **`ProjectWritingChatSummary[]`** (산출물·STAR와 같은 타입) — `id`·`title`·`status`·`lastActivityAt`·`lastAppliedAt`·`messageCount`·`messageLimit`, `last_activity_at desc` |
+| (대화 열기·새로 고침) | **`getWritingChat`** — 기존 액션 그대로 | `{ writingChatId: uuid }` | 서류 대화면 **`DocumentWritingChatDto`**(`target: "application_document"`) — `AnyWritingChatDto` 유니온에 추가됨. `applicationProjectId`·`documentKind`·`structuredDraft`(저장 jsonb 그대로)·`draftCount`·`draftLimit: 6`·메시지·연결 상태·`needsReviewCount`·`canSend` |
+| (저장 — 기존) | `saveApplicationDocument` | 기존 | **`expectedUpdatedAt`에 `getApplicationDocument`의 `updated_at`을 넣어야 한다** — 이번 공백의 핵심(아래) |
+
+**`target`으로 분기해야 한다**: `getWritingChat`은 이제 세 모양 중 하나를 돌려준다. S-10·S-44용 데이터 계층(`career-v45.ts`)은 서류 대화가 오면 `null`로 처리하도록 고쳤다(그 패널의 대화가 아니다).
+
+### 1. 정본 1행 읽기 — 데이터 손실 경로를 막는다
+
+- 사실 확인: 사용자 세션으로 `application_documents` 한 행을 읽는 경로가 없었다. S-46이 늘 문항 설정 상태로 열리고, 첫 저장이 기대 버전 없이(`p_expected_updated_at` null = 덮어씀) 나가 **기존 정본을 빈 기본 문항으로 덮어쓰는** 경로였다.
+- `src/server/services/application-document/read.ts` `getApplicationDocument(user, applicationProjectId, documentKind = "cover_letter")` → `ApplicationDocument | null`. `body`·`meta`는 저장 RPC가 정하는 모양 그대로 넘긴다(여기서 재조립하지 않는다). `slot_count`는 생성 컬럼이라 생성 타입이 `number | null`이지만 `body`가 not null이므로 `?? 0`.
+- `src/types/db.ts` `ApplicationDocument`에 **`first_copied_at: Timestamp | null`**을 더했다(UI stub이 이 타입을 쓴다).
+- **화면이 할 일(UI 요청)**: 행이 오면 작성 상태로 열고 그 `updated_at`을 다음 저장의 `expectedUpdatedAt`으로 보낼 것. 그래야 다른 탭·다른 기기의 저장과 충돌하면 `stale_write`(409, `details.current_updated_at`)가 난다.
+
+### 근거 읽기 — 새 경로를 만들지 않았다
+
+- 기존 공용 칩 읽기(`src/server/services/evidence/index.ts` `loadEvidenceChips`)가 `ownerType: EvidenceOwnerType`을 받아 **`application_document`를 그대로 처리한다**(R15 A9에서 그 열거에 들어갔다). 변경됨/삭제됨 판정도 인사이트와 같은 규칙이다.
+- 서버 액션 경계를 넘도록 `Map` 대신 **평범한 record**로 돌려주는 얇은 래퍼 `listApplicationDocumentEvidence`만 더했다. UI stub `getCoverLetterDocument`의 반환은 지시대로 **행만**이고 근거는 따로 부른다.
+- `user_note` 출처 칩의 라벨은 여전히 폴백이다(spec-gaps R15-API-4 — `source_id`가 `body` 안의 `question_id`라 조인 대상이 없다). 화면이 `body.questions[]`에서 그 문항 문구를 찾아 붙이면 된다.
+
+### 2. 보드용 문항 수
+
+- `listDocumentSlotCounts(user, documentKind = "cover_letter")` → `Record<application_project_id, {slot_count, filled_slot_count}>`. **`application_project_id`·`slot_count`·`filled_slot_count`만 select하고 `body`를 읽지 않는다**(단위 테스트가 select 컬럼 목록에 `body`가 없음을 단정). 카드 판정(표시 없음 / 작성 중 / 작성됨)은 화면 규칙이다(2.7.3).
+- 기존 `loadDocumentCounts`(0/1, `progress.ts`)는 **지우지 않았다**(기존 호출부 `services/application/read.ts`).
+
+### 3. 첫 복사 기록 — db `004670`·타입 재생성 확인 뒤 붙였다
+
+- `markApplicationDocumentCopied(user, applicationProjectId, documentKind)` → `{ firstCopiedAt: string | null }`.
+- **타입 함정 처리**: 생성 타입은 `Returns: string`이지만 행이 없거나 남의 행이면 실제로 `null`이 온다(db 노트 R15 후속 B). `data as string | null`로 받고 빈 문자열도 `null`로 접는다. **통합 테스트가 "정본 행이 없는 프로젝트 → `null`"과 "남의 행 → `null`이고 그 행은 그대로"를 단정한다.**
+- 통합 테스트로 확인한 것: 첫 호출이 값을 기록 → 두 번째 호출이 **같은 값** → 행의 `first_copied_at`이 그 값 → **`updated_at` 불변** → **복사 전 기대 버전으로 저장해도 `stale_write`가 나지 않는다**.
+
+### 4. 서류 대화 읽기 — 새로 고침하면 대화가 사라지던 문제
+
+- `DocumentWritingChatDto`를 `src/lib/contracts/writing-chat.ts`에 신설하고 `AnyWritingChatDto` 유니온에 넣었다. 매퍼 `toDocumentWritingChatDto`는 `chat.ts`에서 **`toDeliverableWritingChatDto`를 그대로 본떴다**(같은 파일·같은 필드 순서·같은 `canSend` 규칙). `DOCUMENT_DRAFT_LIMIT = 6`(초안 턴 6회, R15-API-7 판정).
+- **발견한 결함 1건**: `getWritingChat`이 서류 대화를 STAR DTO 분기로 보내 내 R15 가드(`not a project chat`)에 걸려 **500**이 났다. 서류 분기를 더해 고쳤다.
+- 목록 `listDocumentWritingChats(user, applicationProjectId, documentKind)` — `where application_project_id = ? and document_kind = ?` `order by last_activity_at desc`, 산출물 목록과 같은 `ProjectWritingChatSummary` 모양.
+- **키 케이스 판단**: 기존 대화 DTO 관례를 따랐다 — **`structuredDraft`는 저장 jsonb 그대로(snake_case)**이고 DTO 자기 필드는 camelCase다. 산출물 DTO의 `DeliverableDraftSchema`, SSE `draft_patch`/`facts_patch`의 `structuredDraft`도 전부 snake_case 저장 모양이다. 그래서 `document.questions[].draft.sources[]`는 저장된 `{source_type, source_id, role}`이고 `answer_title`·`draft_count`도 그대로다. **SSE `sources_selected`의 camelCase와 어긋나지 않는다**: 그 이벤트는 저장 초안의 일부가 아니라 **별도의 표시 카드 payload**이고(QA-02에서 깨진 것이 바로 이런 "독립 payload에 저장 모양이 새는" 경계였다), 화면은 저장된 제안을 언제나 `structuredDraft`에서 읽는다. 계약 주석에 이 규칙을 적었다.
+
+### 5. 거부 코드 매핑
+
+- **`direct_write_not_allowed` → 403 `forbidden`**(db 권고·리더 승인 — 권한 문제이지 입력 오류가 아니다), 한국어 문구. 정상 경로(저장·복사 RPC)에서는 나오지 않는다. 단위 테스트 1건.
+
+### 테스트
+
+| 파일 | 추가 |
+|------|------|
+| `application-document/read.test.ts` (신설 6) | 정본 행 매핑(`updated_at`·`first_copied_at`) · 행 없음 `null` · 다른 프로젝트 행 안 섞임 · 보드 두 값 키잉 · **`body`를 select하지 않음** · 빈 record |
+| `application-document/save.test.ts` (+3) | 복사 RPC 인자·반환 · **RPC `null` → 값 `null`(오류 아님)** · `invalid_fields` 매핑 |
+| `db/errors.test.ts` (+1) | `direct_write_not_allowed` → 403 |
+| `writing-chat/document-chat.integration.test.ts` (+1, 총 5) | 실제 로컬 스택: 저장 전 `null` → 저장 뒤 행(`updated_at` = 저장 결과) · 보드 `{3, 1}` 정확 · 근거 읽기(새 소유자) · **초안 턴 뒤 목록·상세를 처음부터 다시 읽어 `DocumentWritingChatDto`로, 반영하지 않은 제안이 남아 있음**(새로 고침) · 복사 기록(첫 값 유지·`updated_at` 불변·복사 전 기대 버전 저장 통과·행 없음 `null`) · **두 번째 사용자: 정본 `null`·보드 키 없음·근거 `{}`·대화 목록 `[]`·상세 `not_found`·복사 `null`이고 원래 행 불변** |
+
+- 단정은 전부 그 테스트가 만든 프로젝트·대화 id로 범위를 좁혔다 — 다른 테스트나 다른 사용자의 잔여 행이 있어도 통과한다.
+
+### 열린 것
+
+- **UI 요청**: S-46이 열 때 `getApplicationDocument` → 행이 있으면 그 `updated_at`을 기대 버전으로 들고 있을 것(이번 공백의 핵심 — 이게 빠지면 서버를 고쳐도 덮어쓰기는 남는다).
+- db 노트가 적은 같은 구조의 우회(`profile_job_interests` 직접 쓰기)는 R15 밖이라 손대지 않았다 — 리더 판단 대상.

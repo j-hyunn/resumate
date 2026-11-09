@@ -127,6 +127,13 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_evidence_source: { message: "근거로 쓸 수 없는 항목이 있어 저장하지 않았어요. 새로고침 후 다시 시도해 주세요.", status: 400 },
   // R15 save_application_document (db notes ②-1)
   invalid_slot: { message: "문항 목록이 바뀌었습니다. 새로고침 후 다시 시도해 주세요." },
+  /**
+   * R15 후속 (db `20261113004670`): `application_documents` rejects a direct insert / update — the
+   * only write paths are `save_application_document` and `mark_application_document_copied`, so
+   * the app never sees this. Mapped so a direct client write gets a clean 403, not a 500.
+   * Name per the leader's brief (`direct_write_not_allowed`); confirm against the db notes.
+   */
+  direct_write_not_allowed: { message: "이 방법으로는 저장할 수 없어요. 화면의 저장하기를 이용해 주세요.", status: 403 },
   too_many_questions: { message: "문항은 5개까지 쓸 수 있어요." },
   // R15 (QA-R15-03): the S7 서류 거부 코드 16개는 `20261113004700`이 그 함수들을 drop해 고아가 됐다
   // (로컬 DB `pg_proc` 전수 확인: raise하는 함수 0개). 남은 패치 거부 코드는 아래 그대로 쓰인다.
@@ -233,6 +240,7 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
   invalid_source_url: "invalid_input",
+  direct_write_not_allowed: "forbidden",
   // R15: `invalid_slot`, `too_many_questions` and `invalid_evidence_source` keep their own codes
   // (unknown code → 400) so S-46 can tell the three apart; see src/lib/contracts/application-document.ts.
 };

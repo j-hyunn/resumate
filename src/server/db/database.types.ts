@@ -669,6 +669,9 @@ isOneToOne: false
               "user_id": string
             }[]
                            },
+"mark_application_document_copied":
+{ Args: { "p_application_project_id": string,"p_document_kind"?: string }; Returns: string
+                           },
 "mark_inactivity_notice_sent":
 { Args: { "p_sent_at": string,"p_user_id": string }; Returns: boolean
                            },

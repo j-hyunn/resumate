@@ -1020,7 +1020,7 @@ export interface ApplicationDocument {
   filled_slot_count: number
   /** Generated column = `jsonb_array_length(body -> 'questions')`. */
   slot_count: number
-  /** S-46 "전체 복사"가 처음 눌린 시각 (PRD 7장 지표). 생성 타입에 있는 실제 컬럼이다 */
+  /** First [복사] (`mark_application_document_copied`); set once, never moves `updated_at`. S-46 "전체 복사" (PRD 7장 지표) */
   first_copied_at: Timestamp | null
 }
 

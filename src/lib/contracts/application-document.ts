@@ -197,3 +197,15 @@ export const DOCUMENT_SAVE_ERROR_CODES = [
   "invalid_evidence_source",
 ] as const;
 export type DocumentSaveErrorCode = (typeof DOCUMENT_SAVE_ERROR_CODES)[number];
+
+// ---------- R15 후속: reads (DM 7장 25행) ----------
+
+/** S-46 정본 1행 / 대화 목록의 대상: `(applicationProjectId, documentKind)`. */
+export const ApplicationDocumentTargetInput = z
+  .object({ applicationProjectId: uuid, documentKind: ApplicationDocumentKindSchema.default("cover_letter") })
+  .strict();
+export type ApplicationDocumentTargetInput = z.input<typeof ApplicationDocumentTargetInput>;
+
+/** S-46 근거 읽기: the 정본 row's id (`owner_id` of its `evidence_links`). */
+export const ApplicationDocumentIdInput = z.object({ applicationDocumentId: uuid }).strict();
+export type ApplicationDocumentIdInput = z.input<typeof ApplicationDocumentIdInput>;

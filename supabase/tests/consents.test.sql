@@ -27,7 +27,7 @@ select is((select required from public.get_consent_status() where consent_type =
 select is((select needs_consent from public.get_consent_status() where consent_type = 'cross_border_transfer'),
           false, 'cross_border_transfer does not need consent at sign-up');
 select is((select current_version from public.get_consent_status() where consent_type = 'marketing'),
-          '2026-11-08.1', 'optional consents follow the privacy version');
+          '2026-11-09', 'optional consents follow the privacy version (CF-S6: privacy 2026-11-09)');
 
 -- record_consents error branches
 select throws_ok($$select * from public.record_consents('[]'::jsonb, null)$$,
@@ -62,15 +62,18 @@ select is(
 select is((select count(*)::int from public.consents), 4, 'one row per item');
 select is((select count(*)::int from public.consents where consent_type = 'cross_border_transfer'),
           0, 'sign-up records no cross_border_transfer row');
--- 동의마다 **자기 문서의** 현재 버전을 인용한다. R14(RM-1): terms는 2026-11-08, privacy 계열
--- (privacy_required·service_improvement·marketing)은 같은 시행일의 2026-11-08.1(동률 정렬로 .1이 현재 판).
-select is((select count(distinct policy_version)::int from public.consents), 2, 'server filled each consent''s own document version');
-select is((select policy_version from public.consents where consent_type = 'terms'), '2026-11-08', 'terms cites the terms version');
-select is((select count(*)::int from public.consents where policy_version = '2026-11-08.1'), 3, 'the 3 privacy-backed consents cite the privacy version');
+-- 동의마다 **자기 문서의** 현재 버전을 인용한다. CF-S6(2026-11-09): terms·privacy가 같은 판 이름 2026-11-09라
+-- "판 이름이 몇 종류인가"로는 더 이상 구분되지 않는다 → 동의 종류별로 어느 문서의 판을 인용했는지 직접 본다.
+select is((select array_agg(consent_type || ':' || policy_version order by consent_type) from public.consents),
+          array['marketing:2026-11-09', 'privacy_required:2026-11-09', 'service_improvement:2026-11-09',
+                'terms:2026-11-09'],
+          'server filled each consent''s own document version (terms -> terms, the rest -> privacy)');
+select is((select policy_version from public.consents where consent_type = 'terms'), '2026-11-09', 'terms cites the terms version');
+select is((select count(*)::int from public.consents where policy_version = '2026-11-09' and consent_type <> 'terms'), 3, 'the 3 privacy-backed consents cite the privacy version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'marketing'),
           null, 'declined optional consent has no agreed_version');
 select is((select agreed_version from public.get_consent_status() where consent_type = 'service_improvement'),
-          '2026-11-08.1', 'agreed optional consent has agreed_version');
+          '2026-11-09', 'agreed optional consent has agreed_version');
 
 -- cross_border_transfer stays a valid type: recordable as agreed or declined, by RPC and direct insert.
 select is(
@@ -104,15 +107,15 @@ select throws_ok($$insert into public.consents (consent_type, policy_version, ag
                    values ('terms', '1999-01-01', true)$$,
                  'P0001', 'unknown_policy_version', 'direct insert must cite a real version');
 select throws_ok($$insert into public.consents (user_id, consent_type, policy_version, agreed)
-                   values ('bbbbbbbb-0000-0000-0000-000000000002', 'terms', '2026-11-08', true)$$,
+                   values ('bbbbbbbb-0000-0000-0000-000000000002', 'terms', '2026-11-09', true)$$,
                  '42501', null, 'cannot insert consent for another user');
 
 -- QA-02: direct insert follows record_consents rules
 select throws_ok($$insert into public.consents (consent_type, policy_version, agreed)
-                   values ('privacy_required', '2026-11-08.1', false)$$,
+                   values ('privacy_required', '2026-11-09', false)$$,
                  'P0001', 'required_consent_missing', 'direct insert cannot decline a required consent');
 select lives_ok($$insert into public.consents (consent_type, policy_version, agreed)
-                  values ('marketing', '2026-11-08.1', true)$$,
+                  values ('marketing', '2026-11-09', true)$$,
                 'direct insert of an optional consent at the current version works');
 reset role;
 insert into public.policy_versions (policy_type, version, effective_at, requires_reconsent, document_path)
@@ -136,7 +139,7 @@ select ok((select withdrawn_at > '2000-01-01' from public.consents
 -- QA-03: B cannot withdraw A's optional consent
 reset role;
 insert into public.consents (user_id, consent_type, policy_version, agreed)
-values ('aaaaaaaa-0000-0000-0000-000000000001', 'service_improvement', '2026-11-08.1', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'service_improvement', '2026-11-09', true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
 update public.consents set withdrawn_at = now() where consent_type = 'service_improvement';
@@ -180,7 +183,7 @@ set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 select throws_ok($$select id from public.consents$$, '42501', null, 'app_ai_writer cannot read consents');
 select throws_ok($$insert into public.consents (user_id, consent_type, policy_version, agreed)
-                   values ('aaaaaaaa-0000-0000-0000-000000000001', 'marketing', '2026-11-08.1', true)$$,
+                   values ('aaaaaaaa-0000-0000-0000-000000000001', 'marketing', '2026-11-09', true)$$,
                  '42501', null, 'app_ai_writer cannot insert consents');
 reset role;
 

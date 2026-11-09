@@ -1,7 +1,7 @@
 # R15 db-engineer 노트 — 자기소개서 관리 DB (cover-letter-chat 11.8 + cover-letter-flow 11.10)
 
 - 날짜: 2026-11-09 · 기준 판: **DM v4.15** (+ **CF-S1** 2026-11-09 사용자 결정, 문서 반영은 **PR #68 미머지** — 이 워크트리 `docs/planning/`에는 없다)
-- 로컬 적용: **완료** (`supabase db reset` 성공, `supabase test db` **64파일 2,613 단정 전부 통과**)
+- 로컬 적용: **완료** (`supabase db reset` 성공, `supabase test db` **65파일 2,658 단정 전부 통과**)
 - 원격: **미반영**. `db push`·MCP `apply_migration`·쓰기 `execute_sql`은 하지 않았다. 파괴 마이그레이션은 **사용자 승인 뒤 코드 배포가 끝난 다음** push.
 - `src/server/db/database.types.ts` 재생성 완료(최종 상태 1개 파일, 생성기 원본 포맷 그대로 — `oxfmt`를 돌리면 전 파일이 리포맷돼 diff가 2,000줄 늘어난다).
 
@@ -344,3 +344,92 @@ psql "$DB_URL" -v ON_ERROR_STOP=0 -f /tmp/guard_check.sql
 - ai-pipeline-engineer: `replace_draft`는 `draft` 키 안에 초안을 담는다(`body`가 아니다) `[가정]`. `value`는 보내도 무시되고 DB가 `blocks`로 다시 조립한다. `sources[]`는 `draft` 안에 둔다.
 - 파괴 마이그레이션은 **`20261113004700`**(재번호됨)이고 **코드 배포 뒤** push. push 전 원격 읽기 전용 확인: 세 테이블 행 수 0 · `evidence_links(owner_type='draft_section')` 0 · 옛 서류 RPC 호출 0 · `writing_chats`에 `project_id is null` 행 0 · 서류 `job_type` + `target_type='writing_chat'` `ai_jobs` 행 0.
 - 되돌릴 수 없는 지점(사용자 승인 대상): ① 코드 배포 뒤 `writing_chats.project_id` not null 복구 ② 코드 배포 뒤 `ai_jobs` CHECK 원복(90일) ③ 3단계 뒤 `structured_draft`에 쓴 서류 모양 jsonb ④ 4단계 drop(스키마 비가역, 지우는 행 0).
+
+
+---
+
+## R15 후속 (2026-11-09) — 쓰기 우회 차단 · 첫 복사 기록 RPC · 읽기 확인
+
+> 리더 판정. **비파괴 17개(`20261113003100`~`004660`)는 원격(운영)에 이미 적용됐다**(`05_release.md` 7절) — 그 파일들은 고치지 않았다(HEAD 대비 diff 0). 새 파일 하나로 했다.
+
+### 마이그레이션
+
+| 번호 | 파일 | 한 줄 | 파괴 | 원격 |
+|------|------|-------|------|------|
+| **20261113004670** | `r15_document_write_guard_and_copy` | 쓰기 가드 트리거 + `updated_at` 트리거 교체 + `mark_application_document_copied` 신설 + `save_application_document` 재정의(플래그 2줄만 추가) | 아니다 | **미반영** — 코드 배포 전에 따로 push |
+
+순서: … `004660`(원격) → **`004670`(이번)** → `004700`(파괴, 코드 배포 뒤). **파괴가 여전히 마지막이다.**
+
+### A. 쓰기 우회 차단
+
+- **문제**: `003100`의 `authenticated` insert·update grant + `insert_own`·`update_own` 정책(invoker RPC 때문에 필요 — R15-DB-1/2)으로 **로그인 사용자가 REST로 자기 행을 직접 쓸 수 있었다** → 문항 ≤5·`char_limit` 필수·`invalid_slot`·`answer_title` ≤100·근거 규칙·**`filled_slot_count` ↔ `body` 정합성**을 전부 건너뛴다. 남의 행은 RLS가 막으므로 교차 사용자 침해는 아니다.
+- **구현**: `BEFORE INSERT OR UPDATE` 트리거 **`application_documents_guard_write`** → `private.application_documents_guard_write()`.
+  - `current_user`가 API 역할(`authenticated`·`anon`·`app_ai_writer`·`app_key_reader`·`service_role`)이고 트랜잭션 로컬 설정 **`app.application_document_write`**가 `'on'`이 아니면 거부 `[가정: 이름]`.
+  - **거부 코드 `direct_write_not_allowed`** (`P0001`, detail `application_documents is written through save_application_document only`) `[가정]` → **api 매핑 권장 403**.
+  - **delete는 막지 않는다**(DM §2.7.3 "delete 본인", 지원 프로젝트 cascade).
+  - **definer 헬퍼는 영향 없다** — `private.reset_application_document_slots`(`delete_career_item`의 `delete_results`)·마이그레이션 소유자는 함수 소유자로 돌아 API 역할이 아니다(`private.application_projects_user_update`의 `current_user = 'authenticated'` 판정과 같은 방식). pgTAP로 확인.
+  - 플래그는 **`save_application_document`·`mark_application_document_copied`만** `set_config('app.application_document_write', 'on', true)`(트랜잭션 로컬)로 **자기 쓰기 직전에 켜고 직후에 끈다**. PostgREST 클라이언트는 `app.*` 설정을 세울 수 없다(노출 스키마의 함수만 부르고, PostgREST가 세우는 것은 `request.*`뿐).
+  - **플래그를 켜도 RLS는 그대로다** — 플래그가 켜진 상태에서도 남의 행 insert는 `42501`(pgTAP로 확인). 플래그는 RLS 우회가 아니라 "RPC 안에서만" 표시다.
+- **`save_application_document`는 R15 최신 정의(`003700` + CF-S1, `004600`·`004660`은 다른 함수)에서 시작**해 **`set_config` 두 줄만** 더했다. 동작 변화 없음 — 기존 R15 저장 테스트가 그대로 통과한다.
+- **같은 구조의 다른 테이블(R15 밖, 고치지 않음 — 기록만)**: `profile_job_interests`도 같은 모양이다(invoker `save_profile_basics` + 사용자 insert grant, DM §5 "직접 insert grant도 두지만 쓰지 않는다 `[가정]`"). 같은 우회가 가능하다(관심 직군·직무 쌍 상한을 건너뛸 수 있음). 같은 패턴(트랜잭션 로컬 플래그 + 가드 트리거)으로 막을 수 있다 — 리더 판단 대상.
+
+### B. 첫 복사 기록 RPC
+
+```
+public.mark_application_document_copied(
+  p_application_project_id uuid,
+  p_document_kind text default 'cover_letter'
+) returns timestamptz            -- security INVOKER, authenticated만 execute
+```
+- `first_copied_at`이 비어 있을 때만 `now()`를 쓴다 → **한 번 기록되면 바뀌지 않는다.** 반환 = **저장된 값**(두 번째 호출도 첫 값).
+- **행이 없으면 `null`**(저장 전엔 복사할 본문이 없다) `[가정]`. **남의 행이면 `null`**이고 그 행은 그대로(RLS가 숨긴다 — 오류가 아니다).
+- 거부: `not_authenticated`(42501) / `invalid_fields`(detail `document_kind`, `cover_letter` 밖).
+- **`updated_at`을 올리지 않는다** — `updated_at`은 저장 RPC의 기대 버전(`stale_write`)이다. 공용 `private.set_updated_at` 대신 이 테이블 전용 **`private.application_documents_set_updated_at`**으로 트리거를 바꿨다: **`updated_at`·`first_copied_at`(·생성 컬럼 `slot_count`) 말고 바뀐 것이 없으면 `updated_at`을 그대로 둔다.** 그래서 복사 뒤에도 다른 탭이 들고 있던 기대 버전으로 저장이 통과한다(pgTAP로 확인). 내용이 바뀌는 저장은 그대로 `updated_at`이 오른다. (부수 효과: 소유자 SQL로도 `updated_at`만 바꾸는 update는 무시된다 — 쓰는 코드가 없다.)
+- **타입**: 생성기는 함수 반환을 non-null로 적는다(`Returns: string`). **실제로는 null이 온다** — api는 `string | null`로 다룰 것.
+
+### C. 읽기 RLS 확인 — 빠진 정책 없음, 연 것 없음
+
+| 읽기 (DM 7장) | 정책 | 결과 |
+|---------------|------|------|
+| `application_documents` 1행 · 보드 `application_project_id`·`slot_count`·`filled_slot_count` | `application_documents_select_own` | 본인 것 보임 / 남의 것 안 보임 |
+| 서류 대화 `writing_chats where application_project_id = ? and document_kind = ?` + `structured_draft` | `writing_chats_select_own` + `003200`의 컬럼 grant(`application_project_id`·`document_kind`) | 보임 / 남의 것 안 보임 |
+| 그 `writing_chat_messages` | `writing_chat_messages_select_own` | 보임 / 남의 것 안 보임 |
+| `evidence_links`(`owner_type='application_document'`, `owner_id` = 그 행) | `evidence_links_select_own` | 보임 / 남의 것 안 보임 |
+
+모두 `user_id = auth.uid()`라 서류 대상 행에도 그대로 맞는다. **새로 연 것은 없다.**
+
+### pgTAP
+
+- **신설 `r15_document_write_guard.test.sql` (35)**: 가드 트리거·RPC 존재·execute(authenticated만) / **직접 insert(6문항 — `too_many_questions`를 건너뛸 모양)·직접 update(`filled_slot_count`·`first_copied_at`) 거부, 아무것도 안 바뀜** / 저장 RPC는 여전히 성공 / **RPC가 끝난 뒤 플래그가 `off`이고 같은 트랜잭션의 직접 쓰기도 거부** / **delete는 됨** / **`delete_career_item` definer 경로는 영향 없음** / 복사: `invalid_fields` · 첫 호출 기록·반환=저장값 · **`updated_at` 불변** · 두 번째 호출이 첫 값 유지 · `first_copied_at`만 바꾼 update도 `updated_at` 불변 · **복사 전 기대 버전으로 저장해도 `stale_write` 아님** · 내용 저장은 `updated_at`을 올림 · 저장은 `first_copied_at`을 건드리지 않음 · 행 없음 → `null` · 남의 행 → `null`이고 그 행 불변 / C 읽기 4종 본인 보임·남의 것 안 보임
+  - `updated_at` 불변은 **2020년 값으로 고정한 픽스처**로 확인한다(`now()`는 트랜잭션 시각이라 그대로 두면 잘못된 트리거도 통과해 버린다).
+- **고친 파일 2개**: `grants.test.sql`(`authenticated` 함수 목록에 `mark_application_document_copied`) · `r15_application_documents.test.sql`("B가 A의 행 insert" → 가드가 먼저 `direct_write_not_allowed`, **플래그를 켜도 RLS가 `42501`로 막는다** 단정 추가)
+- 전체: `supabase test db` **65파일 2,649 단정 통과**. **다른 사용자의 잔여 행을 일부러 넣고 다시 돌려도 전부 통과**(QA-04 원칙).
+- `database.types.ts` 재생성 — `mark_application_document_copied` 추가(+3줄). **api-engineer가 기다리던 타입이다.**
+
+
+---
+
+## R15 후속 2 (2026-11-09) — 법무 3종 2026-11-09판 (CF-S6)
+
+### 마이그레이션
+| 번호 | 파일 | 내용 | 파괴 | 원격 |
+|------|------|------|------|------|
+| **20261113004680** | `r15_policy_versions_cf1` | `policy_versions`에 terms·privacy·ai_data_use `2026-11-09` 3행(시행 `2026-11-09 00:00:00+09`, `requires_reconsent = false`, `/policies/{type}/2026-11-09`, `on conflict do nothing`) | 아니다 | **미반영** |
+
+- **리더가 쓴 파일을 그대로 복사했다**(`cmp` 동일). 내용에서 이상한 곳은 없었다. 새 판은 직전 판보다 시행일이 늦어 R14의 동률 정렬에 기대지 않는다. 지금 시각(`now()`)보다 시행일이 앞이라 적용 즉시 현재 판이 된다. `cross_border_transfer`는 대상이 아니다(`2026-11-08` 유지).
+- 순서는 `004670` < **`004680`** < `004700`(파괴)이다. **파괴가 마지막이다.** 원격 적용분(`004660`까지)과 `004670`은 고치지 않았다.
+- 스키마 변화가 없어서 `database.types.ts`는 **재생성해도 바이트 동일**하다.
+
+### 고친 pgTAP — 실행해서 실제로 깨진 5파일 (리더 후보 7개 중 `r14_remove_mock_interview`·`signup_consent_ai_gate`는 깨지지 않아 손대지 않았다)
+| 파일 | 고친 것 |
+|------|---------|
+| `policy_versions.test.sql` | 전체 행 수 17 → **20**(설명에 2026-11-09 3행 추가). **추가 6건**: 2026-11-09 세 행의 시행일·`requires_reconsent=false`·경로, `cross_border_transfer`는 개정 대상 아님, **기존 동의자가 재동의 대상이 되지 않음**(terms `2026-11-08`·privacy_required `2026-11-08.1`에 동의한 사용자 → `get_consent_status()`의 필수 `needs_consent` 0건, 현재 판은 2026-11-09, 동의 기록은 옛 판 그대로). 옛 판 동의 픽스처는 `consents_before_insert`가 현재 판만 받아서 그 트리거를 끄고 넣었다(테스트와 함께 롤백). |
+| `consents.test.sql` | 선택 동의가 따르는 privacy 판 `2026-11-08.1` → **`2026-11-09`**. "동의마다 자기 문서의 판을 인용" 단정은 terms·privacy가 같은 판 이름이 돼 **판 이름 종류 수(2)로는 더 이상 구분되지 않는다** → **동의 종류별 `종류:판` 배열을 직접 비교**하는 식으로 바꿔 의미를 지켰다. 현재 판을 쓰는 픽스처·직접 insert 7곳도 `2026-11-09`로 바꿨다. `cross_border_transfer`의 `2026-11-08` 단정 3곳은 그대로 둔다(개정 대상 아님). |
+| `r12_ui36_followups.test.sql` | 현재 판 단정 4개를 갱신했다(terms·privacy·ai_data_use `2026-11-09`, 국외 이전 `2026-11-08`). **R14 동률 정렬 규칙은 지우지 않았다** — 현재 판이 넘어가 `current_policy_version`으로는 보이지 않게 되어, ① 같은 시행일 두 행(privacy·ai_data_use의 `2026-11-08`/`2026-11-08.1`)을 함수와 **같은 `ORDER BY`로 직접 정렬**해 `.1`이 앞서는지 보고 ② `private.current_policy_version` 정의에 그 `ORDER BY`가 남아 있는지 본다. plan 22 → 25. |
+| `r13_settings_dialog.test.sql` | ai_data_use 행 수 3 → **4**, 경로 목록에 `2026-11-09` 행 추가. |
+| `account_deletion.test.sql` | 동의 **픽스처** 3행을 현재 판(`2026-11-09`)으로 바꿨다. 단정이 아니라 `consents_before_insert`가 현재 판만 받아서 깨진 것이다. |
+
+- 전체: `supabase test db` **65파일 2,658 단정 통과**(`db reset` 직후). 사용자별 단정은 RLS·픽스처 사용자로 범위가 정해져 있다. `policy_versions` 전체 행 수는 참조 테이블의 시드 계약이라 전역으로 둔다.
+
+### 참고 (`src/` — 손대지 않음)
+`src/` 안의 `2026-11-08` 언급은 주석과 목·테스트 데이터뿐이고(`services/shell/index.ts:46`·`lib/data/account.ts:46` 주석, `shell/index.test.ts`, `lib/mock/fixtures.ts`), 서버 코드는 판을 정렬로 고른다. **앱 본문 `src/components/account/policy-content.ts`(UI 소유)는 이 마이그레이션과 같은 머지로 나가야 한다**(마이그레이션 머리 주석과 같다).

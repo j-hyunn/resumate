@@ -155,8 +155,9 @@ update public.profiles set active_ai_provider = 'gemini', display_name = 'A'
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
 values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-08', true),
-  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-08.1', true);
+  -- fixture consents at the current versions (R15, CF-S6: terms·privacy 2026-11-09)
+  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-09', true),
+  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-09', true);
 insert into public.ai_usage_records (user_id, occurred_at, feature, job_type, ai_job_id, application_project_id, provider,
                                      model, model_tier, connection_tier, usage_source, outcome, price_table_version,
                                      estimated_cost_usd) values
@@ -180,7 +181,7 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('b0000000-9999-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03',
    'env-v1', 'bg01', 'valid');
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-08', true);
+  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-09', true);
 insert into public.writing_chats (id, user_id, project_id, status) values
   ('b0000000-c4a7-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
    'b0000000-3333-0000-0000-000000000001', 'active');

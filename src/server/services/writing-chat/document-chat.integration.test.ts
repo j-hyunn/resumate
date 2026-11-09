@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
-import { DocumentTurnEventSchema, type DocumentTurnEvent } from "@/lib/contracts/writing-chat";
+import { DocumentTurnEventSchema, DocumentWritingChatDto, type DocumentTurnEvent } from "@/lib/contracts/writing-chat";
 import { ProviderError } from "@/server/ai/errors";
 import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { createAiWriterClient } from "@/server/db/ai-writer";
@@ -401,6 +401,130 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
     const all = logs.join("\n");
     expect(all).not.toContain(FAKE_KEY);
     expect(all).not.toContain(ACTION);
+  }, 60_000);
+
+  /**
+   * R15 후속 — the reads S-46 / S-39 call (DM 7장 25행 · 33행), against real rows and real RLS.
+   *
+   * The data-loss path this closes: with no 정본 read, S-46 always opened in 문항 설정 상태 and its
+   * first save went out with no expected version, overwriting the stored answers. Here: no row →
+   * `null`; after a save the row comes back with the `updated_at` the next save must send; the
+   * board counts are exact; a 서류 대화 survives a reload (list + detail, unapplied proposal still
+   * there); and another user sees none of it.
+   *
+   * Assertions are scoped to this test's own project / chat ids, so rows left by other tests (or
+   * other users) don't affect the result.
+   */
+  it("reads: 정본 1행 · 근거 · 보드 문항 수 · 서류 대화 목록과 상세(새로 고침) · 남의 서류는 안 보임", async () => {
+    const { getApplicationDocument, listApplicationDocumentEvidence, listDocumentSlotCounts } = await import("@/server/services/application-document/read");
+    const { getWritingChat, listDocumentWritingChats } = await import("./chat");
+    const projectId = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectId, rawText: KO_BACKEND.raw, companyName: "에이비씨페이" }));
+
+    // 1. No row yet → null (문항 설정 상태), and no board entry for this project.
+    await expect(getApplicationDocument(user, projectId)).resolves.toBeNull();
+    expect((await listDocumentSlotCounts(user))[projectId]).toBeUndefined();
+
+    // 2. After the first save the row comes back, with the version the next save must send.
+    const saved = await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      body: {
+        questions: [
+          { slot: "q_1", question_text: "직무 역량을 써 주세요", char_limit: 800, template_key: "job_competency", body: "이미 쓴 답변입니다." },
+          { slot: "q_2", question_text: "입사 후 계획을 써 주세요", char_limit: 800, template_key: "future_plan", body: "" },
+          { slot: "q_3", question_text: "지원 동기를 써 주세요", char_limit: 800, template_key: "motivation", body: "" },
+        ],
+      },
+    } as never);
+    const doc = await getApplicationDocument(user, projectId);
+    expect(doc).not.toBeNull();
+    expect(doc!.id).toBe(saved.applicationDocumentId);
+    expect(Date.parse(doc!.updated_at)).toBe(Date.parse(saved.updatedAt));
+    expect(doc).toMatchObject({ application_project_id: projectId, document_kind: "cover_letter", slot_count: 3, filled_slot_count: 1, first_copied_at: null });
+    expect(doc!.body.questions.map((q) => q.slot)).toEqual(["q_1", "q_2", "q_3"]);
+    expect(doc!.body.questions[0]!.body).toBe("이미 쓴 답변입니다.");
+
+    // 3. S-39: both counts, exact (작성 중 = 0 < filled < slot).
+    expect((await listDocumentSlotCounts(user))[projectId]).toEqual({ slot_count: 3, filled_slot_count: 1 });
+
+    // 4. 근거: the shared chip read handles the new owner type (empty until an applied proposal is saved).
+    await expect(listApplicationDocumentEvidence(user, doc!.id)).resolves.toEqual({});
+
+    // 5. A 서류 대화 with a 초안 턴, then a "reload": list + detail read from scratch.
+    const chat = await startDocumentWritingChat(user, { applicationProjectId: projectId, documentKind: "cover_letter" } as never);
+    extracts.push({ json: { ...extractOut, intent: "compose_draft" } });
+    replies.push({ json: composeOutput(["q_2"]) });
+    const d = deps();
+    const prepared = await prepareTurn(d, { chatId: chat.writingChatId, requestedSlot: null, requestedAction: "compose_draft", content: "초안 만들어 주세요." } as TurnRequest);
+    if (prepared.kind !== "ready") throw new Error(`blocked ${prepared.code}`);
+    const events: DocumentTurnEvent[] = [];
+    await runTurn(d, prepared, (e) => events.push(e as DocumentTurnEvent), new AbortController().signal);
+    if (events.some((e) => e.type === "error")) throw new Error(`EVENTS=${JSON.stringify(events)}`);
+
+    const list = await listDocumentWritingChats(user, projectId);
+    expect(list.map((c) => c.id)).toContain(chat.writingChatId);
+    const summary = list.find((c) => c.id === chat.writingChatId)!;
+    expect(summary).toMatchObject({ status: "active", messageLimit: 40 });
+    expect(summary.messageCount).toBeGreaterThan(0);
+
+    const reopened = await getWritingChat(user, userId, chat.writingChatId);
+    if (reopened.target !== "application_document") throw new Error(`wrong DTO target: ${reopened.target}`);
+    expect(DocumentWritingChatDto.safeParse(reopened).success).toBe(true);
+    expect(reopened).toMatchObject({ applicationProjectId: projectId, documentKind: "cover_letter", draftCount: 1, draftLimit: 6 });
+    // The unapplied proposal is still there after the reload (stored jsonb, snake_case).
+    const q2 = reopened.structuredDraft.document.questions.find((q) => q.slot === "q_2");
+    expect(q2?.draft.rev).toBe(1);
+    expect(q2?.draft.blocks.length).toBeGreaterThan(0);
+    expect(q2?.draft.applied_at).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(q2!.draft, "sources")).toBe(true);
+    // Messages: greeting + user + assistant.
+    expect(reopened.messages.length).toBeGreaterThanOrEqual(3);
+
+    // 5b. 첫 복사 기록: the first value sticks, and `updated_at` (the expected version) does not move.
+    const { markApplicationDocumentCopied } = await import("@/server/services/application-document/save");
+    const versionBefore = (await getApplicationDocument(user, projectId))!.updated_at;
+    const first = await markApplicationDocumentCopied(user, projectId);
+    expect(first.firstCopiedAt).not.toBeNull();
+    const second = await markApplicationDocumentCopied(user, projectId);
+    expect(second.firstCopiedAt).toBe(first.firstCopiedAt);
+    const afterCopy = (await getApplicationDocument(user, projectId))!;
+    expect(Date.parse(afterCopy.first_copied_at!)).toBe(Date.parse(first.firstCopiedAt!));
+    expect(afterCopy.updated_at).toBe(versionBefore);
+    // …so a save that still holds the pre-copy version is not a stale_write.
+    const resaved = await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      expectedUpdatedAt: versionBefore,
+      body: { questions: doc!.body.questions.map((q) => ({ slot: q.slot, question_id: q.question_id, question_text: q.question_text, char_limit: q.char_limit, template_key: q.template_key, body: q.body })) },
+    } as never);
+    expect(resaved.applicationDocumentId).toBe(doc!.id);
+    // A project with no 정본 row yet → null (nothing to copy), not an error.
+    const emptyProject = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: emptyProject, rawText: KO_BACKEND.raw }));
+    await expect(markApplicationDocumentCopied(user, emptyProject)).resolves.toEqual({ firstCopiedAt: null });
+
+    // 6. Another user sees none of it (RLS).
+    const email = `r15-other-${crypto.randomUUID()}@example.test`;
+    const password = `pw-${crypto.randomUUID()}`;
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    if (created.error || !created.data.user) throw new Error(`createUser failed: ${created.error?.message}`);
+    const otherId = created.data.user.id;
+    try {
+      const other = createClient<Database>(s.url, s.anonKey, { auth: { persistSession: false } });
+      const signIn = await other.auth.signInWithPassword({ email, password });
+      if (signIn.error) throw new Error(`signIn failed: ${signIn.error.message}`);
+      await expect(getApplicationDocument(other, projectId)).resolves.toBeNull();
+      expect((await listDocumentSlotCounts(other))[projectId]).toBeUndefined();
+      await expect(listApplicationDocumentEvidence(other, doc!.id)).resolves.toEqual({});
+      await expect(listDocumentWritingChats(other, projectId)).resolves.toEqual([]);
+      await expect(getWritingChat(other, otherId, chat.writingChatId)).rejects.toMatchObject({ code: "not_found" });
+      // Someone else's row → null, and that row is untouched.
+      await expect(markApplicationDocumentCopied(other, projectId)).resolves.toEqual({ firstCopiedAt: null });
+      expect(Date.parse((await getApplicationDocument(user, projectId))!.first_copied_at!)).toBe(Date.parse(first.firstCopiedAt!));
+    } finally {
+      await admin.auth.admin.deleteUser(otherId);
+    }
   }, 60_000);
 
   /**

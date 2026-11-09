@@ -42,7 +42,7 @@ export function DataInsufficientGate({
   className,
 }: {
   feature: ReadinessFeatureKey
-  /** 인사이트 / 경력기술서 / 자소서 문항 답변 */
+  /** 인사이트 / 자소서 (v5.20, CF-1) */
   featureLabel: string
   returnFeature: ReturnTargetFeature
   readiness: DataReadiness

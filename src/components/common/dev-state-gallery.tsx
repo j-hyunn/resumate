@@ -242,12 +242,12 @@ export function DevStateGallery({
           {show("insufficient") ? (
             <DataInsufficientGate
               feature="draft"
-              featureLabel="경력기술서"
-              returnFeature="career_description"
+              featureLabel="자소서"
+              returnFeature="cover_letter"
               readiness={insufficient}
               applicationProjectId={demoApplication.id}
               applicationName={demoApplication.name}
-              returnHref={`/applications/${demoApplication.id}/drafts`}
+              returnHref={routes.coverLetter(demoApplication.id)}
             />
           ) : null}
           {show("insufficient-no-experience") ? (

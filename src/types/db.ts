@@ -112,6 +112,9 @@ export type DraftSourceOrigin = "ai" | "user"
 
 export type EvidenceOwnerType =
   | "insight"
+  /** (v4.15, CF-1) 자소서 정본 문항·블록 근거 — `item_key` = `{slot}.blocks.{block_id}` / `{slot}.sources.{n}` */
+  | "application_document"
+  /** @deprecated 폐기된 `draft_sections` 시절 행 (DM 2.7.4) */
   | "draft_section"
   | "chat_message"
 export type EvidenceSourceType =
@@ -434,7 +437,8 @@ export interface StructuredDraft {
 }
 
 /** writing_chats.return_target.feature */
-export type ReturnTargetFeature = "insight" | "career_description" | "cover_letter"
+/** (v5.20, CF-1) 경력기술서 폐기 — 복귀 대상은 인사이트 / 자소서 둘 */
+export type ReturnTargetFeature = "insight" | "cover_letter"
 
 /** writing_chats.return_target (2.5, v3.2) */
 export interface ReturnTarget {
@@ -727,6 +731,11 @@ export type JobDescription = Row<"job_descriptions", {
   extraction: JdExtraction | null
   extraction_provider: AiProviderName | null
   tech_keywords: { keyword: string; source_sids: string[]; }[]
+  /**
+   * (v4.15, CF-10·CF-A16) 공고 URL. 컬럼이 아직 배포되지 않아 **생성 타입 대기**이고 real 분기가
+   * 채우지 않는다 — 그래서 optional이다 (백엔드 요청). S-46 머리 "JD 상세"가 읽는다.
+   */
+  source_url?: string | null
 }>
 
 /** jd_requirements (A.7) */
@@ -878,6 +887,141 @@ export type DraftSectionSourceRow = Row<"draft_section_sources", {
  * layer fills it with `[]`. Use `DraftSectionSourceRow`. Delete in the UI rework.
  */
 export type DraftSectionSource = DraftSectionSourceRow & { project_detail_ids: Uuid[] }
+
+// ---------------------------------------------------------------------------
+// 2.7.3 application_documents — 서류 정본 (DM v4.15, CF-1·CF-5·CF-6·CF-A2·CF-A4)
+//
+// 생성 타입 대기: 테이블은 DM 11.8/11.10 배포 전이라 `database.types.ts`에 없다. 그래서
+// 여기서는 `Row<>` 대신 손으로 적고, 배포 뒤 생성 타입 기준으로 다시 묶는다 (백엔드 요청).
+// ---------------------------------------------------------------------------
+
+/** (v4.15, CF-A2) 서류 종류는 자소서 하나 — CHECK in ('cover_letter'), 지원 프로젝트당 정본 1행 */
+export type DocumentKind = "cover_letter"
+
+/** body.questions[].blocks[].basis (DM 2.7.3) — `user` = 사용자가 새로 쓴 블록 */
+export type CoverLetterBlockBasis = "new" | "current_body" | "user"
+
+/** body.questions[].blocks[] 원소 (DM 2.7.3). `type`은 2.5.0a 7종과 같다 */
+export interface CoverLetterBlock {
+  block_id: string
+  type: DeliverableBlockType
+  text: string
+  basis: CoverLetterBlockBasis
+  placeholders: Array<{ token: PlaceholderToken; hint: string }>
+  flags: DraftBlockFlag[]
+  /** 어느 대화의 몇 번째 제안에서 왔는지 (공급자·모델 배지의 원천) */
+  applied_writing_chat_id: Uuid | null
+  applied_rev: number | null
+  applied_at: Timestamp | null
+  /** C-08 "편집됨" 배지 */
+  user_modified: boolean
+}
+
+/**
+ * body.questions[] 원소 (DM 2.7.3 · UX S-46). 배열 길이 ≤ 5 (CF-5).
+ * `answer_title`은 글자 수(`char_limit` 대비)와 `filled_slot_count`에 넣지 않는다 (CF-6·CF-A4).
+ */
+export interface CoverLetterQuestion {
+  /** `q_{n}` — 서류 안에서 유일, 재사용 없음 */
+  slot: string
+  question_id: Uuid
+  /** ≤ 1,000자 */
+  question_text: string
+  /** ≤ 100자, 한 줄 평문. null = 제목 없음 (CF-6) */
+  answer_title: string | null
+  template_key: CoverLetterTemplateKey | null
+  /** AI 판정값 */
+  question_class: QuestionClass | null
+  /** 1~10,000, 새 저장은 필수. DB 기본값 없음 — 화면이 800을 채운다 (CF-U2) */
+  char_limit: number
+  count_basis: CountBasis
+  /** ≤ 300자 */
+  user_note: string | null
+  /** 마크다운 ≤ 8,000자 — `blocks[].text`로 조립한 파생 값 */
+  body: string
+  blocks: CoverLetterBlock[]
+  sort_order: number
+}
+
+/** application_documents.body (자소서. 경력기술서 `sections[]`는 v4.15 폐기, CF-1) */
+export interface CoverLetterBody {
+  questions: CoverLetterQuestion[]
+}
+
+/** application_documents.meta — 지금은 문체만 (CL-A3) */
+export interface ApplicationDocumentMeta {
+  tone?: DraftTone | null
+}
+
+/** application_documents (DM 2.7.3) */
+export interface ApplicationDocument extends BaseRow {
+  application_project_id: Uuid
+  document_kind: DocumentKind
+  body: CoverLetterBody
+  /** 본문이 비어 있지 않은 문항 수 (제목만 있는 문항은 세지 않는다, CF-A4) */
+  filled_slot_count: number
+  /** 문항 수 (생성 컬럼, 본문이 비어도 센다) — S-39 카드 판정에 쓴다 */
+  slot_count: number
+  meta: ApplicationDocumentMeta
+  first_copied_at: Timestamp | null
+}
+
+/** S-46 "저장하기" = `save_application_document` 한 번 (DM v4.15 — 본문 + 머리 제목·마감일) */
+export interface ApplicationValuesPatch {
+  /** ≤ 100자. 빈 문자열 = 이름 되돌리기 (서버 헬퍼가 정한다) */
+  name?: string
+  /** `null` = 비우기 */
+  deadline?: DateString | null
+}
+
+/** `p_applied_proposals` 원소 (S-46 반영 규칙) */
+export interface AppliedProposalRef {
+  writing_chat_id: Uuid
+  slot: string
+  rev: number
+}
+
+/** `save_application_document` 반환 (DM v4.15) */
+export interface SaveApplicationDocumentResult {
+  application_document_id: Uuid
+  document_kind: DocumentKind
+  filled_slot_count: number
+  slot_count: number
+  name: string | null
+  name_source: NameSource | null
+  deadline: DateString | null
+  updated_at: Timestamp
+  applied: AppliedProposalRef[]
+  skipped: Array<AppliedProposalRef & { reason: PageSaveSkipReason }>
+}
+
+/** 저장 거부 코드 — 페이지 저장 공통 + 문항 상한 (DM v4.15 `too_many_questions`) */
+export type ApplicationDocumentSaveErrorCode = PageSaveErrorCode | "too_many_questions"
+
+/** `POST /api/job-descriptions/fetch` 실패 코드 5종 + 주소 검사 (DM v4.15 11.10) */
+export type JdFetchErrorCode =
+  | "invalid_source_url"
+  | "fetch_blocked"
+  | "fetch_timeout"
+  | "fetch_too_large"
+  | "fetch_too_short"
+  | "fetch_failed"
+
+/** `POST /api/job-descriptions/fetch` 응답 (키 camelCase — R4-API-4 관례) */
+export interface JdFetchResult {
+  rawText: string
+  companyName: string | null
+  positionTitle: string | null
+}
+
+/** `POST /api/job-descriptions/extract-preview` 응답 (행 없는 AI-01, DM 2.6.2) */
+export interface JdExtractPreview {
+  previewJobId: Uuid
+  companyName: string | null
+  positionTitle: string | null
+  deadline: DateString | null
+  requirementCount: number
+}
 
 // ---------------------------------------------------------------------------
 // 2.8 근거

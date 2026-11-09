@@ -14,6 +14,7 @@
 import type {
   AiJob,
   Achievement,
+  ApplicationDocument,
   ApplicationProject,
   ApplicationStageEvent,
   Draft,
@@ -41,6 +42,7 @@ import type {
   Consent,
   PolicyVersion,
   AiOutputMeta,
+  CoverLetterQuestion,
   DraftBlock,
   DraftBlockKind,
 } from "@/types/db"
@@ -51,6 +53,7 @@ import { mockAiMeta, mockMessageMeta } from "./ai-meta"
 import { DISCLOSURE_VERSION, MOCK_MODELS, PRICE_TABLE_VERSION, mockDisclosures, mockPriceTables } from "./ai-providers"
 import { currentPeriodMonth, dateFromToday, daysAgo, minutesAgo, month } from "./time"
 import { mockProfileOptions, type MockProfileJobInterest, type MockProfileOption } from "./profile-options"
+import { COVER_LETTER_DEFAULT_CHAR_LIMIT, COVER_LETTER_DEFAULT_QUESTIONS } from "@/lib/data/cover-letter-defaults"
 
 export interface MockDb {
   user: { id: string; email: string }
@@ -76,6 +79,8 @@ export interface MockDb {
   job_descriptions: JobDescription[]
   jd_requirements: JdRequirement[]
   insights: Insight[]
+  /** (v4.15, CF-A2) 자소서 정본 — 지원 프로젝트당 0 또는 1행 (S-46 두 상태의 판정 근거) */
+  application_documents: ApplicationDocument[]
   drafts: Draft[]
   draft_sections: DraftSection[]
   draft_section_sources: DraftSectionSource[]
@@ -947,6 +952,83 @@ export function createFixtures(): MockDb {
     },
   ]
 
+  // --- application documents (자소서 정본, DM 2.7.3) ------------------------
+  // S-46 두 상태: 정본 행이 있으면 작성 상태, 없으면 문항 설정 상태 (CF-A11).
+  //  ap 1 = 일부만 채운 문항 (S-39 "자소서 작성 중"), ap 2 = 전부 채움 ("자소서 작성됨"),
+  //  ap 3~8 = 행 없음 (문항 설정 상태 · S-39 표시 없음).
+  const clQuestion = (
+    n: number,
+    over: Partial<CoverLetterQuestion> = {},
+  ): CoverLetterQuestion => ({
+    slot: `q_${n}`,
+    question_id: IDS.clq(n),
+    question_text: COVER_LETTER_DEFAULT_QUESTIONS[(n - 1) % 3].question_text,
+    answer_title: null,
+    template_key: COVER_LETTER_DEFAULT_QUESTIONS[(n - 1) % 3].template_key,
+    question_class: COVER_LETTER_DEFAULT_QUESTIONS[(n - 1) % 3].template_key,
+    char_limit: COVER_LETTER_DEFAULT_CHAR_LIMIT,
+    count_basis: "with_spaces",
+    user_note: null,
+    body: "",
+    blocks: [],
+    sort_order: n,
+    ...over,
+  })
+  const clBody = (text: string, blockId: string): Pick<CoverLetterQuestion, "body" | "blocks"> => ({
+    body: text,
+    blocks: [
+      {
+        block_id: blockId,
+        type: "paragraph",
+        text,
+        basis: "new",
+        placeholders: [],
+        flags: [],
+        applied_writing_chat_id: null,
+        applied_rev: null,
+        applied_at: null,
+        user_modified: false,
+      },
+    ],
+  })
+  const application_documents: ApplicationDocument[] = [
+    {
+      ...base(IDS.adoc(1), 3, 1),
+      application_project_id: IDS.ap(1),
+      document_kind: "cover_letter",
+      body: {
+        questions: [
+          clQuestion(1, {
+            answer_title: "결제 장애를 줄인 경험",
+            ...clBody("결제 게이트웨이 이중화로 장애 시간을 줄였습니다.", "b1"),
+          }),
+          clQuestion(2, { ...clBody("정산 배치를 다시 설계해 마감 시간을 당겼습니다.", "b2") }),
+          clQuestion(3),
+        ],
+      },
+      filled_slot_count: 2,
+      slot_count: 3,
+      meta: { tone: "concise" },
+      first_copied_at: null,
+    },
+    {
+      ...base(IDS.adoc(2), 2, 0),
+      application_project_id: IDS.ap(2),
+      document_kind: "cover_letter",
+      body: {
+        questions: [
+          clQuestion(1, { ...clBody("팀의 결제 도메인을 맡아 안정성을 책임졌습니다.", "b1") }),
+          clQuestion(2, { answer_title: "정산 자동화", ...clBody("정산 자동화로 수작업을 없앴습니다.", "b2") }),
+          clQuestion(3, { ...clBody("입사 후 결제 신뢰성 지표를 맡고 싶습니다.", "b3") }),
+        ],
+      },
+      filled_slot_count: 3,
+      slot_count: 3,
+      meta: { tone: "concise" },
+      first_copied_at: daysAgo(1),
+    },
+  ]
+
   // --- drafts ---------------------------------------------------------------
   const drafts: Draft[] = [
     {
@@ -1205,6 +1287,14 @@ export function createFixtures(): MockDb {
     ev(13, "draft_section", IDS.dsec(1), "p2-b1", "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
     ev(14, "draft_section", IDS.dsec(1), "e1-s", "experience", IDS.exp(1), "summary", "결제 승인·정산 플랫폼 백엔드 개발과 운영", { source_label: "그린페이먼츠", source_snapshot_at: daysAgo(1) }),
     ev(15, "draft_section", IDS.dsec(2), "q1-p1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
+    // (v5.20, CF-1·CF-S1·CF-S2) 자소서 정본 문항 근거 — `{slot}.sources.{n}`(주 근거 먼저) / `{slot}.blocks.{block_id}`.
+    // C-11은 이 행들을 경로 한 줄로만 보인다(배지·이유 줄 없음). 손편집만 한 문항(q_3)은 근거 행이 없다.
+    ev(16, "application_document", IDS.adoc(1), "q_1.sources.1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
+    ev(17, "application_document", IDS.adoc(1), "q_1.sources.2", "experience", IDS.exp(1), "summary", "결제 승인·정산 플랫폼 백엔드 개발과 운영", { source_label: "그린페이먼츠", source_snapshot_at: daysAgo(1) }),
+    ev(18, "application_document", IDS.adoc(1), "q_1.blocks.b1", "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
+    ev(19, "application_document", IDS.adoc(1), "q_2.sources.1", "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
+    ev(20, "application_document", IDS.adoc(2), "q_1.sources.1", "experience", IDS.exp(1), "summary", "결제 승인·정산 플랫폼 백엔드 개발과 운영", { source_label: "그린페이먼츠", source_snapshot_at: daysAgo(1) }),
+    ev(21, "application_document", IDS.adoc(2), "q_2.sources.1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
   ]
 
   // --- AI 연결 (v4 BYOK): Gemini 무료 키 연결 + 활성 (05 brief) ----------------------
@@ -1406,6 +1496,7 @@ export function createFixtures(): MockDb {
     job_descriptions,
     jd_requirements,
     insights,
+    application_documents,
     drafts,
     draft_sections,
     draft_section_sources,

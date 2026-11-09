@@ -7,7 +7,7 @@
  */
 import * as React from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Loader2, PenLine, TextSearch } from "lucide-react"
+import { ArrowUpRight, Loader2, PenLine, TextSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -49,6 +49,7 @@ export function JdView({
   requirements,
   techKeywords,
   seniority,
+  sourceUrl = null,
   requirementsSlot,
 }: {
   applicationProjectId: string
@@ -60,6 +61,11 @@ export function JdView({
   requirements: JdRequirement[]
   techKeywords: Array<{ keyword: string; source_sids: string[] }>
   seniority: string | null
+  /**
+   * (v5.20, CF-A16) 공고 URL로 만든 자기소개서면 `job_descriptions.source_url` — 원문 패널 머리에
+   * "원래 공고 열기"를 둔다. 원문 수정(Q53-2)은 이 주소를 바꾸지 않는다 `[가정]`.
+   */
+  sourceUrl?: string | null
   /**
    * 요건 영역 replacement while there are no requirements yet (v4): C-18 영역형 / "요건 정리하기" /
    * C-20 block / 분석 중. The 공고 원문 panel always stays (02 S-15 v5).
@@ -81,7 +87,18 @@ export function JdView({
       <Card className="gap-3 p-5 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
-          <JdRawEditButton />
+          <span className="flex items-center gap-1">
+            {sourceUrl ? (
+              <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                  원래 공고 열기
+                  <ArrowUpRight className="size-3.5" aria-hidden />
+                  <span className="sr-only">새 창에서 열림</span>
+                </a>
+              </Button>
+            ) : null}
+            <JdRawEditButton />
+          </span>
         </div>
         <JdRawSavedNote />
         {edit.editing ? (

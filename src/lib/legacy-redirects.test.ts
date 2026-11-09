@@ -49,22 +49,45 @@ describe("retired S-09 · S-34 addresses → S-08 (UQ-428)", () => {
   })
 })
 
-describe("retired S-20 · S-22 · S-33 · S-37 addresses (v5.19, RM-1)", () => {
+describe("자기소개서 관리 옛 주소 → S-46 (v5.20, CF-1·CF-7 — decisions 4.23 UI 4)", () => {
   const ap = "5b0c7f9e-1111-4c2a-9a55-0123456789ab"
+  const draft = "7d2e9b1a-3333-4e4c-9c77-23456789abcd"
   const ses = "6c1d8a0f-2222-4d3b-8b66-123456789abc"
-  it("/applications/{id}/interview… → S-31", () => {
-    expect(redirectOf(`/applications/${ap}/interview`)).toBe(routes.application(ap))
-    expect(redirectOf(`/applications/${ap}/interview/${ses}`)).toBe(routes.application(ap))
-    expect(redirectOf(`/applications/${ap}/interview/${ses}/result`)).toBe(routes.application(ap))
+
+  it("S-31 허브 · S-17 · S-19 · 옛 문항 설정 · S-45 → S-46", () => {
+    for (const path of [
+      `/applications/${ap}`,
+      `/applications/${ap}/drafts`,
+      `/applications/${ap}/drafts/${draft}`,
+      `/applications/${ap}/drafts/${draft}/questions`,
+      `/applications/${ap}/career-description`,
+      `/applications/${ap}/cover-letter/questions`,
+    ]) {
+      expect(redirectOf(path)).toBe(routes.coverLetter(ap))
+    }
   })
-  it("/interviews… → S-13", () => {
+
+  it("S-15 · S-16 → S-46의 탭", () => {
+    expect(redirectOf(`/applications/${ap}/jd`)).toBe(routes.coverLetter(ap, { tab: "jd" }))
+    expect(redirectOf(`/applications/${ap}/insight`)).toBe(routes.coverLetter(ap, { tab: "insight" }))
+  })
+
+  it("S-14 전체 페이지 → S-13 + 모달", () => {
+    expect(redirectOf("/applications/new")).toBe(routes.applicationNew())
+    expect(read(redirectOf("/applications/new")!).get("new")).toBe("1")
+  })
+
+  it("폐기한 면접 주소 (v5.19, RM-1): 지원 건 하위는 S-46, 전체 목록은 S-13 (MRG-UX-1)", () => {
+    expect(redirectOf(`/applications/${ap}/interview`)).toBe(routes.coverLetter(ap))
+    expect(redirectOf(`/applications/${ap}/interview/${ses}`)).toBe(routes.coverLetter(ap))
+    expect(redirectOf(`/applications/${ap}/interview/${ses}/result`)).toBe(routes.coverLetter(ap))
     expect(redirectOf("/interviews")).toBe(routes.applications())
     expect(redirectOf(`/interviews/${ses}/result`)).toBe(routes.applications())
   })
-  it("other application paths are untouched", () => {
-    expect(redirectOf(`/applications/${ap}`)).toBeNull()
-    expect(redirectOf(`/applications/${ap}/insight`)).toBeNull()
-    expect(redirectOf(`/applications/${ap}/interviews`)).toBeNull()
+
+  it("S-13과 S-46 자신은 그대로", () => {
+    expect(redirectOf("/applications")).toBeNull()
+    expect(redirectOf(`/applications/${ap}/cover-letter`)).toBeNull()
     expect(redirectOf("/interviewsx")).toBeNull()
   })
 })

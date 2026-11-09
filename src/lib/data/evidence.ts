@@ -167,19 +167,24 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
     case "jd_requirement": {
       const r = db.jd_requirements.find((x) => x.id === sid)
       // No project → no link.
-      return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["JD 요건"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
+      return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["채용 공고", "요건"], href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd" }) : null, to_career: false, updated_at: null }
     }
     case "jd_sentence":
-      return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.applicationJd(e.application_project_id) : null, to_career: false, updated_at: null }
+      return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd" }) : null, to_career: false, updated_at: null }
     case "user_note": {
-      const s = db.draft_sections.find((x) => x.id === sid)
+      // (v5.20, CF-1 · R15) `source_id`는 자소서 정본의 `body.questions[].question_id`다 — 테이블
+      // 조인으로 풀 수 없어서 **화면(여기)이 문항 번호·메모를 조립한다**(백엔드가 못 하는 자리라고
+      // 알려 온 자리다). 폐기된 `draft_sections`는 더 보지 않는다.
+      const doc = db.application_documents.find((d) => d.body.questions.some((q) => q.question_id === sid))
+      const at = doc ? doc.body.questions.findIndex((q) => q.question_id === sid) : -1
+      const q = doc && at >= 0 ? doc.body.questions[at] : null
       return {
-        source_label: e.source_label ?? "내 메모",
-        current_value: s?.user_note ?? null,
-        path: ["자소서 문항 답변", "문항 메모"],
-        href: s && e.application_project_id ? routes.draftQuestions(e.application_project_id, s.draft_id) : null,
+        source_label: e.source_label ?? (at >= 0 ? `문항 ${at + 1} 메모` : "내 메모"),
+        current_value: q?.user_note ?? null,
+        path: ["자소서", at >= 0 ? `문항 ${at + 1}` : "문항 메모"],
+        href: e.application_project_id ? routes.coverLetter(e.application_project_id) : null,
         to_career: false,
-        updated_at: s?.updated_at ?? null,
+        updated_at: doc?.updated_at ?? null,
       }
     }
   }

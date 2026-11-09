@@ -62,7 +62,8 @@ export function useRequirementsFirst(
     /** `?state=extract-failed*` preview: fail the extraction with this code (nothing is written) */
     previewFail?: AiErrorCode | null
     /** C-20 "입력 원인 실패의 이동" (Q53-2): input-caused failures go to S-15 공고 원문 수정 */
-    jdEditFrom?: { from: "drafts" } | { from: "questions"; draft: string }
+    /** (v5.20, CF-A12) 채용 공고 탭을 원문 수정 상태로 열고 "{인사이트 / 자소서} 탭으로 돌아가기"를 고른다 */
+    jdEditFrom?: { from: "insight" | "cover_letter" }
   },
 ): RequirementsFirst {
   const previewWrite = usePreviewWriteGuard()
@@ -161,7 +162,7 @@ export function useRequirementsFirst(
       reduceTarget="공고 원문"
       refusal={refusal}
       lockEntry="draft"
-      inputHref={opts.jdEditFrom ? routes.applicationJd(applicationProjectId, { edit: 1, ...opts.jdEditFrom }) : undefined}
+      inputHref={opts.jdEditFrom ? routes.coverLetter(applicationProjectId, { tab: "jd", edit: 1, ...opts.jdEditFrom }) : undefined}
       inputLabel="공고 원문 고치기"
       onRetry={() => {
         const next = lastNext.current

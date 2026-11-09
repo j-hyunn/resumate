@@ -1,7 +1,7 @@
-# Resumate 디자인 시스템 v5.13
+# Resumate 디자인 시스템 v5.15
 
-> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤 / v5.7: 2026-11-05, 커리어 화면(S-08 목록·S-09·S-34·S-43 패널)·커리어 항목 추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제 — OD-D4·OD-C1·OD-C2·OD-P2 / v5.8: 2026-11-05, 답 없는 메시지 줄·C-22 드롭다운 확정 — U36-3·U36-4 / v5.9: 2026-11-05, C-17 점수 표시를 플로우 v5.14에 맞춤·"자기소개서 삭제됨" 표식·CR-23 용어 — UQ-387 / v5.10: 2026-11-05, S-44 본문 칸 높이 고정 해제 — 사용자 요청 / v5.11: 2026-11-05, 설정 다이얼로그 왼쪽 탭 4개 재작성·S-04 폐기 정리 — 결정 사이클 settings-dialog SD-* / v5.12: 2026-11-06, 설정 다이얼로그를 원본 화면 3장에 맞춤 — UI 43 런)
-> 기준 기획: **v5.12 개정분(5.11 설정 다이얼로그 시각 재작성 — 5.11.0 공통 시각 언어 신설, 2장 `select`·`tabs`·`radio-group`·`switch` 새 variant·size, `destructive-outline` 사용처 0)은 플로우(UX) v5.17b**(결정 원천 decisions 3.22·3.23·3.24, UI42-1~UI42-8. **시각 원천 = 사용자 원본 화면 3장** `_workspace/ui/43_design/account.webp`·`ai-connection.webp`·`policies.webp`, Figma 노드 없음 — 이미지 픽셀에서 읽었다. 플로우와 다른 곳은 플로우를 따랐다). **v5.11 개정분(5.11 설정 다이얼로그 신설, 5.1·5.7 S-40/S-42 정리, 3.1·3.2 `profile` 근거, 2장 `destructive-outline`·`switch`, S-04 폐기 정리)은 PRD v4.14 · 플로우(UX) v5.17a · AI v4.12a · 데이터 모델 v4.12a**(결정 원천 `docs/planning/decisions.md` 3.22 SD-1~SD-6·SD-A1~SD-A19, 3.23 R13-U1~U4, 4.16. **Figma 없음** — 사용자가 올린 원래 화면 3장은 파일로 남아 있지 않고, 플로우 S-24 ①~④ 컴포넌트 표가 정본이다). **v5.9 개정분(3.16 C-17·A4 "자기소개서 삭제됨" 표식·CR-23 화면 용어)은 플로우(UX) v5.14**(결정 원천 `docs/planning/decisions.md` 3.18 OD-I1·OD-I2·OD-I6·OD-D1, 3.19 U36-1·U36-2, 시각 세부는 구현 코드 `score-display.tsx`·`result-view.tsx`·`session-status.tsx`·`session-list.tsx` 기준). **v5.7 개정분(커리어 화면·추가·수정 모달·C-24 폐기·되돌리기 삭제)은 PRD v4.13 · 플로우(UX) v5.13 · AI v4.11 · 데이터 모델 v4.11**(결정 원천 `docs/planning/decisions.md` 3.18 OD-C1·OD-C2·OD-P2·OD-D4, 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx`가 기준). **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 화면 — S-08 목록·S-09·S-34·S-43 패널·C-22·C-25 — 의 시각 규칙은 (v5.7)에서 코드 기준으로 정리했다: 5.6.1, 6장 A2. C-24는 폐기, 8.4 P-15 해소) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`, v5.7은 `(v5.7)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
+> 작성: ui-designer / 2026-10-24 (v2: 2026-10-28, BYOK 반영 / v3: 2026-10-30, 기획 v5.3 반영 / v4: 2026-11-03, 사용자 지정 브랜드 토큰 / v5: 2026-11-03, 프로젝트 상세·산출물 상세 반영 / v5.1: 2026-11-04, 로그인 Google 단일화 / v5.2: 2026-11-04, 처리방침·약관 링크·S-03 연령 확인·S-30 문서 페이지 / v5.3: 2026-11-04, C-23 소속 선택 전용 / v5.4: 2026-11-04, 알림·경고 모달 공통 모양 / v5.5: 2026-11-04, AI 패널·문서형 입력 개정 — 결정 사이클 ui-panel-doc UP-1~UP-13, 이미 구현된 코드에 맞춤 / v5.6: 2026-11-04, S-02 헤더·카드 없는 배치와 L-02 새 행 안내를 코드에 맞춤 / v5.7: 2026-11-05, 커리어 화면(S-08 목록·S-09·S-34·S-43 패널)·커리어 항목 추가·수정 모달 정리, C-24 폐기, 되돌리기 삭제 — OD-D4·OD-C1·OD-C2·OD-P2 / v5.8: 2026-11-05, 답 없는 메시지 줄·C-22 드롭다운 확정 — U36-3·U36-4 / v5.9: 2026-11-05, C-17 점수 표시를 플로우 v5.14에 맞춤·"자기소개서 삭제됨" 표식·CR-23 용어 — UQ-387 / v5.10: 2026-11-05, S-44 본문 칸 높이 고정 해제 — 사용자 요청 / v5.11: 2026-11-05, 설정 다이얼로그 왼쪽 탭 4개 재작성·S-04 폐기 정리 — 결정 사이클 settings-dialog SD-* / v5.12: 2026-11-06, 설정 다이얼로그를 원본 화면 3장에 맞춤 — UI 43 런 / v5.13: 2026-11-08, AI 모의 면접 MVP 제외 — UI 44 런 / v5.14: 2026-11-09, 자기소개서 관리 흐름 재설계 CF-1~CF-10 — UI 45 런 / v5.15: 2026-11-09, UI 질문 확정 CF-S2·CF-S3 반영 — 같은 런)
+> 기준 기획: **v5.15 개정분(3.10 C-11 행 표시 · 5.12 문항 설정 상태의 첫 저장 · 8.4 P-28~P-30 닫음)은 플로우(UX) v5.20 CF-S2·CF-S3 확정분**(확정 2026-11-09 (사용자), decisions 3.28 후속 확정 4 · 4.23 UI #9. 반영 위치는 UX S-46 "두 상태"·1.3a 상태 판정·C-11 근거 목록 행). **v5.14 개정분(6장 A3 재작성 — S-13 목록 · S-14 2단계 모달 · S-46 작성 화면, 신설 3.26 문항 초안 제안 카드 · 5.6.2 추가 모달 · 5.12 작성 화면 배치, 3.10 C-11 재작성, 폐기 S-17·S-19·S-31·S-45 묘사 정리)은 PRD v4.17 · 플로우(UX) v5.20 · AI v4.15 · 데이터 모델 v4.15**(결정 원천 `docs/planning/decisions.md` **4.23 UI 1~8** + 4.19·4.21·4.22, 사용자 확정 CF-1~CF-10 · CF-U1~U3 · CF-M1. **Figma 노드 없음** — 사용자가 보여 준 화면 시안 4장(목록·추가 모달·문항 설정·작성)은 파일로 남아 있지 않아 **플로우 S-13·S-14·S-46 컴포넌트 표가 정본**이고, 시각 세부는 기존 토큰·패턴을 재사용해 정했다). **v5.12 개정분(5.11 설정 다이얼로그 시각 재작성 — 5.11.0 공통 시각 언어 신설, 2장 `select`·`tabs`·`radio-group`·`switch` 새 variant·size, `destructive-outline` 사용처 0)은 플로우(UX) v5.17b**(결정 원천 decisions 3.22·3.23·3.24, UI42-1~UI42-8. **시각 원천 = 사용자 원본 화면 3장** `_workspace/ui/43_design/account.webp`·`ai-connection.webp`·`policies.webp`, Figma 노드 없음 — 이미지 픽셀에서 읽었다. 플로우와 다른 곳은 플로우를 따랐다). **v5.11 개정분(5.11 설정 다이얼로그 신설, 5.1·5.7 S-40/S-42 정리, 3.1·3.2 `profile` 근거, 2장 `destructive-outline`·`switch`, S-04 폐기 정리)은 PRD v4.14 · 플로우(UX) v5.17a · AI v4.12a · 데이터 모델 v4.12a**(결정 원천 `docs/planning/decisions.md` 3.22 SD-1~SD-6·SD-A1~SD-A19, 3.23 R13-U1~U4, 4.16. **Figma 없음** — 사용자가 올린 원래 화면 3장은 파일로 남아 있지 않고, 플로우 S-24 ①~④ 컴포넌트 표가 정본이다). **v5.9 개정분(3.16 C-17·A4 "자기소개서 삭제됨" 표식·CR-23 화면 용어)은 플로우(UX) v5.14**(결정 원천 `docs/planning/decisions.md` 3.18 OD-I1·OD-I2·OD-I6·OD-D1, 3.19 U36-1·U36-2, 시각 세부는 구현 코드 `score-display.tsx`·`result-view.tsx`·`session-status.tsx`·`session-list.tsx` 기준). **v5.7 개정분(커리어 화면·추가·수정 모달·C-24 폐기·되돌리기 삭제)은 PRD v4.13 · 플로우(UX) v5.13 · AI v4.11 · 데이터 모델 v4.11**(결정 원천 `docs/planning/decisions.md` 3.18 OD-C1·OD-C2·OD-P2·OD-D4, 시각 세부는 구현 코드 `add-career-dialog.tsx`·`career-overview.tsx`·`add-project-dialog.tsx`가 기준). **v5.5 개정분(AI 패널·제안 확인 줄·문서형 입력·좁은 화면 32px·입력 포커스)은 PRD v4.12 · 플로우(UX) v5.12 · AI v4.10 · 데이터 모델 v4.10**(같은 사이클에 병행 작성, 결정 원천 `_workspace/00_input/planning-decisions-ui-panel-doc.md` UP-1~UP-13, 시각 세부는 워크트리 `ai-chat-response-error-3f096a`의 구현 코드가 기준). **v5 추가분은 PRD v4.6 · 플로우 v5.6 · AI v4.6 · 데이터 모델 v4.5**(L-02, S-10, S-43 산출물 섹션, S-44, C-15, C-23, AI-12·AI-13 패널). **C-23은 플로우 v5.9 기준**(v5.3, D-UX-28 변경). 그 밖의 장은 **PRD v4.3 · 플로우 v5.3 · AI v4.3 · 데이터 모델 v4.2** 기준이다(v5.5 커리어 재설계 화면 — S-08 목록·S-09·S-34·S-43 패널·C-22·C-25 — 의 시각 규칙은 (v5.7)에서 코드 기준으로 정리했다: 5.6.1, 6장 A2. C-24는 폐기, 8.4 P-15 해소) (v2는 PRD v4.2 · 플로우 v5.2, v1은 PRD v3.2a · 플로우 v4.2b 기준). v3에서 더하거나 바꾼 규칙은 본문에 `(v3)`, v4는 `(v4)`, v5는 `(v5)`, v5.1(플로우 v5.7 S-02)은 `(v5.1)`, v5.5는 `(v5.5)`, v5.7은 `(v5.7)`로 표시했다(머지 뒤 v4 정합 수정은 `(v5, UQ-BR-n)`).
 > Figma: v3까지는 없음. (v5) 파일 `GagTxDayknEFEa6qdSqQCc` 노드 `1034:8565`(근무 › 프로젝트 추가) · `1041:8783`(교육 › 프로젝트 상세) · `1041:8904`(산출물 상세)를 기준으로 했다. 단, Figma MCP가 호출 한도에 걸려 화면을 직접 읽지 못했고, 리더가 브리프(`_workspace/ui/21_brief_project-add.md`)에 적은 관찰값(크기·반경·색 인상)을 따랐다. 그 밖의 장은 기획 문서만으로 작성했다. 문서가 정하지 않은 시각적 선택은 `[가정]`으로 표시하고 8장에 모았다.
 > **(v5.13, 2026-11-08) AI 모의 면접 MVP 제외 (RM-1~RM-5, 플로우 v5.19, decisions 4.21 UI 7)**: 화면 S-20·S-22·S-33·S-37과 공통 요소 C-14·C-16·C-17은 **폐기**다(코드 삭제, 옛 주소는 308 redirect). 이 문서에서 이들을 사용처·예시로 적은 문장(폭 토큰·컴포넌트 인벤토리·C-03 단계·C-18·C-19·C-20 등)은 이력으로만 남아 있고 **유효 명세가 아니다** — 남은 화면에만 적용한다. 섹션째 폐기한 곳: 1.1.4 면접 단계 2행·토큰, 3.13, 3.15, 3.16, 6장 A4의 면접 부분.
 > 독자: frontend-engineer(파운데이션 A0, 영역 A1~A4), ui-qa. 이 문서만 읽고 같은 모양의 화면을 만들 수 있어야 한다. 토큰·패턴 이름은 엔지니어가 코드에서 그대로 참조하므로, 바꿀 때는 9장에 사용처 이전 목록을 함께 남긴다.
@@ -11,7 +11,7 @@
 ## 0. 원칙
 
 1. **차분하고 촘촘한 업무 도구.** 경력직 이직자가 긴 한국어 글을 읽고 고치는 화면이다. 앱 기본 바탕(사이드바·바깥 영역 `--sidebar`)은 연한 민트 `#F3FBF8`, 콘텐츠 패널(sidebar-inset)·카드·팝오버는 흰색(사용자 결정 2026-11-03), 강조색은 초록 `#15A76E` 하나(사용자 결정 2026-10-24 · 2026-11-03), 의미 색은 상태 표시에만 쓴다. 장식 그라데이션·일러스트·큰 그림자는 쓰지 않는다.
-2. **긴 한국어 본문이 주인공이다.** 본문 16px(사용자 결정 2026-10-24), 행간 1.75. 긴 글 읽기 열(S-19 문서, ~~S-33 답변~~(폐기), S-30 등)은 최대 42rem(약 42자). (v5.5) 단, L-02 문서형 페이지(S-10 STAR·S-44 본문)는 폭 제한 없이 왼쪽 열 전체 폭을 쓴다(사용자 결정 2026-11-04, UP-12 — 8.5 DR-5). 한글에 자간을 좁히지 않는다.
+2. **긴 한국어 본문이 주인공이다.** 본문 16px(사용자 결정 2026-10-24), 행간 1.75. 긴 글 읽기 열(~~S-19 문서~~(폐기), ~~S-33 답변~~(폐기), S-30 등)은 최대 42rem(약 42자). (v5.5) 단, L-02 문서형 페이지(S-10 STAR·S-44 본문, **(v5.14) S-46 문항 답변**)는 폭 제한 없이 왼쪽 열 전체 폭을 쓴다(사용자 결정 2026-11-04, UP-12 — 8.5 DR-5). 한글에 자간을 좁히지 않는다.
 3. **AI 상태는 헷갈리지 않는다.** AI 미연결(잠금)·실행 중·스트리밍·공급자 한도·오류·데이터 부족은 각각 정해진 하나의 모양을 쓴다(4장). AI는 사용자가 연결한 본인 키로만 돈다(BYOK). 그래서 화면에 서비스 횟수나 차감은 없고, 대신 어느 공급자로 도는지(C-19)를 늘 보인다. AI 활동에는 전용 보라색 `--ai`를 쓰고, 다른 용도로 쓰지 않는다.
 4. **근거가 신뢰를 만든다.** 근거 칩(C-01)·출처 발화 칩(C-15)은 하나의 작은 칩 모양으로 통일한다. 상태는 색 + 아이콘 + 글자, 색만으로 구분하지 않는다.
 5. **데스크톱 우선, 모바일 완결.** 1024px 미만에서 셸이 상단 바 + 서랍으로, 768px 미만에서 보드가 열 탭으로 바뀐다.
@@ -524,17 +524,17 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | < 768 | 좁은 화면(모바일) | 보드 → 열 탭(T-8), 표 → 카드 목록, Sheet 전체 폭, 버튼 묶음 세로 쌓기 |
 | 768~1023 | `md` | 셸은 아직 서랍(상단 바), 보드는 가로 열(보드 영역 안 가로 스크롤) |
 | ≥ 1024 | `lg` | **셸 왼쪽 메뉴 고정 표시**(shadcn Sidebar의 모바일 기준을 1024로: `use-mobile.ts`의 `MOBILE_BREAKPOINT = 1024`) |
-| ≥ 1280 | `xl` | S-36 2단(대화 / 정리 결과), S-19 오른쪽 패널 고정 |
+| ≥ 1280 | `xl` | S-36 2단(대화 / 정리 결과), ~~S-19 오른쪽 패널 고정~~(폐기). (v5.14) S-46은 1024부터 3단이라 이 구간에서 더 바뀌는 것이 없다 |
 
 | 폭 토큰 | 값 | 용도 |
 |---------|----|------|
 | `w-sidebar` | 16rem (256px), 아이콘 레일 3.5rem | 왼쪽 메뉴 (`--sidebar-width: 16rem`, 5.1 메뉴 크기) |
 | `h-topbar` | `h-16` (64px) | 상단 바(사이드바 토글 · 이동 경로), 본문 패널 안에서 `sticky top-0` |
-| `max-w-prose-edit` | `max-w-[42rem]` (672px, 16px 한글 약 42자) | 긴 글 편집·읽기 열 (S-35 필드, S-19 문서, ~~S-33 답변~~(폐기), 대화 메시지 열, S-30). (v5.5) L-02 문서형 페이지에는 쓰지 않는다 |
-| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(S-14, ~~S-20~~(폐기), S-25). (v5.7) S-09·S-34는 S-08 패널, S-10은 L-02라 쓰지 않는다. (v5.11) ~~S-04~~는 폐기(플로우 v5.17 SD-A2 — 같은 필드는 설정 계정 탭 "내 정보"), S-24는 다이얼로그(5.11)라 쓰지 않는다 |
-| `max-w-page` | `max-w-6xl` (1152px) | 목록·허브 화면(S-08, S-13, S-31, ~~S-37~~(폐기)) |
+| `max-w-prose-edit` | `max-w-[42rem]` (672px, 16px 한글 약 42자) | 긴 글 편집·읽기 열 (S-35 필드, ~~S-19 문서~~·~~S-33 답변~~(폐기), 대화 메시지 열, S-30). (v5.5) L-02 문서형 페이지에는 쓰지 않는다 — (v5.14) S-46 문항 답변도 왼쪽 열 전체 폭이다 |
+| `max-w-form` | `max-w-3xl` (768px) | 일반 폼 화면(~~S-14~~ — (v5.14) 2단계 모달로 바뀌어 폼 화면이 아니다(5.6.2), ~~S-20~~(폐기), S-25). (v5.7) S-09·S-34는 S-08 패널, S-10은 L-02라 쓰지 않는다. (v5.11) ~~S-04~~는 폐기(플로우 v5.17 SD-A2 — 같은 필드는 설정 계정 탭 "내 정보"), S-24는 다이얼로그(5.11)라 쓰지 않는다 |
+| `max-w-page` | `max-w-6xl` (1152px) | 목록 화면(S-08, S-13). (v5.14) ~~S-31 허브~~·~~S-37~~은 폐기 |
 | 전체 폭 | 제한 없음 | S-39 보드, S-36 대화(2단) |
-| `w-side-panel` | `w-80` (320px) / `2xl:w-96` | S-19 오른쪽 패널 |
+| ~~`w-side-panel`~~ | `w-80` (320px) / `2xl:w-96` | (v5.14) ~~S-19 오른쪽 패널~~ — S-19 폐기로 **쓰는 곳 없음**. 이름은 이력으로 남긴다(S-46 패널은 `w-ai-panel`) |
 | `w-sheet` | `sm:max-w-md` (448px) | C-02 근거 패널 등 오른쪽 Sheet |
 | (v5) `h-shellbar` | `h-14` (56px) | L-02 상단 바 |
 | (v5) `w-ai-panel` | 기본 `26.25rem`(420px, Figma) · 최소 `22.5rem`(360) · 최대 `40rem`(640) 그리고 본문 카드 폭의 50% 이하 | L-02 Resumate AI 패널. 사용자가 손잡이로 바꾼 값은 브라우저에 기억(5.8) |
@@ -556,14 +556,14 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | `card` | 카드·패널 | 기본 `rounded-lg border bg-card`, 그림자 없음(shadcn 기본 `shadow-sm` 제거). (v4) `interactive`(전체 클릭 카드 초록 hover) · `tone="success"`(완료 카드 `border-success/30`) |
 | `sidebar` | L-01 | `collapsible="offcanvas"`, 모바일 기준 1024 |
 | `breadcrumb` | L-01 상단 이동 경로 | |
-| `sheet` | C-02, 좁은 화면 서랍, S-19/S-36 보조 패널 | side `right`(패널), `left`(메뉴 서랍), `bottom`(좁은 화면의 짧은 선택) |
+| `sheet` | C-02, 좁은 화면 서랍, ~~S-19~~/S-36 보조 패널, (v5.14) 좁은 화면 Resumate AI 패널(S-10·S-44·S-46) | side `right`(패널), `left`(메뉴 서랍), `bottom`(좁은 화면의 짧은 선택) |
 | `dialog` | S-11, C-13, ~~C-14, C-16~~(폐기), 저장 확인(S-36) | `sm:max-w-lg`(기본) / `sm:max-w-md`(C-13). 본문 길면 `max-h-[85dvh] overflow-y-auto` |
 | `alert-dialog` | C-05, 되돌릴 수 없는 확인(다시 생성 덮어쓰기, 결과 지우기) | 확인 버튼 `variant="destructive"`(삭제) 또는 `default`(덮어쓰기) |
 | `alert` | C-20 한도·오류 안내, 공급자 장애 배너, S-42 상시 고지, 안내 | 추가 variant: `info` · `warning` · `destructive`(subtle 바탕) · `ai`. (v4) `warning`·`destructive`는 아이콘 색(`text-warning`·`text-destructive`)도 정한다 |
 | `dropdown-menu` | 행·카드 메뉴(⋯), C-12 | C-12는 `DropdownMenuRadioGroup` |
 | `popover` | 칩 미리보기 없음 — 칩은 Sheet로. 필터 묶음, (v5.5) S-10 역량 선택(`CompetencyChips`, 5.9), (v5.12) S-24 최종 학력 기간 칸(`PeriodCell`, 5.11.1) | 역량 선택: `PopoverContent align="start" className="w-64 p-0"` |
 | `tooltip` | 아이콘 버튼 이름, 잘린 칩 라벨 | 지연 500ms. 정보를 Tooltip에만 두지 않는다 |
-| `tabs` | (v5.12) S-24 AI 연결 탭 사용량 공급자 알약(`TabsList variant="pill"`, 5.11.2), S-31 하위 탐색 보조, 좁은 화면 보드 열 탭, S-36 좁은 화면 전환, S-20 유형 | (v5.12) 추가 variant `pill`: 목록 `h-auto gap-2 rounded-none bg-transparent p-0`, 트리거 `h-8 flex-none rounded-control px-3 text-sm font-normal text-muted-foreground hover:text-foreground data-active:bg-primary/10 data-active:font-medium data-active:text-primary-text data-active:shadow-none`, 밑줄 없음. |
+| `tabs` | (v5.12) S-24 AI 연결 탭 사용량 공급자 알약(`TabsList variant="pill"`, 5.11.2), **(v5.14) S-46 왼쪽 탭 3개(자소서 / 채용 공고 / 인사이트 — 5.12, 넓은 화면 세로 목록 · 좁은 화면 가로 탭)**, 좁은 화면 보드 열 탭, S-36 좁은 화면 전환 (~~S-31 하위 탐색~~·~~S-20 유형~~ 폐기) | (v5.12) 추가 variant `pill`: 목록 `h-auto gap-2 rounded-none bg-transparent p-0`, 트리거 `h-8 flex-none rounded-control px-3 text-sm font-normal text-muted-foreground hover:text-foreground data-active:bg-primary/10 data-active:font-medium data-active:text-primary-text data-active:shadow-none`, 밑줄 없음. |
 | `toggle-group` | ~~S-20 질문 수 3/5/7~~ — 폐기(RM-1), 쓰는 곳 없음 | |
 | `radio-group` | C-05 선택지, ~~S-20 면접 유형~~(폐기), (v5.11) S-24 AI 연결 공급자 행 | (v5.12) `RadioGroupItem size="lg"`: 원 `size-5`, 표시 점 `size-2.5`(S-24 공급자 행, 5.11.2). 기본 `size-4`. 카드형 옵션: `rounded-lg border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary-subtle` (v5, UQ-BR-15: 1.3 예외 목록에 등록) |
 | `checkbox` | C-11 체크 트리, C-05 확인 체크 | |
@@ -614,13 +614,13 @@ Tailwind 기본 브레이크포인트를 그대로 쓴다.
 | (v5) `DocTitleInput` · `DocTextarea` | 테두리 없는 `input` / (v5.5) TipTap 마크다운 편집기(`components/common/doc-markdown-editor.tsx`, `doc-inputs.tsx`가 다시 내보냄) | L-02 문서형 입력(5.9, A-13 예외). 서식 CSS는 `globals.css`의 `.doc-md`(레이어 밖) |
 | (v5) `InlineFields` · `InlineField` · `FieldRows` · `ChipSelect` · `CompetencyChips` | `dl` 가로 줄(`InlineFields`) · `dl` 2열(`FieldRows`) + `Select variant="chip"` / (v5.5) 칩 + `Popover`(`Checkbox` 목록 + [적용]) | S-10 머리 필드(5.9). (v5.5) S-10은 `InlineFields` 두 줄만 쓰고 `FieldRows`는 쓰지 않는다(컴포넌트는 남김) |
 | (v5) `ResizeHandle` | `div role="separator"` | L-02 2단 너비 조절(5.9, A-14) |
-| (v5) `AiPanel` (`components/career/ai-panel/`, A2 소유 — 지금은 S-10·S-44만 쓴다) | 머리 · 기록 목록 · 메시지(+ (v5.5) 마지막 AI 턴 아래 제안 확인 줄) · 칩 줄 · 입력창 | S-10·S-44가 **같은 컴포넌트**를 쓰고, 제안 카드와 칩 계산만 넘긴다(5.10). (v5.5) 두 화면 모두 `proposalInline`을 넘겨 제안 카드를 대화 안에 둔다 — 제안 독(`ProposalDock`)은 쓰지 않는다(코드 경로만 남음) |
+| (v5) `AiPanel` (`components/career/ai-panel/`, A2 소유 — (v5.14) **A3의 S-46도 쓴다**. 영역을 넘어 쓰는 컴포넌트라 바꿀 일이 생기면 리더를 거친다) | 머리 · 기록 목록 · 메시지(+ (v5.5) 마지막 AI 턴 아래 제안 확인 줄) · 칩 줄 · 입력창 | S-10·S-44·**S-46**이 **같은 컴포넌트**를 쓰고, 제안 카드(3.24·3.25·**3.26**)와 칩 계산만 넘긴다(5.10). (v5.5) 두 화면 모두 `proposalInline`을 넘겨 제안 카드를 대화 안에 둔다 — 제안 독(`ProposalDock`)은 쓰지 않는다(코드 경로만 남음) |
 | (v5) `StarProposalCard` · `DraftProposalCard` | `Card` 변형 + C-15 칩 | S-10(3.24) / S-44(3.25). 영역 소유(`components/career/`) |
 | (v5) `SourceChip` | C-01 칩 모양 | C-15 출처 칩 4종 라벨(3.14 v4) — 기존 C-15 칩을 이 이름으로 공통화 |
 
 ---
 
-## 3. 공통 컴포넌트 패턴 (C-01 ~ C-21, (v5) C-23 · S-10/S-44 제안 카드)
+## 3. 공통 컴포넌트 패턴 (C-01 ~ C-21, (v5) C-23 · S-10/S-44 제안 카드, (v5.14) S-46 제안 카드)
 
 ### 3.1 C-01 근거 칩
 
@@ -686,12 +686,12 @@ Progress: h-1.5 bg-ai/15 [&>div]:bg-ai  (total 없으면 indeterminate: 막대 �
   - `synthesize_regen`이 와도 **새 행을 더하지 않는다.** `synthesize` 행을 다시 현재 상태(`Loader2` + `font-medium`)로 되돌린다. 글자는 같은 "강점·지원 방향 정리 중"이다. 실행 도중 행 수가 바뀌지 않게 하려는 것이다 `[가정]`.
   - ~~`complete`~~ (v5.13, RM-1) 면접 작업 전용 단계라 폐기.
   - 작업별 단계 목록은 다음과 같다. 인사이트는 `prepare → match → synthesize → validate`이다((v5.13, RM-1) 면접 질문·채점 목록 폐기).
-- **(v3) 목록·카드의 기능 상태** (`AiFeatureStatus`, 명세 C-03 "진행 표시 우선순위"): S-13 기능 진행 칸, S-31 기능 카드, S-39 카드, S-16 머리에 쓴다. 아래 순서로 판정해 **한 모양만** 그린다.
+- **(v3) 목록·카드의 기능 상태** (`AiFeatureStatus`, 명세 C-03 "진행 표시 우선순위"): S-39 카드와 S-16(인사이트 탭) 머리에 쓴다. **(v5.14, CF-3·CF-A14)** ~~S-13 기능 진행 칸~~·~~S-31 기능 카드~~는 사라졌다 — S-13 행에는 진행 표시가 없고(6장 A3), S-31은 폐기다. 아래 순서로 판정해 **한 모양만** 그린다.
 
 | 순서 | 조건 | 모습 |
 |------|------|------|
 | ① 생성 중 | 그 기능의 작업이 대기·실행 중이다(이전 결과가 있어도) | C-03 축약형. 이전 결과의 요약·개수는 숨긴다 |
-| ② 있음 | 진행 중인 작업이 없고 최신 결과가 있다 | 화면의 원래 모양(S-13 아이콘 + 숫자, S-31 상태 배지 + 요약) |
+| ② 있음 | 진행 중인 작업이 없고 최신 결과가 있다 | 화면의 원래 모양((v5.14) S-39 카드의 인사이트 아이콘·자소서 표시, S-16 결과 머리) |
 | ③ 없음 | 결과가 없다 | `text-sm text-muted-foreground` "없음"(화면 명세에 빈 문구가 있으면 그 문구) |
 | 실패 | 결과는 "생성 중"인데 그 작업이 끝났거나 없다 | 아래 실패 한 줄. 지금 보이는 결과보다 **늦게** 끝난 실패만 보인다. 결과가 있으면 ② 모양 아래에 이 한 줄을 붙인다 |
 
@@ -710,9 +710,9 @@ Progress: h-1.5 bg-ai/15 [&>div]:bg-ai  (total 없으면 indeterminate: 막대 �
 | `block_completed` | 왼쪽 테두리 사라짐(`border-transparent`), 근거 칩 자리에 `Skeleton h-6 w-24` 1개 |
 | (v3) `adjusting_length` | 머리 글자를 C-03 축약형 "글자 수 맞추는 중 (현재 {n}자 / 제한 {limit}자)"(`tabular-nums`)로 바꾼다. 블록은 그대로 두고 커서는 지운다 |
 | (v3) **마무리 중** (마지막 `block_completed` 또는 `adjusting_length` 뒤, `validated` 전) | 머리 글자를 `Loader2 size-4 animate-spin text-ai` + "마무리 중…"으로 바꾼다. 블록 글자는 그대로 읽힌다(`text-foreground`, 흐리게 하지 않음). 편집·복사 버튼은 `disabled`이고 블록 hover 바탕은 없다. 글자 선택은 막지 않는다 `[가정]`. "중단" 버튼은 `done`까지 남긴다 `[가정]` |
-| `validated` | (v3) **그 문항의 블록을 통째로 교체**한다(경력기술서는 초안 전체). 임시 블록을 지우고 확정 블록을 한 번에 그린다. 교체 애니메이션은 없다. 교체 전에 화면 맨 위에 보이던 블록의 순번을 기억해 두었다가 교체 뒤 같은 자리로 맞춰 스크롤이 튀지 않게 한다. 이때 근거 칩·자리 표시·검증 배지(C-08)·생성 직후 안내 상자(6장 A3 S-19)가 붙고 편집·복사가 풀린다. `aria-busy`도 이때 푼다 |
+| `validated` | (v3) **그 문항의 블록을 통째로 교체**한다((v5.14, CF-1) 경력기술서 분기 폐기). 임시 블록을 지우고 확정 블록을 한 번에 그린다. 교체 애니메이션은 없다. 교체 전에 화면 맨 위에 보이던 블록의 순번을 기억해 두었다가 교체 뒤 같은 자리로 맞춰 스크롤이 튀지 않게 한다. 이때 근거 칩·자리 표시·검증 배지(C-08)가 붙고 편집·복사가 풀린다. **(v5.14) 옛 "생성 직후 안내 상자"(`GenerationNotes`)는 폐기** — `notes_for_user`·`char_adjust_needed`는 제안 카드 [자세히] 안의 "확인해 주세요" 묶음(3.26)으로 갔다. `aria-busy`도 이때 푼다 |
 | `done` | 머리 사라지고 C-06 저장 상태로 교체 |
-| `error` | 자기소개서·대화는 마지막 블록 아래에 C-20 inline형(3.20)을 둔다. 이미 완료된 문항·질문·턴은 그대로 둔다. (v3) **경력기술서는 예외**다. 임시 블록을 모두 지우고 본문 자리에 C-20 block형을 둔다(6장 A3 "S-19 경력기술서 실패") |
+| `error` | 자기소개서·대화는 마지막 블록 아래에 C-20 inline형(3.20)을 둔다. 이미 완료된 문항·질문·턴은 그대로 둔다. **(v5.14, CF-1)** 옛 "경력기술서 예외"(본문 자리 C-20 block형)는 S-45 폐기와 함께 없앴다 — S-46의 초안 실패는 **제안 카드 위 한 줄**(3.26 "초안 실패")이고 왼쪽 본문은 그대로 둔다 |
 
 - 아직 시작 안 된 블록(자소서 문항 등)은 `Skeleton` 3줄. 자소서의 "근거 선택 먼저" 단계는 C-03 축약형 "쓸 경력·프로젝트 고르는 중"을 먼저 보인다.
 - 스크롤: 사용자가 위로 스크롤하지 않았을 때만 자동으로 따라 내려간다.
@@ -803,20 +803,20 @@ Progress: h-1.5 bg-ai/15 [&>div]:bg-ai  (total 없으면 indeterminate: 막대 �
   - 오른쪽 `Button size="sm"`: 충족이면 `default` "돌아가기", 미충족이면 `outline` "돌아가기"
 - 재판정 중: 준비 상태 배지 자리 `Loader2 size-3.5 animate-spin`.
 
-### 3.10 C-11 사용한 경력·프로젝트
+### 3.10 C-11 사용한 경력·프로젝트 — (v5.14 재작성, CL-5·CF-1) 읽기 전용 목록
 
-- 위치: S-19 오른쪽 패널(넓은 화면) / 문항 카드 아래 `Collapsible`(좁은 화면).
-- 목록 행: `py-2 space-y-1 border-b last:border-0`
-  - 1행 경로 `text-sm font-medium` "회사명 › 프로젝트명 › 상세 내용 제목" (원본 삭제 시 `source_label` + C-01 삭제 스타일 아이콘 `Unlink`, `text-muted-foreground`)
-  - 2행 배지: `role` primary "주 근거" `Badge variant="secondary"` / supporting "보조" `Badge variant="outline"`; `origin` ai "AI 선택" `Badge variant="ai"` + `Sparkles size-3` / user "내가 추가" `Badge variant="outline"` + `UserRound size-3`
-  - 3행 `rationale`·관련 요건·`reuse_reason`: `meta text-muted-foreground`
-- 변경 트리: `Checkbox` 트리(`pl-6` 들여쓰기 단계), 변경되면 패널 아래 `Alert variant="info"` "근거를 바꿨어요" + `AiRunButton` "변경 사항으로 다시 생성"(다시 하기 주석 "다시 하면 공급자 토큰을 다시 써요" 포함, 3.22). 다시 생성 → `AlertDialog`(덮어쓰기 확인).
-- 모두 제외: `Alert variant="warning"` 문구.
-- 경력기술서 출처 `selection_origin`: 트리 위 `Badge`(insight "인사이트 우선순위" info / ai_ranking "AI가 고름" ai / user "직접 고름" outline).
+- **(v5.14)** 고르는 장치가 아니라 **읽기 전용 목록**이다. ~~`Checkbox` 체크 트리~~ · ~~"변경 사항으로 다시 생성"~~ · ~~프로젝트 8개 상한 안내~~ · ~~경력기술서 출처 `selection_origin` 배지~~는 **모두 폐기**다(decisions 4.19 UI #6, CF-1로 경력기술서 자체가 없다). 근거를 바꾸려면 패널 대화로 지시한다 — 화면에 선택 장치를 두지 않는다. v5.13까지의 체크 트리 규칙은 git 이력(이 파일 v5.13)에서 볼 수 있다.
+- 위치: **S-46 자소서 탭의 문항 블록 아래 `Collapsible`**(기본 접힘, 모든 폭 같다 — 5.12) / S-46 제안 카드 [자세히] 안 문항마다의 "근거 목록"(3.26 — 행 모양은 같고, 제안 쪽에만 선택 이유 한 줄이 더 붙는다. 아래 CF-S2).
+- 트리거: `CollapsibleTrigger asChild` + `Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground"` + `ListChecks size-4` + "사용한 경력·프로젝트 {n}개"(`tabular-nums`) + `ChevronRight size-4`(펼침 `rotate-90`). 0개면 트리거를 그리지 않는다.
+- **목록 행 = 경로 한 줄뿐이다 (v5.15, CF-S2 확정 2026-11-09 (사용자))**: `py-2 border-b last:border-0` 안에 `text-sm font-medium` **"회사명 또는 교육 표시 이름 › 프로젝트명"** 한 줄(원본이 지워졌으면 `source_label` + C-01 삭제 스타일 아이콘 `Unlink`, `text-muted-foreground`). 줄이 하나라 `space-y-1`을 두지 않는다.
+  - 순서는 **`{slot}.sources.{n}` 그대로 — 주 근거가 먼저**다(화면이 다시 정렬하지 않는다).
+  - 행 전체가 C-02 근거 패널을 여는 버튼이다(`Item` 아닌 `button.w-full text-left rounded-md hover:bg-accent/50 px-2 -mx-2`) `[가정]`
+- **(v5.15, CF-S2) 배지도 `rationale` 줄도 그리지 않는다** — 주/보조(`role`)·AI 선택/내가 추가(`origin`)·선택 이유(`rationale`)는 **제안 쪽에만** 있는 값이다. 특히 `rationale`은 정본에 저장되지 않아 새로 고침한 뒤에는 그릴 수 없다. 선택 이유를 보려면 대화의 초안 턴 `sources_selected` 근거 카드(3.26 "근거 목록")를 본다. 관련 요건은 그 블록의 `jd_requirement` 근거 칩(C-01)으로 보인다. **저장 계약은 바뀌지 않는다**(8.4 P-28 해소).
+- 문항의 근거는 **그 문항 초안 제안의 `sources[]`**에서 온다(CF-S1). [반영]한 문항만 목록이 바뀌고, 손으로만 고친 문항은 기존 목록을 그대로 보인다 `[가정]`. 화면은 근거를 저장 요청에 싣지 않으므로 목록에 "저장 전" 표시를 두지 않는다 `[가정]`.
 
 ### 3.11 C-12 단계 이동 메뉴
 
-- 트리거: 보드 카드 `⋯`(`Button variant="ghost" size="icon-sm"` + `MoreHorizontal`, `aria-label="카드 메뉴"`) 안의 하위 메뉴 "단계 이동", 또는 S-31 헤더 **단계 칩**(`Button variant="outline" size="sm"` + `StatusDot` + 단계 이름 + `ChevronDown`).
+- 트리거: 보드 카드 `⋯`(`Button variant="ghost" size="icon-sm"` + `MoreHorizontal`, `aria-label="카드 메뉴"`) 안의 하위 메뉴 "단계 이동" **하나뿐이다** — (v5.14, CF-3) ~~S-31 헤더 단계 칩~~은 폐기이고 **S-13 행·S-46 머리에는 단계 칩을 두지 않는다**(전형 단계 변경은 S-39에서만).
 - 내용: `DropdownMenuLabel` "단계 이동" → `DropdownMenuRadioGroup` **4단계**((v5.13, RM-2) 지원 전·서류 전형·과제 전형·전형 종료, 각 항목 앞 `StatusDot`, 현재 단계 체크) → `DropdownMenuSeparator` → "다음 단계로"(`ArrowRight`, 현재가 `closed`면 숨김).
 - 이동 완료: `aria-live` 알림(시각 표시 없음) + 낙관적 반영.
 
@@ -895,7 +895,7 @@ S-37 "새 면접"에서만 쓰던 다이얼로그라 함께 지웠다(코드 `in
 - 두 크기를 쓴다. **기존 결과가 없으면 영역형, 있으면 실행 버튼 자리에만 인라인형**(D-UX-15). 결과 본문·편집·복사는 키 없이도 그대로다(D-36). 잠금을 결과 위에 덮지 않는다.
 - 아이콘: `PlugZap`. 색은 C-09와 같은 안내 카드 계열(`primary-subtle` 아이콘 원)을 쓴다. 오류색·경고색·AI 보라는 쓰지 않는다. 잠금은 실패가 아니라 "아직 연결 안 함"이라서다 `[가정]`.
 
-**영역형** (`AiLock size="area"`: S-15 요건, S-16 인사이트, S-42 빈 상태). S-31 허브 카드는 영역형을 쓰지 않고 명세(02 S-31 v5)대로 카드에 표식만 붙인다 — 결과 없음 "AI 연결 필요", 결과 있음 "새로 만들려면 AI 연결", 요약은 그대로 (리더 결정 2026-10-28, UQ-354)
+**영역형** (`AiLock size="area"`: S-46 "채용 공고" 탭 요건 영역, S-46 "인사이트" 탭 본문, S-42 빈 상태). (v5.14, CF-7) ~~S-31 허브 카드의 표식~~은 폐기 — 카드가 없어졌고 잠금은 탭 안의 영역형과 패널 C-18이 맡는다.
 
 ```
 Card max-w-xl p-6 space-y-4 (그 기능 본문의 시작 위치, 가운데 정렬 아님)
@@ -946,7 +946,7 @@ div.flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed 
 - 좁은 화면: 실행 버튼 옆에 둘 자리가 없으면 버튼 아래 줄로 내린다(`flex-wrap`). 등급 글자는 줄이지 않는다.
 - `aria-label`: "AI 연결: {전체 글자}. AI 연결 설정 열기".
 
-**결과 배지** (`ProviderResultTag`): S-16·S-19·S-22 결과 머리 오른쪽
+**결과 배지** (`ProviderResultTag`): S-16(인사이트 탭) 결과 머리 오른쪽, (v5.14) S-46 제안 카드 위·반영된 문항 옆(~~S-19~~·~~S-22~~ 폐기)
 
 - `caption text-muted-foreground inline-flex items-center gap-1` + `Cpu size-3.5` + 명세 문구 "Gemini · 기본로 만든 결과"(`provider` + `model_tier` → 경량 / 기본 / 고성능). 버튼 모양이 아니다(누르면 S-40으로 가지 않음).
 - 모델 원래 ID(`model`)는 이 글자에 건 `Tooltip`(키보드 포커스 가능 `tabIndex=0`)과 결과 상세 정보에만 보인다.
@@ -1000,7 +1000,7 @@ Alert (톤별) p-4 grid grid-cols-[auto_1fr] gap-x-3
   `p.flex items-center gap-1.5 text-sm` + `ArrowLeftRight size-3.5` + "{활성 공급자}로 처음부터 다시 해요"
   글자색은 감싼 Alert의 글자색을 그대로 쓰고, 경고색으로 바꾸지 않는다. 오류가 아니라 동작 설명이기 때문이다. 버튼 글자는 "다시 시도" 그대로다. readiness가 바뀌면(특히 `ai_connection_changed` 뒤) 배지와 이 줄을 함께 다시 그린다.
 - **(v3) 입력 원인 실패에는 다시 시도가 없다** (`input_too_long`·`safety_blocked`·`not_a_jd`·`insufficient_data`, R-69): `RetryButton`, 공급자 배지, ④ 주석을 그리지 않는다. 동작은 "{대상}으로 이동" 하나다. 그 아래 `caption`으로 "고친 뒤 {실행 버튼 글자}로 새로 실행해 주세요"를 둔다 `[가정: 문구]`. 실행 버튼 글자는 화면마다 다르다. 인사이트는 "다시 생성", 요건 추출은 "요건 정리하기"이고, 서류 3종과 대화는 각 화면의 실행 버튼이다.
-- **(v3) 요청 안에서 끝나는 경로의 대기** (AI 작성 대화 턴, 서류 스트리밍, 요건 추출 — A14): 분당 한도·공급자 장애는 C-03 대기 줄로 보이지 않고 **바로 C-20**이 된다. 대화 턴과 자소서 문항은 그 자리의 inline형, 요건 추출과 경력기술서 시작은 실행 버튼 아래 inline형이다.
+- **(v3) 요청 안에서 끝나는 경로의 대기** (AI 작성 대화 턴, 서류 스트리밍, 요건 추출 — A14): 분당 한도·공급자 장애는 C-03 대기 줄로 보이지 않고 **바로 C-20**이 된다. 대화 턴과 자소서 문항은 그 자리의 inline형, 요건 추출은 실행 버튼 아래 inline형이다((v5.14, CF-1) 경력기술서 시작 삭제).
   - 제목 문장 다음 줄에 `text-sm tabular-nums` "{N}초 뒤 다시 보낼 수 있어요"를 둔다. 1초마다 줄어든다. 60초 이상이면 "{M}분 {S}초 뒤"로 쓴다 `[가정: 60초 이상 표기]`.
   - "다시 보내기"(대화)와 "다시 시도"(서류·요건)는 `RetryButton`처럼 `retry_after`까지 `disabled`이고 글자 뒤에 "(0:12)"를 붙인다. 0이 되면 안내 줄을 지우고 버튼을 활성으로 돌린다.
   - 아이콘과 톤은 원인 표를 따른다(`rate_limited`는 wait-or-act `Hourglass`, `provider_unavailable`은 broken `CloudAlert`). 3.3의 AI 보라 대기 줄은 쓰지 않는다. 자동 재시도가 아니라 사용자가 다시 눌러야 하기 때문이다.
@@ -1027,7 +1027,7 @@ Alert (톤별) p-4 grid grid-cols-[auto_1fr] gap-x-3
 | 형 | 쓰는 곳 | 모습 |
 |----|---------|------|
 | block | S-16 결과 영역 상단, S-22 상단, S-15 요건 영역, S-33 생성 영역 | 위 구조 전체 |
-| inline | S-36 실패한 턴 자리, S-19 실패한 섹션, S-22 실패한 답변 카드 | `flex flex-wrap items-center gap-x-2 gap-y-1 text-sm` + 톤 색 아이콘 `size-4` + 제목 문장(톤의 subtle-foreground 색) + 동작 1~2개(`link sm`). 시각 줄과 주석은 다음 줄에 `caption`으로 둔다. 대화 턴의 다시 보내기는 "다시 보내기"로 쓴다 |
+| inline | S-36 실패한 턴 자리, (v5.14) S-46 패널의 실패한 턴·제안 카드 초안 실패 줄·문항 설정 상태의 요건 추출 실패(~~S-19 실패한 섹션~~·~~S-22~~ 폐기) | `flex flex-wrap items-center gap-x-2 gap-y-1 text-sm` + 톤 색 아이콘 `size-4` + 제목 문장(톤의 subtle-foreground 색) + 동작 1~2개(`link sm`). 시각 줄과 주석은 다음 줄에 `caption`으로 둔다. 대화 턴의 다시 보내기는 "다시 보내기"로 쓴다 |
 | field | S-41 ③ 키 입력란 아래 | 폼 오류 규칙(A-10)과 같다: `text-sm` + 아이콘 `size-4`. 키 형식 오류·`key_invalid`는 `text-destructive`(입력 오류로 다룸)이고, 확인 보류(`needs_check`)는 오류가 아니므로 C-20 대신 5.7 S-41 "확인 보류" 패널로 보인다 |
 
 - 실행 중 자동 재시도(분당 한도 대기)는 C-20이 아니라 C-03의 대기 줄(3.3)로 보인다. 실패처럼 보이지 않게 한다.
@@ -1082,7 +1082,7 @@ Dialog sm:max-w-lg (좁은 화면 max-w-[calc(100%-2rem)])
 
 ### 3.22 AI 실행 버튼 묶음 (v2 신설 — `UsageHint` 대체)
 
-명세의 "실행 버튼 공통 규칙"을 하나의 공통 컴포넌트 `AiRunButton`으로 만든다. 모든 AI 실행 버튼이 이것을 쓴다. 대상은 인사이트 생성, 요건 정리하기, 경력기술서 생성, 자소서 생성·다시 생성, AI 작성 대화 시작이다((v5.13, RM-1) 면접 시작·제출·다시 채점 삭제).
+명세의 "실행 버튼 공통 규칙"을 하나의 공통 컴포넌트 `AiRunButton`으로 만든다. 모든 AI 실행 버튼이 이것을 쓴다. 대상은 인사이트 생성·다시 생성, 요건 정리하기, AI 작성 대화 시작이다((v5.13, RM-1) 면접 시작·제출·다시 채점 삭제 / **(v5.14, CF-1·CF-7) 경력기술서 생성·자소서 생성 버튼 삭제** — 자소서 초안은 버튼이 아니라 패널 대화의 초안 턴으로 만든다. S-46 문항 설정 상태의 [자기소개서 작성 시작]은 요건 선행 추출만 돌므로 `AiRunButton`이 아니라 보통 주 버튼 + C-19 배지다 — 5.12).
 
 ```
 div.flex flex-wrap items-center gap-2
@@ -1306,6 +1306,32 @@ section#draft-card(aria-label="본문 초안"): rounded-xl border bg-card text-c
 - **채운 직후**: 왼쪽 본문 칸 `animate-field-flash` + 바뀐 부분 맨 앞으로 커서를 두지 않고 스크롤만(덧붙이기는 끝, 교체·넣기는 처음) `[가정]` + Sonner 중립 토스트 "본문에 채웠어요"(액션 버튼 없음 — (v5.7) OD-P2로 "되돌리기"와 "이미 본문을 고쳐서 되돌릴 수 없어요" 바뀜 토스트 삭제).
 - 초안 턴 중(질문 턴 포함 AI 응답 중)에는 반영 버튼·블록 버튼 모두 `disabled`.
 
+### 3.26 S-46 문항 초안 제안 카드 (`QuestionProposalCard`, v5.14 신설 — CF-5·CF-6·CL-6)
+
+S-46 패널 대화 안, **마지막 AI 턴 바로 아래 확인 줄**(3.24·3.25와 같은 자리·같은 `proposalInline` 규칙)로 놓이는 대화당 1개 카드. **반영 단위가 블록이 아니라 문항(슬롯 `q_{n}`)**인 것이 3.25와 다르다. 원천: 플로우 S-46 "문항 초안 제안 카드"·"제안 카드 구성"·"반영 규칙"·"응답 방식", AI-04 개정분.
+
+**3.25를 그대로 쓰는 것** (다시 적지 않는다): 카드 틀과 확인 줄 배치 · 블록 렌더링 표(`heading`·`paragraph`·`bullet_list`·`table`·`quote`·`code`) · 검토 필요 블록(`warning` 상자 + [수락]·[빼기]) · 출처 칩(3.14 C-15 3종) · "확인이 필요한 내용 N개" 묶음 · "아직 비어 있는 부분" `chip-dashed` 칩 · "뺀 문장" 줄 · 초안 작성 중 보기(`Skeleton` → 임시 블록 → "긴 글이라 조금 더 걸려요") · 초안 상한 안내 · 초안 턴 중 버튼 `disabled`.
+
+**다른 것**
+
+| 요소 | S-46 규칙 |
+|------|-----------|
+| 제목·설명 | 제목 `p.text-sm font-semibold` **"자소서 초안"**. 설명 `p.text-xs text-muted-foreground tabular-nums` = 명세 문구("{n}번~{m}번 문항 초안을 만들었어요. 문항마다 반영할까요?") + " · 초안 남은 횟수 {n} / 6"(0이면 그 조각만 `text-warning-subtle-foreground`) |
+| 주 버튼 | 확인 줄 오른쪽에 **[모두 반영 (n)]** `Button size="sm"` default(R-C10) + [자세히]/[접기] `ghost sm`. 채울 수 있는 문항이 0개면 [모두 반영]을 그리지 않고 설명이 이유를 말한다(3.25 표와 같은 방식) |
+| 문항 묶음 ([자세히] 안) | 문항마다 `div.space-y-2 rounded-md border p-3`(묶음 사이 `space-y-3`): ① 머리 줄 `flex items-baseline gap-2` — `caption text-muted-foreground tabular-nums` "문항 {n}" + 문항 문장 `text-sm font-medium line-clamp-2` ② **제안 제목**(있을 때) `text-sm font-semibold`, 앞에 `caption text-muted-foreground` "제목" 라벨 — 없으면 줄 자체를 생략한다 `[가정]` ③ 블록 목록(3.25 렌더링) ④ 글자 수 줄 ⑤ C-11 근거 목록(3.10, 접힘) ⑥ 오른쪽 아래 **[반영]** `Button size="sm"` default |
+| 글자 수 줄 | `caption tabular-nums text-muted-foreground` "{n}자 / 제한 {limit}자" — 보정 후 값만 보인다. `char_adjust_needed`면 "확인해 주세요" 묶음에 그 문항 줄이 들어간다(아래) |
+| 근거 목록 (제안 쪽) | **(v5.15, CF-S2)** 제안 카드의 근거 목록은 초안 턴의 `sources_selected`를 쓰므로 **선택 이유(`rationale`)·선택 주체를 함께 보일 수 있는 유일한 자리**다 — 경로 아래 `meta text-muted-foreground`로 이유 한 줄을 둔다 `[가정]`. 정본 쪽 목록(3.10, 왼쪽 문항 아래)은 경로 한 줄만이라 모양이 다른 것이 정상이다 |
+| 확인해 주세요 (옛 A21) | `notes_for_user`·`char_adjust_needed`를 [자세히] 안 맨 아래 `mt-3 space-y-1.5` 묶음으로: `p.text-sm font-medium` "확인해 주세요" + `ul.list-disc pl-5 text-sm text-muted-foreground space-y-1`, 문항별 항목 앞에 `caption` "문항 {n}". **(v5.14)** 대화 기록에 남으므로 ~~"이 안내는 지금만 보여요" 한 줄~~은 두지 않는다(옛 `GenerationNotes` 상자 폐기) |
+| 카드 잠금 | 문항 단위다: "폼에 채움 · 저장 전"·"반영됨" 문항은 그 묶음의 [반영]·블록 [수락]·[빼기]만 `disabled`가 되고, 머리 줄 오른쪽에 `caption` + `Check size-3 text-success-subtle-foreground` "폼에 채움 · 저장 전" / "반영됨"을 둔다 `[가정]`. 사실 [수락]·[거절]은 계속 가능(3.25와 같다) |
+| 초안 실패 | 확인 줄 바로 아래 `div role="alert" mx-4 mb-3 space-y-1`: `text-sm font-medium text-warning-subtle-foreground` 명세 "초안을 만들지 못했어요. 지금 본문은 그대로예요" + C-20 inline형(원인 + `RetryButton` "다시 시도"). 임시 블록은 버리고 이전 제안은 그대로 둔다 |
+
+**반영 확인·토스트**
+
+- **[반영]**(문항별): 제목·내용이 모두 비어 있으면 확인 없이 채운다. 하나라도 있으면 `AlertDialog sm:max-w-md` — 제목 "이 문항을 AI 초안으로 바꿀까요?", 버튼 `취소`(`muted-ghost`) · `바꾸기`(default). `base_body_hash`가 다르면 3.25 "기준 본문이 바뀜"과 같은 모양(제목 앞 `TriangleAlert size-5 text-warning`, 제목 "초안을 만든 뒤 답변이 바뀌었어요", 설명 "바꾸면 바뀐 내용도 사라져요", 버튼 `그래도 바꾸기`).
+- **[모두 반영 (n)]**: 내용이 있는 문항이 섞이면 같은 다이얼로그에 설명 한 줄 "답변이 있는 문항 {m}개는 바뀌어요"를 더한다.
+- 채운 직후: 그 문항의 제목·내용 칸에 `animate-field-flash`(여러 개면 첫 문항으로 스크롤) + Sonner 중립 토스트 "{n}번 문항에 채웠어요" / "문항 {n}개에 채웠어요". **되돌리기 없음**(OD-P2) — 액션 버튼을 달지 않는다.
+- 제안에 제목이 없으면 지금 제목을 그대로 둔다(CF-A4). 검증에서 버려진 제목은 AI 메시지 한 줄로만 알리고 카드에 자리를 만들지 않는다 `[가정]`.
+
 ---
 
 ## 4. 상태 패턴 (ST-xx)
@@ -1413,18 +1439,17 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 
 ### 5.2 목록 · 상세
 
-- **목록 화면**(S-13): `PageHeader`(제목 + 주 버튼 "+ 자기소개서 추가" + 보조 "보드로 보기") → 필터 줄(`flex flex-wrap gap-2`, `Select size sm`/검색 `Input h-9 w-64`) → 넓은 화면 `Table`, 좁은 화면 카드 목록(`Card p-4 space-y-2`, 행의 열을 위아래로).
+- **목록 화면**(S-13): (v5.14, CF-9) `PageHeader`(제목 "자기소개서 관리" + 주 버튼 **"자기소개서 작성"**) → 머리 아래 정렬 표기 한 줄 → 넓은 화면 `Table`, 좁은 화면 카드 목록(`Card p-4 space-y-2`, 행의 열을 위아래로). **필터 줄·검색 칸·보조 버튼 "보드로 보기"는 없다**(v5.14 — 행 구성은 6장 A3).
   - 행 전체가 링크(`cursor-pointer hover:bg-accent`), 행 메뉴 `⋯`는 행 끝, 클릭 전파 막음.
-- **허브**(S-31): 헤더 카드(이름 `page-title` + 인라인 수정 `Button variant="ghost" size="icon-sm"` `Pencil`, 회사·포지션 `meta`, 단계 칩(C-12), `DDay`) → 기능 카드 그리드 `grid gap-4 md:grid-cols-2 lg:grid-cols-3`: JD·요건 / 인사이트 / 서류 초안(카드 3장, (v5.13, RM-1) 면접 카드 삭제). **카드 격자 규칙 (v5.13, UQ-44-4)**: 카드 수가 홀수인 격자에서 2열 구간(md)의 마지막 카드는 `md:col-span-2`로 전체 폭, 3열(lg 이상)에서는 `lg:col-span-1`로 한 칸 — 반 폭 카드가 줄에 홀로 남지 않게 한다. 각 카드 `Card p-5`: 제목 `section-title` + 상태 배지 + 요약 `meta` + 하단 `Button variant="outline" size="sm"` "열기". 진행 중이면 C-03 축약형.
+- ~~**허브**(S-31)~~ — **(v5.14) 폐기**(CF-7). 허브 화면이 없어져 아래 헤더 카드·기능 카드 격자 규칙은 **쓰는 곳이 없다**. 이름·마감일은 S-46 머리(5.12)로, JD·요건과 인사이트는 S-46의 왼쪽 탭으로 갔다. **카드 격자 규칙**(홀수 마지막 카드)은 다른 격자 화면이 생기면 다시 쓸 수 있어 글은 남긴다. v5.13까지의 전체 규칙은 git 이력(이 파일 v5.13)에서 볼 수 있다: 헤더 카드(이름 `page-title` + 인라인 수정 `Button variant="ghost" size="icon-sm"` `Pencil`, 회사·포지션 `meta`, 단계 칩(C-12), `DDay`) → 기능 카드 그리드 `grid gap-4 md:grid-cols-2 lg:grid-cols-3`: JD·요건 / 인사이트 / 서류 초안(카드 3장, (v5.13, RM-1) 면접 카드 삭제). **카드 격자 규칙 (v5.13, UQ-44-4)**: 카드 수가 홀수인 격자에서 2열 구간(md)의 마지막 카드는 `md:col-span-2`로 전체 폭, 3열(lg 이상)에서는 `lg:col-span-1`로 한 칸 — 반 폭 카드가 줄에 홀로 남지 않게 한다. 각 카드 `Card p-5`: 제목 `section-title` + 상태 배지 + 요약 `meta` + 하단 `Button variant="outline" size="sm"` "열기". 진행 중이면 C-03 축약형.
 - **트리**(S-08 커리어): 5.6 영역 메모 참고.
 
 ### 5.3 편집기
 
-- **폼 화면**(S-14. (v5.11) ~~S-04~~ 폐기 — 같은 필드는 설정 계정 탭 "내 정보"(5.11.1, 섹션 단위 저장). (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — (v5.7) 6장 A2 "커리어 v5.13", 편집은 5.6.1 모달): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
+- **폼 화면**(~~S-14~~ — **(v5.14, CF-8) 2단계 모달로 바뀌었다**(5.6.2). 아래 규칙은 S-25 같은 남은 폼 화면에만 쓴다. (v5.11) ~~S-04~~ 폐기 — 같은 필드는 설정 계정 탭 "내 정보"(5.11.1, 섹션 단위 저장). (v5) S-10은 L-02 문서형 페이지 5.9로 옮겼다. S-09·S-34는 v5.5에서 S-08 오른쪽 패널이 됐다 — (v5.7) 6장 A2 "커리어 v5.13", 편집은 5.6.1 모달): `max-w-form` 한 열. 상단 `PageHeader`(제목 + 오른쪽 C-06) → 섹션 카드(`Card p-5 space-y-4`, 섹션 제목 `subsection`) → 맨 아래 위험 영역(삭제, `Button variant="ghost" className="text-destructive"`). 자동 저장이므로 "저장" 버튼은 두지 않는다(명세 C-06). 필수 표시: 라벨 뒤 `text-destructive` "*" + `sr-only` "필수".
   - 필드 2열: 넓은 화면에서 짧은 값(기간, 고용 형태)만 `grid sm:grid-cols-2 gap-4`. 긴 글은 항상 한 열.
 - **긴 글 편집**(~~S-33 답변~~(폐기). (v5) S-35는 폐기 — S-10 STAR는 5.9 `DocTextarea`): 본문 열 `max-w-prose-edit`. 필드마다 `label`(예: "행동 (A) *") + 안내 `meta` + `Textarea prose`(16px/1.75, `min-h-32`) + C-07 + 글자 수. 필드 사이 `space-y-6`. 포커스 이동(C-02 "원본으로 이동")된 필드는 `ring-2 ring-ring` + `animate-field-flash` 1회.
-- **초안 편집기**(S-19): 넓은 화면(≥1280) `grid grid-cols-[minmax(0,1fr)_20rem] gap-8`: 왼쪽 문서(`max-w-prose-edit mx-auto`, 블록마다 hover 시 `bg-accent/50 rounded-md`, 블록 아래 칩 줄 C-01·C-08), 오른쪽 `sticky top-20` 패널(C-11, 자리 표시 목록, 글자 수). 1280 미만은 패널을 머리의 `Button variant="outline" size="sm"` "근거·출처"로 여는 `Sheet side="right"`.
-  - 자소서 문항 머리: `section-title` 문항 + `caption` 글자 수. (v3) 글자 수 글자와 초과 표시는 6장 A3 "S-19 글자 수 표시"를 따른다.
+- ~~**초안 편집기**(S-19)~~ — **(v5.14) 폐기**(CL-7·CF-1). 2단 편집기(왼쪽 문서 + 오른쪽 C-11 패널·`Sheet`)와 문항 머리 글자 수 배치는 화면과 함께 없어졌다. 자소서 문항 편집은 **L-02 3단 작성 화면 S-46**(5.12)이고, 글자 수 표시는 5.12 "글자 수 표시"다. v5.13까지의 시각 규칙은 git 이력(이 파일 v5.13)에서 볼 수 있다.
 
 ### 5.4 대화 (S-36)
 
@@ -1470,9 +1495,9 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 - 카드(`li`): `group rounded-md border bg-card p-3 space-y-2 transition-colors hover:border-foreground/20 hover:shadow-sm focus-within:ring-2 focus-within:ring-ring`
   - 1행: 회사명 `font-semibold text-base truncate` + 오른쪽 `⋯`(C-12)
   - 2행: 포지션 `text-sm text-muted-foreground line-clamp-2`
-  - 3행 `flex flex-wrap items-center gap-2 caption`: `DDay` · 인사이트 `Lightbulb size-3.5`(있을 때 `text-foreground`, 없으면 `text-muted-foreground/60`) · 초안 `FileText` n — 아이콘 옆 숫자, 각 `sr-only` 라벨 ((v5.13, RM-1) 면접 수·"작성 중" 배지 삭제)
+  - 3행 `flex flex-wrap items-center gap-2 caption`: `DDay` · 인사이트 `Lightbulb size-3.5`(있을 때 `text-foreground`, 없으면 `text-muted-foreground/60`, `sr-only` 라벨) · **(v5.14, CF-5·CF-A14) 자소서 표시** — ~~초안 수 `FileText` n~~을 대신해 **글자 배지 하나**다: `0 < filled_slot_count < slot_count`면 `Badge variant="draft"`(= warning + `CircleDashed size-3`) **"자소서 작성 중"**, `filled_slot_count = slot_count`면 `Badge variant="success"` + `Check size-3` **"자소서 작성됨"**, 정본 행이 없거나 `filled_slot_count = 0`이면 **아무것도 그리지 않는다**. 숫자·분수(`2/3`)는 보이지 않는다 `[가정]` ((v5.13, RM-1) 면접 수 삭제)
   - 전형 종료 카드: 3행 앞에 결과 배지(1.1.4)
-  - 드래그 손잡이: 카드 왼쪽 위 `GripVertical size-4 text-muted-foreground`, 정지 시 `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100`(키보드 포커스 시 보임). 카드 본문 클릭 = S-31 이동, 손잡이 = 드래그.
+  - 드래그 손잡이: 카드 왼쪽 위 `GripVertical size-4 text-muted-foreground`, 정지 시 `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100`(키보드 포커스 시 보임). 카드 본문 클릭 = **S-46 이동**(v5.14 — 정본 행이 없으면 문항 설정 상태), 손잡이 = 드래그.
 - 드래그 중: 원래 자리 `border-dashed bg-transparent opacity-50`, 끌리는 카드 `shadow-lg ring-1 ring-border rotate-[1deg]`(reduced-motion이면 회전 없음), 놓을 수 있는 열 `ring-2 ring-primary/40 bg-primary-subtle/60`.
 - 마감 임박(D-3 이내): 카드 테두리는 바꾸지 않고 `DDay`의 warning 배지만(카드 전체 강조는 보드를 시끄럽게 함) `[가정]`.
 - 빈 열: 열 안 `rounded-md border border-dashed p-4 text-center caption text-muted-foreground` "카드 없음" `[가정: 문구, P-4]`.
@@ -1485,8 +1510,9 @@ shadcn **sidebar-08** 블록(inset 사이드바 + 보조 메뉴)을 기반으로
 |------|---------|
 | 되돌릴 수 없는 결정(삭제, 덮어쓰기, 결과 지우기) | `AlertDialog` |
 | 짧은 선택·작은 폼(정량 성과 S-11, C-13, ~~C-14, C-16~~(폐기), 저장 확인) | `Dialog` |
+| (v5.14) 새 자기소개서를 2단계로 만들기(S-14 — URL/직접 입력 → 기업·포지션·공고 내용) | 큰 `Dialog` 2단계 — 5.6.2. 출발 화면(S-13·S-39) 위에 띄우고 페이지로 바꾸지 않는다(CF-8) |
 | (v5.7) 커리어 항목 하나를 한 번에 채워 추가·수정(경력·교육·독립 프로젝트 — S-08 패널에서) | 큰 `Dialog` 폼 — 5.6.1 `AddCareerDialog`. 섹션 인라인 편집(구 C-24)은 쓰지 않는다 |
-| 참고 정보를 보면서 원래 화면을 유지(C-02, S-19/S-36 보조 패널, 좁은 화면 필터) | `Sheet side="right"` (좁은 화면 필터는 `side="bottom"`) |
+| 참고 정보를 보면서 원래 화면을 유지(C-02, ~~S-19~~/S-36 보조 패널, 좁은 화면 Resumate AI 패널) | `Sheet side="right"` (좁은 화면의 짧은 선택은 `side="bottom"`) |
 | 다른 화면으로 가는 일 | 페이지 이동(모달로 화면을 대신하지 않음) |
 
 - 모달 안 주 버튼은 오른쪽 끝, 좁은 화면에서 `flex-col-reverse` 전체 폭.
@@ -1529,6 +1555,56 @@ Dialog (showCloseButton={false} — X는 머리 줄에 직접 둔다)
 - **닫기 = 입력 버림 (OD-C1)**: X·Esc·바깥 누르기로 닫으면 **확인 없이** 입력을 버린다. 이탈 확인 `AlertDialog`, 입력 보존 배너, 브라우저 임시 보존·복원 모두 **없다**. 열 때마다 빈 폼(또는 행 값)에서 시작한다(`key`로 폼을 새로 만듦). 입력 보존·이탈 확인(5.8 `LeaveGuard`, 자동 복원)은 L-02(S-10·S-44)만의 규칙이다 — 이 모달에 가져오지 않는다.
 - **자동 저장 없음**: 작성 중 표시·C-06·"작성 중" 배지를 그리지 않는다. "추가하기" 한 번에 행이 생긴다.
 - 이 모달을 여는 쪽(C-22 메뉴, C-23)은 먼저 닫힌 뒤 연다 — 다이얼로그를 겹치지 않는다(5.6).
+
+#### 5.6.2 자기소개서 추가 모달 (`AddApplicationDialog`, v5.14 신설 — CF-8·CF-10·CF-A6·CF-A17)
+
+새 자기소개서(지원 프로젝트 + JD)를 **2단계 모달**로 만든다(플로우 v5.20 S-14). 진입: S-13 [자기소개서 작성]·빈 상태 버튼, S-39 "지원 전" 열 "+". 옛 전체 페이지(`/applications/new`)의 폼 규칙(5.3)은 쓰지 않는다. 화면 상태는 `?new=1`만 주소에 남기고 입력 내용은 넣지 않는다.
+
+**틀**
+
+```
+Dialog sm:max-w-2xl  (본문이 길어 max-h-[85dvh] overflow-y-auto — 2장 dialog 규칙)
+  DialogHeader px-6 pt-6 pb-4:
+    DialogTitle text-xl font-bold "자기소개서 작성"
+    단계 표시 ol.mt-3 flex items-center gap-2 text-sm   ← StepIndicator(5.7) 재사용, 2단
+  본문 px-6 space-y-5
+  DialogFooter px-6 pb-6 pt-5:  (왼쪽) [이전] ghost  ·  (오른쪽) [다음] / [자기소개서 작성] default
+```
+
+- **단계 표시**: 5.7 `StepIndicator`를 그대로 쓴다(원 `size-6` + 글자). 마디 이름은 "① JD 입력" · "② 지원 기업 / 포지션" `[가정]`. 지난 단계는 누를 수 있고(= [이전]), 다음 단계는 누를 수 없다.
+- 주 버튼은 단계마다 **하나**다(R-C8): ① [다음], ② [자기소개서 작성] — S-39에서 열었으면 ②의 라벨이 **"추가하기"**다(이동하지 않으므로). [이전]은 `muted-ghost`(5.4 보조 버튼 규칙).
+- 좁은 화면(<640): `Sheet side="bottom"`이 아니라 **전체 화면 시트**(`Dialog`를 `max-w-none h-dvh rounded-none`으로) `[가정]` — 공고 원문을 붙여넣는 큰 칸이 있어 바닥 시트로는 좁다. 버튼 줄은 `flex-col-reverse` 전체 폭.
+
+**① JD 입력**
+
+| 요소 | 모양 |
+|------|------|
+| 공고 URL | `Field` 라벨 "포지션 공고 URL" + `Input type="url" inputMode="url"` + 자리 표시 "https://" `[가정]`. 형식 오류는 A-10 오류 한 줄 "공고 주소를 확인해 주세요"(칸 아래) + [다음] `disabled` |
+| 또는 구분 | `flex items-center gap-3` — `Separator` + `caption text-muted-foreground` "또는" + `Separator` `[가정]` |
+| 직접 입력 | `Field` 라벨 "직접 입력" + `Textarea min-h-56 font-sans text-base` + 자리 표시 "공고 내용을 붙여넣어 주세요", 오른쪽 아래 글자 수(C-07 규칙) |
+| 둘 중 하나 | 한쪽에 글자가 들어가면 **다른 쪽은 `disabled`**(흐림은 primitive 기본 `disabled:opacity-50`에 맡기고 색을 덧씌우지 않는다) + 그 칸 아래 `caption text-muted-foreground` "URL과 직접 입력은 하나만 쓸 수 있어요" `[가정]`. 비우면 다시 열린다 |
+| 길이 경고 | 200자 미만·24,000자 초과는 **막지 않는 경고**: 칸 아래 `meta text-warning-subtle-foreground` + `TriangleAlert size-3.5 text-warning` 명세 문구 |
+| 키 안내 | [다음] 옆(좁은 화면은 버튼 위) — 키가 있으면 C-19 배지(AI-01), 없으면 C-18 **인라인형** 한 줄(명세 문구, 막지 않는다) |
+
+- **[다음]의 진행 표시**: 버튼이 `disabled` + 안쪽 `Loader2 animate-spin` + 글자가 단계 문구로 바뀐다 — "공고를 가져오는 중" → "공고 내용을 정리하는 중". 버튼 폭이 흔들리지 않게 `min-w-[12rem]` `[가정]`. 두 단계가 이어지므로 진행 막대(C-03)는 쓰지 않는다(요청 안에서 끝나는 경로).
+- **동의 필요·키 무효**(Q53-1): [다음]을 누르면 `consent_required`는 C-21 동의 창(모달 위 한 겹 — 5.6 예외), `key_status = 'invalid'`는 버튼 아래 C-20 inline형(`key_invalid`) + C-19 경고 배지다. `needs_check`는 막지 않는다. 입력은 그대로 남는다.
+
+**② 지원 기업 / 포지션**
+
+| 요소 | 모양 |
+|------|------|
+| 지원 기업 · 지원 포지션 | `Input` 2개, 넓은 화면 `grid sm:grid-cols-2 gap-4`(짧은 값 2열 — 5.3 규칙). 미리 채운 값도 보통 글자로 보인다(출처 배지·"AI 추출" 표식을 **두지 않는다** — ②에서 사용자가 확인한 값이 최종이라 `company_name_source = 'user'`, CF-A6) `[가정]` |
+| 공고 내용 | `Textarea min-h-72 font-sans text-base` + 오른쪽 아래 글자 수. 가져오기에 성공하면 본문이 채워진 채 열린다 |
+| 미리 정리 표시 | 공고 내용 칸 **위** `meta text-muted-foreground` + `Sparkles size-3.5 text-ai` "공고에서 요건 {requirementCount}개를 미리 정리해 두었어요"(0개면 줄 숨김). 공고 내용을 고치면 같은 자리가 `text-warning-subtle-foreground` + `TriangleAlert size-3.5 text-warning` "공고 내용을 고쳐서 요건은 만든 뒤 다시 정리해요"로 바뀐다 |
+| 가져오기 실패 안내 | 칸 위 `Alert variant="warning"` 작은 형 + `CloudAlert` 명세 문구 "이 공고는 가져오지 못했어요. 내용을 직접 붙여넣어 주세요". 실패 코드 5종을 나누지 않는다 |
+| 원문 고정 안내 | 칸 아래 C-07 모양 한 줄(`Info size-3.5`) "만든 뒤에는 공고 내용을 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요" |
+| AI-01 실패 | ② 머리(단계 표시 아래) C-20 **inline형 축약**(원인 한 줄, 다시 시도 없음 — 생성 직후 요건 추출이 다시 돈다) |
+| 주소 저장 불가 | `invalid_source_url`(400)이면 ② 맨 위 C-20 inline형 + 동작 `Button variant="link" size="sm"` "주소 없이 만들기" |
+
+- **마감일 입력 칸은 ②에 없다**(CF-2) — 마감일은 S-46 머리에서 정한다.
+- **생성 중**: [자기소개서 작성] `disabled` + `Loader2` + "만드는 중…". 실패하면 ② 맨 위 C-20 inline형("만들지 못했어요. 다시 시도해 주세요")이고 입력은 그대로다.
+- **닫기 확인**: 입력이 하나라도 있으면 `AlertDialog sm:max-w-md`(모달 위 한 겹 — 5.6 예외) 제목 "입력한 내용과 정리한 결과가 사라져요", 버튼 `닫기`(`destructive-ghost` — 버리는 동작이지만 삭제가 아니라 채움 없이) · `계속 작성`(default) `[가정]`. 아무것도 입력하지 않았으면 확인 없이 닫는다.
+- **입력 보존**: C-21·키 교체로 모달을 떠날 때 ①·②의 입력과 진입 출처를 **브라우저 세션에만** 저장하고(주소에 넣지 않는다) 돌아오면 그 단계로 복원한다. 생성 성공·로그아웃·탈퇴 때 지운다. 자동 실행은 없다(FL-19).
 
 ### 5.7 AI 연결 화면 (S-40 · S-41 · S-42, v2 신설)
 
@@ -1639,6 +1715,7 @@ Dialog (showCloseButton={false} — X는 머리 줄에 직접 둔다)
 | 다른 곳에서 바뀜(`stale_write`) | 활성 유지 | 비움. 아래 **변경 충돌 확인**을 연다 |
 
 - 표식 점의 `warning`은 "아직 저장 안 됨"이라는 상태라서 쓴다(R-C4: 점 = 아이콘 자리, 글자는 `sr-only`와 버튼 활성 상태가 함께 알린다).
+- **(v5.15, CF-S3) 예외 — S-46 문항 설정 상태**: `SaveButton`이 변경 여부와 관계없이 `disabled`이고 표식 점·C-06 글자가 없다. 그 상태의 첫 저장은 본문 바닥의 [자기소개서 작성 시작]이 맡는다(5.12). L-02의 다른 화면·상태는 위 표 그대로다.
 - **변경 충돌 확인**(`stale_write`): `AlertDialog sm:max-w-md`. 제목 "다른 곳에서 이 {프로젝트/산출물}이(가) 바뀌었어요", 설명 `body text-muted-foreground` — "새로 불러오면 저장하지 않은 변경과 AI 반영 표시가 사라져요"(명세 "버린다고 함께 알림"의 글자, `[가정]`). 버튼 `새로 불러오기`(`muted-ghost`, v5.4) · `내 내용으로 저장`(default). Esc·바깥 누름은 닫기만 하고 편집 상태를 그대로 둔다 `[가정]`.
 - **CrumbRow**: 카드 맨 위 `flex h-12 shrink-0 items-center gap-2 px-6`. "←" = `Button variant="secondary" size="icon-sm" className="rounded-full"` + `ArrowLeft size-4`(`aria-label="뒤로"`, Figma 둥근 버튼. 색은 v4 `secondary` 그대로 — 원형 반경은 1.3 v5 예외, UQ-BR-14). 이동 경로 = `Breadcrumb`(14px). 누를 수 있는 마디(S-10 회사명/기관명, S-44 프로젝트명)는 `text-muted-foreground hover:text-foreground hover:underline`, 누를 수 없는 이름 마디는 `text-muted-foreground`, 마지막 마디("프로젝트 상세"/"산출물 상세", (v5.6) 행이 아직 없는 새 페이지는 "새 프로젝트 추가"/"새 산출물 추가" — 5.9 "머리 — 새 행 안내")는 `font-medium text-foreground` + `aria-current="page"`. 이름 마디는 `max-w-[16rem] truncate` + `title`. 입력 중인 이름을 따라가며, 비면 "새 프로젝트"·"새 산출물"을 `text-muted-foreground`로. (v5.6) 단 새 페이지에서 이름이 비어 있으면 이름 마디를 아예 빼서 "… › 새 프로젝트 › 새 프로젝트 추가"처럼 같은 말이 겹치지 않게 한다(기존 행에서 이름을 지운 경우는 자리 표시 유지).
 - **배너 자리**: CrumbRow 바로 아래 `ShellBanners` = `OverflowScroller`(5.9 "머리·배너가 넘칠 때") `shrink px-6 pb-2` + 안쪽 `space-y-2`, 넘칠 때 이름 "알림". 낮은 창에서 배너가 여럿이면 본문 2단 최소 높이(카드 50%)를 지키도록 줄어들고 그 안에서 스크롤한다(UQ-SC-1). C-10 복귀 배너(3.9)와 **입력 보존 배너**: `Alert variant="info"` 작은 형 + `History size-4` "저장하지 않은 수정이 있어요" + 오른쪽 `Button variant="outline" size="sm"` "이어서 편집" · `Button variant="ghost" size="sm"` "버리기" `[가정: 배너형 — 다이얼로그로 막지 않음]`. 고르기 전에는 저장된 값을 보인다. 둘 다 있으면 C-10이 위.
@@ -1733,7 +1810,7 @@ L-02 새 페이지(S-10 `/career/projects/new?…`, S-44 `/career/projects/[id]/
 - 폭 규칙: `w-ai-panel`(1.4) 안에서, 왼쪽 `min-w-doc-left`를 지킨다. 창이 줄어 둘을 모두 지킬 수 없으면 패널이 최소 폭까지 먼저 줄고, 그래도 안 되면(카드 폭 < 약 820px) 1024 미만 규칙(시트)과 같게 그린다. 기억한 폭(`localStorage`, try/catch)이 범위 밖이면 범위 안으로 자른다.
 - 패널이 닫히면 손잡이도 없다.
 
-### 5.10 Resumate AI 패널 (`AiPanel`, S-10 · S-44 공통, v5 신설)
+### 5.10 Resumate AI 패널 (`AiPanel`, S-10 · S-44 · (v5.14) S-46 공통, v5 신설)
 
 S-36 대화 화면(5.4, 폐기)의 메시지·입력 규칙을 좁은 패널에 맞춰 다시 쓴 것이다. S-10과 S-44는 같은 컴포넌트를 쓰고, 다른 것은 **제안 카드**(3.24 / 3.25)와 **칩 계산**(`quickChips(state)` — 화면이 넘김)·칩 숨김 시점(아래)뿐이다. (v5.5) thread는 shadcn Chat(`MessageScroller`·`Message`·`Bubble`), 입력은 `InputGroup`(Prompt Input 배치)이다.
 
@@ -2247,6 +2324,92 @@ section.space-y-3
 
 ---
 
+### 5.12 S-46 자기소개서 작성 화면 배치 (v5.14 신설 — CF-1·CF-4~CF-7·CF-A9~CF-A13)
+
+L-02 전체 페이지 셸(5.8)에 **왼쪽 탭 3개 + 가운데 탭 내용 + 오른쪽 Resumate AI 패널**을 얹은 유일한 화면이다. 한 주소(`/applications/{id}/cover-letter`)에 **두 상태**가 있다 — 정본 행이 없으면 **문항 설정 상태**, 있으면 **작성 상태**(CF-A11). **정본 행을 만드는 첫 저장은 [자기소개서 작성 시작] 하나뿐이고, 문항 설정 상태에서는 상단 바 "저장하기"가 `disabled`다**(v5.15, CF-S3 확정 2026-11-09 (사용자)). 5.8(셸·저장하기·이탈 확인)·5.9(머리·문서형 입력·`DocTextarea`·손잡이)·5.10(패널)·3.26(제안 카드)을 그대로 쓰고, 아래는 **다른 점만** 적는다.
+
+**세로 구성** (본문 카드 안, 5.9 표의 변형)
+
+| 순서 | 영역 | 클래스 |
+|------|------|--------|
+| 1 | CrumbRow + 배너 | 5.8 그대로. 이동 줄 "← 자기소개서 관리 › {이름}"(S-39에서 왔으면 첫 마디 "지원 현황", "←"도 S-39). 마지막 마디는 **이름**이고 "자기소개서 상세" 같은 셋째 마디를 두지 않는다(CF-A11) |
+| 2 | 머리 | `DocHead` = `OverflowScroller` `max-h-[40%] shrink px-6 pt-2 pb-4` + 안쪽 `space-y-2`. 넘칠 때 이름 "자기소개서 정보" |
+| 3 | 구분선 | `Separator`(카드 전체 폭, `shrink-0`) |
+| 4 | 본문 | **작성 상태**: `flex min-h-[50%] flex-1` — 왼쪽 탭 목록 · 가운데 탭 내용(= 5.9의 왼쪽 입력 영역) · `ResizeHandle` · 패널 / **문항 설정 상태**: 탭 목록·패널 없이 **한 열**(`mx-auto w-full max-w-prose-edit px-6 py-5`, 스크롤은 이 영역 안에서) `[가정]` |
+
+**머리 (두 상태 공통)**
+
+- 제목: `DocTitleInput`(5.9) 그대로. 자리 표시 "자기소개서 이름", `aria-label` "자기소개서 이름", 100자 초과는 A-10 오류.
+- 오른쪽 `⋯`: `Button variant="ghost" size="icon-sm"` `MoreHorizontal`(`aria-label="자기소개서 메뉴"`) → 항목 **"자기소개서 삭제"** 하나(`DropdownMenuItem variant="destructive"` + `Trash2`, C-05). **단계 칩은 없다**(CF-3).
+- 제목 아래 한 줄 묶음 `InlineFields`(5.9, 한 줄에 여러 필드): **작성 상태만** ① 지원 직무 = `dt` "지원 직무" + `dd` 읽기 전용 글자(비면 `text-muted-foreground` "포지션 없음") ② JD 상세 = `Button variant="link" size="sm"` "JD 상세" — `source_url`이 있으면 `target="_blank" rel="noopener"` + `ArrowUpRight size-3.5`(외부로 나가는 표시, `sr-only` "새 창에서 열림"), 없으면 같은 글자의 보통 버튼이고 누르면 "채용 공고" 탭으로 옮긴다 ③ 마감일(아래).
+- **마감일**(두 상태 공통): `Input type="date" className="w-[11rem]"`(2장 "쓰지 않는 것" — date picker 의존성을 넣지 않는다) + 값이 있을 때만 옆 `Button variant="ghost" size="icon-xs"` `X`(`aria-label="마감일 비우기"`). **일 단위**이고 연·월 선택(`MonthField`)을 쓰지 않는다(CF-4). 형식 오류는 칸 아래 A-10. AI가 채웠다는 표식은 두지 않는다(CF-A5).
+- **요약 한 줄**(작성 상태만): 머리 맨 아래 `meta text-muted-foreground tabular-nums` "문항 {n}개 · 답변 {m}개 · 마지막 수정 {상대 시각}".
+
+**문항 설정 상태** (옛 S-18 — CF-5·CF-A10)
+
+```
+안내 1줄  Alert variant="info" 작은 형 + Info size-4   (명세 문구)
+문항 목록 ol.space-y-3
+  문항 li  rounded-lg border p-4 space-y-3
+    1행 flex items-start gap-3: caption tabular-nums "문항 {n}" + Textarea(문항 문장, field-sizing-content min-h-16) + 삭제 ghost icon-sm Trash2
+    2행 flex flex-wrap items-end gap-4:
+       글자 수 제한  Input type=number w-28 (기본값 800) + "자"
+       기준          Select size="sm" w-36 ("공백 포함" / "공백 제외")
+       메모          Button variant="ghost" size="sm" + Plus "메모 추가"  → 펼치면 Textarea 300자
+    A12 안내  meta text-muted-foreground + Info size-3.5  (글자 수 칸 아래 줄)
+[+ 문항 추가 {n}/5]  Button variant="outline" className="w-full border-dashed"
+바닥  flex justify-end: [자기소개서 작성 시작] Button size="lg" + C-19 배지
+```
+
+- **기본값 800**(CF-U2): 기본 3문항과 "+ 문항 추가"로 만든 문항의 글자 수 칸을 **800으로 미리 채운다**. 시안의 600은 쓰지 않는다. 비우면 필수 오류(A-10 "글자 수 제한을 입력해 주세요" `[가정]`).
+- **"+ 문항 추가 {n}/5"**: 라벨에 `tabular-nums`로 현재 수를 넣는다. 5개면 `disabled` + 버튼 아래 `meta` 명세 문구 "문항은 5개까지 추가할 수 있어요". ~~10개 상한~~은 v5.14에서 **5개**로 바뀌었다(CF-5).
+- **메모는 접어 둔다**(CF-A10) — 펼친 상태는 그 문항에만 남고 저장·새로 열기 때 다시 접힌다 `[가정]`.
+- **주 버튼은 바닥의 [자기소개서 작성 시작] 하나다 (v5.15, CF-S3)** — R-C8 그대로다. 상단 바 `SaveButton`은 이 상태에서 **늘 `disabled`**("저장하기", 표식 점 없음)이고 C-06 글자 자리는 비운다. 변경이 있어도 활성으로 바뀌지 않는다 — 저장하는 순간 작성 상태로 바뀌어 문항 설정이 끊기는 것을 막는 규칙이다. ⌘S·Ctrl+S도 이 상태에서는 아무 일도 하지 않고, 비활성 버튼 툴팁을 "문항을 정한 뒤 '자기소개서 작성 시작'을 누르면 저장돼요"로 바꾼다 `[가정]`.
+- **저장 없이 나가면 이탈 확인**(L-02 `LeaveGuard`, 5.8 — C-05 계열 확인)이다. "저장하고 나가기"를 둘 수 없으므로 버튼은 `나가기`(`muted-ghost`) · `계속 작성`(default) 두 개다 `[가정]`. 손대지 않은 기본 3문항만 있으면 "변경 없음"이라 확인을 띄우지 않는다.
+- **요건 선행 추출**: [자기소개서 작성 시작]을 누르면 그 버튼이 ST-WAIT-JD(버튼 `disabled` + 아래 `Loader2 text-ai` "공고 요건 정리 중")가 되고, 실패하면 같은 자리에 C-20 inline형(입력 원인이면 동작 "공고 원문 고치기" → 저장 뒤 작성 상태의 "채용 공고" 탭을 수정 상태로 연다).
+- 이 상태는 AI를 실행하지 않으므로(선행 추출 제외) **C-18·C-19·패널을 그리지 않는다**(CL-8) — 다만 [자기소개서 작성 시작] 옆에는 선행 추출이 돌 수 있어 C-19 배지를 둔다.
+
+**작성 상태 — 왼쪽 탭 3개** (CF-7·CF-A12)
+
+- 넓은 화면(≥1024): `Tabs orientation="vertical"` — 목록 `TabsList variant="pill"`을 세로로(`flex-col items-stretch w-40 shrink-0 border-r px-3 py-4 gap-1`, 트리거 `justify-start w-full`) `[가정]`. 탭 이름 **"자소서" / "채용 공고" / "인사이트"**(CF-U3). 가운데 탭 내용이 5.9의 왼쪽 입력 영역 자리이고 자기 안에서 스크롤한다.
+- 좁은 화면(<1024): 탭 목록을 **가운데 위 가로 탭**(`TabsList variant="pill"` 한 줄, `sticky top-0 bg-card`)으로 바꾸고 패널은 떠 있는 "Resumate AI" 버튼 → 전체 화면 시트(5.8 좁은 화면)다.
+- 주소 `?tab=jd`·`?tab=insight`(없으면 자소서)와 짝이고, 탭을 옮겨도 자소서 탭의 저장하지 않은 제목·본문은 폼에 그대로 남는다(같은 페이지 폼). **"저장하기"가 켜져 있어도 탭 머리에 점·배지를 두지 않는다**(CF-A12 `[가정]`).
+- 패널은 탭과 관계없이 오른쪽에 그대로 있다(자소서 대화) — 탭을 옮겨도 열림/닫힘·너비가 유지된다.
+- "채용 공고" 탭 = **S-15 규칙**(6장 A3), "인사이트" 탭 = **S-16 규칙**(6장 A3). 공고 원문 수정의 "저장"/"취소"는 **탭 안의 버튼**이고 상단 바 "저장하기"와 섞지 않는다 — 탭 안 버튼은 `secondary`/`muted-ghost`로 두어 L-02의 주 버튼과 구분한다 `[가정]`.
+
+**자소서 탭 — 문항 블록**
+
+```
+안내 1줄 + G-2 민감정보 문구   (C-07 모양, 목록 위)
+빈 상태 상자(답변이 하나도 없을 때) Alert variant="info" + 명세 문구 + [AI와 초안 쓰기](키 있음) / C-18 인라인(키 없음)
+문항 목록 ol.space-y-8
+  문항 li  space-y-2  (문항 사이 구분선 없이 간격으로만 — 5.9 STAR 간격 규칙과 같은 결)
+    머리 flex items-start gap-2:
+      caption tabular-nums "문항 {n}" + 문항 문장 text-base font-semibold (읽기 전용)
+      ml-auto  "AI 제안 있음" Badge variant="ai" (있을 때) · 접기 ghost icon-sm ChevronDown · ⋯ ghost icon-sm
+    제목  Input(answer_title) — 테두리 없는 문서형 입력(A-13 예외): text-lg font-semibold bg-transparent px-2 -mx-2 rounded-md hover:bg-accent/60, 자리 표시 "답변 제목"
+    내용  DocTextarea grow (5.9·v5.10 — 칸 안에서 스크롤하지 않고 내용만큼 자란다)
+    글자 수 줄 + 근거 칩(C-01)·검증 배지(C-08)
+    C-11 "사용한 경력·프로젝트"(3.10, 접힘) · 메모(접힘)
+```
+
+- **⋯ 메뉴**(문항마다): "문항 편집" · "이 문항 복사"(`Copy`) · 구분선 · "위로 이동" / "아래로 이동"(순서 변경 — 드래그를 두지 않는다, 키보드로도 같은 길) · 구분선 · "문항 삭제"(`DropdownMenuItem variant="destructive"`) `[가정]`.
+- **(v5.15) 작성 상태에서 문항 설정 상태로 돌아갈 입구는 만들지 않는다** — 문항 추가·삭제·순서·문항 문장·**글자 수 제한**·기준·메모를 모두 이 "문항 편집"이 다룬다(CL-8. 8.4 P-30 결정 불필요). 머리 ⋯에 "문항 설정" 항목을 두지 않는다.
+- **문항 편집**은 그 블록을 **제자리에서 편집 모드로 바꾼다**(모달 아님): 문항 문장·글자 수 제한·기준·메모 칸이 문항 설정 상태와 같은 모양으로 열리고 블록 아래 `[확인]`(`secondary sm`) 하나로 닫는다 — 값은 폼에만 남고 저장은 상단 바 "저장하기"다 `[가정]`. "+ 문항 추가 {n}/5"는 목록 맨 아래 `outline` 점선 버튼으로 **작성 상태에도 있다**(5개면 `disabled` + 같은 문구).
+- **문항 삭제 확인**: 제목·답변이 모두 비면 확인 없이 지우고, 하나라도 있으면 `AlertDialog`(C-05 계열) 제목 "문항 삭제" + 명세 본문 + 버튼 `삭제`(`destructive`). 마지막 1문항은 `⋯`의 삭제가 `disabled`이고 메뉴 아래 `caption` "문항은 1개 이상 있어야 해요".
+- **제목은 글자 수에 넣지 않는다**(CF-6) — 글자 수 줄은 내용만 센다. 복사에는 제목이 들어간다.
+- **글자 수 표시**(A12·CL-A4 유지, 옛 S-19 문항 머리에서 **문항 블록 아래**로 옮겼다):
+  - 기본: `caption tabular-nums text-muted-foreground` "현재 1,180자 / 제한 1,200자(공백 포함)".
+  - 제한 초과·110% 이내: 같은 글자를 `text-warning-subtle-foreground`로 바꾸고 앞에 `TriangleAlert size-3.5 text-warning`, 아래 줄에 `meta text-warning-subtle-foreground`로 명세 문구("제한보다 {n − limit}자 많아요. AI 보정 범위…").
+  - 편집해서 110%를 넘으면 같은 경고 모양에 아래 줄은 "제한보다 {n − limit}자 많아요"만 `[가정]`. 입력 중 실시간으로 다시 센다.
+- **"AI 제안 있음"**: 반영하지 않은 제안이 있는 문항 머리에 `Badge variant="ai"` + `Sparkles size-3`. 누르면 패널을 열고 제안 카드 [자세히]를 그 문항 묶음까지 펼쳐 스크롤한다(UP-4).
+- **복사**: 머리 묶음 오른쪽 `Button variant="outline" size="sm"` + `Copy` "전체 복사", 문항마다는 `⋯`의 "이 문항 복사". **키 없이** 된다. 자리 표시가 남아 있으면 복사 뒤 토스트에 C-08 경고 한 줄을 붙인다 `[가정]`.
+- **근거 구간 강조**: C-02에서 오면 그 문항으로 스크롤하고 `DocTextarea`의 `highlightRange`로 구간을 강조한다(5.9 규칙). 본문을 고치면 강조를 지운다.
+- **패널**(5.10 그대로): 머리 "Resumate AI" + 기록 목록 + "+ 새 대화" + `⋯`("이 대화 삭제") + ×. 입력창 아래 줄 "n/40" · C-19 · 보내기. 제안 카드는 **3.26**이고 S-44의 `DraftProposalCard`(3.25)를 쓰지 않는다. 키 없음·동의 필요·키 무효는 **패널만** 잠기고(C-18·C-21·C-20) 왼쪽 본문 입력·문항 편집·저장하기·복사는 그대로 된다(CL-8).
+- 상태 모음: 페이지 = 로딩(`PageShellSkeleton`) / 정상 / 답변 없음 / 변경 있음 / 저장 중 / 검증 오류 / 저장 실패(ST-SAVE-FAILED) / 다른 곳에서 바뀜(5.8 변경 충돌 확인) / ST-NOTFOUND → S-13 / S-28. 패널 = 5.10 상태 + 요건 정리 중 · 초안 작성 중 · 초안 실패 · 초안 상한(6회).
+
+---
+
 ## 6. 영역별 메모
 
 ### A1 계정 (S-01, S-02, S-03, S-24, S-25, S-30)
@@ -2330,66 +2493,31 @@ Card max-w-md mx-auto mt-16 p-8 space-y-5
   - **좁은 화면**(`lg` 미만): 한 번에 한 칸. URL에 항목이 있으면 상세 칸만, 상세 맨 위 `Button ghost sm -ml-2` + `ArrowLeft` "커리어"(목록으로). 없으면 목록 칸만. 카드 그리드 `sm` 미만 1열.
   - **폐기 (v5.7, OD-C2)**: C-24 섹션 인라인 편집 — 섹션이 그 자리에서 폼으로 바뀌는 모양, 섹션 단위 저장·취소 버튼, 섹션 이탈 확인, 섹션 입력 보존 배너("저장하지 않은 수정이 있어요 · 이어서 수정 / 버리기"), "새 경력"·"새 독립 프로젝트" 패널 상태. 이 문서에 정해 둔 패턴 이름이 없어 이전할 사용처도 없다(코드에도 없음).
 
-### A3 자기소개서 관리 (S-13, S-14, S-31, S-15~S-19)
+### A3 자기소개서 관리 (S-13 · S-14 추가 모달 · S-46 작성 화면 + 탭 S-15·S-16. ~~S-17~~·~~S-19~~·~~S-31~~·~~S-45~~ v5.14 폐기)
 
-- S-13: 5.2 목록. 단계 열은 `StatusDot` + 단계 이름(+ 종료 시 결과 배지). 기능 진행 칸은 아이콘 3개(`Lightbulb`/`FileText`/`MessagesSquare`) + 숫자, 생성 중이면 C-03 축약형.
-- S-14: (v2) 키가 없으면 C-18 인라인 안내 한 줄과 함께 회사명·포지션명 입력란을 펼쳐 두고(비우면 기본 이름, 요건 추출 없음), 키가 있으면 입력란을 접어 둔다(구현·명세 기준, UQ-240). AI 연결을 다녀와도 입력은 브라우저 세션에서 복원한다(UQ-230). 공고 원문 `Textarea` `min-h-80 font-sans text-base`(붙여넣기 대량 텍스트), 오른쪽 아래 글자 수. 추출 대기 이름 "새 자기소개서"는 `text-muted-foreground`, AI가 채운 이름은 옆 `Badge variant="ai"` "AI 추출".
-- S-15 JD·요건: 넓은 화면 2열 `grid xl:grid-cols-2 gap-6` — 왼쪽 "공고 원문"(`Card`, `prose`, 문장 하이라이트 = `mark.bg-ai-subtle`), 오른쪽 요건 목록(`category`별 묶음, 행: 요건 글 + `importance` 배지 + 사용자 수정 표시 `PenLine`). JD 판별 경고 `Alert variant="warning"`. (v2) 요건이 없고 키도 없으면 요건 쪽이 C-18 영역형이 된다(공고 원문은 그대로). 키가 있으면 "요건 정리하기" AiRunButton을 둔다.
-- S-16 인사이트: 섹션 순서대로 카드. 요건 판정 표 = `Table`(요건 · 판정 3.17 · 근거 칩) — 좁은 화면 카드형. 강점·보완점은 `Card` 목록(제목 `subsection` + `prose` + 칩 줄). 보완점의 두 선택지 = `outline sm` "AI와 대화하며 추가" + `ghost sm` "직접 입력". "데이터 변경됨" 상태: 카드 머리 `Badge warning` + `RefreshCw` "커리어가 바뀌었어요" + "다시 생성"(AiRunButton, 다시 하기 주석). (v2) 결과 머리 오른쪽에 C-19 결과 배지를 둔다. 키가 없으면 결과는 그대로 보이고 실행 버튼만 C-18 인라인형이 된다.
-- S-17/S-18: 경력기술서 포함 항목 = C-11 체크 트리. 자소서 문항 카드 = `Card p-5`(문항 `Input`, 글자 수 `Input type=number w-28`, 공백 기준 `Select`, 메모 `Textarea` 300자).
-- S-19: 5.3 초안 편집기. 자리 표시 토큰(C-08)은 편집 중에도 강조 유지.
-- **(v3) S-17 초안 목록 상태** (`drafts.status`, 행 배지). 행 오른쪽 결과 배지는 C-19 결과 배지이고, 자소서는 마지막으로 생성이 완료된 문항의 값이다.
+> **(v5.14) 읽는 순서**: 기준 기획은 플로우 **v5.20**이다(decisions 4.23 UI 1~8). 목록 = 아래 "S-13", 추가 = **5.6.2** 모달, 작성 화면 = **5.12**(머리·문항 설정 상태·자소서 탭·탭 3개)와 **3.26**(제안 카드)·**3.10**(C-11)·5.8·5.9·5.10. **v5.13까지 이 절에 있던 S-17 서류 초안 목록(`drafts.status` 배지·실패 초안 행·문체 선택·AI 기본 선택 실패·프로젝트 8개 상한)·S-19 초안 편집기(생성 직후 안내 상자 `GenerationNotes`·글자 수 표시·스트리밍·경력기술서 실패·자소서 실패 문항)·S-31 허브·S-45 경력기술서 규칙은 화면과 함께 폐기됐다**(CF-1 경력기술서 완전 제거 · CF-7 허브·초안 목록 폐기). 그 시각 규칙은 **git 이력(이 파일 v5.13)**에서 볼 수 있다.
 
-| 상태 | 배지 |
-|------|------|
-| `composing` | `draft` "작성 중" |
-| `generating` | `ai` + `Loader2 size-3 animate-spin` "생성 중" |
-| `ready` | `success` "완료" |
-| `partially_failed` | `warning` + `TriangleAlert size-3` "{n}개 문항 생성 실패" |
-| `failed` | `destructive-subtle` + `CircleX size-3` "생성 실패" |
-
-- **(v3) S-17 실패 초안 행** (경력기술서 `failed`): 열 수 없는 행이다. 행 링크와 hover 바탕을 빼고 제목은 `text-muted-foreground`로 둔다. 행 끝 동작 묶음은 `flex items-center gap-2`로 "다시 시도"(`outline sm` + `RotateCcw`) + C-19 연결 배지(활성 공급자) · "삭제"(`ghost sm text-destructive`, C-05)이다. 행 아래에 `caption` "다시 시도하면 토큰을 다시 써요"를 둔다. 좁은 화면에서는 동작 묶음을 행 아래 줄로 내린다. 다시 시도하면 목록 맨 위에 새 초안 행이 `generating`으로 생기고 실패 행은 그대로 남는다.
-- **(v3) S-17·S-18 요건 선행 추출**: 요건이 없는 자기소개서에서 "새 경력기술서"나 생성 버튼을 누르면 그 버튼이 ST-WAIT-JD가 된다(버튼 `disabled` + 아래 `Loader2 text-ai` "공고 요건 정리 중"). 실패하면 같은 자리에 C-20 inline형을 두고(3.20 요청 안 경로 대기 규칙 포함) 초안 행은 생기지 않는다.
-- **(v3) S-17 문체 선택**: 경력기술서 설정에서 포함 항목 트리 위에 둔다 `[가정: 위치]`. `label` "문체" + `ToggleGroup type="single" variant="outline"` 두 항목 "간결" · "상세"(각 `h-9 px-4 text-sm`, 선택된 항목 `data-[state=on]:bg-primary-subtle data-[state=on]:text-primary-subtle-foreground`). 기본은 "간결"이고, 선택을 해제할 수 없다(선택된 항목을 다시 눌러도 무시). 값이 null인 이전 초안은 "간결"이 선택된 모습으로 그린다. 생성된 초안에서 문체를 바꾸면 C-11 근거 변경과 같은 모양(`Alert variant="info"` + "변경 사항으로 다시 생성" `AiRunButton`)을 보인다 `[가정]`.
-- **(v3) S-17 AI 기본 선택 실패** (AI-11, C-11): 트리 위에 `Alert variant="warning"` + `ListChecks`를 둔다.
-  - AlertTitle: "AI가 포함할 항목을 고르지 못했어요. 직접 골라 주세요"
-  - AlertDescription 첫 줄: C-20 원인 제목 문장 한 줄(`text-sm`)
-  - 동작: "AI에게 다시 맡기기"(`outline sm`) + C-19 연결 배지(활성 공급자)
-  - 트리는 모두 체크 해제된 상태로 평소처럼 그린다(흐리게 하지 않음). 출처 배지는 처음부터 "직접 고름" `outline`이다.
-  - 생성 버튼은 1개 이상 체크하기 전까지 `disabled`이고, 버튼 위 `meta`로 "포함할 항목을 1개 이상 골라 주세요"를 보인다 `[가정: 문구]`.
-- **(v3) 선택 개수 상한**: 경력기술서 프로젝트는 8개까지다. 8개를 고르면 체크되지 않은 프로젝트 체크박스를 `disabled`로 두고 트리 위 `meta`로 "프로젝트는 8개까지 고를 수 있어요"를 보인다 `[가정: 문구]`. 자소서 문항당 근거 5개도 같은 자리, 같은 모양으로 명세 문구 "한 문항에 5개까지 고를 수 있어요"를 보인다.
-- **(v3) S-18 글자 수 안내**: 글자 수 제한 `Input` 줄 바로 아래에 `meta text-muted-foreground` + `Info size-3.5`로 명세 문구를 둔다. "최대 10%까지 넘을 수 있으니"만 `font-medium text-foreground`로 둔다. 문항이 10개면 "+ 문항 추가"를 `disabled`로 두고 옆에 `meta` "문항은 10개까지 추가할 수 있어요"를 둔다 `[가정: 문구]`. 문항 문장 1,000자는 C-07 글자 수 규칙을 따른다.
-- **(v3) S-19 생성 직후 안내 상자** (`GenerationNotes`): `validated` 뒤 왼쪽 문서 열 맨 위에 둔다. 자소서는 문항 목록 맨 위에 하나를 두고 문항별로 묶는다.
-
-```
-Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
-  트리거 줄 px-4 py-3 flex items-center gap-2:
-    Info size-4 text-info + text-sm font-semibold text-info-subtle-foreground "생성 직후 안내" [가정: 제목]
-    + Badge variant="count" 항목 수 + ml-auto ChevronDown size-4
-  본문 px-4 pb-4 space-y-4 text-sm text-info-subtle-foreground
-    묶음마다 p.font-medium 머리 + ul list-disc pl-5 space-y-1.5
-      "포함하지 않은 항목" (경력기술서 omitted): 항목 이름 font-medium + " — " + 이유
-      "확인해 주세요" (notes_for_user)
-      "글자 수를 맞추지 못했어요" (자소서 char_adjust_needed)
-    자소서는 묶음 위에 caption "문항 {n}"
-  하단 줄 border-t border-info/20 pt-3 caption: Clock size-3.5 + "이 안내는 지금만 보여요. 필요하면 메모해 두세요"
-```
-
-  - 닫기(X)는 두지 않고 접을 수만 있다. 저장되지 않으므로 화면을 다시 열면 상자가 없다. 안내할 내용이 하나도 없으면 상자를 그리지 않는다.
-- **(v3) S-19 글자 수 표시** (자소서 문항 머리):
-  - 기본: `caption tabular-nums text-muted-foreground` "현재 1,180자 / 제한 1,200자(공백 포함)"
-  - 제한을 넘었지만 110% 이내: 같은 글자를 `text-warning-subtle-foreground`로 바꾸고 앞에 `TriangleAlert size-3.5 text-warning`를 둔다. 문항 머리 아래에 `meta text-warning-subtle-foreground`로 명세 문구 "제한보다 {n − limit}자 많아요. AI 보정 범위(최대 10% 초과) 안이라 그대로 두었어요. 제출처 제한을 확인해 주세요"를 둔다.
-  - 편집해서 110%를 넘은 경우: 같은 경고 모양이고 아래 줄은 "제한보다 {n − limit}자 많아요"만 둔다 `[가정]`.
-  - 편집본 기준으로 실시간 다시 센다. 생성 직후 안내 상자가 사라져도 이 경고는 남는다(`validation_report`).
-- **(v3) S-19 스트리밍**: "마무리 중"과 블록 통째 교체는 3.4 C-04 표를 따른다.
-- **(v3) S-19 경력기술서 실패**: 편집기 문서 열 자리에 C-20 block형을 둔다. AlertTitle은 원인 문장이다. AlertDescription 첫 줄은 `font-medium` "생성에 실패했어요. 다시 시도하면 새 초안으로 처음부터 만들어요"이다. **② 보존 줄은 넣지 않는다**(남는 블록이 없다). 동작 줄은 `RetryButton` + C-19 연결 배지(활성 공급자)이다. 항상 새 초안이므로 "처음부터 다시" 줄은 두지 않는다. 오른쪽 패널(C-11)은 비운다. 입력 원인 실패면 3.20 규칙대로 다시 시도가 없다.
-- (v3) S-19 자소서 실패 문항: 그 문항 자리에만 C-20 inline형을 두고, 완료된 문항은 그대로 둔다.
-- (v3) S-13·S-31 기능 상태는 3.3 `AiFeatureStatus`를 따른다.
+- **S-13 목록** (v5.14 재작성 — CF-3·CF-9·CF-A8): 5.2 "목록 화면", `max-w-page` 한 열.
+  - 머리: `PageHeader` 제목 "자기소개서 관리" + 오른쪽 주 버튼 `Button` default **"자기소개서 작성"**(→ 5.6.2 모달). 머리 아래 정렬 표기 한 줄 `meta text-muted-foreground` **"최근 작성 순"** — 바꿀 수 없는 글자라 `Select`가 아니다(정렬 선택·필터·검색·"보드로 보기" 없음, CF-9).
+  - 행(넓은 화면 `Table` 3열 + D-day 열): ① **이름** `font-medium max-w-[28rem] truncate` + `title`(`application_projects.name`) ② **포지션** `text-sm text-muted-foreground`(비면 셀을 비운다 — "—"를 넣지 않는다 `[가정]`) ③ **만든 날** `caption tabular-nums` "yyyy.mm.dd" ④ **마감 D-day** = 공통 `DDay`(`deadline`이 있을 때만, 없으면 셀 비움. 3일 이내 `Badge warning`, 지나면 "마감").
+  - 열 머리 글자는 "이름 · 포지션 · 만든 날 · 마감" `[가정]`. 이름 열 안: 추출 대기 이름("새 자기소개서 (YYYY-MM-DD)")은 `text-muted-foreground`, AI가 채운 이름(`name_source = 'ai'`)은 옆 `Badge variant="ai"` "AI 추출"(v5.13까지 S-14 폼에 있던 규칙을 목록 행으로 옮겼다). **이름 모양이 섞여 보이는 것은 정상**이다(옛 "회사명 – 포지션명" 행은 바꾸지 않는다) — 화면은 `name`을 그대로 보인다.
+  - **단계 칩·전형 결과·기능 진행 칸(인사이트·서류 수·면접 수)은 없다**(CF-3·CF-A14) — `StatusDot`·`AiFeatureStatus`(3.3)를 S-13에서 쓰지 않는다.
+  - 행 전체가 링크(→ S-46. 정본 행이 없으면 문항 설정 상태), 행 끝 `⋯`는 **"자기소개서 삭제"**(C-05) 한 항목(`DropdownMenuItem variant="destructive"` + `Trash2`), 클릭 전파 막음. 단계 이동(C-12)은 두지 않는다.
+  - 좁은 화면 카드: 1행 이름 `font-medium`, 2행 `caption text-muted-foreground` "포지션 · 만든 날 · D-day"(가운뎃점 구분, 빈 조각은 구분점째 뺀다) `[가정]`.
+  - 빈 상태: 4장 ST-EMPTY(아이콘 `Briefcase`) + 명세 문구 + 주 버튼 "자기소개서 작성" 하나(보조 버튼 없음).
+- **S-14 추가 모달**: **5.6.2**. v5.13까지의 전체 페이지 폼 규칙(`max-w-form`, 회사명·포지션명 접기, 공고 원문 `min-h-80`)은 쓰지 않는다 — 공고 원문 칸 규칙만 모달 ②로 옮겼다(5.6.2).
+- **S-46 작성 화면**: **5.12**. 머리(제목·지원 직무·JD 상세·마감일·요약·⋯ 삭제), 문항 설정 상태(기본값 800·"+ 문항 추가 n/5"), 자소서 탭 문항 블록(제목·내용·글자 수·C-11·메모), 왼쪽 탭 3개, 패널·제안 카드 자리가 모두 거기 있다.
+- **S-15 "채용 공고" 탭** (v5.14 — 별도 화면에서 S-46의 탭으로, ID 유지): 탭 내용 안 2열 `grid xl:grid-cols-2 gap-6` — 왼쪽 "공고 원문"(`Card`, `prose`, 문장 하이라이트 `mark.bg-ai-subtle`, 머리 오른쪽에 `source_url`이 있으면 `Button variant="link" size="sm"` + `ArrowUpRight` "원래 공고 열기"), 오른쪽 요건 목록(`category`별 묶음, 행: 요건 글 + `importance` 배지(`high` = `Badge variant="secondary"` "핵심") + 사용자 수정 표시 `PenLine`). JD 판별 경고 `Alert variant="warning"`. 요건이 없고 키도 없으면 요건 쪽만 C-18 **영역형**(공고 원문은 그대로), 키가 있으면 "요건 정리하기" `AiRunButton`(진행 중에는 버튼 자리 `Loader2` + "공고 요건 정리 중").
+  - **공고 원문 수정**(Q53-2·Q53-11): 공고 원문 `Card`가 `Textarea` 칸으로 바뀌고 머리 오른쪽에 **탭 안의 버튼** `[저장]`(`secondary sm`) · `[취소]`(`muted-ghost sm`)를 둔다 — 상단 바 "저장하기"와 섞지 않는다(5.12). 길이 경고는 S-14와 같은 문구·모양, 조건 밖이면 수정 버튼을 그리지 않는다. 저장 성공 뒤 안내 한 줄은 `Alert variant="info"` 작은 형이고, 인사이트 탭·자소서 쪽에서 왔으면 그 아래 `Button variant="outline" size="sm"` "{인사이트 / 자소서} 탭으로 돌아가기".
+  - (v5.14) 요건 상태 글자는 "요건 정리 전"이다(~~S-31 카드 상태 배지~~ 폐기).
+- **S-16 "인사이트" 탭** (v5.14 — 같은 방식으로 탭이 됐다, ID 유지): 섹션 순서대로 카드. 요건 판정 표 = `Table`(요건 · 판정 3.17 · 근거 칩), 좁은 화면 카드형. 강점·보완점은 `Card` 목록(제목 `subsection` + `prose` + 칩 줄). 보완점의 두 선택지 = `outline sm` "AI와 대화하며 추가" + `ghost sm` "직접 입력"(→ C-23). "데이터 변경됨": 카드 머리 `Badge warning` + `RefreshCw` "커리어가 바뀌었어요" + "다시 생성"(`AiRunButton`). 결과 머리 오른쪽 C-19 결과 배지. 키가 없으면 결과는 그대로 보이고 실행 버튼만 C-18 인라인형, 결과도 없으면 본문 C-18 영역형. `data_sufficiency.level = 'thin'`이면 결과 위 `Alert variant="info"` 한 줄.
+- **(v5.14) 걷어낸 것** — 되살리지 않는다: ~~S-17 초안 목록 상태 배지(`drafts.status` 5값: `composing`·`generating`·`ready`·`partially_failed`·`failed`)~~ · ~~실패 초안 행~~ · ~~문체 `ToggleGroup`("간결"/"상세")~~ · ~~AI 기본 선택 실패 `Alert`(AI-11)~~ · ~~경력기술서 포함 항목 체크 트리와 프로젝트 8개 상한~~ · ~~문항당 근거 5개 상한 안내~~ · ~~S-19 생성 직후 안내 상자 `GenerationNotes`~~ · ~~S-19 문항 머리 글자 수 배치~~ · ~~S-19 경력기술서 실패 block형~~ · ~~S-19 자소서 실패 문항 inline형~~ · ~~S-13·S-31 기능 상태 `AiFeatureStatus`~~ · ~~문항 10개 상한~~(→ 5개, CF-5). 대신 쓸 자리: 글자 수 경고·스트리밍·제안 카드·출처 칩·근거 목록·초안 실패는 **5.12와 3.26·3.10**에, 요건 선행 추출은 **5.12 문항 설정 상태**에 옮겨 적었다.
 
 ### A4 보드 (S-39) — (v5.13) 면접 화면 S-20·S-33·S-22·S-37 폐기 (RM-1, 2026-11-08)
 
 - S-39: 5.5. **4열**(지원 전·서류 전형·과제 전형·전형 종료, RM-2). C-12·C-13은 3장, 카드 기능 상태는 3.3 `AiFeatureStatus`(인사이트만). 보드에는 AI 잠금 상태가 없다.
-- ~~S-20 면접 준비 · S-33 면접 답변지 · S-22 면접 결과 · S-37 모의 면접(전체 세션) · "자기소개서 삭제됨" 표식 · S-22 다시 채점 · S-33 그만둔 세션·질문 근거 칩·생성 진행~~ — 화면과 함께 폐기. v5.12까지의 시각 규칙은 git 이력(이 파일 v5.12)에서 볼 수 있다. 옛 주소 `/applications/{id}/interview…`는 S-31, `/interviews…`는 S-13으로 308 redirect(`src/lib/legacy-redirects.ts`).
+- **(v5.14, CF-3·CF-5·CF-A14)** 카드의 **서류 쪽 표시는 "자소서 작성 중 / 작성됨" 배지 하나**다(~~초안 수 숫자~~ 폐기 — 5.5 카드 3행). 카드 본문을 누르면 **S-46**(~~S-31~~ 폐기)으로 가고, "지원 전" 열 "+"는 **5.6.2 추가 모달**을 보드 위에 띄운다(생성 뒤 보드에 남고 "열기" 토스트 → S-46). 전형 단계 변경은 보드에서만 한다.
+- ~~S-20 면접 준비 · S-33 면접 답변지 · S-22 면접 결과 · S-37 모의 면접(전체 세션) · "자기소개서 삭제됨" 표식 · S-22 다시 채점 · S-33 그만둔 세션·질문 근거 칩·생성 진행~~ — 화면과 함께 폐기. v5.12까지의 시각 규칙은 git 이력(이 파일 v5.12)에서 볼 수 있다. 옛 주소 `/applications/{id}/interview…`는 **S-46**(v5.14 — S-31이 CF-7로 폐기, MRG-UX-1 `[가정]`), `/interviews…`는 S-13으로 308 redirect(`src/lib/legacy-redirects.ts`).
 
 ---
 
@@ -2440,7 +2568,7 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-3 | 중립색은 약간 푸른 회색(260°), 페이지 바탕 회색 + 카드 흰색 | 1.1 |
 | G-4 | AI 활동 전용 보라색 `--ai` 도입 | 1.1, R-C3 |
 | G-5 | 반경 8px 기준, 그림자는 떠 있는 것에만 | 1.3 |
-| G-6 | 셸 접힘 기준 1024px, S-36 2단·S-19 패널 기준 1280px, 보드 탭 기준 768px | 1.4 |
+| G-6 | 셸 접힘 기준 1024px, S-36 2단 기준 1280px, 보드 탭 기준 768px. (v5.14) ~~S-19 패널 1280px~~ 폐기 — L-02 3단(S-10·S-44·S-46)은 1024px 기준 | 1.4 |
 | G-7 | 메뉴 아이콘(Layers/Briefcase/MessagesSquare/KanbanSquare) | 5.1 |
 | G-8 | 날짜는 네이티브 `Input type="date"`, 월은 Select 두 개(추가 의존성 회피) | 2 |
 | G-9 | 마감 임박은 D-day 배지만 강조(카드 전체 강조 안 함) | 5.5 |
@@ -2473,8 +2601,8 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-36 | (v3) C-21 동의 창의 제목·버튼 글자, 동의 뒤 토스트 없음 | 3.21 |
 | G-37 | (v3) S-36 전송 차단 안내는 다음 전송까지 남음, 그만두기 확인 버튼 글자 "그만두기", 그만둔 뒤 S-08 묶음 펼침·강조, 그만둔 대화 막대 문구 "그만둔 대화예요", 그만둔 대화의 미리보기 읽기 전용 | 5.4 |
 | G-38 | (v3) S-25 busy 오류는 Alert 안에 버튼 없이 "탈퇴하기"를 다시 누름, 탈퇴 마무리 상태는 셸 밖 배치, 성공 뒤 토스트 없음 | 6 A1 |
-| G-39 | (v3) S-17 문체 선택 위치와 변경 후 다시 생성 안내, 생성 버튼 비활성 이유 문구, 프로젝트 8개 문구, S-18 10개 문구 | 6 A3 |
-| G-40 | (v3) S-19 생성 직후 안내 상자 제목 "생성 직후 안내", 편집으로 110%를 넘었을 때의 표시 | 6 A3 |
+| ~~G-39~~ | **(v5.14) 폐기** — S-17·S-45(경력기술서) 화면이 없어져 문체 선택·생성 버튼·프로젝트 8개·문항 10개 문구가 모두 사라졌다. 문항 상한 문구는 명세가 정한 "문항은 5개까지 추가할 수 있어요"다(CF-5) | 6 A3 |
+| G-40 | ~~(v3) S-19 생성 직후 안내 상자 제목 "생성 직후 안내"~~ **(v5.14) 폐기** — 상자 자체가 없어졌다(3.4·3.26). 남은 부분: 편집으로 110%를 넘었을 때의 표시(5.12 글자 수 표시) | 5.12 |
 | G-41 | (v3) S-37 메뉴 항목의 공급자 글자와 키 없음 시 C-18 팝업형, S-33 빈 답변 "답변 없음" | 6 A4 |
 | G-42 | (v5) L-02 셸 바탕 `--shell` = L-01 앱 바탕 `--sidebar`와 같은 #F3FBF8(v4 브랜드 토큰, 머지 2026-11-03 — Q-10 해소) | 1.1, 5.8 |
 | G-43 | (v5) AI 패널 바탕 `--panel`(카드와 칩 사이 밝기). 다크에서는 카드보다 밝다 | 1.1, 5.10 |
@@ -2516,6 +2644,15 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | G-79 | (v5.12) 미연결 공급자 행에도 비활성 라디오를 보인다(화면), Gemini [연결]도 `secondary`(추천은 배지), S-41만 묶음 테두리 유지 | 5.11.2 |
 | G-80 | (v5.12) 내 정보 [저장]은 학력 상자 아래 오른쪽 정렬 `h-10`(화면에 없음 — 섹션 단위 저장 UX), 쌍 행 2행은 라벨 칸 비움, [+ 관심 직무 추가]는 `secondary sm`으로 칸 열에 맞춤 | 5.11.1 |
 | G-81 | (v5.12) 기간 칸 = 한 칸 버튼 + `Popover` 안 연월 셀렉트 4개(입력 방식 유지), 칸 표시는 C-25 형식에서 "(N년 N개월)" 생략 | 5.11.1 **확정 2026-11-06 (사용자, UI43-2)** |
+| G-82 | (v5.14) S-13 행 = `Table` 4열(이름·포지션·만든 날·마감)이고 열 머리 글자·빈 셀 처리(포지션·D-day 없으면 셀을 비운다), 좁은 화면은 두 줄 카드 | 6 A3 |
+| G-83 | (v5.14) S-14 모달 = `Dialog sm:max-w-2xl` + 5.7 `StepIndicator` 2단, [다음] 진행은 버튼 안 글자 교체(C-03 막대 없음), ①의 URL·직접 입력은 서로 `disabled`, 닫기 확인 버튼 `닫기`(destructive-ghost)·`계속 작성`(default) | 5.6.2 |
+| G-84 | (v5.14) S-46 마감일 = `Input type="date"` + "비우기" `X`(날짜 선택 라이브러리를 넣지 않는다, 2장) | 5.12 |
+| G-85 | (v5.14) S-46 왼쪽 탭 = `TabsList variant="pill"`을 세로 목록(`w-40`, 넓은 화면)·가로 한 줄(좁은 화면)로. 저장하지 않은 변경을 탭 머리에 표시하지 않는다 | 5.12 |
+| G-86 | (v5.14) S-46 문항 블록 구성(머리 ⋯ 메뉴 5항목·"문항 편집"은 제자리 편집 모드·순서 변경은 "위로/아래로" 메뉴(드래그 없음)·제목 칸은 테두리 없는 문서형 입력·문항 사이 `space-y-8`) | 5.12 |
+| G-87 | ~~(v5.14) S-46 문항 설정 상태는 R-C8 예외로 주 버튼이 둘이다~~ → **(v5.15, CF-S3 확정) 주 버튼은 바닥 [자기소개서 작성 시작] 하나**이고 상단 바 `SaveButton`은 `disabled`다. 남은 `[가정]`은 비활성 버튼 툴팁 문구와 이탈 확인 버튼 2개(`나가기`/`계속 작성`)뿐이다 | 5.12, 5.8 |
+| G-88 | (v5.14) 3.26 제안 카드 — 문항 묶음 테두리 상자, "제목" 라벨 + 제안 제목 줄(없으면 생략), 문항별 잠금 글자("폼에 채움 · 저장 전"/"반영됨"), "확인해 주세요" 묶음 위치 | 3.26 |
+| G-89 | (v5.14) 3.10 C-11 = 접힌 읽기 전용 목록(트리거 "사용한 경력·프로젝트 {n}개"), 행 전체가 C-02를 여는 버튼. **(v5.15, CF-S2 확정)** 행이 **경로 한 줄만**이고 배지·`rationale` 줄이 없는 것은 더 이상 `[가정]`이 아니다 | 3.10 |
+| G-90 | (v5.14) S-39 카드 자소서 표시 = 배지 하나(`draft` "자소서 작성 중" / `success` "자소서 작성됨"), 숫자·분수 없음 | 5.5 |
 
 ### 8.3 열린 질문 (리더 경유)
 
@@ -2545,10 +2682,10 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | P-8 | C-20 (v2) | "입력·부분 결과 보존"이 규칙으로만 있고 화면 문구가 없다. 임시 "입력과 지금까지 만든 결과는 그대로 있어요" |
 | P-9 | S-41 ③ (v2) | 교체 중 실패 시 "기존 키 유지" 안내 문구가 없다. 임시 "기존 키는 그대로 쓰여요" |
 | P-10 | S-42 · S-40 (v2) | 사용량 불러오기 오류 문구, 유료 등급 C-19 툴팁 문구, C-21 재동의 알림 문구가 없다 |
-| P-6 | 여러 화면 | 명세가 "v3와 같음"으로 적은 S-15~S-19·S-22·S-24·C-08의 v3 세부 명세가 저장소에 없음. 이 문서는 v4 명세와 AI 명세에서 보이는 요소로만 패턴을 정했다 |
+| P-6 | 여러 화면 | 명세가 "v3와 같음"·"구현 기준"으로 적은 S-15·S-16(v5.14 탭)·~~S-17~~·~~S-19~~·S-24·C-08의 v3 세부 명세가 저장소에 없음. 이 문서는 v4 명세와 AI 명세에서 보이는 요소로만 패턴을 정했다 |
 | P-11 | S-22 (v3) | 종합 평가만 실패한 `evaluation_failed` 세션(실패한 답변 0개)에서 버튼 글자가 "실패한 답변 0개 다시 채점"이 된다. 이 경우 버튼을 보일지, 글자를 무엇으로 할지 명세에 없다. 임시로 n이 0이면 "종합 평가 다시 정리"로 쓴다 `[가정]` |
 | P-12 | S-36 · S-33 (v3) | 그만둔 대화를 열었을 때의 안내 문구, 그만둔 면접의 빈 답변 표시 문구가 없다. 임시 "그만둔 대화예요", "답변 없음" |
-| P-13 | S-17 · S-18 (v3) | 선택 상한(프로젝트 8개, 문항 10개)과 1개 이상 선택 조건의 안내 문구가 없다(자소서 근거 5개만 있음). 임시 문구는 G-39 |
+| ~~P-13~~ | ~~S-17 · S-18~~ (v3) | **해소·해당 없음 (v5.14, CF-1·CF-5·CF-7)** — S-17·경력기술서가 폐기되어 프로젝트 8개·근거 5개 상한이 없어졌고, 문항 상한은 5개로 바뀌며 명세가 문구를 정했다("문항은 5개까지 추가할 수 있어요", "문항은 1개 이상 있어야 해요") |
 | P-14 | C-21 (v3) | 실행 전에 여는 동의 창의 제목과 확인 버튼 글자가 없다. 임시 "{공급자}({등급}) 데이터 사용 동의" / "동의하고 계속" |
 | ~~P-15~~ | S-08 · S-09 · S-34 · C-22 · C-24 · C-25 (v5) | **해소(v5.7, OD-D4)**: 구현 코드 기준으로 정리했다 — 5.6.1 커리어 항목 추가·수정 모달, 6장 A2 "(v5.7) 커리어 v5.13". C-24는 폐기(OD-C2). (이전: v5.5 커리어 재설계 화면의 시각 규칙이 이 문서에 아직 없다(이번 범위 밖). 구현은 앞서 진행됐으므로 다음 디자인 시스템 개정에서 구현을 기준으로 정리할지 리더 판단 필요. (v5, UQ-BR-16) 정리할 때 S-08 패널 안 클릭 요소는 v4 컴포넌트로 적는다 — 프로젝트 카드 C-25·산출물 행 = `Item`(ghost), 섹션 동작 버튼 = 덧씌우기 없는 `ghost sm`, 삭제 메뉴 = `DropdownMenuItem variant="destructive"` (v5.5, UQ-738) 빈 상태는 정리했다 — 4장 ST-EMPTY "예외 S-08") |
 | ~~P-16~~ | S-10 · S-44 패널 (v5) | **해소(v5.5)**: 사용자 결정 UP-4 — 제안 카드는 마지막 AI 턴 바로 아래 확인 줄(5.10). (이전: "대화 목록 아래 고정"을 입력창 위 독으로 읽음) |
@@ -2563,6 +2700,9 @@ Collapsible (기본 펼침) rounded-lg border border-info/30 bg-info-subtle
 | ~~P-25~~ | S-24 ① 내 정보 (v5.11) | **해소(v5.12 기록, 플로우 v5.17b UI42-2, 확정 2026-11-06 (사용자))** — 임시안 그대로 확정. 원문: 모든 항목이 선택 입력인데 셀렉트에서 고른 값을 **비우는 방법·문구**가 없다. 임시 항목 "선택 안 함"(G-65). 또 최종 학력 기간에서 연도만 고르고 월을 비운 경우의 검증 문구가 없다(연월 `'YYYY-MM'`만 저장 가능) |
 | ~~P-26~~ | S-24 ① `stale_write` (v5.11) | **해소(v5.12 기록, 플로우 v5.17b UI42-3, 확정 2026-11-06 (사용자))** — 임시안 그대로 확정. 원문: "사용자가 고친 값은 덮어쓰기 전에 보여 준다"의 방법이 없다. 임시로 충돌 Alert 안에 "{칸 라벨}: {내가 입력한 값}" 목록(G-72). 되돌려 넣는 버튼은 두지 않았다 |
 | P-27 | S-24 ① 최종 학력 (v5.12) | 원본 화면은 최종 학력 상자 안에 보이는 라벨이 없고 **칸 이름을 회색 placeholder로** 쓴다("학교 명" · "학위" · "졸업 상태" · "yyyy.mm - yyyy.mm" · "전공" · "학점"). UX는 셀렉트 placeholder를 모두 "선택해 주세요"로 정했다 — 상자 안에서 그 문구를 쓰면 학위·졸업 상태 칸을 구분할 수 없다. 임시로 상자 안 칸만 칸 이름 placeholder(접근 이름은 `aria-label`) `[UI-가정]`. 확인할 것: ① 이 예외를 문구 규칙으로 올릴지 ② 기간 칸 placeholder "yyyy.mm - yyyy.mm"(영문 형식 표기)을 그대로 쓸지 ③ 기간 칸에서 C-25의 "(N년 N개월)"을 빼도 되는지 **확정 2026-11-06 (사용자, UI43-1~3)**: 칸 이름 placeholder 유지, 기간은 날짜만, 칸 오류는 밑줄 + 연도만 고른 기간은 sr 문구 "연도와 월을 함께 골라 주세요" |
+| ~~P-28~~ | C-11 (v5.14) | **해소 (v5.15, CF-S2 — 확정 2026-11-09 (사용자))**: 근거 목록 행은 **경로 한 줄("회사명 또는 교육 표시 이름 › 프로젝트명")만**이고 순서는 `{slot}.sources.{n}` 그대로(주 근거 먼저)다. 주/보조·AI 선택/내가 추가 배지와 선택 이유 줄은 두지 않는다 — `rationale`은 정본에 저장되지 않아 새로 고침 뒤 그릴 수 없고 대화의 `sources_selected` 근거 카드에만 있다. 저장 계약 변경 없음(3.10) |
+| ~~P-29~~ | S-46 문항 설정 상태 (v5.14) | **해소 (v5.15, CF-S3 — 확정 2026-11-09 (사용자))**: 임시안("같은 방문에선 전환하지 않는다")을 **대체**했다 — 문항 설정 상태에서는 **상단 바 "저장하기"를 비활성**으로 두고 정본 행을 만드는 **첫 저장은 [자기소개서 작성 시작] 하나**다. 저장 없이 나가면 이탈 확인이다(5.12, 5.8 예외 줄) |
+| ~~P-30~~ | S-46 자소서 탭 (v5.14) | **결정 불필요 (2026-11-09)** — 작성 상태의 **"문항 편집"**(CL-8)이 문항 추가·삭제·순서·문항 문장·글자 수 제한·기준·메모를 모두 다루므로 문항 설정 상태로 돌아갈 입구를 새로 만들지 않는다(5.12) |
 
 ### 8.5 디자인 결정 필요 / 위험 (v5.5, 2026-11-04)
 
@@ -2608,6 +2748,8 @@ v5.5는 **이미 구현된 코드와 사용자 결정(UP-1~UP-13, 2026-11-04)을
 
 | 버전 | 날짜 | 내용 |
 |------|------|------|
+| v5.15 | 2026-11-09 | **UI 질문 확정 반영 — CF-S2·CF-S3**(확정 2026-11-09 (사용자), 플로우 v5.20 CF-S2·S3 · decisions 3.28 후속 확정 4 · 4.23 UI #9. 45 런 같은 사이클). **3.10 C-11**: 근거 목록 행 = **경로 한 줄만**("회사명 또는 교육 표시 이름 › 프로젝트명"), 순서는 `{slot}.sources.{n}` 그대로(주 근거 먼저), 배지와 **`rationale` 줄 삭제**(정본에 저장되지 않는 값 — 선택 이유는 대화의 `sources_selected` 근거 카드에만, 관련 요건은 블록의 `jd_requirement` 근거 칩). **5.12 · 5.8**: 문항 설정 상태에서 상단 바 `SaveButton`을 **늘 `disabled`**(표식 점·C-06 글자·⌘S 없음, 비활성 툴팁 문구 `[가정]`)로 두고 **첫 저장은 [자기소개서 작성 시작] 하나**로 못 박았다 — R-C8 예외였던 "주 버튼 둘" 서술과 "같은 방문에선 전환 안 함" 임시안을 걷고, 5.8 `SaveButton` 표에 이 상태 예외 줄을 더했다. 저장 없이 나가면 `LeaveGuard` 2버튼(`나가기`/`계속 작성`) `[가정]`. **5.12 자소서 탭**: 작성 상태의 "문항 편집"이 글자 수 제한 수정까지 맡으므로 문항 설정으로 돌아갈 입구를 만들지 않는다는 한 줄 추가. **8.4 P-28·P-29·P-30 해소로 닫음**, 8.2 G-87·G-89 갱신(확정으로 바뀐 부분은 `[가정]`에서 뗐다). 새 토큰·패턴·variant 0개 |
+| v5.14 | 2026-11-09 | **자기소개서 관리 흐름 재설계**(UI 45 런, 결정 사이클 `cover-letter-flow` CF-1~CF-10 · CF-U1~U3 · CF-M1 · CF-S1, 플로우 v5.20, decisions 4.23 UI 1~8. Figma 노드 없음 — 시안 4장은 파일로 남지 않아 플로우 컴포넌트 표를 정본으로 삼았다). **신설**: 3.26 S-46 문항 초안 제안 카드(`QuestionProposalCard` — 반영 단위가 문항, 제안 제목 CF-6, 3.25를 재사용하는 부분을 표로 명시) · 5.6.2 자기소개서 추가 모달(`AddApplicationDialog` — 2단계, `StepIndicator` 재사용, [다음] 진행 표시, Q53-1 분기, 닫기 확인) · 5.12 S-46 작성 화면 배치(머리 제목·지원 직무·JD 상세·마감일 `Input type=date`·요약·⋯ 삭제 / 문항 설정 상태 — 기본값 **800자**(CF-U2)·"+ 문항 추가 n/5"(CF-5)·요건 선행 추출 / 왼쪽 탭 3개 "자소서·채용 공고·인사이트"(CF-U3) / 자소서 탭 문항 블록·글자 수 표시·복사·근거 강조 / 패널). **재작성**: 3.10 C-11 = 읽기 전용 목록(체크 트리·다시 생성·프로젝트 8개 상한·`selection_origin` 폐기), 6장 A3 전체(S-13 목록 CF-9 · S-14 → 5.6.2 · S-46 → 5.12 · S-15·S-16은 탭으로 재정의). **폐기 묘사 정리(CF-1·CF-7)**: A3의 S-17 상태 배지·실패 초안 행·문체 선택·AI 기본 선택 실패·경력기술서 체크 트리(프로젝트 8개)·S-19 생성 직후 안내 상자(`GenerationNotes`)·S-19 글자 수 표시·스트리밍·경력기술서 실패·자소서 실패 문항·`AiFeatureStatus` 사용처, 5.2 허브(S-31), 5.3 폼 화면(S-14)·초안 편집기(S-19), 1.4 `max-w-page`·`w-side-panel`·`max-w-prose-edit`·xl 행, 2장 `sheet`·`tabs` 사용처, 3.3·3.4(`validated`·`error` 경력기술서 분기)·3.11·3.18·3.19·3.20·3.22, 8.2 G-6·G-39, 8.4 P-13 — 모두 취소선 + "git 이력(이 파일 v5.13)에서 볼 수 있다" 방식. **바뀐 값**: 문항 상한 10개 → **5개**, 글자 수 제한 기본값 **800자**, S-39 카드 서류 표시 = "자소서 작성 중 / 작성됨" 배지 하나(숫자 없음, 5.5), 카드·S-13 행의 목적지 S-31 → **S-46**, 옛 면접 주소 리다이렉트 도착지 S-31 → **S-46**(MRG-UX-1, 6장 A4). **새 토큰 0개 · 새 shadcn primitive 0개 · 새 variant 0개 · 기존 토큰·패턴 이름 변경 없음** — `tabs variant="pill"`·`StepIndicator`·`DocTextarea grow`·`DDay`·`Badge draft/success/ai`·`Input type=date`를 재사용했다. 8.2 **G-82~G-90**, 8.4 **P-28·P-29·P-30** 신설 |
 | v5.13 | 2026-11-08 | **AI 모의 면접 MVP 제외**(UI 44 런, 결정 사이클 `remove-mock-interview` RM-1~RM-5, 플로우 v5.19, decisions 4.21 UI 7). 폐기 표시: 3.13 C-14 · 3.15 C-16 · 3.16 C-17 · 3.19 목록 열 "실행 공급자" · 6장 A4 면접 부분. 1.1.4 면접 단계 2행과 토큰 `--stage-job-interview`·`--stage-culture-fit-interview`(`globals.css` 포함) 삭제. 3.3 면접 단계 문구·`complete` 삭제, 3.8 컬처핏 대안 줄 삭제, 3.11 4단계, 3.18 팝업형 = `AiLockPopup`만, 5.1 L-01 메뉴 3개, 5.5 카드 면접 수 삭제. (QA 라운드 2, UQ-44-3·4) 3.5 C-05·3.22·4장·5.2 면접 문장 정리, 사용처 목록 폐기 표시, 5.2 허브 카드 격자 규칙(홀수 마지막 카드 md 전체 폭·lg 3열), 5.11.2 안내 문구. 머리 안내로 나머지 사용처 언급은 이력으로 돌림 |
 | v5.12 | 2026-11-06 | **설정 다이얼로그를 원본 화면 3장에 맞춤**(UI 43 런. 시각 원천 `_workspace/ui/43_design/account.webp`·`ai-connection.webp`·`policies.webp` — 기획 사이클 `settings-dialog`의 원천과 같은 화면, Figma 노드 없음, 이미지 픽셀에서 읽고 화면 1.3px ≈ 1 CSS px로 환산. 기준 플로우 v5.17b · decisions 3.22·3.23·3.24). **5.11 시각 재작성**: 5.11.0 공통 시각 언어 표 + "화면을 따르지 않는 곳" 표 신설 / 틀: 전체 폭 머리(보이는 제목 "설정" + X, `border-b`), 이동 경로 삭제, 탭 아이콘 삭제(글자만 `h-10 text-sm`), 탭 목록 13rem, 크기 `lg:max-w-[min(1100px,100vw−4rem)]`·높이 760, 본문 `@container/settings` / 계정 탭: `SettingsFieldRow`(라벨 6rem 회색 본문 + 칸 13rem `h-8`), 한 줄 두 쌍(`@3xl`), 쌍 행 legend·열 머리 삭제, **최종 학력 = 테두리 상자 하나**(굵은 학교 명 줄 + 세로 구분선 다섯 칸, 칸 이름 placeholder, 기간 `PeriodCell` 팝오버), [저장] 학력 아래 오른쪽 `h-10`, 위험 구역 = `destructive` 채움 `h-10` 아이콘 없음 / AI 연결 탭: 공급자 행 테두리·구분선 삭제 + 활성 `bg-primary/10` + 이름 열 `w-28` + 라디오 `size="lg"` + 미연결 행 비활성 라디오 + [연결] `secondary` + ⋯ `muted-ghost`, 상시 고지 = 머리 설명 줄, 공급자 `TabsList variant="pill"` + 같은 줄 가격 안내 + 대시보드 ↗(`ArrowUpRight`), 표 = 회색 머리·둥근 테두리·행 구분선 없음·숫자 왼쪽 정렬·`text-sm` / 약관 탭: 문서 행 상자 삭제 + [전문 확인] `secondary sm` 아이콘 없음, 선택 동의 = 굵은 라벨 + 같은 줄 설명(11rem 열) + `Switch size="lg"`, 원칙 줄 상자 삭제 / 개선 요청 탭: `ArrowUpRight`. **새 variant·size**: `SelectTrigger variant="cell"` · `TabsList variant="pill"` · `RadioGroupItem size="lg"` · `Switch size="lg"`. **새 패턴**: `SettingsFieldRow` · `PeriodCell`. 새 색 토큰 0개, **이름 변경 없음**. **사용처 이전**: `destructive-outline` → `destructive`(`account/account-tab.tsx` 회원 탈퇴, `account/sign-out-button.tsx` 로그아웃 — variant 정의는 남김), `ProviderRowGroup` 기본 모양 바뀜(S-41 `key-connect-flow.tsx`는 `bordered`), `TabsList variant="line"` → `"pill"`(`account/ai-usage-panel.tsx`). 8.2 G-62·G-68·G-69·G-70·G-73 고침 + **G-75~G-81**, 8.4 P-22~P-26 해소 표시(UI42) + **P-27**, 8.5 **DR-13**(모서리)·**DR-14**(초록 채움 농도) |
 | v5.11 | 2026-11-05 | **새 설정 다이얼로그 — 왼쪽 탭 4개**(UI 42 런, 결정 사이클 `settings-dialog` SD-1~SD-6 · SD-A1~SD-A19 · R13-U1~U4. 기준 PRD v4.14 · 플로우 v5.17a · AI v4.12a · 데이터 모델 v4.12a, Figma 없음). **신설 5.11**: 탭 4개(`account` · `ai-connection` · `policies` · `feedback`, 아이콘 `UserRound`·`PlugZap`·`FileText`·`MessageSquarePlus`)와 옛 섹션 ID 호환표, 크기 `md:max-w-[760px] lg:max-w-[880px]` · 높이 `min(640px,…)` · 탭 목록 `12rem`(v5.10 `max-h-[500px]`·`h-[480px]`·`700/800`에서), 좁은 화면 4칸 탭 줄, AI 연결 경고 점 유지, 미저장 확인 `UnsavedChangesConfirm`(커리어 모달 OD-C1과 다른 규칙), 5.11.1 계정 탭(섹션 단위 저장 `SectionSaveBar`, 쌍 행 `JobInterestRows`, 최종 학력 묶음 `HighestEducationFields`, 위험 구역), 5.11.2 AI 연결 탭(공급자 라디오 행 `ProviderRow`, 사용량 공급자 탭 + 교차 표 `AiUsageByProvider`), 5.11.3 약관 탭(문서 4행 + `Switch` 선택 동의 2개 + 원칙 줄), 5.11.4 개선 요청 탭(링크 / 준비 중). **variant 추가**: `button` `destructive-outline`. **2장**: `switch` 행 추가, `tabs`·`table` 쓰는 곳 추가. **이름 이전**: `ProviderCard` → `ProviderRow`(사용처 `account/provider-card.tsx`·`ai-connection-panel.tsx`·`key-connect-flow.tsx`·`ai-status-line.tsx`, 앵커 `provider-card-{p}` → `provider-row-{p}`), 섹션 ID `withdraw` → 탭 `account`(사용처 `app/(dashboard)/settings/withdraw/page.tsx`·`account/withdraw-form.tsx`), `ai-usage` 삭제(사용처 `ai-connection-panel.tsx` 사용량 입구, `settings-section-list.ts`·`settings-sections.tsx`). **없앤 것**: 섹션 7개 + "화면" 섹션(테마는 계정 메뉴 스위치 — 1.1·Q-2), 5.7 S-40 카드·사용량 입구·원칙 줄, S-42 합계 카드·공급자별 표·고지 sticky. **고친 것**: 3.1·3.2 `profile` 근거(칩 그대로, C-02 이동 자리에 한 줄), 3.18 AI 연결하기 목적지·5.1 AI 상태 줄 "섹션" → "탭", 5.6 다이얼로그 겹침 예외, 1.4 `max-w-form`·5.2 폼 화면·A2 머리에서 ~~S-04~~ 정리, 6 A1 S-24·S-30(문서 4개, AI 데이터 처리 페이지). 8.2 G-62~G-74, 8.4 P-22~P-26. 다른 토큰 변경 없음 |

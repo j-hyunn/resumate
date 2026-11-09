@@ -11,7 +11,6 @@ import type {
 } from "@/types/db"
 import { mockRequest } from "@/lib/mock/store"
 import { mockV45DeletionImpact, mockV45Delete } from "@/lib/mock/career-v45"
-import { countsAsDraft } from "./labels"
 import type { MockDb } from "@/lib/mock/fixtures"
 import * as applicationActions from "@/server/actions/application"
 import * as draftActions from "@/server/actions/draft"
@@ -252,6 +251,8 @@ async function mockDeletionImpact(entityType: DeletionEntityType, entityId: stri
     if (!e.application_project_id) continue
     const b = bucket(e.application_project_id)
     if (e.owner_type === "insight") b.insights.add(e.owner_id)
+    // (v5.20, CF-1) 자소서 정본 문항·블록 근거 — 서류는 1행이라 수가 0 또는 1이다
+    if (e.owner_type === "application_document") b.drafts.add(e.owner_id)
     if (e.owner_type === "draft_section") {
       b.sections.add(e.owner_id)
       const section = db.draft_sections.find((s) => s.id === e.owner_id)
@@ -385,7 +386,9 @@ export async function getApplicationDeletionImpact(applicationProjectId: string)
       const db = await mockRequest(400)
       return {
         insights: db.insights.filter((i) => i.application_project_id === applicationProjectId).length,
-        drafts: db.drafts.filter((d) => d.application_project_id === applicationProjectId && countsAsDraft(d)).length,
+        // (v5.20, CF-1·CF-A14) 서류는 자소서 정본 1행뿐이다 — 옛 `drafts` 테이블이 아니라
+        // `application_documents`를 센다(0 또는 1). 화면은 이 수를 보이지 않고 "자소서" 유무만 쓴다
+        drafts: db.application_documents.filter((d) => d.application_project_id === applicationProjectId).length,
         stage_events: db.application_stage_events.filter((e) => e.application_project_id === applicationProjectId).length,
       }
     },
@@ -421,6 +424,7 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   db.jd_requirements = db.jd_requirements.filter((r) => !jdIds.includes(r.job_description_id))
   db.insights = db.insights.filter((i) => i.application_project_id !== applicationProjectId)
   db.drafts = db.drafts.filter((d) => !draftIds.includes(d.id))
+  db.application_documents = db.application_documents.filter((d) => d.application_project_id !== applicationProjectId)
   db.draft_sections = db.draft_sections.filter((s) => !draftIds.includes(s.draft_id))
   db.draft_section_sources = db.draft_section_sources.filter((s) => s.application_project_id !== applicationProjectId)
   db.evidence_links = db.evidence_links.filter((e) => e.application_project_id !== applicationProjectId)

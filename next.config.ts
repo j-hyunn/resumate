@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: "/policies", destination: "/policies/privacy", permanent: true },
-      // retired S-09 · S-34 edit pages → S-08 (UQ-428); retired S-20 · S-22 · S-33 · S-37 → S-31 / S-13 (v5.19, RM-1)
+      // retired S-09 · S-34 edit pages → S-08 (UQ-428); 자기소개서 관리 옛 주소 → S-46 / S-13 (v5.20, CF-1·CF-7)
       ...LEGACY_REDIRECTS,
     ];
   },

@@ -6,15 +6,20 @@ import { EmptyState, ErrorState } from "@/components/common/state-views"
 import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { KanbanBoard, type BoardData } from "@/components/board/kanban-board"
+import { KanbanBoard, type BoardData, type CoverLetterLabelMap } from "@/components/board/kanban-board"
 import { getBoard } from "@/lib/data/applications"
+import { coverLetterProgressLabel, listCoverLetterSlotCounts } from "@/lib/data/cover-letters"
 import { STAGE_ORDER } from "@/lib/data/labels"
 import { getPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 
 /**
  * S-39 지원 현황 보드 — 4열 (v5.19, RM-2: C-14 팝업 없음, 보드에 AI 잠금 상태 없음).
- * ?state=: loading · error · unauth · empty · move-failed (모든 이동이 실패 → 원위치 + 토스트)
+ * ?state=: loading · error · unauth · empty · move-failed (모든 이동이 실패 → 원위치 + 토스트) ·
+ * cl-pending (자소서 수 조회가 아직 백엔드에 없을 때 — 배지 없음)
+ *
+ * (v5.20, CF-3 / decisions 4.23 UI 5) 카드의 서류 쪽 표시는 "자소서 작성 중 / 작성됨" 배지 하나다
+ * (`filled_slot_count` · `slot_count`). 서류 수·초안 수 표시는 없다.
  */
 type Props = {
   params: Promise<Record<string, never>>
@@ -43,6 +48,25 @@ function BoardSkeleton() {
   )
 }
 
+/**
+ * 자소서 작성 상태는 보드의 곁가지 표시다 — `listCoverLetterSlotCounts()`는 아직 real 분기가 없어
+ * (`application_documents` 연결 대기, DM 2.7.3) 실패하면 배지만 접고 보드는 그대로 보인다. [UI-가정]
+ */
+async function readCoverLetterLabels(): Promise<CoverLetterLabelMap> {
+  let counts
+  try {
+    counts = await listCoverLetterSlotCounts()
+  } catch {
+    return {}
+  }
+  const labels: CoverLetterLabelMap = {}
+  for (const [id, c] of Object.entries(counts)) {
+    const label = coverLetterProgressLabel(c)
+    if (label) labels[id] = label
+  }
+  return labels
+}
+
 async function Screen({ searchParams }: Props) {
   const state = getPreviewState(await searchParams)
   const crumbs = <PageCrumbs items={[{ label: "지원 현황" }]} />
@@ -65,6 +89,7 @@ async function Screen({ searchParams }: Props) {
     )
 
   const raw = await getBoard()
+  const coverLetterLabels = state === "cl-pending" ? {} : await readCoverLetterLabels()
   const board: BoardData =
     state === "empty" ? (Object.fromEntries(STAGE_ORDER.map((s) => [s, []])) as unknown as BoardData) : raw
   const total = STAGE_ORDER.reduce((n, s) => n + board[s].length, 0)
@@ -92,7 +117,7 @@ async function Screen({ searchParams }: Props) {
           }
         />
       ) : (
-        <KanbanBoard board={board} failMove={state === "move-failed"} />
+        <KanbanBoard board={board} coverLetterLabels={coverLetterLabels} failMove={state === "move-failed"} />
       )}
     </div>
   )

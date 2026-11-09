@@ -387,7 +387,7 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   aiRetry?: boolean
   /**
    * v5.3 (A3 request 5): block form — first description line (`font-medium`) above the 시각·보존 줄,
-   * e.g. S-19 경력기술서 실패 "생성에 실패했어요. 다시 시도하면 새 초안으로 처음부터 만들어요".
+   * e.g. 초안 턴 실패 "생성에 실패했어요. 다시 시도하면 새 초안으로 처음부터 만들어요".
    */
   lead?: React.ReactNode
   className?: string

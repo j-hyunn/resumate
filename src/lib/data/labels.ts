@@ -82,8 +82,10 @@ export function aiStageLabel(
 export const AI_USAGE_FEATURE_LABELS: Record<AiUsageFeature, string> = {
   jd_extraction: "요건 추출",
   insight: "인사이트",
-  career_description: "경력기술서",
-  cover_letter: "자소서 문항 답변", // 02 S-42 (D-UX-23)
+  // (v5.20, CF-1) 경력기술서 폐기. 값은 과거 사용량 행 보존용으로 CHECK에 남아 있고(decisions 4.23
+  // 백엔드 7), S-42 표는 usage-display.ts가 두 값을 한 줄로 합쳐 보인다
+  career_description: "자기소개서 작성 AI 채팅",
+  cover_letter: "자소서", // (v5.20, CF-U3)
   writing_chat: "AI 작성 대화",
   key_verification: "연결 확인",
   // [UI-가정] Should features, not shown in the display table
@@ -254,16 +256,33 @@ export function kstToday(): string {
 }
 
 /**
- * "서류 초안 수" (S-13 · S-31 · S-39, C-05 N): 경력기술서 `composing` (첫 생성 중단, Q53-7) has no user
- * content and isn't counted. 자소서 `composing` holds written questions and is.
+ * @deprecated (v5.20, CF-A14) 화면 "서류 수"가 없어졌다 — S-13·S-39·C-05는 수를 보이지 않고
+ * S-39 카드는 `filled_slot_count`·`slot_count`로 "자소서 작성 중 / 작성됨"만 보인다
+ * (`coverLetterProgressLabel`, lib/data/cover-letters.ts). 폐기될 `drafts` 테이블 집계에만 남아 있다.
  */
 export function countsAsDraft(d: { draft_type: string; status: string }): boolean {
   return !(d.draft_type === "career_description" && d.status === "composing")
 }
 
-/** Default name "새 자기소개서 (2026-10-28)" (S-14, KST date; R4 CR-23 [가정] = private.application_default_name) */
+/**
+ * Default name "새 자기소개서 (2026-10-28)" (S-14, KST date; CR-23 [가정] = private.application_fallback_name).
+ * 기업 명이 있을 때의 이름은 "{기업 명} 자기소개서"(v5.20, CF-A7 — `composeCoverLetterName`).
+ */
 export function defaultApplicationName(createdAt: string | Date): string {
   return `새 자기소개서 (${kstDateString(createdAt)})`
+}
+
+/**
+ * S-14 이름 규칙 (v5.20, CF-A7 `[가정]` — v5.3의 "회사명 – 포지션명" 대체): 지원 기업이 있으면
+ * **"{기업 명} 자기소개서"**. `application_projects.name`은 100자까지라 넘으면 기업 명 앞쪽을 남기고
+ * 줄인다 `[가정]`. 기업 명이 없으면 null → 호출하는 쪽이 기본 이름을 쓴다.
+ * 이미 있는 자기소개서의 이름("회사명 – 포지션명")은 바꾸지 않는다 (DM v4.15 `[가정]`).
+ */
+export function composeCoverLetterName(companyName: string | null | undefined): string | null {
+  const company = companyName?.trim()
+  if (!company) return null
+  const suffix = " 자기소개서"
+  return `${company.slice(0, 100 - suffix.length)}${suffix}`
 }
 
 /** application_projects.name display: null → "새 자기소개서", default → "새 자기소개서 (날짜)" (S-14 [가정], KST, CR-23) */
@@ -371,10 +390,10 @@ export const AI_TRAINING_NOTICE =
 export const AI_FEATURE_NAMES = {
   requirements: "요건 정리",
   insight: "인사이트",
-  career_description: "경력기술서",
-  // UX v5.14 U36-6: C-18 기능 이름 = "자소서 문항 답변" ("자기소개서"는 지원 건 이름, CR-23)
-  cover_letter: "자소서 문항 답변",
-  draft_source_ranking: "AI 근거 선택",
+  // (v5.20, CF-U3 확정) 기능 이름 = "자소서" — 지원 건·서류 자체는 "자기소개서"(CR-23)이고 S-46의
+  // 탭 이름도 "자소서"다. (v5.20, CF-1) `career_description`(경력기술서)·`draft_source_ranking`
+  // (AI 근거 선택)은 기능이 없어져 표에서 뺐다.
+  cover_letter: "자소서",
   writing_chat: "AI 작성 대화",
   // [UI-가정] S-42 entry (not in the leader list)
   usage: "AI 사용량",

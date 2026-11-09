@@ -41,7 +41,7 @@ describe("L-01 menu (v5.19, RM-1)", () => {
     expect(MENU_ITEMS.map((m) => m.key)).toEqual(["career", "applications", "board"])
   })
   it("maps application sub-screens to 자기소개서 관리", () => {
-    expect(menuKeyForPath(routes.applicationInsight("ap-1"))).toBe("applications")
+    expect(menuKeyForPath(routes.coverLetter("ap-1", { tab: "insight" }))).toBe("applications")
     expect(menuKeyForPath(routes.board())).toBe("board")
   })
 })

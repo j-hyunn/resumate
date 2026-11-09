@@ -60,7 +60,7 @@ export function useDeleteApplication({ after }: { after?: () => void } = {}) {
 
 /**
  * C-10 → original screen: restore in-progress settings once on entry (clears the return target).
- * `onRestore` receives the stored params (경력기술서 포함 항목 등).
+ * `onRestore` receives the stored params.
  */
 export function useRestoreReturnParams(
   applicationProjectId: string,

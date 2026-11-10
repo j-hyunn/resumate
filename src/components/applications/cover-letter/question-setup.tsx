@@ -18,6 +18,7 @@
  */
 import { toast } from "sonner"
 import { isAiRejected, notifyAiRejected } from "@/components/common/ai-rejection"
+import { useAiConnection, useAiConnectionLoaded } from "@/components/common/ai-connection-context"
 import { submitFailedMessage } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react"
@@ -84,8 +85,16 @@ export function QuestionSetup({
     else if (e?.char_limit) limitRefs.current[focusIndex]?.focus()
   }, [focusIndex, errors])
 
+  // FL-03 "키가 있고 요건이 아직 없으면 AI-01을 먼저": `extractFirst`(jd-state)는 **요건이 없는지만** 본다 — AI 연결
+  // 여부는 보지 않는다(옛 S-17·S-19는 AiRunButton의 C-18 잠금이 막아 줬다). 그래서 키 없는 사용자가 [작성 시작]을
+  // 누르면 추출이 `ai_not_connected`로 거절돼 시작이 안 됐다(2026-11-10 사용자 보고 — 처음엔 조용히, 거절을 알리게 한
+  // 뒤엔 "AI 연결하면 사용할 수 있어요" 토스트). AI를 지금 쓸 수 있을 때만 먼저 추출하고, 아니면(키 없음·키 무효·
+  // 동의 필요 `[UI-가정]`) 건너뛰고 바로 저장한다 — 요건은 나중에 채용 공고 탭에서 정리한다.
+  const connection = useAiConnection()
+  const connectionLoaded = useAiConnectionLoaded()
+  const aiUsable = Boolean(connection?.active_provider) && connection?.key_status !== "invalid" && !connection?.consent_required
   const req = useRequirementsFirst(applicationProjectId, {
-    needed: extractFirst,
+    needed: extractFirst && aiUsable,
     rerunLabel: "자기소개서 작성 시작",
     previewFail: extractFailPreview,
     jdEditFrom: { from: "cover_letter" },
@@ -221,7 +230,7 @@ export function QuestionSetup({
             <Plus aria-hidden />
             문항 추가 <span className="tabular-nums">{forms.length}/{COVER_LETTER_MAX_QUESTIONS}</span>
           </Button>
-          <Button disabled={starting || req.busy} onClick={() => void startWriting()}>
+          <Button disabled={starting || req.busy || (extractFirst && !connectionLoaded)} onClick={() => void startWriting()}>
             {starting || req.busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
             자기소개서 작성 시작
           </Button>

@@ -93,6 +93,8 @@ export interface CoverLetterScreenData {
   source_url: string | null
   /** null = 문항 설정 상태 (CF-A11) */
   document: ApplicationDocument | null
+  /** 문항 설정 상태의 첫 문항 `question_id` — **서버가 만든다**(서버 HTML과 하이드레이션이 같은 id를 쓰게) */
+  seed_question_ids: string[]
   /** `getEvidence("application_document", doc.id)` — C-11 */
   evidence: Record<string, EvidenceView[]>
   /** 키가 있고 요건이 아직 없다 → [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 */
@@ -146,7 +148,7 @@ export function CoverLetterScreen({
   const docRef = React.useRef<ApplicationDocument | null>(data.document)
   // 첫 폼은 **한 번만** 만든다 — 만들 때마다 새 `question_id`가 생겨 기준선과 어긋나지 않게
   const [initialForms] = React.useState<QuestionForm[]>(() => {
-    const forms = previewForms(data.document, previewState)
+    const forms = previewForms(data.document, previewState, data.seed_question_ids)
     slots.markUsed(forms.map((f) => f.slot))
     return forms
   })
@@ -770,21 +772,21 @@ export function CoverLetterScreen({
  * - `questions-max` → 5문항("+ 문항 추가" 비활성)
  * - `empty-answers` → 정본 행의 제목·답변을 비운 작성 상태(빈 상태 상자)
  */
-function previewForms(doc: ApplicationDocument | null, state: string | null): QuestionForm[] {
+function previewForms(doc: ApplicationDocument | null, state: string | null, ids: readonly string[]): QuestionForm[] {
   if (state === "questions-invalid") {
-    const forms = seedQuestionForms()
+    const forms = seedQuestionForms(ids)
     forms[0] = { ...forms[0], question_text: "" }
     forms[1] = { ...forms[1], char_limit: "" }
     return forms
   }
   if (state === "questions-max") {
-    const forms = seedQuestionForms()
+    const forms = seedQuestionForms(ids)
     // 기본 3문항(q_1~q_3) 다음 번호를 받는다 (q_4·q_5)
     while (forms.length < COVER_LETTER_MAX_QUESTIONS)
-      forms.push({ ...newQuestionForm(nextSlot(forms.map((f) => f.slot))), question_text: `추가 문항 ${forms.length + 1}` })
+      forms.push({ ...newQuestionForm(nextSlot(forms.map((f) => f.slot)), ids[forms.length]), question_text: `추가 문항 ${forms.length + 1}` })
     return forms
   }
-  if (!doc) return seedQuestionForms()
+  if (!doc) return seedQuestionForms(ids)
   const forms = toQuestionForms(doc.body)
   if (state === "empty-answers") return forms.map((f) => ({ ...f, answer_title: "", body: "", blocks: [] }))
   return forms

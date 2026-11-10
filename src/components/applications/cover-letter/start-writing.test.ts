@@ -27,3 +27,33 @@ describe("[자기소개서 작성 시작]은 실패를 삼키지 않는다", () 
     expect(src).toMatch(/catch \(err\) \{\s*\/\/[^\n]*\n\s*setBusy\(false\)\s*\n\s*throw err/)
   })
 })
+
+// 회귀 가드 — 2026-11-10 하이드레이션 오류: 문항 설정 상태의 기본 문항 `question_id`를 렌더마다 `randomUUID()`로
+// 만들어 서버 HTML과 브라우저의 `id`·`htmlFor`가 어긋났다. id는 서버가 한 번 만들어 내려 준다.
+import { seedQuestionForms, newQuestionForm } from "./question-form"
+
+describe("문항 설정 상태의 첫 문항 id는 서버가 준 값을 쓴다 (하이드레이션)", () => {
+  it("seedQuestionForms(ids)는 넘겨받은 id를 그대로 쓴다 — 같은 ids면 같은 폼", () => {
+    const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"]
+    expect(seedQuestionForms(ids).map((f) => f.question_id)).toEqual(ids)
+    expect(seedQuestionForms(ids)).toEqual(seedQuestionForms(ids))
+    expect(newQuestionForm("q_4", "44444444-4444-4444-8444-444444444444").question_id).toBe("44444444-4444-4444-8444-444444444444")
+  })
+
+  it("페이지(서버)가 seed_question_ids를 만들고 화면은 그것으로 첫 폼을 만든다", () => {
+    const page = readFileSync(join(__dirname, "../../../app/(page)/(gated)/applications/[id]/cover-letter/page.tsx"), "utf8")
+    expect(page).toMatch(/seed_question_ids:\s*Array\.from\(/)
+    const screen = read("cover-letter-screen.tsx")
+    expect(screen).toMatch(/previewForms\(data\.document, previewState, data\.seed_question_ids\)/)
+    expect(screen).not.toMatch(/seedQuestionForms\(\)/)
+  })
+})
+
+// 회귀 가드 — 2026-11-10 "작성 시작 누르면 AI 연결해야만 쓸 수 있다고 토스트": 요건 선행 추출 판정이 AI 연결을 보지 않았다.
+describe("요건 선행 추출은 AI를 쓸 수 있을 때만 (FL-03)", () => {
+  it("needed = 요건 없음 && AI 사용 가능 — 키 없으면 추출 없이 바로 저장", () => {
+    const src = read("question-setup.tsx")
+    expect(src).toMatch(/needed:\s*extractFirst && aiUsable/)
+    expect(src).toMatch(/aiUsable = Boolean\(connection\?\.active_provider\)/)
+  })
+})

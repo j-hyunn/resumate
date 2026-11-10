@@ -317,3 +317,47 @@ cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && supab
 ```bash
 cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv /tmp/20261113004700_r15_drop_drafts.sql supabase/migrations/
 ```
+
+## 12. 릴리스 완료 (2026-11-10) — 운영 반영 끝
+
+모든 원격 쓰기는 사용자가 이 세션에서 직접 승인했다. 각 단계 승인: "성공하면 진행"(법무 판 push + 머지) · "올려"(파괴).
+
+### 순서와 결과
+1. **#70 프리뷰 빌드 success를 확인**한 뒤 진행했다(운영 빌드와 같은 `next build`).
+2. **법무 판 `20261113004695` push.** dry-run으로 1개만 올라가는 것을 확인했고, 파괴 파일은 빼 두었다.
+   - 결과: 세 문서(terms·privacy·ai_data_use) 모두 `current_policy_version = 2026-11-09`, `requires_reconsent = false` → **재동의 없음**.
+3. **#70 머지**(`7a66c3e`, merge commit)를 법무 판 push **직후** 했다 → **운영 배포**.
+   - #70이 #69를 통째로 포함했으므로 **#69는 머지됨으로 자동 표시**됐다.
+   - 이어서 **#68(기획 문서) 머지**(`ccf3a79`).
+   - 머지 전 점검:
+     - #70은 백엔드 최신 `043226e`까지 포함했다.
+     - 백엔드 소유 경로가 #69 HEAD와 같았다.
+     - main과 충돌이 없었다.
+4. **배포 확인**
+   - Vercel 배포 `7a66c3e`·`ccf3a79` **둘 다 success**(GitHub 커밋 상태).
+   - 운영 URL: `/` 200, `/applications` → `/sign-in` 307(게이트 정상), 새 API `/api/job-descriptions/fetch`·`extract-preview` **401**(배포됨, 미인증).
+   - Supabase postgres ERROR·FATAL **0건**(배포 뒤 창).
+   - ⚠ **Vercel 런타임 오류는 확인하지 못했다.** Vercel MCP 403이고 CLI가 설치되지 않았다.
+5. **파괴 `20261113004700` push**(사용자 "올려").
+   - 직전 SELECT: `drafts`·`draft_sections`·`draft_section_sources`·`draft_section` 근거 **모두 0행**.
+   - dry-run으로 1개만 올라가는 것을 확인했다.
+   - **가드 통과**.
+   - 결과:
+     - 옛 테이블 3개 **0개 남음**, 옛 서류 RPC **0개 남음**.
+     - 남길 헬퍼 2개(`education_display_name`·`trim_js_whitespace`)는 그대로다.
+     - `evidence_links_owner_type_check` = `insight`·`chat_message`·`application_document`.
+     - **SECURITY DEFINER WARN 18 → 13**(옛 서류 RPC 5건 drop, 신규 0).
+     - INFO `account_deletion_logs`·Auth WARN 2건은 기존 그대로다.
+
+### 최종 원격 상태
+- 운영 마이그레이션 마지막: **`20261113004700`** — **R15 21개 전부 적용**.
+- **되돌릴 수 없는 지점 모두 지났다.**
+  - 코드 배포로 `writing_chats.project_id` not null 해제와 `ai_jobs` CHECK 완화의 되돌림 창이 닫혔다.
+  - `004700`으로 옛 서류 스키마가 사라졌다.
+  - 지운 사용자 데이터는 0행이다.
+
+### 남은 것
+- **브라우저 확인**: 실제 데이터로 S-13 → S-14 → S-46 → AI 패널 → 저장을 눌러 본 확인이 아직 없다.
+- **Vercel 런타임 오류**: 대시보드에서 직접 확인해야 한다.
+- **출시 전 법무 확인**(사용자 몫): 사람인·잡코리아 이용약관의 자동 수집 제한(CF-10).
+- **R15 범위 밖 후속**: invoker 저장 RPC 대상 테이블(`profile_job_interests` 등)의 직접 쓰기 우회 감사.

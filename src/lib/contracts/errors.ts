@@ -46,7 +46,7 @@ export type GenericErrorCode = (typeof APP_ERROR_CODES)[number];
  */
 export type ErrorCode = GenericErrorCode | AiErrorCode | (string & {});
 
-/** `details`: optional machine data for a specific code (e.g. S7 `career_description_in_progress` → `{ jobId }`). */
+/** `details`: optional machine data for a specific code (e.g. R15 `too_many_questions` → `{ limit, current }`). */
 export type ErrorBody = { code: ErrorCode; message: string; details?: Record<string, unknown> };
 export type ErrorResponse = { error: ErrorBody };
 export type ActionResult<T> = { data: T } | ErrorResponse;

@@ -23,7 +23,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"c0000000-0000-0000-0000-000000000003","role":"authenticated"}';
 select is(public.create_application_project('c0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args), '회사', '포지션')
             - 'application_project_id' - 'job_description_id',
-          '{"name":"회사 – 포지션","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true}'::jsonb,
+          '{"name":"회사 자기소개서","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true,
+            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
           'no active provider: passes, saved key-less (D-30)');
 
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';

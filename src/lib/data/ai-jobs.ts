@@ -39,7 +39,7 @@ function toJobView(job: AiJob, ap: { id: string; name: string | null; name_sourc
   if (ap) {
     switch (job.job_type) {
       case "insight":
-        result_href = routes.applicationInsight(ap.id)
+        result_href = routes.coverLetter(ap.id, { tab: "insight" })
         done_message = `${name} 인사이트가 준비됐어요`
         break
     }

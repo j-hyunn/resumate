@@ -15,7 +15,7 @@ export interface ReturnTargetInput {
   /**
    * 진행 중 설정 restored on return. Settled keys (A2 request 7):
    * - cover_letter: `{ draft_id }` (S-18 문항 설정 화면의 초안)
-   * - career_description: `{ included_project_ids }`
+   * - (v5.20, CF-1) career_description 폐기
    * - insight (보완점): `{ gap_item_key, requirement_ids }`
    */
   params?: Record<string, unknown>

@@ -1,65 +1,17 @@
-import type { AliasEntry, AliasMap } from "./aliases";
+import type { AliasMap } from "./aliases";
 import type { CareerRows } from "./career-rows";
 
 /**
- * Document source selection helpers (S7: AI-03 포함 항목, AI-04 사용한 경력·프로젝트,
- * AI-11 기본 선택). Pure functions over career rows and pack alias maps.
+ * Document source selection helpers (AI-04 문항 근거: 사용자가 고른 경력·프로젝트).
+ * Pure functions over career rows and pack alias maps.
+ *
+ * (R15, CF-1) The 경력기술서 helpers (`MAX_DRAFT_PROJECTS`, `packProjects`,
+ * `deriveSelection`, `selectionFromPrioritiesWithAliases`) went with AI-03·AI-11.
  */
 
-/** AI-03 card: "프로젝트 최대 8개" [가정]; AI-11 includes at most 8 as well. */
-export const MAX_DRAFT_PROJECTS = 8;
-
-export type DraftSourceSelection = {
-  includedProjectIds: string[];
-  /** Every pack project: the order the screen lists them in (included first). */
-  projectOrder: string[];
-  includedExperienceIds: string[];
-  includedEducationIds: string[];
-};
-
-/** Pack projects in pack order (experience → education → standalone; latest first), with their parent. */
-export function packProjects(aliases: AliasMap): Array<{ id: string; alias: string; parent: AliasEntry | null; entry: AliasEntry }> {
-  const out: Array<{ id: string; alias: string; parent: AliasEntry | null; entry: AliasEntry }> = [];
-  for (const entry of aliases.values()) {
-    if (entry.sourceType !== "project") continue;
-    const parentAlias = entry.parents[0];
-    out.push({ id: entry.id, alias: entry.alias, entry, parent: parentAlias ? (aliases.get(parentAlias) ?? null) : null });
-  }
-  return out;
-}
-
-/** Included experiences/educations derived from included projects (AI-11 card: "소속 프로젝트에서 서버가 파생"), pack order. */
-export function deriveSelection(aliases: AliasMap, includedProjectIds: readonly string[], restOrder?: readonly string[]): DraftSourceSelection {
-  const projects = packProjects(aliases);
-  const byId = new Map(projects.map((p) => [p.id, p]));
-  const included = includedProjectIds.filter((id, i) => byId.has(id) && includedProjectIds.indexOf(id) === i).slice(0, MAX_DRAFT_PROJECTS);
-  const includedSet = new Set(included);
-  const rest = (restOrder ?? projects.map((p) => p.id)).filter((id) => byId.has(id) && !includedSet.has(id));
-  const restSet = new Set(rest);
-  const tail = projects.map((p) => p.id).filter((id) => !includedSet.has(id) && !restSet.has(id));
-  const parents = projects.filter((p) => includedSet.has(p.id) && p.parent).map((p) => p.parent as AliasEntry);
-  const ordered = (type: "experience" | "education") => {
-    const ids = new Set(parents.filter((p) => p.sourceType === type).map((p) => p.id));
-    return [...aliases.values()].filter((e) => e.sourceType === type && ids.has(e.id)).map((e) => e.id);
-  };
-  return {
-    includedProjectIds: included,
-    projectOrder: [...included, ...rest, ...tail],
-    includedExperienceIds: ordered("experience"),
-    includedEducationIds: ordered("education"),
-  };
-}
-
-/** Insight `strategy.project_priorities` (AI-03 기본 선택 (1)): by rank; projects gone from the pack are skipped. */
-export function selectionFromPrioritiesWithAliases(aliases: AliasMap, priorities: ReadonlyArray<{ project_id: string; rank: number }>): DraftSourceSelection {
-  const ids = [...priorities].sort((a, b) => a.rank - b.rank).map((p) => p.project_id);
-  return deriveSelection(aliases, ids);
-}
-
 /**
- * Career rows narrowed to a selection (AI-03 "선택한 경력·교육·프로젝트만", v4.5:
- * affiliated STAR, standalone role/description/skills/deliverables; AI-04 user
- * mode). `experienceIds`/`educationIds` are included as headers (their own
+ * Career rows narrowed to a selection (AI-04 사용자 지정 근거; v4.5: affiliated
+ * STAR, standalone role/description/skills/deliverables). `experienceIds`/`educationIds` are included as headers (their own
  * fields); only `projectIds`
  * come with them, unless the parent is in `whole*Ids` (all its projects).
  * Parents of selected projects are added. Skills: those tagged on included projects.
@@ -98,9 +50,22 @@ export function filterCareerRows(
   };
 }
 
-/** "회사명 › 프로젝트명" label for a source (C-11 표시, draft_section_sources.source_label). */
+/**
+ * The one rule for a source's display label: "부모 › 프로젝트" with empty parts dropped.
+ * Parent = experience `company_name` / education display name (ED-3 `educationDisplayName`);
+ * project = `name`. A standalone project is its name alone; a bare experience / education is its
+ * own label.
+ *
+ * Shared by the SSE `sources_selected` card (`sourceLabel`, from the pack's alias labels) and the
+ * reopened 서류 대화's `sourceLabels` (R15 후속 4, from the rows) so the two strings are identical.
+ */
+export function joinSourceLabel(parentLabel: string | null | undefined, projectLabel: string | null | undefined): string {
+  return [parentLabel, projectLabel].filter((v): v is string => !!v && v.trim() !== "").join(" › ");
+}
+
+/** "회사명 › 프로젝트명" label for a source (C-11 표시, 근거 카드 `sources_selected`). */
 export function sourceLabel(aliases: AliasMap, refs: { projectAlias: string | null; parentAlias: string | null }): string {
   const parent = refs.parentAlias ? aliases.get(refs.parentAlias) : undefined;
   const project = refs.projectAlias ? aliases.get(refs.projectAlias) : undefined;
-  return [parent?.label, project?.label].filter((v): v is string => !!v && v.trim() !== "").join(" › ");
+  return joinSourceLabel(parent?.label, project?.label);
 }

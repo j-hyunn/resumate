@@ -426,7 +426,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     const impact = await getDeletionImpact(user, { entityType: "project", entityId: ids.project });
     expect("affected_results" in impact && impact.affected_results.by_application_project).toEqual([
       // v1, v2, v3 (QA-S6-01 retry) + the R2 cross-provider retry row.
-      expect.objectContaining({ application_project_id: project, insights: 4, drafts: 0, draft_sections: 0 }),
+      expect.objectContaining({ application_project_id: project, insights: 4, documents: 0, document_sections: 0 }),
     ]);
   });
 

@@ -129,7 +129,7 @@ export function InsightView(props: InsightViewProps) {
     application_project_id: apId,
     feature: "insight",
     application_name: applicationName,
-    href: routes.applicationInsight(apId),
+    href: routes.coverLetter(apId, { tab: "insight" }),
   }
   const ready = readiness.features.insight.ready
   const connection = useAiConnection(readiness.ai_connection)
@@ -195,7 +195,7 @@ export function InsightView(props: InsightViewProps) {
         readiness={readiness}
         applicationProjectId={apId}
         applicationName={applicationName}
-        returnHref={routes.applicationInsight(apId)}
+        returnHref={routes.coverLetter(apId, { tab: "insight" })}
         activeChatId={props.activeChatId}
         chatFailure={props.gateChatFailure}
       />
@@ -250,19 +250,19 @@ export function InsightView(props: InsightViewProps) {
               code={failedCategory}
               {...errorInfo}
               onRetry={preview.failed ? undefined : job.error || late?.job ? () => void job.retry() : () => void startFromNotice()}
-              retryHref={preview.failed ? routes.applicationInsight(apId) : undefined}
+              retryHref={preview.failed ? routes.coverLetter(apId, { tab: "insight" }) : undefined}
               retrying={job.retrying || (!job.error && starting)}
               refusal={preview.refusal ?? job.refusal ?? startRefusal}
               rerunLabel="다시 생성"
               // Q53-2 · C-20 "입력 원인 실패의 이동": 요건이 없으면 S-15 공고 원문 수정, 있으면 S-15 "요건이 있는 공고" 안내
               inputHref={
                 !isInputCausedJdFailure(failedCategory)
-                  ? routes.applicationJd(apId)
+                  ? routes.coverLetter(apId, { tab: "jd" })
                   : hasRequirements
-                    ? routes.applicationJd(apId, { from: "insight", cause: failedCategory as "not_a_jd" | "input_too_long" | "safety_blocked" })
-                    : routes.applicationJd(apId, { edit: 1, from: "insight" })
+                    ? routes.coverLetter(apId, { tab: "jd", from: "insight", cause: failedCategory as "not_a_jd" | "input_too_long" | "safety_blocked" })
+                    : routes.coverLetter(apId, { tab: "jd", edit: 1, from: "insight" })
               }
-              inputLabel={isInputCausedJdFailure(failedCategory) ? (hasRequirements ? "공고 확인하기" : "공고 원문 고치기") : "JD·요건 보기"}
+              inputLabel={isInputCausedJdFailure(failedCategory) ? (hasRequirements ? "공고 확인하기" : "공고 원문 고치기") : "채용 공고 보기"}
               hideFixCaption={isInputCausedJdFailure(failedCategory) && hasRequirements}
               reduceTarget="공고 원문"
             />

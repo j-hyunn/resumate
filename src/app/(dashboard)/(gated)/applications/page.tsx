@@ -1,20 +1,26 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Briefcase, KanbanSquare, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Briefcase } from "lucide-react"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
 import { PageHeader } from "@/components/common/basics"
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/common/state-views"
 import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
-import { ApplicationFilters, ApplicationList } from "@/components/applications/application-list"
-import { AutoRefresh } from "@/components/applications/shared"
+import { ApplicationList, ApplicationSortNote } from "@/components/applications/application-list"
+import { AddApplicationLauncher } from "@/components/applications/add-application-launcher"
 import { getPreviewState } from "@/lib/preview-state"
-import { STAGE_ORDER } from "@/lib/data/labels"
-import { routes } from "@/lib/routes"
-import type { ApplicationStage } from "@/types/db"
-import { listApplicationProjects as listApplicationsForScreen } from "@/lib/data/applications"
+import { listCoverLetters } from "@/lib/data/cover-letters"
 
-// S-13 자기소개서 목록 (메뉴: 자기소개서 관리). ?state=: empty · loading · error · not-found · move-failed
+/**
+ * S-13 자기소개서 목록 (메뉴: 자기소개서 관리) — (v5.20 재작성, CF-3·CF-9·CF-A8).
+ *
+ * 머리 = 제목 "자기소개서 관리" + 바꿀 수 없는 표기 "최근 작성 순" + 주 버튼 [자기소개서 작성]
+ * (→ S-14 2단계 모달, `?new=1`). 정렬은 `created_at desc` 하나이고 정렬 선택·전형 단계 거르기·
+ * 검색·"보드로 보기"는 없다(CF-9). 행 → S-46.
+ *
+ * `?state=`: empty · loading · error · unauth · not-found
+ * S-14 모달: `?new=1[&from=board]` + 모달 자신의 `?state=`(5절 표 — step1 · fetching · fetch-failed ·
+ * extracting · extract-failed · step2 · close-confirm · creating · create-failed · invalid-source-url ·
+ * consent-required · key-invalid · key-missing)
+ */
 type Props = { params: Promise<Record<string, never>>; searchParams: Promise<Record<string, string | string[] | undefined>> }
 
 export default function Page({ params, searchParams }: Props) {
@@ -25,73 +31,37 @@ export default function Page({ params, searchParams }: Props) {
   )
 }
 
-function one(v: string | string[] | undefined) {
-  return Array.isArray(v) ? v[0] : v
-}
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
 
 async function Screen({ searchParams }: Props) {
   const sp = await searchParams
   const state = getPreviewState(sp)
   if (state === "not-found") notFound()
-  const sort = one(sp.sort) === "deadline" ? "deadline" : "last_activity"
-  const stageParam = one(sp.stage)
-  const stage = STAGE_ORDER.includes(stageParam as ApplicationStage) ? (stageParam as ApplicationStage) : null
+  // S-14 모달: 주소에는 화면 상태(`?new=1`)만 남고 입력 내용은 넣지 않는다 (CF-8)
+  const modalOpen = one(sp.new) === "1"
+  const fromBoard = one(sp.from) === "board"
 
-  const header = (
-    <PageHeader
-      title="자기소개서 관리"
-      actions={
-        <>
-          <Button variant="outline" asChild>
-            <Link href={routes.board()}>
-              <KanbanSquare aria-hidden />
-              보드로 보기
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href={routes.applicationNew()}>
-              <Plus aria-hidden />
-              자기소개서 추가
-            </Link>
-          </Button>
-        </>
-      }
-    />
-  )
+  const launcher = <AddApplicationLauncher open={modalOpen} fromBoard={fromBoard} previewState={state} />
 
   const body = await (async () => {
     if (state === "loading") return <ListSkeleton rows={5} />
     if (state === "error") return <ErrorState kind="error" />
     if (state === "unauth") return <ErrorState kind="unauth" />
-    const all = state === "empty" ? [] : await listApplicationsForScreen({ sort })
-    if (all.length === 0)
+    const rows = state === "empty" ? [] : await listCoverLetters()
+    if (rows.length === 0)
       return (
         <EmptyState
           icon={Briefcase}
           title="아직 자기소개서가 없어요"
-          description="지원하려는 공고를 붙여넣어 첫 자기소개서를 추가해 보세요. 커리어 정리 전에도 추가할 수 있어요"
-          actions={
-            <Button asChild>
-              <Link href={routes.applicationNew()}>
-                <Plus aria-hidden />
-                자기소개서 추가
-              </Link>
-            </Button>
-          }
+          // UX v5.20 S-13 상태 "빈 상태" 문구 그대로 (UQ-744 — "붙여넣어"를 URL 입력에 맞게 "넣어"로)
+          description="지원하려는 공고를 넣어 첫 자기소개서를 만들어 보세요. 커리어 정리 전에도 만들 수 있어요"
+          actions={<AddApplicationLauncher.Button />}
         />
       )
-    const rows = stage ? all.filter((r) => r.stage === stage) : all
     return (
       <div className="space-y-4">
-        <ApplicationFilters sort={sort} stage={stage} />
-        {/* v5.3 C-03: 작업 id 없는 인사이트 진행(축약형)은 서버 값 — 진행 중이면 다시 읽는다 */}
-        <AutoRefresh active={rows.some((r) => r.insight_status.kind === "generating" && !r.insight_job_id)} />
-        {rows.length === 0 ? (
-          // [UI-가정] 필터 결과 없음 문구
-          <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">이 전형 단계의 자기소개서가 없어요</p>
-        ) : (
-          <ApplicationList rows={rows} failMove={state === "move-failed"} />
-        )}
+        <ApplicationSortNote />
+        <ApplicationList rows={rows} />
       </div>
     )
   })()
@@ -99,8 +69,9 @@ async function Screen({ searchParams }: Props) {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <PageCrumbs items={[{ label: "자기소개서 관리" }]} />
-      {header}
+      <PageHeader title="자기소개서 관리" actions={<AddApplicationLauncher.Button />} />
       {body}
+      {launcher}
     </div>
   )
 }

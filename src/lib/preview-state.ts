@@ -63,8 +63,7 @@ export const PREVIEW_STATES = [
   "request-wait",
   // C-04 "마무리 중" (validated pending, edit / copy disabled)
   "finalizing",
-  // W5: S-19 중단 대기, 커리어 폼 저장 충돌
-  "stopping",
+  // W5: 커리어 폼 저장 충돌 ((v5.20, CL-7) S-19 초안 편집기 폐기로 `stopping`은 뺐다)
   "save-conflict",
   "multi-detail",
   // C-09 hint project_fields (A18)

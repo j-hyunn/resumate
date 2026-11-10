@@ -185,8 +185,14 @@ export function useLeaveGuard({ dirty, onSave, onDiscard }: { dirty: boolean; on
   return { dirty, navigate, pending, saving, cancel, leaveWithoutSaving, saveAndLeave, reloadDiscarding }
 }
 
-/** 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>. */
-export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
+/**
+ * 이탈 확인 다이얼로그 — X (계속 편집) + 2 actions (5.8, 2026-11 모달 개편). Rendered by <PageShell>.
+ *
+ * `hideSave`: "저장하고 나가기"를 두지 않는 화면용 (S-46 문항 설정 상태 — 저장 경로가
+ * [자기소개서 작성 시작] 하나라 이 자리에서 저장할 수 없다, CF-S3). 그러면 버튼 둘은
+ * "나가기" / "계속 작성"이다. 기본값은 지금 동작 그대로다.
+ */
+export function LeaveGuardDialog({ guard, hideSave = false }: { guard: LeaveGuardController; hideSave?: boolean }) {
   return (
     <AlertDialog open={guard.pending !== null} onOpenChange={(o) => !o && !guard.saving && guard.cancel()}>
       <AlertDialogContent className="sm:max-w-md">
@@ -198,12 +204,16 @@ export function LeaveGuardDialog({ guard }: { guard: LeaveGuardController }) {
         {/* 2026-11 모달 개편: "계속 편집" is the top-right X (closes = stay); 2 buttons right-aligned */}
         <AlertDialogFooter>
           <Button variant="muted-ghost" disabled={guard.saving} onClick={guard.leaveWithoutSaving}>
-            저장하지 않고 나가기
+            {hideSave ? "나가기" : "저장하지 않고 나가기"}
           </Button>
-          <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
-            {guard.saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            저장하고 나가기
-          </Button>
+          {hideSave ? (
+            <Button onClick={guard.cancel}>계속 작성</Button>
+          ) : (
+            <Button onClick={() => void guard.saveAndLeave()} disabled={guard.saving}>
+              {guard.saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
+              저장하고 나가기
+            </Button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -238,22 +248,42 @@ function useNarrow(query = "(max-width: 767px)"): boolean {
  * The page's only primary button (R-C8). Ctrl/⌘ + S saves (and never opens the browser's save dialog).
  * `savedAt` = the last successful save this visit ("저장됨 HH:MM" in idle / saved).
  */
-export function SaveButton({ state, onSave, savedAt, className }: { state: SaveUiState; onSave: () => void; savedAt: string | null; className?: string }) {
+export function SaveButton({
+  state,
+  onSave,
+  savedAt,
+  className,
+  noShortcut = false,
+}: {
+  state: SaveUiState
+  onSave: () => void
+  savedAt: string | null
+  className?: string
+  /**
+   * 이 화면 상태에는 저장 단축키가 **없다** — ⌘S·Ctrl+S 처리, `aria-keyshortcuts`, 툴팁("저장하기 (⌘S)")을
+   * 모두 끈다. S-46 문항 설정 상태가 쓴다: 그 상태는 ⌘S가 동작하지 않고(CF-S3) **비활성인 이유를
+   * 알리지 않는다**(CF-S5 — 툴팁·안내 줄·`aria-describedby` 없음). 동작하지 않는 단축키를 화면 낭독기에
+   * 알리지 않게 `aria-keyshortcuts`도 뺀다(UQ-750). 기본값은 지금 동작 그대로다(S-10·S-44).
+   */
+  noShortcut?: boolean
+}) {
   const narrow = useNarrow()
   const enabled = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
   const showDot = state === "dirty" || state === "failed" || state === "invalid" || state === "stale"
   const enabledRef = React.useRef(enabled)
   const saveRef = React.useRef(onSave)
+  const noShortcutRef = React.useRef(noShortcut)
   React.useEffect(() => {
     enabledRef.current = enabled
     saveRef.current = onSave
-  }, [enabled, onSave])
+    noShortcutRef.current = noShortcut
+  }, [enabled, onSave, noShortcut])
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "s" || e.altKey || e.shiftKey) return
       e.preventDefault()
-      if (enabledRef.current) saveRef.current()
+      if (enabledRef.current && !noShortcutRef.current) saveRef.current()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -280,7 +310,7 @@ export function SaveButton({ state, onSave, savedAt, className }: { state: SaveU
               className="min-w-[6.5rem]"
               disabled={!enabled}
               onClick={onSave}
-              aria-keyshortcuts={isMac() ? "Meta+S" : "Control+S"}
+              aria-keyshortcuts={noShortcut ? undefined : isMac() ? "Meta+S" : "Control+S"}
             >
               {state === "saving" ? (
                 <>
@@ -296,7 +326,7 @@ export function SaveButton({ state, onSave, savedAt, className }: { state: SaveU
           </span>
         </TooltipTrigger>
         {/* [UI-가정] 툴팁 글자 */}
-        <TooltipContent>저장하기 ({shortcut})</TooltipContent>
+        {noShortcut ? null : <TooltipContent>저장하기 ({shortcut})</TooltipContent>}
       </Tooltip>
     </div>
   )
@@ -345,26 +375,39 @@ export function StaleWriteDialog({
   onOverwrite,
   onReload,
   onOpenChange,
+  reloadOnly = false,
 }: {
   open: boolean
-  entity: "project" | "deliverable"
+  entity: "project" | "deliverable" | "cover_letter"
   busy?: boolean
-  /** "내 내용으로 저장" = the same request with p_expected_updated_at = null */
+  /**
+   * "새로 불러오기" **하나만** 둔다("내 내용으로 저장" 없음). S-46 문항 설정 상태가 쓴다(CF-S9 확정
+   * 2026-11-10 (사용자, UQ-761)): 다른 탭이 이미 정본을 만들었으면 이 탭의 문항 설정으로 덮지 않고 버린 뒤
+   * 정본을 읽어 작성 상태로 연다. 제목·설명은 그대로다. 기본값은 지금 동작(버튼 둘 — S-10·S-44·S-46 작성 상태).
+   */
+  reloadOnly?: boolean
+  /**
+   * "내 내용으로 저장" = the same request again. S-10·S-44: with p_expected_updated_at = null. S-46 (`cover_letter`,
+   * CF-S7): with the `stale_write` reply's `details.current_updated_at` — the 자기소개서 save RPC refuses null on an
+   * existing row, because there null would mean both "first save" and "force overwrite".
+   */
   onOverwrite: () => void
   /** "새로 불러오기" = drop unsaved edits and the [반영] memory, read again */
   onReload: () => void
   onOpenChange: (open: boolean) => void
 }) {
-  const what = entity === "project" ? "이 프로젝트가" : "이 산출물이"
+  // (45 런) S-46도 이 다이얼로그를 쓴다 — "산출물"로 보이지 않게 (CF-U3: 서류 이름 "자기소개서")
+  const what = entity === "project" ? "이 프로젝트가" : entity === "cover_letter" ? "이 자기소개서가" : "이 산출물이"
   const keepRef = React.useRef<HTMLButtonElement | null>(null)
+  const reloadRef = React.useRef<HTMLButtonElement | null>(null)
   return (
     <AlertDialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <AlertDialogContent
         className="sm:max-w-md"
         onOpenAutoFocus={(e) => {
-          // first focus = the choice that keeps the edits ("내 내용으로 저장")
+          // first focus = the choice that keeps the edits ("내 내용으로 저장"); reload-only → the one button
           e.preventDefault()
-          keepRef.current?.focus()
+          ;(reloadOnly ? reloadRef : keepRef).current?.focus()
         }}
       >
         <AlertDialogHeader>
@@ -374,13 +417,15 @@ export function StaleWriteDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           {/* not AlertDialogCancel: Radix focuses Cancel first, and this one throws edits away (QA UQ-PA-4) */}
-          <Button variant="muted-ghost" disabled={busy} onClick={onReload}>
+          <Button ref={reloadRef} variant={reloadOnly ? "default" : "muted-ghost"} disabled={busy} onClick={onReload}>
             새로 불러오기
           </Button>
-          <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            내 내용으로 저장
-          </AlertDialogAction>
+          {reloadOnly ? null : (
+            <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>
+              {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
+              내 내용으로 저장
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -451,12 +496,15 @@ export function PageShell({
   guard,
   save,
   aiReopen,
+  hideLeaveSave = false,
   children,
 }: {
   guard: LeaveGuardController
   /** <SaveButton … /> */
   save: React.ReactNode
   aiReopen?: AiReopenProps | null
+  /** 이탈 확인에 "저장하고 나가기"를 두지 않는다 (S-46 문항 설정 상태, CF-S3) */
+  hideLeaveSave?: boolean
   children: React.ReactNode
 }) {
   useToasterPosition("bottom-left")
@@ -474,7 +522,7 @@ export function PageShell({
           {children}
         </main>
       </div>
-      <LeaveGuardDialog guard={guard} />
+      <LeaveGuardDialog guard={guard} hideSave={hideLeaveSave} />
     </LeaveGuardContext.Provider>
   )
 }
@@ -547,8 +595,12 @@ export function CrumbRow({ back, items, current }: { back: { href: string; label
 // 입력 보존 (UX-7, 1.3a 입력 보존) — browser storage only, never the URL
 // ---------------------------------------------------------------------------
 
-/** 키: 기존 = 행 ID, 새 페이지 = 소속 ID(산출물은 프로젝트 ID) + "new" (1.3a). */
-export function preservationKey(kind: "project" | "deliverable", rowId: string | null, parentId: string): string {
+/**
+ * 키: 기존 = 행 ID, 새 페이지 = 소속 ID(산출물은 프로젝트 ID) + "new" (1.3a).
+ * `cover_letter`(S-46)는 행 ID 대신 **지원 프로젝트 ID**를 쓴다 — 지원 프로젝트당 정본 1행이라
+ * 서류 id가 주소에도 키에도 없다 (CF-A2, UX S-46 "입력 보존 키").
+ */
+export function preservationKey(kind: "project" | "deliverable" | "cover_letter", rowId: string | null, parentId: string): string {
   return `resumate:l02:${kind}:${rowId ?? `${parentId}:new`}`
 }
 

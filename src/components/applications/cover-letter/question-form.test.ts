@@ -1,0 +1,310 @@
+import { describe, expect, it } from "vitest"
+import {
+  allClipboardText,
+  countChars,
+  createSlotAllocator,
+  invalidSlotCopy,
+  isUntouchedSeed,
+  questionStructure,
+  questionStructureChanged,
+  slotsInUse,
+  newQuestionForm,
+  nextSlot,
+  slotNumber,
+  toQuestionForms,
+  questionClipboardText,
+  QUESTION_ERROR_COPY,
+  seedQuestionForms,
+  toCoverLetterBody,
+  validateQuestions,
+} from "./question-form"
+import { COVER_LETTER_DEFAULT_CHAR_LIMIT, COVER_LETTER_DEFAULT_QUESTIONS } from "@/lib/data/cover-letter-defaults"
+
+describe("S-46 문항 폼 규칙", () => {
+  it("기본 3문항은 K-28 문구 + 글자 수 제한 800 (CF-U2 — 시안의 600이 아니다)", () => {
+    const forms = seedQuestionForms()
+    expect(forms).toHaveLength(3)
+    expect(forms.map((f) => f.question_text)).toEqual(COVER_LETTER_DEFAULT_QUESTIONS.map((q) => q.question_text))
+    expect(new Set(forms.map((f) => f.char_limit))).toEqual(new Set([String(COVER_LETTER_DEFAULT_CHAR_LIMIT)]))
+    expect(forms.map((f) => f.template_key)).toEqual(["motivation", "job_competency", "future_plan"])
+  })
+
+  it('"+ 문항 추가"로 만든 문항에도 800이 미리 채워진다', () => {
+    expect(newQuestionForm("q_4").char_limit).toBe(String(COVER_LETTER_DEFAULT_CHAR_LIMIT))
+  })
+
+  it("손대지 않은 기본 3문항만 있으면 변경 없음으로 본다", () => {
+    expect(isUntouchedSeed(seedQuestionForms())).toBe(true)
+    const touched = seedQuestionForms()
+    touched[0] = { ...touched[0], char_limit: "1000" }
+    expect(isUntouchedSeed(touched)).toBe(false)
+    expect(isUntouchedSeed([...seedQuestionForms(), newQuestionForm("q_4")])).toBe(false)
+  })
+
+  it("검증: 빈 문항 · 빈 글자 수 · 범위 밖 (UX S-46 검증)", () => {
+    const forms = seedQuestionForms()
+    forms[0] = { ...forms[0], question_text: "   " }
+    forms[1] = { ...forms[1], char_limit: "" }
+    forms[2] = { ...forms[2], char_limit: "20000" }
+    const { errors, firstIndex } = validateQuestions(forms)
+    expect(firstIndex).toBe(0)
+    expect(errors[0].question_text).toBe(QUESTION_ERROR_COPY.question_required)
+    expect(errors[1].char_limit).toBe(QUESTION_ERROR_COPY.limit_required)
+    expect(errors[2].char_limit).toBe(QUESTION_ERROR_COPY.limit_range)
+  })
+
+  it("검증을 통과한 폼은 오류가 없다", () => {
+    expect(validateQuestions(seedQuestionForms()).firstIndex).toBeNull()
+  })
+
+  it("저장 입력은 slot을 그대로 보내고 sort_order만 화면 순서로 매긴다 · 근거를 싣지 않는다 (UQ-740 · CF-S1)", () => {
+    const forms = seedQuestionForms()
+    const body = toCoverLetterBody([forms[2], forms[0], forms[1]])
+    // 순서를 바꿔도 슬롯은 제 문항을 따라간다 — 다시 매기지 않는다
+    expect(body.questions.map((q) => q.slot)).toEqual(["q_3", "q_1", "q_2"])
+    expect(body.questions.map((q) => q.sort_order)).toEqual([1, 2, 3])
+    expect(body.questions[0].char_limit).toBe(COVER_LETTER_DEFAULT_CHAR_LIMIT)
+    // 저장 입력에 `sources` 키가 없다 — 서버가 applied_proposals의 제안에서 evidence_links를 만든다
+    for (const q of body.questions) expect("sources" in q).toBe(false)
+  })
+
+  it("빈 제목·메모는 null로 보낸다 (CF-6)", () => {
+    const f = { ...newQuestionForm("q_1"), question_text: "문항", answer_title: "  ", user_note: "" }
+    const q = toCoverLetterBody([f]).questions[0]
+    expect(q.answer_title).toBeNull()
+    expect(q.user_note).toBeNull()
+  })
+
+  it("글자 수는 내용만 센다 — 기준에 따라 공백을 뺀다 (CF-6)", () => {
+    expect(countChars("가 나 다", "with_spaces")).toBe(5)
+    expect(countChars("가 나 다", "without_spaces")).toBe(3)
+  })
+
+  it("복사에는 제목이 들어간다", () => {
+    const f = { ...newQuestionForm("q_1"), question_text: "지원 동기", answer_title: "결제 장애를 줄인 경험", body: "본문" }
+    expect(questionClipboardText(f, 1)).toBe("1. 지원 동기\n\n결제 장애를 줄인 경험\n\n본문")
+    const noTitle = { ...f, answer_title: "" }
+    expect(questionClipboardText(noTitle, 2)).toBe("2. 지원 동기\n\n본문")
+    expect(allClipboardText([f, noTitle])).toContain("\n\n---\n\n")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UQ-740 슬롯 불변식 (DM v4.15 2.5.1 "슬롯 키 `slot` (확정)" — 안정 키, 한 번 쓰면 재사용하지 않는다)
+// ---------------------------------------------------------------------------
+describe("S-46 슬롯 키는 안정 키다 (UQ-740)", () => {
+  it("다음 슬롯 = 쓴 적 있는 번호의 최댓값 + 1 (빈 번호를 채우지 않는다)", () => {
+    expect(nextSlot([])).toBe("q_1")
+    expect(nextSlot(["q_1", "q_3"])).toBe("q_4")
+    expect(nextSlot(["q_9", "q_2"])).toBe("q_10")
+    // 형식이 아닌 값은 무시한다
+    expect(nextSlot(["", "s_7", "q_2"])).toBe("q_3")
+    expect(slotNumber("q_12")).toBe(12)
+    expect(slotNumber("q_")).toBeNull()
+  })
+
+  it("문항을 지운 뒤 추가하면 지운 번호를 다시 쓰지 않는다 (이번 방문 안)", () => {
+    const slots = createSlotAllocator(["q_1", "q_2", "q_3"])
+    let forms = seedQuestionForms()
+    // q_3 삭제(저장 전) → 남은 문항만 보면 다음은 q_3이지만, 발급기는 q_3을 기억한다
+    forms = forms.filter((f) => f.slot !== "q_3")
+    forms = [...forms, newQuestionForm(slots.allocate())]
+    expect(forms.map((f) => f.slot)).toEqual(["q_1", "q_2", "q_4"])
+    // 방금 만든 q_4도 지우고 또 추가 → q_5
+    forms = forms.filter((f) => f.slot !== "q_4")
+    forms = [...forms, newQuestionForm(slots.allocate())]
+    expect(forms.map((f) => f.slot)).toEqual(["q_1", "q_2", "q_5"])
+  })
+
+  it("저장된 정본에 빈 번호가 있어도(q_1, q_3) 다음은 q_4다 — 정상이다", () => {
+    const slots = createSlotAllocator(["q_1", "q_3"])
+    expect(slots.allocate()).toBe("q_4")
+  })
+
+  it("열린 대화의 제안이 가리키는 슬롯도 쓴 번호로 친다 (지워진 문항의 제안이 새 문항에 붙지 않게)", () => {
+    // 정본에는 q_1·q_2만 남았지만 대화에는 지워진 q_3의 제안이 남아 있다
+    const slots = createSlotAllocator(["q_1", "q_2", "q_3"])
+    expect(slots.allocate()).toBe("q_4")
+  })
+
+  it("순서를 바꿔도 슬롯은 바뀌지 않는다", () => {
+    const [a, b, c] = seedQuestionForms()
+    const reordered = toCoverLetterBody([c, a, b])
+    expect(reordered.questions.map((q) => [q.slot, q.question_id])).toEqual([
+      [c.slot, c.question_id],
+      [a.slot, a.question_id],
+      [b.slot, b.question_id],
+    ])
+  })
+
+  it("저장 왕복(폼 → 정본 → 폼) 뒤에도 슬롯·순서가 그대로다", () => {
+    const [a, b, c] = seedQuestionForms()
+    const extra = newQuestionForm("q_7")
+    // q_2를 지우고, q_7을 맨 앞으로 옮긴 폼
+    const sent = toCoverLetterBody([extra, a, c])
+    // 정본은 받은 slot을 그대로, sort_order를 1부터 — 배열 순서가 섞여 와도 sort_order로 되살린다
+    const stored = { questions: [...sent.questions].reverse() }
+    const back = toQuestionForms(stored)
+    expect(back.map((f) => f.slot)).toEqual(["q_7", "q_1", "q_3"])
+    expect(back.map((f) => f.question_id)).toEqual([extra.question_id, a.question_id, c.question_id])
+    void b
+  })
+  it("정본의 최고 번호(slot_high_water)를 받으면 그보다 큰 번호부터 준다 — 없으면 0", () => {
+    // 정본에는 q_1·q_2만 남았지만 q_7까지 쓴 적이 있다 → 다음은 q_8
+    expect(createSlotAllocator(["q_1", "q_2"], { highWater: 7 }).allocate()).toBe("q_8")
+    // 남은 슬롯이 더 크면 그쪽을 따른다
+    expect(createSlotAllocator(["q_9"], { highWater: 3 }).allocate()).toBe("q_10")
+    expect(createSlotAllocator(["q_1"]).allocate()).toBe("q_2")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UQ-756·757 — 발급기에 번호가 들어오는 길은 `slotsInUse()` 하나를 지난다
+// ---------------------------------------------------------------------------
+describe("슬롯 발급은 지금 화면의 모든 슬롯을 본다 (UQ-756·757)", () => {
+  const stored = { body: { questions: [{ slot: "q_1" }, { slot: "q_2" }, { slot: "q_3" }] } }
+
+  it("UQ-756 재현 순서: q_4 추가 → 저장 없이 새로 고침 → 입력 보존 복원 → '+ 문항 추가'는 q_4가 아니라 q_5", () => {
+    // 방문 1: 정본 q_1~q_3에서 문항 하나 추가 → q_4 (저장하지 않는다)
+    const visit1 = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    const added = visit1.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))
+    expect(added).toBe("q_4")
+    const preserved = [...seedQuestionForms(), newQuestionForm(added)]
+
+    // 방문 2(새로 고침): 발급기는 정본만 알고 시작한다. 입력 보존이 q_4가 든 폼을 되살렸다
+    const visit2 = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    const next = visit2.allocate(slotsInUse({ forms: preserved, document: stored }))
+    // 예전 코드는 여기서 q_4를 한 번 더 발급해 저장이 invalid_slot으로 막혔다
+    expect(next).toBe("q_5")
+    expect(new Set([...preserved.map((f) => f.slot), next]).size).toBe(preserved.length + 1)
+  })
+
+  it("UQ-756: 복원분을 markUsed로 미리 넣어도 같은 함수를 지나 같은 결과다", () => {
+    const visit = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    visit.markUsed(slotsInUse({ forms: [newQuestionForm("q_4")] }))
+    expect(visit.allocate()).toBe("q_5")
+  })
+
+  it("UQ-757: 기록에서 나중에 연 대화의 제안 슬롯도 쓴 번호다 (첫 렌더의 open_chat만이 아니다)", () => {
+    // 첫 렌더에는 열린 대화가 없었다
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: stored, chat: null }))
+    // 나중에 연 대화에 지워진 문항 q_6의 제안이 남아 있다
+    const laterChat = { structured_draft: { document: { questions: [{ slot: "q_6" }] } } }
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored, chat: laterChat }))).toBe("q_7")
+  })
+
+  it("한 번 발급한 번호는 그 문항을 지워도 다시 주지 않는다 (지금 화면에 없어도)", () => {
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: stored }))
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))).toBe("q_4")
+    // q_4를 지운 화면에서 다시 추가
+    expect(slots.allocate(slotsInUse({ forms: seedQuestionForms(), document: stored }))).toBe("q_5")
+  })
+
+  it("invalid_slot 문구는 원인을 알린다 — '저장 실패'로 뭉개지 않는다 (UQ-756)", () => {
+    expect(invalidSlotCopy(4)).toContain("문항 4")
+    expect(invalidSlotCopy(4)).toContain("지우고 다시 추가")
+    expect(invalidSlotCopy(null)).toContain("문항 키가 겹쳐")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// R15 후속 3 — 슬롯 정체는 번호 + question_id. 기존 문항은 읽어 온 id를 그대로 보낸다
+// ---------------------------------------------------------------------------
+describe("question_id는 정본·입력 보존을 지나도 잃지 않는다 (R15 후속 3)", () => {
+  const storedBody = {
+    questions: [
+      { slot: "q_1", question_id: "11111111-1111-4111-8111-000000000001", sort_order: 1, question_text: "가", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces" as const, user_note: null, body: "", blocks: [] },
+      { slot: "q_3", question_id: "11111111-1111-4111-8111-000000000003", sort_order: 2, question_text: "나", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces" as const, user_note: null, body: "", blocks: [] },
+    ],
+  }
+
+  it("정본에서 온 문항은 저장 입력에 읽어 온 question_id를 그대로 싣는다 (새로 만들지 않는다)", () => {
+    const sent = toCoverLetterBody(toQuestionForms(storedBody))
+    expect(sent.questions.map((q) => [q.slot, q.question_id])).toEqual([
+      ["q_1", "11111111-1111-4111-8111-000000000001"],
+      ["q_3", "11111111-1111-4111-8111-000000000003"],
+    ])
+  })
+
+  it("입력 보존(JSON 왕복)으로 되살린 문항도 같은 question_id를 싣는다", () => {
+    const preserved = JSON.parse(JSON.stringify(toQuestionForms(storedBody))) as ReturnType<typeof toQuestionForms>
+    expect(toCoverLetterBody(preserved).questions.map((q) => q.question_id)).toEqual([
+      "11111111-1111-4111-8111-000000000001",
+      "11111111-1111-4111-8111-000000000003",
+    ])
+  })
+
+  it("새 문항만 새 question_id를 받는다", () => {
+    const fresh = newQuestionForm("q_4")
+    expect(fresh.question_id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(fresh.question_id).not.toBe("11111111-1111-4111-8111-000000000001")
+  })
+
+  it("slot_high_water를 저장 응답으로 받으면 다음 번호는 그것 + 1 (지운 최고 번호도 다시 쓰지 않는다)", () => {
+    // 읽은 행: q_1·q_2만 남았고 slot_high_water = 3
+    const slots = createSlotAllocator(slotsInUse({ forms: [], document: { body: { questions: [{ slot: "q_1" }, { slot: "q_2" }] } } }), { highWater: 3 })
+    expect(slots.allocate()).toBe("q_4")
+    // 저장 응답이 더 큰 값을 알려 오면 그것을 따른다
+    slots.markHighWater(9)
+    expect(slots.allocate()).toBe("q_10")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CF-S8 (확정 2026-11-10) — 턴 전에 저장할지: 저장된 [slot, question_id] 순서 목록 vs 지금 폼
+// ---------------------------------------------------------------------------
+describe("CF-S8 — 문항 구성이 바뀌었나 (턴 전 자동 저장 판정)", () => {
+  const storedQuestions = [
+    { slot: "q_1", question_id: "id-1", sort_order: 1 },
+    { slot: "q_3", question_id: "id-3", sort_order: 2 },
+  ]
+  const stored = questionStructure(storedQuestions)
+  const form = (slot: string, question_id: string) => ({ ...newQuestionForm(slot), question_id })
+
+  it("구성은 sort_order 순서의 [slot, question_id]다 (배열 순서가 섞여 와도)", () => {
+    expect(questionStructure([...storedQuestions].reverse())).toEqual([
+      ["q_1", "id-1"],
+      ["q_3", "id-3"],
+    ])
+  })
+
+  it("값(답변·제목·메모)만 바뀌었으면 거짓 — 저장하지 않고 스냅숏으로 보낸다", () => {
+    const forms = [
+      { ...form("q_1", "id-1"), body: "새 답변", answer_title: "새 제목", user_note: "새 메모", char_limit: "1200" },
+      { ...form("q_3", "id-3"), question_text: "고친 문항 문장" },
+    ]
+    expect(questionStructureChanged(stored, forms)).toBe(false)
+  })
+
+  it("문항을 추가했으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1"), form("q_3", "id-3"), form("q_4", "id-4")])).toBe(true)
+  })
+
+  it("문항을 지웠으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1")])).toBe(true)
+  })
+
+  it("순서를 바꿨으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_3", "id-3"), form("q_1", "id-1")])).toBe(true)
+  })
+
+  it("같은 번호라도 question_id가 다르면 참(다른 문항이다)", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1"), form("q_3", "id-other")])).toBe(true)
+  })
+
+  it("문항 설정 상태(정본 행 없음)는 대화가 없으니 해당 없음 — 거짓", () => {
+    expect(questionStructureChanged(null, [form("q_1", "id-1"), form("q_4", "id-4")])).toBe(false)
+  })
+
+  it("저장 왕복 뒤의 폼은 그 정본과 구성이 같다 — 저장 직후 다시 저장하지 않는다", () => {
+    const forms = toQuestionForms({
+      questions: [
+        { slot: "q_3", question_id: "id-3", sort_order: 2, question_text: "나", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces", user_note: null, body: "", blocks: [] },
+        { slot: "q_1", question_id: "id-1", sort_order: 1, question_text: "가", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces", user_note: null, body: "", blocks: [] },
+      ],
+    })
+    expect(questionStructureChanged(stored, forms)).toBe(false)
+    // 저장 응답 뒤 화면이 정본 body로 두는 값(toCoverLetterBody)도 같은 구성이다
+    expect(questionStructure(toCoverLetterBody(forms).questions)).toEqual(stored)
+  })
+})

@@ -8,12 +8,13 @@ import type { Ai01Output } from "../../schemas/AI-01";
 
 export function output(partial: Partial<Ai01Output> = {}): Ai01Output {
   return {
-    schema_version: 1,
+    schema_version: 2,
     detected_language: "ko",
     is_likely_jd: true,
     company_name: null,
     position_title: null,
     seniority: null,
+    deadline: null,
     requirements: [],
     tech_keywords: [],
     other_sids: [],
@@ -141,5 +142,30 @@ export const INJECTION = {
       { keyword: "Playwright", source_sids: ["S4"] },
     ],
     other_sids: ["S3"],
+  }),
+};
+
+/**
+ * (v4.15, CF-2) JD carrying an application deadline. S1 title, S2 duty,
+ * S3 required, S4 deadline with a full date, S5 deadline without a year.
+ */
+export const KO_WITH_DEADLINE = {
+  raw: [
+    "사사소프트 데이터 엔지니어",
+    "데이터 파이프라인 운영",
+    "Python 실무 경험",
+    "서류 접수 마감: 2026.12.15(월) 23:59까지",
+    "면접은 12월 말에 진행됩니다.",
+  ].join("\n"),
+  output: output({
+    company_name: { value: "사사소프트", source_sids: ["S1"] },
+    position_title: { value: "데이터 엔지니어", source_sids: ["S1"] },
+    deadline: { value: "2026-12-15", source_sids: ["S4"] },
+    requirements: [
+      { category: "responsibility", text: "데이터 파이프라인 운영", keywords: ["데이터 파이프라인"], importance: "high", source_sids: ["S2"] },
+      { category: "required", text: "Python 실무 경험", keywords: ["Python"], importance: "high", source_sids: ["S3"] },
+    ],
+    tech_keywords: [{ keyword: "Python", source_sids: ["S3"] }],
+    other_sids: ["S5"],
   }),
 };

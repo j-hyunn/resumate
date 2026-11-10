@@ -149,7 +149,7 @@ select throws_ok($$select public.apply_jd_extraction(current_setting('t.jd1')::u
 select is(public.apply_jd_extraction(current_setting('t.jd1')::uuid, 'a0000000-7777-0000-0000-000000000001', 1,
             (select v from t_result), 'gemini', 'gemini-3.8-flash-lite') - 'job_description_id',
           '{"applied":true,"application_project_id":"a0000000-aaaa-0000-0000-000000000001","extraction_status":"succeeded",
-            "name":"에이비씨페이 – 백엔드 엔지니어","name_source":"ai",
+            "name":"에이비씨페이 자기소개서","name_source":"ai","deadline":null,
             "company_name":"에이비씨페이","company_name_source":"ai","position_title":"백엔드 엔지니어","position_title_source":"ai",
             "requirement_count":2}'::jsonb,
           'apply fills company / position / name from AI (extra keys ignored)');
@@ -200,7 +200,9 @@ select is(public.apply_jd_extraction(current_setting('t.jd2')::uuid, 'a0000000-7
             jsonb_set((select v from t_result), '{requirements}', '[{"category":"required","content":"x","keywords":[],"importance":"high","source_sids":["S1"]}]')
               || '{"tech_keywords":[]}', 'gemini', 'm')
             - 'job_description_id' - 'application_project_id' - 'applied' - 'extraction_status' - 'requirement_count',
-          '{"name":"내가 쓴 회사 – 백엔드 엔지니어","name_source":"ai","company_name":"내가 쓴 회사","company_name_source":"user",
+          -- R15 (CF-9): the name is built from the company name alone, and a user company name keeps name_source
+          -- 'user' because the composed name is the one the user's own value produced.
+          '{"name":"내가 쓴 회사 자기소개서","name_source":"user","deadline":null,"company_name":"내가 쓴 회사","company_name_source":"user",
             "position_title":"백엔드 엔지니어","position_title_source":"ai"}'::jsonb,
           'user company not overwritten');
 
@@ -235,7 +237,8 @@ select is(public.apply_jd_extraction(current_setting('t.jd6')::uuid, 'a0000000-7
             - 'job_description_id' - 'application_project_id' - 'extraction_status',
           jsonb_build_object('applied', true, 'requirement_count', 1,
             'name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')', 'name_source', 'default',
-            'company_name', null, 'company_name_source', null, 'position_title', null, 'position_title_source', null),
+            'company_name', null, 'company_name_source', null, 'position_title', null, 'position_title_source', null,
+            'deadline', null),
           'unknown / missing sids drop company and position; name falls back to default');
 
 -- ── fail + stalled recovery (P4) ────────────────────────────────────────
@@ -343,12 +346,16 @@ reset role;
 grant usage on schema extensions to service_role;
 set local role service_role;
 set local request.jwt.claims = '{"role":"service_role"}';
-select is(public.sweep_stalled_ai_jobs(now() - interval '1 minute'), 1, 'sweep closes the stalled extraction job');
+-- QA-04 (리더 수정 2026-11-09): sweep_stalled_ai_jobs는 DB 전체를 쓸고 그 수를 돌려주므로
+-- where 절로 좁힐 수 없다. 픽스처 밖의 멈춘 작업이 하나라도 있으면 등식이 깨지므로 ">= 1"로 본다
+-- (우리 작업이 실제로 닫혔는지는 바로 아래 extraction_status 단정이 확인한다).
+select ok(public.sweep_stalled_ai_jobs(now() - interval '1 minute') >= 1,
+          'sweep closes the stalled extraction job');
 reset role;
 select is((select array[jd.extraction_status, ap.name, ap.name_source] from public.job_descriptions jd
              join public.application_projects ap on ap.id = jd.application_project_id
             where jd.id = current_setting('t.jd5')::uuid),
-          array['failed', '회사 – 포지션', 'user'], 'swept job -> JD failed with the fallback name');
+          array['failed', '회사 자기소개서', 'user'], 'swept job -> JD failed with the fallback name');
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
@@ -389,8 +396,11 @@ select is((select count(*)::int from public.application_projects where user_id =
 
 -- Account deletion removes everything (DM-1).
 delete from auth.users where id = 'a0000000-0000-0000-0000-000000000001';
-select is((select count(*)::int from public.application_projects) + (select count(*)::int from public.job_descriptions)
-          + (select count(*)::int from public.jd_requirements) + (select count(*)::int from public.application_stage_events),
+-- R15 (QA-04 선례): 픽스처 사용자 범위로 좁힌다 — 로컬 DB에 남은 다른 사용자의 행이 이 단정을 깨지 않게.
+select is((select count(*)::int from public.application_projects where user_id = 'a0000000-0000-0000-0000-000000000001')
+          + (select count(*)::int from public.job_descriptions where user_id = 'a0000000-0000-0000-0000-000000000001')
+          + (select count(*)::int from public.jd_requirements where user_id = 'a0000000-0000-0000-0000-000000000001')
+          + (select count(*)::int from public.application_stage_events where user_id = 'a0000000-0000-0000-0000-000000000001'),
           0, 'account deletion cascades through all S5 tables');
 
 select * from finish();

@@ -32,8 +32,8 @@ select ok(pg_get_functiondef('public.fail_insight(uuid, uuid)'::regprocedure)
 
 select set_eq($$select tgname::text from pg_trigger where tgrelid = 'public.ai_jobs'::regclass and not tgisinternal
                   and tgname like 'ai_jobs_release_%'$$,
-              array['ai_jobs_release_jd_extraction', 'ai_jobs_release_insight', 'ai_jobs_release_drafts'],
-              'release triggers installed (S7: + drafts; R14: interview trigger dropped)');
+              array['ai_jobs_release_jd_extraction', 'ai_jobs_release_insight'],
+              'release triggers installed (R15: the drafts release trigger dropped with the tables)');
 
 select * from finish();
 rollback;

@@ -7,6 +7,7 @@
 import type { AiErrorCode, AiProviderName, DraftBlockFlag } from "@/types/db"
 import type { BlockStreamEvent, ChatTurnEvent, GenerationNotesPayload, OmittedProject, StreamErrorEvent, StreamSource, ValidatedBlock } from "@/lib/mock/ai-stream"
 import { previewPathsOf } from "./writing-chat-slots"
+import type { CoverLetterTurnEvent } from "./cover-letter-chat-types"
 
 /** A real stream request: POST JSON to a Route Handler that answers SSE (or a JSON error before the stream). */
 export interface RealStreamRequest {
@@ -219,6 +220,101 @@ export async function* realChatTurn(request: RealStreamRequest, signal: AbortSig
       case "error":
         yield errorEventOf(ev, provider)
         return
+    }
+  }
+}
+
+/**
+ * 서류(자소서) 초안 턴의 SSE 읽기 — 계약 `DocumentTurnEvent`를 화면 모양(`CoverLetterTurnEvent`)으로
+ * 그대로 옮긴다. **새 이벤트 이름은 없다**: 기존 이름에 `slot`·`questionNo`가 붙은 모양이다.
+ *
+ * ⚠ 대소문자 규칙이 한 군데만 다르다 — **`sources_selected.sources[]`는 camelCase**이고
+ * **`draft_block.block`은 저장 모양이라 snake_case**다. 둘을 같은 규칙으로 바꾸면 깨진다
+ * (백엔드에서 실제로 결함이 났던 자리다). 그래서 둘 다 **그대로 통과시킨다**.
+ */
+export async function* realCoverLetterTurn(request: RealStreamRequest, signal: AbortSignal): AsyncGenerator<CoverLetterTurnEvent> {
+  const opened = await openStream(request, signal)
+  if (!(opened instanceof Response)) {
+    yield { type: "error", errorCode: opened.error_code, provider: opened.provider, retryAfter: opened.retry_after, quotaResetsAt: opened.quota_resets_at }
+    return
+  }
+  let provider: AiProviderName | null = null
+  for await (const ev of readSse(opened)) {
+    switch (ev.type) {
+      case "turn_started":
+        provider = (ev.provider as AiProviderName | null) ?? null
+        yield { type: "turn_started", provider, modelTier: (ev.modelTier as never) ?? null, connectionTier: (ev.connectionTier as never) ?? null }
+        break
+      case "reply_delta":
+        yield { type: "reply_delta", text: String(ev.text ?? "") }
+        break
+      case "reply_done":
+        yield { type: "reply_done", text: String(ev.text ?? "") }
+        break
+      case "draft_patch":
+        yield { type: "draft_patch", structuredDraft: ev.structuredDraft as never, added: (ev.added as string[]) ?? [] }
+        break
+      case "draft_flags":
+        yield {
+          type: "draft_flags",
+          needsReview: (ev.needsReview as string[]) ?? [],
+          sensitiveAdded: Number(ev.sensitiveAdded ?? 0),
+          sensitiveFlagsCount: Number(ev.sensitiveFlagsCount ?? 0),
+        }
+        break
+      case "sources_selected":
+        // camelCase 그대로 (`sortOrder`·`experienceId`·`projectId`·`reuseReason` …)
+        yield {
+          type: "sources_selected",
+          slot: String(ev.slot),
+          questionNo: Number(ev.questionNo ?? 0),
+          questionClass: String(ev.questionClass ?? ""),
+          sources: (ev.sources as never) ?? [],
+        }
+        break
+      case "draft_started":
+        yield { type: "draft_started", attempt: Number(ev.attempt ?? 1), reason: (ev.reason as never) ?? "initial", slots: (ev.slots as string[]) ?? [] }
+        break
+      case "draft_block":
+        // snake_case 그대로 (저장 모양)
+        yield { type: "draft_block", slot: String(ev.slot), questionNo: Number(ev.questionNo ?? 0), attempt: Number(ev.attempt ?? 1), block: ev.block as never }
+        break
+      case "adjusting_length":
+        yield { type: "adjusting_length", questions: (ev.questions as never) ?? [] }
+        break
+      case "draft_done":
+        yield {
+          type: "draft_done",
+          slot: String(ev.slot),
+          questionNo: Number(ev.questionNo ?? 0),
+          answerTitle: (ev.answerTitle as string | null) ?? null,
+          charCount: Number(ev.charCount ?? 0),
+          charLimit: (ev.charLimit as number | null) ?? null,
+          charAdjustNeeded: Boolean(ev.charAdjustNeeded),
+          correctionApplied: Boolean(ev.correctionApplied),
+          needsReviewBlockIds: (ev.needsReviewBlockIds as string[]) ?? [],
+          droppedBlockCount: Number(ev.droppedBlockCount ?? 0),
+          rev: Number(ev.rev ?? 1),
+          draftCount: Number(ev.draftCount ?? 0),
+          // 저장된 제안 — 저장 모양(snake_case) 그대로 통과 (`draft_block.block`과 같은 규칙)
+          draft: ev.draft as never,
+        }
+        break
+      case "turn_done":
+        yield {
+          type: "turn_done",
+          messageCount: Number(ev.messageCount ?? 0),
+          remainingMessages: Number(ev.remainingMessages ?? 0),
+          limitReached: Boolean(ev.limitReached),
+          draftStatus: (ev.draftStatus as never) ?? "unchanged",
+          draftCount: Number(ev.draftCount ?? 0),
+        }
+        return
+      case "error": {
+        const e = errorEventOf(ev, provider)
+        yield { type: "error", errorCode: e.error_code, provider: e.provider, retryAfter: e.retry_after, quotaResetsAt: e.quota_resets_at }
+        return
+      }
     }
   }
 }

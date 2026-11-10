@@ -5,7 +5,7 @@ import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { createDbRunGate } from "@/server/services/ai-connection/keys";
 import { createTurnChatDb } from "@/server/services/writing-chat/db";
-import { createDeliverablePipelines, createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
+import { createDeliverablePipelines, createDocumentPipelines, createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
 import type { TurnDeps } from "@/server/services/writing-chat/types";
 import { connections } from "./connections";
 import { logJobEvent } from "./log";
@@ -13,7 +13,7 @@ import { createSupabaseJobStore } from "./supabase-store";
 import { createSupabaseUsageStore } from "./supabase-usage";
 
 /**
- * Production wiring of the AI-12 / AI-13 turn (S4, R5). Same connection path as the job
+ * Production wiring of the AI-12 / AI-13 / AI-04 turn (S4, R5, R15). Same connection path as the job
  * runner (S3b): provider context from the user session, keys decrypted per
  * call through app_key_reader, key status + run gate through app_ai_writer.
  * The turn itself runs inside the SSE request (no after(), no next_run_at).
@@ -37,6 +37,8 @@ export function createWritingChatTurnDeps(user: UserSupabaseClient, userId: stri
     pipelines: createWritingChatPipelines({ logger: consoleAiLogger, log: logJobEvent }),
     // R5 AI-13 (deliverable chats): V-10 stats / rejected checks only, never text.
     deliverablePipelines: createDeliverablePipelines({ logger: consoleAiLogger, log: logJobEvent }),
+    // R15 AI-04 (서류 대화): same rule — counts and check names only (C-7).
+    documentPipelines: createDocumentPipelines({ logger: consoleAiLogger, log: logJobEvent }),
     log: logJobEvent,
   };
 }

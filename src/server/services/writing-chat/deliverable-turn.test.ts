@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "@/lib/contracts/errors";
+import { ErrorEvent } from "@/lib/contracts/ai";
 import { DeliverableTurnEventSchema, type DeliverableTurnEvent } from "@/lib/contracts/writing-chat";
 import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext, type ProviderContext } from "@/server/jobs/provider-context";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import type { LlmFactoryInput } from "@/server/jobs/types";
 import { ProviderError } from "@/server/ai/errors";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
-import { MemoryChatDb, fakeDeliverablePipelines, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
+import { MemoryChatDb, fakeDeliverablePipelines, fakeDocumentPipelines, fakeWritingChatPipelines } from "@/test/writing-chat-fakes";
 import { prepareTurn, runTurn, type TurnRequest } from "./turn";
 import type { DeliverableComposeOutcome, PipelineCall, TurnDeps } from "./types";
 import type { ComposeEvent } from "@/server/ai/pipelines/AI-13";
@@ -84,6 +85,7 @@ function setup(opts: { context?: ProviderContext; reply?: ScriptedResponse[]; ex
     createLlm: (input: LlmFactoryInput) => (input.tier === "light" ? extractLlm(input) : replyLlm(input)),
     pipelines: fakeWritingChatPipelines(),
     deliverablePipelines,
+    documentPipelines: fakeDocumentPipelines(),
     now: clock.now,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -184,6 +186,12 @@ describe("AI-13 deliverable turn — draft turn", () => {
     const t = setup({ reply: [{ error: "safety_blocked" }], extract: [{ json: { patch: withFacts() } }] });
     const { prepared, events } = await run(t.deps, { content: "초안", requestedAction: "compose_draft" });
     expect(types(events)).toEqual(["turn_started", "facts_patch", "draft_flags", "draft_started", "error"]);
+    // QA-R15-02: the failure event satisfies `ErrorEvent` / the turn's own union, not only `{code}`.
+    const err = events.at(-1)!;
+    expect(ErrorEvent.safeParse(err).success).toBe(true);
+    expect(DeliverableTurnEventSchema.safeParse(err).success).toBe(true);
+    expect(err).toMatchObject({ type: "error", code: "safety_blocked", category: "input", failureCause: "input_rejected", retryable: false });
+    expect((err as { message: string }).message).toMatch(/[가-힣]/);
     expect(t.chats.chat.deliverableDraft?.draft_count).toBe(0);
     expect(t.chats.chat.messages.at(-1)).toMatchObject({ role: "assistant", status: "failed" });
     const job = t.store.jobs.get(prepared.kind === "ready" ? prepared.job.id : "")!;

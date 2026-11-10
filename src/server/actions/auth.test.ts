@@ -1,5 +1,5 @@
+import { PENDING_CAREER_DESCRIPTION_COOKIE } from "@/server/auth/user-cookies";
 import { describe, expect, it, vi } from "vitest";
-import { PENDING_CAREER_DESCRIPTION_COOKIE } from "@/server/services/drafts/pending-cookie";
 
 const state = vi.hoisted(() => ({ deleted: [] as string[], signOutFails: false }));
 vi.mock("next/headers", () => ({

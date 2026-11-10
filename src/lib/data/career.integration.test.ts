@@ -11,7 +11,7 @@ import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import type { LlmFactoryInput } from "@/server/jobs/types";
 import { createTurnChatDb } from "@/server/services/writing-chat/db";
-import { createDeliverablePipelines, createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
+import { createDeliverablePipelines, createDocumentPipelines, createWritingChatPipelines } from "@/server/services/writing-chat/pipelines";
 import type { TurnDeps } from "@/server/services/writing-chat/types";
 import { connectTestProvider, markTestKeyInvalid } from "@/test/ai-connection-db";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
@@ -87,6 +87,7 @@ describe.skipIf(!ready)("W2 career and writing chat wiring (local stack)", () =>
         input.tier === "light" ? scriptedLlmFactory(extractAdapter.adapter, Date.now)(input) : scriptedLlmFactory(replyAdapter.adapter, Date.now)(input),
       pipelines: createWritingChatPipelines({ logger: () => {}, log }),
       deliverablePipelines: createDeliverablePipelines({ logger: () => {}, log }),
+      documentPipelines: createDocumentPipelines({ logger: () => {}, log }),
       log,
     };
   }

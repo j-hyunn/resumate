@@ -1,19 +1,42 @@
-import { AI_PROVIDERS, CONNECTION_TIERS, MODEL_TIERS, WRITING_CHAT_STATUSES, type AiProvider, type ConnectionTier, type ModelTier, type WritingChatMessageRole, type WritingChatMessageStatus, type WritingChatStatus } from "@/lib/contracts/enums";
+import {
+  AI_PROVIDERS,
+  CONNECTION_TIERS,
+  MODEL_TIERS,
+  WRITING_CHAT_STATUSES,
+  type AiProvider,
+  type ApplicationDocumentKind,
+  type ConnectionTier,
+  type ModelTier,
+  type WritingChatMessageRole,
+  type WritingChatMessageStatus,
+  type WritingChatStatus,
+} from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
-import { parseDeliverableDraft, parseStructuredDraft, ReturnTarget, type WritingChatMessageDto, type WritingChatTurnFailure } from "@/lib/contracts/writing-chat";
+import {
+  parseCoverLetterDraft,
+  parseDeliverableDraft,
+  parseStructuredDraft,
+  ReturnTarget,
+  type WritingChatMessageDto,
+  type WritingChatTurnFailure,
+} from "@/lib/contracts/writing-chat";
 import type { ChatMessage, ChatSnapshot } from "./types";
 
 /** writing_chats / writing_chat_messages rows ↔ service types (DM §2.5 v4.5). */
 
 export const CHAT_COLUMNS =
-  "id, user_id, project_id, project_deliverable_id, title, status, structured_draft, message_count, last_extracted_sequence, return_target, last_activity_at, last_applied_at, created_at";
+  "id, user_id, project_id, project_deliverable_id, application_project_id, document_kind, title, status, structured_draft, message_count, last_extracted_sequence, return_target, last_activity_at, last_applied_at, created_at";
 export const MESSAGE_COLUMNS = "id, sequence, role, content, status, ai_job_id, provider, model, model_tier, connection_tier, created_at";
 
 export type ChatRow = {
   id: string;
+  /** R15 D2: null on a 서류 대화 (the not-null constraint was released). */
+  project_id: string | null;
   user_id: string;
-  project_id: string;
   project_deliverable_id: string | null;
+  /** R15 D2: set (with `document_kind`) on a 서류 대화; null otherwise. */
+  application_project_id: string | null;
+  document_kind: string | null;
   title: string | null;
   status: string;
   structured_draft: unknown;
@@ -66,13 +89,17 @@ export function toChatMessage(row: MessageRow): ChatMessage {
 }
 
 export function toChatSnapshot(row: ChatRow, messages: MessageRow[]): ChatSnapshot {
-  // DM 2.5.0: the draft's shape follows the chat's target (deliverable chats: AI-13 shape).
+  // DM 2.5 v4.15: the target is exactly one of project (STAR, AI-12) / project_deliverable (AI-13) /
+  // application_project + document_kind (서류, AI-04), and the draft's shape follows it.
   const isDeliverable = row.project_deliverable_id !== null && row.project_deliverable_id !== undefined;
+  const isDocument = !isDeliverable && row.application_project_id !== null && row.application_project_id !== undefined;
   let draft;
   let deliverableDraft = null;
+  let documentDraft = null;
   try {
-    draft = parseStructuredDraft(isDeliverable ? {} : row.structured_draft);
+    draft = parseStructuredDraft(isDeliverable || isDocument ? {} : row.structured_draft);
     if (isDeliverable) deliverableDraft = parseDeliverableDraft(row.structured_draft);
+    if (isDocument) documentDraft = parseCoverLetterDraft(row.structured_draft);
   } catch (cause) {
     throw new AppError("internal_error", undefined, { status: 500, cause });
   }
@@ -82,10 +109,13 @@ export function toChatSnapshot(row: ChatRow, messages: MessageRow[]): ChatSnapsh
     userId: row.user_id,
     projectId: row.project_id,
     projectDeliverableId: isDeliverable ? row.project_deliverable_id : null,
+    applicationProjectId: isDocument ? row.application_project_id : null,
+    documentKind: isDocument ? (row.document_kind as ApplicationDocumentKind | null) : null,
     title: row.title,
     status: required<WritingChatStatus>(WRITING_CHAT_STATUSES, row.status),
     structuredDraft: draft,
     deliverableDraft,
+    documentDraft,
     messageCount: row.message_count,
     lastExtractedSequence: row.last_extracted_sequence,
     // soft reference (DM §2.5): an unreadable value is ignored rather than failing the chat.

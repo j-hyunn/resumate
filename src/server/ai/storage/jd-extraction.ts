@@ -34,6 +34,12 @@ export type ApplyJdExtractionResult = {
   company_name: { value: string; source_sids: string[] } | null;
   position_title: { value: string; source_sids: string[] } | null;
   seniority: Ai01NormalizedOutput["seniority"];
+  /**
+   * (v4.15, CF-2) `{value, source_sids, usable}` or null. `apply_jd_extraction`
+   * re-checks the date and the window and writes `application_projects.deadline`
+   * only when it is null (D13). An older payload without the key is ignored.
+   */
+  deadline: Ai01NormalizedOutput["deadline"];
   requirements: ApplyJdRequirement[];
   tech_keywords: { keyword: string; source_sids: string[] }[];
   other_sids: string[];
@@ -69,6 +75,7 @@ export function toApplyJdExtractionPayload(input: {
     company_name: named(output.company_name),
     position_title: named(output.position_title),
     seniority: output.seniority ? { ...output.seniority, source_sids: [...output.seniority.source_sids] } : null,
+    deadline: output.deadline ? { ...output.deadline, source_sids: [...output.deadline.source_sids] } : null,
     requirements: toApplyJdRequirements(output),
     tech_keywords: output.tech_keywords.map((t) => ({ keyword: t.keyword, source_sids: [...t.source_sids] })),
     other_sids: [...output.other_sids],

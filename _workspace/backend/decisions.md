@@ -78,3 +78,227 @@
 - 2026-11-05 원격 반영(사용자 요청 "원격 반영 먼저해"): `supabase db push --linked`로 R11 `20261113000500`~`001200` 8개 + R12 `20261113001300` 적용(모두 비파괴). 확인: 원격 마지막 `20261113001300`, `ai_disclosures` v2026-11-05 6행, `policy_versions` 2026-11-05 3행, `backfill_interview_scores` 실행 결과 sessions 0·answers 0(원격 면접 세션 0건). 보안 advisor는 기존 항목뿐(authenticated SECURITY DEFINER RPC 22건, `account_deletion_logs` 정책 없음 INFO, 유출 비밀번호 보호, MFA) — 새 항목 없음. 성능은 INFO만. R11 코드는 이미 main(#48·#49), R12 코드는 PR #50. 상세 `_workspace/backend/release-2026-11-05/05_release.md`
 - 2026-11-08 원격 반영(사용자 요청 "drop 진행"): R13 2단 **파괴적** `20261113002800_r13_drop_profile_legacy_columns` — `profiles`의 `total_years_of_experience`·`desired_job_title`·`interested_industries` drop. 이 워크트리가 `supabase link` 안 된 상태라 (`db push`는 사용자가 직접 넣는 DB 비밀번호 필요) **Supabase MCP `execute_sql` 한 트랜잭션**으로 DDL + `schema_migrations` 버전 행 insert를 함께 적용했다. 사전 확인: 읽는 코드 0건(남은 참조는 주석·`evidence_links.source_field` 문자열 값), 원격 함수·뷰·제약 의존 0건, 삭제 전 값은 1행뿐이고 셋 다 빈 값 (null·null·`[]`) → 실질 손실 없음. 로컬 pgTAP 65파일 3055건 통과. 적용 후: 컬럼 0개, 원격 마지막 `20261113002800`, advisors 새 항목 없음. 코드 변경·새 배포 없음(파일은 이미 main). 상세 `_workspace/backend/R13/05_release.md` "2단 결과"
 - 2026-11-08 원격 반영(사용자 요청 "법무 2건 진행" → "머지해" → "다시 시도해줘"): `20261113002900_policy_versions_2026_11_08` (비파괴, `policy_versions`에 `privacy`·`ai_data_use` 2026-11-08 2행). **순서대로** PR #62 머지(`9ffd881`) → Vercel 운영 배포 성공 확인 → 행 반영. 첫 시도가 권한 분류기(Production Deploy)에 막혀, 배포 뒤 승인까지 **새 본문 + 옛 시행일**이 함께 보이는 구간이 있었다(기능 영향 없음). 워크트리가 link 안 돼 있어 `db push` 대신 MCP `execute_sql` 한 트랜잭션으로 2행 + `schema_migrations` 버전 행을 넣었다. 확인: `privacy`·`ai_data_use` 현재 버전 2026-11-08, `terms`·`cross_border_transfer`는 2026-11-05 그대로, 원격 마지막 `20261113002900`. advisors는 DDL 없는 insert라 실행하지 않았다. 브라우저 미확인. 상세 `_workspace/backend/release-2026-11-08/05_release.md`
+
+## 2026-11-09 R15 리더 판정 — 옛 서류 코드 폐기와 UI 화면의 순서 충돌
+
+**상황**: 11.8 배포 4단계(가드 + 테이블 3개 drop + 결과 RPC 폐기)를 **로컬에 적용하면** 생성 타입에서 `drafts`·`draft_sections`·`draft_section_sources`가 사라진다. 그런데 옛 서류 화면 S-17·S-19(`src/app/(dashboard)/(gated)/applications/[id]/drafts/**`)와 그 컴포넌트 4개가 `src/lib/data/drafts.ts` → `drafts-real.ts` → `src/server/services/drafts/*` + 폐기 라우트 3개(`career-descriptions`·`draft-source-ranking`·`draft-sections/[id]/generate`)를 쓰고 있다. 즉 **파괴 단계를 로컬 적용하면 typecheck가 깨진다.**
+
+**판정 (리더, 2026-11-09)**: UX v5.20이 S-17·S-19·S-31·S-45를 폐기하지만 **화면 삭제는 UI 세션 몫**이므로 이 슬라이스에서 화면을 지우지 않는다. 대신:
+
+1. 백엔드 소유분은 R15에서 **폐기한다** — `src/server/services/drafts/*`, 라우트 3개, `src/lib/data/drafts-real.ts`, 거부 코드 `career_description_in_progress`.
+2. `src/lib/data/drafts.ts`를 **mock 전용 + `// 연결 대기`** 로 되돌린다(실제 경로 분기 제거, export 이름·시그니처 유지). backend-context "Minimal UI edits"가 허용하는 **preview/mock 스위치** 범위다 — 옛 화면은 `?state=` 미리 보기로만 컴파일·동작하고 실제 데이터는 붙지 않는다.
+3. 옛 서류 화면·컴포넌트 삭제와 옛 주소 → S-46 리다이렉트는 **"UI 요청"**으로 넘긴다(4.23 UI 표 #4).
+4. 그래서 **파괴 마이그레이션을 로컬에 적용할 수 있고** 타입·pgTAP·typecheck가 통과한다. 원격 반영은 사용자 승인 뒤, **코드 배포 뒤**(11.8 (2) 순서).
+
+**근거**: 11.8 (2)의 "코드 배포 줄"이 요구하는 것은 "옛 `drafts` 계열을 읽고 쓰는 **코드**를 모두 지운다"이고, CF-M1로 관찰 기간 읽기 경로가 폐기됐으므로 옛 화면을 살려 둘 데이터 이유가 없다. 화면은 UI 세션이 지운다.
+
+## 2026-11-09 R15 리더 판정 2건 (구현 세부)
+
+**R15-L1 — AI-04 프롬프트 번호는 `v6`**(기획 4.23은 `v7`로 적었다). 4.23은 "main 병합: RM이 같은 날 v6을 먼저 썼다 — 구현 번호는 백엔드가 확인, MRG-AI-1 `[가정]`"으로 확인을 위임했다. 현행 코드 확인 결과 **R14가 쓴 것은 `ai-04.generate.v5`·`ai-04.adjust.v5`**이고 v6은 코드에 없었다 → 다음 번호 **v6**으로 올렸다. 출력 `schema_version`은 명세대로 **4**(현행 2 → 4, 3을 거치지 않음 — v4.13 채팅형 전환이 구현돼 있지 않아 3판 행이 없다). `common.v4`는 올리지 않았다(RM 판 그대로).
+
+**R15-L2 — 서류 턴 SSE는 새 이벤트 이름을 만들지 않고 기존 payload에 칸을 더한다.** 한 턴에 문항이 최대 3개(CL-10)라 기존 `sources_selected`·`draft_started`·`draft_block`·`adjusting_length`·`draft_done`에 **`slot`·`questionNo`** 칸을 더한다(AI 명세 AI-04 "초안 턴 이벤트 순서"가 문항마다 반복한다고 적은 것의 구현 표현). UI의 `useAiStream` 반환 모양은 바뀌지 않는다. `[가정]`
+
+## 2026-11-09 R15 구현 전제 차이 (보고용, 결정 아님)
+
+**AI-04의 v4.13 채팅형 전환이 애초에 구현돼 있지 않았다.** 현행 코드는 문항 1개짜리 카드형 파이프라인(`selection_mode`, `complete_cover_letter_section` payload)이었다. 11.8이 미배포인 것과 같은 이유다(기획이 CL-* 사이클에서 설계만 하고 구현 슬라이스가 없었다). 그래서 R15의 AI 작업은 "`answer_title` 추가"가 아니라 **CL-* + CF-* 동시 구현**(서류 턴 파이프라인 신설)이 됐다. 슬라이스 범위가 계획서 1-D보다 넓어졌으나 결정 변경은 없다.
+
+## 2026-11-09 CF-S1 (사용자 결정) — 자소서 슬롯 근거의 저장 원천
+
+**배경**: R15 구현 중 발견한 기획 불일치(R15-AI-2). DM 2.8·AI-04는 슬롯 단위 근거 `{slot}.sources.{n}`이 생긴다고 단정하는데, v4.15가 `set_source_ranking`·`document.source_ranking`을 폐기해 AI-04가 낸 `sources[]`를 저장할 자리가 없었고 `body.questions[]`·`save_application_document` 인자에도 그 칸이 없었다. 기획 검토 세션(`local_6c265c4a-0a2e-4e53-8e52-a6fc0459717d`)에 선택지 3개와 구현 영향을 올려 사용자 결정을 받았다.
+
+**확정 (2026-11-09, 사용자) — 안 (2) 변형 "AI 초안에 실어 저장"**:
+- **새 패치 연산을 만들지 않는다.** 기존 `replace_draft`에 **`sources[]`** 인자를 붙인다 — 원소 `{source_type, source_id, role}`, `role` ∈ `primary`/`supporting`, **0~5개** `[가정]`. 저장 위치 `structured_draft.document.questions[].draft.sources[]`.
+- **별칭 → `source_id` 변환은 서버(ai-pipeline)가 블록 `evidence[]`와 같은 경로로** 한다. `user_note`의 `source_id` = 그 문항의 `question_id`. 허용 출처는 2.8 목록 그대로.
+- **`save_application_document` 근거 쓰기**: 그 슬롯 제안이 `p_applied_proposals`에서 **applied**면 **그 제안(같은 `rev`)의 `draft.sources[]`**로 `{slot}.sources.{n}`을 교체(`n` = 배열 순서, `primary` 먼저, **`role`은 행에 저장하지 않는다**). **적용 제안이 없는 슬롯은 기존 `sources` 행을 유지**하고 블록 근거만 본문대로 재작성 `[가정]`. 보내지 않은 슬롯은 양쪽 삭제.
+- **화면은 `sources`를 보내지 않는다** — `p_body.questions[]`에 `sources` 키가 없고 **RPC 인자·`p_body` 모양은 변경 없다**.
+- 설계 의도: 근거 출처가 AI 턴 결과뿐이라 화면 값을 `origin='ai'` 근거로 저장하는 **위조 경로가 생기지 않는다**(CF-A17과 같은 성질).
+- **귀결**: 2.5.1의 "슬롯마다 근거를 전부 지우고 다시 넣는다"는 **블록 근거에만** 적용된다. `sources` 행은 적용 제안이 있을 때만 교체된다.
+
+**문서 상태 주의**: CF-S1의 문서 반영(DM 2.5.0b·2.5.1·2.8, AI-04 "저장 매핑", UX S-46, decisions 3.28 후속 확정 3 + 4.23 백엔드 #14)은 **PR #68로 미머지**다. **이 워크트리의 `docs/planning/`에는 CF-S1이 없다** — R15는 이 결정 기록을 기준으로 구현했다. PR #68이 머지되면 문서와 대조할 것.
+
+**CF-S1 번호 판단 (리더 승인 2026-11-09)**: AI-04 출력 `schema_version` **4 유지**, 프롬프트 **`ai-04.generate.v6` 유지**. `sources[]`(`role`·`rationale`·`reuse_reason`·`evidence`)는 이미 모델 출력 스키마에 있던 값이고 모델이 하는 일·선택 규칙·프롬프트 문장이 바뀌지 않았다 — 서버가 그 값을 저장하기 시작한 것뿐이다. 올리면 `input_hash` 재사용만 잃는다. `structured_draft.schema_version`도 **1 유지**(11.8 미배포로 1판 행이 없다).
+
+**CF-S1 구현 계약 (db-engineer와 대조 대상)**: `sources` **키 없음 ≠ 빈 배열** — 키가 있으면(빈 배열 포함) 교체, 없으면 기존 행 유지. 화면이 보내지 않아 제안이 유일한 원천이므로 **초안 턴은 블록이 남은 문항마다 항상 키를 싣는다**(프로젝트 0개가 정상인 `motivation`·`future_plan`은 `[]`). 별칭 → `source_id` 변환은 블록 `evidence[]`와 **같은 함수**(`toStoredSourceRef`)를 쓴다.
+
+## 2026-11-09 R15-DB-8 기획 문장 정정 (결정 아님)
+
+DM §2.6.1 조건 5(`jd_has_results`)가 11.8 4단계에서 drop되는 `draft_sections.ai_content`를 읽고 있었다(R14가 면접 질문 행 조건을 지울 때 남은 줄). 기획 검토 세션에 올려 **문장 정정으로 처리**됐다 — 사용자 결정 사항이 아니었다.
+- 정정 내용: 조건 5에서 `draft_sections.ai_content` 절 삭제, 설명 문단에 "서류 정본은 JD 문장을 담지 않아 조건 5가 서류를 보지 않는다 — 자기소개서만 있고 JD 근거(`jd_requirement`·`jd_sentence`)가 없으면 원문 수정 허용, JD 출처 블록 근거가 있으면 세 번째 절이 막는다" 추가.
+- 구현(R15-DB-8)과 같은 모양이므로 **`[가정]` 표식을 해제**했다.
+- R15-DB-9(거부 코드 `23514` → `P0001 invalid_evidence_source`)는 **문서 변경 불필요**로 합의 — 구현 세부 `[가정]`으로 유지.
+- 문서 반영은 **PR #68(미머지)** 에 있다 — CF-S1과 같은 PR이다. 이 워크트리 `docs/planning/`에는 둘 다 없으므로, PR #68 머지 뒤 §2.6.1·2.5.0b·2.5.1·2.8·AI-04를 구현과 대조할 것(`04_summary.md` 후속 항목).
+
+## 2026-11-09 R15 리더 판정 — 블록 `review` 강제는 DB 범위가 아니다 (구현 수정, 기획 충돌 아님)
+
+**발견 경로**: ai-pipeline ↔ db-engineer 계약 대조(CF-S1 뒤 7항목). DB의 서류 블록 재조립 함수가 **`blocks[].evidence[]`가 비면 비제목 블록을 `review='needs_review'`·`review_reason='no_evidence'`로 강제**했다. 담당자는 기획 충돌로 올렸으나 문서를 확인한 결과 **구현이 명세 범위를 넘은 것**이었다.
+
+**판정 근거**:
+1. **판정 기준이 틀렸다** — DM §2.5.0b "`blocks[]` 출처 3종" = `evidence` / `source_fact_ids` / `source_body_quotes`. 다음 행의 "근거 0개면 `needs_review`"는 **3종 전부 0개**를 뜻한다. AI 명세 AI-04도 "블록의 출처 3종 … 모든 문단에 하나 이상 필요(없으면 V-4)". `evidence[]`만 보면 **이어 쓰기 블록**(출처가 대화 사실·지금 본문 인용뿐인 문단, CL-4의 주 경로)이 전부 `needs_review`가 되어 매번 사용자 [수락]을 요구한다 — 눈에 보이는 오동작.
+2. **그 판정은 DB 몫이 아니다** — DM §2.5.0b "DB의 V-10 방어 범위 (서류)": 2.5.0a 범위 + `blocks[].evidence[]` 원소의 **모양·길이·개수만** 본다. §2.5.0a R5-DB-6: "제목 외 블록은 출처 1개 이상(V-10a) … 은 **파이프라인 몫이다**".
+
+**지시**: DB의 `review`/`review_reason` 강제 분기 제거, 패치로 온 값을 그대로 저장. 유지할 것 — `evidence[]` 모양·길이·개수 검사, `source_type` 2.8 목록 검사, `quote` ≤ 2,000자, 블록당 ≤ 20개, 그리고 **V-8 마지막 안전망**(`job_competency` 문항의 `project.learnings` 거부 — 문서가 "저장 RPC에도 남긴다"고 적은 유일한 예외). pgTAP는 반대로 3건 추가(출처가 `source_fact_ids`뿐·`source_body_quotes`뿐인 블록은 `ok`로 저장, 파이프라인이 보낸 `needs_review`는 그대로 저장).
+
+**기록 위치**: `spec-gaps.md`에 적지 않는다 — 기획 문제가 아니다.
+
+## 2026-11-09 R15 계약 대조 결과 (CF-S1 뒤)
+
+ai-pipeline이 db 노트와 7항목을 대조해 **불일치 2건을 잡았다**. 대조를 넣은 값이 확인된 지점이다.
+- **`replace_draft` payload 모양 (중대)**: AI 쪽이 `{op, body:{slot,…}}`로 보내는데 DB는 `{op, slot, question_id?, draft:{…}}`를 기대했다. 그대로 두면 **모든 서류 초안 턴이 `invalid_patch 'op N slot'`으로 실패**했을 것이다. AI 쪽을 DB 모양으로 고쳤다 — `value`는 보내지 않는다(DB가 `blocks`로 재조립), `question_id`는 DB가 새 슬롯 원소를 만들 때 쓰므로 함께 보낸다.
+- **`char_limit_at_generation` null**: DB는 null 값을 `invalid_value`로 보고 **초안을 조용히 저장하지 않는다**(키 없음은 통과). AI 쪽이 null이면 키를 빼고 보내게 고쳤다.
+- 일치 확인: `sources` 키 없음 ≠ 빈 배열 / `role` 2값 / 0~5개·`invalid_patch` detail / 허용 출처 8값 동일 집합 / R15-DB-3(슬롯 근거의 `source_field`·`source_locator` 부재) / 그 밖 `invalid_patch`·`invalid_value` 조건 전부 통과.
+
+## 2026-11-09 R15 리더 판정 — `draft_count`는 **초안 턴당 1** (R15-API-7)
+
+**발견**: api-engineer가 편입한 서류 대화 통합 테스트에서, `apply_structured_draft_patch`가 `draft_count`를 **`replace_draft` 연산마다** 올려 문항 2개를 쓴 초안 턴 한 번에 `draft_count`가 2가 됐다. 귀결 — 5문항 자소서는 한 바퀴가 턴 2회(3+2) = 연산 5개여서 **한 바퀴만 돌아도 6회 중 5회를 소모**하고 두 번째 바퀴가 `writing_chat_draft_limit_reached`로 막힌다.
+
+**판정: 구현이 틀렸다. 턴당 1이 맞다.** 기획 세션에 올리지 않았다 — 문서가 답을 갖고 있다.
+- **결정적 근거** — AI 명세 C-14 "서류 작성 대화" 행: "대화당 초안 제안 ≤ 6회 … **제안 단위가 (v4.15, CF-1·CF-5) '최대 3문항'이라 자소서 5문항이면 초안 턴 2회면 한 바퀴가 돈다**". **"제안 단위" = "최대 3문항"** = 한 제안은 한 초안 턴이고, 6회는 초안 턴 6회(= 세 바퀴)다.
+- 보강 1 — AI 7.4의 비용 논거("초안 턴이 질문 턴의 약 10배 비용"): 비용 단위는 compose **호출**이고 한 턴이 문항 3개를 써도 호출은 1회다.
+- 보강 2 — DM 2.5.0b가 부정한 것은 "**문항별** 6회"이지 "한 턴이 슬롯 수만큼 소모"가 아니다.
+- 보강 3 — 화면이 "초안 남은 횟수 **6 − `draft_count`**"를 계산해 보인다. 연산당 세면 한 바퀴 뒤 "1회 남음"이 되어 "6회째 뒤에 칩을 숨기고 새 대화 권유"라는 흐름과 어긋난다.
+- **왜 지금까지 드러나지 않았나**: 산출물 대화(2.5.0a)는 슬롯이 하나라 "연산당 = 턴당"이었다. 서류는 슬롯이 여럿이어서 처음 갈라졌다.
+
+**지시**: `apply_structured_draft_patch` 서류 분기에서 `replace_draft`를 담은 **패치 호출당 +1**(연산 3개여도 +1). 산출물·STAR 분기는 변경 금지(회귀 방지). "내용 블록이 안 남은 초안도 횟수는 센다"는 유지. 통합 테스트 기대값 `[2,2]` → `[1,1]` + 초안 턴 6회 뒤 7번째 거부 단정 추가.
+
+## 2026-11-09 R15 QA-02 정정 승인 — 와이어는 이미 정상이었다
+
+backend-qa가 "화면이 실패 이벤트를 버려 C-20 안내가 뜨지 않는다"고 적었으나, api-engineer 확인 결과 **`src/server/sse.ts`의 `normalizeErrorEvent`가 내보내는 모든 `error` 이벤트를 다시 조립**해 **와이어 모양은 이미 완전했고 C-20도 떴다**. 실제 결함은 ① 턴이 만든 객체가 계약을 어겨 in-process 소비자(테스트)가 버린다 ② `as` 캐스팅이 타입 검사를 우회한다 두 가지다. **심각도 Major는 유지**한다 — 아래 이유로 ②가 실제 버그를 가리고 있었다.
+
+**캐스팅 제거가 찾아낸 결함**: AI-04의 `sources_selected`가 저장 행 모양 **snake_case**(`sort_order`·`experience_id`…)인데 SSE 계약은 **camelCase**였다. 그대로 배포되면 **S-46의 근거 칩이 하나도 파싱되지 않는다.** `toDocumentSseEvent()` 한 자리에서 이름을 바꾸고 snake_case 키가 남지 않는지 테스트로 묶었다. `as` 캐스팅 7곳을 모두 지우라는 지시가 이것을 드러냈다 — 캐스팅을 남긴 채 계약만 채웠다면 못 찾았다.
+
+## 2026-11-09 CF-S2·CF-S3 접수 (자소서 UI 세션 경유) — 백엔드 변경 없음
+
+UI 세션(`local_7e541d52-…`, worktree `cover-letter-ui-469976`)이 전달한 2026-11-09 사용자 확정 2건. 둘 다 서버·DB 변경이 필요하지 않다.
+- **CF-S2**: 문항 근거의 원천은 그 문항 초안 제안의 `sources[]`이고 **화면은 근거를 저장 요청에 싣지 않는다**(저장 입력은 `applied_proposals: [{writing_chat_id, slot, rev}]`만). 근거 행은 저장 RPC가 넣는다. 정본 C-11은 경로 한 줄만 보이므로 `role`·`origin`·`rationale`은 정본에 두지 않는다. → **R15의 CF-S1 구현과 일치**(확인 완료).
+- **CF-S3**: 문항 설정 상태에서 정본 행을 만드는 첫 저장은 **[자기소개서 작성 시작] 하나**이고 상단 "저장하기"는 비활성(⌘S도 꺼짐). → **화면 쪽 게이트이고 RPC는 변경 없다**고 판단해 서버를 그대로 뒀다.
+
+**문서 정정 결과 (2026-11-09)**: DM 2.5.1 "정본 행이 생기는 때"에 남아 있던 "문항 설정 상태의 '저장하기'만 누른 경우는 행이 생기므로 다음 방문은 작성 상태다" 문장이 CF-S3와 어긋난다는 것을 내가 지적했고, UI 세션이 기획 세션에 올려 **PR #68에 정정이 추가**됐다 — 그 문장은 취소선 처리되고 CF-S3 문장(화면 게이트·RPC 변경 없음·첫 저장 = [자기소개서 작성 시작])으로 교체, UX S-46 상단 바에도 "문항 설정 상태에서는 비활성·⌘S도 꺼짐" 표기. **즉 R15의 판단(RPC 그대로)이 정본이 됐다.**
+
+**UI 세션과의 계약 합의**: 정본 키는 `get_deletion_impact` → `documents`·`document_chats`, 커리어 결과 영향 → `documents`·`document_sections`, 단 **`get_account_deletion_summary`는 반환 키 `drafts` 유지**(DM §4.3). `src/lib/data/drafts.ts`와 픽스처는 drop 커밋과 같은 머지에서 UI 세션이 걷되 **`retryJdExtraction`·`runJdExtraction`은 보존**(JD 요건 추출, S-15·D-30). UI 세션은 서버 통합 테스트를 돌리지 않으므로 공유 로컬 Supabase의 `db reset`은 이쪽이 자유롭게 쓴다. **R15 커밋 뒤 UI 세션에 알릴 것.**
+
+## 2026-11-09 R15 후속 — 읽기 공백 4건 + 쓰기 우회 1건 (UI 세션 연결 중 발견)
+
+**발견 경로**: 자소서 UI 세션(`local_7e541d52-…`)이 R15를 실제 경로에 연결하다가 **화면이 부를 서버 함수가 없는 자리** 4건을 보고했다. 리더가 코드로 4건 모두 확인했다.
+
+**판정: 기획 공백이 아니라 R15 계획의 누락이다.** DM 7장 25행 "서류 작성 화면 조회"(정본 1행 + 그 서류의 대화 목록 + 연 대화의 메시지·`structured_draft` + `application_document` 근거 + JD 머리)와 33행 "보드 조회"(`filled_slot_count`·`slot_count`)가 이미 정해 둔 읽기다. 계획서 1-E가 "연결(wiring)은 하지 않는다"를 **"UI가 부를 서버 읽기도 만들지 않는다"로 잘못 넓혔다** — 연결은 `src/lib/data/`를 실제 경로로 바꾸는 일이고, 서버 서비스·액션은 R15 범위였다.
+
+| # | 공백 | 영향 | 처리 |
+|---|------|------|------|
+| 1 | 사용자 세션으로 **정본 1행을 읽는 서비스·액션이 없다** | S-46이 늘 문항 설정 상태로 열려, 이미 쓴 자소서 위에 빈 기본 문항으로 [작성 시작]을 누르면 **정본을 덮어쓴다**(기대 버전 null = 덮어씀, 2.5.1). **코드 배포 순간 생기는 데이터 손실 경로** | `getApplicationDocument` → 행 또는 `null` |
+| 2 | `loadDocumentCounts`가 0/1만 준다 | S-39 카드 "작성 중/작성됨"을 가를 수 없다 | `listDocumentSlotCounts` → `{slot_count, filled_slot_count}`, `body` 미독 |
+| 3 | `first_copied_at`을 쓰는 경로가 없다 | 첫 복사 지표(PRD 7장) 미기록. 옛 `drafts_keep_first_copied_at`은 파괴 단계가 drop한다 | RPC `mark_application_document_copied` — 한 번만 기록, **`updated_at` 불변**(기대 버전 보호), 행 없으면 `null` |
+| 4 | 서류 대화 DTO·목록·상세가 없다(`AnyWritingChatDto`에 서류 분기 없음) | 새로 고침하면 대화와 미반영 제안이 화면에서 사라지고, 초안 6회를 쓴 대화를 다시 열 수 없다(서버 데이터는 남는다) | `DocumentWritingChatDto` + 목록·상세, 산출물 대화 읽기 관례 그대로 |
+
+**릴리스 판단**: **1이 해소되기 전에는 두 PR(#69 + UI)을 머지하지 않는다.** 4는 체감이 커서 함께, 2·3도 작아서 함께 넣는다.
+
+### 쓰기 우회 (리더 발견, 위 작업 중)
+
+**문제**: `20261113003100`이 `authenticated`에 `application_documents`의 **insert·update grant + RLS `insert_own`·`update_own`**을 둔다(저장 RPC가 `security invoker`라 필요했다 — R15-DB-1/2). 그 결과 로그인한 사용자가 **저장 RPC를 거치지 않고 REST로 자기 행을 직접 쓸 수 있다** — 문항 ≤ 5·`char_limit` 필수·슬롯 형식·`answer_title` ≤ 100·**`filled_slot_count`와 `body`의 정합성**을 모두 건너뛴다. 다른 사용자 행은 RLS가 막으므로 **교차 사용자 침해는 아니고 자기 행 무결성 문제**다. DM 2.7.3은 "insert·update = `save_application_document`"만 쓰기 경로로 둔다.
+
+**판정 (리더)**: 저장 RPC는 **문서(2.5.1 공통 규칙)대로 `security invoker`를 유지**하고, **트랜잭션 로컬 설정 플래그 없이는 쓰기를 거부하는 `BEFORE INSERT OR UPDATE` 트리거**를 단다. 저장·복사 RPC만 플래그를 세운다. **delete는 막지 않는다**(DM 2.7.3 "delete 본인", 지원 프로젝트 cascade). 문서의 두 문장("invoker"·"쓰기는 RPC로만")을 둘 다 만족하는 **구현 세부**이므로 기획 세션에 올리지 않았다.
+
+**마이그레이션**: 1단계 17개가 **원격에 이미 적용**됐으므로 기존 파일을 고치지 않고 **새 비파괴 파일 `20261113004670`** 하나로 한다(A 가드·B 복사 RPC·C 읽기 RLS 확인). **파괴 `004700`은 계속 마지막이다.** 이 파일도 **코드 배포 전에 push**해야 한다 → `05_release.md`를 고친다.
+
+**경계**: `src/lib/data/cover-letters.ts`는 UI 세션 브랜치 소유(stub이 이름·시그니처까지 맞춰져 있다)라 백엔드가 만들지 않는다. 백엔드는 서버 서비스·액션·계약만 만들고 export 목록을 UI에 넘긴다.
+
+**UI에 덧붙인 주의**: 문항 설정 상태는 `getCoverLetterDocument`가 **`null`일 때만** 들어가야 한다 — 읽기 **실패**를 `null`로 접으면 같은 덮어쓰기가 다시 생긴다.
+
+### R15 후속 db 결과 (2026-11-09)
+- 새 비파괴 `20261113004670_r15_document_write_guard_and_copy.sql` — 원격 미적용, **코드 배포 전에 push**. 순서 `004660`(원격) → `004670` → `004700`(파괴, 마지막). 원격 적용분 17개는 무변경(리더 확인).
+- **A 쓰기 가드**: 트리거 `application_documents_guard_write`, 트랜잭션 로컬 플래그 `app.application_document_write`, 거부 `direct_write_not_allowed`(P0001 → api **403**, 리더 승인). delete는 허용. 플래그가 켜져도 RLS는 그대로(남의 행 insert는 `42501`). `delete_career_item`의 definer 헬퍼는 소유자로 돌아 가드에 걸리지 않음(pgTAP 확인).
+- **B 복사 RPC** `mark_application_document_copied` — 한 번만 기록, 행 없음·남의 행은 `null`, **`updated_at` 불변**(전용 트리거가 `updated_at`·`first_copied_at`·`slot_count` 외 변화가 없으면 유지). ⚠ 생성 타입은 `Returns: string`이지만 **실제 `null`이 온다** → api는 `string | null`로 받는다.
+- **C 읽기 RLS**: 빠진 정책 없음, 새로 연 것 없음(4종 모두 `user_id = auth.uid()`).
+- pgTAP **65파일 2,649 단정**, 잔여 행을 심은 상태로도 통과.
+
+### R15 범위 밖 후속 후보 — `profile_job_interests` 쓰기 우회 (db-engineer 관찰)
+R13의 `profile_job_interests`도 **같은 구조**다 — 저장 RPC `save_profile_basics`가 `security invoker`이고 `authenticated`에 insert grant가 있어, 로그인한 사용자가 RPC를 거치지 않고 REST로 자기 관심 직무 행을 직접 쓸 수 있다(상한·검증 우회, 자기 행 무결성 문제 — 교차 사용자 침해 아님). **R15 범위가 아니라 이 슬라이스에서 고치지 않는다.** 같은 가드 패턴(`004670`)으로 막을 수 있다. 다른 invoker 저장 RPC 대상 테이블도 같은 감사가 필요하다 — 별도 슬라이스 후보.
+
+## 2026-11-09 UQ-741 — 서류 저장의 기대 버전 null = 덮어쓰기 (기획 회부, 미결)
+
+**발견**: UI 세션 UI QA UQ-741(Major). `save_application_document`가 행이 있어도 `p_expected_updated_at`이 null이면 검사 없이 덮어쓴다.
+
+**판정: 버그가 아니라 문서에 적힌 공통 계약**이라 리더가 바꾸지 않았다. DM §2.5.1 공통 규칙 "기대 버전": "null이면 덮어쓴다(화면 '내 내용으로 저장'은 이 인자 없이 다시 보낸다)". 저장 RPC 5개가 같은 규칙을 쓴다(리더 코드 확인: `save_project_page`·`save_project_deliverable`·`save_profile_basics`·`save_application_document`·R11 `p_client_id` 판).
+
+**서류에만 생기는 모호함**: S-10·S-44는 만들기와 고치기가 인자로 갈리고(대상 id null + `p_client_id`) 화면이 늘 `updated_at`을 들고 있어, null은 "내 내용으로 저장"에서만 나온다. 서류는 "행이 없으면 만들고 있으면 고친다"(구분 인자 없음)라서 **null이 "첫 저장"과 "강제 덮어쓰기" 두 뜻**을 갖는다. 행이 생기기 전에 연 탭은 보낼 `updated_at`이 없어서 **화면에서 고칠 수 없다** → 두 탭 경로로 정본이 빈 기본 문항으로 조용히 덮인다.
+
+**회부**: 기획 검토 세션(`local_6c265c4a-…`)에 선택지 4개와 구현 영향을 올렸다. **권고 (a)** — 서류 RPC만 "행이 있는데 null이면 `stale_write`", 첫 저장은 지금처럼, "내 내용으로 저장"은 `stale_write`의 `details.current_updated_at`을 다시 보낸다, S-10·S-44·프로필은 변경 없음. 확정되면 R15 후속 묶음에 새 비파괴 마이그레이션(`004700`보다 앞 번호)으로 넣는다. **두 PR 머지는 이 건 정리 뒤.**
+
+**정정 (UI QA)**: 공백 1번(정본 읽기 없음)의 현재 증상은 "늘 문항 설정 상태"가 아니라 **"S-46이 늘 오류 화면"**이다(`notWired`가 throw하고 page가 catch하지 않는다). 그래서 **현재 코드로는 덮어쓰기가 일어나지 않는다.** 위험은 "읽기를 연결할 때 실패를 `null`로 처리하면 생기는 경로"였고, UI가 `catch → null`을 넣지 않기로 했다.
+
+**UQ-752 (Minor)**: `src/server/ai/storage/evidence-links.ts:23`의 쓰는 곳 없는 타입 목록에 옛 `drafts` 이름 잔여. 런타임 영향 없음. QA가 끝난 뒤 정리한다.
+
+**파괴 전 점검 — 충족 (UI 세션 판정, 그쪽 브랜치 기준)**: 실제 경로에서 옛 `drafts`·`draft_sections`·`draft_section_sources` 참조 0건(`.from(...)` 0, 옛 RPC 호출 0, `drafts-real.ts`·`services/drafts/`·옛 생성 라우트 없음). 이름만 걸리는 실제 경로 파일 4곳은 안전 판정. `retryJdExtraction`·`runJdExtraction` 보존(`drafts.ts:1153-1158`).
+
+## 2026-11-09 CF-S6 (사용자 확정) — 법무 3종 2026-11-09판 `policy_versions` 행
+
+**출처**: 기획 검토 세션 회신. decisions 4.23 백엔드 #15, 문서 반영은 **PR #68(미머지)** — 이 워크트리 `docs/`에는 없다.
+
+**원문 확인 (리더, PR #68 브랜치 `docs/legal/` 읽기 전용)**: terms·privacy·ai_data_use 모두 **버전 `2026-11-09`, 시행일 2026-11-09, 재동의 없음**(경력기술서 삭제 — 제공 서비스·수집 항목 축소). cross_border_transfer는 대상 아님. 원격 직전 판은 terms `2026-11-08`, privacy·ai_data_use `2026-11-08.1`. 새 판의 시행일이 더 늦어 R14 동률 정렬과 무관하다.
+
+**구현**: `20261113004680_r15_policy_versions_cf1.sql`(R14 `20261113002950` 패턴 — 새 행만, `on conflict do nothing`). 번호는 `004670` 뒤·파괴 `004700` 앞. **QA 진행 중이라 스크래치패드에 준비만 했다** → QA 뒤 db-engineer가 넣고 현재 판을 박아 둔 pgTAP 7곳(`policy_versions` 개수 17→20, `consents`·`r12_ui36_followups`·`account_deletion`·`r13_settings_dialog`·`r14_remove_mock_interview`·`signup_consent_ai_gate`)을 고친다. 앱 코드 `src/server/services/shell/index.ts`는 **주석만** 걸려 변경 없음(테스트는 자체 픽스처).
+
+**릴리스 결합**: UI 소유 `src/components/account/policy-content.ts`와 **같은 머지**. 마이그레이션은 코드 배포 전에 push되므로 **push ~ 머지 사이 화면이 옛 본문에 새 시행일**을 보인다(R14와 같은 창 — push 직후 머지).
+
+## 2026-11-09 CF-S7 (사용자 확정) — 서류 저장의 기대 버전 null
+
+UQ-741 회부 결과 **(a) 확정**. `save_application_document`만: **정본 행이 있는데 `p_expected_updated_at`이 null이면 `stale_write`**(409, `details.current_updated_at`). 행 없음 + null(첫 저장)은 통과. 다른 저장 RPC 3종(`save_project_page`·`save_project_deliverable`·`save_profile_basics`)은 변경 없음. "내 내용으로 저장"은 `stale_write`의 `current_updated_at`을 실어 재전송(UI 커밋 `f56775e`에 이미 반영). 문서는 PR #68(DM 2.5.1 "기대 버전" 행 서류 예외, UX S-46, decisions 3.28 CF-S7·4.23 백엔드 #16·UI #12). → 새 비파괴 `20261113004690`.
+
+## 2026-11-09 R15 후속 3 리더 판정 2건 (UI QA 라운드 1에서 나온 백엔드 요청)
+
+**① 슬롯 번호 재사용 금지 수단 — `application_documents.slot_high_water`** (UQ-740 수정 중 발견)
+DM 2.5.0b "번호는 그 서류에서 한 번 쓰면 재사용하지 않는다"는 **이미 정해진 규칙**인데 정본에 지킬 수단이 없었다 — 지우고 **저장한** 번호는 `body`에서 사라져 다음 방문의 화면이 알 수 없다. 그러면 옛 대화의 같은 번호 제안이 새 문항에 붙어 같은 `slot`·`rev`로 [반영]·저장이 통과한다(근거 행은 저장 때 지워지지만 제안은 `structured_draft`에 남는다). **판정**: 규칙을 지키는 수단이라 구현 세부로 정했다 — 컬럼 `slot_high_water integer not null default 0` `[가정: 이름]`. 저장 RPC가 **저장돼 있던 body에 없는 새 슬롯**의 번호가 이 값 이하이면 `invalid_slot`, 쓴 뒤 `greatest(기존, 이번 최대 번호)`. `meta`에 두지 않은 이유: `p_meta`는 `{tone}`만 받는 계약(2.5.1). `updated_at` 트리거 예외 목록에 추가(메타라 기대 버전을 깨지 않게). CF-S7과 같은 함수라 **같은 마이그레이션 `004690`**. 화면은 `max(slot_high_water, 열린 제안, 이번 방문 발급분) + 1`로 새 번호를 정한다.
+
+**② 서류 `draft_done`에 확정 초안 `draft`** — 틀린 문장을 [반영]할 수 있던 자리
+산출물 `draft_done`은 `body: StoredDraftBodySchema`를 싣고 계약 주석이 "`draft_block`은 임시 — `draft_done.body`가 정본"인데, **서류 `draft_done`에는 확정 초안이 없었다**. 화면이 임시 `draft_block`을 모아 제안을 만들기 때문에 **글자 수 보정(`correctionApplied`)이 일어나면 [반영]이 보정 전 문장을 채운다**. `base_body_hash`도 없어 화면이 재계산했다. **판정**: S-44와 계약을 맞추는 구현 세부(새 이벤트 이름 없음, R15-L2와 같은 종류) — 서류 `draft_done`에 그 슬롯의 **저장된** 초안 객체를 `draft`로 싣는다(저장 모양 snake_case). **DB가 `value`를 블록으로 재조립하므로 파이프라인 객체가 아니라 패치 적용 뒤 저장본**을 싣는다 — 통합 테스트로 "SSE 초안 == 저장 초안" 단정.
+
+## 2026-11-09 R15 후속 3 QA — 슬롯 정체는 번호 + `question_id` (QA-07·QA-08, 리더 판정)
+
+**QA 후속 라운드 2 결과**: CF-S7·`draft_done.draft` 통과(동시 첫 저장 25회 독립 재현 — 매번 성공 1·`stale_write` 1, 500 0건, 이중 성공 0건. 우회 시도: 먼 미래·과거·`±infinity`·형식 오류·밀리초 절삭·`p_client_id` 모두 실패). 슬롯 재사용 규칙에 Major 1·Minor 1.
+
+**QA-07 (Major)** — 재사용 검사가 **슬롯 이름만** 본다(`004690:233-237`). 같은 `q_3` 이름에 다른 `question_id`가 오면 "기존 `q_3`"으로 통과해 **옛 문항의 AI 제안이 새 문항에 `applied`**된다(S-swap). `question_id`를 빼면 서버가 기존 슬롯에 새 uuid를 발급해 정체가 바뀌고 `user_note` 근거가 끊긴다(S-swapnull). 실제 패치 RPC(`app_ai_writer`)로 만든 제안으로 사용자 세션 REST에서 끝까지 재현됐다. 올바른 UI는 닿지 않지만 옛 탭·버그 화면·`question_id`를 빼는 클라이언트가 조용히 일으킨다. 교차 사용자 영향 없음.
+
+**QA-08 (Minor)** — 한 저장에서 지운 슬롯의 제안을 같이 보내면 "반영됨"으로 기록된다(`003700`부터). 근거 행은 생기지 않음.
+
+**판정**: DM 2.5.0b 재사용 금지와 2.5.1 반영됨 기록을 제대로 지키는 **구현 수정** — 기획에 올리지 않았다.
+1. 저장된 슬롯과 같은 번호 + **다른 `question_id`** → 새 문항으로 보고 `invalid_slot`.
+2. 저장된 슬롯과 같은 번호 + **`question_id` 생략** → 저장된 id를 **물려받는다**(새 uuid 금지).
+3. 저장된 body에 없는 새 슬롯은 지금처럼 번호 > `slot_high_water`.
+4. 심층 방어: 제안의 저장된 `question_id` ≠ 이번 body 그 슬롯의 `question_id` → `skipped: not_found` `[가정: 사유]`(2.5.1 "대화가 이 대상의 것이 아님" — `proposal_changed`는 `rev` 차이용). 이번 방문에 추가해 아직 저장되지 않은 슬롯은 1로 막히지 않으므로 필요하다.
+5. QA-08: 제안의 슬롯이 이번 저장된 body에 없으면 `skipped: not_found`.
+
+**마이그레이션**: `004690`은 아직 커밋·원격 push 전이라 **그 파일을 고친다**(새 파일 없음).
+
+**관찰 (결함 아님)**: `draft_done.draft`와 저장본은 [반영]이 읽는 모든 필드가 같지만, TS 스키마 정규화로 항상 빈 배열인 키 2개(`requirement_ids`·`source_project_fields`)가 바이트 단위로 다르다. 다시 읽기 DTO도 같은 정규화를 거친다. 계약 주석 "exactly as … holds it"이 과장이라 리더가 문구를 고쳤다(`src/lib/contracts/writing-chat.ts`).
+
+## 2026-11-10 CF-S8 (사용자 확정) — 저장하지 않은 새 문항의 AI 초안: (a) 자동 저장 후 요청
+
+리더가 기획 세션에 올린 건(저장하지 않은 새 문항은 AI 초안 컨텍스트에 들어가지 않는다)이 **(a)로 확정**됐다. **백엔드 변경 없음.**
+- **서버 — 지금 동작을 정본으로 확정**: `mergeQuestions`(`src/server/ai/context-pack/cover-letter-chat.ts:213-234`)는 정본 문항만 돌고, `form_snapshot`은 저장된 문항의 **값만** 덮어쓴다. 코드는 바꾸지 않는다.
+- **화면(UI #13)**: S-46은 턴을 보내기 전에 저장하지 않은 문항 추가·삭제·순서 변경이 있으면 `save_application_document`로 **먼저 저장하고, 성공하면 턴을 보낸다**. 저장이 실패하면(검증 오류·`too_many_questions`·`stale_write`·네트워크) 턴을 보내지 않는다. 값만 바뀐 경우는 저장하지 않고 스냅숏으로 보낸다 `[가정]`.
+- **R15와 맞물리는 점**: 자동 저장도 일반 저장과 같은 경로라서 CF-S7(정본이 있으면 기대 버전 필수)과 슬롯 정체 규칙(번호 + `question_id`, `slot_high_water`)을 그대로 거친다. 그래서 저장된 문항에만 제안이 붙고, QA-07에서 막은 혼선이 다시 열리지 않는다.
+- 문서: PR #68 커밋 `99ce3d9` — DM 2.5.1 `form_snapshot` 단락, AI-04 `<document_state>` 행, decisions 3.28 CF-S8, 4.23 백엔드 #17(변경 없음)·UI #13. 이 워크트리의 `docs/planning/`에는 아직 없다(PR #68 미머지).
+
+## 2026-11-10 R15 후속 4 — UI 연결 중 나온 요청 2건 (리더 판정, 릴리스를 막지 않음)
+
+UI 세션이 `8473a58` 연결을 끝내고(`783325c`, lint·typecheck·test 2,501·build 통과) 두 건을 올렸다. UI PR이 아직 준비 전이라 이번 묶음에 넣는다.
+
+**① 다시 연 서류 대화에서 제안 근거 목록이 비어 보인다**
+- `DocumentWritingChatDto.structuredDraft`의 `draft.sources[]`에는 id만 있고 라벨이 없다. 화면은 저장되지 않는 SSE `sources_selected` 카드로만 라벨을 그릴 수 있다.
+- **판정: 서버가 DTO에서 라벨을 붙인다.** 화면이 `getEvidence`로 조인하는 방법은 안 된다 — `evidence_links` 행은 제안을 [반영]해 저장한 뒤에만 생기므로, 아직 반영하지 않은 제안에는 조인할 행이 없다.
+- 라벨은 **별도 camelCase 필드**에 둔다. `structuredDraft`(저장 모양)에는 키를 섞지 않는다 — 저장본과 비교하는 단정이 깨진다.
+- 라벨 함수는 기존 근거 칩·SSE 카드와 **같은 함수**를 쓴다(ED-3 교육 표시 이름 포함).
+- **이유 문장은 붙이지 않는다**(CF-S1: `role`·`rationale`은 저장하지 않는다).
+
+**② UQ-759 (Minor) — `invalid_source_url`이 화면까지 오지 않는다**
+- 원인은 둘이다. `errors.ts`가 이 코드를 `invalid_input`으로 바꾸고, zod `sourceUrl` 정규식이 스킴 대소문자를 구분한다.
+- **판정**:
+  - 코드를 `invalid_source_url`(400)로 보존한다.
+  - zod는 대소문자를 무시한다. DB CHECK는 이미 `~*`(대소문자 무시)라 DB 변경은 없다.
+  - 정규화는 **스킴만 소문자**로 바꾼다. URL 전체를 정규화하면 끝 슬래시·인코딩 등이 바뀌어 사용자가 넣은 주소가 달라진다.
+
+## 2026-11-10 CF-S9 (사용자 확정, UQ-761) — 문항 설정 상태의 `stale_write`는 "새로 불러오기"만: 백엔드 변경 없음
+
+- S-46 문항 설정 상태에서 [자기소개서 작성 시작]이 `stale_write`를 받으면, 화면은 **"새로 불러오기"만** 보인다. "내 내용으로 저장"(강제 덮어쓰기)은 이 상태에서 제공하지 않는다.
+- 그래서 다른 탭이 만든 정본을 빈 문항 설정으로 덮는 저장이 **화면에서 나가지 않는다**. 강제 덮어쓰기 계약도 새로 만들지 않는다.
+- **R15와의 관계**: CF-S7의 서버 거부(정본이 있는데 기대 버전 null → `stale_write`)를 화면 쪽에서 한 번 더 막는 두 번째 방어선이다. 서버 계약은 그대로이고, 작성 상태의 "내 내용으로 저장"(`current_updated_at` 재전송)도 그대로 유효하다.
+- 기록: decisions 4.23 백엔드 #18(변경 없음), PR #68 커밋 `d4a1c13`.

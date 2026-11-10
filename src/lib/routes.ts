@@ -65,22 +65,33 @@ export const routes = {
    */
   writingChatRedirect: (id: Id) => `/career/writing-chats/${id}`, // → S-10 / S-44
 
-  // 자기소개서 관리 — A3
+  // 자기소개서 관리 — A3 (v5.20, CF-1·CF-7: S-31 허브 · S-17 서류 목록 · S-19 초안 편집기 · S-45 폐기)
   applications: () => "/applications", // S-13
-  applicationNew: (query?: { from?: "board" }) => withQuery("/applications/new", query), // S-14
-  application: (id: Id) => `/applications/${id}`, // S-31
   /**
-   * S-15. Q53-2 · 9 from a C-20 "입력 원인 실패의 이동": `edit: 1` opens 공고 원문 수정, `from` picks the
-   * "{기능}으로 돌아가기" link (`draft` for S-18), `cause` is the failure shown on a JD that has requirements.
+   * S-14 자기소개서 추가 — **S-13 / S-39 위 2단계 모달**(v5.20, CF-8). 전체 페이지
+   * `/applications/new`는 여기로 보내고 모달을 연 채로 연다 `[가정]`: 화면 상태 파라미터
+   * (`?new=1`)만 넣고 입력 내용은 URL에 넣지 않는다. S-39에서는 그 화면 위에서 모달이 열리므로
+   * 이 주소가 필요 없다 — `from=board`는 옛 주소에서 온 경우의 복귀 표시다 `[UI-가정]`.
    */
-  applicationJd: (
+  applicationNew: (query?: { from?: "board" }) => withQuery("/applications", { new: 1, from: query?.from }), // S-14
+  /**
+   * S-46 자기소개서 작성 — **한 주소 두 상태**(정본 행이 없으면 문항 설정, 있으면 작성 — CF-A11).
+   * 서류 id는 주소에 넣지 않는다(지원 프로젝트당 정본 1행, CF-A2).
+   * `tab` = 왼쪽 탭(없으면 자소서): `jd` = S-15 채용 공고 · `insight` = S-16 인사이트 `[가정]`.
+   * `chat` = 연 대화(`?chat={writing_chat_id}`) `[가정]`.
+   * `edit`·`from`·`cause` = Q53-2 "입력 원인 실패의 이동"으로 채용 공고 탭을 원문 수정 상태로 열 때
+   * (`from`은 "{인사이트 / 자소서} 탭으로 돌아가기" 링크를 고른다 — v5.20, CF-A12).
+   */
+  coverLetter: (
     id: Id,
-    query?: { edit?: 1; from?: "insight" | "drafts" | "questions"; draft?: Id; cause?: "not_a_jd" | "input_too_long" | "safety_blocked" },
-  ) => withQuery(`/applications/${id}/jd`, query), // S-15
-  applicationInsight: (id: Id) => `/applications/${id}/insight`, // S-16
-  applicationDrafts: (id: Id) => `/applications/${id}/drafts`, // S-17
-  draftQuestions: (id: Id, draftId: Id) => `/applications/${id}/drafts/${draftId}/questions`, // S-18
-  draft: (id: Id, draftId: Id) => `/applications/${id}/drafts/${draftId}`, // S-19
+    query?: {
+      tab?: "jd" | "insight"
+      chat?: Id
+      edit?: 1
+      from?: "insight" | "cover_letter"
+      cause?: "not_a_jd" | "input_too_long" | "safety_blocked"
+    },
+  ) => withQuery(`/applications/${id}/cover-letter`, query), // S-46 (+ S-15 · S-16 탭, S-18 문항 설정 상태)
 
   // 보드 — A4 (S-20·S-22·S-33·S-37 폐기 v5.19 RM-1: 옛 주소는 next.config.ts 리다이렉트)
   board: () => "/board", // S-39
@@ -120,7 +131,7 @@ export const MENU_ITEMS: ReadonlyArray<{ key: MenuKey; label: string; href: stri
   { key: "board", label: "지원 현황", href: routes.board() },
 ]
 
-/** Active-menu rule (L-01): application sub-screens (S-14~S-18, S-31, S-45, S-46) → 자기소개서 관리 */
+/** Active-menu rule (L-01): 자기소개서 관리 하위 화면 (S-14 모달 · S-46과 그 탭 S-15·S-16) → 자기소개서 관리 */
 export function menuKeyForPath(pathname: string): MenuKey | null {
   if (pathname.startsWith("/career")) return "career"
   if (pathname.startsWith("/applications")) return "applications"

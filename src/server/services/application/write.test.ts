@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { UpdateFailedJdRawTextInput } from "@/lib/contracts/application";
+import { CreateApplicationProjectInput, UpdateFailedJdRawTextInput } from "@/lib/contracts/application";
+import { toErrorBody } from "@/lib/contracts/errors";
 import { splitJdSentences } from "@/server/ai/context-pack/jd";
 import { sha256Hex } from "@/server/ai/hash";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { fakeSupabase } from "@/test/fake-supabase";
+import { normalizeJdRawText } from "./raw-text";
 import { createApplicationProject, updateFailedJdRawText } from "./write";
 
 const ID = "00000000-0000-4000-8000-0000000000a1";
@@ -14,11 +16,17 @@ const raised = (message: string) => Object.assign(new Error(message), { code: "P
 describe("updateFailedJdRawText (Q53-2, DM 2.6.1)", () => {
   const ok = { application_project_id: ID, job_description_id: JD, extraction_status: "pending", raw_text_edited_at: "2026-11-02T00:00:00Z", ai_run_allowed: false };
 
-  it("sends the text untouched with the server's sentence split and hash", async () => {
+  // A3 (R15): the edit path normalizes with `normalizeJdRawText` first, then splits and hashes
+  // that one string — the same code the create path and the preview route use.
+  it("sends the normalized text with the server's sentence split and hash of the same string", async () => {
     const db = fakeSupabase({}, () => ok);
+    const normalized = normalizeJdRawText(RAW);
     const result = await updateFailedJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW });
     expect(db.rpcCalls).toEqual([
-      { name: "update_failed_jd_raw_text", args: { p_application_project_id: ID, p_raw_text: RAW, p_raw_text_hash: sha256Hex(RAW), p_sentences: splitJdSentences(RAW) } },
+      {
+        name: "update_failed_jd_raw_text",
+        args: { p_application_project_id: ID, p_raw_text: normalized, p_raw_text_hash: sha256Hex(normalized), p_sentences: splitJdSentences(normalized) },
+      },
     ]);
     expect(result).toEqual({ applicationProjectId: ID, jobDescriptionId: JD, extractionStatus: "pending", rawTextEditedAt: "2026-11-02T00:00:00Z", aiRunAllowed: false, warnings: ["short_jd"] });
   });
@@ -55,5 +63,48 @@ describe("createApplicationProject gate (Q53-1, DM 2.11.7 path 6)", () => {
       throw raised(code);
     });
     await expect(createApplicationProject(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code, status: 409 });
+  });
+});
+
+// ---------------- UQ-759 (R15 후속 4): the source URL ----------------
+
+describe("createApplicationProject source URL (UQ-759)", () => {
+  const created = { application_project_id: ID, job_description_id: JD, name: null, name_source: null, extraction_status: "pending", ai_run_allowed: false, created: true, preview_applied: false, preview_skip_reason: null };
+  const parse = (sourceUrl: string) => CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, sourceUrl });
+
+  it.each([
+    ["HTTPS://Example.com/Jobs/42/", "https://Example.com/Jobs/42/"],
+    ["Http://jobs.example.test/a?b=1", "http://jobs.example.test/a?b=1"],
+    ["https://example.com/%EC%A7%81%EB%AC%B4", "https://example.com/%EC%A7%81%EB%AC%B4"],
+  ])("%s passes and only the scheme is lowercased → %s", async (typed, stored) => {
+    const db = fakeSupabase({}, () => created);
+    await createApplicationProject(db.client as UserSupabaseClient, parse(typed));
+    // Host case, path, trailing slash, query and percent-encoding are kept as typed.
+    expect(db.rpcCalls[0]!.args.p_source_url).toBe(stored);
+  });
+
+  it.each(["ftp://example.com/job", "javascript:alert(1)", "example.com/job", `https://example.com/${"a".repeat(2048)}`])(
+    "%s → invalid_source_url (400) under its own code, before any RPC",
+    async (bad) => {
+      const db = fakeSupabase({}, () => created);
+      // Not a zod failure: a zod refusal would become the generic `invalid_input`.
+      const input = CreateApplicationProjectInput.safeParse({ id: ID, rawText: RAW, sourceUrl: bad });
+      expect(input.success).toBe(true);
+      await expect(createApplicationProject(db.client as UserSupabaseClient, input.data!)).rejects.toMatchObject({ code: "invalid_source_url", status: 400 });
+      expect(db.rpcCalls).toHaveLength(0);
+    },
+  );
+
+  it("the code survives the action boundary (toErrorBody keeps it — no alias to invalid_input)", async () => {
+    const db = fakeSupabase({}, () => created);
+    const err = await createApplicationProject(db.client as UserSupabaseClient, parse("ftp://example.com/job")).catch((e: unknown) => e);
+    expect(toErrorBody(err)).toMatchObject({ code: "invalid_source_url" });
+  });
+
+  it("the RPC's own invalid_source_url raise is preserved too", async () => {
+    const db = fakeSupabase({}, () => {
+      throw raised("invalid_source_url");
+    });
+    await expect(createApplicationProject(db.client as UserSupabaseClient, parse("https://example.com/job"))).rejects.toMatchObject({ code: "invalid_source_url", status: 400 });
   });
 });

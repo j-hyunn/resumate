@@ -185,7 +185,9 @@ async function loadCareerData(): Promise<CareerData> {
     achievements: [],
     skills: rows.skills as unknown as Skill[],
     project_skills: rows.project_skills,
-    writing_chats: rows.writing_chats.map((c) => toLegacyWritingChat(c, projectById.get(c.project_id))),
+    // R15 D2: `writing_chats.project_id` is nullable now (서류 대화 has none) — a document chat
+    // has no project to label, so it maps with `undefined`.
+    writing_chats: rows.writing_chats.map((c) => toLegacyWritingChat(c, c.project_id ? projectById.get(c.project_id) : undefined)),
   }
 }
 

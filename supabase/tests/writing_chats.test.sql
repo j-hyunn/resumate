@@ -43,7 +43,8 @@ select hasnt_column('public', 'writing_chats', 'experience_id', 'R4: experience_
 select hasnt_column('public', 'writing_chats', 'saved_at', 'R4: saved_at dropped');
 select has_column('public', 'writing_chats', 'title', 'R4: title');
 select has_column('public', 'writing_chats', 'last_applied_at', 'R4: last_applied_at');
-select col_not_null('public', 'writing_chats', 'project_id', 'R4: project_id not null');
+-- R15 (CL-1): project_id is nullable — a document chat belongs to no project (DM §2.5).
+select col_is_null('public', 'writing_chats', 'project_id', 'R15: project_id nullable (document chats)');
 select has_index('public', 'writing_chats', 'writing_chats_project_id_last_activity_idx', 'R4: panel history index');
 
 -- DM §2.5: nobody (but the owner / platform superusers) can UPDATE structured_draft directly.

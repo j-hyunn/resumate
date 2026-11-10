@@ -135,12 +135,14 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
       user,
       CreateApplicationProjectInput.parse({ id: projectB, rawText: "짧은 공고", companyName: "가나다랩", positionTitle: "데이터 엔지니어", deadline: "2026-12-01" }),
     );
-    expect(created).toMatchObject({ name: "가나다랩 – 데이터 엔지니어", nameSource: "user", warnings: ["short_jd"] });
+    // R15 D12 (CF-9): the name rule is "{회사명} 자기소개서" — the position title is not in it.
+    expect(created).toMatchObject({ name: "가나다랩 자기소개서", nameSource: "user", warnings: ["short_jd"] });
   });
 
   it("deletion impact of an application project (R14 cascade keys only); others → not_found", async () => {
     await expect(getApplicationProjectDeletionImpact(user, projectA)).resolves.toEqual({
-      cascade: { insights: 0, drafts: 0, stage_events: expect.any(Number) },
+      // R15 D9: `drafts` → `documents` + `document_chats`.
+      cascade: { insights: 0, documents: 0, document_chats: 0, stage_events: expect.any(Number) },
     });
     await expect(getApplicationProjectDeletionImpact(otherUser, projectA)).rejects.toMatchObject({ code: "not_found", status: 404 });
   });
@@ -171,7 +173,7 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(res.jd.techKeywords.map((k) => k.keyword)).toContain("Kafka");
 
     const hub = await getApplicationHub(user, projectA);
-    expect(hub).toMatchObject({ name: "에이비씨페이 – 백엔드 엔지니어 (결제)", nameSource: "ai", stage: "before_apply" });
+    expect(hub).toMatchObject({ name: "에이비씨페이 자기소개서", nameSource: "ai", stage: "before_apply" });
     expect(hub.jd.requirementCount).toBe(6);
 
     const job = await admin.from("ai_jobs").select("status, job_type, application_project_id, model_tier").eq("id", res.jobId).single();
@@ -308,10 +310,18 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_failure_not_input" });
     await admin.from("ai_jobs").update({ error_code: "not_a_jd" }).eq("id", jobId);
 
-    // Condition 5 reads against the real tables: a draft without AI content isn't a result.
-    // (The positive rows need the AI writer's full flow; pgTAP covers them on the RPC, jdRawTextLockOf on the view.)
-    const draft = await user.rpc("create_cover_letter_draft", { p_application_project_id: id });
-    expect(draft.error).toBeNull();
+    /**
+     * Condition 5 reads against the real tables. R15-DB-8: the 서류 branch is gone, so a saved
+     * 자기소개서 정본 no longer locks the raw text — only a ready insight or JD evidence does.
+     * (The positive rows need the AI writer's full flow; pgTAP covers them on the RPC,
+     * `jdRawTextLockOf` on the view.)
+     */
+    const saved = await user.rpc("save_application_document", {
+      p_application_project_id: id,
+      p_document_kind: "cover_letter",
+      p_body: { questions: [{ slot: "q_1", question_text: "지원 동기", char_limit: 800, body: "지원 동기를 씁니다." }] },
+    });
+    expect(saved.error).toBeNull();
     await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });
 
     // Condition 1: any job type on the project.

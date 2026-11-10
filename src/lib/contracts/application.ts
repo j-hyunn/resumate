@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AiProviderSchema, ErrorEvent } from "./ai";
+import { JD_SOURCE_URL_MAX } from "./jd-fetch";
 import {
   APPLICATION_STAGES,
   JD_EXTRACTION_STATUSES,
@@ -28,6 +29,25 @@ export const APPLICATION_NAME_MAX = 100;
 export const APPLICATION_MEMO_MAX = 2000;
 /** DM A.6: raw_text 1~50,000. */
 export const JD_RAW_TEXT_MAX = 50_000;
+/** DM 11.10 #1 `[가정]`: `job_descriptions.source_url` ≤ 2,048 (one source — see ./jd-fetch). */
+export { JD_SOURCE_URL_MAX };
+
+/** UQ-759: lowercase the `http` / `https` scheme only (`HTTPS://Example.com/A` → `https://Example.com/A`). */
+export function normalizeSourceUrlScheme(url: string): string {
+  return url.replace(/^https?:/i, (scheme) => scheme.toLowerCase());
+}
+
+/** `job_descriptions_source_url_check`: `http(s)://` (any case) and ≤ 2,048 chars. */
+export function isValidSourceUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url) && url.length <= JD_SOURCE_URL_MAX;
+}
+
+/**
+ * Refusals the S-14 create path shows under their own code. `invalid_source_url` (400) drives
+ * "주소 없이 만들기": the RPC builds no row, so the screen resends the same `id` without the URL.
+ */
+export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "key_invalid", "ai_consent_required", "application_project_id_conflict"] as const;
+export type CreateApplicationErrorCode = (typeof CREATE_APPLICATION_ERROR_CODES)[number];
 /** db notes [가정]: company_name / position_title ≤ 200. */
 export const JD_TITLE_MAX = 200;
 /** F-P2-01 [가정]: a JD shorter than this gets a warning flag only. */
@@ -67,6 +87,30 @@ export const CreateApplicationProjectInput = z.object({
   positionTitle: optionalText(JD_TITLE_MAX),
   name: optionalText(APPLICATION_NAME_MAX),
   deadline: z.preprocess((v) => (v === "" ? undefined : v), dateOnly.optional()),
+  /**
+   * R15 (CF-10, D11): the posting URL the user pasted in S-14 단계 1, stored on
+   * `job_descriptions.source_url`. The RPC re-checks it (`invalid_source_url`, 400) and
+   * builds no row when it fails, so the screen may resend the same `id` without it.
+   */
+  sourceUrl: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z
+      .string()
+      .trim()
+      // UQ-759: only the scheme is lowercased (`HTTPS://` → `https://`). `new URL().href` would also
+      // rewrite the trailing slash, percent-encoding and host spelling — the URL is stored as typed.
+      // The scheme / length rule is NOT a zod check on purpose: a zod failure becomes the generic
+      // `invalid_input`, and S-14's "주소 없이 만들기" needs `invalid_source_url` (400). The service
+      // checks it (`assertSourceUrl`) and the RPC checks it again (`~* '^https?://'`, ≤ 2,048).
+      .transform(normalizeSourceUrlScheme)
+      .optional(),
+  ),
+  /**
+   * R15 (CF-A17, D11): the `ai_jobs` row of the 요건 미리 보기 run. The RPC reads the
+   * **server's** `output` (never requirements sent by the screen) after recomputing the
+   * hash from `p_raw_text`, and always links the job even when it drops the result.
+   */
+  previewJobId: uuid.optional(),
 });
 export type CreateApplicationProjectInput = z.input<typeof CreateApplicationProjectInput>;
 
@@ -136,7 +180,45 @@ export type CreateApplicationProjectResult = {
   shouldExtract: boolean;
   /** False when the same id already existed (idempotent retry; the input was ignored). */
   created: boolean;
+  /** R15 D11: the preview's requirements were written into this JD (no AI-01 call needed). */
+  previewApplied: boolean;
+  /** Why the preview was not applied; null when it was, or when no `previewJobId` was sent. */
+  previewSkipReason: PreviewSkipReason | null;
   warnings: JdInputWarning[];
+};
+
+// ---------- 요건 미리 보기 (A2, CF-A17 / DM 2.6.2) ----------
+
+/**
+ * `create_application_project` return `preview_skip_reason` (R15 D11, db notes ②-3).
+ * The job row is linked to the new project in every case, including these.
+ */
+export const PREVIEW_SKIP_REASONS = ["preview_not_found", "preview_expired", "preview_mismatch"] as const;
+export type PreviewSkipReason = (typeof PREVIEW_SKIP_REASONS)[number];
+
+/** `ai_jobs.finished_at` + this window — after it the result is `preview_expired` and the cron empties it. */
+export const PREVIEW_TTL_HOURS = 24;
+
+export const ExtractJdPreviewInput = z.object({
+  rawText: z
+    .string()
+    .max(JD_RAW_TEXT_MAX)
+    .refine((v) => v.trim().length > 0, { message: "empty_raw_text" }),
+});
+export type ExtractJdPreviewInput = z.input<typeof ExtractJdPreviewInput>;
+
+/**
+ * `POST /api/job-descriptions/extract-preview` 200 body. The requirement text itself is
+ * **not** here — it stays in `ai_jobs.output` on the server (CF-A17: the screen can never
+ * send requirements back as `origin = 'ai'`).
+ */
+export type ExtractJdPreviewResult = {
+  previewJobId: string;
+  companyName: string | null;
+  positionTitle: string | null;
+  /** `YYYY-MM-DD`, only when AI-01's 검사 1~4 all passed; the create RPC checks it again. */
+  deadline: string | null;
+  requirementCount: number;
 };
 
 // ---------- update / delete ----------
@@ -352,15 +434,25 @@ export type GateCode = Extract<AiErrorCode, "key_missing" | "key_invalid">;
 
 // ---------- display helpers ----------
 
-/** "회사명 – 포지션명" (U+2013 with spaces, same as the DB name rule). */
-export function joinCompanyPosition(companyName: string | null, positionTitle: string | null): string | null {
+/**
+ * "{회사명} 자기소개서" — the R15 name rule (CF-9·CF-A7, DM 11.10 #3 /
+ * `private.application_compose_name`). Replaces v4.14's "회사명 – 포지션명";
+ * the position title is no longer part of the name.
+ */
+export function composeApplicationName(companyName: string | null): string | null {
   const c = companyName?.trim();
-  const p = positionTitle?.trim();
-  return c && p ? `${c} – ${p}` : null;
+  return c ? `${c} 자기소개서` : null;
 }
 
-/** Card / row label: name → "회사명 – 포지션명" → "새 자기소개서". */
+/** @deprecated R15 (CF-9): the name no longer joins the position title. Use `composeApplicationName`. */
+export function joinCompanyPosition(companyName: string | null, positionTitle: string | null): string | null {
+  void positionTitle;
+  return composeApplicationName(companyName);
+}
+
+/** Card / row label: name → "{회사명} 자기소개서" → "새 자기소개서". */
 export function applicationDisplayName(name: string | null, companyName: string | null, positionTitle: string | null): string {
   if (name && name.trim()) return name;
-  return joinCompanyPosition(companyName, positionTitle) ?? PENDING_DISPLAY_NAME;
+  void positionTitle;
+  return composeApplicationName(companyName) ?? PENDING_DISPLAY_NAME;
 }

@@ -74,6 +74,14 @@ function useEvidencePanel() {
   return React.useContext(EvidenceContext)
 }
 
+/**
+ * C-02를 여는 함수만 필요한 자리(칩이 아닌 행 전체가 패널을 여는 C-11 목록 — design-system 3.10).
+ * `<EvidenceProvider>` 밖에서는 `null`을 돌려주므로 호출하는 쪽이 자기 패널을 띄우면 된다.
+ */
+export function useEvidencePanelOpen(): ((items: EvidenceView[], focusId?: string) => void) | null {
+  return React.useContext(EvidenceContext)?.open ?? null
+}
+
 // ---------------------------------------------------------------------------
 // C-01 chip
 // ---------------------------------------------------------------------------

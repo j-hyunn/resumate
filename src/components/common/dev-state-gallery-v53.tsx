@@ -37,25 +37,74 @@ function Section({ id, title, show, children }: { id: string; title: string; sho
   )
 }
 
-/** Q53-1~10 entry points: `?state=` on any row, plus the fixtures (lib/mock/fixtures.ts) that run the real flow */
+/**
+ * Q53 진입점: 어느 행이든 `?state=`, 그리고 실제 흐름을 돌리는 픽스처(lib/mock/fixtures.ts).
+ * (v5.20, CF-1·CF-7) S-31·S-17·S-19·S-45 주소가 없어져 S-15·S-16은 **S-46의 탭**(`?tab=`)이고
+ * S-14는 **S-13 위 모달**(`?new=1`)이다. S-17 전용 줄(Q53-4·Q53-7·Q53-8)은 지웠다.
+ */
 const Q53_LINKS: Array<{ label: string; href: string }> = [
-  { label: "Q53-1 S-14 동의 필요 → C-21", href: `${routes.applicationNew()}?state=consent-required` },
-  { label: "Q53-1 S-14 키 무효 → C-20", href: `${routes.applicationNew()}?state=key-invalid` },
-  { label: "Q53-1 S-14 서버 거부 (동의)", href: `${routes.applicationNew()}?state=create-refused-consent` },
-  { label: "Q53-1 S-14 서버 거부 (키 무효)", href: `${routes.applicationNew()}?state=create-refused-key-invalid` },
-  { label: "Q53-2 픽스처: 입력 원인 실패 JD", href: routes.applicationJd(IDS.ap(7)) },
-  { label: "Q53-11 픽스처: 요건 0개로 성공한 JD", href: routes.applicationJd(IDS.ap(8)) },
-  { label: "Q53-2 S-15 수정 중", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-edit` },
-  { label: "Q53-2 S-15 저장 실패", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-save-failed` },
-  { label: "Q53-2 S-15 저장 거부", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-save-refused` },
-  { label: "Q53-2 S-15 저장 뒤", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-saved` },
-  { label: "Q53-2 S-15 원인 모름", href: `${routes.applicationJd(IDS.ap(1))}?state=raw-unknown-cause` },
-  { label: "Q53-2 S-16 공고를 고친 뒤", href: `${routes.applicationInsight(IDS.ap(1))}?state=raw-edited` },
-  { label: "Q53-4 S-17 요건 없는 JD", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements` },
-  { label: "Q53-4 S-17 동의 필요", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements-consent` },
-  { label: "Q53-4 S-17 키 무효", href: `${routes.applicationDrafts(IDS.ap(1))}?state=no-requirements-key-invalid` },
-  { label: "Q53-7 픽스처: 작성 중 경력기술서", href: `${routes.applicationDrafts(IDS.ap(3))}#new-draft` },
-  { label: "Q53-8 C-09 project_fields", href: `${routes.applicationDrafts(IDS.ap(1))}?state=insufficient-project-fields` },
+  { label: "Q53-1 S-14 동의 필요 → C-21", href: `${routes.applicationNew()}&state=consent-required` },
+  { label: "Q53-1 S-14 키 무효 → C-20", href: `${routes.applicationNew()}&state=key-invalid` },
+  { label: "Q53-1 S-14 서버 거부 (동의)", href: `${routes.applicationNew()}&state=create-refused-consent` },
+  { label: "Q53-1 S-14 서버 거부 (키 무효)", href: `${routes.applicationNew()}&state=create-refused-key-invalid` },
+  { label: "Q53-2 픽스처: 입력 원인 실패 JD", href: routes.coverLetter(IDS.ap(7), { tab: "jd" }) },
+  { label: "Q53-11 픽스처: 요건 0개로 성공한 JD", href: routes.coverLetter(IDS.ap(8), { tab: "jd" }) },
+  { label: "Q53-2 S-15 수정 중", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-edit` },
+  { label: "Q53-2 S-15 저장 실패", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-failed` },
+  { label: "Q53-2 S-15 저장 거부", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-refused` },
+  { label: "Q53-2 S-15 저장 뒤", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-saved` },
+  { label: "Q53-2 S-15 원인 모름", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-unknown-cause` },
+  { label: "Q53-2 S-16 공고를 고친 뒤", href: `${routes.coverLetter(IDS.ap(1), { tab: "insight" })}&state=raw-edited` },
+  { label: "Q53-8 C-09 project_fields", href: `${routes.coverLetter(IDS.ap(1))}?state=insufficient-project-fields` },
+]
+
+/**
+ * (v5.20, CF-*) 자기소개서 흐름 재설계의 화면별 `?state=` 키. A0이 키를 정하고 A3·A4가 화면에서
+ * 읽는다 — 화면이 아직 없는 줄은 404가 나며 그 화면이 들어오면 바로 열린다.
+ */
+const COVER_LETTER_LINKS: Array<{ label: string; href: string }> = [
+  // S-13 자기소개서 목록
+  { label: "S-13 빈 상태", href: `${routes.applications()}?state=empty` },
+  { label: "S-13 로딩", href: `${routes.applications()}?state=loading` },
+  { label: "S-13 목록 읽기 실패", href: `${routes.applications()}?state=error` },
+  // S-14 2단계 모달 (S-13 위, ?new=1)
+  { label: "S-14 ① JD 입력", href: `${routes.applicationNew()}&state=step1` },
+  { label: "S-14 ① 공고 가져오는 중", href: `${routes.applicationNew()}&state=fetching` },
+  { label: "S-14 ① 가져오기 실패", href: `${routes.applicationNew()}&state=fetch-failed` },
+  { label: "S-14 ① 공고 내용 정리하는 중", href: `${routes.applicationNew()}&state=extracting` },
+  { label: "S-14 ① 미리 보기 추출 실패", href: `${routes.applicationNew()}&state=extract-failed` },
+  { label: "S-14 ② 지원 기업 / 포지션", href: `${routes.applicationNew()}&state=step2` },
+  { label: "S-14 닫기 확인", href: `${routes.applicationNew()}&state=close-confirm` },
+  { label: "S-14 만드는 중", href: `${routes.applicationNew()}&state=creating` },
+  { label: "S-14 생성 실패", href: `${routes.applicationNew()}&state=create-failed` },
+  { label: "S-14 주소 저장 불가 (invalid_source_url)", href: `${routes.applicationNew()}&state=invalid-source-url` },
+  // S-46 문항 설정 상태
+  { label: "S-46 문항 설정 (기본 3문항)", href: `${routes.coverLetter(IDS.ap(3))}?state=questions` },
+  { label: "S-46 문항 설정 검증 오류", href: `${routes.coverLetter(IDS.ap(3))}?state=questions-invalid` },
+  { label: "S-46 문항 설정 요건 정리 중", href: `${routes.coverLetter(IDS.ap(3))}?state=extracting` },
+  { label: "S-46 문항 설정 요건 추출 실패", href: `${routes.coverLetter(IDS.ap(3))}?state=extract-failed` },
+  { label: "S-46 문항 5개 (추가 비활성)", href: `${routes.coverLetter(IDS.ap(3))}?state=questions-max` },
+  // S-46 작성 상태
+  { label: "S-46 작성 상태 (픽스처: 일부 채움)", href: routes.coverLetter(IDS.ap(1)) },
+  { label: "S-46 작성 상태 (픽스처: 전부 채움)", href: routes.coverLetter(IDS.ap(2)) },
+  { label: "S-46 답변 없음 빈 상태", href: `${routes.coverLetter(IDS.ap(1))}?state=empty-answers` },
+  { label: "S-46 저장 실패", href: `${routes.coverLetter(IDS.ap(1))}?state=save-failed` },
+  { label: "S-46 다른 곳에서 바뀜", href: `${routes.coverLetter(IDS.ap(1))}?state=save-conflict` },
+  { label: "S-46 문항 상한 거부 (too_many_questions)", href: `${routes.coverLetter(IDS.ap(1))}?state=too-many-questions` },
+  { label: "S-46 찾을 수 없음", href: `${routes.coverLetter(IDS.ap(1))}?state=not-found` },
+  // S-46 패널 (자소서 대화)
+  { label: "S-46 패널 초안 작성 중", href: `${routes.coverLetter(IDS.ap(1))}?state=draft-stream` },
+  { label: "S-46 패널 초안 실패", href: `${routes.coverLetter(IDS.ap(1))}?state=draft-failed` },
+  { label: "S-46 패널 초안 상한 (6회)", href: `${routes.coverLetter(IDS.ap(1))}?state=draft-limit` },
+  { label: "S-46 패널 AI 잠금 (C-18)", href: `${routes.coverLetter(IDS.ap(1))}?state=ai-locked` },
+  // 탭
+  { label: "S-46 채용 공고 탭 (S-15)", href: routes.coverLetter(IDS.ap(1), { tab: "jd" }) },
+  { label: "S-46 인사이트 탭 (S-16)", href: routes.coverLetter(IDS.ap(1), { tab: "insight" }) },
+  // S-39 카드 서류 표시
+  { label: "S-39 보드 (자소서 작성 중 / 작성됨)", href: routes.board() },
+  { label: "S-39 보드 (자소서 수 연결 대기 — 배지 없음)", href: `${routes.board()}?state=cl-pending` },
+  // UQ-742: 보드 위에서 모달이 열린다 — 보드로 가서 "지원 전" 열 "+"를 누른다
+  { label: "S-39 보드 (지원 전 + → 보드 위 추가 모달)", href: routes.board() },
 ]
 
 const REFUSALS: Array<{ state: string; code: AiRetryRefusalCode }> = [
@@ -210,14 +259,14 @@ export function DevStateGalleryV53({
               variant="outline"
               onClick={() =>
                 stream.start({
-                  blocks: [{ block_id: "b1", text: "경력기술서 첫 블록입니다." }, { block_id: "b2", text: "…" }],
+                  blocks: [{ block_id: "b1", text: "문항 초안 첫 블록입니다." }, { block_id: "b2", text: "…" }],
                   fail: "rate_limited",
                   failAfterBlocks: 1,
                   discardOnError: true,
                 })
               }
             >
-              경력기술서 실패 (블록 남기지 않음 + 대기)
+              초안 턴 실패 (블록 남기지 않음 + 대기)
             </Button>
           </div>
         </Card>
@@ -249,7 +298,7 @@ export function DevStateGalleryV53({
           readiness={projectFields}
           applicationProjectId={demoApplication.id}
           applicationName={demoApplication.name}
-          returnHref={routes.applicationInsight(demoApplication.id)}
+          returnHref={routes.coverLetter(demoApplication.id, { tab: "insight" })}
         />
       </Section>
 
@@ -259,6 +308,22 @@ export function DevStateGalleryV53({
         </p>
         <ul className="grid gap-2 text-sm sm:grid-cols-2">
           {Q53_LINKS.map((l) => (
+            <li key={l.label}>
+              <Link className="underline underline-offset-4" href={l.href}>
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section id="cover-letter" title="자기소개서 흐름 (v5.20 CF-*) 화면별 미리보기" show={show("cover-letter")}>
+        <p className="text-sm text-muted-foreground">
+          S-13 · S-14 2단계 모달 · S-46(문항 설정 / 작성, 탭 3개) · S-39 카드. A0이 정한 `?state=` 키이고 화면은 A3·A4가 만든다 —
+          아직 없는 화면은 404가 나요.
+        </p>
+        <ul className="grid gap-2 text-sm sm:grid-cols-2">
+          {COVER_LETTER_LINKS.map((l) => (
             <li key={l.label}>
               <Link className="underline underline-offset-4" href={l.href}>
                 {l.label}

@@ -105,8 +105,11 @@ insert into public.ai_usage_records (id, user_id, occurred_at, feature, job_type
    'insight', 'insight', 'gemini', 'gemini-3.8-flash', 'default', 'free', 10000, 0, 0, 2000,
    'provider_reported', 'succeeded', 'v2026-10-28', 0.999000);
 
+-- QA-04 (리더 수정 2026-11-09): 픽스처 사용자로 좁힌다. 전역 count(*)는 다른 사용자의 사용량
+-- 행 하나에도 깨진다(공유 로컬 Supabase에서 run-checks.sh가 불안정해지는 원인).
 select is((select count(*)::int from public.ai_usage_records
-            where input_cost_usd = 0 and output_cost_usd = 0), 36,
+            where input_cost_usd = 0 and output_cost_usd = 0
+              and user_id = 'a0000000-0000-0000-0000-000000000001'), 36,
           'fixture: all 36 rows start at 0 / 0 (the column defaults)');
 
 create temp table t_b as select private.backfill_usage_split_costs() as r;

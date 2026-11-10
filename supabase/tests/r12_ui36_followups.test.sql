@@ -3,29 +3,37 @@
 -- QA fix (QA-02, QA-03): Gemini paid / inactive Gemini free key, greetings through the start RPCs, UX v5.13 wording.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(25);
 
 -- 1. policy_versions 2026-11-05 (no reconsent) is the latest effective version of each type
 -- R13 added policy_type 'ai_data_use' with the same version string; this assertion stays about the R12 three.
 select is((select count(*)::int from public.policy_versions
             where version = '2026-11-05' and not requires_reconsent and policy_type <> 'ai_data_use'), 3,
           'three 2026-11-05 policy versions without reconsent');
-select is((select array_agg(policy_type order by policy_type)
-             from (select distinct on (policy_type) policy_type, version
-                     from public.policy_versions
-                    where effective_at <= now() and policy_type <> 'ai_data_use'
-                    order by policy_type, effective_at desc, version collate "C" desc) latest
-            where version = '2026-11-08'),
-          array['cross_border_transfer', 'terms'],
-          '2026-11-08 is current for 약관·국외 이전 (R14, RM-1)');
--- 처리방침: 2026-11-08 (UI42-7, 20261113002900) 뒤 같은 시행일의 2026-11-08.1 (R14) — 동률은 버전 문자열로
-select is(private.current_policy_version('privacy'), '2026-11-08.1', 'privacy is current at 2026-11-08.1');
-select is(private.current_policy_version('ai_data_use'), '2026-11-08.1', 'ai_data_use is current at 2026-11-08.1');
-select is(private.current_policy_version('terms'), '2026-11-08', 'terms is current at 2026-11-08');
+-- Current versions (R15, CF-S6 2026-11-09): terms·privacy·ai_data_use moved to 2026-11-09; 국외 이전 stays at
+-- 2026-11-08 (not part of that revision).
+select is(private.current_policy_version('cross_border_transfer'), '2026-11-08',
+          '2026-11-08 is still current for 국외 이전 (R14, RM-1; not revised by CF-S6)');
+select is(private.current_policy_version('privacy'), '2026-11-09', 'privacy is current at 2026-11-09 (CF-S6)');
+select is(private.current_policy_version('ai_data_use'), '2026-11-09', 'ai_data_use is current at 2026-11-09 (CF-S6)');
+select is(private.current_policy_version('terms'), '2026-11-09', 'terms is current at 2026-11-09 (CF-S6)');
+-- The R14 tie-break rule (two versions on one effective_at -> the later revision, byte order, wins) is no longer
+-- visible through "the current version", so it is checked on the two tied rows directly, with the same ORDER BY
+-- the function uses, and on the function's own definition.
+select is((select version from public.policy_versions
+            where policy_type = 'privacy' and effective_at = '2026-11-08 00:00:00+09'
+            order by effective_at desc, version collate "C" desc limit 1),
+          '2026-11-08.1', 'tie on one effective_at: 2026-11-08.1 sorts before 2026-11-08 (R14 rule)');
+select is((select version from public.policy_versions
+            where policy_type = 'ai_data_use' and effective_at = '2026-11-08 00:00:00+09'
+            order by effective_at desc, version collate "C" desc limit 1),
+          '2026-11-08.1', 'the same for ai_data_use');
+select ok(pg_get_functiondef('private.current_policy_version(text)'::regprocedure)
+            ~ 'order by pv\.effective_at desc, pv\.version collate "C" desc',
+          'private.current_policy_version keeps the tie-break ORDER BY');
 
--- 2. default draft titles (D-UX-23)
-select ok(private.draft_default_title('cover_letter') like '자소서 문항 답변 (____-__-__)', 'cover_letter default title');
-select ok(private.draft_default_title('career_description') like '경력기술서 (____-__-__)', 'career_description unchanged');
+-- 2. ~~default draft titles (D-UX-23)~~ — R15 (CL-3·CF-1): private.draft_default_title is dropped with the
+--    drafts tables; the cover letter of record has no title column (DM §2.7.3).
 
 -- 3. greeting gate label
 select ok(private.writing_chat_greeting(jsonb_populate_record(null::public.projects, '{"name":"P"}'), 'cover_letter', false)

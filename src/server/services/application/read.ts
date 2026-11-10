@@ -31,7 +31,7 @@ import { AppError } from "@/lib/contracts/errors";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
-import { loadDraftCounts } from "@/server/services/drafts/progress";
+import { loadDocumentCounts } from "@/server/services/application-document/progress";
 import { loadInsightProgress } from "@/server/services/insight/progress";
 import { parseSentences } from "./db";
 
@@ -80,12 +80,12 @@ function jdOf(row: ProjectRow): JdEmbed | null {
 
 /**
  * Feature progress per project (S-13, S-39, S-31). S6: insight state
- * (services/insight/read.ts). S7 fills draft counts.
+ * (services/insight/read.ts). R15: `draftCount` is the 자기소개서 정본 count (0 or 1, CF-A14).
  */
 export async function loadProgress(supabase: UserSupabaseClient, ids: readonly string[]): Promise<Map<string, ApplicationProgress>> {
   const out = new Map<string, ApplicationProgress>();
   if (ids.length === 0) return out;
-  const [insight, drafts] = await Promise.all([loadInsightProgress(supabase, ids), loadDraftCounts(supabase, ids)]);
+  const [insight, drafts] = await Promise.all([loadInsightProgress(supabase, ids), loadDocumentCounts(supabase, ids)]);
   for (const id of ids) {
     out.set(id, {
       insight: insight.get(id) ?? "none",
@@ -318,17 +318,17 @@ async function hasRowsFromThisText(supabase: UserSupabaseClient, applicationProj
     return n ?? 0;
   };
   const head = { count: "exact", head: true } as const;
-  // Condition 5 (R14 RPC): ready insights, JD evidence, draft sections with AI content.
-  const [insights, evidence, drafts] = await Promise.all([
+  /**
+   * Condition 5 (R15 `update_failed_jd_raw_text`): ready insights or JD evidence.
+   * The 서류 branch is gone (spec-gaps R15-DB-8) — a JD used only for a 자기소개서 may have its
+   * raw text edited, because the 자소서 answers are not derived from the requirement rows the way
+   * a 경력기술서 was. Keep this mirror in step with the RPC.
+   */
+  const [insights, evidence] = await Promise.all([
     count(supabase.from("insights").select("id", head).eq("application_project_id", applicationProjectId).eq("status", "ready")),
     count(supabase.from("evidence_links").select("id", head).eq("application_project_id", applicationProjectId).in("source_type", ["jd_requirement", "jd_sentence"])),
-    supabase.from("drafts").select("id").eq("application_project_id", applicationProjectId),
   ]);
-  if (drafts.error) throw mapDbError(drafts.error);
-  if (insights > 0 || evidence > 0) return true;
-  const draftIds = (drafts.data ?? []).map((d) => d.id);
-  const sections = draftIds.length ? await count(supabase.from("draft_sections").select("id", head).in("draft_id", draftIds).not("ai_content", "is", null)) : 0;
-  return sections > 0;
+  return insights > 0 || evidence > 0;
 }
 
 async function loadJdRawTextLock(

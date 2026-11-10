@@ -150,7 +150,8 @@ export function projectedReady(db: MockDb, chat: WritingChat): boolean {
   return Boolean(name && role && detailOk && parentOk)
 }
 
-const FEATURE_LABEL = { insight: "인사이트", career_description: "경력기술서", cover_letter: "자소서 문항 답변" } as const
+// (v5.20, CF-1·CF-U3) 경력기술서 폐기, 기능 이름 "자소서"
+const FEATURE_LABEL = { insight: "인사이트", cover_letter: "자소서" } as const
 
 export async function planMockTurn(
   chatId: string,

@@ -4,7 +4,7 @@
  * C-18 AI 잠금 상태 (02 C-18, design-system 3.18) — ST-AI-LOCKED.
  *
  *   <AiLock entry="insight" size="area" />                 화면·탭 본문 대신 (기존 결과 없음)
- *   <AiLock entry="draft" size="inline" actionName="경력기술서 생성" />   실행 버튼 하나 대신
+ *   <AiLock entry="draft" size="inline" actionName="문항 초안 만들기" />   실행 버튼 하나 대신
  *   <AiLockPopup open … entry="insight" returnHref={…} />          팝업형
  *
  * "AI 연결하기" → S-41 (저장된 키 없음) / S-40, and remembers the FL-19 return target.
@@ -42,16 +42,16 @@ export const AI_LOCK_ENTRIES: Record<AiLockEntry, { description: string; alterna
   writing_chat: { description: "질문에 답하면 AI가 STAR(상황·역할·행동·결과/성과·배운 점)에 넣을 내용을 제안해요", alternative: "직접 입력" }, // C-18 (v5.13)
   requirements: { description: "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요" },
   insight: { description: "이 공고와 내 커리어를 비교해 충족 요건·강점·보완점을 정리해요", alternative: "커리어 정리하기" },
-  draft: { description: "커리어를 바탕으로 경력기술서·자소서 문항 답변 초안을 써 드려요" }, // C-18 (v5.13, D-UX-23)
+  draft: { description: "커리어를 바탕으로 자소서 문항 초안을 써 드려요" }, // C-18 (v5.20, CF-1·CF-A13 — 경력기술서 폐기)
   usage: { description: "AI를 연결하면 Resumate에서 쓴 토큰과 예상 비용을 여기서 볼 수 있어요" },
 }
 
-/** UQ-350: default FL-19 feature per entry ("draft" → 경력기술서; cover-letter call sites pass `feature="cover_letter"`) */
+/** UQ-350: default FL-19 feature per entry ((v5.20, CF-1) "draft" → 자소서 — 서류가 하나다) */
 const ENTRY_FEATURE: Record<AiLockEntry, AiFeatureKey> = {
   writing_chat: "writing_chat",
   requirements: "requirements",
   insight: "insight",
-  draft: "career_description",
+  draft: "cover_letter",
   usage: "usage",
 }
 

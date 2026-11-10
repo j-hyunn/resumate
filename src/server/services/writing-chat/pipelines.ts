@@ -12,7 +12,14 @@ import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career/rpc";
 import type { AiLogger } from "@/server/ai/log";
 import { WRITING_CHAT_SLOTS, type RequirementCategory, type RequirementImportance } from "@/lib/contracts/enums";
-import type { DeliverablePipelines, DeliverablePlan, Log, TurnSnapshot, WritingChatPipelines } from "./types";
+import * as ai04 from "@/server/ai/pipelines/AI-04";
+import * as ai04in from "@/server/ai/context-pack/cover-letter-chat";
+import type { ReplyNotice as Ai04ReplyNotice } from "@/server/ai/prompts/AI-04";
+import { loadCareerRows } from "@/server/ai/context-pack/career-rows";
+import { DOCUMENT_SLOT_RE } from "@/lib/contracts/writing-chat";
+import { parseSentences } from "@/server/services/application/db";
+import { loadInsightRequirements } from "@/server/services/insight/db";
+import type { DeliverablePipelines, DeliverablePlan, DocumentPipelines, DocumentPlan, Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
  * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
@@ -27,6 +34,8 @@ type Loaded = Pick<WritingChatTurnInput, "project" | "gate" | "gateRequirements"
 
 async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<Loaded> {
   const chat = snap.chat;
+  // R15 D2: a STAR / deliverable chat always has a project; a 서류 대화 never reaches here.
+  if (!chat.projectId) throw new AppError("internal_error", undefined, { status: 500 });
   const [projectRes] = await Promise.all([
     db
       .from("projects")
@@ -216,12 +225,13 @@ type DeliverableLoaded = Pick<DeliverableChatTurnInput, "deliverable" | "project
 export async function loadDeliverableInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<DeliverableLoaded> {
   const chat = snap.chat;
   const deliverableId = chat.projectDeliverableId;
-  if (!deliverableId) throw new AppError("internal_error", undefined, { status: 500 });
+  if (!deliverableId || !chat.projectId) throw new AppError("internal_error", undefined, { status: 500 });
+  const projectId: string = chat.projectId;
   const [deliverableRes, projectRes, skillsRes, siblingsRes] = await Promise.all([
     db.from("project_deliverables").select("id, title, body").eq("id", deliverableId).maybeSingle(),
-    db.from("projects").select("id, name, start_month, end_month, is_current, role, description").eq("id", chat.projectId).maybeSingle(),
-    db.from("project_skills").select("skill_id, created_at").eq("project_id", chat.projectId).order("created_at"),
-    db.from("project_deliverables").select("id, title").eq("project_id", chat.projectId).neq("id", deliverableId).order("sort_order").limit(20),
+    db.from("projects").select("id, name, start_month, end_month, is_current, role, description").eq("id", projectId).maybeSingle(),
+    db.from("project_skills").select("skill_id, created_at").eq("project_id", projectId).order("created_at"),
+    db.from("project_deliverables").select("id, title").eq("project_id", projectId).neq("id", deliverableId).order("sort_order").limit(20),
   ]);
   for (const r of [deliverableRes, projectRes, skillsRes, siblingsRes]) if (r.error) throw mapDbError(r.error);
   const d = deliverableRes.data;
@@ -267,7 +277,8 @@ export function toDeliverableTurnInput(
     formSnapshot: (snap.formSnapshot as AiDeliverableFormSnapshot | null) ?? null,
     requestedSlot: slot && isDeliverableSlot(slot) ? slot : null,
     requestedAction: snap.requestedAction,
-    style: snap.style,
+    // R15: the turn request's `style` may carry the 서류 vocabulary; only AI-13's values pass here.
+    style: snap.style === "fit_length" ? null : snap.style,
     isFinalReply: snap.isLastTurn,
     ...loaded,
   };
@@ -343,6 +354,210 @@ export function createDeliverablePipelines(opts: PipelineLogOptions = {}): Deliv
       const ctx = await stateFor(call.snapshot).latest;
       const result = yield* ai13.compose(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey, jobId: call.jobId, logger: opts.logger }, { style });
       return { outcome: result.outcome, patch: result.patch, validation: { needsReviewBlockIds: result.validation.needsReviewBlockIds }, assistantMessage: result.assistantMessage };
+    },
+  };
+}
+
+// ---------------- AI-04 서류 대화 (R15, ai notes §2 (2)) ----------------
+
+type DocumentLoaded = Pick<ai04in.CoverLetterChatTurnInput, "questions" | "careerRows" | "jd" | "insightSignal">;
+
+/**
+ * AI-04 input reads (app_ai_writer, RLS = this user): the 자기소개서 정본's `body.questions[]`, the
+ * whole career pack (CL-Q1: every turn gets the full pack until RAG), the JD's sentences and
+ * requirement rows, and the latest ready insight's strengths as a soft signal. Reads only (NFR-AI-05).
+ *
+ * `extraction.other_sids` (회사·직무 소개 문장) comes from the JD row, like AI-01's own split.
+ */
+export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<DocumentLoaded> {
+  const chat = snap.chat;
+  const applicationProjectId = chat.applicationProjectId;
+  const documentKind = chat.documentKind;
+  if (!applicationProjectId || !documentKind) throw new AppError("internal_error", undefined, { status: 500 });
+  const [docRes, jdRes, careerRows, insightRes] = await Promise.all([
+    db.from("application_documents").select("body").eq("application_project_id", applicationProjectId).eq("document_kind", documentKind).maybeSingle(),
+    db.from("job_descriptions").select("id, updated_at, sentences, position_title, extraction").eq("application_project_id", applicationProjectId).maybeSingle(),
+    loadCareerRows(db),
+    db
+      .from("insights")
+      .select("result, status, version_no")
+      .eq("application_project_id", applicationProjectId)
+      .eq("status", "ready")
+      .order("version_no", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  for (const r of [docRes, jdRes, insightRes]) if (r.error) throw mapDbError(r.error);
+  // The chat cascades with its application project; a missing JD is a race with a delete.
+  if (!jdRes.data) throw new AppError("not_found", "대상 자기소개서를 찾을 수 없습니다.");
+  const requirements = await loadInsightRequirements(db, jdRes.data.id);
+  return {
+    // No 정본 row yet (the chat may start before the first save): no questions, greeting case ②.
+    questions: documentQuestionRows(docRes.data?.body),
+    careerRows,
+    jd: {
+      jobDescriptionId: jdRes.data.id,
+      jobDescriptionUpdatedAt: jdRes.data.updated_at,
+      sentences: parseSentences(jdRes.data.sentences),
+      companySids: otherSidsOf(jdRes.data.extraction),
+      requirements,
+      positionTitle: jdRes.data.position_title,
+    },
+    insightSignal: insightSignalOf(insightRes.data?.result),
+  };
+}
+
+/** `application_documents.body.questions[]` → the pipeline's row shape (unknown values are dropped). */
+function documentQuestionRows(body: unknown): ai04in.CoverLetterQuestionRow[] {
+  const questions = (body as { questions?: unknown } | null | undefined)?.questions;
+  if (!Array.isArray(questions)) return [];
+  const out: ai04in.CoverLetterQuestionRow[] = [];
+  for (const q of questions) {
+    if (!q || typeof q !== "object") continue;
+    const r = q as Record<string, unknown>;
+    if (typeof r.slot !== "string" || typeof r.question_id !== "string") continue;
+    out.push({
+      slot: r.slot,
+      question_id: r.question_id,
+      question_text: typeof r.question_text === "string" ? r.question_text : "",
+      template_key: (typeof r.question_class === "string" ? r.question_class : typeof r.template_key === "string" ? r.template_key : null) as ai04in.CoverLetterQuestionRow["template_key"],
+      char_limit: typeof r.char_limit === "number" ? r.char_limit : null,
+      count_basis: (r.count_basis === "without_spaces" ? "without_spaces" : "with_spaces") as ai04in.CoverLetterQuestionRow["count_basis"],
+      user_note: typeof r.user_note === "string" ? r.user_note : null,
+      answer_title: typeof r.answer_title === "string" ? r.answer_title : null,
+      body: typeof r.body === "string" ? r.body : "",
+    });
+  }
+  return out;
+}
+
+/** `job_descriptions.extraction.other_sids` (회사·직무 소개 문장; not requirement evidence). */
+function otherSidsOf(extraction: unknown): string[] {
+  if (!extraction || typeof extraction !== "object" || Array.isArray(extraction)) return [];
+  const sids = (extraction as Record<string, unknown>).other_sids;
+  return Array.isArray(sids) ? sids.filter((s): s is string => typeof s === "string") : [];
+}
+
+/** AI-02 result → the soft 강점 signal AI-04 may lean on (never a source of facts). */
+function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  const r = result as Record<string, unknown>;
+  const strengths = Array.isArray(r.strengths)
+    ? r.strengths
+        .map((s) => (s && typeof s === "object" ? (s as Record<string, unknown>) : null))
+        .filter((s): s is Record<string, unknown> => s !== null)
+        .map((s) => ({ title: typeof s.title === "string" ? s.title : "", description: typeof s.description === "string" ? s.description : "" }))
+        .filter((s) => s.title !== "")
+    : [];
+  const positioning = typeof r.positioning === "string" && r.positioning.trim() ? r.positioning : null;
+  if (strengths.length === 0 && positioning === null) return null;
+  return { strengths, positioning };
+}
+
+export function toDocumentTurnInput(
+  snap: TurnSnapshot,
+  loaded: DocumentLoaded,
+  draft?: { structuredDraft: unknown; lastExtractedSequence: number },
+): ai04in.CoverLetterChatTurnInput {
+  const chat = snap.chat;
+  const slot = snap.requestedSlot?.slot;
+  const requestedSlot = slot && DOCUMENT_SLOT_RE.test(slot) ? slot : null;
+  return {
+    messages: chat.messages.map((m) => ({ id: m.id, sequence: m.sequence, role: m.role, content: m.content, status: m.status })),
+    structuredDraft: draft ? draft.structuredDraft : chat.documentDraft,
+    lastExtractedSequence: draft ? draft.lastExtractedSequence : chat.lastExtractedSequence,
+    // DM 2.5.1: the S-46 form's unsaved values, in memory for this turn only (never stored or logged).
+    formSnapshot: (snap.formSnapshot as ai04in.CoverLetterFormSnapshot | null) ?? null,
+    requestedSlot,
+    requestedSlots: requestedSlot ? [requestedSlot] : null,
+    requestedAction: snap.requestedAction === "compose_draft" ? "compose_draft" : null,
+    style: snap.style === "fit_length" || snap.style === "shorter" ? snap.style : null,
+    isFinalReply: snap.isLastTurn,
+    ...loaded,
+  };
+}
+
+/** Production AI-04 pipelines: one context per turn, rebuilt once after the facts patch (draft turn). */
+export function createDocumentPipelines(opts: PipelineLogOptions = {}): DocumentPipelines {
+  type State = { loaded: Promise<DocumentLoaded>; ctx: Promise<ai04in.CoverLetterChatContext>; latest: Promise<ai04in.CoverLetterChatContext> };
+  const states = new WeakMap<TurnSnapshot, State>();
+  const stateFor = (snap: TurnSnapshot): State => {
+    let st = states.get(snap);
+    if (!st) {
+      const loaded = loadDocumentInputs(snap.db, snap);
+      const ctx = loaded.then((l) => ai04in.buildCoverLetterChatContext(toDocumentTurnInput(snap, l)));
+      st = { loaded, ctx, latest: ctx };
+      // A failed load is not cached (the next call may retry).
+      ctx.catch(() => states.delete(snap));
+      states.set(snap, st);
+    }
+    return st;
+  };
+
+  return {
+    async plan(snapshot) {
+      const plan = ai04.planCoverLetterTurn(await stateFor(snapshot).ctx);
+      // reject_draft_limit is refused in prepareTurn before the message is saved; here it can only
+      // come from a race (another tab's draft) — composeDecision answers it with the limit notice.
+      const out: DocumentPlan = plan.kind === "reject_draft_limit" ? { kind: "compose", source: "requested_action" } : plan;
+      return out;
+    },
+    async extract(call) {
+      const ctx = await stateFor(call.snapshot).ctx;
+      const result = await ai04.extract(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey, jobId: call.jobId, logger: opts.logger });
+      return {
+        skipped: result.skipped,
+        patch: result.skipped || result.patch.ops.length === 0 ? null : result.patch,
+        processedThroughSequence: result.processedThroughSequence,
+        intent: result.intent,
+        sensitiveAdded: result.sensitiveAdded,
+      };
+    },
+    async decide(snapshot, after, plan) {
+      const st = stateFor(snapshot);
+      if (after.stored) {
+        const loaded = await st.loaded;
+        const through = after.processedThroughSequence ?? snapshot.chat.lastExtractedSequence;
+        st.latest = Promise.resolve(ai04in.buildCoverLetterChatContext(toDocumentTurnInput(snapshot, loaded, { structuredDraft: after.stored, lastExtractedSequence: through })));
+      }
+      const ctx = await st.latest;
+      const extracted = after.extracted ? { intent: after.extracted.intent } : null;
+      const decision = ai04.composeDecision(ctx, plan, extracted);
+      if (decision.action === "reply") return { action: "reply", notices: decision.notices };
+      return { action: "compose", batch: decision.batch, slots: decision.batch.map((q) => q.slot) };
+    },
+    async *reply(call, notices) {
+      const ctx = await stateFor(call.snapshot).latest;
+      for await (const event of ai04.reply(ctx, { llm: call.llm, signal: call.signal, callKey: call.callKey }, notices as Ai04ReplyNotice[])) {
+        if (event.type === "delta") yield { type: "delta", text: event.text };
+        else if (event.type === "done") yield { type: "done" };
+        else yield { type: "error", error: event.error };
+      }
+    },
+    async *compose(call, decision) {
+      const ctx = await stateFor(call.snapshot).latest;
+      const batch = decision.batch as ai04in.CoverLetterQuestionContext[];
+      const result = yield* ai04.compose(
+        ctx,
+        { llm: call.llm, signal: call.signal, callKey: call.callKey, adjustCallKey: `${call.callKey}.adjust_length`, jobId: call.jobId, logger: opts.logger },
+        { batch },
+      );
+      return {
+        outcome: result.outcome,
+        patch: result.patch,
+        questions: result.questions.map((q) => ({
+          slot: q.slot,
+          questionNo: q.questionNo,
+          answerTitle: q.answerTitle,
+          charCount: q.charCount,
+          charLimit: q.charLimit,
+          charAdjustNeeded: q.charAdjustNeeded,
+          correctionApplied: q.correctionApplied,
+          needsReviewBlockIds: q.needsReviewBlockIds,
+          droppedBlockCount: q.droppedBlockCount,
+        })),
+        assistantMessage: result.assistantMessage,
+      };
     },
   };
 }

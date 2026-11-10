@@ -23,17 +23,39 @@ export const CAREER_LEGACY_REDIRECTS: LegacyRedirect[] = [
 ]
 
 /**
- * Retired mock-interview screens (UX v5.19 1장 "폐기한 면접 화면의 주소", RM-1 `[가정]`), no toast:
- * - S-20 · S-33 · S-22 (`/applications/{id}/interview[/{sessionId}[/result]]`) → S-31 `/applications/{id}`
- *   (S-31 answers ST-NOTFOUND when the 자기소개서 is missing or not the user's).
- * - S-37 · "자기소개서 삭제됨" S-22 (`/interviews[/{sessionId}/result]`) → S-13 `/applications`.
- * `:rest*` also matches the bare prefix. [UI-가정] Next keeps the request's query string on a config redirect
- * (`?type=` 등이 남는다); both targets ignore unknown keys, so nothing changes on screen.
+ * 자기소개서 관리 흐름 재설계 (UX v5.20, CF-1·CF-7·CF-8 — decisions 4.23 UI 4). 한 자기소개서의
+ * 모든 옛 주소가 **S-46 `/applications/{id}/cover-letter`**로 간다 (308, 안내 없음):
+ *
+ * | 옛 주소 | 화면 | 간 곳 |
+ * |---|---|---|
+ * | `/applications/new` | S-14 전체 페이지 | `/applications?new=1` — S-13 위에 모달을 연 채로 (`[가정]`) |
+ * | `/applications/{id}` | S-31 허브 (폐기) | S-46 |
+ * | `/applications/{id}/jd` | S-15 | S-46 `?tab=jd` |
+ * | `/applications/{id}/insight` | S-16 | S-46 `?tab=insight` |
+ * | `/applications/{id}/drafts[/…]` | S-17 · S-19 · 옛 문항 설정 | S-46 (서류 종류 판정 불필요 — CF-1) |
+ * | `/applications/{id}/career-description` | S-45 경력기술서 (폐기) | S-46 |
+ * | `/applications/{id}/cover-letter/questions` | v5.18 문항 설정 | S-46 (한 주소 두 상태) |
+ * | `/applications/{id}/interview…` | S-20 · S-33 · S-22 (RM-1 폐기) | S-46 — R14가 보내던 S-31이 폐기됐다 (MRG-UX-1 `[가정]`) |
+ * | `/interviews[/…]` | S-37 (RM-1 폐기) | S-13 `/applications` (그대로) |
+ *
+ * 지원 프로젝트가 없으면 S-46이 ST-NOTFOUND → S-13으로 보낸다.
+ * `:rest*` also matches the bare prefix. [UI-가정] Next keeps the request's query string on a config
+ * redirect; the targets ignore unknown keys, so nothing changes on screen. `/applications/new` comes
+ * first because `/applications/:id` would match "new" (rules match in order).
  */
-export const INTERVIEW_LEGACY_REDIRECTS: LegacyRedirect[] = [
-  { source: "/applications/:id/interview/:rest*", destination: "/applications/:id", permanent: true },
+export const APPLICATION_LEGACY_REDIRECTS: LegacyRedirect[] = [
+  { source: "/applications/new", destination: "/applications?new=1", permanent: true },
+  { source: "/applications/:id/jd", destination: "/applications/:id/cover-letter?tab=jd", permanent: true },
+  { source: "/applications/:id/insight", destination: "/applications/:id/cover-letter?tab=insight", permanent: true },
+  { source: "/applications/:id/drafts/:rest*", destination: "/applications/:id/cover-letter", permanent: true },
+  { source: "/applications/:id/career-description", destination: "/applications/:id/cover-letter", permanent: true },
+  { source: "/applications/:id/cover-letter/questions", destination: "/applications/:id/cover-letter", permanent: true },
+  // S-20 · S-33 · S-22 (v5.19, RM-1) — 도착지였던 S-31이 폐기되어 S-46으로 (MRG-UX-1 `[가정]`)
+  { source: "/applications/:id/interview/:rest*", destination: "/applications/:id/cover-letter", permanent: true },
   { source: "/interviews/:rest*", destination: "/applications", permanent: true },
+  // S-31 허브 — 마지막: 위의 더 긴 경로들이 먼저 걸러진 뒤에만 맞는다
+  { source: "/applications/:id", destination: "/applications/:id/cover-letter", permanent: true },
 ]
 
 /** Every retired-screen redirect, in match order (next.config.ts). */
-export const LEGACY_REDIRECTS: LegacyRedirect[] = [...CAREER_LEGACY_REDIRECTS, ...INTERVIEW_LEGACY_REDIRECTS]
+export const LEGACY_REDIRECTS: LegacyRedirect[] = [...CAREER_LEGACY_REDIRECTS, ...APPLICATION_LEGACY_REDIRECTS]

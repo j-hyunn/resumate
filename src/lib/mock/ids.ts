@@ -25,6 +25,10 @@ export const IDS = {
   drf: (n: number) => uid("a06", n),
   dsec: (n: number) => uid("a07", n),
   dsrc: (n: number) => uid("a08", n),
+  /** application_documents (자소서 정본, DM 2.7.3) */
+  adoc: (n: number) => uid("a09", n),
+  /** body.questions[].question_id */
+  clq: (n: number) => uid("a10", n),
   evl: (n: number) => uid("d01", n),
   job: (n: number) => uid("d02", n),
   usage: (n: number) => uid("d03", n),

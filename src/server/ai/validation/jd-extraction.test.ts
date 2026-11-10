@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KO_BACKEND, KO_DATA_NOISY, output } from "../__fixtures__/AI-01/jds";
+import { KO_BACKEND, KO_DATA_NOISY, KO_WITH_DEADLINE, output } from "../__fixtures__/AI-01/jds";
 import { splitJdSentences } from "../context-pack/jd";
 import { normalizeSid, requirementTextKey, validateJdExtraction } from "./jd-extraction";
 
@@ -116,5 +116,83 @@ describe("validateJdExtraction", () => {
 
   it("dedupes warnings", () => {
     expect(validateJdExtraction(output({ warnings: ["복수 포지션", "복수 포지션 ", ""] }), S(1)).value.warnings).toEqual(["복수 포지션"]);
+  });
+});
+
+// (v4.15, CF-2·CF-A5) deadline 검증 1~5 — R15 AI1.
+describe("deadline (AI-01 CF-2)", () => {
+  const sentences = splitJdSentences(KO_WITH_DEADLINE.raw);
+  const sentenceText = (sid: string) => sentences.find((s) => s.sid === sid)?.text ?? null;
+  const run = (partial: Parameters<typeof output>[0], today?: string | null) =>
+    validateJdExtraction(output(partial), new Set(sentences.map((s) => s.sid)), { sentenceText, today });
+
+  it("keeps a dated deadline whose sentence spells out year, month and day", () => {
+    const { value, report } = run({ deadline: { value: "2026-12-15", source_sids: ["S4"] } }, "2026-11-09");
+    expect(value.deadline).toEqual({ value: "2026-12-15", source_sids: ["S4"], usable: true });
+    expect(report.deadline_dropped).toBe(0);
+    expect(value.schema_version).toBe(2);
+  });
+
+  it("drops the value when a source_sid is outside this JD's split (check 2)", () => {
+    const { value, report } = run({ deadline: { value: "2026-12-15", source_sids: ["S99"] } }, "2026-11-09");
+    expect(value.deadline).toBeNull();
+    expect(report.deadline_dropped).toBe(1);
+    expect(report.sids_dropped).toBeGreaterThan(0);
+  });
+
+  it("drops the value when source_sids is empty (check 2)", () => {
+    expect(run({ deadline: { value: "2026-12-15", source_sids: [] } }, "2026-11-09").value.deadline).toBeNull();
+  });
+
+  it("drops a non-calendar date (check 1)", () => {
+    for (const bad of ["2026-02-30", "2026-13-01", "0000-01-01", "2026/12/15", "12-15"]) {
+      expect(run({ deadline: { value: bad, source_sids: ["S4"] } }, "2026-11-09").value.deadline).toBeNull();
+    }
+  });
+
+  it("drops a value whose year is not in the cited sentence (check 3)", () => {
+    // S5 ("면접은 12월 말에 진행됩니다.") has no year and no day.
+    expect(run({ deadline: { value: "2026-12-31", source_sids: ["S5"] } }, "2026-11-09").value.deadline).toBeNull();
+  });
+
+  it("reads a two-digit year written with a dot as 20YY (check 3 [가정])", () => {
+    const short = splitJdSentences("마감: 26.12.15까지");
+    const { value } = validateJdExtraction(output({ deadline: { value: "2026-12-15", source_sids: ["S1"] } }), new Set(short.map((s) => s.sid)), {
+      sentenceText: (sid) => short.find((s) => s.sid === sid)?.text ?? null,
+      today: "2026-11-09",
+    });
+    expect(value.deadline?.value).toBe("2026-12-15");
+  });
+
+  it("keeps a past deadline but marks it unusable and warns (check 4)", () => {
+    const { value, report } = run({ deadline: { value: "2026-12-15", source_sids: ["S4"] } }, "2026-12-20");
+    expect(value.deadline).toEqual({ value: "2026-12-15", source_sids: ["S4"], usable: false });
+    expect(report.deadline_out_of_range).toBe(1);
+    expect(value.warnings).toContain("공고의 마감일(2026-12-15)이 이미 지났어요");
+  });
+
+  it("marks a deadline more than 366 days ahead unusable without a warning (check 4)", () => {
+    const { value } = run({ deadline: { value: "2026-12-15", source_sids: ["S4"] } }, "2025-01-01");
+    expect(value.deadline?.usable).toBe(false);
+    expect(value.warnings).toEqual([]);
+  });
+
+  it("keeps the day the deadline falls on today", () => {
+    expect(run({ deadline: { value: "2026-12-15", source_sids: ["S4"] } }, "2026-12-15").value.deadline?.usable).toBe(true);
+  });
+
+  it("passes an older result that has no deadline key (schema_version 1)", () => {
+    const old = { ...output({}), schema_version: 1 } as unknown as Parameters<typeof validateJdExtraction>[0];
+    delete (old as { deadline?: unknown }).deadline;
+    const { value, report } = validateJdExtraction(old, new Set(sentences.map((s) => s.sid)), { sentenceText, today: "2026-11-09" });
+    expect(value.deadline).toBeNull();
+    expect(report.deadline_dropped).toBe(0);
+    expect(value.schema_version).toBe(2);
+  });
+
+  it("a null value is not a failure", () => {
+    const { value, report } = run({ deadline: { value: null, source_sids: [] } }, "2026-11-09");
+    expect(value.deadline).toBeNull();
+    expect(report.deadline_dropped).toBe(0);
   });
 });

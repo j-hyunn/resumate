@@ -1,75 +1,36 @@
 "use client"
 
 /**
- * S-13 자기소개서 목록 — filter row, wide table / narrow card list, row menu (C-12 단계 이동 + C-05 삭제).
- * Rows link to S-31; the ⋯ menu stops propagation (design-system 5.2).
+ * S-13 자기소개서 목록 행 — (v5.20 재작성, CF-3·CF-9·CF-A8·CF-A14 / design-system v5.15 6장 A3 "S-13 목록").
+ *
+ * 넓은 화면은 `Table` 4열(이름 · 포지션 · 만든 날 · 마감), 좁은 화면은 두 줄 카드. 행 전체가 S-46으로
+ * 가고(정본 행이 없으면 문항 설정 상태), 행 끝 `⋯`는 **"자기소개서 삭제"(C-05) 한 항목**이다.
+ *
+ * **되살리지 않는 것**(CF-3·CF-A14): 전형 단계 칩·전형 결과 배지·단계 이동(C-12)·기능 진행 칸
+ * (인사이트·서류 수·면접 수)·정렬 선택·전형 단계 거르기·"보드로 보기". 전형 단계 변경은 S-39에서만 한다.
+ * 이름은 화면이 다시 만들지 않고 `application_projects.name`을 그대로 보인다 — v5.20 전에 만든
+ * "회사명 – 포지션명"과 새 "{기업 명} 자기소개서"가 **섞여 보이는 것이 정상**이다(UX S-13 `[가정]`).
  */
 import * as React from "react"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { FileText, Lightbulb } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { MoreHorizontal, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DDay, OutcomeBadge, StageLabel } from "@/components/common/basics"
-import { StageCardMenu, useStageMove, type StageMoveController } from "@/components/common/stage-menu"
-import type { ApplicationStage } from "@/types/db"
-import type { ApplicationSummary } from "@/lib/data/applications"
-import type { ApplicationSummary as ApplicationListRow } from "@/lib/data/applications"
-import { AI_STAGE_LABELS, STAGE_LABELS, STAGE_ORDER, applicationDisplayName, formatDate, formatRelative } from "@/lib/data/labels"
+import { DDay } from "@/components/common/basics"
+import type { CoverLetterListRow } from "@/lib/data/cover-letters"
+import { applicationDisplayName, formatDate } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
-import { JobInline, useDeleteApplication } from "./shared"
-import { AiFeatureStatus } from "@/components/common/ai-feature-status"
+import { useDeleteApplication } from "./shared"
 
-// ---------------------------------------------------------------------------
-// filters (query: sort, stage — non-personal values only)
-// ---------------------------------------------------------------------------
-
-export function ApplicationFilters({ sort, stage }: { sort: "last_activity" | "deadline"; stage: ApplicationStage | null }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const params = useSearchParams()
-  const set = (key: string, value: string | null) => {
-    const next = new URLSearchParams(params.toString())
-    if (value) next.set(key, value)
-    else next.delete(key)
-    const qs = next.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname)
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Select value={sort} onValueChange={(v) => set("sort", v === "last_activity" ? null : v)}>
-        <SelectTrigger size="sm" className="w-40" aria-label="정렬">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="last_activity">최근 활동순</SelectItem>
-          <SelectItem value="deadline">마감일순</SelectItem>
-        </SelectContent>
-      </Select>
-      {/* [UI-가정] 전형 단계로 거르기 (02 S-13 [가정]) */}
-      <Select value={stage ?? "all"} onValueChange={(v) => set("stage", v === "all" ? null : v)}>
-        <SelectTrigger size="sm" className="w-44" aria-label="전형 단계로 거르기">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">모든 전형 단계</SelectItem>
-          {STAGE_ORDER.map((s) => (
-            <SelectItem key={s} value={s}>
-              {STAGE_LABELS[s]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
+/** 머리 아래 정렬 표기 — 바꿀 수 없는 글자다(정렬 선택·필터·검색 없음, CF-9) */
+export function ApplicationSortNote() {
+  return <p className="text-sm text-muted-foreground">최근 작성 순</p>
 }
-
-// ---------------------------------------------------------------------------
-// list
-// ---------------------------------------------------------------------------
 
 const WIDE_QUERY = "(min-width: 768px)"
 function subscribeWide(cb: () => void) {
@@ -77,12 +38,16 @@ function subscribeWide(cb: () => void) {
   mq.addEventListener("change", cb)
   return () => mq.removeEventListener("change", cb)
 }
-/** one layout at a time so each row has a single stage-move state (A3 UQ-81). Server: wide. */
+/** one layout at a time so each row has a single menu state. Server: wide. */
 function useWide() {
-  return React.useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE_QUERY).matches, () => true)
+  return React.useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia(WIDE_QUERY).matches,
+    () => true,
+  )
 }
 
-export function ApplicationList({ rows, failMove = false }: { rows: ApplicationListRow[]; failMove?: boolean }) {
+export function ApplicationList({ rows }: { rows: CoverLetterListRow[] }) {
   const del = useDeleteApplication()
   const wide = useWide()
   if (!wide)
@@ -90,7 +55,7 @@ export function ApplicationList({ rows, failMove = false }: { rows: ApplicationL
       <>
         <ul className="space-y-2">
           {rows.map((row) => (
-            <ApplicationRow key={row.id} row={row} failMove={failMove} onDelete={del.open} layout="card" />
+            <ApplicationRow key={row.id} row={row} onDelete={del.open} layout="card" />
           ))}
         </ul>
         {del.dialog}
@@ -98,16 +63,15 @@ export function ApplicationList({ rows, failMove = false }: { rows: ApplicationL
     )
   return (
     <>
-      {/* wide: table */}
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[34%]">자기소개서</TableHead>
-              <TableHead>전형 단계</TableHead>
-              <TableHead>마감</TableHead>
-              <TableHead>기능 진행</TableHead>
-              <TableHead>최근 활동</TableHead>
+              {/* [UI-가정] 열 머리 글자 (G-82) */}
+              <TableHead className="w-[46%]">이름</TableHead>
+              <TableHead>포지션</TableHead>
+              <TableHead className="w-32">만든 날</TableHead>
+              <TableHead className="w-28">마감</TableHead>
               <TableHead className="w-12">
                 <span className="sr-only">행 메뉴</span>
               </TableHead>
@@ -115,7 +79,7 @@ export function ApplicationList({ rows, failMove = false }: { rows: ApplicationL
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <ApplicationRow key={row.id} row={row} failMove={failMove} onDelete={del.open} layout="table" />
+              <ApplicationRow key={row.id} row={row} onDelete={del.open} layout="table" />
             ))}
           </TableBody>
         </Table>
@@ -127,31 +91,32 @@ export function ApplicationList({ rows, failMove = false }: { rows: ApplicationL
 
 function ApplicationRow({
   row,
-  failMove,
   onDelete,
   layout,
 }: {
-  row: ApplicationListRow
-  failMove: boolean
+  row: CoverLetterListRow
   onDelete: (id: string, name: string) => void
   layout: "table" | "card"
 }) {
   const router = useRouter()
   const name = applicationDisplayName(row.name, row.name_source, row.created_at)
-  const move = useStageMove({
-    applicationProjectId: row.id,
-    name,
-    stage: row.stage,
-    outcome: row.stage_outcome,
-    failMove,
-    onMoved: () => router.refresh(),
-  })
-  const href = routes.application(row.id)
+  const href = routes.coverLetter(row.id)
   const menu = (
     <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      <RowMenu name={name} controller={move} onOpen={() => router.push(href)} onDelete={() => onDelete(row.id, name)} />
-      {/* portals bubble React events to the row → keep dialogs inside the stopPropagation wrapper */}
-      {move.dialogs}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {/* UQ-124: 어느 자기소개서의 메뉴인지 읽히게 */}
+          <Button variant="ghost" size="icon-sm" aria-label={`${name} 메뉴`}>
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem variant="destructive" onSelect={() => onDelete(row.id, name)}>
+            <Trash2 aria-hidden />
+            자기소개서 삭제
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </span>
   )
 
@@ -161,20 +126,18 @@ function ApplicationRow({
         <TableCell className="max-w-0">
           <NameCell row={row} name={name} href={href} />
         </TableCell>
-        <TableCell>
-          <StageCell stage={move.stage} outcome={move.outcome} />
+        {/* 비면 셀을 비운다 — "—"를 넣지 않는다 (G-82) */}
+        <TableCell className="max-w-0">
+          {row.position_title ? <span className="block truncate text-sm text-muted-foreground">{row.position_title}</span> : null}
         </TableCell>
-        <TableCell>
-          <DeadlineCell deadline={row.deadline} />
-        </TableCell>
-        <TableCell>
-          <ProgressCell row={row} />
-        </TableCell>
-        <TableCell className="text-sm text-muted-foreground tabular-nums">{formatRelative(row.last_activity_at)}</TableCell>
+        <TableCell className="text-sm text-muted-foreground tabular-nums">{formatDate(row.created_at)}</TableCell>
+        {/* 마감 D-day는 값이 있을 때만 (CF-2·CF-9) */}
+        <TableCell>{row.deadline ? <DDay deadline={row.deadline} /> : null}</TableCell>
         <TableCell>{menu}</TableCell>
       </TableRow>
     )
 
+  // 좁은 화면: 1행 이름 / 2행 "포지션 · 만든 날 · D-day" (빈 조각은 구분점째 뺀다) [UI-가정] G-82
   return (
     <li>
       <Card size="sm" interactive className="relative gap-2 px-4">
@@ -184,48 +147,35 @@ function ApplicationRow({
           </div>
           <div className="relative z-10">{menu}</div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <StageCell stage={move.stage} outcome={move.outcome} />
-          <DeadlineCell deadline={row.deadline} />
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <ProgressCell row={row} />
-          <span className="text-sm text-muted-foreground tabular-nums">{formatRelative(row.last_activity_at)}</span>
+        <div className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+          {row.position_title ? (
+            <>
+              <span className="truncate">{row.position_title}</span>
+              <span aria-hidden>·</span>
+            </>
+          ) : null}
+          <span className="tabular-nums">{formatDate(row.created_at)}</span>
+          {row.deadline ? (
+            <>
+              <span aria-hidden>·</span>
+              <DDay deadline={row.deadline} />
+            </>
+          ) : null}
         </div>
       </Card>
     </li>
   )
 }
 
-function RowMenu({ name, controller, onOpen, onDelete }: { name: string; controller: StageMoveController; onOpen: () => void; onDelete: () => void }) {
+function NameCell({ row, name, href, stretched }: { row: CoverLetterListRow; name: string; href: string; stretched?: boolean }) {
   return (
-    <StageCardMenu
-      controller={controller}
-      label={`${name} 메뉴`} // UQ-124: which 자기소개서
-      extraItems={
-        <>
-          <DropdownMenuItem onSelect={onOpen}>자기소개서 열기</DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-            삭제
-          </DropdownMenuItem>
-        </>
-      }
-    />
-  )
-}
-
-function NameCell({ row, name, href, stretched }: { row: ApplicationListRow; name: string; href: string; stretched?: boolean }) {
-  const jd = row.job_description
-  const analyzing = jd?.extraction_status === "running"
-  // v5 (D-30): JD registered without a key — requirements not organised yet (no job)
-  const notOrganised = jd?.extraction_status === "pending"
-  return (
-    <div className="min-w-0 space-y-0.5">
+    <div className="flex min-w-0 items-center gap-1.5">
       <Link
         href={href}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "block truncate font-medium hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "block truncate font-medium hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          // 추출 대기 이름("새 자기소개서 (YYYY-MM-DD)")은 흐리게
           !row.name && "text-muted-foreground",
           stretched && "after:absolute after:inset-0",
         )}
@@ -233,68 +183,12 @@ function NameCell({ row, name, href, stretched }: { row: ApplicationListRow; nam
       >
         {name}
       </Link>
-      {notOrganised ? (
-        // [UI-가정] S-13 행의 "요건 정리 전" 표시 (S-31 요건 상태와 같은 말)
-        <span className="text-sm text-muted-foreground">요건 정리 전</span>
-      ) : analyzing ? (
-        // [UI-가정] 목록에서 추출 대기 표시. C-03 prepare 문구를 쓴다 (S-15·S-31과 같음).
-        // Q-18: 02 "공고 요건 정리 중" ↔ 03 AI-01 "공고를 분석하고 있어요" 미결
-        <span className="text-sm text-muted-foreground">{AI_STAGE_LABELS.prepare}</span>
-      ) : jd?.company_name || jd?.position_title ? (
-        <p className="truncate text-sm text-muted-foreground">{[jd.company_name, jd.position_title].filter(Boolean).join(" · ")}</p>
+      {/* AI가 채운 이름 (v5.13까지 S-14 폼에 있던 규칙을 목록 행으로 옮겼다 — design-system 6장 A3) */}
+      {row.name_source === "ai" ? (
+        <Badge variant="ai" className="shrink-0">
+          AI 추출
+        </Badge>
       ) : null}
     </div>
-  )
-}
-
-function StageCell({ stage, outcome }: { stage: ApplicationStage; outcome: ApplicationSummary["stage_outcome"] }) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-2 text-sm">
-      <StageLabel stage={stage} />
-      {stage === "closed" ? <OutcomeBadge outcome={outcome} /> : null}
-    </span>
-  )
-}
-
-function DeadlineCell({ deadline }: { deadline: string | null }) {
-  if (!deadline) return <span className="text-sm text-muted-foreground">—</span>
-  return (
-    <span className="inline-flex items-center gap-2 text-sm">
-      <DDay deadline={deadline} />
-      <span className="text-muted-foreground tabular-nums">{formatDate(deadline)}</span>
-    </span>
-  )
-}
-
-/**
- * 기능 진행: 인사이트(없음/생성 중/있음) · 서류 초안 수.
- * v5.3 C-03 진행 표시 우선순위 (AiFeatureStatus): 작업이 대기·실행 중이면 이전 결과가 있어도 "생성 중"(C-03
- * 축약형, live), 아니면 있음 / 없음 + 결과보다 늦게 끝난 실패 한 줄(버튼 없음, G-30).
- */
-function ProgressCell({ row }: { row: ApplicationListRow }) {
-  const insight = row.insight_status
-  return (
-    <span className="flex flex-wrap items-center gap-3 text-sm">
-      {insight.kind === "generating" && row.insight_job_id ? (
-        // A3 UQ-74: only the AI-02 job (재생성 중 포함), polled live
-        <span onClick={(e) => e.stopPropagation()}>
-          <span className="sr-only">인사이트</span>
-          <JobInline jobId={row.insight_job_id} />
-        </span>
-      ) : (
-        <span className={cn("inline-flex items-start gap-1", insight.kind === "none" && "text-muted-foreground/70")}>
-          <Lightbulb className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <span className="sr-only">인사이트</span>
-          <AiFeatureStatus status={insight}>
-            <span>있음</span>
-          </AiFeatureStatus>
-        </span>
-      )}
-      <span className="inline-flex items-center gap-1 tabular-nums">
-        <FileText className="size-3.5" aria-hidden />
-        <span className="sr-only">서류 초안</span>
-        {row.draft_count}
-      </span>
-    </span>
   )
 }

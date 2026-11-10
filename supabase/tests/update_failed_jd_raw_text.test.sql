@@ -86,18 +86,16 @@ values ('a0000000-0000-0000-0000-000000000001', 'insight', w0t.pid(18), 'applica
 insert into public.insights (user_id, application_project_id, version_no, is_latest, status, result, match_stage_result, requirements_hash, completed_at,
                              schema_version, prompt_version, provider, model, model_tier, connection_tier, input_hash, career_snapshot_hash)
 values ('a0000000-0000-0000-0000-000000000001', w0t.pid(12), 1, true, 'ready', '{}', '{}', 'rh', now(), 1, 'p', 'gemini', 'm', 'default', 'free', 'i', 'c');
-insert into public.drafts (id, user_id, application_project_id, draft_type, title, status)
-  values ('a0000000-eeee-0000-0000-000000000014', 'a0000000-0000-0000-0000-000000000001', w0t.pid(14), 'cover_letter', 't', 'composing');
-insert into public.draft_sections (user_id, draft_id, sort_order, section_kind, question_text, count_basis, ai_content, status)
-  values ('a0000000-0000-0000-0000-000000000001', 'a0000000-eeee-0000-0000-000000000014', 0, 'cover_letter_question', 'q', 'with_spaces', '[]', 'failed');
--- 15 owner: a section of its own project's draft; evidence through a direct row (superuser).
-insert into public.drafts (id, user_id, application_project_id, draft_type, title, status)
-  values ('a0000000-eeee-0000-0000-000000000015', 'a0000000-0000-0000-0000-000000000001', w0t.pid(15), 'cover_letter', 't', 'composing');
-insert into public.draft_sections (id, user_id, draft_id, sort_order, section_kind, question_text, count_basis, status)
-  values ('a0000000-e5e5-0000-0000-000000000015', 'a0000000-0000-0000-0000-000000000001', 'a0000000-eeee-0000-0000-000000000015', 0, 'cover_letter_question', 'q', 'with_spaces', 'pending');
+-- R15 (CL-3): the drafts tables are gone, and condition 5 lost its draft_sections.ai_content check (the written
+-- cover letter does not quote JD sentences by itself). 15 keeps the JD-evidence branch, now owned by a document.
+insert into public.application_documents (id, user_id, application_project_id, document_kind, body, filled_slot_count)
+  values ('a0000000-eeee-0000-0000-000000000015', 'a0000000-0000-0000-0000-000000000001', w0t.pid(15), 'cover_letter',
+          '{"questions": [{"slot": "q_1", "question_id": "a0000000-e5e5-0000-0000-000000000015", "question_text": "q",
+                           "char_limit": 800, "count_basis": "with_spaces", "body": "답변", "blocks": [],
+                           "sort_order": 1}]}'::jsonb, 1);
 insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_locator, sort_order)
-  values ('a0000000-0000-0000-0000-000000000001', w0t.pid(15), 'draft_section', 'a0000000-e5e5-0000-0000-000000000015', 'b1',
-          'jd_sentence', w0t.jid(15), '{"sid":"S1","start":0,"end":1}', 0);
+  values ('a0000000-0000-0000-0000-000000000001', w0t.pid(15), 'application_document', 'a0000000-eeee-0000-0000-000000000015',
+          'q_1.blocks.b1', 'jd_sentence', w0t.jid(15), '{"sid":"S1","start":0,"end":1}', 0);
 update public.application_projects set last_activity_at = '2026-01-01';
 
 set local role authenticated;
@@ -119,7 +117,8 @@ select throws_ok($$select w0t.edit(8)$$, 'P0001', 'jd_failure_not_input', '4: pr
 select throws_ok($$select w0t.edit(19)$$, 'P0001', 'jd_failure_not_input', '4: insufficient_data is out');
 select throws_ok($$select w0t.edit(9)$$, 'P0001', 'jd_failure_not_input', '4: job pruned, cause unknown');
 select throws_ok($$select w0t.edit(12)$$, 'P0001', 'jd_has_results', '5: ready insight');
-select throws_ok($$select w0t.edit(14)$$, 'P0001', 'jd_has_results', '5: draft section ai_content');
+-- R15: 14 no longer has a result of its own -> the edit is allowed (condition 5 dropped the draft check).
+select lives_ok($$select w0t.edit(14)$$, '5: a written cover letter alone no longer blocks the edit (R15)');
 select throws_ok($$select w0t.edit(15)$$, 'P0001', 'jd_has_results', '5: JD evidence');
 select throws_ok($$select w0t.edit(16, '옛 원문')$$, 'P0001', 'jd_raw_text_unchanged', '6: same text');
 select throws_ok($$select w0t.edit(16, E'  옛 원문\n')$$, 'P0001', 'jd_raw_text_unchanged', '6: surrounding whitespace only');

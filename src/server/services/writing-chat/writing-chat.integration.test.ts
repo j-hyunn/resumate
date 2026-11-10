@@ -23,7 +23,7 @@ import {
   startWritingChat,
 } from "./chat";
 import { createTurnChatDb } from "./db";
-import { createDeliverablePipelines, createWritingChatPipelines } from "./pipelines";
+import { createDeliverablePipelines, createDocumentPipelines, createWritingChatPipelines } from "./pipelines";
 import { prepareTurn, runTurn } from "./turn";
 import type { TurnDeps } from "./types";
 
@@ -100,6 +100,7 @@ describe.skipIf(!ready)("AI writing chat v4.4 (local stack)", () => {
         input.tier === "light" ? scriptedLlmFactory(extractAdapter.adapter, Date.now)(input) : scriptedLlmFactory(replyAdapter.adapter, Date.now)(input),
       pipelines: createWritingChatPipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
       deliverablePipelines: createDeliverablePipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
+      documentPipelines: createDocumentPipelines({ logger: (entry) => void logs.push(JSON.stringify(entry)), log }),
       log,
     };
   }

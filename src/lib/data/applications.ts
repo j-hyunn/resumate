@@ -25,12 +25,13 @@ import { newId, USER_ID } from "@/lib/mock/ids"
 import { activeKey, assertAiRunnable, createMockJob, MockAiError } from "@/lib/mock/ai"
 import { consentRequired } from "@/lib/mock/consent"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
-import { STAGE_ORDER, countsAsDraft, defaultApplicationName } from "./labels"
+import { STAGE_ORDER, composeCoverLetterName, countsAsDraft, defaultApplicationName } from "./labels"
 import { resolveAiFeatureStatus, type AiFeatureStatusView } from "./ai-feature-status"
 import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { refreshApplicationJobs } from "./ai-jobs"
 import { isInputCausedJdFailure, JD_RAW_TEXT_MAX } from "./jd-raw-text"
 import { previewOr } from "./source"
+import { checkJdPreview, type PreviewSkipReason } from "./jd-preview-store"
 import { realMoveApplicationStage, realSetApplicationOutcome, realUpdateApplicationProject } from "./board-real"
 import {
   realCreateApplicationProject,
@@ -42,14 +43,13 @@ import {
   realStartInsight,
   realUpdateFailedJdRawText,
 } from "./applications-real"
-import { realGetDraft, realListDrafts, realSaveDraftSection } from "./drafts-real"
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
   job_description: Pick<JobDescription, "id" | "company_name" | "position_title" | "extraction_status"> | null
   /** 인사이트 없음 / 생성 중 / 있음 */
   insight_state: "none" | "generating" | "ready"
-  /** 서류 초안 수: 경력기술서 `composing` 제외 (S-17, Q53-7) */
+  /** @deprecated (v5.20, CF-A14) 화면 "서류 수" 폐기 — S-39 카드는 `listCoverLetterSlotCounts()`를 쓴다 */
   draft_count: number
   /** running async AI jobs on this project (C-03 축약형) */
   running_job_ids: string[]
@@ -94,9 +94,10 @@ function failJdExtraction(db: MockDb, jd: JobDescription, job: AiJob, code: AiEr
   })
   const ap = db.application_projects.find((a) => a.id === jd.application_project_id)
   if (ap && !ap.name) {
-    const both = jd.company_name && jd.position_title ? `${jd.company_name} – ${jd.position_title}`.slice(0, 100) : null
-    ap.name = both ?? defaultApplicationName(ap.created_at)
-    ap.name_source = both ? "user" : "default"
+    // (v5.20, CF-A7) 실패해도 이름 규칙은 같다: 기업 명이 있으면 "{기업 명} 자기소개서", 없으면 기본 이름
+    const composed = composeCoverLetterName(jd.company_name)
+    ap.name = composed ?? defaultApplicationName(ap.created_at)
+    ap.name_source = composed ? "user" : "default"
   }
 }
 
@@ -137,9 +138,13 @@ function completeJdExtraction(db: MockDb, jd: JobDescription, job: AiJob) {
     jd.requirements_hash = `mock-${jd.id}-${lines.length}`
   }
   const ap = db.application_projects.find((a) => a.id === jd.application_project_id)
+  // (v5.20, CF-A7) 추출이 회사명을 찾으면 "{AI 추출 회사명} 자기소개서"로. 사용자가 고친 이름(`user`)은 그대로
   if (ap && (!ap.name || ap.name_source === "default")) {
-    ap.name = `${jd.company_name} – ${jd.position_title}`
-    ap.name_source = "ai"
+    const composed = composeCoverLetterName(jd.company_name)
+    if (composed) {
+      ap.name = composed
+      ap.name_source = "ai"
+    }
   }
 }
 
@@ -294,12 +299,39 @@ export interface CreateApplicationInput {
    */
   company_name?: string | null
   position_title?: string | null
+  /**
+   * R15 (CF-10·CF-A16·CF-A17): ①에서 붙여넣은 공고 URL(JD에 저장)과, 생성 RPC가 요건을 읽어 오는
+   * **요건 미리 보기 작업 id**다. 둘 다 선택이고 real 경로가 그대로 넘긴다.
+   * **이름 규칙(R15 D12)**: `name`이 있으면 그것 / 없고 회사명이 있으면 "{회사명} 자기소개서"(user,
+   * 키 연결과 무관) / 회사명도 없으면 키 없음은 기본 이름, 키 있음은 null(추출 대기).
+   */
+  source_url?: string | null
+  preview_job_id?: string | null
+  /**
+   * **mock 전용**: 미리 보기가 찾은 마감일. real 경로에서는 서버가 미리 보기 작업 행의 `output`에서
+   * 읽으므로 보내지 않는다 — mock은 작업 행이 없어 모달이 들고 있던 값을 받는다 `[UI-가정]`.
+   */
+  preview_deadline?: string | null
 }
 
-async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<ApplicationProject> {
+/**
+ * (v5.20, CF-A17 — R15 계약 정본 2026-11-09) `create_application_project` 반환에 붙는 미리 보기 적용 결과.
+ * 서버가 **원문 sha256을 다시 계산해 대조**하므로 모달 ②에서 공고 내용을 한 글자라도 고치면
+ * `preview_mismatch`로 미리 보기가 버려지고 생성은 계속된다(마감일·요건이 적용되지 않는다).
+ * real 분기(`realCreateApplicationProject`)는 아직 이 키를 돌려주지 않으므로 optional이다.
+ */
+export type CreateApplicationResult = ApplicationProject & {
+  preview_applied?: boolean
+  preview_skip_reason?: PreviewSkipReason | null
+}
+
+export type { PreviewSkipReason }
+
+async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<CreateApplicationResult> {
   const company = input.company_name?.trim() || null
   const position = input.position_title?.trim() || null
-  const name = input.name?.trim() || (company && position ? `${company} – ${position}`.slice(0, 100) : null)
+  // (v5.20, CF-A7) 이름 = "{기업 명} 자기소개서" — ②에서 사용자가 확인한 값이라 `name_source = 'user'`
+  const name = input.name?.trim() || composeCoverLetterName(company)
   const db = await mockRequest()
   const key = activeKey(db)
   if (key?.status === "invalid") throw MockAiError.refuse("key_invalid")
@@ -362,7 +394,16 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     tech_keywords: [],
     requirements_hash: null,
     raw_text_edited_at: null,
+    // R15: 생성 RPC가 `p_source_url`을 받는다 (CF-10·CF-A16)
+    source_url: input.source_url?.trim() || null,
   })
+  // (CF-A17 · R15) 미리 보기 적용: 서버가 원문을 다시 해시해 대조한다 — ②에서 공고 내용을 고치면
+  // `preview_mismatch`로 버려지고 생성은 계속된다(마감일·요건이 적용되지 않는다)
+  const preview = checkJdPreview(input.preview_job_id, input.raw_text)
+  if (preview.applied && !ap.deadline && input.preview_deadline) {
+    // CF-2·CF-A5: AI-01 `deadline.value`는 비어 있을 때만 채운다 (사용자 값을 덮지 않는다)
+    ap.deadline = input.preview_deadline
+  }
   db.application_stage_events.push({
     id: newId(),
     user_id: USER_ID,
@@ -374,7 +415,7 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     to_outcome: null,
     created_at: now,
   })
-  return clone(ap)
+  return { ...clone(ap), preview_applied: preview.applied, preview_skip_reason: preview.skipReason }
 }
 
 /** S-31 헤더 인라인 수정 (name, deadline, memo only) */
@@ -709,7 +750,7 @@ export function getApplicationProject(id: string): Promise<ApplicationSummary | 
   return previewOr(() => mockGetApplicationProject(id), () => realGetApplicationProject(id))
 }
 
-export function createApplicationProject(input: CreateApplicationInput): Promise<ApplicationProject> {
+export function createApplicationProject(input: CreateApplicationInput): Promise<CreateApplicationResult> {
   return previewOr(() => mockCreateApplicationProject(input), () => realCreateApplicationProject(input))
 }
 
@@ -733,14 +774,22 @@ export function startInsight(applicationProjectId: string, opts?: { fail?: AiErr
   return previewOr(() => mockStartInsight(applicationProjectId, opts), () => realStartInsight(applicationProjectId))
 }
 
+/**
+ * R15: 서류 reads are **연결 대기** again (mock only). The `drafts` tables are dropped
+ * (CF-1·CF-M1) and the 자기소개서 정본 reads come with S-46 in a later slice; the retired
+ * S-17 / S-19 screens keep working under `?state=` previews only
+ * (leader decision 2026-11-09). Export names and signatures are unchanged.
+ */
 export function listDrafts(applicationProjectId: string): Promise<Draft[]> {
-  return previewOr(() => mockListDrafts(applicationProjectId), () => realListDrafts(applicationProjectId))
+  return previewOr(() => mockListDrafts(applicationProjectId), async () => [])
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function getDraft(applicationProjectId: string, draftId: string): Promise<DraftWithSections | null> {
-  return previewOr(() => mockGetDraft(applicationProjectId, draftId), () => realGetDraft(applicationProjectId, draftId))
+  return previewOr(() => mockGetDraft(applicationProjectId, draftId), async () => null)
 }
 
+/** 연결 대기 — see `listDrafts`. */
 export function saveDraftSection(sectionId: string, patch: DraftSectionPatch, opts?: { fail?: boolean }): Promise<DraftSection | null> {
-  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), () => realSaveDraftSection(sectionId, patch))
+  return previewOr(() => mockSaveDraftSection(sectionId, patch, opts), async () => null)
 }

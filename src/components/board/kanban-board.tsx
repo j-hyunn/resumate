@@ -31,7 +31,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core"
-import { FileText, GripVertical, Lightbulb, MoreHorizontal, Plus } from "lucide-react"
+import { Check, CircleDashed, GripVertical, Lightbulb, MoreHorizontal, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -50,8 +50,32 @@ import { applicationDeletedToast, applicationDisplayName, STAGE_LABELS, STAGE_OR
 import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { deleteApplicationProjectAction } from "./actions"
+import { BoardAddButton } from "./board-add-button"
 
 export type BoardData = Record<ApplicationStage, ApplicationSummary[]>
+
+/**
+ * 카드별 자소서 표시 글자 (서버에서 `coverLetterProgressLabel()`로 판정해 넘긴다 —
+ * `lib/data/cover-letters`는 `server-only`라 이 클라이언트 파일에서 부를 수 없다).
+ * 행이 없거나 답변이 0개인 카드는 키가 없다.
+ */
+export type CoverLetterLabelMap = Record<string, "자소서 작성 중" | "자소서 작성됨">
+
+/**
+ * (v5.20, CF-3·CF-A14 / design-system 5.5 카드 3행) 카드의 서류 쪽 표시 = 배지 하나.
+ * 행 없음 또는 `filled_slot_count = 0` → 아무것도 그리지 않는다. 숫자·분수는 보이지 않는다.
+ */
+function CoverLetterBadge({ label }: { label: CoverLetterLabelMap[string] | undefined }) {
+  if (!label) return null
+  const done = label === "자소서 작성됨"
+  const Icon = done ? Check : CircleDashed
+  return (
+    <Badge variant={done ? "success" : "draft"}>
+      <Icon className="size-3" aria-hidden />
+      {label}
+    </Badge>
+  )
+}
 
 function cardTitle(card: ApplicationSummary) {
   const company = card.job_description?.company_name
@@ -116,7 +140,7 @@ const columnCoordinates: KeyboardCoordinateGetter = (event, { context }) => {
 // board
 // ---------------------------------------------------------------------------
 
-export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: boolean }) {
+export function KanbanBoard({ board, coverLetterLabels, failMove }: { board: BoardData; coverLetterLabels: CoverLetterLabelMap; failMove: boolean }) {
   const router = useRouter()
   const [snapshot, setSnapshot] = React.useState<Record<string, { stage: ApplicationStage; outcome: StageOutcome | null; moving: boolean; controller: StageMoveController }>>({})
   const [activeId, setActiveId] = React.useState<string | null>(null)
@@ -197,7 +221,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
   const menuExtras = (card: ApplicationSummary) => (
     <>
       <DropdownMenuItem asChild>
-        <Link href={routes.application(card.id)} onClick={() => setNavOrigin("board", card.id)}>
+        <Link href={routes.coverLetter(card.id)} onClick={() => setNavOrigin("board", card.id)}>
           자기소개서 열기
         </Link>
       </DropdownMenuItem>
@@ -218,6 +242,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
         card={card}
         controller={controller}
         stage={snapshot[card.id]?.stage ?? card.stage}
+        coverLetterLabel={coverLetterLabels[card.id]}
         draggable={draggable}
         menuExtras={menuExtras(card)}
       />
@@ -266,7 +291,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
         <DragOverlay>
           {activeCard ? (
             <div className="rotate-[1deg] rounded-md shadow-lg ring-1 ring-border motion-reduce:rotate-0">
-              <CardBody card={activeCard} stage={activeFrom ?? activeCard.stage} />
+              <CardBody card={activeCard} stage={activeFrom ?? activeCard.stage} coverLetterLabel={coverLetterLabels[activeCard.id]} />
             </div>
           ) : null}
         </DragOverlay>
@@ -286,12 +311,11 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
         {STAGE_ORDER.map((stage) => (
           <TabsContent key={stage} value={stage} className="space-y-2 pt-2">
             {stage === "before_apply" ? (
-              <Button asChild variant="outline" className="h-11 w-full">
-                <Link href={routes.applicationNew({ from: "board" })}>
-                  <Plus aria-hidden />
-                  자기소개서 추가
-                </Link>
-              </Button>
+              // UQ-742: 보드 위에서 S-14 모달을 연다 (S-13으로 이동하지 않는다)
+              <BoardAddButton variant="outline" className="h-11 w-full">
+                <Plus aria-hidden />
+                자기소개서 추가
+              </BoardAddButton>
             ) : null}
             <ul className="space-y-2" aria-label={`${STAGE_LABELS[stage]} ${columns[stage].length}개`}>
               {columns[stage].length === 0 ? <EmptyColumn /> : null}
@@ -310,7 +334,7 @@ export function KanbanBoard({ board, failMove }: { board: BoardData; failMove: b
         onConfirm={async () => {
           if (!deleteTarget) return
           await deleteApplicationProjectAction(deleteTarget.entity_id)
-          // FL-06 "출발 화면으로 + 토스트" — S-13 · S-31과 같은 문구 (UQ-383)
+          // FL-06 "출발 화면으로 + 토스트" — S-13과 같은 문구 (UQ-383)
           toast.success(applicationDeletedToast(deleteTarget.label ?? ""))
           router.refresh()
         }}
@@ -364,11 +388,10 @@ function BoardColumn({
           {count}
         </Badge>
         {stage === "before_apply" ? (
-          <Button asChild variant="ghost" size="icon-sm" className="ml-auto">
-            <Link href={routes.applicationNew({ from: "board" })} aria-label="자기소개서 추가">
-              <Plus aria-hidden />
-            </Link>
-          </Button>
+          // UQ-742: 보드 위에서 S-14 모달을 연다 (S-13으로 이동하지 않는다)
+          <BoardAddButton variant="ghost" size="icon-sm" className="ml-auto" aria-label="자기소개서 추가">
+            <Plus aria-hidden />
+          </BoardAddButton>
         ) : null}
       </div>
       <ul className="flex-1 space-y-2 overflow-y-auto p-0.5" aria-label={`${STAGE_LABELS[stage]} ${count}개`}>
@@ -383,12 +406,14 @@ function BoardCard({
   card,
   controller,
   stage,
+  coverLetterLabel,
   draggable,
   menuExtras,
 }: {
   card: ApplicationSummary
   controller: StageMoveController | null
   stage: ApplicationStage
+  coverLetterLabel: CoverLetterLabelMap[string] | undefined
   draggable: boolean
   menuExtras: React.ReactNode
 }) {
@@ -406,6 +431,7 @@ function BoardCard({
       <CardBody
         card={card}
         stage={stage}
+        coverLetterLabel={coverLetterLabel}
         handle={
           draggable ? (
             <button
@@ -441,15 +467,17 @@ function BoardCard({
 function CardBody({
   card,
   stage,
+  coverLetterLabel,
   handle,
   menu,
   link = false,
 }: {
   card: ApplicationSummary
   stage: ApplicationStage
+  coverLetterLabel: CoverLetterLabelMap[string] | undefined
   handle?: React.ReactNode
   menu?: React.ReactNode
-  /** stretched link to S-31 ("지원 현황 › …") */
+  /** stretched link to S-46 ("지원 현황 › …", v5.20 — S-31 폐기) */
   link?: boolean
 }) {
   const { title, subtitle } = cardTitle(card)
@@ -463,7 +491,7 @@ function CardBody({
         <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
           {link ? (
             <Link
-              href={routes.application(card.id)}
+              href={routes.coverLetter(card.id)}
               onClick={() => setNavOrigin("board", card.id)}
               className="after:absolute after:inset-0 after:rounded-md focus-visible:outline-none"
             >
@@ -485,11 +513,7 @@ function CardBody({
             <span className="sr-only">{hasInsight ? "인사이트 있음" : "인사이트 없음"}</span>
           </span>
         )}
-        <span className="inline-flex items-center gap-1 tabular-nums">
-          <FileText className="size-3.5" aria-hidden />
-          {card.draft_count}
-          <span className="sr-only">서류 초안 {card.draft_count}개</span>
-        </span>
+        <CoverLetterBadge label={coverLetterLabel} />
       </div>
       <FeatureStatusLines label="인사이트" status={insight} />
     </article>
@@ -498,7 +522,7 @@ function CardBody({
 
 /**
  * F8 card lines (design-system 3.3 v3): ① generating → C-03 축약형 (the indicator above is hidden),
- * late failure → one line without a button (the card opens S-31, where C-20 is shown in full).
+ * late failure → one line without a button (the card opens S-46, where C-20 is shown in full).
  */
 function FeatureStatusLines({ label, status }: { label: string; status: AiFeatureStatusView }) {
   if (status.kind === "generating")

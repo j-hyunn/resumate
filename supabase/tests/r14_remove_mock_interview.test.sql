@@ -47,7 +47,8 @@ select is(pg_temp.check_values('ai_usage_records_feature_check'),
           array['career_description', 'chat_reply', 'cover_letter', 'insight', 'jd_extraction', 'key_verification',
                 'writing_assist', 'writing_chat'], 'ai_usage_records.feature: 8 values');
 select is(pg_temp.check_values('evidence_links_owner_type_check'),
-          array['chat_message', 'draft_section', 'insight'], 'evidence owner_type: interview owners removed');
+          array['application_document', 'chat_message', 'insight'],
+          'evidence owner_type: interview owners removed (R15: draft_section out, application_document in)');
 select is(pg_temp.check_values('evidence_links_source_type_check'),
           array['education', 'experience', 'jd_requirement', 'jd_sentence', 'profile', 'project', 'project_deliverable',
                 'skill', 'user_note'], 'evidence source_type: interview_answer removed');
@@ -130,11 +131,11 @@ select throws_ok($$select public.move_application_stage('a1400000-aaaa-0000-0000
                  'P0001', 'invalid_stage', 'move to job_interview refused');
 
 select is(public.get_deletion_impact('application_project', 'a1400000-aaaa-0000-0000-000000000001'),
-          '{"cascade": {"insights": 1, "drafts": 0, "stage_events": 1}}'::jsonb,
+          '{"cascade": {"insights": 1, "documents": 0, "document_chats": 0, "stage_events": 1}}'::jsonb,
           'application project deletion impact: no interview_sessions, no kept');
 select is(public.get_deletion_impact('project', 'a1400000-3333-0000-0000-000000000001') -> 'affected_results',
           '{"by_application_project": [{"application_project_id": "a1400000-aaaa-0000-0000-000000000001", "name": "P1",
-             "insights": 1, "drafts": 0, "draft_sections": 0}]}'::jsonb,
+             "insights": 1, "documents": 0, "document_sections": 0}]}'::jsonb,
           'career deletion impact: no interview_sessions / detached_interview_sessions');
 
 select is((select array_agg(k order by k) from jsonb_object_keys(public.get_account_deletion_summary() -> 'applications') k),

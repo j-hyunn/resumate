@@ -1,52 +1,73 @@
 "use server"
 
 /**
- * A3 server actions (자기소개서 관리). Thin wrappers over src/lib/data/* and the area shim
- * (src/lib/data/drafts.ts). Screens refresh with router.refresh() after a write.
+ * 자기소개서 관리 server actions. Thin wrappers over src/lib/data/*. Screens refresh with
+ * router.refresh() after a write.
+ *
+ * (v5.20, CF-1·CF-7) 폐기된 액션: `rankDraftSourcesAction`(AI-11) · `createCareerDescriptionAction` ·
+ * `createCoverLetterAction` · `deleteDraftAction` · `prepare/finalizeCareerDescriptionAction` ·
+ * `prepare/finalizeCoverLetterSectionAction` · `saveEditedContentAction` · `setSectionSourcesAction` ·
+ * `markDraftCopiedAction` — S-17·S-19·S-45가 없어지고 초안은 S-46 패널의 초안 턴이 만든다.
  */
-import type { AiErrorCode, AiProviderName, ApplicationProject, DraftOptions, DraftSection, JobDescription } from "@/types/db"
-import { createApplicationProject, getJobDescription, saveDraftSection, startInsight, updateApplicationProject, updateFailedJdRawText } from "@/lib/data/applications"
+import type { AiErrorCode, AiProviderName, ApplicationProject, JobDescription } from "@/types/db"
+import { createApplicationProject, getJobDescription, startInsight, updateApplicationProject, updateFailedJdRawText } from "@/lib/data/applications"
+import type { PreviewSkipReason } from "@/lib/data/jd-preview-store"
 import { getAiJob } from "@/lib/data/ai-jobs"
 import type { AiRejected } from "@/lib/data/ai-errors"
-import { deleteApplicationProject, deleteDraft } from "@/lib/data/deletion"
+import { deleteApplicationProject } from "@/lib/data/deletion"
 import { withAiGuard } from "@/lib/data/ai-guard"
-import { getDataReadiness } from "@/lib/data/readiness"
+// (v5.20, CF-1·CF-5) 폐기된 `draft_sections` 행 단위 문항 액션(`saveQuestionAction`·
+// `addQuestionAction`·`deleteQuestionAction`)은 S-46 문항 설정 상태가 `application_documents.body`를
+// 페이지 단위로 저장하면서 쓰는 화면이 없어졌다. JD 요건 추출만 남는다 (S-15·D-30 — 실제 경로 유지).
+import { retryJdExtraction } from "@/lib/data/drafts"
+import type { DocumentFormSnapshot } from "@/lib/contracts/application-document"
+import { AppError, isAppError, runAction } from "@/lib/contracts/errors"
+import { deleteCoverLetterChat, getCoverLetterChat, startCoverLetterChat } from "@/lib/data/cover-letter-chats"
 import {
-  addCoverLetterQuestion,
-  createCareerDescriptionDraft,
-  createCoverLetterDraft,
-  deleteDraftSection,
-  finalizeCareerDescription,
-  finalizeCoverLetterSection,
-  markDraftCopied,
-  markDraftEdited,
-  prepareCareerDescription,
-  prepareCareerDescriptionStream,
-  prepareCoverLetterSection,
-  prepareCoverLetterStream,
-  MockAiError,
-  rankDraftSources,
-  retryJdExtraction,
-  setSectionSources,
-  type GenerationResult,
-  type SourceSelection,
-} from "@/lib/data/drafts"
+  extractJdPreview,
+  fetchJobPosting,
+  getCoverLetterDocument,
+  listCoverLetterSlotCounts,
+  markCoverLetterCopied,
+  saveCoverLetterDocument,
+  type SaveCoverLetterInput,
+} from "@/lib/data/cover-letters"
 
-// --- S-14 / S-31 -------------------------------------------------------------------------
+// --- S-14 ② 생성 · S-46 머리 ----------------------------------------------------------------
 
 export async function createApplicationAction(input: {
   raw_text: string
   name: string | null
   deadline: string | null
-  /** S-14 회사명·포지션명 입력란 → JD company_name / position_title (source 'user') */
+  /** S-14 ② 지원 기업·지원 포지션 → JD company_name / position_title (source 'user') */
   company_name?: string | null
   position_title?: string | null
+  /** (v5.20, CF-10·CF-A16) ①의 공고 URL → `p_source_url` */
+  source_url?: string | null
+  /** (v5.20, CF-A17) ① [다음]의 미리 보기 작업 id → `p_preview_job_id` */
+  preview_job_id?: string | null
+  /** mock 전용: 미리 보기가 찾은 마감일 (real 경로는 서버가 작업 행에서 읽는다) */
+  preview_deadline?: string | null
   fail?: boolean
-}): Promise<{ id: string } | AiRejected> {
+}): Promise<CreateApplicationOutcome | AiRejected | { refused: "invalid_source_url" }> {
   if (input.fail) throw new Error("save failed (mock)")
   const raw = input.raw_text.trim()
   if (!raw) throw new Error("raw_text required")
-  // v5.3 S-14 이름 규칙은 data layer(createApplicationProject)가 정한다
+  try {
+    return await createApplicationGuarded(input, raw)
+  } catch (e) {
+    // `invalid_source_url`(400)은 값으로 돌려준다 — 던지면 Server Action 경계에서 `code`를 잃어
+    // 화면이 "주소 없이 만들기"를 띄울 수 없다 (UX S-14 "주소 저장 불가")
+    if (isAppError(e) && e.code === "invalid_source_url") return { refused: "invalid_source_url" }
+    throw e
+  }
+}
+
+async function createApplicationGuarded(
+  input: Parameters<typeof createApplicationAction>[0],
+  raw: string,
+): Promise<CreateApplicationOutcome | AiRejected> {
+  // (v5.20, CF-A7) 이름 규칙 "{기업 명} 자기소개서"는 data layer(createApplicationProject)가 정한다
   // Q53-1: key_invalid / ai_consent_required come back as `{ rejected, refusal }` with no row (경로 ⑥)
   return withAiGuard(async () => {
     const ap = await createApplicationProject({
@@ -55,12 +76,27 @@ export async function createApplicationAction(input: {
       deadline: input.deadline || null,
       company_name: input.company_name,
       position_title: input.position_title,
+      source_url: input.source_url,
+      preview_job_id: input.preview_job_id,
+      preview_deadline: input.preview_deadline,
     })
-    return { id: ap.id }
+    return {
+      id: ap.id,
+      // R15: 미리 보기가 버려졌는지 화면이 알 수 있게 그대로 올린다 (② "공고 내용 고침" 안내)
+      preview_applied: ap.preview_applied ?? false,
+      preview_skip_reason: ap.preview_skip_reason ?? null,
+    }
   })
 }
 
-/** S-15 공고 원문 저장 (Q53-2, RPC update_failed_jd_raw_text): `{ refused }` = nothing changed */
+/** S-14 ② [자기소개서 작성]의 결과 (R15 `create_application_project` 반환에서 화면이 쓰는 부분) */
+export interface CreateApplicationOutcome {
+  id: string
+  preview_applied: boolean
+  preview_skip_reason: PreviewSkipReason | null
+}
+
+/** 채용 공고 탭 공고 원문 저장 (Q53-2, RPC update_failed_jd_raw_text): `{ refused }` = nothing changed */
 export async function updateFailedJdRawTextAction(applicationProjectId: string, rawText: string) {
   return updateFailedJdRawText(applicationProjectId, rawText)
 }
@@ -79,7 +115,7 @@ export async function deleteApplicationAction(id: string) {
 }
 
 /**
- * S-15 "요건 정리하기" / 다시 시도, S-17·S-18 요건 선행 추출 (A13). v5.3: path ⑤ refusal comes back as
+ * 채용 공고 탭 "요건 정리하기" / 다시 시도, S-46 문항 설정 상태의 선행 추출 (A13). v5.3: path ⑤ refusal comes back as
  * `AiRejected` (nothing changed). `{ already: true }` = another path was already extracting
  * ("이미 정리하고 있어요"). `true` = started.
  */
@@ -88,7 +124,7 @@ export async function retryJdExtractionAction(applicationProjectId: string): Pro
   return r === "already" ? { already: true } : r
 }
 
-/** Requirement-extraction state for client polling (S-15 / S-17 / S-18 요건 선행 추출) */
+/** Requirement-extraction state for client polling (채용 공고 탭 · S-46 문항 설정 상태의 선행 추출) */
 export interface JdExtractionState {
   status: JobDescription["extraction_status"] | null
   requirement_count: number
@@ -111,7 +147,7 @@ export async function getJdExtractionStateAction(applicationProjectId: string): 
   }
 }
 
-// --- S-16 ----------------------------------------------------------------------------------
+// --- 인사이트 탭 (S-16) --------------------------------------------------------------------
 
 /**
  * v4: key checked first on the server (`{ rejected }` → nothing changed); D-30: startInsight runs
@@ -121,108 +157,65 @@ export async function startInsightAction(applicationProjectId: string, fail?: Ai
   return withAiGuard(() => startInsight(applicationProjectId, { fail: fail ?? null, rate_wait: opts?.rate_wait }))
 }
 
-// --- S-17 ----------------------------------------------------------------------------------
+// --- S-46 문항 설정 (옛 S-18 — A3가 다시 쓴다) ------------------------------------------------
 
-export type RankDraftSourcesResult =
-  | { ok: true; project_ids: string[] }
-  | { ok: false; error_code: AiErrorCode; provider: AiProviderName | null; retry_after: string | null; quota_resets_at: string | null }
-  | AiRejected
+// --- S-14 ① JD 입력 · S-46 자소서 정본 (v5.20 — 실제 경로, lib/data/cover-letters.ts) ----------
+
+/** S-14 ① [다음]: 공고 URL 가져오기 (AI 아님). 실패는 throw → 화면이 "가져오지 못했어요" 한 문구로 */
+export async function fetchJobPostingAction(url: string) {
+  return fetchJobPosting(url)
+}
+
+/** S-14 ① [다음]: 행 없는 AI-01 미리 보기. Q53-1 거부는 `AiRejected`로 돌아온다 (CF-A6 · R-CF-4) */
+export async function extractJdPreviewAction(rawText: string) {
+  return withAiGuard(() => extractJdPreview(rawText))
+}
+
+/** S-46: 정본 행 (없으면 문항 설정 상태, 있으면 작성 상태 — CF-A11) */
+export async function getCoverLetterDocumentAction(applicationProjectId: string) {
+  return getCoverLetterDocument(applicationProjectId)
+}
 
 /**
- * AI-11 경력기술서 기본 선택 (path ⑤). v5.3 A23: a failure is **not** replaced by a fallback selection —
- * the screen opens an unchecked tree + "AI가 포함할 항목을 고르지 못했어요" + C-20 cause line.
- * Key / consent refusal → `AiRejected` (AiRunButton re-reads readiness → C-18 / C-21).
+ * S-46 "저장하기" / [자기소개서 작성 시작] — 본문 + 머리 제목·마감일을 한 번에 (DM v4.15).
+ * **`ActionResult`로 돌려준다**: Server Action에서 던진 오류는 경계를 넘으며 `code`·`details`를 잃어
+ * (메시지만 남는다) 화면이 `stale_write`·`too_many_questions`·`invalid_slot`을 가를 수 없었다.
  */
-export async function rankDraftSourcesAction(applicationProjectId: string, fail?: boolean): Promise<RankDraftSourcesResult> {
-  try {
-    const r = await rankDraftSources(applicationProjectId, { fail })
-    return { ok: true, project_ids: r.project_ids }
-  } catch (e) {
-    if (e instanceof MockAiError) {
-      if (e.error_code === "key_missing" || e.error_code === "key_invalid") return { rejected: e.error_code, refusal: e.refusal }
-      return { ok: false, error_code: e.error_code, provider: null, retry_after: null, quota_resets_at: null }
-    }
-    return { ok: false, error_code: "provider_unavailable", provider: null, retry_after: null, quota_resets_at: null }
-  }
+export async function saveCoverLetterDocumentAction(input: SaveCoverLetterInput) {
+  return runAction(() => saveCoverLetterDocument(input))
 }
 
-export async function createCareerDescriptionAction(applicationProjectId: string, options: DraftOptions, regeneratedFromId?: string | null) {
-  const draft = await createCareerDescriptionDraft(applicationProjectId, options, regeneratedFromId ?? null)
-  return { id: draft.id }
+/** S-46 "전체 복사" (`first_copied_at`, PRD 7장 지표) */
+export async function markCoverLetterCopiedAction(applicationProjectId: string) {
+  return markCoverLetterCopied(applicationProjectId)
 }
 
-export async function createCoverLetterAction(applicationProjectId: string) {
-  const draft = await createCoverLetterDraft(applicationProjectId)
-  return { id: draft.id }
+/** S-39 카드 "자소서 작성 중 / 작성됨" (UI 5) */
+export async function listCoverLetterSlotCountsAction() {
+  return listCoverLetterSlotCounts()
 }
 
-export async function deleteDraftAction(draftId: string) {
-  await deleteDraft(draftId)
+// --- S-46 자소서 작성 대화 (R15 + 후속: 시작·열기·목록·삭제 모두 실제 경로) -------------------
+
+/** 패널 "+ 새 대화" / 첫 메시지 — `start_document_writing_chat`. 정본 행을 만들지 않는다 (CF-S3) */
+export async function startCoverLetterChatAction(applicationProjectId: string, formSnapshot?: DocumentFormSnapshot) {
+  return startCoverLetterChat(applicationProjectId, formSnapshot)
 }
 
-// --- S-18 ----------------------------------------------------------------------------------
-
-export async function saveQuestionAction(
-  sectionId: string,
-  patch: Partial<Pick<DraftSection, "question_text" | "char_limit" | "count_basis" | "user_note">>,
-  fail?: boolean,
-) {
-  return saveDraftSection(sectionId, patch, { fail })
+/**
+ * 패널 기록 목록에서 대화를 열거나 턴이 끝난 뒤 **저장된 제안으로 다시 맞출 때** (R15 후속 `getWritingChat`).
+ * `ActionResult`로 돌려준다 — 던진 오류는 경계에서 `code`를 잃는다.
+ */
+export async function getCoverLetterChatAction(chatId: string, applicationProjectId: string) {
+  return runAction(async () => {
+    // UQ-758: 이 지원 건의 대화가 아니면 열지 않는다
+    const chat = await getCoverLetterChat(chatId, applicationProjectId)
+    if (!chat) throw new AppError("not_found", "요청한 대화를 찾을 수 없어요")
+    return chat
+  })
 }
 
-export async function addQuestionAction(draftId: string) {
-  return addCoverLetterQuestion(draftId)
+/** 패널 ⋯ "이 대화 삭제" (C-05 `writing_chat`) */
+export async function deleteCoverLetterChatAction(chatId: string) {
+  return deleteCoverLetterChat(chatId)
 }
-
-export async function deleteQuestionAction(draftId: string, sectionId: string) {
-  return deleteDraftSection(draftId, sectionId)
-}
-
-// --- S-19 ----------------------------------------------------------------------------------
-
-/** Why the server refused to start a generation (A3 UQ-86): the AI connection first, then readiness (FL-08) */
-async function refusal(): Promise<{ refused: "insufficient" | "locked" | "key_invalid" | "unavailable" }> {
-  // A3 UQ-238: FL-08 order — key first, then data readiness
-  const readiness = await getDataReadiness()
-  if (!readiness.ai_connection.active_provider) return { refused: "locked" }
-  if (readiness.ai_connection.key_status === "invalid") return { refused: "key_invalid" }
-  if (!readiness.features.draft.ready) return { refused: "insufficient" }
-  return { refused: "unavailable" }
-}
-
-export async function prepareCareerDescriptionAction(draftId: string) {
-  // real: `{ generation_id, request }` for the SSE route; `?state=`: the mock plan
-  return (await prepareCareerDescriptionStream(draftId)) ?? (await prepareCareerDescription(draftId)) ?? refusal()
-}
-
-export async function finalizeCareerDescriptionAction(draftId: string, generationId: string, result: GenerationResult) {
-  return finalizeCareerDescription(draftId, generationId, result)
-}
-
-export async function prepareCoverLetterSectionAction(sectionId: string) {
-  return (await prepareCoverLetterStream(sectionId)) ?? (await prepareCoverLetterSection(sectionId)) ?? refusal()
-}
-
-export async function finalizeCoverLetterSectionAction(sectionId: string, generationId: string, result: GenerationResult) {
-  return finalizeCoverLetterSection(sectionId, generationId, result)
-}
-
-export async function saveEditedContentAction(
-  draftId: string,
-  sectionId: string,
-  edited: NonNullable<DraftSection["edited_content"]>,
-  fail?: boolean,
-) {
-  const saved = await saveDraftSection(sectionId, { edited_content: edited }, { fail })
-  await markDraftEdited(draftId)
-  return saved
-}
-
-export async function setSectionSourcesAction(sectionId: string, selections: SourceSelection[]) {
-  return setSectionSources(sectionId, selections)
-}
-
-export async function markDraftCopiedAction(draftId: string) {
-  return markDraftCopied(draftId)
-}
-

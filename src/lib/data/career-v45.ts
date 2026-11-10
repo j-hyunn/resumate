@@ -452,6 +452,8 @@ export async function getWritingChat(chatId: string): Promise<WritingChatView | 
     async () => {
       try {
         const dto = await v45.getAnyChat(chatId)
+        // R15 후속: a 서류 대화 belongs to the S-46 panel, not this one (S-10 / S-44) — treat it as absent here.
+        if (dto.target === "application_document") return null
         return dto.target === "project_deliverable" ? deliverableChatOf(dto) : chatOf(dto)
       } catch (err) {
         if (isAppError(err) && err.code === "not_found") return null

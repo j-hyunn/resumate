@@ -5,7 +5,7 @@
  * Loads impact counts itself (get_deletion_impact etc.) and returns the chosen options.
  * Never delete without it (patterns.md §8).
  */
-import { actionFailedMessage, applicationObjectPhrase, objectParticle } from "@/lib/data/labels"
+import { actionFailedMessage, applicationObjectPhrase } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2 } from "lucide-react"
 import {
@@ -28,7 +28,6 @@ import type { AffiliationMode, AiProviderName, DeletionEntityType, DeletionImpac
 import {
   getApplicationDeletionImpactAction,
   getDeletionImpactAction,
-  getDraftDeletionImpactAction,
   getRunningAiJobCountAction,
 } from "@/lib/data/actions"
 import { AI_PROVIDER_LABELS, AI_PROVIDERS } from "@/lib/mock/ai-providers"
@@ -50,9 +49,10 @@ export type DeleteTarget =
       unsavedChanges?: boolean
     }
   | { kind: "writing_chat"; entity_id: string; label?: string }
-  | { kind: "application_project"; entity_id: string; label: string }
-  /** K-3 (v5.13): the title follows the draft type; `label` = the draft's name */
-  | { kind: "draft"; entity_id: string; label: string; draft_type: "career_description" | "cover_letter" }
+  /** S-13 행 메뉴 · S-46 머리 ⋯ · S-39 카드 메뉴. `unsavedChanges` = S-46에 저장하지 않은 변경 (v5.20, CF-A9) */
+  | { kind: "application_project"; entity_id: string; label: string; unsavedChanges?: boolean }
+  // (v5.20, CF-1·CF-7·CF-A9) `kind: "draft"` 폐기 — 진입점(S-17 행 ⋯ · S-45 · S-46 머리 ⋯)이 모두
+  // 없어졌고 서류가 자기소개서와 1:1이라 삭제 단위는 "자기소개서" 하나다 (C-05 "서류" 행 폐기)
   /** v5 C-05 "API 키 삭제" (S-40, D-36, NFR-KEY-06·09). `entity_id` = provider */
   | { kind: "api_key"; entity_id: AiProviderName; label?: string; is_active: boolean }
 
@@ -77,8 +77,6 @@ function targetName(t: DeleteTarget): string {
       return "AI 작성 대화"
     case "application_project":
       return "자기소개서" // K-2 (v5.13, CR-23)
-    case "draft":
-      return t.draft_type === "cover_letter" ? "자소서 문항 답변" : "경력기술서" // K-3 (v5.13, D-UX-23)
     case "api_key":
       return "API 키"
   }
@@ -88,7 +86,6 @@ type Impact =
   | { kind: "career"; data: DeletionImpact }
   | { kind: "writing_chat"; data: DeletionImpact }
   | { kind: "application_project"; data: ApplicationDeletionImpact }
-  | { kind: "draft"; data: { sections: number } }
   | { kind: "api_key"; data: { running_jobs: number } }
 
 function CardRadio({ value, id, title, description }: { value: string; id: string; title: string; description?: string }) {
@@ -142,8 +139,6 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           return { kind: "writing_chat", data: await getDeletionImpactAction("writing_chat", target.entity_id) }
         case "application_project":
           return { kind: "application_project", data: await getApplicationDeletionImpactAction(target.entity_id) }
-        case "draft":
-          return { kind: "draft", data: await getDraftDeletionImpactAction(target.entity_id) }
         case "api_key":
           return { kind: "api_key", data: { running_jobs: await getRunningAiJobCountAction(target.entity_id) } }
       }
@@ -199,8 +194,6 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
           <AlertDialogDescription>
             {target.kind === "application_project"
               ? `${applicationObjectPhrase(target.label, { quoted: true })} 삭제할까요?` // K-2 (v5.13) + U36-7 overlap rule
-              : target.kind === "draft"
-                ? `'${target.label}'${objectParticle(target.label)} 삭제할까요?` // K-3 (v5.13)
               : target.kind === "api_key"
                 ? `${AI_PROVIDER_LABELS[target.entity_id]} 키를 삭제할까요? 즉시 영구 삭제되고 되돌릴 수 없어요.`
               : target.kind === "career" && target.entity_type === "project_deliverable"
@@ -246,7 +239,7 @@ function DeleteConfirmDialogInner({ target, open, onOpenChange, onConfirm }: Del
                   id="result-delete"
                   value="delete_results"
                   title="관련 결과도 함께 삭제"
-                  description="인사이트는 해당 버전, 경력기술서는 문서 전체, 자소서 문항 답변은 해당 문항의 생성 결과만(문항·글자 수·메모는 남음) 삭제돼요"
+                  description="인사이트는 해당 버전, 자기소개서는 해당 문항의 답변 본문만(문항·글자 수 제한·메모·제목은 남음) 삭제돼요"
                 />
               </RadioGroup>
               <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
@@ -313,16 +306,11 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
   }
   if (impact.kind === "application_project") {
     const d = impact.data
-    // K-2 (v5.13) · (v5.19, RM-1): everything under the 자기소개서 goes; spec copy verbatim
-    lines.push(`JD·요건, 인사이트 ${d.insights}, 서류 ${d.drafts}, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
+    // K-2 (v5.13) · (v5.19, RM-1) · (v5.20, CF-A14·CF-U3): 서류가 자기소개서와 1:1이라 "서류 {N}"을
+    // 쓰지 않는다 — 명세 문구 그대로. 계약 키는 `d.documents`(백엔드 정본)이고 그 수는 보이지 않는다.
+    lines.push(`JD·요건, 인사이트 ${d.insights}, 자소서 문항·답변, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
+    if (target.kind === "application_project" && target.unsavedChanges) lines.push("저장하지 않은 수정도 함께 사라져요")
   }
-  // K-3 (v5.13): a cover-letter draft's sections are its questions
-  if (impact.kind === "draft" && target.kind === "draft")
-    lines.push(
-      target.draft_type === "cover_letter"
-        ? `문항 ${impact.data.sections}개와 그 답변이 함께 삭제돼요`
-        : "작성한 블록과 직접 고친 내용이 함께 삭제돼요",
-    )
   if (impact.kind === "api_key" && target.kind === "api_key") {
     if (impact.data.running_jobs > 0)
       lines.push(`진행 중인 AI 작업 ${impact.data.running_jobs}건은 실패로 끝나고 입력(답변·대화·문항)은 그대로 남아요`)
@@ -346,7 +334,9 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
           <ul className="list-disc space-y-1 pl-4">
             {byAp.map((ap) => (
               <li key={ap.application_project_id}>
-                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights} · 초안 {ap.drafts}
+                {/* (v5.20, R-CF-12 · CF-A14) 서류가 0~1이라 수를 보이지 않고, 1이면 "자소서"만 붙인다 `[가정]` */}
+                {ap.name ?? "새 자기소개서"} — 인사이트 {ap.insights}
+                {ap.documents > 0 ? " · 자소서" : null}
               </li>
             ))}
           </ul>

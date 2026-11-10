@@ -6,6 +6,7 @@ import {
   ApplyDraftEditInput,
   DeliverableDraftEditInput,
   DeliverableWritingChatsInput,
+  DocumentWritingChatsInput,
   ProjectWritingChatsInput,
   ReviewDraftFieldInput,
   StartDeliverableWritingChatInput,
@@ -80,6 +81,20 @@ export async function listDeliverableWritingChats(input: unknown): Promise<Actio
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
     return chats.listDeliverableWritingChats(supabase, parsed.data.projectDeliverableId);
+  });
+}
+
+/**
+ * S-46 대화 기록 목록 of one 서류 (R15 후속, DM 7장 25행 — latest activity first). Opening one is
+ * `getWritingChat`, which answers a `DocumentWritingChatDto` for a 서류 대화 (`target:
+ * "application_document"`), so a reload restores the messages and the unapplied proposals.
+ */
+export async function listDocumentWritingChats(input: unknown): Promise<ActionResult<ProjectWritingChatSummary[]>> {
+  const parsed = DocumentWritingChatsInput.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  return runAction(async () => {
+    const { supabase } = await requireConsentedUser();
+    return chats.listDocumentWritingChats(supabase, parsed.data.applicationProjectId, parsed.data.documentKind);
   });
 }
 

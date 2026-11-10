@@ -17,15 +17,14 @@ import { usePreviewState } from "./preview-state-client"
 import { CAREER_SAVED_EVENT, notifyCareerSaved, readCareerReturn, type StoredReturnTarget } from "./return-target"
 import { routes } from "@/lib/routes"
 
+// (v5.20, CF-1) 경력기술서 폐기 — 복귀 대상은 인사이트 / 자소서 둘. 기능 이름 "자소서"(CF-U3)
 export const RETURN_FEATURE_LABELS: Record<ReturnTargetFeature, string> = {
   insight: "인사이트",
-  career_description: "경력기술서",
-  cover_letter: "자소서 문항 답변", // D-UX-23 (U36-2)
+  cover_letter: "자소서",
 }
 
 export const RETURN_FEATURE_READINESS: Record<ReturnTargetFeature, ReadinessFeatureKey> = {
   insight: "insight",
-  career_description: "draft",
   cover_letter: "draft",
 }
 

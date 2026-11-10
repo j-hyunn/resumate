@@ -85,7 +85,8 @@ async function loadChatDetail(supabase: UserSupabaseClient, chatId: string): Pro
   if (!z.guid().safeParse(chatId).success) return null
   const loaded = await loadWritingChatWithMessages(supabase, chatId)
   if (!loaded) return null
-  const project = await loadProjectRow(supabase, loaded.chat.project_id)
+  // R15 D2: a 서류 대화 has `project_id` null (DM 2.5) — there is no project row to load.
+  const project = loaded.chat.project_id ? await loadProjectRow(supabase, loaded.chat.project_id) : null
   // Generated types give CHECK columns as string; the DB guarantees the narrower UI types.
   return detail({ writing_chat_messages: loaded.messages as unknown as WritingChatMessage[] }, toLegacyWritingChat(loaded.chat, project ?? undefined))
 }

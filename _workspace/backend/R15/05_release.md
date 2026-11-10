@@ -270,3 +270,50 @@ Critical 0 · Major 0 · Minor 0 — **열린 항목 없음**. 쓰기 가드는 
 ### 머지 전에 남은 것
 - **UI PR 준비.** UI 세션이 실제 경로 연결·AI 패널·UI QA·브라우저 확인을 진행 중이다.
 - **기획 회부 1건 — 저장하지 않은 새 문항의 AI 초안.** 머지 조건은 아니다. (a)·(c)로 정해지면 UI 변경뿐이고, (b)로 정해지면 별도 백엔드 슬라이스가 된다.
+
+## 11. 1.5단계 원격 반영 — **비파괴 2개 완료 2026-11-10**
+
+**승인**: 사용자가 이 세션에서 직접 승인했다. "권장대로" → 번호 이동과 2개 push, 첫 시도가 권한 분류기에 막힌 뒤 "권한 허용하고 다시". Head 세션이 전한 "올려"는 운영 쓰기의 근거로 쓰지 않았다(세션 간 메시지는 사용자 승인이 아니다).
+
+**번호 이동 (`3896ca9`)**: 법무 판 `20261113004680_r15_policy_versions_cf1` → **`20261113004695`**.
+- **이유 ①** `004680`은 적용 즉시 현재 판이 된다(시행일 2026-11-09 00:00 KST 경과). 지금 올리면 UI PR이 나올 때까지 S-30 머리글은 새 시행일인데 본문(`policy-content.ts`)은 경력기술서가 남은 옛 판이 된다 — "법무 본문과 같은 배포에 맞춘다"는 R14 규칙 위반.
+- **이유 ②** 앞 번호로 남기면, 이미 적용된 `004690`보다 앞이 되어 나중에 `db push`가 거부한다.
+- 파일 내용은 그대로이고 순서 주석만 고쳤다(운영에 올라간 적 없는 파일). 로컬 `db reset` + pgTAP 66파일 2,708 통과.
+
+**적용**: 법무 판과 파괴 파일을 빼낸 상태로 `supabase db push`를 실행했다. dry-run에서 2개만 올라가는 것을 먼저 확인했다.
+
+| 적용됨 | 내용 |
+|--------|------|
+| `20261113004670_r15_document_write_guard_and_copy` | 직접 쓰기 차단 트리거 · 첫 복사 RPC · `updated_at` 트리거 교체 |
+| `20261113004690_r15_document_save_null_expected` | CF-S7 · `slot_high_water` · 슬롯 정체(번호 + `question_id`) · 패치 RPC `question_id` 갱신 |
+
+**확인 (읽기 전용)**
+- `list_migrations`(CLI): 마지막 **`20261113004690`**. `004695`(법무 판)와 `004700`(파괴)은 **미적용** — 의도대로다.
+- **advisors security: 새 항목 없음.**
+  - SECURITY DEFINER WARN은 **18건 그대로**이고 목록도 직전과 같다.
+  - 새 definer 헬퍼 `private.doc_proposal_question_id`는 노출되지 않는 `private` 스키마라 잡히지 않는다.
+  - 복사 RPC `mark_application_document_copied`는 invoker라 잡히지 않는다.
+  - INFO `account_deletion_logs` 정책 없음(의도), Auth WARN 2건(R15 무관, Google 단일 로그인)은 기존 그대로다.
+- advisors performance: **이번엔 다시 보지 않았다.** 두 파일은 인덱스·FK를 더하지 않는다(컬럼 1개·트리거·함수). 직전 확인은 INFO만이었다.
+- **실질 데이터 영향: 0행.** `execute_sql` SELECT만으로 확인했다.
+  - 운영 `application_documents` 0행, `slot_high_water > 0` 0행, 서류 대화 0건, 지원 프로젝트 0건 → `004690`의 `slot_high_water` 백필이 건드린 행은 없다.
+  - 새 객체는 존재한다: `slot_high_water` 컬럼 1 · 가드 트리거 1 · 복사 RPC 1.
+- **옛 코드 영향 없음.** 운영 코드(main)는 서류 경로를 쓰지 않는다. 직접 쓰기 호출 0건(QA 확인).
+
+### 남은 순서 (갱신)
+1. ~~1단계 비파괴 17개~~ — 완료 2026-11-09
+2. ~~비파괴 `004670`·`004690`~~ — **완료 2026-11-10**
+3. **법무 판 `004695`** — **UI PR 머지 직전에** push한다. 머리글과 본문이 어긋나는 시간을 짧게 둔다. 파괴 파일은 빼낸 상태로 올린다.
+4. **두 PR 함께 머지**(#69 + UI PR) = 운영 배포. 이 순간 `writing_chats.project_id` not null 해제와 `ai_jobs` CHECK 완화의 되돌림 창이 닫힌다.
+5. **파괴 `004700`** — 코드 배포 뒤, **사용자 승인 뒤**. 가드가 행 수를 다시 센다(현재 옛 초안 0행). push 뒤 SECURITY DEFINER WARN 18 → 13을 확인한다.
+
+### 3단계 명령
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv supabase/migrations/20261113004700_r15_drop_drafts.sql /tmp/
+```
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && supabase db push
+```
+```bash
+cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv /tmp/20261113004700_r15_drop_drafts.sql supabase/migrations/
+```

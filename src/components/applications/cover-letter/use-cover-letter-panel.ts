@@ -59,6 +59,8 @@ export interface CoverLetterPanelController {
   /** 키 상태 — 잠겼으면 패널만 잠긴다 (왼쪽 본문·저장·복사는 그대로, CL-8) */
   locked: boolean
   lockReason: "ai_not_connected" | "key_invalid" | "ai_consent_required" | null
+  /** C-21 동의 창 — 동의가 필요할 때 `send`가 연다. 패널이 그린다 (58 런: 그려지지 않던 것을 바로잡음) */
+  consentDialog: React.ReactNode
   chats: CoverLetterChatSummary[]
   chat: CoverLetterChatView | null
   messages: CoverLetterPanelMessage[]
@@ -503,6 +505,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     bindInput,
     locked,
     lockReason,
+    consentDialog: consent.dialog,
     chats,
     chat,
     messages,

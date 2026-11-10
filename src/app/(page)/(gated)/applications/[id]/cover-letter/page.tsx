@@ -9,7 +9,7 @@ import { getEvidence } from "@/lib/data/evidence"
 import { CoverLetterScreen, type CoverLetterTab } from "@/components/applications/cover-letter/cover-letter-screen"
 import { JdTab } from "@/components/applications/cover-letter/jd-tab"
 import { InsightTab } from "@/components/applications/cover-letter/insight-tab"
-import { extractFirstPreviewFail, jdRunState } from "../../_lib/jd-state"
+import { extractFirstPreviewFail, jdRunState } from "@/app/(dashboard)/(gated)/applications/_lib/jd-state"
 
 /**
  * S-46 자기소개서 작성 — **한 주소 두 상태** (UX v5.20 S-46, CF-A11).

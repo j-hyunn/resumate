@@ -25,7 +25,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DocTitleInput, InlineField, InlineFields, PANEL_WIDTH } from "@/components/common/doc-inputs"
+import { DocTitleInput, FieldRow, FieldRows, PANEL_WIDTH } from "@/components/common/doc-inputs"
 import { DocBody, DocHead, type DocPanelPlacement } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
@@ -72,6 +72,13 @@ import {
   type QuestionErrors,
   type QuestionForm,
 } from "./question-form"
+
+/**
+ * 세로 탭 한 칸 — 공통 알약 탭의 선택 색(연한 초록)을 시안 3의 **회색 바탕 + 검은 글자**로 바꾼다 `[UI-가정]`.
+ * 같은 변형 접두사로 써야 tailwind-merge가 기본 알약 색을 대체한다.
+ */
+const TAB_PILL =
+  "h-10 w-full justify-start px-4 text-foreground group-data-[variant=pill]/tabs-list:h-10 group-data-[variant=pill]/tabs-list:text-foreground group-data-[variant=pill]/tabs-list:data-active:bg-muted group-data-[variant=pill]/tabs-list:data-active:text-foreground dark:group-data-[variant=pill]/tabs-list:data-active:bg-muted dark:group-data-[variant=pill]/tabs-list:data-active:text-foreground max-lg:w-auto max-lg:justify-center"
 
 export type CoverLetterTab = "cover_letter" | "jd" | "insight"
 
@@ -471,7 +478,7 @@ export function CoverLetterScreen({
   const saveUi: SaveUiState = state === "questions" ? "idle" : uiState
 
   const head = (
-    <DocHead className="space-y-2" label="자기소개서 정보">
+    <DocHead className="space-y-3" label="자기소개서 정보">
       <div className="flex items-start gap-2">
         <DocTitleInput
           ref={nameRef}
@@ -511,18 +518,37 @@ export function CoverLetterScreen({
         </p>
       ) : null}
 
-      <InlineFields>
-        {/* 지원 직무·JD 상세는 작성 상태 머리에만 (시안 4) */}
+      {/* 라벨/값 줄 (시안 2·3: 왼쪽 회색 라벨 열 + 오른쪽 컨트롤) — S-10 머리의 `FieldRows`를 그대로 쓴다.
+          마감일(두 상태) → 지원 직무 · JD 상세(작성 상태만, 확정 항목) */}
+      <FieldRows className="max-w-2xl">
+        <FieldRow label="마감일" labelId="cl-deadline-label">
+          {/* 일 단위 (CF-4) — 시안의 연·월 두 셀렉트 대신 같은 높이·테두리의 날짜 칸 하나 */}
+          <Input
+            type="date"
+            aria-labelledby="cl-deadline-label"
+            className="w-[11rem]"
+            value={deadline}
+            onChange={(e) => {
+              setDeadline(e.target.value)
+              if (saveState !== "saving") setSaveState("idle")
+            }}
+          />
+          {deadline ? (
+            <Button variant="ghost" size="icon-xs" aria-label="마감일 비우기" onClick={() => setDeadline("")}>
+              <X aria-hidden />
+            </Button>
+          ) : null}
+        </FieldRow>
         {state === "writing" ? (
           <>
-            <InlineField label="지원 직무">
+            <FieldRow label="지원 직무">
               {data.position_title ? (
                 <span className="text-sm">{data.position_title}</span>
               ) : (
                 <span className="text-sm text-muted-foreground">포지션 없음</span>
               )}
-            </InlineField>
-            <InlineField label="채용 공고">
+            </FieldRow>
+            <FieldRow label="채용 공고">
               {data.source_url ? (
                 <Button variant="link" size="sm" className="h-auto px-0" asChild>
                   <a href={data.source_url} target="_blank" rel="noopener noreferrer">
@@ -536,36 +562,11 @@ export function CoverLetterScreen({
                   JD 상세
                 </Button>
               )}
-            </InlineField>
+            </FieldRow>
           </>
         ) : null}
-        <InlineField label="마감일">
-          <span className="flex items-center gap-1">
-            {/* 일 단위 (CF-4) — 연·월 선택을 쓰지 않는다 */}
-            <Input
-              type="date"
-              aria-label="마감일"
-              className="w-[11rem]"
-              value={deadline}
-              onChange={(e) => {
-                setDeadline(e.target.value)
-                if (saveState !== "saving") setSaveState("idle")
-              }}
-            />
-            {deadline ? (
-              <Button variant="ghost" size="icon-xs" aria-label="마감일 비우기" onClick={() => setDeadline("")}>
-                <X aria-hidden />
-              </Button>
-            ) : null}
-          </span>
-        </InlineField>
-      </InlineFields>
+      </FieldRows>
 
-      {state === "writing" && doc ? (
-        <p className="text-xs text-muted-foreground tabular-nums">
-          문항 {forms.length}개 · 답변 {forms.filter((f) => f.body.trim()).length}개 · 마지막 수정 {formatRelative(updatedAt ?? doc.updated_at)}
-        </p>
-      ) : null}
       {pageError ? (
         <p className="text-sm text-destructive" role="alert">
           {pageError}
@@ -605,6 +606,7 @@ export function CoverLetterScreen({
         placement.setWideOpen(true)
         panel.focusInput()
       }}
+      meta={doc ? `문항 ${forms.length}개 · 답변 ${forms.filter((f) => f.body.trim()).length}개 · 마지막 수정 ${formatRelative(updatedAt ?? doc.updated_at)}` : null}
       onRevealProposal={(slot) => {
         // 좁은 화면이면 시트를 열고, 넓은 화면이면 패널을 연 뒤 그 문항의 제안 자리로 간다 (UQ-749)
         if (placement.mode === "narrow") placement.setSheetOpen(true)
@@ -644,9 +646,9 @@ export function CoverLetterScreen({
       <Separator className="shrink-0" />
 
       {state === "questions" ? (
-        // 문항 설정 상태: 탭 목록·AI 패널 없이 한 열
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 max-md:px-4">
-          <div className="mx-auto w-full max-w-prose-edit">
+        // 문항 설정 상태: 탭 목록·AI 패널 없이 가운데 좁은 한 열 (시안 2 — 위아래 여백 넉넉히)
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-16 pb-10 max-md:px-4 max-md:pt-8">
+          <div className="mx-auto w-full max-w-[52rem]">
             <QuestionSetup
               applicationProjectId={apId}
               allocateSlot={allocateSlot}
@@ -674,18 +676,19 @@ export function CoverLetterScreen({
       ) : (
         <Tabs value={tab} onValueChange={changeTab} orientation="vertical" className="min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 max-lg:flex-col">
+            {/* 세로 알약 탭 (시안 3: 약 190px 열, 선택 탭 = 회색 바탕 알약, 구분선 없음) — 공통 `Tabs` `variant="pill"` */}
             <TabsList
               variant="pill"
-              className="w-40 shrink-0 flex-col items-stretch gap-1 border-r px-3 py-4 max-lg:w-full max-lg:flex-row max-lg:border-r-0 max-lg:border-b max-lg:px-4 max-lg:py-2"
+              className="w-48 shrink-0 flex-col items-stretch gap-1 py-6 pl-6 max-lg:w-full max-lg:flex-row max-lg:border-b max-lg:px-4 max-lg:py-2"
             >
               {/* 탭 이름 — CF-U3 확정: 작성 화면 탭은 "자소서" */}
-              <TabsTrigger value="cover_letter" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="cover_letter" className={TAB_PILL}>
                 자소서
               </TabsTrigger>
-              <TabsTrigger value="jd" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="jd" className={TAB_PILL}>
                 채용 공고
               </TabsTrigger>
-              <TabsTrigger value="insight" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="insight" className={TAB_PILL}>
                 인사이트
               </TabsTrigger>
             </TabsList>
@@ -709,7 +712,9 @@ export function CoverLetterScreen({
                 }
                 aside={
                   <CoverLetterPanel
-                    panel={{ ...panel, hide: () => placement.setWideOpen(false) }}
+                    panel={panel}
+                    placement={placement}
+                    onDirectInput={() => document.querySelector<HTMLElement>(`[aria-label="문항 1 내용"]`)?.focus()}
                     questions={forms.map((f) => ({ slot: f.slot, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
                     filled={applied.map((a) => ({ slot: a.slot, rev: a.rev }))}
                     onFill={onFill}

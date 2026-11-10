@@ -14,7 +14,7 @@
  */
 import * as React from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Plus } from "lucide-react"
+import { CirclePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { routes } from "@/lib/routes"
 import { AddApplicationDialog } from "./add-application-dialog"
@@ -69,7 +69,7 @@ export function AddApplicationLauncherButton() {
   const setOpen = useModalUrl()
   return (
     <Button onClick={() => setOpen(true)}>
-      <Plus aria-hidden />
+      <CirclePlus aria-hidden />
       자기소개서 작성
     </Button>
   )

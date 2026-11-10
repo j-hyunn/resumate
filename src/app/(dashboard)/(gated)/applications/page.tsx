@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 import { Briefcase } from "lucide-react"
 import { ScreenSuspense } from "@/components/common/screen-suspense"
-import { PageHeader } from "@/components/common/basics"
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/common/state-views"
 import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { ApplicationList, ApplicationSortNote } from "@/components/applications/application-list"
@@ -12,7 +11,7 @@ import { listCoverLetters } from "@/lib/data/cover-letters"
 /**
  * S-13 자기소개서 목록 (메뉴: 자기소개서 관리) — (v5.20 재작성, CF-3·CF-9·CF-A8).
  *
- * 머리 = 제목 "자기소개서 관리" + 바꿀 수 없는 표기 "최근 작성 순" + 주 버튼 [자기소개서 작성]
+ * 머리 = (58 런, 시안 1) 큰 제목 없이 한 줄: 바꿀 수 없는 표기 "최근 작성 순"(칩 모양) + 주 버튼 [⊕ 자기소개서 작성]
  * (→ S-14 2단계 모달, `?new=1`). 정렬은 `created_at desc` 하나이고 정렬 선택·전형 단계 거르기·
  * 검색·"보드로 보기"는 없다(CF-9). 행 → S-46.
  *
@@ -58,18 +57,19 @@ async function Screen({ searchParams }: Props) {
           actions={<AddApplicationLauncherButton />}
         />
       )
-    return (
-      <div className="space-y-4">
-        <ApplicationSortNote />
-        <ApplicationList rows={rows} />
-      </div>
-    )
+    return <ApplicationList rows={rows} />
   })()
 
+  // 시안 1(뒤 배경): 별도 큰 페이지 제목 없이 — 상단 바가 "자기소개서 관리"를 보이고(L-01 이동 경로),
+  // 본문 위 한 줄에 왼쪽 정렬 표기 "최근 작성 순"(바꿀 수 없음, CF-9) · 오른쪽 주 버튼 "⊕ 자기소개서 작성"
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageCrumbs items={[{ label: "자기소개서 관리" }]} />
-      <PageHeader title="자기소개서 관리" actions={<AddApplicationLauncherButton />} />
+      <h1 className="sr-only">자기소개서 관리</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ApplicationSortNote />
+        <AddApplicationLauncherButton />
+      </div>
       {body}
       {launcher}
     </div>

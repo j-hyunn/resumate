@@ -66,7 +66,7 @@ describe("S-39 문항 수 · 첫 복사", () => {
 
 describe("S-46 페이지는 정본 읽기 실패를 null로 접지 않는다 (소스 가드)", () => {
   it("page.tsx의 getCoverLetterDocument 호출에 catch가 없다", () => {
-    const src = readFileSync(join(process.cwd(), "src/app/(dashboard)/(gated)/applications/[id]/cover-letter/page.tsx"), "utf8")
+    const src = readFileSync(join(process.cwd(), "src/app/(page)/(gated)/applications/[id]/cover-letter/page.tsx"), "utf8")
     const call = src.slice(src.indexOf("getCoverLetterDocument(id)"), src.indexOf("getCoverLetterDocument(id)") + 80)
     expect(src).toContain("getCoverLetterDocument(id)")
     expect(call).not.toMatch(/\.catch\(/)

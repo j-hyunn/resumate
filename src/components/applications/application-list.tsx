@@ -27,9 +27,16 @@ import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 import { useDeleteApplication } from "./shared"
 
-/** 머리 아래 정렬 표기 — 바꿀 수 없는 글자다(정렬 선택·필터·검색 없음, CF-9) */
+/**
+ * 본문 위 정렬 표기 — 시안 1의 회색 알약(`Button variant="chip"`과 같은 모양) 그대로지만 **바꿀 수 없는 글자**다
+ * (정렬 선택·필터·검색 없음, CF-9). 누를 것이 없으므로 버튼·⌄를 두지 않는다 `[UI-가정]`.
+ */
 export function ApplicationSortNote() {
-  return <p className="text-sm text-muted-foreground">최근 작성 순</p>
+  return (
+    <p className="inline-flex h-8 items-center rounded-full bg-muted px-3 text-sm text-foreground">
+      <span className="sr-only">정렬: </span>최근 작성 순
+    </p>
+  )
 }
 
 const WIDE_QUERY = "(min-width: 768px)"

@@ -230,3 +230,43 @@ Critical 0 · Major 0 · Minor 0 — **열린 항목 없음**. 쓰기 가드는 
 **1.5단계 갱신**: 비파괴 **`004670`·`004680`·`004690`** 세 개를 파괴 파일을 빼낸 상태로 한 번에 push한다. 확인 기준도 바뀐다 — `list_migrations` 마지막이 **`20261113004690`**.
 
 **후속 라운드 2 QA (2026-11-09)**: Critical 0 · Major 0 · Minor 0 — **R15 열린 항목 없음**. CF-S7 동시 첫 저장 25회 독립 재현(매번 성공 1·`stale_write` 1, 500 0건), 기대 버전 우회 시도 전부 실패, 슬롯 S-swap·S-swapnull 재현 후 닫힘, `draft_done.draft`가 보정 후 저장본과 일치. pgTAP **66파일 2,708**, Vitest **150파일 2,432**, typecheck·lint 통과(잔여 행 심은 상태, reset 없이).
+
+## 10. 원격 반영 준비 완료 (2026-11-09) — 머지 당일 절차
+
+### 지금 원격 상태 (읽기 전용 확인)
+- `list_migrations` 마지막 **`20261113004660`** — 1단계 17개 적용 그대로, 변동 없음.
+- **dry-run**(`supabase db push --dry-run`, 파괴 파일을 빼낸 상태): **정확히 3개**가 올라갈 예정이다.
+  - `20261113004670_r15_document_write_guard_and_copy`
+  - `20261113004680_r15_policy_versions_cf1`
+  - `20261113004690_r15_document_save_null_expected`
+
+  파괴 `004700`은 빠져 있다. dry-run 뒤 파일을 복원했고 작업 트리는 clean이다.
+
+### 왜 지금 push하지 않고 머지 직전에 한 번에 하는가
+1. **`004680`(법무 2026-11-09판) 때문이다.** 이 파일은 적용 즉시 현재 판이 된다(시행일 2026-11-09 00:00 KST가 이미 지났다). 그런데 본문(`policy-content.ts`)은 UI PR 머지 때 나간다. 지금 올리면 **UI PR이 준비될 때까지 S-30 머리글은 새 시행일인데 본문은 경력기술서가 남은 옛 판**이 된다.
+2. **번호 순서상 나눠 올릴 수 없다.** `004670`·`004690`만 먼저 올리면, `004680`이 원격의 마지막 적용분(`004690`)보다 **앞 번호**가 된다. 그러면 `db push`가 거부하거나 `--include-all`이 필요하다(backend-context "Conventions"). 셋을 한 번에 올리는 게 가장 단순하다.
+3. **세 파일 모두 옛 코드에 영향이 없다.** 그래서 머지 직전에 올려도 안전하다. 옛 코드는 `application_documents`를 쓰지 않는다(QA 확인: `src/`의 직접 쓰기 0건). 옛 서류 화면은 mock 전용이다.
+
+### 머지 당일 순서 (UI PR이 준비된 뒤)
+1. **비파괴 3개 push.** 이 워크트리에서 하고, 링크는 이미 걸려 있다.
+   ```bash
+   cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv supabase/migrations/20261113004700_r15_drop_drafts.sql /tmp/20261113004700_r15_drop_drafts.sql.hold
+   ```
+   ```bash
+   cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && supabase db push
+   ```
+   ```bash
+   cd /Users/jehyun/Resumate/.claude/worktrees/cover-letter-backend-ef4d68 && mv /tmp/20261113004700_r15_drop_drafts.sql.hold supabase/migrations/20261113004700_r15_drop_drafts.sql
+   ```
+2. **확인(읽기 전용, 리더).**
+   - `list_migrations`의 마지막이 `20261113004690`인지 본다.
+   - `get_advisors` security에서 SECURITY DEFINER WARN이 **18건 그대로**여야 한다. 새 RPC `mark_application_document_copied`는 invoker이고, 새 definer 헬퍼 `private.doc_proposal_question_id`는 노출되지 않는 `private` 스키마에 있다.
+3. **곧바로 두 PR 머지**(#69 + UI PR) = 운영 배포. 이 순간 `writing_chats.project_id` not null 해제와 `ai_jobs` CHECK 완화의 **되돌림 창이 닫힌다**(3절).
+4. Vercel 배포 상태와 런타임 오류를 확인한다(읽기 전용).
+5. **파괴 `004700` push** — **사용자 확인 뒤.**
+   - 가드가 지우는 행 수를 다시 센다. 지금은 0행이다.
+   - push 뒤 SECURITY DEFINER WARN이 **18 → 13**으로 줄었는지 본다(옛 서류 RPC 5건 drop).
+
+### 머지 전에 남은 것
+- **UI PR 준비.** UI 세션이 실제 경로 연결·AI 패널·UI QA·브라우저 확인을 진행 중이다.
+- **기획 회부 1건 — 저장하지 않은 새 문항의 AI 초안.** 머지 조건은 아니다. (a)·(c)로 정해지면 UI 변경뿐이고, (b)로 정해지면 별도 백엔드 슬라이스가 된다.

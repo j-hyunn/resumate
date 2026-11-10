@@ -31,6 +31,23 @@ export const APPLICATION_MEMO_MAX = 2000;
 export const JD_RAW_TEXT_MAX = 50_000;
 /** DM 11.10 #1 `[가정]`: `job_descriptions.source_url` ≤ 2,048 (one source — see ./jd-fetch). */
 export { JD_SOURCE_URL_MAX };
+
+/** UQ-759: lowercase the `http` / `https` scheme only (`HTTPS://Example.com/A` → `https://Example.com/A`). */
+export function normalizeSourceUrlScheme(url: string): string {
+  return url.replace(/^https?:/i, (scheme) => scheme.toLowerCase());
+}
+
+/** `job_descriptions_source_url_check`: `http(s)://` (any case) and ≤ 2,048 chars. */
+export function isValidSourceUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url) && url.length <= JD_SOURCE_URL_MAX;
+}
+
+/**
+ * Refusals the S-14 create path shows under their own code. `invalid_source_url` (400) drives
+ * "주소 없이 만들기": the RPC builds no row, so the screen resends the same `id` without the URL.
+ */
+export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "key_invalid", "ai_consent_required", "application_project_id_conflict"] as const;
+export type CreateApplicationErrorCode = (typeof CREATE_APPLICATION_ERROR_CODES)[number];
 /** db notes [가정]: company_name / position_title ≤ 200. */
 export const JD_TITLE_MAX = 200;
 /** F-P2-01 [가정]: a JD shorter than this gets a warning flag only. */
@@ -77,7 +94,16 @@ export const CreateApplicationProjectInput = z.object({
    */
   sourceUrl: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string().trim().max(JD_SOURCE_URL_MAX).regex(/^https?:\/\//).optional(),
+    z
+      .string()
+      .trim()
+      // UQ-759: only the scheme is lowercased (`HTTPS://` → `https://`). `new URL().href` would also
+      // rewrite the trailing slash, percent-encoding and host spelling — the URL is stored as typed.
+      // The scheme / length rule is NOT a zod check on purpose: a zod failure becomes the generic
+      // `invalid_input`, and S-14's "주소 없이 만들기" needs `invalid_source_url` (400). The service
+      // checks it (`assertSourceUrl`) and the RPC checks it again (`~* '^https?://'`, ≤ 2,048).
+      .transform(normalizeSourceUrlScheme)
+      .optional(),
   ),
   /**
    * R15 (CF-A17, D11): the `ai_jobs` row of the 요건 미리 보기 run. The RPC reads the

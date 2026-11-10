@@ -38,6 +38,7 @@ import { assertApplicationProjectOwned } from "@/server/services/application/db"
 import { deleteCareerItem } from "@/server/services/career/rpc";
 import { applyDeliverableDraftPatch, applyDraftPatch, loadChatSnapshot } from "./db";
 import { applicableFields, needsReviewCount } from "./draft";
+import { loadDocumentSourceLabels } from "./source-labels";
 import { toMessageDtos } from "./mappers";
 import { hasRoomForTurn, remainingMessages } from "./turn";
 import type { ChatSnapshot } from "./types";
@@ -214,7 +215,7 @@ export function toDeliverableWritingChatDto(chat: ChatSnapshot, extra: ChatDtoEx
 }
 
 /** S-46 panel DTO of a 서류 대화 (AI-04, R15 후속). Mirrors `toDeliverableWritingChatDto`. */
-export function toDocumentWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra): DocumentWritingChatDto {
+export function toDocumentWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra & { sourceLabels: DocumentWritingChatDto["sourceLabels"] }): DocumentWritingChatDto {
   const draft = chat.documentDraft;
   if (!draft || !chat.applicationProjectId || !chat.documentKind) throw internal(new Error("not a document chat"));
   const room = hasRoomForTurn(chat.messageCount);
@@ -242,6 +243,7 @@ export function toDocumentWritingChatDto(chat: ChatSnapshot, extra: ChatDtoExtra
     connection: extra.connection,
     needsReviewCount: draft.facts.filter((f) => f.review === "needs_review").length,
     canSend: open && room && extra.connection.lock === null && !replyRunning,
+    sourceLabels: extra.sourceLabels,
   };
 }
 
@@ -258,7 +260,11 @@ export async function getWritingChat(supabase: UserSupabaseClient, userId: strin
   ]);
   if (chat.projectDeliverableId) return toDeliverableWritingChatDto(chat, { connection, failures });
   // R15 후속: a 서류 대화 used to fall through to the STAR DTO and fail ("not a project chat").
-  if (chat.applicationProjectId) return toDocumentWritingChatDto(chat, { connection, failures });
+  if (chat.applicationProjectId) {
+    // R15 후속 4: label the proposals' sources so a reload shows them (one query per source table).
+    const sourceLabels = chat.documentDraft ? await loadDocumentSourceLabels(supabase, chat.documentDraft) : {};
+    return toDocumentWritingChatDto(chat, { connection, failures, sourceLabels });
+  }
   return toWritingChatDto(chat, { connection, failures });
 }
 

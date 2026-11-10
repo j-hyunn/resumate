@@ -50,9 +50,22 @@ export function filterCareerRows(
   };
 }
 
+/**
+ * The one rule for a source's display label: "부모 › 프로젝트" with empty parts dropped.
+ * Parent = experience `company_name` / education display name (ED-3 `educationDisplayName`);
+ * project = `name`. A standalone project is its name alone; a bare experience / education is its
+ * own label.
+ *
+ * Shared by the SSE `sources_selected` card (`sourceLabel`, from the pack's alias labels) and the
+ * reopened 서류 대화's `sourceLabels` (R15 후속 4, from the rows) so the two strings are identical.
+ */
+export function joinSourceLabel(parentLabel: string | null | undefined, projectLabel: string | null | undefined): string {
+  return [parentLabel, projectLabel].filter((v): v is string => !!v && v.trim() !== "").join(" › ");
+}
+
 /** "회사명 › 프로젝트명" label for a source (C-11 표시, 근거 카드 `sources_selected`). */
 export function sourceLabel(aliases: AliasMap, refs: { projectAlias: string | null; parentAlias: string | null }): string {
   const parent = refs.parentAlias ? aliases.get(refs.parentAlias) : undefined;
   const project = refs.projectAlias ? aliases.get(refs.projectAlias) : undefined;
-  return [parent?.label, project?.label].filter((v): v is string => !!v && v.trim() !== "").join(" › ");
+  return joinSourceLabel(parent?.label, project?.label);
 }

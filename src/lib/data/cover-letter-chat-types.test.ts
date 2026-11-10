@@ -125,3 +125,52 @@ describe("서류 draft_done.draft — [반영]은 저장된 제안을 읽는다 
     expect(Object.keys(done.draft.blocks[0])).toContain("block_id")
   })
 })
+
+// R15 후속 4 — 다시 연 대화의 근거 목록: 저장된 `draft.sources`와 `sourceLabels`를 인덱스로 짝짓는다
+import { DELETED_SOURCE_LABEL, storedSourceCards } from "./cover-letter-chat-types"
+
+describe("storedSourceCards — 다시 연 대화의 근거 카드 (R15 후속 4)", () => {
+  const view = (sources: Array<{ source_type: string; source_id: string; role?: string }>, labels: Array<{ sourceType: string; sourceId: string; label: string | null; deleted: boolean }>) =>
+    ({
+      structured_draft: { document: { questions: [{ slot: "q_1", draft: { sources } }] } },
+      source_labels: { q_1: labels },
+    }) as unknown as Parameters<typeof storedSourceCards>[0]
+
+  it("같은 순서로 짝지어 서버 라벨을 쓰고, 이유 문장은 비운다 (CF-S1)", () => {
+    const out = storedSourceCards(
+      view(
+        [
+          { source_type: "experience", source_id: "e1", role: "primary" },
+          { source_type: "project", source_id: "p1", role: "supporting" },
+        ],
+        [
+          { sourceType: "experience", sourceId: "e1", label: "가나다랩 › 결제 개편", deleted: false },
+          { sourceType: "project", sourceId: "p1", label: "사이드 프로젝트", deleted: false },
+        ],
+      ),
+    )
+    expect(out.q_1.map((c) => c.label)).toEqual(["가나다랩 › 결제 개편", "사이드 프로젝트"])
+    expect(out.q_1.map((c) => c.role)).toEqual(["primary", "supporting"])
+    expect(out.q_1[0].experienceId).toBe("e1")
+    expect(out.q_1[1].projectId).toBe("p1")
+    expect(out.q_1.every((c) => c.rationale === "" && c.reuseReason === null)).toBe(true)
+  })
+
+  it("원본이 지워진 출처는 '원본 삭제됨'으로 (오류 아님)", () => {
+    const out = storedSourceCards(view([{ source_type: "project", source_id: "p9" }], [{ sourceType: "project", sourceId: "p9", label: null, deleted: true }]))
+    expect(out.q_1[0].label).toBe(DELETED_SOURCE_LABEL)
+  })
+
+  it("라벨이 없거나 id가 어긋나면 그 출처를 뺀다 — 엉뚱한 라벨을 붙이지 않는다", () => {
+    const out = storedSourceCards(
+      view(
+        [
+          { source_type: "experience", source_id: "e1" },
+          { source_type: "project", source_id: "p1" },
+        ],
+        [{ sourceType: "experience", sourceId: "e-other", label: "다른 회사 › 다른 프로젝트", deleted: false }],
+      ),
+    )
+    expect(out.q_1).toBeUndefined()
+  })
+})

@@ -81,6 +81,19 @@ export interface CoverLetterChatView extends CoverLetterChatSummary {
   draft_count: number
   remaining_messages: number
   limit_reached: boolean
+  /**
+   * R15 후속 4 `DocumentWritingChatDto.sourceLabels` — 슬롯별로 `draft.sources[]`와 **같은 순서·같은 길이**의
+   * 표시 라벨(SSE `sources_selected` 카드와 같은 문자열). 원본이 지워졌으면 `deleted: true`·`label: null`.
+   * 이유 문장은 없다(CF-S1 — 저장하지 않는 값).
+   */
+  source_labels: Record<string, CoverLetterStoredSourceLabel[]>
+}
+
+export interface CoverLetterStoredSourceLabel {
+  sourceType: string
+  sourceId: string
+  label: string | null
+  deleted: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -183,3 +196,43 @@ export const PANEL_COPY = {
   sensitive: "민감정보·회사 기밀·다른 사람의 개인정보는 쓰지 마세요",
   needsReviewBlock: "본인이 한 일이 맞는지, 원래 말과 같은지 확인해 주세요",
 } as const
+
+// ---------------------------------------------------------------------------
+// 다시 연 대화의 근거 카드 (R15 후속 4)
+// ---------------------------------------------------------------------------
+
+/** 원본이 지워진 출처의 표시 글자 — C-02 "원본 삭제됨"과 같은 말 */
+export const DELETED_SOURCE_LABEL = "원본 삭제됨"
+
+/**
+ * 저장된 제안의 `draft.sources[]`(`{source_type, source_id, role}`, snake_case)와 `source_labels[slot]`을
+ * **인덱스로 짝지어** 제안 카드의 근거 목록을 만든다. SSE `sources_selected` 카드와 같은 모양이지만
+ * 이유 문장(`rationale`·`reuseReason`)은 비어 있다 — 저장하지 않는 값이다(CF-S1). 라벨 배열이 짧거나
+ * 없으면 그 출처는 뺀다(서버가 같은 길이를 약속하지만, 어긋나도 엉뚱한 라벨을 붙이지 않는다).
+ */
+export function storedSourceCards(view: Pick<CoverLetterChatView, "structured_draft" | "source_labels">): Record<string, CoverLetterSourceCard[]> {
+  const out: Record<string, CoverLetterSourceCard[]> = {}
+  for (const q of view.structured_draft.document.questions) {
+    const sources = (q.draft as { sources?: Array<{ source_type: string; source_id: string; role?: string | null }> } | null | undefined)?.sources
+    if (!sources || sources.length === 0) continue
+    const labels = view.source_labels?.[q.slot] ?? []
+    const cards: CoverLetterSourceCard[] = []
+    sources.forEach((src, i) => {
+      const lab = labels[i]
+      if (!lab || lab.sourceId !== src.source_id) return
+      cards.push({
+        sortOrder: i,
+        role: src.role === "supporting" ? "supporting" : i === 0 ? "primary" : src.role === "primary" ? "primary" : "supporting",
+        experienceId: src.source_type === "experience" ? src.source_id : null,
+        educationId: src.source_type === "education" ? src.source_id : null,
+        projectId: src.source_type === "project" ? src.source_id : null,
+        label: lab.deleted || lab.label == null ? DELETED_SOURCE_LABEL : lab.label,
+        rationale: "",
+        reuseReason: null,
+        requirementIds: [],
+      })
+    })
+    if (cards.length > 0) out[q.slot] = cards
+  }
+  return out
+}

@@ -410,7 +410,8 @@ function ProposalSources({ sources }: { sources: CoverLetterSourceCard[] | undef
           <li key={`${s.sortOrder}-${s.label}`} className="space-y-0.5">
             <p className="text-sm font-medium">{s.label}</p>
             {/* 제안 쪽에만 있는 줄 — 정본 C-11에는 두지 않는다 (저장되지 않는 값이다) */}
-            <p className="text-xs text-muted-foreground">{s.reuseReason ?? s.rationale}</p>
+            {/* 다시 연 대화에는 이유 문장이 없다 (저장하지 않는 값, CF-S1) — 그때는 줄을 그리지 않는다 */}
+            {(s.reuseReason ?? s.rationale) ? <p className="text-xs text-muted-foreground">{s.reuseReason ?? s.rationale}</p> : null}
           </li>
         ))}
       </ul>

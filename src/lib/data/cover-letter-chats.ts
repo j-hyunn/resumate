@@ -43,6 +43,7 @@ function newChatView(id: string, applicationProjectId: string): CoverLetterChatV
     draft_count: 0,
     remaining_messages: COVER_LETTER_MESSAGE_LIMIT,
     limit_reached: false,
+    source_labels: {},
   }
 }
 
@@ -174,5 +175,6 @@ export function toChatView(dto: DocumentWritingChatDto): CoverLetterChatView {
     draft_count: dto.draftCount,
     remaining_messages: dto.remainingMessages,
     limit_reached: dto.limitReached,
+    source_labels: dto.sourceLabels ?? {},
   }
 }

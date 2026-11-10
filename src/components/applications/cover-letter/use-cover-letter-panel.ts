@@ -20,6 +20,7 @@ import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
 import { shouldAdoptReread } from "./panel-rules"
+import { storedSourceCards } from "@/lib/data/cover-letter-chat-types"
 import {
   COVER_LETTER_DRAFT_LIMIT,
   COVER_LETTER_MESSAGE_LIMIT,
@@ -295,6 +296,9 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     setChat(view)
     setMessages(view.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, status: m.status })))
     setDraftCount(view.draft_count)
+    // 다시 연 대화의 근거 목록(R15 후속 4): 저장된 제안 + 서버 라벨. 이번 방문에 SSE로 받은 카드가 있으면
+    // 그 카드가 이긴다(이유 문장이 있다). 다른 대화를 열 때는 그 전에 `setSources({})`로 비운다.
+    setSources((live) => ({ ...storedSourceCards(view), ...live }))
     setChats((list) =>
       list.map((c) => (c.id === view.id ? { ...c, title: view.title, status: view.status, message_count: view.message_count, last_activity_at: view.last_activity_at } : c)),
     )

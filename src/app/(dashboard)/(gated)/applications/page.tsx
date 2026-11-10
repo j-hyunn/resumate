@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/common/basics"
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/common/state-views"
 import { PageCrumbs } from "@/components/common/shell/breadcrumbs"
 import { ApplicationList, ApplicationSortNote } from "@/components/applications/application-list"
-import { AddApplicationLauncher } from "@/components/applications/add-application-launcher"
+import { AddApplicationLauncher, AddApplicationLauncherButton } from "@/components/applications/add-application-launcher"
 import { getPreviewState } from "@/lib/preview-state"
 import { listCoverLetters } from "@/lib/data/cover-letters"
 
@@ -55,7 +55,7 @@ async function Screen({ searchParams }: Props) {
           title="아직 자기소개서가 없어요"
           // UX v5.20 S-13 상태 "빈 상태" 문구 그대로 (UQ-744 — "붙여넣어"를 URL 입력에 맞게 "넣어"로)
           description="지원하려는 공고를 넣어 첫 자기소개서를 만들어 보세요. 커리어 정리 전에도 만들 수 있어요"
-          actions={<AddApplicationLauncher.Button />}
+          actions={<AddApplicationLauncherButton />}
         />
       )
     return (
@@ -69,7 +69,7 @@ async function Screen({ searchParams }: Props) {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <PageCrumbs items={[{ label: "자기소개서 관리" }]} />
-      <PageHeader title="자기소개서 관리" actions={<AddApplicationLauncher.Button />} />
+      <PageHeader title="자기소개서 관리" actions={<AddApplicationLauncherButton />} />
       {body}
       {launcher}
     </div>

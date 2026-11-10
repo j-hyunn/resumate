@@ -106,7 +106,7 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_stage: { message: "입력값을 확인해 주세요." },
   // R15 (DM 11.10 #1·#2, CF-10): `p_source_url` is not http(s) or longer than 2,048 — the RPC
   // builds no row, so the screen may resend the same `p_id` without the URL.
-  invalid_source_url: { message: "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요." },
+  invalid_source_url: { message: "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요.", status: 400 },
   invalid_outcome: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요." },
   not_closed: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요.", status: 409 },
   already_extracted: { message: "이미 요건을 정리한 공고예요.", status: 409 },
@@ -239,7 +239,7 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_sentences: "internal_error",
   invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
-  invalid_source_url: "invalid_input",
+  // UQ-759: `invalid_source_url` keeps its own code (no alias) — S-14 "주소 없이 만들기" keys on it.
   direct_write_not_allowed: "forbidden",
   // R15: `invalid_slot`, `too_many_questions` and `invalid_evidence_source` keep their own codes
   // (unknown code → 400) so S-46 can tell the three apart; see src/lib/contracts/application-document.ts.

@@ -463,6 +463,17 @@ export const DocumentWritingChatDto = z.object({
   /** Facts still needs_review ("검토가 필요한 항목 N개"). */
   needsReviewCount: z.number().int().nonnegative(),
   canSend: z.boolean(),
+  /**
+   * R15 후속 4: display labels of each proposal's `draft.sources[]`, keyed by slot, in the **same
+   * order** as that slot's `structuredDraft.document.questions[].draft.sources` (pair by index for
+   * the stored `role`). `label` is the same string the live SSE `sources_selected` card showed
+   * ("부모 › 프로젝트"); `deleted: true` + `label: null` when the source row is gone (원본 삭제됨).
+   * A separate field on purpose: `structuredDraft` stays the stored shape. No rationale (CF-S1).
+   */
+  sourceLabels: z.record(
+    z.string(),
+    z.array(z.object({ sourceType: z.string(), sourceId: z.string(), label: z.string().nullable(), deleted: z.boolean() })),
+  ),
 });
 export type DocumentWritingChatDto = z.infer<typeof DocumentWritingChatDto>;
 

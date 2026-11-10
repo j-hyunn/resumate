@@ -129,8 +129,9 @@ describe("R15 save_application_document refusals", () => {
 });
 
 describe("R15 create_application_project", () => {
-  it("invalid_source_url → 400 invalid_input (no row is built, so the screen may resend without the URL)", () => {
-    expect(mapDbError({ code: "P0001", message: "invalid_source_url" })).toMatchObject({ code: "invalid_input", status: 400 });
+  // UQ-759: the code is preserved (it used to be aliased to `invalid_input`, which hid it from S-14).
+  it("invalid_source_url → 400 under its own code (no row is built, so the screen may resend without the URL)", () => {
+    expect(mapDbError({ code: "P0001", message: "invalid_source_url" })).toMatchObject({ code: "invalid_source_url", status: 400 });
   });
 });
 

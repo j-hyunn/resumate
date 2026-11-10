@@ -386,3 +386,59 @@ QA의 임시 스모크를 정식 편입하고 **초안 턴(compose)을 더했다
 - `getApplicationDocument`의 명시 select에 추가했다. `ApplicationDocument`(`src/types/db.ts`)에 `slot_high_water: number`(not null default 0)를 넣었다. 저장 반환 계약 `SaveApplicationDocumentRpcResult`에 `slot_high_water`, 서비스 결과에 `slotHighWater`를 넣었다.
 - **같은 통합 테스트**: 첫 저장 `q_1..q_3` → 3(반환·읽기 둘 다) → `q_3`을 지우고 저장해도 3 유지 → **`q_3`을 새 문항으로 다시 넣으면 `invalid_slot`(`details.field = "q_3"`), 아무것도 안 바뀜**(`slot_count` 2 유지) → `q_4`는 통과하고 4가 된다.
 - `DocumentQuestion`은 `.strict()`라 `sort_order`를 받지 않는다. 지시대로 **바꾸지 않았다**(순서 = 받은 배열 순서, 2.5.1).
+
+---
+
+## ⑫ R15 후속 4 (2026-11-10) — 다시 연 대화의 근거 라벨 · UQ-759
+
+- 검증: `pnpm typecheck` 통과 · `pnpm lint` 경고 0 · `pnpm test` **152파일 2,462건 전부 통과**.
+- `supabase/`·`docs/`·`src/lib/data/cover-letters.ts` 미수정. 커밋·원격 쓰기 없음. (중간에 사용량 한도로 한 번 멈췄다가 이어서 끝냈다.)
+
+### UI에 넘길 것
+
+1. **`DocumentWritingChatDto.sourceLabels`** (새 필드, camelCase) — `getWritingChat`의 서류 분기:
+   ```ts
+   sourceLabels: Record<slot, Array<{ sourceType: string; sourceId: string; label: string | null; deleted: boolean }>>
+   ```
+   - 키 = slot. 각 배열은 그 슬롯의 `structuredDraft.document.questions[].draft.sources`와 **같은 순서·같은 길이**다 → **인덱스로 짝지어** 저장된 `role`을 읽는다.
+   - `label`은 라이브 SSE `sources_selected` 카드의 `label`과 **같은 문자열**이다("부모 › 프로젝트", 교육 부모는 ED-3 표시 이름).
+   - 원본이 그 사이 지워졌으면 `deleted: true`, `label: null` → 근거 칩처럼 "원본 삭제됨"으로 그린다. 오류가 아니다.
+   - 근거를 고르지 않은 슬롯은 `[]`이다. **이유 문장은 없다**(CF-S1 — `role`·`rationale`은 저장하지 않는다).
+   - `structuredDraft`는 **그대로 저장 모양**이다(라벨 키를 섞지 않았다 — `draft_done.draft == 저장본` 단정이 그대로 산다).
+2. **`invalid_source_url`(400)이 화면까지 자기 코드로 온다**(이전에는 `invalid_input`으로 바뀌어 "주소 없이 만들기"가 걸리지 않았다). 생성 액션에서도, RPC에서도 같다. 계약에 `CREATE_APPLICATION_ERROR_CODES`(`invalid_source_url` 포함)를 더했다.
+3. **공고 주소의 스킴 대소문자는 무시**한다. `HTTPS://`·`Http://`가 통과하고 저장 때 **스킴만** 소문자가 된다(`HTTPS://Example.com/Jobs/42/` → `https://Example.com/Jobs/42/` — 호스트 표기·경로·끝 슬래시·쿼리·퍼센트 인코딩은 입력 그대로).
+
+### 1. 근거 라벨 — 서버가 DTO에서 붙인다 (리더 판정)
+
+- **왜 서버인가**: `evidence_links` 행은 제안을 [반영]해 저장한 뒤에만 생긴다. 아직 반영하지 않은 제안에는 조인할 행이 없다.
+- `src/server/services/writing-chat/source-labels.ts` `loadDocumentSourceLabels(user, draft)`:
+  - 사용자 세션·RLS로 읽는다(남의 행은 안 보이므로 "삭제됨"과 같게 읽힌다).
+  - **표당 쿼리 1개, 최대 3개**(`projects` → 그 부모를 합친 `experiences`·`educations`). 출처마다 쿼리를 날리지 않는다(단위 테스트가 5슬롯×3출처에서도 3개뿐임을 단정). 출처가 없으면 쿼리 0개.
+  - 출처 종류별 라벨: `project` = 부모(경력 `company_name` / 교육 ED-3 표시 이름) › `name`, 독립 프로젝트는 `name`만. `experience` = `company_name`. `education` = ED-3 표시 이름.
+  - 그 밖의 저장 가능 종류(`user_note`·`jd_requirement` 등 — 지금 `toStoredSources`는 project/experience/education만 저장하므로 실제로는 오지 않는다)는 근거 칩의 종류 라벨을 쓴다(`user_note` = "내 메모"). 추적하지 않는 종류는 칩처럼 "현재"로 본다 `[가정]`.
+- `getWritingChat` 서류 분기에서 이 함수를 불러 `toDocumentWritingChatDto(..., { sourceLabels })`에 넣는다.
+- **라벨 함수를 하나로 모았다 — `selection.ts`를 고친 이유**: SSE 카드의 라벨은 `src/server/ai/context-pack/selection.ts`의 `sourceLabel(aliases, refs)`가 팩 별칭 라벨로 만든다. 같은 문자열을 보장하려고 그 함수의 본문(`[부모, 프로젝트].filter(비지 않음).join(" › ")`)을 **`joinSourceLabel(parentLabel, projectLabel)`로 꺼냈다.** `sourceLabel`은 이제 그것을 부르고, DTO 쪽도 같은 함수를 부른다. 별칭 라벨의 원천(경력 `company_name`, 교육 `educationDisplayName`, 프로젝트 `name` — `career-pack.ts`)과 DTO가 읽는 컬럼·변환이 같다.
+
+### ⚠ 모델 입력 영향 확인 — **없다**
+
+- `sourceLabel`은 SSE 카드뿐 아니라 **AI-04 프롬프트에도 들어간다**(`cover-letter-chat.ts:547` `renderUserSources`). 그래서 이 리팩터가 바이트를 바꾸면 `prompt_version`·`input_hash`에 영향이 있다.
+- 바뀐 것은 **함수 추출뿐**이고 필터·조인 식은 문자 그대로 같다. 새 단위 테스트 `src/server/ai/context-pack/source-label.test.ts`(10건)가 리팩터 전 본문을 그대로 옮겨 두고 9가지 입력(빈 값·공백만·앞뒤 공백·null·undefined·교육 이름 없음)에서 **출력이 동일**함을 단정한다. AI 스위트(1,198건, 프롬프트 버전 고정 테스트 포함)도 수정 없이 통과했다.
+- **팩 조립 한 지점(CL-Q1 제약 ①)은 건드리지 않았다** — `buildCareerPack`·`career-pack.ts`·`cover-letter-chat.ts`는 그대로다. DTO 라벨은 팩을 다시 조립하지 않고 행에서 직접 읽는다(모델 입력 경로가 아니다).
+
+### 2. UQ-759
+
+- **원인 ① 고침**: `src/server/db/errors.ts`의 별칭 `invalid_source_url → invalid_input`을 지웠다. 코드가 그대로 400으로 간다. 이 별칭은 R15에서 내가 넣은 것이다. 그 별칭을 단정하던 내 테스트도 "자기 코드 보존"으로 바꿨다.
+- **원인 ② 고침 + 숨은 원인 ③**: 정규식을 대소문자 무시로만 바꾸면 끝나지 않았다. zod 실패는 액션에서 **늘 `invalid_input`**이 되므로, `ftp://`를 zod가 거부하면 별칭을 지워도 화면에 `invalid_source_url`이 오지 않는다. 그래서:
+  - zod는 `trim` + **스킴만 소문자** 변환(`normalizeSourceUrlScheme`)만 한다.
+  - 스킴(`/^https?:\/\//i`)·길이(≤ 2,048) 판정은 **서비스**(`isValidSourceUrl`)가 하고 `invalid_source_url`(400)을 던진다 → RPC 호출 전, 행 없음. RPC가 다시 본다(`~* '^https?://'`).
+- **정규화는 스킴만**: `new URL().href`를 쓰지 않았다(끝 슬래시·인코딩·호스트 표기까지 바뀐다).
+- **공고 가져오기(`/api/job-descriptions/fetch`)**: 계약에 스킴 정규식이 없다. `assertSafeUrl`이 `new URL()`로 파싱하는데 `protocol`이 이미 소문자라 `HTTPS://`가 통과하고 `ftp:`·`javascript:`는 `invalid_source_url`이다. **코드 변경 없음**, 단위 테스트로 확인만 했다(4건). SSRF 검사는 파싱 뒤라 영향이 없다.
+- 테스트(`write.test.ts` +9): `HTTPS://`·`Http://`·퍼센트 인코딩 통과 + 스킴만 소문자 / `ftp://`·`javascript:`·스킴 없음·2,049자 → `invalid_source_url` 400이고 **zod는 통과(= `invalid_input`이 아님)**, RPC 호출 0 / `toErrorBody`가 코드를 보존 / RPC의 raise도 보존.
+
+### 통합 테스트 (`document-chat.integration.test.ts` +1, 총 8)
+
+교육 1개(`programName` `"  데이터 분석 과정  "`)와 그 아래 완료 프로젝트, 경력 아래 프로젝트 하나를 더 심는다. 별칭은 **파이프라인과 같은 팩 빌더**로 풀었다(번호를 추측하지 않는다). 초안 턴이 두 출처를 고르게 한다. 단정:
+- SSE 카드 라벨이 `"데이터 분석 과정 › 추천 모델"`(ED-3 trim).
+- 다시 읽으면 `sourceLabels.q_1`이 `draft.sources`와 같은 순서이고 **각 라벨이 SSE 카드 라벨과 같다**.
+- `structuredDraft`가 DB 저장본과 같고 라벨 문자열이 섞이지 않았다.
+- 출처 하나를 지운 뒤 다시 읽으면 그 출처는 `{label: null, deleted: true}`이고 나머지는 그대로이며, DTO가 계약을 통과한다.

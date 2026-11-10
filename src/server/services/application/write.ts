@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import {
-  JD_SOURCE_URL_MAX,
   applicationDisplayName,
+  isValidSourceUrl,
   jdInputWarnings,
   type CreateApplicationProjectInput,
   type CreateApplicationProjectResult,
@@ -53,9 +53,10 @@ export async function createApplicationProject(
   const rawText = normalizeJdRawText(input.rawText);
   // C-2: deterministic server split; offsets index the raw text exactly as stored (never trimmed).
   const sentences = splitJdSentences(rawText);
-  if (input.sourceUrl && input.sourceUrl.length > JD_SOURCE_URL_MAX) {
-    // Same rule as `job_descriptions_source_url_check`; caught before the RPC so no row is attempted.
-    throw new AppError("invalid_source_url", "공고 주소를 확인해 주세요.", { status: 400 });
+  if (input.sourceUrl && !isValidSourceUrl(input.sourceUrl)) {
+    // Same rule as `job_descriptions_source_url_check` (scheme any case, ≤ 2,048); caught before the
+    // RPC so no row is attempted. Its own code, never `invalid_input` (UQ-759).
+    throw new AppError("invalid_source_url", "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요.", { status: 400 });
   }
   const { data, error } = await supabase.rpc("create_application_project", {
     p_id: input.id,

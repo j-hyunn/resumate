@@ -150,3 +150,15 @@ describe("assertSafeUrl", () => {
     expect(await codeOf(() => assertSafeUrl("https://empty.example.com/x", lookupTo()))).toBe("fetch_failed");
   });
 });
+
+// UQ-759 (R15 후속 4): the fetch route parses with `new URL`, which lowercases the scheme itself, so
+// an upper-case scheme is accepted and a non-http(s) one is refused — no regex involved.
+describe("assertSafeUrl scheme case (UQ-759)", () => {
+  const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
+  it.each(["HTTPS://example.com/job", "Http://example.com/job"])("%s is accepted", async (u) => {
+    await expect(assertSafeUrl(u, publicLookup)).resolves.toMatchObject({ url: expect.any(URL) });
+  });
+  it.each(["ftp://example.com/job", "javascript:alert(1)"])("%s → invalid_source_url", async (u) => {
+    await expect(assertSafeUrl(u, publicLookup)).rejects.toMatchObject({ code: "invalid_source_url", status: 400 });
+  });
+});

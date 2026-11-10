@@ -474,6 +474,142 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
   }, 60_000);
 
   /**
+   * R15 후속 4 (리더 판정): a reopened 서류 대화 labels its proposals' sources.
+   *
+   * `draft.sources[]` stores `{source_type, source_id, role}` only, and the live labels come from the
+   * SSE `sources_selected` card, which is not stored — so after a reload the list was empty. The DTO
+   * now carries `sourceLabels`, built from the rows with the **same rule** as the card. This checks:
+   * the reloaded label equals the SSE `label` byte for byte; an education parent uses its ED-3 display
+   * name (trimmed `program_name`); a source deleted since the draft is `deleted: true` with no label,
+   * not an error; and `structuredDraft` itself is untouched (still equal to the stored jsonb).
+   */
+  it("reopened chat: sourceLabels equal the SSE sources_selected labels (education parent, deleted source)", async () => {
+    const career = await import("@/server/services/career");
+    const contracts = await import("@/lib/contracts/career");
+    const { loadCareerRows } = await import("@/server/ai/context-pack/career-rows");
+    const { buildCareerPack } = await import("@/server/ai/context-pack/career-pack");
+    const { getWritingChat } = await import("./chat");
+
+    // An education (ED-3: program name with surrounding spaces) with one complete project,
+    // and a second experience project we delete after the draft.
+    const edu = { education: crypto.randomUUID(), eduProject: crypto.randomUUID(), doomed: crypto.randomUUID() };
+    await career.saveEducation(
+      user,
+      contracts.SaveEducationInput.parse({
+        id: edu.education,
+        institutionName: "한빛 아카데미",
+        programName: "  데이터 분석 과정  ",
+        educationType: "course",
+        startMonth: "2020-03",
+        endMonth: "2020-12",
+        enrollmentStatus: "completed",
+      }),
+    );
+    const EDU_ACTION = "추천 모델의 평가 지표를 설계하고 오프라인 실험을 반복했다";
+    const DOOMED_ACTION = "주문 이벤트 파이프라인의 재처리 절차를 문서로 정리했다";
+    await career.createProject(user, contracts.CreateProjectInput.parse({ id: edu.eduProject, name: "추천 모델", affiliation: { type: "education", id: edu.education } }));
+    await career.saveProject(
+      user,
+      contracts.SaveProjectInput.parse({ id: edu.eduProject, startMonth: "2020-06", situation: "추천 품질이 낮았다", task: "평가 지표 설계", action: EDU_ACTION, result: "지표를 정했다" }),
+    );
+    await career.createProject(user, contracts.CreateProjectInput.parse({ id: edu.doomed, name: "주문 파이프라인", affiliation: { type: "experience", id: ids.experience } }));
+    await career.saveProject(
+      user,
+      contracts.SaveProjectInput.parse({ id: edu.doomed, startMonth: "2023-01", situation: "재처리가 잦았다", task: "절차 정리", action: DOOMED_ACTION, result: "절차를 정리했다" }),
+    );
+
+    // Resolve aliases with the same pack builder the pipeline uses (CL-Q1: one assembly point).
+    const pack = buildCareerPack(await loadCareerRows(createAiWriterClient(userId)));
+    const prjEdu = pack.aliases.aliasOf("project", edu.eduProject);
+    const parentEdu = pack.aliases.aliasOf("education", edu.education);
+    const prjDoomed = pack.aliases.aliasOf("project", edu.doomed);
+    const parentExp = pack.aliases.aliasOf("experience", ids.experience);
+    if (!prjEdu || !parentEdu || !prjDoomed || !parentExp) throw new Error("seeded rows are not in the career pack (incomplete?)");
+
+    const projectId = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectId, rawText: KO_BACKEND.raw, companyName: "에이비씨페이" }));
+    await saveApplicationDocument(user, {
+      applicationProjectId: projectId,
+      documentKind: "cover_letter",
+      body: { questions: [{ slot: "q_1", question_text: "직무 역량을 써 주세요", char_limit: 800, template_key: "job_competency", body: "" }] },
+    } as never);
+    const chat = await startDocumentWritingChat(user, { applicationProjectId: projectId, documentKind: "cover_letter" } as never);
+
+    const ev = (ref: string, quote: string) => [{ source_type: "project", ref, field: "action", quote }];
+    extracts.push({ json: { ...extractOut, intent: "compose_draft" } });
+    replies.push({
+      json: {
+        schema_version: 4,
+        draft_type: "cover_letter",
+        turn_kind: "compose",
+        questions: [
+          {
+            question_slot: "q_1",
+            question_class: "job_competency",
+            sources: [
+              { project_ref: prjEdu, experience_ref: null, education_ref: parentEdu, role: "primary", rationale: "평가 설계 경험", requirement_refs: [], reuse_reason: null, evidence: ev(prjEdu, EDU_ACTION) },
+              { project_ref: prjDoomed, experience_ref: parentExp, education_ref: null, role: "supporting", rationale: "절차 정리 경험", requirement_refs: [], reuse_reason: null, evidence: ev(prjDoomed, DOOMED_ACTION) },
+            ],
+            paragraphs: [
+              {
+                block_id: "q_1-p1",
+                text: `${EDU_ACTION}. ${DOOMED_ACTION}. 이 경험으로 직무에서도 기준을 세우고 개선하겠습니다.`,
+                evidence: [...ev(prjEdu, EDU_ACTION), ...ev(prjDoomed, DOOMED_ACTION)],
+                source_fact_ids: [],
+                source_body_quotes: [],
+                requirement_refs: [],
+                placeholders: [],
+              },
+            ],
+            answer_title: null,
+            notes_for_user: [],
+          },
+        ],
+      },
+    });
+    const d = deps();
+    const prepared = await prepareTurn(d, { chatId: chat.writingChatId, requestedSlot: null, requestedAction: "compose_draft", content: "초안 만들어 주세요." } as TurnRequest);
+    if (prepared.kind !== "ready") throw new Error(`blocked ${prepared.code}`);
+    const events: DocumentTurnEvent[] = [];
+    await runTurn(d, prepared, (e) => events.push(e as DocumentTurnEvent), new AbortController().signal);
+    if (events.some((e) => e.type === "error")) throw new Error(`EVENTS=${JSON.stringify(events)}\nLOGS=${logs.join("\n")}`);
+
+    // What the live card showed.
+    const card = events.find((e): e is Extract<DocumentTurnEvent, { type: "sources_selected" }> => e.type === "sources_selected" && e.slot === "q_1");
+    expect(card).toBeDefined();
+    const liveLabel = (projectRowId: string) => card!.sources.find((x) => x.projectId === projectRowId)!.label;
+    // ED-3: the education parent is the trimmed program name.
+    expect(liveLabel(edu.eduProject)).toBe("데이터 분석 과정 › 추천 모델");
+
+    // Reload, before anything is deleted: every stored source is labelled exactly like the card.
+    const before = await getWritingChat(user, userId, chat.writingChatId);
+    if (before.target !== "application_document") throw new Error("wrong target");
+    const stored = before.structuredDraft.document.questions.find((q) => q.slot === "q_1")!.draft.sources;
+    expect(stored.map((x) => x.source_type)).toEqual(["project", "project"]);
+    const labels = before.sourceLabels.q_1!;
+    // Same order as `draft.sources` (pair by index for `role`).
+    expect(labels.map((l) => l.sourceId)).toEqual(stored.map((x) => x.source_id));
+    for (const l of labels) {
+      expect(l.deleted).toBe(false);
+      expect(l.label).toBe(liveLabel(l.sourceId));
+    }
+    // `structuredDraft` is still the stored jsonb (no label keys mixed in).
+    const row = await admin.from("writing_chats").select("structured_draft").eq("id", chat.writingChatId).single();
+    expect(before.structuredDraft).toEqual(CoverLetterDraftSchema.parse(row.data?.structured_draft));
+    expect(JSON.stringify(before.structuredDraft)).not.toContain("데이터 분석 과정");
+
+    // Delete one source (outside the app path, to model "removed since the draft"), then reload.
+    const gone = await admin.from("projects").delete().eq("id", edu.doomed);
+    expect(gone.error).toBeNull();
+    const after = await getWritingChat(user, userId, chat.writingChatId);
+    if (after.target !== "application_document") throw new Error("wrong target");
+    const afterLabels = after.sourceLabels.q_1!;
+    expect(afterLabels.find((l) => l.sourceId === edu.eduProject)).toMatchObject({ deleted: false, label: "데이터 분석 과정 › 추천 모델" });
+    expect(afterLabels.find((l) => l.sourceId === edu.doomed)).toEqual({ sourceType: "project", sourceId: edu.doomed, label: null, deleted: true });
+    expect(DocumentWritingChatDto.safeParse(after).success).toBe(true);
+  }, 60_000);
+
+  /**
    * R15 후속 3 — CF-S7 = (a) (사용자 확정 2026-11-09) and the slot high-water mark (db `004690`).
    *
    * CF-S7: once the 정본 row exists, a save **without** an expected version is a `stale_write`

@@ -57,8 +57,15 @@ export function AddApplicationLauncher({
   return <AddApplicationDialog open={open} onOpenChange={onOpenChange} fromBoard={fromBoard} previewState={open ? previewState : null} />
 }
 
-/** 머리·빈 상태의 주 버튼 — 누르면 `?new=1`을 켠다 */
-function LauncherButton() {
+/**
+ * 머리·빈 상태의 주 버튼 — 누르면 `?new=1`을 켠다.
+ *
+ * **이름 붙은 export로 둔다 — `AddApplicationLauncher.Button` 같은 정적 속성으로 달지 않는다.** 이 파일은
+ * `"use client"`이고 S-13 페이지는 서버 컴포넌트다. 서버 컴포넌트가 받는 것은 클라이언트 참조(프록시)라
+ * 정적 속성이 실리지 않아 `undefined`가 되고, 운영에서 React #130으로 S-13 전체가 깨졌다(2026-11-10).
+ * 타입체크·빌드는 이것을 잡지 못한다 — `no-client-static-members.test.ts`가 소스로 막는다.
+ */
+export function AddApplicationLauncherButton() {
   const setOpen = useModalUrl()
   return (
     <Button onClick={() => setOpen(true)}>
@@ -68,4 +75,3 @@ function LauncherButton() {
   )
 }
 
-AddApplicationLauncher.Button = LauncherButton

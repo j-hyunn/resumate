@@ -291,3 +291,30 @@ export function invalidSlotCopy(questionNo: number | null): string {
     ? `문항 ${questionNo}의 키가 다른 문항과 겹쳐 저장하지 못했어요. 그 문항을 지우고 다시 추가해 주세요`
     : "문항 키가 겹쳐 저장하지 못했어요. 마지막에 추가한 문항을 지우고 다시 추가해 주세요"
 }
+
+// ---------------------------------------------------------------------------
+// CF-S8 (확정 2026-11-10, 사용자) — 턴 전에 저장할지 판정
+//
+// AI가 초안 대상으로 아는 문항은 **저장된 문항뿐**이다(`form_snapshot`은 저장된 문항의 값만 덮는다,
+// DM 2.5.1). 그래서 문항 **추가·삭제·순서 바꿈**이 저장되지 않은 채로 턴을 보내면 화면이 먼저 저장한다.
+// 판정은 저장된 정본의 `[slot, question_id]` 순서 목록과 지금 폼의 목록을 비교한다 — 답변·제목·메모 같은
+// **값만** 바뀐 경우는 거짓(스냅숏이 이미 덮는다 `[가정]`).
+// ---------------------------------------------------------------------------
+
+export type QuestionStructure = ReadonlyArray<readonly [slot: string, questionId: string]>
+
+/** 문항 구성 = 순서대로 `[slot, question_id]` */
+export function questionStructure(questions: ReadonlyArray<{ slot: string; question_id: string; sort_order?: number }>): QuestionStructure {
+  const ordered = questions.every((q) => typeof q.sort_order === "number") ? [...questions].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) : questions
+  return ordered.map((q) => [q.slot, q.question_id] as const)
+}
+
+/**
+ * 저장되지 않은 **문항 구성 변경**(추가·삭제·순서 바꿈)이 있는가. `stored`가 `null`(정본 행 없음 = 문항 설정
+ * 상태)이면 대화가 없으니 해당 없음 → 거짓.
+ */
+export function questionStructureChanged(stored: QuestionStructure | null, forms: ReadonlyArray<{ slot: string; question_id: string }>): boolean {
+  if (!stored) return false
+  if (stored.length !== forms.length) return true
+  return forms.some((f, i) => f.slot !== stored[i][0] || f.question_id !== stored[i][1])
+}

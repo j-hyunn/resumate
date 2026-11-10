@@ -55,11 +55,13 @@ import { CoverLetterPanel } from "./cover-letter-panel"
 import { useCoverLetterPanel } from "./use-cover-letter-panel"
 import type { QuestionFill } from "./question-proposal-card"
 import { QuestionSetup } from "./question-setup"
-import { expectedVersion } from "./save-version"
+import { expectedVersion, restorableCopy, staleDialogReloadOnly } from "./save-version"
 import {
   createSlotAllocator,
   invalidSlotCopy,
   isUntouchedSeed,
+  questionStructure,
+  questionStructureChanged,
   slotsInUse,
   newQuestionForm,
   nextSlot,
@@ -133,6 +135,7 @@ export function CoverLetterScreen({
 
   // ---------- 폼 ----------
   const [doc, setDoc] = React.useState<ApplicationDocument | null>(data.document)
+  const docRef = React.useRef<ApplicationDocument | null>(data.document)
   // 첫 폼은 **한 번만** 만든다 — 만들 때마다 새 `question_id`가 생겨 기준선과 어긋나지 않게
   const [initialForms] = React.useState<QuestionForm[]>(() => {
     const forms = previewForms(data.document, previewState)
@@ -186,7 +189,7 @@ export function CoverLetterScreen({
       if (!raw) return
       const copy = JSON.parse(raw) as { forms: QuestionForm[]; name: string; deadline: string; base_updated_at: string | null }
       // U40-2: 이 복사본을 쓴 뒤 다른 곳에서 저장됐으면 버린다
-      if ((copy.base_updated_at ?? null) !== (data.document?.updated_at ?? null)) {
+      if (!restorableCopy(copy.base_updated_at, data.document?.updated_at)) {
         window.localStorage.removeItem(preserveKey)
         return
       }
@@ -334,7 +337,15 @@ export function CoverLetterScreen({
       clearPreserved()
       setDoc((prev) =>
         prev
-          ? { ...prev, updated_at: r.updatedAt, filled_slot_count: r.filledSlotCount, slot_count: r.slotCount, slot_high_water: r.slotHighWater }
+          ? {
+              ...prev,
+              // 저장한 본문이 이제 정본이다 — CF-S8 "문항 구성이 바뀌었나"의 기준선이 된다
+              body: toCoverLetterBody(current),
+              updated_at: r.updatedAt,
+              filled_slot_count: r.filledSlotCount,
+              slot_count: r.slotCount,
+              slot_high_water: r.slotHighWater,
+            }
           : ({
               id: r.applicationDocumentId,
               user_id: "",
@@ -395,6 +406,15 @@ export function CoverLetterScreen({
       turnError: previewState === "draft-failed" ? "provider_unavailable" : null,
     },
     requirementsPending: data.extract_first,
+    // CF-S8 (확정 2026-11-10, 사용자): 저장하지 않은 문항 **구성** 변경(추가·삭제·순서)이 있으면 턴 전에
+    // "저장하기"와 **같은 경로**(`runSave`)로 먼저 저장한다 — 기대 버전·CF-S7·slot_high_water·question_id 보존·
+    // 반영한 제안(`applied_proposals`)이 평소 저장 그대로 적용된다. 실패하면 `false` → 턴을 보내지 않는다.
+    // 값(답변·제목·메모)만 바뀌었으면 저장하지 않고 스냅숏으로 보낸다 `[가정]`
+    beforeTurn: async () => {
+      const stored = docRef.current ? questionStructure(docRef.current.body.questions) : null
+      if (!questionStructureChanged(stored, formsRef.current)) return true
+      return runSave()
+    },
     onChatChange: (chatId) => {
       // 연 대화는 주소에 남긴다 (`?chat=`) — 서버 재렌더가 일어나지 않게 replaceState만 쓴다
       const url = new URL(window.location.href)
@@ -403,6 +423,11 @@ export function CoverLetterScreen({
       window.history.replaceState(window.history.state, "", url.pathname + url.search)
     },
   })
+
+  // CF-S8 판정에 쓰는 지금의 정본 (턴을 보내는 이벤트 때 읽는다)
+  React.useEffect(() => {
+    docRef.current = doc
+  }, [doc])
 
   // 발급기가 읽는 "지금 화면의 슬롯" — 폼·정본·열린 대화가 바뀔 때마다 맞춘다 (UQ-756·757)
   React.useEffect(() => {
@@ -701,10 +726,15 @@ export function CoverLetterScreen({
         entity="cover_letter"
         busy={saveState === "saving"}
         onOpenChange={setStale}
+        // CF-S9 (확정 2026-11-10, 사용자): **문항 설정 상태**의 [작성 시작]이 `stale_write`를 받으면 "새로 불러오기"
+        // 하나만 둔다 — 이 탭의 문항 설정으로 덮으면 다른 탭이 만든 문항의 근거 행이 빈 문항에 남거나 슬롯 판정에서
+        // 거부된다. "새로 불러오기"는 이 탭의 입력 보존 복사본까지 버리고 정본을 다시 읽어 **작성 상태**로 연다.
+        // **작성 상태**(CF-S8 자동 저장 실패 포함)는 CF-S7 그대로 버튼 둘이다
+        reloadOnly={staleDialogReloadOnly(state)}
         onOverwrite={() => {
           setStale(false)
-          // CF-S7: 문항 설정 상태의 [작성 시작]도 같은 다이얼로그다 — 거기서 "내 내용으로 저장"이면 작성 상태로 간다
-          void runSave({ overwrite: true, createRow: state === "questions" })
+          // 작성 상태에서만 닿는다 — `stale_write`가 준 지금 버전을 실어 다시 보낸다 (CF-S7)
+          void runSave({ overwrite: true })
         }}
         onReload={guard.reloadDiscarding}
       />

@@ -5,6 +5,8 @@ import {
   createSlotAllocator,
   invalidSlotCopy,
   isUntouchedSeed,
+  questionStructure,
+  questionStructureChanged,
   slotsInUse,
   newQuestionForm,
   nextSlot,
@@ -245,5 +247,64 @@ describe("question_id는 정본·입력 보존을 지나도 잃지 않는다 (R1
     // 저장 응답이 더 큰 값을 알려 오면 그것을 따른다
     slots.markHighWater(9)
     expect(slots.allocate()).toBe("q_10")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CF-S8 (확정 2026-11-10) — 턴 전에 저장할지: 저장된 [slot, question_id] 순서 목록 vs 지금 폼
+// ---------------------------------------------------------------------------
+describe("CF-S8 — 문항 구성이 바뀌었나 (턴 전 자동 저장 판정)", () => {
+  const storedQuestions = [
+    { slot: "q_1", question_id: "id-1", sort_order: 1 },
+    { slot: "q_3", question_id: "id-3", sort_order: 2 },
+  ]
+  const stored = questionStructure(storedQuestions)
+  const form = (slot: string, question_id: string) => ({ ...newQuestionForm(slot), question_id })
+
+  it("구성은 sort_order 순서의 [slot, question_id]다 (배열 순서가 섞여 와도)", () => {
+    expect(questionStructure([...storedQuestions].reverse())).toEqual([
+      ["q_1", "id-1"],
+      ["q_3", "id-3"],
+    ])
+  })
+
+  it("값(답변·제목·메모)만 바뀌었으면 거짓 — 저장하지 않고 스냅숏으로 보낸다", () => {
+    const forms = [
+      { ...form("q_1", "id-1"), body: "새 답변", answer_title: "새 제목", user_note: "새 메모", char_limit: "1200" },
+      { ...form("q_3", "id-3"), question_text: "고친 문항 문장" },
+    ]
+    expect(questionStructureChanged(stored, forms)).toBe(false)
+  })
+
+  it("문항을 추가했으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1"), form("q_3", "id-3"), form("q_4", "id-4")])).toBe(true)
+  })
+
+  it("문항을 지웠으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1")])).toBe(true)
+  })
+
+  it("순서를 바꿨으면 참", () => {
+    expect(questionStructureChanged(stored, [form("q_3", "id-3"), form("q_1", "id-1")])).toBe(true)
+  })
+
+  it("같은 번호라도 question_id가 다르면 참(다른 문항이다)", () => {
+    expect(questionStructureChanged(stored, [form("q_1", "id-1"), form("q_3", "id-other")])).toBe(true)
+  })
+
+  it("문항 설정 상태(정본 행 없음)는 대화가 없으니 해당 없음 — 거짓", () => {
+    expect(questionStructureChanged(null, [form("q_1", "id-1"), form("q_4", "id-4")])).toBe(false)
+  })
+
+  it("저장 왕복 뒤의 폼은 그 정본과 구성이 같다 — 저장 직후 다시 저장하지 않는다", () => {
+    const forms = toQuestionForms({
+      questions: [
+        { slot: "q_3", question_id: "id-3", sort_order: 2, question_text: "나", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces", user_note: null, body: "", blocks: [] },
+        { slot: "q_1", question_id: "id-1", sort_order: 1, question_text: "가", answer_title: null, template_key: null, question_class: null, char_limit: 800, count_basis: "with_spaces", user_note: null, body: "", blocks: [] },
+      ],
+    })
+    expect(questionStructureChanged(stored, forms)).toBe(false)
+    // 저장 응답 뒤 화면이 정본 body로 두는 값(toCoverLetterBody)도 같은 구성이다
+    expect(questionStructure(toCoverLetterBody(forms).questions)).toEqual(stored)
   })
 })

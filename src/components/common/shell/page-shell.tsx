@@ -375,10 +375,17 @@ export function StaleWriteDialog({
   onOverwrite,
   onReload,
   onOpenChange,
+  reloadOnly = false,
 }: {
   open: boolean
   entity: "project" | "deliverable" | "cover_letter"
   busy?: boolean
+  /**
+   * "새로 불러오기" **하나만** 둔다("내 내용으로 저장" 없음). S-46 문항 설정 상태가 쓴다(CF-S9 확정
+   * 2026-11-10 (사용자, UQ-761)): 다른 탭이 이미 정본을 만들었으면 이 탭의 문항 설정으로 덮지 않고 버린 뒤
+   * 정본을 읽어 작성 상태로 연다. 제목·설명은 그대로다. 기본값은 지금 동작(버튼 둘 — S-10·S-44·S-46 작성 상태).
+   */
+  reloadOnly?: boolean
   /**
    * "내 내용으로 저장" = the same request again. S-10·S-44: with p_expected_updated_at = null. S-46 (`cover_letter`,
    * CF-S7): with the `stale_write` reply's `details.current_updated_at` — the 자기소개서 save RPC refuses null on an
@@ -392,14 +399,15 @@ export function StaleWriteDialog({
   // (45 런) S-46도 이 다이얼로그를 쓴다 — "산출물"로 보이지 않게 (CF-U3: 서류 이름 "자기소개서")
   const what = entity === "project" ? "이 프로젝트가" : entity === "cover_letter" ? "이 자기소개서가" : "이 산출물이"
   const keepRef = React.useRef<HTMLButtonElement | null>(null)
+  const reloadRef = React.useRef<HTMLButtonElement | null>(null)
   return (
     <AlertDialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <AlertDialogContent
         className="sm:max-w-md"
         onOpenAutoFocus={(e) => {
-          // first focus = the choice that keeps the edits ("내 내용으로 저장")
+          // first focus = the choice that keeps the edits ("내 내용으로 저장"); reload-only → the one button
           e.preventDefault()
-          keepRef.current?.focus()
+          ;(reloadOnly ? reloadRef : keepRef).current?.focus()
         }}
       >
         <AlertDialogHeader>
@@ -409,13 +417,15 @@ export function StaleWriteDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           {/* not AlertDialogCancel: Radix focuses Cancel first, and this one throws edits away (QA UQ-PA-4) */}
-          <Button variant="muted-ghost" disabled={busy} onClick={onReload}>
+          <Button ref={reloadRef} variant={reloadOnly ? "default" : "muted-ghost"} disabled={busy} onClick={onReload}>
             새로 불러오기
           </Button>
-          <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            내 내용으로 저장
-          </AlertDialogAction>
+          {reloadOnly ? null : (
+            <AlertDialogAction ref={keepRef} disabled={busy} onClick={(e) => (e.preventDefault(), onOverwrite())}>
+              {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
+              내 내용으로 저장
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

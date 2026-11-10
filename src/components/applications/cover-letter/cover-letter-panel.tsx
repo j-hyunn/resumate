@@ -43,7 +43,8 @@ export function CoverLetterPanel({
   const [input, setInput] = React.useState("")
   const [deleting, setDeleting] = React.useState<DeleteTarget | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
-  const busy = panel.phase !== "idle"
+  // CF-S8: 턴 전 자동 저장 중에도 보내기·칩을 막는다 (이중 전송 방지)
+  const busy = panel.phase !== "idle" || panel.preparing
 
   // UP-3 자동 스크롤: 새 조각이 올 때 바닥에 붙어 있으면 따라간다
   React.useEffect(() => {
@@ -56,8 +57,8 @@ export function CoverLetterPanel({
   const submit = () => {
     const content = input.trim()
     if (!content || busy) return
-    setInput("")
-    panel.send(content)
+    // 입력창은 턴이 **실제로 나갈 때만** 비운다 — 턴 전 저장이 실패하면 그대로 남는다 (CF-S8)
+    panel.send(content, { onSent: () => setInput("") })
   }
 
   return (
@@ -212,14 +213,15 @@ export function CoverLetterPanel({
             </span>
             <ProviderBadge />
             <span className="flex-1" />
-            {busy ? (
+            {panel.phase !== "idle" ? (
               <Button variant="outline" size="sm" onClick={panel.stop}>
                 <Square aria-hidden />
                 중단
               </Button>
             ) : (
-              <Button size="sm" disabled={!input.trim() || panel.messageLimitReached} onClick={submit}>
-                {panel.phase !== "idle" ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+              // 턴 전 자동 저장 중(CF-S8)에는 막고 도는 표시만 — 저장은 중단할 수 없다
+              <Button size="sm" disabled={!input.trim() || panel.messageLimitReached || panel.preparing} onClick={submit}>
+                {panel.preparing ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
                 보내기
               </Button>
             )}

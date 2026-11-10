@@ -85,7 +85,9 @@ export interface CoverLetterPanelController {
   /** 문항별 근거 카드 (`sources_selected` — 표시용. 저장 근거는 서버가 만든다, CF-S1) */
   sources: Record<string, CoverLetterSourceCard[]>
   provisional: ProvisionalBlocks | null
-  send: (content: string, opts?: { draftTurn?: boolean; requestedSlot?: string; style?: "fit_length" | "shorter" }) => void
+  send: (content: string, opts?: { draftTurn?: boolean; requestedSlot?: string; style?: "fit_length" | "shorter"; onSent?: () => void }) => void
+  /** CF-S8 — 턴 전 자동 저장 중 */
+  preparing: boolean
   stop: () => void
   retry: () => void
   newChat: () => void
@@ -104,6 +106,11 @@ export interface CoverLetterPanelOptions {
   /** 요건이 아직 없다 → 시작 인사 ④ ("공고 요건 정리 중") */
   requirementsPending: boolean
   onChatChange: (chatId: string | null) => void
+  /**
+   * CF-S8: 턴을 보내기 **직전**에 부른다. 저장하지 않은 문항 구성 변경이 있으면 화면이 저장하고, 성공하면
+   * `true`, 실패하면 `false`(턴을 보내지 않는다). 바뀐 것이 없으면 바로 `true`.
+   */
+  beforeTurn?: () => Promise<boolean>
 }
 
 const PANEL_OPEN_KEY = "resumate:l02:cover_letter:panel"
@@ -115,6 +122,9 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const [open, setOpen] = React.useState(true)
   const [chats, setChats] = React.useState(opts.initialChats)
   const [chat, setChat] = React.useState(opts.initialChat)
+  /** CF-S8 — 턴 전 자동 저장 중 (보내기·칩을 막는다) */
+  const [preparing, setPreparing] = React.useState(false)
+  const preparingRef = React.useRef(false)
   /**
    * 마지막으로 **열기를 요청한** 대화 id (UQ-760). R15 후속 3에서 턴 뒤 다시 읽기는 걷었고, 다시 읽기가 남은
    * 길은 "기록에서 열기"다. 그 응답이 늦게 오면 그 사이 다른 대화를 또 열었거나 "+ 새 대화"로 비웠을 수
@@ -366,15 +376,38 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   }, [chat, opts])
 
   const send = React.useCallback(
-    (content: string, sendOpts: { draftTurn?: boolean; requestedSlot?: string; style?: "fit_length" | "shorter" } = {}) => {
+    (
+      content: string,
+      sendOpts: {
+        draftTurn?: boolean
+        requestedSlot?: string
+        style?: "fit_length" | "shorter"
+        /** 턴이 실제로 나갈 때(저장이 성공한 뒤) 불린다 — 입력창은 이때만 비운다 (CF-S8) */
+        onSent?: () => void
+      } = {},
+    ) => {
       const draftTurn = Boolean(sendOpts.draftTurn)
       if (locked) return
       if (draftTurn && draftLimitReached) return
       if (messageLimitReached) return
+      // 저장 중·턴 중에는 보내지 않는다 — 이중 전송 막기 (CF-S8)
+      if (preparingRef.current || phase !== "idle") return
       lastSend.current = { content, draftTurn, requestedSlot: sendOpts.requestedSlot, style: sendOpts.style }
       const run = async () => {
+        // CF-S8 (확정 2026-11-10, 사용자): 저장하지 않은 문항 구성 변경이 있으면 **먼저 저장**하고, 성공한 뒤에만
+        // 턴을 보낸다. 실패하면 턴을 보내지 않는다(입력창은 `onSent`가 불리지 않아 그대로 남는다).
+        // 저장은 화면의 "저장하기"와 같은 경로(`runSave`)다 — 오류도 같은 자리·문구·다이얼로그로 보인다
+        if (opts.beforeTurn) {
+          preparingRef.current = true
+          setPreparing(true)
+          const ok = await opts.beforeTurn().catch(() => false)
+          preparingRef.current = false
+          setPreparing(false)
+          if (!ok) return
+        }
         const target = await ensureChat()
         if (!target) return
+        sendOpts.onSent?.()
         setMessages((list) => [...list, { id: `u-${Date.now()}`, role: "user", content, status: "ok" }])
         await runTurn(target, content, { draftTurn, requestedSlot: sendOpts.requestedSlot, style: sendOpts.style })
       }
@@ -382,7 +415,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
       if (lockReason === "ai_consent_required") return consent.open(() => void run())
       consent.guard(() => void run())
     },
-    [consent, draftLimitReached, ensureChat, lockReason, locked, messageLimitReached, runTurn],
+    [consent, draftLimitReached, ensureChat, lockReason, locked, messageLimitReached, opts, phase, runTurn],
   )
 
   const stop = React.useCallback(() => {
@@ -493,6 +526,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     sources,
     provisional,
     send,
+    preparing,
     stop,
     retry,
     newChat,

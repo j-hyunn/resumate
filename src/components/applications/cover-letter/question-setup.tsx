@@ -16,6 +16,9 @@
  * 상태에서 늘 비활성이고 ⌘S도 아무 일을 하지 않는다 — 화면(`cover-letter-screen.tsx`)이 그 규칙을
  * 들고 있다. 순서는 **추출 → 성공 뒤 저장**이다(v5.20 정정, DM-3).
  */
+import { toast } from "sonner"
+import { isAiRejected, notifyAiRejected } from "@/components/common/ai-rejection"
+import { submitFailedMessage } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -87,6 +90,21 @@ export function QuestionSetup({
     previewFail: extractFailPreview,
     jdEditFrom: { from: "cover_letter" },
   })
+
+  /**
+   * [자기소개서 작성 시작] — 요건 선행 추출(필요할 때) → 저장. 결과를 버리지 않는다(2026-11-10 사용자 보고
+   * "누르면 아무 동작도 안 해"): 추출이 AI 동의·키 문제로 **거절되면 `run`이 거절 값을 돌려줄 뿐 아무것도 그리지
+   * 않아**, 버튼이 잠깐 돌고 멈춘 것처럼 보였다. 거절은 공통 `notifyAiRejected`(C-20 제목 토스트 + 연결 다시 읽기,
+   * 버튼은 다음 클릭에 C-18/C-21로 바뀐다)로, 던진 오류는 저장 실패 문구로 알린다.
+   */
+  const startWriting = async () => {
+    try {
+      const r = await req.run(onStart)
+      if (isAiRejected(r)) notifyAiRejected(r)
+    } catch {
+      toast.error(submitFailedMessage("자기소개서"))
+    }
+  }
 
   const patch = (i: number, p: Partial<QuestionForm>) => onChange(forms.map((f, idx) => (idx === i ? { ...f, ...p } : f)))
   const add = () => onChange([...forms, newQuestionForm(allocateSlot())])
@@ -203,7 +221,7 @@ export function QuestionSetup({
             <Plus aria-hidden />
             문항 추가 <span className="tabular-nums">{forms.length}/{COVER_LETTER_MAX_QUESTIONS}</span>
           </Button>
-          <Button disabled={starting || req.busy} onClick={() => void req.run(onStart)}>
+          <Button disabled={starting || req.busy} onClick={() => void startWriting()}>
             {starting || req.busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
             자기소개서 작성 시작
           </Button>

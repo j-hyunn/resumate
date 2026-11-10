@@ -20,6 +20,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ArrowUpRight, MoreHorizontal, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
+import { submitFailedMessage } from "@/lib/data/labels"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -326,6 +327,9 @@ export function CoverLetterScreen({
             return false
           default:
             setSaveState("failed")
+            // 문항 설정 상태는 상단 저장 상태 표시가 `idle`로 고정(CF-S3·S5)이라 "저장 실패"가 어디에도 안 보였다
+            // (2026-11-10 "작성 시작을 눌러도 아무 동작이 없다"). 정본 행을 만드는 [자기소개서 작성 시작]의 실패는 알린다
+            if (opts.createRow) toast.error(submitFailedMessage("자기소개서"))
             return false
         }
       }

@@ -109,7 +109,14 @@ export function useRequirementsFirst(
       setBusy(false)
       return next()
     }
-    const started = await retryJdExtractionAction(applicationProjectId)
+    let started: Awaited<ReturnType<typeof retryJdExtractionAction>>
+    try {
+      started = await retryJdExtractionAction(applicationProjectId)
+    } catch (err) {
+      // 던진 오류(네트워크·서버)로 "정리 중"에 묶이지 않게 풀고 호출한 쪽에 넘긴다 (2026-11-10)
+      setBusy(false)
+      throw err
+    }
     if (isAiRejected(started)) {
       // path ⑤ refusal: nothing changed — the run button re-reads readiness (C-18 / C-21 / key_invalid)
       setBusy(false)

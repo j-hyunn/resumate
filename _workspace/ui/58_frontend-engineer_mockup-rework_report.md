@@ -167,3 +167,51 @@ S-08 "커리어 추가" 모달(`add-career-dialog.tsx`, C-22)이 파일 안에 �
 - `pnpm lint`·`pnpm typecheck`·`pnpm test`(158파일 2,550건)·`pnpm build` 전부 통과.
 - 렌더: `/applications?new=1&state=step1`·`step2`·`/applications?state=empty` 200 · `/career?new=experience|education|project&state=default` 200 — 모두 "Element type is invalid" 0건. 모달은 Portal이라 HTML에 없어 클라이언트 청크로 확인: "JD 입력"·"포지션 공고"·"지원 기업 / 포지션"·"공고 내용"·"자기소개서 추가"·`https://www.jd.com`·"포지션 공고 내용을 입력해주세요."·"기업 명"·"포지션 명"·`w-[602px]`(공통 틀) 있음.
 - 브라우저 확인은 여전히 못 했다(ui-qa 필요).
+
+---
+
+## 10. 59 QA 수정 (`_workspace/ui/59_ui-qa_mockup-rework_review.md`, 커밋 `e90c1e5` 위)
+
+브리프 정정(시안 그림 ≈ 1.39배 → CSS px = 그림 ÷ 1.39)을 반영했다.
+
+| 이슈 | 고친 것 | 파일 |
+|---|---|---|
+| UQ-762 (Major) 문항 설정 열 | `max-w-[52rem]` → **`max-w-[37.5rem]` (600px)**. 600에 맞는 토큰 폭이 없어(`max-w-xl` = 576px, `max-w-2xl` = 672px) 임의 값을 썼다 | `cover-letter-screen.tsx` |
+| UQ-765 (Minor) 탭 열·글자 수 칸 | 탭 열 `w-48` → **`w-[10.25rem]`** = 왼쪽 여백 24 + **알약 140px**(시안의 알약 폭). 글자 수 칸 `w-[8.75rem]` → **`w-[6.25rem]` (100px)**. 라벨 열은 공통 `FieldRows` 값(`6.25rem` = 100px) 그대로 | `cover-letter-screen.tsx`, `question-fields.tsx` |
+| UQ-764 (Major, 회귀) 39개 상한 문구 | 공통 `AiPanelCopy`에 선택 속성 **`closed`**를 더했다(`PanelInputArea` `closedCopy`, 넘기지 않으면 지금 규칙 그대로 → S-10·S-44 불변). S-46은 `coverLetterClosedCopy(messageCount)`를 넘긴다 — 39·40이면 **이전 S-46 문구 "이 대화는 메시지 한도에 닿았어요. 새 대화에서 이어 가세요"**, 그 전(대화 `closed`)이면 공통 기본. 39 판정은 컨트롤러와 같은 순수 함수 `coverLetterMessageLimitReached`(컨트롤러도 이 함수를 쓰게 바꿨다, 값 같음). 카운터 "39/40"은 이전 S-46에도 있던 표시라 그대로 | `ai-panel.tsx`, `panel-input.tsx`, `panel-rules.ts`, `cover-letter-panel.tsx`, `use-cover-letter-panel.ts` |
+| UQ-767 (Minor) 행 끝 ⋯ 정렬 | ⋯를 **문항 칸 안쪽 오른쪽 끝**으로 옮겼다(`QuestionTextField` `trailing`, 칸에 `pr-10`) → 글자 수 칸 오른쪽 끝 = 아래 [자기소개서 작성 시작] 오른쪽 끝 `[UI-가정]` | `question-fields.tsx`, `question-setup.tsx` |
+| UQ-768 (Minor) 정렬 표기 모양 | `rounded-full` → 공통 버튼 모서리 **`rounded-control`**(둥근 사각) | `application-list.tsx` |
+| UQ-769 (Minor, 접근성) 숨은 라벨 | "**문항 {n} 문장**"·"**문항 {n} 글자 수 제한**"(번호 포함). ⋯는 이미 "문항 {n} 설정" | `question-fields.tsx`, `question-setup.tsx` |
+| UQ-770 초안 상한 칩 | 아래 참고 | `panel-rules.ts`, `use-cover-letter-ai-panel.ts` |
+
+**UQ-770 — 명세 대조.** UX 02 S-46 제안 카드 표 "초안 남은 횟수" 행은 "0이면 **고정 칩 3개(OD-P6)** + [새 대화]"다. 그런데 OD-P6의 고정 3개는 AI-13(산출물) 칩이다("빠진 부분 물어봐 줘" · "**프로젝트 내용을 바탕으로** 물어봐 줘" · "새 대화 시작"). 2번 칩은 프로젝트 맥락이라 자소서에 맞지 않는다. 자소서 칩의 원천인 **AI-04 "빠른 버튼 칩" 표**(03-ai-features, AI-04 절)는 "초안 6회에 닿으면 `compose_draft` 칩이 사라지고 **'빠진 부분 물어봐 줘' / '새 대화 시작'**으로 바뀐다"고 적는다. 그래서 칩 문구는 AI-04를 따랐고, "새 대화 시작"은 S-44와 **같은 `new_chat` 칩 경로**다(공통 패널 `sendChip`에서 메시지를 보내지 않고 새 대화를 연다). [새 대화]는 이 칩과 3.26 카드의 [새 대화](제안이 없을 때)가 맡는다. 상한 줄 "이 대화에서는 초안을 더 만들 수 없어요…"는 입력 위에 그대로 있다. **기획 확인 필요**: UX S-46 "고정 칩 3개"와 AI-04 "칩 2개"가 다르다. 구현은 AI-04 기준이다.
+
+**고치지 않은 것**: UQ-766(공통 패널 머리 아이콘, 지시대로), UQ-771·UQ-772(문서 — ui-designer·기획).
+
+### 10.1 S-13 목록 — 새 시안 4 (`_workspace/ui/58_mockup/4_s13-list.webp`)
+| 시안 4 요소 | 구현 | 공통 |
+|---|---|---|
+| L-01 셸(사이드바·위 바 "자기소개서 관리") | 그대로. 사이드바 "모의 면접"은 넣지 않음(RM-1) | 셸 |
+| 왼쪽 "최근 작성 순 ⌄" 회색 둥근 사각 | 고정 표기(`rounded-control bg-muted h-8 px-3`). ⌄는 지난번 `[UI-가정]`대로 뺀다(선택지 없음, CF-9) | 버튼 모서리 토큰 |
+| 오른쪽 "⊕ 자기소개서 작성" | 그대로 | `AddApplicationLauncherButton` |
+| **표가 아닌 세 줄 행** — 이름(기본 글자·보통 굵기) / 포지션(회색) / 날짜 yyyy.mm.dd(회색) | `Table`(4열)·좁은 화면 `Card`를 지우고 **`ul.divide-y` + 공통 `Item variant="row"` + `Link`** 한 가지 목록으로(좁은 화면도 같음). 포지션이 비면 그 줄을 생략. 날짜 `formatDate` = `yyyy.mm.dd` | `Item`(목록 행 hover·포커스 모양) |
+| 행 사이 전폭 가로 구분선, 열 머리 없음 | `divide-y`(첫 행 위·마지막 행 아래 선 없음), 헤더 행 없음 | — |
+| 행 글자 x = 칩 글자 x | 행 `px-3` = 칩 `px-3` | — |
+| (시안에 없음) 마감 D-day | 값이 있을 때만 날짜 줄 옆 "yyyy.mm.dd · D-n" `[UI-가정]` | `DDay` |
+| (시안에 없음) 행 메뉴 ⋯ (삭제만, C-05) | 행 오른쪽 위 절대 위치, 링크 밖 형제(링크 안 버튼 중첩 없음). 마우스 올림·포커스·메뉴 열림일 때만 보이고 터치 기기는 늘 보인다. Tab으로 늘 닿는다 `[UI-가정]` | `DropdownMenu` |
+| (시안에 없음) "AI 추출" 배지·추출 대기 이름 흐리게 | 그대로(이름 줄 안) | `Badge variant="ai"` |
+
+- 정렬·데이터(`listCoverLetters`)·삭제(`useDeleteApplication`)·`?state=` empty·loading·error·RSC 가드는 그대로. 넓이 판정 훅(`useWide`)은 목록이 한 가지가 되어 지웠다.
+
+### 10.2 검증
+- `pnpm lint`·`pnpm typecheck`·`pnpm build` 통과. `pnpm test` **159파일 2,556건** 통과(새 `panel-adapter-rules.test.ts` 6건: 38/39/40 경계, 39·40 상자 문구 = 이전 S-46 문구 ≠ 공통 "끝난 대화", closed 기본, 초안 상한 칩 2개·`new_chat`, 칩 턴 옵션).
+- dev 서버 렌더 — 모두 200, "Element type is invalid" 0, 서버 오류 digest 0:
+  | 주소 | 확인 |
+  |---|---|
+  | `…0003/cover-letter?state=questions` | `max-w-[37.5rem]`, `w-[6.25rem]`, 숨은 라벨 "문항 1 문장"·"문항 2 글자 수 제한" |
+  | `…0001/cover-letter?state=writing` | 200 (`<table>` 1개는 채용 공고·인사이트 탭 내용) |
+  | `…0001/cover-letter?state=draft-limit` | 칩 "빠진 부분 물어봐 줘"·"새 대화 시작", 상한 줄, 탭 열 `w-[10.25rem]` |
+  | `/applications?state=empty` | 200, `<table>` 0 |
+  | `/applications?state=default` | 200, **`<table>` 0**, `ul[aria-label=자기소개서 목록]`, 정렬 표기 `rounded-control bg-muted` |
+  | `/applications?new=1&state=step1` | 200 |
+- 브라우저 확인 못 함 — hover 노출, 행 간격, 39개 상자는 ui-qa 브라우저 점검 필요.

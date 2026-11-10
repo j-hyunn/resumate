@@ -14,8 +14,9 @@
  * - 입력창 글자는 여기 둔다. 보내기는 `cl.send(text, { onSent })` — 입력창은 턴이 **실제로 나갈 때만** 비운다
  *   (CF-S8: 턴 전 저장이 실패하면 글자가 남는다).
  * - CF-S8 저장 중(`preparing`)은 공통 패널의 `starting`(입력 잠금 + 도는 표시)으로 보인다.
- * - 칩은 서류 대화 칩 문자열 그대로. 초안 턴 상한(6회)에 닿으면 초안 칩을 줄에서 뺀다 `[UI-가정]`.
- * - 메시지 상한(서류 대화는 39에서 막는다)·끝난 대화 → 공통 "끝난 대화" 상자.
+ * - 칩은 서류 대화 칩 문자열 그대로. 초안 턴 상한(6회)에 닿으면 "빠진 부분 물어봐 줘" · "새 대화 시작"(AI-04 표, UQ-770).
+ * - 메시지 상한(서류 대화는 39에서 막는다)·끝난 대화 → 공통 "끝난 대화" 상자. 문구는 화면이 `copy.closed`로 이전 S-46
+ *   문구를 넘긴다(공통 상자는 40 이상만 상한 문구를 고르므로, UQ-764).
  * - 실패한 턴 → 공통 C-20(다시 보내기). 초안 턴 실패는 제안 카드(3.26)가 그리므로 목록에서 숨긴다.
  */
 import * as React from "react"
@@ -26,19 +27,10 @@ import type { DeliverableStructuredDraft } from "@/types/db"
 import type { WritingChatMessageView, WritingChatSummary, WritingChatView } from "@/lib/data/career-v45-shared"
 import type { QuickChip } from "@/lib/data/quick-chips"
 import type { CoverLetterPanelController } from "./use-cover-letter-panel"
+import { chipTurnOptions, coverLetterPanelChips } from "./panel-rules"
 
 const NO_IDS: ReadonlySet<string> = new Set()
 const NOOP = () => {}
-
-/** 초안 턴을 돌리는 칩 (상한 6회에 걸린다) */
-export function isDraftChip(chip: string): boolean {
-  return chip.includes("초안 만들기") || chip === "글자 수 맞춰 줘" || chip === "더 간결하게"
-}
-
-/** 칩 → 서류 대화 턴 옵션 (기존 `cover-letter-panel.tsx`의 규칙 그대로) */
-export function chipTurnOptions(chip: string): { draftTurn: boolean; style?: "fit_length" | "shorter" } {
-  return { draftTurn: isDraftChip(chip), style: chip === "더 간결하게" ? "shorter" : chip === "글자 수 맞춰 줘" ? "fit_length" : undefined }
-}
 
 /** 서류 대화 메시지 → 공통 스레드 행. 빈 AI 행은 그리지 않는다(기존 동작). 시작 인사는 대화가 비었을 때만 맨 위에 */
 export function toThreadMessages(cl: Pick<CoverLetterPanelController, "messages" | "chat">, greeting: string): WritingChatMessageView[] {
@@ -101,9 +93,8 @@ export function useCoverLetterAiPanel(cl: CoverLetterPanelController, placement:
       }
     : null
 
-  const chips: QuickChip[] = cl.chips
-    .filter((c) => !(cl.draftLimitReached && isDraftChip(c)))
-    .map((label) => ({ kind: "message", label, requested_slot: null, requested_action: null, style: null }))
+  // 초안 6회에 닿으면 "빠진 부분 물어봐 줘" · "새 대화 시작"(AI-04 표, UQ-770)
+  const chips: QuickChip[] = coverLetterPanelChips(cl.chips, cl.draftLimitReached)
 
   const failure: TurnFailure | null = cl.failure
     ? {

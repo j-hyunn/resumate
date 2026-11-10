@@ -86,6 +86,11 @@ export interface AiPanelCopy {
   lock?: string
   /** start-area fixed notice (Info line) */
   notice?: string
+  /**
+   * the closed-chat box line. Omitted = the S-10 / S-44 rule (≥ 40 messages → `PANEL_COPY.messageLimit`, else
+   * `chatClosed`). S-46 closes at 39 and passes its own message-limit line (UQ-764).
+   */
+  closed?: string
 }
 
 export function AiPanel({
@@ -138,7 +143,14 @@ export function AiPanel({
           />
           {renderProposal && !proposalInline ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
           {renderAboveInput ? <div className="shrink-0 px-3 pt-2 empty:hidden">{renderAboveInput(panel)}</div> : null}
-          <PanelInputArea panel={panel} renderClosedActions={renderClosedActions} onDirectInput={onDirectInput} lockCopy={lockCopy} lockEntry={lockEntry} />
+          <PanelInputArea
+            panel={panel}
+            renderClosedActions={renderClosedActions}
+            onDirectInput={onDirectInput}
+            lockCopy={lockCopy}
+            lockEntry={lockEntry}
+            closedCopy={copy?.closed}
+          />
         </>
       )}
       {panel.consentDialog}

@@ -22,6 +22,7 @@ import { PANEL_COPY, PANEL_FIXED_NOTE } from "@/lib/data/cover-letter-chat-types
 import { QuestionProposalCard, type QuestionFill } from "./question-proposal-card"
 import type { CoverLetterPanelController } from "./use-cover-letter-panel"
 import { useCoverLetterAiPanel } from "./use-cover-letter-ai-panel"
+import { coverLetterClosedCopy } from "./panel-rules"
 
 export function CoverLetterPanel({
   panel,
@@ -44,7 +45,8 @@ export function CoverLetterPanel({
     <AiPanel
       panel={common}
       lockEntry="draft"
-      copy={{ lock: AI_LOCK_ENTRIES.draft.description, notice: PANEL_FIXED_NOTE }}
+      // closed: 서류 대화는 39개에서 막는다 — 이전 S-46 문구 그대로 (UQ-764)
+      copy={{ lock: AI_LOCK_ENTRIES.draft.description, notice: PANEL_FIXED_NOTE, closed: coverLetterClosedCopy(panel.messages.length) }}
       proposalInline
       // 초안 턴 실패는 제안 카드가 C-20 + 다시 시도를 그린다 (지금 본문·이전 제안 유지)
       hideDraftTurnFailure={() => panel.draftFailed}
@@ -56,7 +58,7 @@ export function CoverLetterPanel({
         </>
       )}
       renderAboveInput={() =>
-        // 초안 턴 6회를 다 썼다 — 초안 칩은 줄에서 빠지고 이 한 줄이 이유를 알린다 (대화는 계속할 수 있다)
+        // 초안 턴 6회를 다 썼다 — 칩이 "빠진 부분 물어봐 줘" · "새 대화 시작"으로 바뀌고 이 한 줄이 이유를 알린다 (대화는 계속)
         panel.draftLimitReached && !panel.locked ? <p className="text-sm text-muted-foreground">{PANEL_COPY.draftLimitReached}</p> : null
       }
       onDirectInput={onDirectInput}

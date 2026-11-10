@@ -9,8 +9,8 @@
  * ST-WAIT-JD 줄이 공급자 없이 진행을 알린다 `[UI-가정]`.
  *
  * 모양 (58 런, 시안 2): 가운데 좁은 열 · 제목 "자기소개서 문항 추가" + 회색 부제 · 문항 한 줄 =
- * [문항 입력][글자 수 "자"][⋯] · 마지막 줄 왼쪽 "+ 문항 추가 n/5", 오른쪽 [자기소개서 작성 시작].
- * 기준(공백 포함/제외)·메모·삭제는 행 끝 ⋯ 메뉴로 숨긴다(확정 항목이라 없애지 않는다).
+ * [문항 입력(안쪽 끝 ⋯)][글자 수 "자"] · 마지막 줄 왼쪽 "+ 문항 추가 n/5", 오른쪽 [자기소개서 작성 시작].
+ * 기준(공백 포함/제외)·메모·삭제는 문항 칸 안쪽 끝 ⋯ 메뉴로 숨긴다(확정 항목이라 없애지 않는다).
  *
  * **CF-S3**: 정본 행을 만드는 첫 저장은 **[자기소개서 작성 시작] 하나**다. 상단 바 "저장하기"는 이
  * 상태에서 늘 비활성이고 ⌘S도 아무 일을 하지 않는다 — 화면(`cover-letter-screen.tsx`)이 그 규칙을
@@ -101,7 +101,8 @@ export function QuestionSetup({
         <p className="text-base text-muted-foreground">작성하고자 하는 자기소개서 문항을 입력해주세요</p>
       </div>
 
-      {/* 문항 한 줄 = [문항 입력(넓게)] [글자 수 + "자"] [⋯] — 라벨 없음(sr-only), 자리 표시 = 기본 문항 문구 */}
+      {/* 문항 한 줄 = [문항 입력(넓게, 안쪽 끝 ⋯)] [글자 수 + "자"] — 라벨 없음(sr-only, 번호 포함), 자리 표시 = 기본 문항 문구.
+          글자 수 칸의 오른쪽 끝이 아래 [자기소개서 작성 시작]의 오른쪽 끝과 맞는다 (59 QA UQ-767) */}
       <ol className="space-y-4">
         {forms.map((f, i) => {
           const idPrefix = `qs-${f.question_id}`
@@ -113,31 +114,13 @@ export function QuestionSetup({
                 <span className="sr-only">문항 {i + 1}</span>
                 <QuestionTextField
                   idPrefix={idPrefix}
-                  compact
-                  placeholder={COVER_LETTER_DEFAULT_QUESTIONS[i]?.question_text ?? "작성하고자 하는 문항을 입력해 주세요"}
-                  value={f.question_text}
-                  error={errors[i]?.question_text}
-                  onChange={(v) => patch(i, { question_text: v })}
-                  inputRef={(el) => {
-                    textRefs.current[i] = el
-                  }}
-                />
-                <CharLimitInput
-                  id={`${idPrefix}-limit`}
-                  value={f.char_limit}
-                  invalid={Boolean(errors[i]?.char_limit)}
-                  describedBy={`${errors[i]?.char_limit ? `${idPrefix}-limit-error ` : ""}${limitFocus === f.question_id ? `${idPrefix}-limit-note` : ""}`.trim() || undefined}
-                  onChange={(v) => patch(i, { char_limit: v })}
-                  onFocus={() => setLimitFocus(f.question_id)}
-                  onBlur={() => setLimitFocus((x) => (x === f.question_id ? null : x))}
-                  inputRef={(el) => {
-                    limitRefs.current[i] = el
-                  }}
-                />
-                {/* 기준·메모·삭제는 시안 기본 화면에 없다 → 행 끝 작은 ⋯ 메뉴로 숨긴다 `[UI-가정]` (확정 항목이라 없애지 않는다) */}
+                  number={i + 1}
+                  trailing={
+                    <>
+                {/* 기준·메모·삭제는 시안 기본 화면에 없다 → 문항 칸 안 오른쪽 끝 작은 ⋯ 메뉴로 숨긴다 `[UI-가정]` (확정 항목이라 없애지 않는다, 59 QA UQ-767) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" className="mt-1 text-muted-foreground" aria-label={`문항 ${i + 1} 설정`}>
+                    <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`문항 ${i + 1} 설정`}>
                       <MoreHorizontal aria-hidden />
                     </Button>
                   </DropdownMenuTrigger>
@@ -168,6 +151,30 @@ export function QuestionSetup({
                     {forms.length <= 1 ? <p className="px-2 py-1 text-xs text-muted-foreground">{QUESTION_MIN_NOTE}</p> : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                    </>
+                  }
+                  compact
+                  placeholder={COVER_LETTER_DEFAULT_QUESTIONS[i]?.question_text ?? "작성하고자 하는 문항을 입력해 주세요"}
+                  value={f.question_text}
+                  error={errors[i]?.question_text}
+                  onChange={(v) => patch(i, { question_text: v })}
+                  inputRef={(el) => {
+                    textRefs.current[i] = el
+                  }}
+                />
+                <CharLimitInput
+                  id={`${idPrefix}-limit`}
+                  number={i + 1}
+                  value={f.char_limit}
+                  invalid={Boolean(errors[i]?.char_limit)}
+                  describedBy={`${errors[i]?.char_limit ? `${idPrefix}-limit-error ` : ""}${limitFocus === f.question_id ? `${idPrefix}-limit-note` : ""}`.trim() || undefined}
+                  onChange={(v) => patch(i, { char_limit: v })}
+                  onFocus={() => setLimitFocus(f.question_id)}
+                  onBlur={() => setLimitFocus((x) => (x === f.question_id ? null : x))}
+                  inputRef={(el) => {
+                    limitRefs.current[i] = el
+                  }}
+                />
               </div>
               {errors[i]?.char_limit ? (
                 <p id={`${idPrefix}-limit-error`} className="text-sm text-destructive" role="alert">

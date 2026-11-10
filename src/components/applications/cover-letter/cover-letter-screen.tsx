@@ -648,7 +648,8 @@ export function CoverLetterScreen({
       {state === "questions" ? (
         // 문항 설정 상태: 탭 목록·AI 패널 없이 가운데 좁은 한 열 (시안 2 — 위아래 여백 넉넉히)
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-16 pb-10 max-md:px-4 max-md:pt-8">
-          <div className="mx-auto w-full max-w-[52rem]">
+          {/* 시안 2의 열 폭 약 600px(그림 830px ÷ 1.39) — 59 QA UQ-762 */}
+          <div className="mx-auto w-full max-w-[37.5rem]">
             <QuestionSetup
               applicationProjectId={apId}
               allocateSlot={allocateSlot}
@@ -676,10 +677,10 @@ export function CoverLetterScreen({
       ) : (
         <Tabs value={tab} onValueChange={changeTab} orientation="vertical" className="min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 max-lg:flex-col">
-            {/* 세로 알약 탭 (시안 3: 약 190px 열, 선택 탭 = 회색 바탕 알약, 구분선 없음) — 공통 `Tabs` `variant="pill"` */}
+            {/* 세로 알약 탭 (시안 3: 알약 폭 약 140px = 열 164px − 왼쪽 여백 24px, 59 QA UQ-765, 선택 탭 = 회색 바탕 알약, 구분선 없음) — 공통 `Tabs` `variant="pill"` */}
             <TabsList
               variant="pill"
-              className="w-48 shrink-0 flex-col items-stretch gap-1 py-6 pl-6 max-lg:w-full max-lg:flex-row max-lg:border-b max-lg:px-4 max-lg:py-2"
+              className="w-[10.25rem] shrink-0 flex-col items-stretch gap-1 py-6 pl-6 max-lg:w-full max-lg:flex-row max-lg:border-b max-lg:px-4 max-lg:py-2"
             >
               {/* 탭 이름 — CF-U3 확정: 작성 화면 탭은 "자소서" */}
               <TabsTrigger value="cover_letter" className={TAB_PILL}>

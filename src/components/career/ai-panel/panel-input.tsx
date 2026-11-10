@@ -24,6 +24,7 @@ export function PanelInputArea({
   onDirectInput,
   lockCopy,
   lockEntry = "writing_chat",
+  closedCopy,
 }: {
   panel: AiPanelController
   renderClosedActions?: (panel: AiPanelController) => React.ReactNode
@@ -31,6 +32,8 @@ export function PanelInputArea({
   /** C-18 description; default = the S-10 / S-44 copy for `panel.target` */
   lockCopy?: string
   lockEntry?: AiLockEntry
+  /** closed-box line; default = the S-10 / S-44 rule below */
+  closedCopy?: string
 }) {
   const lockDescription = lockCopy ?? PANEL_COPY.lock[panel.target]
   if (panel.locked) {
@@ -47,7 +50,7 @@ export function PanelInputArea({
         <div className="space-y-2 rounded-2xl border border-dashed border-input bg-card p-3">
           <p className="flex items-start gap-2 text-sm">
             <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-            {full ? PANEL_COPY.messageLimit : PANEL_COPY.chatClosed}
+            {closedCopy ?? (full ? PANEL_COPY.messageLimit : PANEL_COPY.chatClosed)}
           </p>
           <div className="flex flex-wrap gap-2">
             {renderClosedActions?.(panel)}

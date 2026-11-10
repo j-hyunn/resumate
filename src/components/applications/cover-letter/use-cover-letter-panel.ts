@@ -19,11 +19,10 @@ import { useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
-import { shouldAdoptReread } from "./panel-rules"
+import { coverLetterMessageLimitReached, shouldAdoptReread } from "./panel-rules"
 import { storedSourceCards } from "@/lib/data/cover-letter-chat-types"
 import {
   COVER_LETTER_DRAFT_LIMIT,
-  COVER_LETTER_MESSAGE_LIMIT,
   coverLetterChips,
   coverLetterGreeting,
   firstTurnOffer,
@@ -201,7 +200,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const draftRemaining = Math.max(0, COVER_LETTER_DRAFT_LIMIT - draftCount)
   const draftLimitReached = draftRemaining === 0
   const messageCount = messages.filter((m) => m.role === "user" || m.role === "assistant").length
-  const messageLimitReached = messageCount >= COVER_LETTER_MESSAGE_LIMIT - 1
+  const messageLimitReached = coverLetterMessageLimitReached(messageCount)
 
   const answered = opts.formSnapshot.filter((q) => q.body.trim()).length
   const greeting = coverLetterGreeting({ answered, total: opts.formSnapshot.length, requirementsPending: opts.requirementsPending })

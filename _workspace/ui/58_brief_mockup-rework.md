@@ -52,3 +52,9 @@
 
 ## 검증
 `pnpm lint`·`typecheck`·`test`·`build` 전부 통과. **dev 서버(포트 3000, 이미 떠 있다 — 끄지 마라)로 미리보기를 렌더**해 "Element type is invalid"·500이 없는지: `/applications?state=empty`, `/applications?new=1&state=step1`·`state=step2`, `/applications/00000000-0000-4a01-8000-000000000003/cover-letter?state=questions`, `/applications/00000000-0000-4a01-8000-000000000001/cover-letter?state=writing`·`draft-stream`·`save-conflict`, `/board?state=default`. (브라우저 캡처는 불가 — Chrome 확장 미연결, 사용자 Safari 권한 거절.)
+
+## ⚠ 정정 (2026-11-10, 59 QA UQ-762) — 시안 그림은 약 1.39배 확대돼 있다
+위 본문의 px 수치(모달 "약 830px", 문항 설정 열 "약 830px", 탭 열 "약 190px", 라벨 열 "약 140px", 글자 수 칸 "약 140px")는 **그림 픽셀**이다.
+CSS 픽셀은 **그림 픽셀 ÷ 약 1.39**: 모달 836 → **602**(= 커리어 추가 모달, 공통 `FormDialog`) · 문항 설정 열 830 → **약 600** ·
+탭 열 190 → **약 140** · 라벨 열 140 → **약 100** · 글자 수 칸 140 → **약 100** · AI 패널 579 → **약 420** · 입력 높이 56 → **40**.
+근거: 패널·입력 높이·라벨 열·모달이 모두 같은 배율로 맞는다(59 QA). 브리프 작성자(리더)의 실수다.

@@ -42,7 +42,7 @@
 --   And private.wc_patch_document now refreshes the slot's question_id on every replace_draft that carries one,
 --   so a draft written for a question swapped in on an unsaved slot is compared against the right question.
 -- Starts from the latest definition, 20261113004670 (with the write-guard set_config lines) — not 003700.
--- 비파괴. 004660까지는 원격, 004670·004680은 고치지 않는다. 순서: 004680 < 004690 < 004700(파괴, 마지막).
+-- 비파괴. 004660까지는 원격, 004670은 고치지 않는다. 순서: 004670 < 004690 < 004695(법무 판) < 004700(파괴, 마지막).
 -- Slot high-water mark ------------------------------------------------------------------------------------------
 alter table public.application_documents
   add column slot_high_water integer not null default 0,

@@ -24,11 +24,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DocTextarea, DocTitleInput, flashElement, highlightRange } from "@/components/common/doc-inputs"
-import { AiLock } from "@/components/common/ai-lock"
-import { InputGuide } from "@/components/common/input-guide"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 import type { EvidenceView } from "@/lib/data/evidence"
-import { ANSWER_NOTE, QUESTION_MAX_NOTE, QUESTION_MIN_NOTE } from "@/lib/data/cover-letter-copy"
+import { QUESTION_MAX_NOTE, QUESTION_MIN_NOTE } from "@/lib/data/cover-letter-copy"
 import { COVER_LETTER_LIMITS, COVER_LETTER_MAX_QUESTIONS } from "@/lib/data/cover-letter-defaults"
 import { COUNT_BASIS_LABELS } from "../labels"
 import { QuestionNoteField, QuestionSettingsRow, QuestionTextField } from "./question-fields"
@@ -161,9 +159,6 @@ export function AnswerTab({
               </Button>
             )}
           </p>
-          {locked ? <AiLock entry="draft" size="inline" /> : null}
-          <p>{ANSWER_NOTE}</p>
-          <InputGuide guide="G-2" />
         </div>
       ) : null}
 

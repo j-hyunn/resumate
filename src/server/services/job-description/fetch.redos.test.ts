@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bodyFrameUrl, extractJobPosting, fetchJobDescription, htmlToText } from "./fetch";
-import * as r15 from "./fetch.r15-reference";
+import * as r15 from "./__tests__/fetch.r15-reference";
 import {
   boilerplateOpenTags,
   closeTagFinder,

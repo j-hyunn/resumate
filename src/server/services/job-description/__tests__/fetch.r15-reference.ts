@@ -17,7 +17,7 @@ import {
   type JdFetchErrorCode,
 } from "@/lib/contracts/jd-fetch";
 import { isAppError } from "@/lib/contracts/errors";
-import { assertSafeUrl, defaultLookup, type LookupFn } from "./ssrf";
+import { assertSafeUrl, defaultLookup, type LookupFn } from "../ssrf";
 
 /**
  * R15 A1 — 공고 URL 가져오기 (CF-10). Fetches a job posting page and turns it

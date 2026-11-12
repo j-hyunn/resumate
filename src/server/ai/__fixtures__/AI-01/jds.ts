@@ -169,3 +169,48 @@ export const KO_WITH_DEADLINE = {
     other_sids: ["S5"],
   }),
 };
+
+/**
+ * (R16) The same kind of posting as the URL fetch now returns it — markdown
+ * (headings, list markers, bold). Fictional company. Sentence ids after
+ * splitJdSentences: S1 title, S2 `## 주요 업무` header, S3–S4 duties,
+ * S5 `**자격 요건**` header, S6–S7 required, S8 deadline, S9–S10 table rows
+ * (header row, data row; the separator row is skipped).
+ */
+export const KO_MARKDOWN = {
+  raw: [
+    "# 아자소프트 백엔드 엔지니어",
+    "",
+    "## 주요 업무",
+    "",
+    "- 주문 API 설계 및 운영",
+    "* 배치 작업 성능 개선",
+    "",
+    "**자격 요건**",
+    "",
+    "- **필수**: Java 3년 이상",
+    "1. Spring 기반 서버 개발 경험",
+    "",
+    "### 서류 접수 마감: 2026.12.20까지",
+    "",
+    "| 구분 | 내용 |",
+    "| --- | --- |",
+    "| 근무지 | 서울 판교 |",
+  ].join("\n"),
+  output: output({
+    company_name: { value: "아자소프트", source_sids: ["S1"] },
+    position_title: { value: "백엔드 엔지니어", source_sids: ["S1"] },
+    deadline: { value: "2026-12-20", source_sids: ["S8"] },
+    requirements: [
+      { category: "responsibility", text: "주문 API 설계 및 운영", keywords: ["API"], importance: "high", source_sids: ["S3"] },
+      { category: "responsibility", text: "배치 작업 성능 개선", keywords: ["배치"], importance: "normal", source_sids: ["S4"] },
+      { category: "required", text: "Java 3년 이상 경험", keywords: ["Java"], importance: "high", source_sids: ["S6"] },
+      { category: "required", text: "Spring 기반 서버 개발 경험", keywords: ["Spring"], importance: "high", source_sids: ["S7"] },
+    ],
+    tech_keywords: [
+      { keyword: "Java", source_sids: ["S6"] },
+      { keyword: "Spring", source_sids: ["S7"] },
+    ],
+    other_sids: ["S2", "S5", "S9", "S10"],
+  }),
+};

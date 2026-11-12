@@ -246,6 +246,11 @@ export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(funct
       .run()
   }, [editor, value])
 
+  // `readOnly`가 바뀌면 편집 가능 여부도 따른다 (모달의 처리 중 잠금 등). 첫 값은 useEditor의 `editable`이 정한다
+  React.useEffect(() => {
+    if (editor && editor.isEditable === readOnly) editor.setEditable(!readOnly, false)
+  }, [editor, readOnly])
+
   React.useImperativeHandle(ref, () => (editor?.view.dom ?? null) as HTMLElement, [editor])
 
   return <EditorContent editor={editor} />

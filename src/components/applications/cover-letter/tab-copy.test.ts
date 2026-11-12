@@ -47,6 +47,14 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).toMatch(/if \(text && !keyless\)/)
   })
 
+  it("⑦ 추가 모달 ② 공고 내용 칸은 마크다운 편집기 — 고치기 전에는 값을 다시 내보내지 않는다(해시 대조 유지)", () => {
+    const src = read("../add-application-dialog.tsx")
+    expect(src).toMatch(/<DocTextarea\s+id="add-ap-raw"/)
+    const editor = readFileSync(join(__dirname, "../../common/doc-markdown-editor.tsx"), "utf8")
+    expect(editor).toMatch(/setContent\(value, \{ contentType: "markdown", emitUpdate: false \}\)/)
+    expect(editor).toMatch(/editor\.setEditable\(!readOnly, false\)/)
+  })
+
   it("④ 인사이트 탭 잠금 안내는 카드 없이 컨테이너에 바로", () => {
     const src = read("../insight-view.tsx")
     expect(src).toMatch(/<AiLock entry="insight" size="area" bare /)

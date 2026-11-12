@@ -18,6 +18,8 @@
  * 작성 중 자동 저장 없음(CF-A17): 입력이 있는 채로 닫으면 확인 한 줄. C-21·키 교체로 떠날 때만
  * 브라우저 세션에 입력을 남긴다(`form-draft.ts`의 규칙 그대로, 주소에는 넣지 않는다).
  */
+import { cn } from "@/lib/utils"
+import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { CloudAlert, Info, Sparkles, TriangleAlert } from "lucide-react"
@@ -452,19 +454,29 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
                       )
                     ) : null}
                     <div className="group/raw flex min-h-0 flex-1 flex-col gap-2">
-                      <Textarea
-                        id="add-ap-raw"
-                        className="min-h-48 flex-1 resize-none text-base leading-[1.75]"
-                        placeholder="포지션 공고 내용을 입력해주세요."
-                        value={raw}
-                        disabled={busy}
-                        aria-describedby="add-ap-raw-note"
-                        onChange={(e) => {
-                          setRaw(e.target.value)
-                          setRawEdited(true)
-                        }}
-                        required
-                      />
+                      {/* (2026-11-10) 가져온 공고는 마크다운이라 같은 공통 마크다운 편집기로 보인다 — 공통 Textarea와 같은 테두리 틀.
+                          편집기는 사용자가 고치기 전에는 값을 다시 내보내지 않아(emitUpdate:false) 가져온 원문 그대로 저장된다 →
+                          미리 보기 해시 대조(CF-A17)가 그대로 맞는다 */}
+                      <div
+                        className={cn(
+                          "flex min-h-48 flex-1 flex-col overflow-y-auto rounded-control border border-input bg-transparent px-2.5 py-2 transition-colors dark:bg-input/30",
+                          busy && "cursor-not-allowed bg-input/50 opacity-50",
+                        )}
+                      >
+                        <DocTextarea
+                          id="add-ap-raw"
+                          placeholder="포지션 공고 내용을 입력해주세요."
+                          value={raw}
+                          readOnly={busy}
+                          aria-describedby="add-ap-raw-note"
+                          onValueChange={(v) => {
+                            setRaw(v)
+                            setRawEdited(true)
+                          }}
+                          grow
+                          className="mx-0 min-h-0 flex-1 px-0 py-0 hover:bg-transparent"
+                        />
+                      </div>
                       <InputChecks text={rawTrimmed} />
                       {/* U-6 (예외 Q53-2) — 공고 칸에 포커스가 있을 때만 보인다 `[UI-가정]`(시안에 상시 보조 문구 없음). 낭독기는 늘 읽는다 */}
                       <p id="add-ap-raw-note" className="sr-only flex items-start gap-1.5 text-sm text-muted-foreground group-focus-within/raw:not-sr-only">

@@ -11,6 +11,24 @@ import {
   type JdFetchErrorCode,
 } from "@/lib/contracts/jd-fetch";
 import { isAppError } from "@/lib/contracts/errors";
+import {
+  boilerplateOpenTags,
+  closeTagFinder,
+  collapsePipes,
+  frameSrcValues,
+  ldJsonBodies,
+  leadingSpaceLength,
+  removeElements,
+  replaceAnyTag,
+  replaceComments,
+  replaceNamedTags,
+  replacePairedElements,
+  splitAtOpenTags,
+  stripCdataOpen,
+  tableCells,
+  tableRows,
+  trailingSpaceLength,
+} from "./html-scan";
 import { assertSafeUrl, defaultLookup, type LookupFn } from "./ssrf";
 
 /**
@@ -186,11 +204,23 @@ const DROPPED_ELEMENTS = ["script", "style", "noscript", "template", "svg", "hea
 const BOILERPLATE_ATTR =
   /(^|[\s_-])(gnb|lnb|snb|nav|navi|menu|breadcrumb|banner|advert|adsense|ad[_-]?(area|wrap|box)|cookie|popup|layer[_-]?pop|sidebar|side[_-]?bar|related|recomm|recommend|share|sns|copyright|footer|header|pagination|paging|search[_-]?form|login)([\s_-]|$)/i;
 
+/**
+ * Hotfix QA-R16-02: the same two passes per tag as R15's
+ * `<tag\b[^>]*>[\s\S]*?</tag\s*>` then `<tag\b[^>]*\/?>` regexes, run by linear scanners with
+ * identical match semantics (`html-scan.ts`) — the regexes were O(n²) on unclosed tags.
+ */
 function stripDroppedElements(html: string): string {
   let out = html;
+  let lower = out.toLowerCase();
   for (const tag of DROPPED_ELEMENTS) {
-    out = out.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}\\s*>`, "gi"), " ");
-    out = out.replace(new RegExp(`<${tag}\\b[^>]*/?>`, "gi"), " ");
+    // Both passes need a `<tag`; skip the two full scans when the document has none. `toLowerCase`
+    // can only add false positives (a non-ASCII character lowering to ASCII), which just fall back
+    // to the exact scan — never a false negative, so the output can't change.
+    if (!lower.includes(`<${tag}`)) continue;
+    const before = out;
+    out = removeElements(out, tag, " ");
+    out = replaceNamedTags(out, new Set([tag]), false, " ");
+    if (out !== before) lower = out.toLowerCase();
   }
   return out;
 }
@@ -202,57 +232,73 @@ function stripDroppedElements(html: string): string {
  * miss only leaves extra text, never wrong text.
  */
 function stripBoilerplateBlocks(html: string): string {
-  const open = /<(div|section|ul|ol|dl|table)\b[^>]*(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>/gi;
+  // Hotfix QA-R16-02: R15's `open` regex (`<(div|…)\b[^>]*(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>`)
+  // was O(n³), and its close-tag search re-scanned to the end for every unclosed block (O(n²)).
+  // Same matches, same resume points, in O(n): `boilerplateOpenTags` + a per-tag close finder.
+  const closeFinders = new Map<string, (from: number) => number>();
+  const closeOf = (tag: string, from: number) => {
+    let finder = closeFinders.get(tag);
+    if (!finder) {
+      finder = closeTagFinder(html, tag);
+      closeFinders.set(tag, finder);
+    }
+    return finder(from);
+  };
   let out = "";
   let cursor = 0;
-  let match: RegExpExecArray | null;
-  while ((match = open.exec(html)) !== null) {
-    if (match.index < cursor) continue;
-    const [whole, tagRaw, attr] = [match[0], match[1]!, match[2]!];
-    if (!BOILERPLATE_ATTR.test(attr)) continue;
-    const tag = tagRaw.toLowerCase();
-    const end = findCloseTag(html, open.lastIndex, tag);
-    if (end === -1) continue;
-    out += html.slice(cursor, match.index);
-    cursor = end;
-    open.lastIndex = end;
-    void whole;
+  const opens = boilerplateOpenTags(html);
+  let step = opens.next();
+  while (!step.done) {
+    const match = step.value;
+    let resume: number | undefined;
+    if (match.index >= cursor && BOILERPLATE_ATTR.test(match.value)) {
+      const end = closeOf(match.name, match.end);
+      if (end !== -1) {
+        out += html.slice(cursor, match.index);
+        cursor = end;
+        resume = end;
+      }
+    }
+    step = opens.next(resume);
   }
   return out + html.slice(cursor);
-}
-
-/** Index just past the matching close tag of an already-open element. */
-function findCloseTag(html: string, from: number, tag: string): number {
-  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, "gi");
-  re.lastIndex = from;
-  let depth = 1;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    depth += m[1] === "/" ? -1 : 1;
-    if (depth === 0) return re.lastIndex;
-  }
-  return -1;
 }
 
 // ---------------- HTML → Markdown (R16) ----------------
 //
 // The fetched posting is stored as **Markdown** so S-46's editor (TipTap + `@tiptap/markdown`,
-// `TableKit` on) keeps headings, lists, emphasis and tables. Regex-based like the rest of this file
-// — no DOM in the runtime, no new dependency. Markdown characters that occur in the posting's own
-// text are **not** escaped `[가정]` (a stray `*` rendering oddly beats `\` littering the 원문),
-// except `|` inside a table cell, which would break the table.
+// `TableKit` on) keeps headings, lists, emphasis and tables. No DOM in the runtime, no new
+// dependency. Markdown characters that occur in the posting's own text are **not** escaped `[가정]`
+// (a stray `*` rendering oddly beats `\` littering the 원문), except `|` inside a table cell, which
+// would break the table.
+//
+// QA-R16-01: every element pass below has the match semantics of the R16 regex noted on it, run by
+// the linear scanners of `html-scan.ts` (the lazy `[\s\S]*?` regexes searched to the end of the
+// string from every unclosed `<b>` / `<em>` / `<h1>` — 140~170 s on 2 MB).
 
 /** Blocks separated by a blank line (one newline is a soft break inside a paragraph in Markdown). */
-const BLOCK_TAGS = /<\/?(p|div|section|article|blockquote|pre|dd|dt|dl|figure|figcaption|hr|address|main|header|footer|thead|tbody|tfoot)\b[^>]*>/gi;
+const BLOCK_TAGS = new Set([
+  "p", "div", "section", "article", "blockquote", "pre", "dd", "dt", "dl", "figure", "figcaption", "hr", "address", "main", "header", "footer", "thead", "tbody", "tfoot",
+]);
+/** List / table structure left after the conversions: one line break each. */
+const STRUCTURE_TAGS = new Set(["li", "tr", "td", "th", "table", "ul", "ol"]);
+/** Blocks folded into a list item's line. */
+const LIST_ITEM_BLOCKS = new Set(["p", "div", "span", "section"]);
+const IMG_TAG = new Set(["img"]);
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"];
 /** Tags that must not appear inside a `**…**` / `_…_` run (the emphasis is dropped instead). */
 const BLOCKISH_INSIDE = /<\/?(p|div|section|article|blockquote|pre|ul|ol|li|table|tr|td|th|h[1-6]|dl|dd|dt|br|hr)\b/i;
 
-/** Placeholder for a finished table, so later passes (entities, whitespace) never touch it. */
+/**
+ * Placeholder for a finished table, so later passes (entities, whitespace) never touch it. NUL is
+ * stripped from the page first (`htmlToMarkdown`), so a page can't forge one (QA-R16-04).
+ */
 const TABLE_TOKEN = (n: number) => `\u0000TABLE${n}\u0000`;
 const TABLE_TOKEN_RE = /\u0000TABLE(\d+)\u0000/g;
 
+/** `/<[^>]*>/g` → " ". */
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, " ");
+  return replaceAnyTag(html, " ");
 }
 
 /** One line of text: tags out, entities decoded, whitespace collapsed. */
@@ -260,29 +306,37 @@ function inlineText(html: string): string {
   return decodeEntities(stripTags(html)).replace(/\s+/g, " ").trim();
 }
 
-/** `<strong>/<b>` → `**…**`, `<em>/<i>` → `_…_` (never `*`: at a line start it reads as a list). */
+/**
+ * `<strong>/<b>` → `**…**`, `<em>/<i>` → `_…_` (never `*`: at a line start it reads as a list).
+ * Same matches as `/<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi`, then the `em|i` one.
+ */
 function convertEmphasis(html: string): string {
-  const wrap = (marker: string) => (_m: string, _tag: string, inner: string) => {
+  const wrap = (marker: string) => (_tag: string, inner: string) => {
     // A block inside the run can't be wrapped in Markdown: keep the content, drop the emphasis.
     if (BLOCKISH_INSIDE.test(inner)) return inner;
-    const lead = /^\s*/.exec(inner)![0];
-    const trail = /\s*$/.exec(inner)![0];
-    const core = inner.slice(lead.length, inner.length - trail.length);
+    // Hand-counted: `/\s*$/` is O(k²) on a long run of spaces inside the run.
+    const leadLength = leadingSpaceLength(inner);
+    const trailLength = trailingSpaceLength(inner);
+    const lead = inner.slice(0, leadLength);
+    const trail = inner.slice(inner.length - trailLength);
+    const core = inner.slice(leadLength, inner.length - trailLength);
     // Empty runs (`<b> </b>`) would leave a stray `** **`.
     if (inlineText(core) === "") return inner;
     // Keep the spaces outside the markers: `** 주요 **` is not bold in Markdown.
     return `${lead}${marker}${core}${marker}${trail}`;
   };
-  return html
-    .replace(/<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi, wrap("**"))
-    .replace(/<(em|i)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi, wrap("_"));
+  const bold = replacePairedElements(html, ["strong", "b"], "attrs", false, wrap("**"));
+  return replacePairedElements(bold, ["em", "i"], "attrs", false, wrap("_"));
 }
 
-/** `h1`–`h6` → atx heading on its own paragraph. Inner tags are flattened (no emphasis in a heading). */
+/**
+ * `h1`–`h6` → atx heading on its own paragraph. Inner tags are flattened (no emphasis in a heading).
+ * Same matches as `/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi`.
+ */
 function convertHeadings(html: string): string {
-  return html.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi, (_m, level: string, inner: string) => {
+  return replacePairedElements(html, HEADING_TAGS, "boundary", false, (tag, inner) => {
     const text = inlineText(inner.replace(/<br\s*\/?>/gi, " "));
-    return text ? `\n\n${"#".repeat(Number(level))} ${text}\n\n` : "\n\n";
+    return text ? `\n\n${"#".repeat(Number(tag.slice(1)))} ${text}\n\n` : "\n\n";
   });
 }
 
@@ -290,18 +344,17 @@ function convertHeadings(html: string): string {
  * `ul > li` → `- `, `ol > li` → `1. ` (the renderer numbers them). Innermost list first, so a nested
  * list is already text when its parent is converted; nesting flattens (lines are trimmed — accepted).
  * Blocks inside an item are folded into the item's line so the marker never stands alone.
+ * Same matches as `/<(ul|ol)\b[^>]*>((?:(?!<(?:ul|ol)\b)[\s\S])*?)<\/\1\s*>/gi`, up to 50 rounds.
  */
 function convertLists(html: string): string {
-  const innermost = /<(ul|ol)\b[^>]*>((?:(?!<(?:ul|ol)\b)[\s\S])*?)<\/\1\s*>/gi;
   let out = html;
   for (let guard = 0; guard < 50; guard++) {
-    const next = out.replace(innermost, (_m, tag: string, inner: string) => {
+    const next = replacePairedElements(out, ["ul", "ol"], "boundary", true, (tag, inner) => {
       const marker = tag.toLowerCase() === "ol" ? "1. " : "- ";
-      const items = inner
-        .replace(/<\/?(p|div|span|section)\b[^>]*>/gi, " ")
+      const flat = replaceNamedTags(inner, LIST_ITEM_BLOCKS, true, " ")
         .replace(/<br\s*\/?>/gi, " ")
-        .replace(/<\/li\s*>/gi, "")
-        .split(/<li\b[^>]*>/i)
+        .replace(/<\/li\s*>/gi, "");
+      const items = splitAtOpenTags(flat, "li")
         .slice(1)
         // An item with no text (`<li><b></b></li>`) would leave a bare "-" line: drop it.
         .filter((item) => inlineText(item) !== "")
@@ -313,7 +366,7 @@ function convertLists(html: string): string {
     out = next;
   }
   // An orphan <li> (no list around it) still reads as an item.
-  return out.replace(/<\/li\s*>/gi, "").replace(/<li\b[^>]*>/gi, "\n- ");
+  return replaceNamedTags(out.replace(/<\/li\s*>/gi, ""), new Set(["li"]), false, "\n- ");
 }
 
 type TableCell = { text: string; colspan: number; rowspan: number; header: boolean };
@@ -338,10 +391,10 @@ function spanOf(attrs: string, name: "colspan" | "rowspan"): number {
  */
 function renderTable(inner: string, flatTables: readonly string[]): { markdown: string; flat: string } {
   const rows: TableCell[][] = [];
-  for (const tr of inner.matchAll(/<tr\b[^>]*>([\s\S]*?)(?=<tr\b|<\/table|$)/gi)) {
+  for (const tr of tableRows(inner)) {
     const cells: TableCell[] = [];
-    for (const td of tr[1]!.matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)(?=<(?:td|th)\b|<\/tr\s*>|$)/gi)) {
-      cells.push({ text: cellText(td[3]!.replace(/<\/(td|th)\s*>/gi, ""), flatTables), colspan: spanOf(td[2]!, "colspan"), rowspan: spanOf(td[2]!, "rowspan"), header: td[1]!.toLowerCase() === "th" });
+    for (const td of tableCells(tr)) {
+      cells.push({ text: cellText(td.body.replace(/<\/(td|th)\s*>/gi, ""), flatTables), colspan: spanOf(td.attrs, "colspan"), rowspan: spanOf(td.attrs, "rowspan"), header: td.name.toLowerCase() === "th" });
     }
     if (cells.length > 0) rows.push(cells);
   }
@@ -375,7 +428,8 @@ function renderTable(inner: string, flatTables: readonly string[]): { markdown: 
   });
   // A table with no text at all (layout scaffolding) would leave `|  |` / `| --- |`: emit nothing.
   if (grid.every((l) => l.every((c) => c === ""))) return { markdown: "", flat: "" };
-  const width = Math.max(...grid.map((l) => l.length));
+  // QA-R16-05: `Math.max(...rows)` throws RangeError past ~125k arguments (a 1 MB+ table → 500).
+  const width = grid.reduce((m, l) => Math.max(m, l.length), 0);
   for (const l of grid) while (l.length < width) l.push("");
 
   const headerIndex = Math.max(0, rows.findIndex((cells) => cells.some((c) => c.header)));
@@ -385,12 +439,14 @@ function renderTable(inner: string, flatTables: readonly string[]): { markdown: 
   return { markdown, flat: grid.flat().filter(Boolean).join(" ") };
 }
 
-/** Innermost table first; each finished table becomes a token so nothing later rewrites it. */
+/**
+ * Innermost table first; each finished table becomes a token so nothing later rewrites it.
+ * Same matches as `/<table\b[^>]*>((?:(?!<table\b)[\s\S])*?)<\/table\s*>/gi`, up to 50 rounds.
+ */
 function convertTables(html: string, tables: string[], flatTables: string[]): string {
-  const innermost = /<table\b[^>]*>((?:(?!<table\b)[\s\S])*?)<\/table\s*>/gi;
   let out = html;
   for (let guard = 0; guard < 50; guard++) {
-    const next = out.replace(innermost, (_m, inner: string) => {
+    const next = replacePairedElements(out, ["table"], "boundary", true, (_tag, inner) => {
       const { markdown, flat } = renderTable(inner, flatTables);
       if (!markdown) return "\n\n";
       tables.push(markdown);
@@ -411,16 +467,18 @@ function convertTables(html: string, tables: string[], flatTables: string[]): st
 export function htmlToMarkdown(html: string): string {
   const tables: string[] = [];
   const flatTables: string[] = [];
-  let md = stripBoilerplateBlocks(stripDroppedElements(html));
-  md = md.replace(/<!--[\s\S]*?-->/g, " ");
-  md = md.replace(/<img\b[^>]*>/gi, " ");
+  // NUL first (hotfix QA-R16-02 / QA-R16-04): Postgres refuses it in raw_text, and it is the
+  // table-token delimiter — a page can't plant `\0TABLE0\0` to duplicate a table.
+  let md = stripBoilerplateBlocks(stripDroppedElements(html.replace(/\u0000/g, "")));
+  md = replaceComments(md, " ");
+  md = replaceNamedTags(md, IMG_TAG, false, " ");
   md = convertTables(md, tables, flatTables);
   md = convertHeadings(md);
   md = convertLists(md);
   md = convertEmphasis(md);
   md = md.replace(/<br\s*\/?>/gi, "\n");
-  md = md.replace(BLOCK_TAGS, "\n\n");
-  md = md.replace(/<\/?(li|tr|td|th|table|ul|ol)\b[^>]*>/gi, "\n");
+  md = replaceNamedTags(md, BLOCK_TAGS, true, "\n\n");
+  md = replaceNamedTags(md, STRUCTURE_TAGS, true, "\n");
   // Links (and every other inline tag) keep their text only.
   md = stripTags(md);
   md = decodeEntities(md);
@@ -444,13 +502,13 @@ export function markdownTextLength(md: string): number {
     .split("\n")
     .filter((line) => !/^\|(?:\s*:?-{3,}:?\s*\|)+$/.test(line.trim()))
     .map((line) =>
-      line
-        .replace(/^#{1,6}\s+/, "")
-        .replace(/^(?:[-*+]|\d+\.)\s+/, "")
-        .replace(/\*\*/g, "")
-        .replace(/(^|[^\w])_(\S(?:[^_\n]*\S)?)_(?=[^\w]|$)/g, "$1$2")
-        .replace(/\s*\|\s*/g, " ")
-        .trim(),
+      collapsePipes(
+        line
+          .replace(/^#{1,6}\s+/, "")
+          .replace(/^(?:[-*+]|\d+\.)\s+/, "")
+          .replace(/\*\*/g, "")
+          .replace(/(^|[^\w])_(\S(?:[^_\n]*\S)?)_(?=[^\w]|$)/g, "$1$2"),
+      ).trim(),
     )
     .filter((line) => line !== "")
     .join("\n")
@@ -494,7 +552,8 @@ function hasType(node: Record<string, unknown>, type: string): boolean {
 
 function asText(value: unknown): string | null {
   if (typeof value === "string") {
-    const trimmed = decodeEntities(value).replace(/\s+/g, " ").trim();
+    // NUL never reaches company_name / position_title (Postgres refuses it — hotfix QA-R16-02).
+    const trimmed = decodeEntities(value.replace(/\u0000/g, "")).replace(/\s+/g, " ").trim();
     return trimmed === "" ? null : trimmed;
   }
   if (Array.isArray(value)) {
@@ -511,13 +570,13 @@ function asText(value: unknown): string | null {
 /** schema.org `JobPosting` from any `<script type="application/ld+json">` block. */
 export function extractJobPosting(html: string): JobPostingFields {
   const empty: JobPostingFields = { title: null, companyName: null, descriptionHtml: null };
-  const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\s*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
+  // Hotfix QA-R16-02: R15's `<script\b[^>]*type…[^>]*>([\s\S]*?)<\/script\s*>` regex was O(n²) on
+  // unclosed scripts, and its CDATA prefix `^\s*(?:\/\/)?\s*` O(k²) on leading whitespace.
+  for (const body of ldJsonBodies(html)) {
     let parsed: unknown;
     try {
       // Some pages wrap the JSON in a CDATA section.
-      parsed = JSON.parse(m[1]!.replace(/^\s*(?:\/\/)?\s*<!\[CDATA\[/, "").replace(/\]\]>\s*$/, ""));
+      parsed = JSON.parse(stripCdataOpen(body).replace(/\]\]>\s*$/, ""));
     } catch {
       continue;
     }
@@ -543,11 +602,9 @@ function hostMatches(host: string, domain: string): boolean {
 
 /** All `<iframe src>` / `<frame src>` values on the page, in document order. */
 function frameSources(html: string): string[] {
-  const out: string[] = [];
-  const re = /<(?:iframe|frame)\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) out.push(decodeEntities(m[1]!));
-  return out;
+  // Hotfix QA-R16-02: R15's `<(?:iframe|frame)\b[^>]*\bsrc…[^>]*>` regex was O(n³) — and it runs on
+  // every fetched page, before the 사람인 / 잡코리아 host check.
+  return frameSrcValues(html).map(decodeEntities);
 }
 
 /**
@@ -674,17 +731,25 @@ async function download(start: string, deps: Resolved, signal: AbortSignal, dead
 
 /**
  * `raw_text` is capped at 50,000 characters of **Markdown** (the stored string). R16: cut at a line
- * boundary so a `**…**` pair or a table row is never split; a single line longer than the cap is
- * cut hard, dropping an unmatched trailing `**`.
+ * boundary so a `**…**` pair or a table row is never split — but only a line break in the last 10 %
+ * of the cap (QA-R16-03: a short title followed by one 60,000-character paragraph used to cut back to
+ * the title and fail `fetch_too_short`). Otherwise the cut is hard and a `**` left unpaired on the
+ * cut line is dropped (the marker only — the text after it stays).
  */
 export function truncate(text: string): string {
   if (text.length <= JD_FETCH_RAW_TEXT_MAX) return text;
   const window = text.slice(0, JD_FETCH_RAW_TEXT_MAX);
   const cut = window.lastIndexOf("\n");
-  if (cut > 0) return window.slice(0, cut).trimEnd();
-  const pairs = window.match(/\*\*/g)?.length ?? 0;
-  return pairs % 2 === 1 ? window.slice(0, window.lastIndexOf("**")).trimEnd() : window;
+  if (cut >= TRUNCATE_LINE_BOUNDARY_FROM) return window.slice(0, cut).trimEnd();
+  const lineStart = cut + 1;
+  const pairs = window.slice(lineStart).match(/\*\*/g)?.length ?? 0;
+  if (pairs % 2 === 0) return window;
+  const marker = window.lastIndexOf("**");
+  return (window.slice(0, marker) + window.slice(marker + 2)).trimEnd();
 }
+
+/** A line break at or after this index of the 50,000 window is a clean cut (the last 10 %). */
+const TRUNCATE_LINE_BOUNDARY_FROM = Math.floor(JD_FETCH_RAW_TEXT_MAX * 0.9);
 
 function codeOf(err: unknown): string {
   return isAppError(err) ? err.code : "fetch_failed";

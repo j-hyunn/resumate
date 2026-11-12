@@ -182,6 +182,41 @@ describe("truncate — 50,000 at a line boundary (R16)", () => {
   it("text under the cap is returned as is", () => {
     expect(truncate("## 짧음\n\n- 하나")).toBe("## 짧음\n\n- 하나");
   });
+
+  // QA-R16-03: a line break early in the window must not throw the rest of the posting away.
+  it("short title + one 60,000-character paragraph: cut hard at the cap, not back to the title", () => {
+    const md = `## 제목\n\n${"가".repeat(60_000)}`;
+    const out = truncate(md);
+    expect(out).toBe(md.slice(0, JD_FETCH_RAW_TEXT_MAX));
+    expect(markdownTextLength(out)).toBeGreaterThan(JD_FETCH_MIN_CHARS);
+  });
+
+  it("300-character intro + 60,000-character paragraph keeps 50,000 characters", () => {
+    const md = `${"소개".repeat(150)}\n${"나".repeat(60_000)}`;
+    expect(truncate(md)).toHaveLength(JD_FETCH_RAW_TEXT_MAX);
+  });
+
+  it("a line break in the last 10 % of the cap is still a clean cut; one just before it is not", () => {
+    const at = (n: number) => `${"가".repeat(n)}\n${"나".repeat(60_000)}`;
+    expect(truncate(at(JD_FETCH_RAW_TEXT_MAX * 0.9))).toBe("가".repeat(JD_FETCH_RAW_TEXT_MAX * 0.9));
+    expect(truncate(at(JD_FETCH_RAW_TEXT_MAX * 0.9 - 1))).toHaveLength(JD_FETCH_RAW_TEXT_MAX);
+  });
+
+  it("a hard cut through a **…** run drops only the unpaired marker, keeping the text", () => {
+    const md = `## 제목\n\n앞 **${"굵".repeat(60_000)}**`;
+    const out = truncate(md);
+    expect(out).toBe(`## 제목\n\n앞 ${"굵".repeat(JD_FETCH_RAW_TEXT_MAX - 11)}`);
+    // A ** pair closed before the cut on the same line is kept.
+    const closed = truncate(`## 제목\n\n**필수** ${"가".repeat(60_000)}`);
+    expect(closed.startsWith("## 제목\n\n**필수** 가")).toBe(true);
+    expect(closed).toHaveLength(JD_FETCH_RAW_TEXT_MAX);
+  });
+
+  it("end to end: a short heading over a 60,000-character paragraph is fetched, not fetch_too_short", async () => {
+    const result = await run({ [url]: page(`<h1>백엔드 개발자</h1><p>${"가".repeat(60_000)}</p>`) });
+    expect(result.rawText.startsWith("# 백엔드 개발자\n\n가")).toBe(true);
+    expect(result.rawText).toHaveLength(JD_FETCH_RAW_TEXT_MAX);
+  });
 });
 
 describe("fixtures: frames and JobPosting come out as Markdown", () => {

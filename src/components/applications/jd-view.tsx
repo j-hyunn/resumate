@@ -83,8 +83,10 @@ export function JdView({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-      <Card className="gap-3 p-5 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
+    // (2026-11-10 사용자 요청) 원문은 카드 없이 컨테이너 폭 전체를 쓴다. 오른쪽 열(요건)이 비면 — 예: AI 미연결로
+    // "요건 정리하기"가 아무것도 그리지 않을 때 — 그 div를 감춰(`empty:hidden`) 원문만 꽉 차게 보인다
+    <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+      <section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3 xl:flex-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
           <span className="flex items-center gap-1">
@@ -128,12 +130,12 @@ export function JdView({
           })}
         </p>
         )}
-      </Card>
+      </section>
 
       {requirementsSlot ? (
-        <div className="space-y-6">{requirementsSlot}</div>
+        <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">{requirementsSlot}</div>
       ) : (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">
         {seniority ? (
           <p className="text-sm text-muted-foreground">
             경력 조건: <span className="text-foreground">{seniority}</span>

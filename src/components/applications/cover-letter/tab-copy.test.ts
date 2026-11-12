@@ -34,6 +34,13 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).not.toMatch(/<Textarea\b/)
   })
 
+  it("⑤ 채용 공고 탭: 원문은 카드 없이 전체 폭, 빈 오른쪽 열은 감춘다", () => {
+    const src = read("../jd-view.tsx")
+    expect(src).not.toMatch(/xl:grid-cols-2/)
+    expect(src).toMatch(/<section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3 xl:flex-1">/)
+    expect(src.match(/empty:hidden xl:flex-1/g)?.length).toBe(2)
+  })
+
   it("④ 인사이트 탭 잠금 안내는 카드 없이 컨테이너에 바로", () => {
     const src = read("../insight-view.tsx")
     expect(src).toMatch(/<AiLock entry="insight" size="area" bare /)

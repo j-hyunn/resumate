@@ -24,9 +24,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { aiErrorTitle } from "@/components/common/ai-error-notice"
 import { CharCount } from "@/components/common/input-guide"
+import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
 import type { AiErrorCode } from "@/types/db"
@@ -340,16 +340,26 @@ export function JdRawEditor({
     }
   }
 
+  const focused = React.useRef(false)
+  const focusOnce = React.useCallback((el: HTMLElement | null) => {
+    if (!el || focused.current) return
+    focused.current = true
+    el.focus()
+  }, [])
+
   return (
     <div className="space-y-3">
-      <Textarea
+      {/* 공고 원문 편집도 공통 마크다운 편집기로 (2026-11-10 사용자 요청 — 보기와 같은 마크다운 형식).
+          저장되는 원문은 편집기가 내보내는 마크다운 문자열이다. 처음 열 때 한 번 포커스를 준다(옛 autoFocus) */}
+      <DocTextarea
+        ref={focusOnce}
         id={id}
         aria-label="공고 원문"
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        className="min-h-80 font-sans text-base"
+        onValueChange={setText}
+        grow
+        className="min-h-80"
         aria-invalid={tooLong || undefined}
-        autoFocus
       />
       <div className="flex justify-end">
         <CharCount count={trimmed.length} limit={JD_RAW_TEXT_MAX} />

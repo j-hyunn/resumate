@@ -28,6 +28,12 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).toMatch(/<DocTextarea value=\{rawText\}.*\breadOnly\b/)
   })
 
+  it("③-2 공고 원문 편집도 공통 마크다운 편집기(일반 입력칸 아님)", () => {
+    const src = read("../jd-raw-edit.tsx")
+    expect(src).toMatch(/<DocTextarea\s+ref=\{focusOnce\}/)
+    expect(src).not.toMatch(/<Textarea\b/)
+  })
+
   it("④ 인사이트 탭 잠금 안내는 카드 없이 컨테이너에 바로", () => {
     const src = read("../insight-view.tsx")
     expect(src).toMatch(/<AiLock entry="insight" size="area" bare /)

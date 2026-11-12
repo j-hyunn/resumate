@@ -41,6 +41,12 @@ describe("S-46 탭 안내 정리", () => {
     expect(src.match(/empty:hidden xl:flex-1/g)?.length).toBe(2)
   })
 
+  it("⑥ 자기소개서 추가 모달에도 AI 잠금 안내를 두지 않는다 (키 없으면 미리 보기만 건너뛴다)", () => {
+    const src = read("../add-application-dialog.tsx")
+    expect(src).not.toMatch(/<AiLock\b/)
+    expect(src).toMatch(/if \(text && !keyless\)/)
+  })
+
   it("④ 인사이트 탭 잠금 안내는 카드 없이 컨테이너에 바로", () => {
     const src = read("../insight-view.tsx")
     expect(src).toMatch(/<AiLock entry="insight" size="area" bare /)

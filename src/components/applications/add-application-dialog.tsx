@@ -36,7 +36,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiLock } from "@/components/common/ai-lock"
 import {
   FormDialog,
   FormDialogBody,
@@ -498,10 +497,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
               )}
               {/* Q53-1 게이트 — 생겼을 때만 (키 무효 C-20) */}
               {keyInvalidShown ? <AiErrorNotice code="key_invalid" size="inline" /> : null}
-              {/* 키 없음: ②에서 요건을 미리 정리하지 못한 이유를 그때만 알린다 (막지 않는다, CF-U1) `[UI-가정]` */}
-              {step === 1 && keyless ? (
-                <AiLock entry="requirements" size="inline" description="AI를 연결하면 공고에서 회사명·포지션명·마감일·요건을 정리해 드려요" />
-              ) : null}
             </div>
           </FormDialogFooter>
         </FormDialogForm>

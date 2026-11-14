@@ -7,7 +7,7 @@
 ## 요약
 
 - 검토 문서: `docs/planning/01-prd.md` **v4.18**, `02-user-flows.md` **v5.21**, `03-ai-features.md` **v4.16**, `04-data-model.md` **v4.16**, `decisions.md`(1장 JR-Q1~Q4, 3.29, 4.24), `README.md`
-- 이슈: **Critical 0 / Major 5 / Minor 9** — 라운드 1의 12건 모두 해소(라운드 2), 라운드 2 신규 Minor 2건(R-JR-13·14) 미해결
+- 이슈: **Critical 0 / Major 5 / Minor 9** — 라운드 1의 12건 모두 해소(라운드 2), 라운드 2 신규 Minor 2건(R-JR-13·14)도 해소. **후속 확정 라운드 신규: Major 2 / Minor 4 (R-JR-15~20) 미해결**
 - 잘 맞은 것(이슈 없음): 짝 판 번호(네 문서 상호 일치, 각 변경 이력 행 있음, `(vN, JR-n)` 표기 일관) · 이름(`MT-n`·`match_key`·`match_keys`·`requirement_text`·`sids`·`raw_text_hash` = JD 해시 복사·`identify` 단계·`ai-02.identify.v1`/`match.v6`/`synthesize.v6`/`common.v5`·`update_jd_raw_text`·`rawTextEditable`·`rawTextLockedReason`·`jd_no_sentences`·fetch `{rawText}`) · 마감일·기업명 선택 규칙과 CF-A7 기본 이름(네 문서 + decisions 같음) · 인사이트 지연 35~55초·1회 약 $0.13·예시 월 $1.1~1.4(PRD 6.4·6.5 ↔ AI-02 카드·7.3a 같음) · 원문 수정 조건 ①~⑤ ↔ DM 2.6.1 조건 3~7 · 사용량 과거 행(`jd_extraction` CHECK 유지, 진행 중 작업 `canceled`/`canceled`) · AI-12 게이트 JD 입력 ↔ DM grant · 삭제 영향(`get_deletion_impact` 변경 없음) · README 4.24 포인터(DM 11.11 · AI 0.v416 · UX 5.1o).
 - 폐기 대상 전수 `grep -nE` 결과: 대부분 취소선·"기록"·폐기 표기 안에 있다. **효력 있는 문장으로 남은 자리**는 R-JR-1·3·4·6·9·10에 모았다.
 
@@ -121,30 +121,83 @@
 - 근거: `04-data-model.md:714` — 취소선을 닫는 쪽이 "…(` 자기소개서` 6자를 남김). ~~ 기존 …"처럼 공백 뒤에 와 있다. GFM은 공백 뒤 `~~`를 닫는 기호로 읽지 않아 "2단계 값의 출처 … AI 추출값으로 채워진다(`ai`)" 문단이 취소선 없이 보인다. 앞의 굵은 "(v4.16, JR-1·JR-2) 폐기 — 기록." 표지로 뜻은 읽히지만 렌더링이 의도와 다르다.
 - 담당: DM
 - 고칠 방향: "남김).~~ 기존"으로 공백을 지우거나 닫는 `~~`를 마침표 바로 뒤에 붙인다.
-- 상태: 미해결
+- 상태: **해소 (후속 확정 라운드 확인)**
 
 ### R-JR-14 [Minor] decisions.md — 4.19·4.23의 UI·백엔드 ★ 행 3곳에 되돌림 표기가 없음 (라운드 2 신규)
 - 경계: B12 (R-JR-5에서 빠진 자리)
 - 근거: `decisions.md:994` 4.19 UI #4 "[작성 시작]에서 요건 선행 추출(키가 있을 때만…)" · `:1089` 4.23 백엔드 #8 `POST /api/job-descriptions/fetch` "…`JobPosting` 구조…"(응답에서 `companyName`·`positionTitle` 제거 → 4.24 #14) · `:1108` 4.23 UI #2 "S-14 → 2단계 모달 — [다음](가져오기 → 미리 보기 추출, 진행 표시, 409면 Q53-1…) ② … 채움 순서 AI-…"(→ 4.24 UI #1). 4.24 머리말은 4.23 #2·#4·#6과 AI 줄만 폐기로 꼽는다. 백엔드·UI가 Phase 0에서 이 ★ 행을 아직 해야 할 일로 읽을 수 있다.
 - 담당: 리더
 - 고칠 방향: 세 행에 "— (2026-11-14, JR-n) 되돌림/일부 대체 → 4.24 #n"(994 → UI #4, 1089 → 백엔드 #14, 1108 → UI #1)을 붙이고 4.24 머리말 목록에 더한다.
+- 상태: **해소 (후속 확정 라운드 확인)**
+
+## 후속 확정 라운드 (2026-11-14) — 사용자 결정 대기 답변 반영분
+
+- 입력: 결정 입력 "후속 확정" 절(JR-Q1 (a) 확정 · JR-Q2 보류 + 임시 단일 호출 · JR-Q3 (b) 그냥 삭제 · JR-5 자소서는 원문을 읽지 않음 · JR-6 AI 연결 시 인사이트 자동 시작 · JR-7 원문 언제든 수정), `dm_replies.md` 5·6절. 변경분은 `git diff HEAD -- docs/planning`(커밋 `36223b1` 이후).
+- 확인 결과
+  - ① 철회 대상 grep(1a/1b·`identify`·`ai-02.identify.v1`·`insight.identify`·변환 후 drop·"결과 없을 때만"·`jd_has_results`/`has_results`·AI-04 원문 입력·자소서 `jd_sentence` 근거): PRD·AI·DM·decisions·README는 취소선·철회·기록 안에만 남는다. **UX에 효력 문장이 남았다** → R-JR-15·16.
+  - ② JR-6: DM 2.6.2(조건·`insightJobId`·`insightSkipReason` 7값·같은 `p_id` 재시도 제외) = decisions 4.24 #10 = `dm_replies` 5절. PRD D-18·F-AP-01 (7)과 UX FL-10·S-14·S-16의 동작은 맞는다. 다만 UX가 응답 이름을 쓰지 않는다 → R-JR-17.
+  - ③ JR-7: DM·decisions는 `rawTextLockedReason = job_in_progress` 하나, stale = `staleReasons.rawText`(해시 비교), 옛 인사이트 = `schemaVersion = 1`로 같다. UX는 stale 기준이 다르고 대기 표기가 남았다 → R-JR-17. PRD·AI에도 "DM이 정한다"가 남았다 → R-JR-18·19.
+  - ④ 비용·지연: 인사이트 $0.11, 예시 월 약 $1.2~1.5($1.49), 지연 40~75초, Gemini 무료 월 약 82회가 PRD 6.4·6.5 ↔ AI 0.v416·AI-02·7.3a에서 같다. 이슈 없음.
+  - ⑤ decisions 4.24: 백엔드 #1~#21 + UI #1~#9. 옛 행의 "→ 4.24 #n" 참조 9곳(752·753·758·1005·1094·1096·1098·1100·1119)이 새 번호와 맞는다. DM 11.11(마이그레이션 A `…_r16_jd_raw_text_cleanup`·B·C, 데이터 행 삭제, 최종 단언 5항)과 `dm_replies` 5절의 항목·이름이 일치한다(인사 3종·`delete_account_data`·이름 헬퍼·`insight_payload_valid`·`start_writing_chat` 포함). 3.29 JR-3 행만 R-JR-20.
+
+### R-JR-15 [Major] UX 본문에 "AI-04가 공고 원문 문장을 읽는다"가 효력 문장으로 남음 (JR-5와 정면 충돌)
+- 경계: B3·B5·B12
+- 근거: `02-user-flows.md:550` FL-03 "(v5.21, JR-1·JR-3) 폐기 … 대화는 선행 조건 없이 바로 열린다. **AI-04는 턴마다 저장된 공고 원문 문장(`Sn`)을 그대로 읽는다.**" · `:1736` S-46 "요건 추출이 도는 자리" 폐기 문장 "AI-02(인사이트)·**AI-04(자소서 대화)는 저장된 공고 원문 문장(`Sn`)을 그대로 읽는다**" ↔ JR-5 "자소서 대화(AI-04)는 공고 원문을 직접 읽지 않는다" · AI `03:465` "받는 기능: … AI-02뿐이다" · DM `dm_replies` F-DM-3 "`sentences`는 읽지 않는다" · decisions 4.24 #19 · UX 자체 `:902`·`:1718`(자소서 근거에 공고 쪽 없음)
+- 담당: UX
+- 고칠 방향: 두 문장의 AI-04 부분을 "(v5.21, JR-5) AI-04는 공고 원문을 읽지 않고 최신 인사이트 + 커리어를 읽는다"로 바꾼다.
+- 상태: 미해결
+
+### R-JR-16 [Minor] UX 5.1o 첫 판 표와 C-02에 철회된 내용이 남음
+- 경계: B12
+- 근거: `02-user-flows.md:2654` 5.1o JR-3 행 "AI-02·AI-04는 공고 원문 문장(`Sn`)을 그대로 입력"(JR-5 대체 표시 없음) · `:2672` JR-Q1 행 반영 위치 "C-11, C-15 '공고 원문에서'" · `:2673` JR-Q2 행 반영 위치 "C-03 새 단계 `identify`(1a 식별) + `match`(1b 배치 판정) 문구 — … 둘로 나눔"(왼쪽만 취소선) · `:2698` 대체 표 "S-15 공고 원문 수정 조건 → 원문에서 나온 결과가 없는 동안(JR-Q4)"(JR-7로 다시 바뀜) · `:2702` 대체 표 "C-15 → '공고 원문에서'(JR-Q1)"(JR-5와 반대) · `:772` C-02 "(v5.21, JR-Q1 `[가정]`) … 그 문장(`Sn`, **여러 개면 모두**)" — JR-Q1은 확정됐고, 근거 칩은 문장 하나다(AI-5)
+- 담당: UX
+- 고칠 방향: 각 행의 오른쪽 칸에 "(후속 확정, JR-5/JR-7/JR-Q2 보류) 대체" 표기를 붙이거나 취소선을 친다. C-02는 `[가정]`을 떼고 "그 문장"으로 바꾼다.
+- 상태: 미해결
+
+### R-JR-17 [Major] UX가 DM 6절 회신(DM-10~13)을 반영하지 않음 — stale 판정 기준이 다르고 계약 이름이 없음
+- 경계: B2·B5
+- 근거: ① stale 기준: `02-user-flows.md:765` C-01 "`jd_sentence`는 공고 내용을 고친 시각(`raw_text_edited_at`)이 기준 — 고친 뒤면 '변경됨'" · `:1583` S-16 "공고 내용을 고친 뒤(`raw_text_edited_at`이 그 인사이트를 만든 뒤) … '공고가 바뀌었어요'" ↔ DM `04:818` "`staleReasons.rawText` = `insights.raw_text_hash ≠ job_descriptions.raw_text_hash`. **`raw_text_edited_at`과 생성 시각 비교는 쓰지 않는다**(같은 원문으로 되돌린 경우)" · `04:1022` "`jd_sentence` 근거 칩 '변경됨'도 `rawText` 하나로" ② 대기 표기: `:1566` "(실행 중 인사이트를 막을지 끝낸 뒤 둘지는 DM이 정한다 — ux_requests DM-10)"·"`job_in_progress` 하나 `[가정]`" — DM-10이 "막는다, `job_in_progress` | null"로 확정 ③ 계약 이름: UX 본문에 `insightJobId`·`insightSkipReason`·`staleReasons.rawText`·`schemaVersion`이 0건이다(DM 2.6.2·2.7.0·3.10과 decisions 4.24 UI #9는 이 이름을 쓴다). S-16 "옛 인사이트"(`:1582`)는 "schema 1"로만 적었다.
+- 담당: UX
+- 고칠 방향: ① 두 자리를 "판정은 서버 `staleReasons.rawText`(공고 해시 비교)"로 바꾼다. 같은 원문으로 되돌리면 표시가 없어진다는 것도 적는다. ② 대기 표기를 "DM v4.16 확정"으로 바꾼다. ③ S-14·S-16에 `insightJobId`(있으면 "인사이트를 만드는 중이에요")·`insightSkipReason`, 옛 인사이트 판별 `schemaVersion = 1`을 적는다.
+- 상태: 미해결
+
+### R-JR-18 [Minor] PRD — 원문 수정 중 실행 중 인사이트 처리가 "데이터 모델이 정한다 `[가정]`"으로 남음
+- 경계: B12
+- 근거: `01-prd.md:224` F-AP-01 (5) "인사이트가 실행 중일 때의 처리(끝난 뒤 반영 또는 막음)는 데이터 모델이 정한다 `[가정]`" · `:648` D-19 예외 대체 문장에 실행 중 차단이 없다 ↔ `dm_replies` FU-6 "인사이트 실행 중이면 **막는다**(끝난 뒤 다시 고침)" · DM 2.6.1 `jd_job_in_progress` · `dm_replies` 6절 "PRD: D-19 예외 문장(인사이트 실행 중만 막음)"
+- 담당: PRD
+- 고칠 방향: 두 자리에 "인사이트가 대기·실행 중이면 수정을 막는다(끝난 뒤 고친다, DM v4.16)"를 넣는다.
+- 상태: 미해결
+
+### R-JR-19 [Minor] AI 명세 — DM 확정값 미반영 2곳
+- 경계: B3·B12
+- 근거: ① `03-ai-features.md:1549` AI-02 "원문을 고칠 때 인사이트가 실행 중이면 그 작업을 끝낸 뒤 표시하거나 수정을 막는다 — **DM이 둘 중 단순한 쪽으로 정한다**" ↔ `dm_replies` F-DM-7 "(가) 막는다로 확정, `complete_insight`의 `stale_run`은 남긴다" ② AI-12 게이트 진입 입력을 "그 보완점 항목"이라고만 적고, 어느 항목인지 고르는 키 `return_target.params.insight_item_key`(`gaps.{n}`, 없으면 `gaps[]` ≤ 5)가 AI 명세에 0건이다 — DM F-DM-5·decisions 4.24 #14 확정 이름. AI-04의 stale 입력도 DM이 `staleReasons`(조립기)로 정했는데 AI 명세에 이름이 없다
+- 담당: AI
+- 고칠 방향: ① "DM v4.16: 실행 중이면 수정을 막는다(`jd_job_in_progress`), 좁은 틈은 `stale_run`"으로 바꾼다. ② AI-12 입력 표에 `params.insight_item_key`를, AI-04 입력 표에 `staleReasons.{career, rawText}`를 적는다.
+- 상태: 미해결
+
+### R-JR-20 [Minor] decisions.md 3.29 JR-3 행에 JR-5 부분 대체 표기가 없음
+- 경계: B12
+- 근거: `decisions.md:709` JR-3 "**AI-02 인사이트·AI-04 자소서 대화(그리고 AI-12 게이트 진입 — 리더 판단 L-4 `[가정]`)는 JD 원문 문장 … 을 그대로 입력**" — 같은 절 후속 확정 표 `:719` JR-5가 AI-04·AI-12 부분과 L-4를 대체했는데, 옛 행 안에는 표기가 없다(이 문서의 행 안 대체 표기 관행, R-JR-5)
+- 담당: 리더
+- 고칠 방향: 행 끝에 "— (2026-11-14 후속, JR-5) AI-04·AI-12 부분 대체: 원문은 AI-02만, L-4 대체"를 붙인다.
 - 상태: 미해결
 
 ## 결정 필요 통합 (중복 제거)
 
 | ID | 내용 | 출처 |
 |----|------|------|
-| JR-Q1 | JD 근거 표현 — 권장 (a) 문장 ID `Sn`(`jd_sentence`)만 | decisions 1장, PRD 9.0, AI 8장 |
-| JR-Q2 | AI-02 요건 판정 구조 — 권장 (a) 1a 식별 → 1b 배치 판정, `MT-n` | decisions 1장, PRD 9.0, AI 8장 |
-| JR-Q3 | 기존 `jd_requirements`·`jd_requirement` 근거 — 권장 (a) 변환 후 drop | decisions 1장, PRD 9.0, DM 8장 |
-| JR-Q4 | 공고 원문 수정 — 권장 (a) 결과(완료 인사이트·문장 근거·대화 제안 근거)·진행 중 작업이 없을 때만, `update_jd_raw_text` | decisions 1장, PRD 9.0, DM 8장 |
+| JR-Q1 | (후속 확정 2026-11-14: (a) 확정) JD 근거 표현 — 권장 (a) 문장 ID `Sn`(`jd_sentence`)만 | decisions 1장, PRD 9.0, AI 8장 |
+| JR-Q2 | (후속: 보류 — 인사이트 재설계 사이클) AI-02 요건 판정 구조 — 권장 (a) 1a 식별 → 1b 배치 판정, `MT-n` | decisions 1장, PRD 9.0, AI 8장 |
+| JR-Q3 | (후속: (b) 그냥 삭제 확정) 기존 `jd_requirements`·`jd_requirement` 근거 — 권장 (a) 변환 후 drop | decisions 1장, PRD 9.0, DM 8장 |
+| JR-Q4 | (후속: JR-7 언제든 수정으로 확정) 공고 원문 수정 — 권장 (a) 결과(완료 인사이트·문장 근거·대화 제안 근거)·진행 중 작업이 없을 때만, `update_jd_raw_text` | decisions 1장, PRD 9.0, DM 8장 |
 
 새로 올릴 `[결정 필요]`는 없다. 리더 판단 `[가정]`(JR-Q5, L-1~L-4, AI-5)은 사용자에게 묻지 않는 항목으로 decisions 1장에 정리돼 있다.
 
 ## 담당별 수정 요청
 
 - 라운드 1 (모두 해소): UX R-JR-1·2·4·9 · DM R-JR-3·10 · PRD R-JR-6·7 · AI R-JR-8 · 리더 R-JR-5·11·12
-- **라운드 2 미해결**: DM R-JR-13 (Minor) · 리더 R-JR-14 (Minor)
+- 라운드 2 (모두 해소): DM R-JR-13 · 리더 R-JR-14
+- **후속 확정 라운드 미해결**: UX R-JR-15·17 (Major), R-JR-16 (Minor) · PRD R-JR-18 (Minor) · AI R-JR-19 (Minor) · 리더 R-JR-20 (Minor)
 
 
 ## 리더 처리 (라운드 2 뒤, 2026-11-14)
@@ -152,3 +205,10 @@
 - R-JR-13: `04-data-model.md:714` 닫는 `~~` 앞 공백 제거 — **해소(리더)**
 - R-JR-14: decisions.md 4.19 UI #4 · 4.23 백엔드 #8 · 4.23 UI #2 행에 되돌림 표기(→ 4.24 UI #4 · #14 · UI #1) — **해소(리더)**
 - 남은 이슈 0건. 결정 대기 JR-Q1~JR-Q4는 사용자 몫
+
+## 리더 처리 (후속 확정 라운드 뒤, 2026-11-14)
+
+- R-JR-15·16·17 (UX), R-JR-18 (PRD), R-JR-19 (AI): 담당 수정 보고 — **해소**
+- R-JR-20 (리더): decisions.md 3.29 JR-3 행에 "후속 확정 JR-5로 AI-04·AI-12 부분 대체" 표기 — **해소**
+- 리더 확인 grep: `ai-02.identify`·`insight.identify`·`identify` 단계·변환 후 drop·"결과가 없는 동안"·`raw_text_edited_at` 시각 비교 — 효력 문장 없음. `jd_has_results`는 DM 2.6.1 "(v4.3~v4.15 기록)" 블록 안과 11.11 제거 목록에만 남음
+- 남은 이슈 0건. 보류 JR-Q2(인사이트 재설계 사이클)

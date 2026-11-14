@@ -2,6 +2,7 @@
 
 - 작성: data-architect / 2026-11-14 / 기준: `docs/planning/04-data-model.md` **v4.16** (짝 판 PRD v4.18 · UX v5.21 · AI v4.16)
 - 입력: `_workspace/jd-raw-text/{prd,ux,ai}_requests.md`(AI DM-2a 포함), 리더 판단(1a 식별 → 1b 판정, `MT-n`, `match_key`/`match_keys`, `raw_text_hash`)
+- **(후속 확정 2026-11-14 뒤) 1~3절 중 6절과 어긋나는 회신은 6절이 이긴다** — 특히 AI DM-2·DM-2a(1a/1b·`identify`), PRD DM-2·AI DM-4(변환), DM-3·UX DM-2·DM-3·AI DM-7(원문 수정 조건), AI DM-11(게이트가 원문을 읽음)은 철회.
 - **리더 이름은 모두 그대로 확정**했다. 데이터 쪽에서 바꾼 것은 `raw_text_hash`의 **값 정의** 하나다(AI DM-3) — 이름은 같다.
 
 ## 1. product-planner (PRD v4.18)
@@ -51,39 +52,77 @@
 - **AI**: `raw_text_hash` 정의(JD 해시 복사), `M-n` 잔여 → `MT-n`, AI-02 원소 0개 실패 줄(방어용), 서류 대화 시작 인사 3종(요건 추출 전 삭제 — AI 회신 12 자리).
 - **PRD**: 원문 수정 RPC `update_jd_raw_text`, "결과"에 대화 제안의 공고 근거 포함, Q53-1 생성 게이트 폐기.
 
-## 5. 백엔드 후속 (decisions.md 4장으로 옮길 목록)
+## 5. 백엔드 후속 (decisions.md 4장으로 옮길 목록 — 후속 확정 기준으로 고쳐 씀)
 
 ★ = 이미 만든 코드·마이그레이션이 바뀐다. 상세·순서는 DM v4.16 11.11.
 
 **지울 것**
-- ★ 테이블 `jd_requirements`(트리거 `jd_requirements_set_updated_at`·`jd_requirements_evidence_source_deleted`, 정책, `authenticated`·`app_ai_writer` grant 포함).
-- ★ 컬럼 `job_descriptions.extraction_status`·`extraction`·`extraction_job_id`·`extraction_provider`·`extraction_model`·`tech_keywords`·`requirements_hash`·`detected_language` + CHECK 7개(`_extraction_status_check`·`_extraction_check`·`_extraction_provider_check`·`_tech_keywords_check`·`_requirements_hash_check`·`_succeeded_check`·`_detected_language_check`)·FK `job_descriptions_extraction_job_fkey`·인덱스 `job_descriptions_extraction_job_id_idx`.
+- ★ 테이블 `jd_requirements`(트리거 `jd_requirements_set_updated_at`·`jd_requirements_evidence_source_deleted`, 정책, grant).
+- ★ 컬럼 `job_descriptions.extraction_status`·`extraction`·`extraction_job_id`·`extraction_provider`·`extraction_model`·`tech_keywords`·`requirements_hash`·`detected_language` + CHECK 7개·FK `job_descriptions_extraction_job_fkey`·인덱스 `job_descriptions_extraction_job_id_idx`.
 - ★ public RPC `begin_jd_extraction`·`apply_jd_extraction`·`fail_jd_extraction`·`update_failed_jd_raw_text`·`purge_unused_jd_preview_outputs`.
-- ★ private `jd_apply_extraction_result`·`jd_extraction_job_matches`·`jd_extraction_result_valid`·`jd_sids_exist`·`jd_extraction_mark_failed`·`ai_jobs_release_jd_extraction`(+ 같은 이름 트리거 on `ai_jobs`)·`jd_sids_valid`(다른 사용처가 없으면).
-- ★ CHECK 값: `evidence_links_source_type_check`의 `jd_requirement`(변환 뒤).
-- ★ API `POST /api/job-descriptions/extract-preview`, `POST /api/application-projects/{id}/jd-extraction`.
-- ★ 크론: `src/server/jobs/cron.ts`의 `purge_unused_jd_preview_outputs` 호출.
-- ★ 코드: AI-01 파이프라인·스키마·프롬프트·검증·저장·픽스처(`src/server/ai/**/AI-01*`, `jd-extraction*`, `src/server/jobs/jd-extraction`), 컨텍스트 빌더 `REQ-n` 별칭(`context-pack/jd.ts`·`gate-requirements.ts`), 근거 허용 목록·칩의 `jd_requirement`, 오류 매핑 `jd_raw_text_locked`·`jd_failure_not_input`·`jd_not_extracted`(`src/server/db/errors.ts`), 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록.
+- ★ private `jd_apply_extraction_result`·`jd_extraction_job_matches`·`jd_extraction_result_valid`·`jd_sids_exist`·`jd_extraction_mark_failed`·`ai_jobs_release_jd_extraction`(+ 트리거)·`jd_sids_valid`(다른 사용처가 없으면).
+- ★ 데이터 행(변환 없음): `jd_requirement` 근거 전부, `application_document` 소유 `jd_sentence` 근거 전부, 서류 대화 `structured_draft` 안의 JD 출처 원소.
+- ★ CHECK 값: `evidence_links_source_type_check`의 `jd_requirement`.
+- ★ API `POST /api/job-descriptions/extract-preview`, `POST /api/application-projects/{id}/jd-extraction`. 크론의 `purge_unused_jd_preview_outputs` 호출.
+- ★ 코드: AI-01 파이프라인 일체, 컨텍스트 빌더 `REQ-n`, AI-04·AI-12의 원문 입력, 근거 허용 목록·칩의 JD 출처(자소서), 오류 매핑 `jd_has_results`·`jd_raw_text_locked`·`jd_failure_not_input`·`jd_not_extracted`, 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록.
 
-**남기는 과거 값 (CHECK 그대로, 새 행 없음)**: `ai_jobs.job_type`·`ai_usage_records.job_type`·`feature`의 `jd_extraction`, `ai_jobs_jd_extraction_check`(두 분기 모두), `error_code` `not_a_jd`(+ `error_category` 식), `company_name_source`·`position_title_source`·`name_source`의 `ai`.
+**남기는 과거 값 (CHECK 그대로, 새 행 없음)**: `jd_extraction`(job_type·feature), `ai_jobs_jd_extraction_check`, `not_a_jd`(+ `error_category` 식), 출처 `ai`, **옛 인사이트 행(`schema_version = 1`)과 그 나머지 근거**(보이지 않고 지우지도 않음).
 
 **바꿀 것 / 새로 만들 것**
-- ★ `create_application_project`: `p_preview_job_id` 제거(옛 시그니처 drop 후 재생성), Q53-1 게이트 삭제, 이름 항상 결정(`user`/`default`), `jd_no_sentences`, 반환 `{application_project_id, job_description_id, created, name, name_source}`.
-- ★ 신설 `update_jd_raw_text(p_application_project_id, p_raw_text, p_raw_text_hash, p_sentences)` → `{application_project_id, job_description_id, raw_text_edited_at}`, `authenticated`만, 조건 0~7(2.6.1), 판정 헬퍼 `private.jd_raw_text_lock_reason` `[가정]`. JD 조회에 `rawTextEditable`·`rawTextLockedReason`.
-- ★ `private.job_descriptions_guard`: 원문 3컬럼 변경은 `raw_text_edited_at` 변경과 함께일 때만(컬럼 drop 전에 교체).
-- ★ `private.evidence_allowed_sources`·`private.evidence_links_check_source`·서류 근거 허용 목록(`save_application_document`·`private.doc_*`·`private.wc_doc_*`): `jd_requirement` 제거.
-- ★ `insights.requirements_hash` → `raw_text_hash`(rename + CHECK·ready CHECK 식), 값 = JD `raw_text_hash` 복사.
-- ★ `private.insight_payload_valid`·`complete_insight`: `hashes.raw_text_hash`, 근거 목록 정리, JD 해시 불일치 → `stale_run`. `begin_insight`: `jd_not_extracted` 삭제, 0문장 → `jd_no_sentences` 409.
-- ★ `private.writing_chat_document_greeting`·`start_document_writing_chat`: "요건 추출 전" 인사 분기·`extraction_status` 읽기 삭제(인사 3종).
-- ★ `private.delete_account_data`: `jd_requirements` delete 줄 삭제.
-- ★ 이름 헬퍼 `private.application_fallback_name`·`private.application_compose_name`: 본문·시그니처 그대로, **호출 방식만 정리** — 생성 RPC는 `p_name`이 비면 항상 `application_fallback_name` 하나로 이름을 정한다(직접 `compose_name` 분기·"추출 대기" null 분기 삭제), 추출 쪽 호출자는 drop, 남는 호출자 = 생성 RPC·`application_reset_name`(DM 11.11 (3) #10, 비파괴).
-- ★ `POST /api/job-descriptions/fetch` 응답 `{rawText}`만(`companyName`·`positionTitle` 제거).
-- ★ 인사이트 파이프라인: 1a 식별(`ai-02.identify.v1`, 경량) → 1b 판정(배치) → 종합, `progress.stage` `identify`, `call_key` `insight.identify`, `match_key` `MT-n`·`match_keys`, `stale.raw_text`, `input_hash`에 `raw_text_hash`. AI-04·AI-12 게이트는 원문 문장 전체 입력.
-- 변경 없음 확인: `get_data_readiness`, `get_ai_usage_summary`, `get_deletion_impact`.
+- ★ `create_application_project`: `p_preview_job_id` 제거(재생성), Q53-1 게이트 삭제, 이름 항상 결정, `jd_no_sentences`, 반환 `{application_project_id, job_description_id, created, name, name_source}`.
+- ★ **생성 Server Action 인사이트 자동 시작(JR-6)**: RPC 성공 뒤 별도 단계, 조건 = AI 연결(활성 키 `valid`/`needs_check` + 동의) · D-01 · 문장 ≥ 1 · 진행 중 인사이트 없음 → 수동 시작과 같은 서비스로 작업 1개. 아니면·실패하면 건너뛰고 생성은 성공. 응답 `insightJobId`·`insightSkipReason`(`ai_not_connected`·`key_invalid`·`consent_required`·`insufficient_data`·`no_sentences`·`in_progress`·`start_failed`). 같은 `p_id` 재시도는 자동 시작 안 함.
+- ★ 신설 `update_jd_raw_text(p_application_project_id, p_raw_text, p_raw_text_hash, p_sentences)` → `{application_project_id, job_description_id, raw_text_edited_at}`, `authenticated`만. 조건 = 인자·문장 ≥ 1 · 내 것 · **진행 중 `insight` 작업 없음**(`jd_job_in_progress`) · 내용 변경(`jd_raw_text_unchanged`). 기존 인사이트·근거는 그대로. JD 조회 `rawTextEditable`·`rawTextLockedReason`(`job_in_progress` | null).
+- ★ `private.job_descriptions_guard`: 원문 변경 = `raw_text_edited_at` 변경과 함께일 때만(컬럼 drop 전에 교체).
+- ★ 근거 허용 목록 `private.evidence_allowed_sources`·`private.evidence_links_check_source`: `insight` = 커리어 5종 + `jd_sentence`, `application_document` = 커리어 5종 + `user_note`. 서류 저장·제안 패치(`save_application_document`·`private.doc_evidence_row`·`private.doc_proposal_sources`·`private.doc_replace_slot_evidence`·`private.wc_doc_evidence`·`private.wc_doc_sources`)도 같은 목록.
+- ★ `insights.requirements_hash` → `raw_text_hash`(rename + CHECK, 값 = JD `raw_text_hash` 복사, 과거 행은 JD 현재 값으로).
+- ★ `private.insight_payload_valid`·`complete_insight`: `hashes.raw_text_hash`, 근거 목록 정리, `schema_version = 2`, JD 해시 불일치 → `stale_run`. `begin_insight`: `jd_not_extracted` 삭제, 0문장 → `jd_no_sentences`.
+- ★ 인사이트 파이프라인(임시, JR-Q2 보류): 원문 문장 전체 입력, **단계 1 한 호출**(식별 + 판정, ≤ 15) + 단계 2, `match_key` `MT-n`·`match_keys`, `match_stage_result` `{prompt_version, items}`, `call_key` `insight.match.1`·`insight.synthesize`, 조회 `schemaVersion`(1 → "다시 만들어야 해요")·`staleReasons.{career, rawText}`, 재사용은 `schema_version = 2`만. `identify` 단계 없음.
+- ★ AI-04 컨텍스트(JR-5): 원문 대신 최신 ready 인사이트(`schema_version = 2`) 블록 + stale 값. 권한 변경 없음(`insights` grant 기존).
+- ★ `start_writing_chat`: `return_target.params.insight_id`·`insight_item_key`(`gaps.{n}`) 검사. 게이트 컨텍스트는 그 보완점(없으면 `gaps[]` ≤ 5).
+- ★ `private.writing_chat_document_greeting`·`start_document_writing_chat`: "요건 추출 전" 분기 삭제(인사 3종).
+- ★ `private.delete_account_data`: `jd_requirements` 줄 삭제.
+- ★ 이름 헬퍼 `private.application_fallback_name`·`application_compose_name`: 본문·시그니처 그대로, 호출 방식만 정리(생성 RPC는 `p_name`이 비면 항상 `application_fallback_name`). 비파괴.
+- ★ `POST /api/job-descriptions/fetch` 응답 `{rawText}`만.
+- 변경 없음: `get_data_readiness`, `get_ai_usage_summary`, `get_deletion_impact`.
 
-**마이그레이션 (JR-Q3 (a), 전부 `-- DESTRUCTIVE:`, 원격 push는 사용자)**
-- A `…_r16_jd_raw_text_convert`: 0 변환 전 행 수 집계(push 전 읽기 전용 집계를 `_workspace/backend/R16/release-counts.md`에 + `raise notice`) → 1 트리거 `ai_jobs_release_jd_extraction` drop 후 진행 중 `jd_extraction` 작업 `canceled`/`canceled` → 2 `jd_preview` 작업 `output`·`step_outputs` 비우기 → 3 `name is null` 백필(`default`) → 4 인사이트 `result`·`match_stage_result` 2판 변환 + `requirement_matches.<uuid>` 근거 `item_key` → `MT-n` → 5 `jd_requirement` 근거 → `jd_sentence`(첫 문장, 문항 단위는 locator null, 중복·원본 없음은 삭제) → 6 서류 대화 `structured_draft` 출처 변환 → 7 `insights.requirements_hash` rename + JD 해시로 채움.
-- B `…_r16_jd_raw_text_rpcs`: 위 RPC·트리거 함수 교체·신설, 옛 RPC·헬퍼 drop.
-- C `…_r16_drop_jd_extraction`: `jd_requirements`·JD 컬럼 8개 drop, `evidence_links` CHECK에서 `jd_requirement` 제거, **최종 단언**(`jd_requirement` 근거 0 · 1판 인사이트 0 · null 이름 0 · 진행 중 추출 0 · 근거 수 보존식) — 하나라도 거짓이면 롤백.
-- 배포: A·B·C push → 바로 코드 배포 `[가정]`. 되돌리기 불가 — 백업 시점 확인은 릴리스 체크리스트.
-- 타입·pgTAP: `database.types.ts` 재생성, pgTAP 항목은 11.11 (3) #13.
+**마이그레이션 (JR-Q3 (b), 전부 `-- DESTRUCTIVE:`, 원격 push는 사용자)**
+- A `…_r16_jd_raw_text_cleanup`: 0 push 전 읽기 전용 집계 10항목을 `_workspace/backend/R16/release-counts.md`에 + `raise notice` → 1 트리거 drop 후 진행 중 `jd_extraction` 작업 `canceled`/`canceled` → 2 `jd_preview` 출력 비우기·`name is null` 백필 → 3 `jd_requirement` 근거·자소서 `jd_sentence` 근거 삭제 → 4 서류 대화 제안의 JD 출처 제거 → 5 `insights.requirements_hash` rename + JD 해시로 채움.
+- B `…_r16_jd_raw_text_rpcs`: 함수 교체·신설, 옛 RPC·헬퍼·트리거 drop(데이터 손실 없음, 되돌릴 수 없음).
+- C `…_r16_drop_jd_extraction`: `jd_requirements`·JD 컬럼 8개 drop, CHECK에서 `jd_requirement` 제거, 최종 단언(`jd_requirement` 근거 0 · 자소서 `jd_sentence` 근거 0 · 대화 제안 JD 출처 0 · null 이름 0 · 진행 중 추출 0).
+- 배포: A·B·C push → 바로 코드 배포 `[가정]`. 타입 재생성·pgTAP은 11.11 (3) #13.
+
+## 6. 후속 확정 회신 (2026-11-14, 사용자 결정 반영 — DM v4.16 같은 판)
+
+### ai-feature-designer (`ai_requests.md` 4절)
+
+| ID | 회신 | 본문 |
+|----|------|------|
+| F-DM-1 | 반영. 1a/1b·`identify`·`insight.identify`·혼합 등급 회신 **철회**. `match_stage_result` = `{prompt_version, items: [{match_key, requirement_text, sids, status, model_status, rationale, missing_aspect}]}`, `progress.stage` 값 그대로, `call_key` `insight.match.1` + `insight.synthesize`, 등급 기본 하나. `result` 원소·`MT-n`·`match_keys`·`raw_text_hash` 그대로 | 2.7.0 |
+| F-DM-2 | 반영. `jd_requirement` 근거 변환 없이 삭제. 옛 인사이트는 그대로 두고 **행 컬럼 `insights.schema_version`**(1 = 옛)으로 판별, 인사이트 조회가 `schemaVersion`을 함께 준다. 재사용·AI-04·AI-12는 2만 | 2.7.0·11.11 |
+| F-DM-3 | 반영. AI-04는 최신 `is_latest`·`ready`·`schema_version = 2` 인사이트의 요청한 필드를 읽고 `sentences`는 읽지 않는다. stale이어도 읽고 `staleReasons.{career, rawText}`(`raw_text_hash`·`career_snapshot_hash` 비교)를 조립기가 만든다. `app_ai_writer`의 `insights` select grant·정책은 이미 있다 — 변경 없음. `company_name`·`position_title` 계속 읽음 | 2.7.0 |
+| F-DM-4 | 반영. `application_document` 허용 = 커리어 5종 + `user_note`(트리거·저장 RPC·`private.doc_*`·`private.wc_doc_*` 같은 목록). `jd_sentence`는 `insight`에만. 기존 자소서 `jd_sentence` 근거·대화 제안의 JD 출처는 마이그레이션이 지운다. 서류 대화 조건은 없어졌다 | 2.8·11.11 |
+| F-DM-5 | 반영. `writing_chats.return_target.params.insight_id` + **`insight_item_key`**(`gaps.{n}`) `[가정: 키 이름]` — 컬럼·CHECK 변경 없음, `start_writing_chat`이 모양·소유를 검사. 키가 없으면 `gaps[]` ≤ 5. 게이트는 `sentences`를 읽지 않는다 | 2.7.0 |
+| F-DM-6 | 반영. 생성 RPC는 그대로 두고 **생성 Server Action**이 RPC 성공 뒤 수동 시작과 같은 서비스로 작업 1개를 만든다(조건 = AI 연결 + 동의 + D-01 + 문장 ≥ 1 + 진행 중 인사이트 없음). 아니면·실패하면 건너뛰고 생성은 성공. 응답 **`insightJobId`**·**`insightSkipReason`** `[가정: 이름]` | 2.6.2 |
+| F-DM-7 | **(가) 막는다로 확정**: `update_jd_raw_text`는 진행 중 `insight` 작업이 있으면 `jd_job_in_progress`. (나)는 경합 거부를 빼고 "처음부터 낡은 결과" 경로를 새로 만들어야 해서 더 복잡하다. `complete_insight`의 `stale_run`은 좁은 틈 방어로 **남긴다**. stale 판정 = `insights.raw_text_hash ≠ job_descriptions.raw_text_hash`. 자소서 쪽 조건 없음 | 2.6.1 |
+
+### ux-planner (`ux_requests.md` DM-10~13)
+
+| ID | 회신 | 본문 |
+|----|------|------|
+| DM-10 | UX가 쓴 대로 **막는다** — 진행 중 `insight` 작업만(자소서 턴은 막지 않음). `rawTextLockedReason` = `job_in_progress` \| null 하나, `jd_has_results`·`has_results` 폐기 | 2.6.1 |
+| DM-11 | 원천 = **`insights.raw_text_hash ≠ job_descriptions.raw_text_hash`**(시각 비교 아님 — 같은 원문으로 되돌리면 안 바뀐 것으로 본다). 조회 필드 **`staleReasons.rawText`**(옛 `requirements`). 그 인사이트의 `jd_sentence` 근거 칩 "변경됨"도 **같은 값**(칩마다 계산하지 않음, true면 원문 강조 안 함) | 2.6.1·2.7.0 |
+| DM-12 | **`insights.schema_version`**(행 컬럼, 조회 `schemaVersion`) — 1이면 옛 인사이트. `result` 안에는 판 키가 없으니 행 값을 쓴다 | 2.7.0 |
+| DM-13 | 자동으로 만든다 — 생성 RPC가 아니라 **생성 Server Action**이. 응답 **`insightJobId`**(있으면 "인사이트를 만드는 중이에요")·**`insightSkipReason`** | 2.6.2 |
+
+### product-planner (`prd_requests.md` FU-6~8)
+
+| ID | 회신 | 본문 |
+|----|------|------|
+| FU-6 | "결과 없을 때만" 삭제. 인사이트 실행 중이면 **막는다**(끝난 뒤 다시 고침). 그 밖에는 언제든 고칠 수 있고 기존 인사이트는 "공고가 바뀌었어요"로 남는다 | 2.6.1 |
+| FU-7 | 변환 단계 삭제 — `jd_requirements`·`jd_requirement` 근거 행 삭제(+ JR-5에 따라 자소서 `jd_sentence` 근거·대화 제안 JD 출처 삭제). 옛 인사이트 판별 = `insights.schema_version = 1`. 행 수는 push 전 집계로 기록 | 11.11 |
+| FU-8 | 생성 Server Action이 RPC 성공 뒤 인사이트 작업을 만든다(수동 시작과 같은 검사). 키 없음·키 무효·동의 필요·D-01 미달·문장 0개·진행 중이면 건너뛰고 오류 없이 생성 성공, 응답 `insightSkipReason`. D-18은 이 경로만 바뀐다 | 2.6.2 |
+
+### 다른 문서가 고칠 이름 (후속)
+- **UX**: `rawTextLockedReason` = `job_in_progress` 하나, stale = `staleReasons.rawText`, 옛 인사이트 = `schemaVersion = 1`, 자동 시작 응답 `insightJobId`·`insightSkipReason`, 게이트 `return_target.params.insight_item_key`.
+- **AI**: 위 F-DM 회신대로 — AI-04 입력 필드 경로, 게이트 `params.insight_item_key`, `raw_text_hash` 정의(JD 해시 복사)는 그대로.
+- **PRD**: D-19 예외 문장(인사이트 실행 중만 막음), D-18 예외(생성 뒤 자동 시작).

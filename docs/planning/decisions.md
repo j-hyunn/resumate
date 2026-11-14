@@ -2,7 +2,7 @@
 
 기획 문서 전반의 결정 필요 항목과 확정된 결정을 누적 기록한다. 사용자가 답한 항목은 "확정"으로 옮기고 날짜를 남긴다.
 
-- 최종 갱신: **2026-11-14** (결정 사이클 **`jd-raw-text`** — 채용 공고 AI 처리(AI-01) 폐기, 공고 원문 텍스트를 그대로 쓴다. 사용자 확정 JR-1~JR-4(3.29), 결정 대기 **JR-Q1~JR-Q4 4건**(1장, 권장안은 본문에서 `[가정]`), 후속 4.24 ★. PRD v4.18 · UX v5.21 · AI v4.16 · DM v4.16). 이전 갱신 아래
+- 최종 갱신: **2026-11-14** (결정 사이클 **`jd-raw-text`** — 채용 공고 AI 처리(AI-01) 폐기, 공고 원문 텍스트는 인사이트만 읽는다. 사용자 확정 JR-1~JR-7 + 결정 대기 답변(JR-Q1 (a)·JR-Q3 (b)·JR-Q4 → JR-7, 3.29), **보류 JR-Q2 1건**(인사이트 재설계 사이클), 후속 4.24 ★. PRD v4.18 · UX v5.21 · AI v4.16 · DM v4.16). 이전 갱신 아래
 - 2026-11-14 입력(결정 사이클 `jd-raw-text`): `_workspace/00_input/planning-decisions-jd-raw-text.md`(사용자 원문 "채용 공고는 AI 부분 필요 없어. 원문 텍스트 그대로만 사용" · 확정 JR-1~JR-4 · 권장안 JR-Q1~JR-Q4 · 리더 판단 JR-Q5·L-1·L-2·AI-5), 요청·회신 `_workspace/jd-raw-text/{prd,ux,ai}_requests.md`·`dm_replies.md`, 리뷰 `_workspace/03_spec-reviewer_review_jd-raw-text.md`. 백엔드는 세션 `jd-raw-backend`가 같은 방향으로 동시에 진행
 - 이전 갱신: **2026-11-08** (main 병합 — **AI 모의 면접 MVP 제외 RM-1~RM-5**(3.27·4.21, 결정 대기 없음)·**S-44 본문 칸 높이 DH-1**(3.26·4.20) 위에 **재검토 `cl-audit`**(4.22)과 **결정 사이클 `cover-letter-flow`**(사용자 확정 CF-1~CF-10·CF-U1~U3 — 3.28·4.23, 경력기술서 완전 제거)을 얹었다. 판 번호는 main이 먼저 쓴 v4.16/v5.19/v4.14/v4.14(RM)를 두고 cover-letter-flow를 **PRD v4.17 · UX v5.20 · AI v4.15 · DM v4.15**로 다시 매겼다. **1장 결정 대기 0건**(CF-M1·CLA-Q3·CL-Q1 — 3.28 후속 확정 2))
 - 2026-11-08 입력(결정 사이클 `cover-letter-flow`): `_workspace/00_input/planning-decisions-cover-letter-flow.md`(사용자 시안 4장 설명 · 사용자 확정 CF-1~CF-10 · 열린 결정 CF-U1·CF-U2 · 리더 판단 CF-A1~CF-A17 · URL 가져오기 시험 결과), 요청·회신 `_workspace/cover-letter-flow/`, 리뷰 `_workspace/03_spec-reviewer_review_cover-letter-flow.md`. 반영 문서: PRD v4.17, UX v5.20, AI v4.15, DM v4.15
@@ -18,18 +18,18 @@
 - 2026-11-02 입력(커리어 재설계): `_workspace/00_input/planning-decisions-career-redesign.md`(사용자 확정 CR-1~CR-14, 피그마 `GagTxDayknEFEa6qdSqQCc` 커리어 프레임 대조), 리뷰 `_workspace/03_spec-reviewer_review_career-redesign.md`(라운드 1~3 — 사용자 결정 10건 → 후속 결정 CR-15~CR-24, 대체·폐기 표기 목록, 이슈 R-CR-1~17 모두 해결). 반영 문서: PRD v4.5, UX v5.5, AI v4.5, DM v4.4
 - 2026-11-03 입력(프로젝트 추가·산출물 상세): `_workspace/00_input/planning-decisions-project-add-figma.md`(사용자 확정 PA-1~PA-4, 피그마 `1034:8565`·`1041:8783`·`1041:8904` 대조), 요청·회신 `_workspace/project-add-figma/`, 리뷰 `_workspace/03_spec-reviewer_review_project-add-figma.md`(라운드 2 + 리더 후속, 이슈 R-PA-1~15 모두 해결). 반영 문서: PRD v4.6, UX v5.6, AI v4.6, DM v4.5
 
-## 1. 결정 대기 (4건 — 2026-11-14 `jd-raw-text`, JR-Q1~JR-Q4)
+## 1. 결정 대기 (0건 + 보류 1건 — 2026-11-14 `jd-raw-text`)
 
-**(jd-raw-text, 2026-11-14)** 사용자가 채용 공고의 AI 처리를 없애기로 했다(3.29). 그 귀결 중 **사용자가 골라야 할 4건**이다. 네 문서는 권장안 (a)를 `[가정]`으로 적용해 두었다 — (a)로 확정되면 표식만 떼고, 다른 안을 고르면 해당 절을 다시 쓴다. 백엔드는 (a) 기준으로 진행해도 기획과 어긋나지 않는다(공유 노트로 전달).
+**(jd-raw-text, 2026-11-14)** 사이클이 올린 JR-Q1~JR-Q4 중 **세 건은 같은 날 사용자가 답했고(3.29 후속 확정), JR-Q2는 사용자가 보류했다** — "인사이트 부분도 대대적인 수정이 필요해. 인사이트 관련된 건 나중에 다시 한번에 결정할게". 보류 기간에는 임시 최소 수정만 한다(아래).
 
-| ID | 묶음 | 질문 | 선택지 (권장 먼저 — 리더·담당 권장, 확정 아님) | 막는 것 |
-|----|------|------|---------------------------------------------|--------|
-| **JR-Q1** | 근거 | `REQ-n`(요건) 대신 JD 근거를 무엇으로 가리키나 | **(a) 권장 — 이미 있는 결정적 문장 ID `Sn`(`jd_sentence`)만 쓴다.** 서버가 저장 때 원문을 줄·불릿·마침표로 나눈 `job_descriptions.sentences`가 이미 구현돼 있어 AI 없이 결정적이고, 서버가 존재를 검증(V-1)하며 칩은 원문 문장을 강조한다. 근거 칩 하나 = 문장 하나 (b) 원문 인용(`quote`) — 모델 인용 변형으로 검증 실패가 잦다 (c) 공고 전체 하나의 출처 — 근거 강제(NFR-AI-01)가 약해진다 | 백엔드 근거 허용 목록·JR-Q3 변환 방식 |
-| **JR-Q2** | AI-02 구조 | 요건 목록이 없어진 인사이트의 "요건별 판정"을 어떻게 만드나 | **(a) 권장 — 2단계 체인 유지, 단계 1을 1a 식별(경량 등급, 원문에서 요건 문구 `requirement_text` ≤ 120자 + `sids`, 최대 15개) → 1b 판정(기본 등급, 8개씩 배치 병렬)으로 나눈다.** 식별 결과는 인사이트 결과 안에만 두고 JD에는 붙이지 않는다(JR-1 취지). 원소 키 `MT-n`(서버), 저장 `match_key`·`match_keys`. 1회 약 $0.13(v4.15와 같음), 지연 약 35~55초(측정 전, 목표 p90 40초는 실측 뒤 재확인). S-16 요건별 판정 표가 그대로 산다. 약점: 실행마다 식별한 요건이 조금씩 다를 수 있다 (b) 판정+종합 1회 호출 — 출력이 길어 함수 60초 한도·검증 실패 시 전체 재생성 (c) 요건 판정 표 폐기, 강점·보완점·지원 방향만 — 가장 싸지만 S-16 핵심 표가 사라진다 | 백엔드 AI-02 파이프라인(`ai-02.identify.v1` 신설 등)·UI S-16 |
-| **JR-Q3** | 기존 데이터 | 이미 있는 `jd_requirements`와 `jd_requirement` 근거 행을 어떻게 하나 | **(a) 권장 — 변환 후 drop**: 옛 인사이트의 요건 참조를 `jd_requirements.text`/`source_sids`로 새 모양(schema 2, `MT-n`)에 백필하고, `jd_requirement` 근거 행은 그 요건의 첫 문장 `jd_sentence` 행으로 바꾼 뒤 테이블·추출 컬럼을 drop(`-- DESTRUCTIVE:` 3파일, 변환 전 행 수 기록·최종 단언 실패 시 롤백, 원격 push는 사용자 — DM 11.11). **운영 DB가 2026-11-08 기준 지원 프로젝트 0건이었으므로, push 전 읽기 전용 집계가 0이면 변환 단계는 빈 실행이 되고 CF-M1처럼 "가드 + drop"과 같은 결과가 된다** (b) 그냥 drop + 근거 행 삭제, 옛 인사이트는 "다시 생성" 안내 — 사용자 키로 재생성 비용 (c) 테이블을 읽기 전용으로 남김 — 죽은 테이블·두 표시 경로 | 백엔드 R16 마이그레이션 A·C |
-| **JR-Q4** | 원문 수정 | 공고 원문을 만든 뒤 고칠 수 있나 (지금 예외 "추출 실패·요건 0개 JD만"은 추출이 없어져 성립하지 않는다) | **(a) 권장 — 그 원문에서 나온 결과가 없는 동안만 고칠 수 있다**: 완료 인사이트 0·`jd_sentence` 근거 행 0·저장 안 한 자소서 대화 제안의 공고 근거 0·실행 중 AI 작업 없음. RPC `update_failed_jd_raw_text` → **`update_jd_raw_text`**. 채용 공고 탭 [공고 내용 수정]은 고칠 수 있을 때만 보이고, 아니면 이유 문구(`rawTextLockedReason`) (b) 예외 없이 완전 불변(D-19 원형) — 잘못 넣었으면 지우고 다시 만든다 | 백엔드 RPC·UI S-15 |
+| ID | 묶음 | 질문 | 상태 | 막는 것 |
+|----|------|------|------|--------|
+| ~~JR-Q1~~ | 근거 | ~~JD 근거 표현~~ | **확정 2026-11-14 (사용자) — (a) 결정적 문장 ID `Sn`(`jd_sentence`)만.** JR-5에 따라 `jd_sentence` 근거는 **인사이트만** 단다 | — |
+| **JR-Q2** | AI-02 구조 | 요건 목록이 없어진 인사이트를 어떻게 만드나 | **보류 (2026-11-14, 사용자) — 인사이트 재설계 사이클에서 한 번에 정한다.** 그때까지 **임시**: 요건 목록 대신 원문 문장을 넣는 최소 수정 — 단계 1을 한 호출(원문에서 요건 식별 + 판정, 원소 `requirement_text`·`sids`·`MT-n`, 최대 15), 단계 2 종합 그대로. 알려진 위험: 단계 1 지연 약 40~75초(추정) — 목표 p90 40초·함수 60초를 넘을 수 있다. ~~1a 식별 → 1b 판정 분리(`ai-02.identify.v1`)~~는 만들지 않는다(재설계 때 다시 본다) | 인사이트 재설계 사이클 |
+| ~~JR-Q3~~ | 기존 데이터 | ~~`jd_requirements`·근거 행 처리~~ | **확정 2026-11-14 (사용자) — (b) 그냥 삭제.** 변환 없이 `jd_requirement` 근거 행을 지우고 테이블·추출 컬럼 drop. 옛 인사이트(`schema_version = 1`)는 "공고 처리 방식이 바뀌어 다시 만들어야 해요" + [다시 생성] `[가정: 문구]` | — |
+| ~~JR-Q4~~ | 원문 수정 | ~~만든 뒤 원문 수정~~ | **확정 2026-11-14 (사용자) — 새 안 JR-7: 언제든 수정**(인사이트가 대기·실행 중일 때만 막음 `[가정]` — DM 회신), 기존 인사이트는 "공고가 바뀌었어요 — 다시 생성" | — |
 
-**리더 판단으로 정한 것 (묻지 않음, `[가정]`)**: JR-Q5 과거 기록 — `ai_jobs.job_type`·사용량 `feature`의 `jd_extraction`, `target_type = 'jd_preview'`, 오류 `not_a_jd`는 CHECK에 남기고 새 행만 막는다(CF-A3 `career_description` 선례), 진행 중 추출 작업은 `canceled`로 닫는다, 사용량 표는 과거 기록이 있는 달에만 "JD 요건 추출(종료)" 행. AI L-1(단계 1 분리 — JR-Q2 (a) 안에 넣음), L-2(요건 키 `MT-n` — 대화 메시지 별칭 `M-n`과 겹침 방지), L-3(`common.v5`), L-4(AI-12 게이트 진입은 원문 문장 전체, `ai-12.reply.v8`), AI-5(근거 칩 = 문장 하나, 여러 문장 강조는 S-16 요건 행 링크만). **리더 정정**: 결정 입력 첫 판이 JR-2에 "기업명·포지션명 필수"로 잘못 적었다 — v5.20 규칙 그대로 **세 칸 모두 선택, 공고 내용만 필수, 기업명이 비면 "새 자기소개서 (YYYY-MM-DD)"**(CF-A7).
+**리더·담당 판단 (묻지 않음, `[가정]`)**: JR-Q5 과거 기록 — `jd_extraction`(job_type·feature)·`jd_preview`·`not_a_jd`는 CHECK에 남기고 새 행만 막음, 진행 중 추출 작업은 `canceled`, 사용량 표는 과거 기록이 있는 달에만 "JD 요건 추출(종료)" 행. 요건 키 `MT-n`(대화 메시지 별칭 `M-n`과 겹침 방지), `common.v5`, 근거 칩 = 문장 하나. JR-5의 귀결 — 자소서 근거에서 `jd_sentence` 제거, AI-12 게이트 진입은 원문 대신 그 보완점 항목, stale 인사이트도 AI-04가 읽되 안내 줄. JR-6의 귀결 — 데이터 최소 기준(D-01) 미달·문장 0개·진행 중 인사이트가 있으면 자동 시작하지 않음, 자동 시작이 실패해도 생성은 성공. **리더 정정**: 결정 입력 첫 판이 JR-2에 "기업명·포지션명 필수"로 잘못 적었다 — v5.20 규칙 그대로 세 칸 모두 선택, 공고 내용만 필수, 기업명이 비면 "새 자기소개서 (YYYY-MM-DD)"(CF-A7). **AI L-1(1a/1b 분리)은 JR-Q2 보류로 철회.**
 
 ### 1.0 이전 결정 대기 (2026-11-08 모두 처리 — CL-Q1은 RAG 사이클로)
 
@@ -241,7 +241,7 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 | # | 결정 | 반영 문서 | ★ |
 |---|------|-----------|---|
 | Q53-1 | S-14: 동의 필요·키 무효면 만들기 전에 막음(C-21 / 키 교체), 동의 뒤 만들면서 추출. 입력 보존, 키 없음 흐름은 그대로 | PRD 3.3, UX S-14·FL-10·C-18, AI AI-01, DM 2.7.1·2.11.7 | ★ — **(2026-11-14, JR-1) 생성 게이트 부분 효력 없음**: 생성이 AI를 부르지 않는다(DM 회신 DM-5). 그 밖의 AI 실행 전 게이트는 그대로 |
-| Q53-2 | 입력 원인으로 요건 추출이 실패해 요건이 없는 JD는 공고 원문 수정 허용. U-6·D-19의 예외 | PRD F-AP-01·D-19, UX S-15·C-20, AI AI-01, DM 2.6.1·A.6 | ★ — **(2026-11-14) 조건 변경 → JR-Q4 `[가정]`**: "결과가 없는 동안" 수정, RPC `update_jd_raw_text` |
+| Q53-2 | 입력 원인으로 요건 추출이 실패해 요건이 없는 JD는 공고 원문 수정 허용. U-6·D-19의 예외 | PRD F-AP-01·D-19, UX S-15·C-20, AI AI-01, DM 2.6.1·A.6 | ★ — **(2026-11-14, JR-7) 대체**: 원문은 언제든 수정(인사이트 대기·실행 중만 막음), RPC `update_jd_raw_text` |
 | Q53-3 | 입력 원인 채점 실패는 다시 채점 버튼 없음, 원인 + "이 기업 JD로 새 면접 시작" | UX S-22, AI 다시 채점, DM 2.7.1 | ★ |
 | Q53-4 | S-17: 요건 없는 JD는 추출 먼저 → 설정 화면, 기본 "AI에게 맡기기". 동의 필요·키 무효면 자동 실행 대신 누를 때 C-21 / 키 교체 | UX FL-03·S-17·C-11, AI AI-11 | |
 | Q53-5 | 종합만 실패하면 "종합 평가 다시 정리"(답변 재호출 없음, 활성 공급자) | UX S-22, AI 다시 채점, DM 2.7.1·2.9.1 | ★ |
@@ -250,7 +250,7 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 | Q53-8 | `project_fields`일 때 C-09 제목 변경 — **유지, 대상 변경 (2026-11-02, CR-7)**: `project_fields`는 이제 독립 프로젝트 내용 1칸(A18 의미 변경) | UX C-09 | |
 | Q53-9 | 질문 생성 입력 원인 실패는 S-15로, `insufficient_data`만 S-20 C-09 | UX C-20·S-33·S-20·FL-12 | |
 | Q53-10 | 다시 채점 대상이 없고 종합 평가 다시 정리도 할 수 없는 입력 원인 채점 실패 세션의 "새 결과" 표식은 처음 열면 지움. 다시 할 수 있는 실패 세션은 A9 그대로 | UX S-22·S-37·L-01·S-20, AI 다시 채점, DM 2.7.1·A.12 | ★ |
-| Q53-11 | 추출은 성공했는데 요건이 0개인 JD도 공고 원문 수정 허용. 이 원문으로 만든 결과가 있으면 잠금(2026-11-01, UQ-610). AI-01 정상 경로에서는 생기지 않는 안전망 | PRD F-AP-01·D-19, UX S-15, AI AI-01, DM 2.6.1 | ★ — **(2026-11-14) 조건 변경 → JR-Q4 `[가정]`**: 요건 0개 조건이 없어졌다 |
+| Q53-11 | 추출은 성공했는데 요건이 0개인 JD도 공고 원문 수정 허용. 이 원문으로 만든 결과가 있으면 잠금(2026-11-01, UQ-610). AI-01 정상 경로에서는 생기지 않는 안전망 | PRD F-AP-01·D-19, UX S-15, AI AI-01, DM 2.6.1 | ★ — **(2026-11-14, JR-7) 대체**: 요건 0개 조건이 없어졌고 원문은 언제든 수정 |
 
 ### 3.9 사용자 확정 (2026-11-02, 커리어 화면 재설계)
 
@@ -706,8 +706,19 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 |----|------|------------------|
 | **JR-1** | **AI-01 JD 요건 추출 폐기**(ID 재사용 금지). 요건 목록 `jd_requirements`·별칭 `REQ-n`·근거 `jd_requirement`·`requirements_hash`, 추출 상태 컬럼·RPC, 추가 모달 미리 보기 추출(`extract-preview`·`jd_preview`·`p_preview_job_id`), `job_type = 'jd_extraction'`(새 행), 오류 `not_a_jd`(새 값), 진행 문구, 사용량 기능 행(새 기록), 평가 세트 항목, 성능 목표 "JD 요건 추출 15초"를 지운다. F-P2-02·F-P2-03 폐기 | D-30, A2·A13, Q53-1(생성 게이트 — DM 회신 DM-5의 귀결), Q53-11, CF-2(AI 추출 부분), CF-A5, CF-A6, CF-A17 |
 | **JR-2** | 추가 모달 2단계의 **기업명·포지션명·마감일은 사용자가 직접 입력**(AI·`JobPosting` 미리 채우기·로딩 없음). URL 가져오기는 공고 원문만 채운다. 세 칸 모두 선택(공고 내용만 필수), 마감일 칸은 ②에 새로 생긴 일 단위 입력 | CF-A6, CF-A15 일부(`JobPosting` 채움), R-CF-14(마감일은 ②에 없음) |
-| **JR-3** | **AI-02 인사이트·AI-04 자소서 대화(그리고 AI-12 게이트 진입 — 리더 판단 L-4 `[가정]`)는 JD 원문 문장(`sentences`의 `Sn`)을 그대로 입력**으로 받는다. "추출을 먼저 끝내야 연다"·"요건 없으면 거부" 선행 조건 삭제. 문장 0개 원문은 저장 때 `jd_no_sentences`로 막는다(DM 회신, `[가정: 이름]`) | C-2 "AI-01 이후는 요건 목록", A13, C-6 추출 선행 |
+| **JR-3** | **AI-02 인사이트·AI-04 자소서 대화(그리고 AI-12 게이트 진입 — 리더 판단 L-4 `[가정]`)는 JD 원문 문장(`sentences`의 `Sn`)을 그대로 입력**으로 받는다. "추출을 먼저 끝내야 연다"·"요건 없으면 거부" 선행 조건 삭제. 문장 0개 원문은 저장 때 `jd_no_sentences`로 막는다(DM 회신, `[가정: 이름]`) **— (후속 확정 JR-5로 AI-04·AI-12 부분 대체: 원문은 인사이트만 읽는다)** | C-2 "AI-01 이후는 요건 목록", A13, C-6 추출 선행 |
 | **JR-4** | URL 가져오기(`POST /api/job-descriptions/fetch`)는 AI가 아니므로 남긴다 — 응답은 `{rawText}`만(`[가정: JR-2 "원문 텍스트만"의 귀결]`) | — |
+
+**후속 확정 (2026-11-14, 사용자 — 결정 대기 답변)**. 원문(요지): "원문 문장 ID" · "인사이트 부분도 대대적인 수정이 필요해 … 나중에 다시 한번에 결정할게" · "그냥 삭제" · "자기소개서에서 공고 원문은 인사이트를 제공하는 용도로만 사용돼. 자기소개서에서 AI가 참조할 수 있는 부분은 JD를 포함한 인사이트와 프로젝트들이야" · "자소서 생성과 동시에 인사이트가 생성되도록 … 단, AI가 연결되지 않은 경우만 지금 방식으로" · "언제든 수정" · "임시로 원문 입력만 맞춤".
+
+| ID | 결정 | 대체하는 기존 결정 |
+|----|------|------------------|
+| **JR-Q1 (a)** | JD 근거 = 결정적 문장 ID `Sn`(`jd_sentence`). 인사이트만 단다(JR-5) | — |
+| **JR-Q2 보류** | 인사이트는 재설계 사이클에서 한 번에 정한다. 임시로 원문 입력만 맞춘다(1장) | 리더 판단 L-1 철회 |
+| **JR-Q3 (b)** | 그냥 삭제 — `jd_requirement` 근거 행 삭제, 변환 없음, 옛 인사이트는 다시 생성 안내 | — |
+| **JR-5** | **공고 원문은 인사이트를 만드는 용도로만 쓴다.** 자소서 대화(AI-04)는 원문을 읽지 않고 **인사이트(JD 내용 포함) + 커리어 데이터** + 문항·메모만 읽는다. 인사이트가 없으면 커리어만으로 진행하고 안내 | JR-3 중 AI-04·AI-12 부분, 리더 판단 L-4 |
+| **JR-6** | **AI가 연결돼 있으면 자기소개서를 만들 때 인사이트가 자동으로 시작된다.** 연결되지 않았으면 지금처럼 인사이트 탭에서 직접 만든다 | **D-18**(사용자가 누를 때만, 자동 시작 없음) |
+| **JR-7** | **공고 원문은 언제든 고칠 수 있다.** 기존 인사이트는 "공고가 바뀌었어요 — 다시 생성", 자소서에는 영향 없음 | DM-18·D-19 예외(Q53-2·Q53-11), JR-Q4 권장안 |
 
 ## 4. 백엔드 후속 수정 필요 (2026-11-05)
 
@@ -738,13 +749,13 @@ UI 통합 QA(`_workspace/ui/13_ui-qa_v53_integration_review.md`)의 결정 대�
 
 | # | 백엔드에서 할 일 |
 |---|------------------|
-| Q53-1 | `create_application_project`가 행을 넣기 전에 동의·키를 확인하고 거부(`key_invalid`/`ai_consent_required`, 경로 ⑥, 고아 행 금지) — **(2026-11-14, JR-1) 생성 게이트 되돌림 → 4.24 #8** |
-| Q53-2 | RPC `update_failed_jd_raw_text`, `raw_text_edited_at`, `private.job_descriptions_guard` 완화, `ensureJdExtracted`가 `begin` 뒤에 문장을 읽게 수정, `getJdView.rawTextEditable`, 지난 실패 표시 규칙, pgTAP (DM 2.6.1) — **(2026-11-14, JR-Q4 `[가정]`) 되돌림·교체 → 4.24 #3·#9·#10** |
+| Q53-1 | `create_application_project`가 행을 넣기 전에 동의·키를 확인하고 거부(`key_invalid`/`ai_consent_required`, 경로 ⑥, 고아 행 금지) — **(2026-11-14, JR-1) 생성 게이트 되돌림 → 4.24 #9** |
+| Q53-2 | RPC `update_failed_jd_raw_text`, `raw_text_edited_at`, `private.job_descriptions_guard` 완화, `ensureJdExtracted`가 `begin` 뒤에 문장을 읽게 수정, `getJdView.rawTextEditable`, 지난 실패 표시 규칙, pgTAP (DM 2.6.1) — **(2026-11-14, JR-7) 되돌림·교체 → 4.24 #3·#11** |
 | Q53-3 | `answer_evaluations.error_code`, `fail_answer_evaluation` 인자, 입력 원인 답변 다시 채점 제외, `interview_evaluation_input_only`, 라우트의 `not_scored` 판정 변경 (DM 2.7.1) |
 | Q53-5 | 다시 채점의 종합만 다시 정리 경로(`evaluate` 없음), 대상 0 세션의 같은 행 다시 시도 거부 |
 | Q53-7 | `drafts_type_status_check`에 경력기술서 `composing`, 취소 처리 변경(`ai_jobs_release_drafts`, `fail_career_description`), `begin_career_description`의 `composing` 행 삭제, 조회 규칙 (DM 2.7.1) |
 | Q53-10 | `mark_interview_result_viewed` 조건 변경, 공용 판정 헬퍼(`begin_interview_evaluation`·다시 채점 라우트·세션 조회·이 RPC), `getInterviewResult`가 이 세션에도 RPC 호출, `canRetryEvaluation` 같은 판정, pgTAP (DM 2.7.1) |
-| Q53-11 | `update_failed_jd_raw_text` 조건 2·4에 `succeeded` + 요건 0개 추가, `job_descriptions_guard`가 `succeeded → pending`도 통과, pgTAP (DM 2.6.1) — **(2026-11-14, JR-Q4 `[가정]`) 되돌림·교체 → 4.24 #3·#9·#10** |
+| Q53-11 | `update_failed_jd_raw_text` 조건 2·4에 `succeeded` + 요건 0개 추가, `job_descriptions_guard`가 `succeeded → pending`도 통과, pgTAP (DM 2.6.1) — **(2026-11-14, JR-7) 되돌림·교체 → 4.24 #3·#11** |
 
 ### 4.2 리뷰 중 생긴 백엔드 확인 항목
 
@@ -1080,13 +1091,13 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 | # | 결정 | 할 일 | ★ | 파괴적 |
 |---|------|-------|---|--------|
 | 1 | CF-10·CF-A16 | `job_descriptions.source_url` 신설(text null, http(s)·≤ 2,048자 `[가정]`) | ★ | 아니다 |
-| 2 | CF-10·CF-A17 | `create_application_project`에 `p_source_url`·`p_preview_job_id` 추가, 미리 보기 결과 적용(원문 sha256 재계산 + 문장 수 대조, 같을 때만), 반환 `preview_applied`·`preview_skip_reason` | ★ | 아니다 (함수 교체) — **(2026-11-14, JR-1) `p_preview_job_id`·`preview_*` 되돌림 → 4.24 #8** (`p_source_url`은 유지) |
+| 2 | CF-10·CF-A17 | `create_application_project`에 `p_source_url`·`p_preview_job_id` 추가, 미리 보기 결과 적용(원문 sha256 재계산 + 문장 수 대조, 같을 때만), 반환 `preview_applied`·`preview_skip_reason` | ★ | 아니다 (함수 교체) — **(2026-11-14, JR-1) `p_preview_job_id`·`preview_*` 되돌림 → 4.24 #9** (`p_source_url`은 유지) |
 | 3 | CF-9·CF-A7 | 이름 조립 "{회사명} 자기소개서" — `private.application_compose_name`·`application_fallback_name`. 기존 이름 백필 없음 `[가정]` | ★ | 아니다 |
 | 4 | CF-2·CF-A5 | `apply_jd_extraction`이 AI-01 `deadline.value`를 `deadline is null`일 때만 기록(`source_sids`·기간 검사) | ★ | 아니다 — **(2026-11-14, JR-1·JR-2) 되돌림 → 4.24 #3** (`apply_jd_extraction` drop) |
 | 5 | CF-A8 | 인덱스 `application_projects (user_id, created_at desc)` | ★ | 아니다 |
-| 6 | CF-A17 | `ai_jobs_jd_extraction_check` 완화(`target_type = 'jd_preview'`), 쓰이지 않은 미리 보기 `output` 24시간 뒤 비우기(정리 크론 1줄) | ★ | 아니다 — **(2026-11-14, JR-1) 되돌림 → 4.24 #3·#4·#7** |
+| 6 | CF-A17 | `ai_jobs_jd_extraction_check` 완화(`target_type = 'jd_preview'`), 쓰이지 않은 미리 보기 `output` 24시간 뒤 비우기(정리 크론 1줄) | ★ | 아니다 — **(2026-11-14, JR-1) 되돌림 → 4.24 #3·#8·#16** |
 | 7 | CF-1 | `start_writing_chat` 복귀 대상 허용 목록에서 `career_description` 제거. `ai_jobs.job_type`·사용량 `feature`의 `career_description`·`draft_source_ranking`은 과거 행 보존용으로 CHECK에 남김 | ★ | 아니다 |
-| 8 | CF-10·CF-A15 | **새 API** `POST /api/job-descriptions/fetch`(서버 가져오기 — SSRF 차단·10초·2MB·리다이렉트 3회 재검사, 사이트별 처리: 사람인 본문 주소·잡코리아 프레임 주소·EUC-KR, `JobPosting` 구조화 데이터, 실패 코드 `fetch_*` 5종, AI 아님) · **새 API** `POST /api/job-descriptions/extract-preview`(행 없는 AI-01, Q53-1 게이트 409) | | 아니다 — **(2026-11-14, JR-2·JR-4) `JobPosting` 회사명·포지션명 응답 되돌림 → 4.24 #14**(가져오기 자체는 유지) |
+| 8 | CF-10·CF-A15 | **새 API** `POST /api/job-descriptions/fetch`(서버 가져오기 — SSRF 차단·10초·2MB·리다이렉트 3회 재검사, 사이트별 처리: 사람인 본문 주소·잡코리아 프레임 주소·EUC-KR, `JobPosting` 구조화 데이터, 실패 코드 `fetch_*` 5종, AI 아님) · **새 API** `POST /api/job-descriptions/extract-preview`(행 없는 AI-01, Q53-1 게이트 409) | | 아니다 — **(2026-11-14, JR-2·JR-4) `JobPosting` 회사명·포지션명 응답 되돌림 → 4.24 #15**(가져오기 자체는 유지) |
 | 9 | CF-A17 | 원문 정규화 함수 하나로 분할·해시·저장(`normalizeJdRawText` `[가정: 이름]`) | ★ (코드) | 아니다 |
 | 10 | CF-1·CF-5·CF-6·DM-4 | **11.8 계획 수정**(미배포): `document_kind`·`writing_chats.document_kind` = `cover_letter` 1값, 문항 ≤ 5(`too_many_questions` — 5 초과이고 저장 수보다 많을 때만), `answer_title`, `slot_count` 생성 컬럼, `save_application_document`에 `p_application_values {name, deadline}`, 경력기술서 근거·섹션 경로 폐기 | | 계획만 |
 | 11 | CF-A1 → CF-M1 | ~~11.8 이관: 경력기술서 초안 전부가 덤프 대상 → 7단계에서 사라짐~~ **(CF-M1, 2026-11-08 사용자) 대체 — 옛 초안 0행이라 이관 없이 가드 + drop**. 경력기술서·자소서 초안 모두 0행이라 손실 없음 | | 가드 + drop — 되돌릴 수 없다(0행) |
@@ -1125,56 +1136,58 @@ PA-1~PA-4 반영으로 이미 구현된 백엔드(DM v4.4 기준)와 UI를 고�
 
 ### 4.24 채용 공고 AI 처리 폐기 후속 (2026-11-14, JR-*) ★
 
-**이 사이클은 기획 문서만 고쳤다.** 아래가 `resumate-backend`·`resumate-ui`가 Phase 0에서 읽을 목록이다. 백엔드 세션 `jd-raw-backend`가 같은 방향으로 이미 진행 중이라, 그 결과를 이 표와 대조해 완료 표시를 한다(다른 하네스가 완료를 보고할 때만). JR-Q1~JR-Q4는 권장안 (a) 기준이다 — 사용자가 다른 안을 고르면 해당 행을 다시 쓴다. 상세·순서는 **DM v4.16 11.11**, 프롬프트는 **AI v4.16 0.v416**, 화면은 **UX v5.21 5.1o**. 4.23의 #2(미리 보기 인자)·#4(AI-01 `deadline`)·#6(`jd_preview`)와 AI 줄의 AI-01 schema 2는 **이 사이클로 폐기**됐다 — 구현했으면 되돌린다.
+**이 사이클은 기획 문서만 고쳤다.** 아래는 `resumate-backend`·`resumate-ui`가 Phase 0에서 읽을 목록이다. 기준은 사용자 확정 JR-1~JR-7과 결정 대기 답변(JR-Q1 (a)·JR-Q3 (b)·JR-7)이고, **인사이트(AI-02)는 JR-Q2 보류에 따른 임시 최소 수정**이다(재설계 사이클에서 다시 바뀐다). 백엔드 세션 `jd-raw-backend`가 같은 방향으로 진행 중이므로, 그 결과를 이 표와 대조해 완료 표시를 한다(다른 하네스가 완료를 보고할 때만). 상세·순서는 **DM v4.16 11.11**, 프롬프트는 **AI v4.16 0.v416**, 화면은 **UX v5.21 5.1o**. 4.23의 #2(미리 보기 인자)·#4(AI-01 `deadline`)·#6(`jd_preview`)·#8(`JobPosting` 응답)과 AI 줄의 AI-01 schema 2는 **이 사이클로 폐기**됐다 — 구현했으면 되돌린다. 이 표의 첫 판(1a/1b 분리·변환 후 drop·"결과 없을 때만 수정")은 후속 확정으로 대체됐다.
 
 **백엔드 — 지울 것** (`resumate-backend`)
 
 | # | 결정 | 할 일 | ★ | 파괴적 |
 |---|------|-------|---|--------|
-| 1 | JR-1·JR-Q3 | 테이블 `jd_requirements` drop(트리거 `jd_requirements_set_updated_at`·`jd_requirements_evidence_source_deleted`, 정책, `authenticated`·`app_ai_writer` grant 포함) | ★ | **예** (마이그레이션 C) |
-| 2 | JR-1 | `job_descriptions` 컬럼 8개 drop: `extraction_status`·`extraction`·`extraction_job_id`·`extraction_provider`·`extraction_model`·`tech_keywords`·`requirements_hash`·`detected_language` + 관련 CHECK 7개·FK `job_descriptions_extraction_job_fkey`·인덱스 `job_descriptions_extraction_job_id_idx` | ★ | **예** (C) |
-| 3 | JR-1·JR-Q4 | public RPC drop: `begin_jd_extraction`·`apply_jd_extraction`·`fail_jd_extraction`·`update_failed_jd_raw_text`·`purge_unused_jd_preview_outputs`. private 헬퍼 drop: `jd_apply_extraction_result`·`jd_extraction_job_matches`·`jd_extraction_result_valid`·`jd_sids_exist`·`jd_extraction_mark_failed`·`ai_jobs_release_jd_extraction`(+ 같은 이름 트리거)·`jd_sids_valid`(다른 사용처 없으면) | ★ | **예** (마이그레이션 B `…_r16_jd_raw_text_rpcs` — public RPC 5개 drop, 데이터 손실은 없지만 되돌릴 수 없고 옛 코드 호출이 깨진다) |
-| 4 | JR-1 | API 삭제: `POST /api/job-descriptions/extract-preview`, `POST /api/application-projects/{id}/jd-extraction`. 크론 `src/server/jobs/cron.ts`의 `purge_unused_jd_preview_outputs` 호출 삭제 | ★ | 아니다 |
-| 5 | JR-1 | 코드 삭제: AI-01 파이프라인·스키마·프롬프트(`ai-01.*`)·검증·저장·픽스처, `src/server/jobs/jd-extraction`, 컨텍스트 빌더 `REQ-n` 별칭(`context-pack/jd.ts`·`gate-requirements.ts`), 근거 허용 목록·칩의 `jd_requirement`, 오류 매핑 `jd_raw_text_locked`·`jd_failure_not_input`·`jd_not_extracted`, 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록 | ★ | 아니다 |
-| 6 | JR-Q1 | `evidence_links_source_type_check`에서 `jd_requirement` 제거(변환 뒤), `private.evidence_allowed_sources`·`evidence_links_check_source`·서류 근거 허용 목록(`save_application_document`·`private.doc_*`·`private.wc_doc_*`)에서도 제거 | ★ | **예** (C) |
-| 7 | JR-Q5 | **남기는 과거 값**(CHECK 그대로, 새 행 금지): `ai_jobs.job_type`·`ai_usage_records.job_type`·`feature`의 `jd_extraction`, `ai_jobs_jd_extraction_check`, `error_code` `not_a_jd`, `*_source`의 `ai` | | 아니다 |
+| 1 | JR-1·JR-Q3 | 테이블 `jd_requirements` drop(트리거 `jd_requirements_set_updated_at`·`jd_requirements_evidence_source_deleted`, 정책, grant 포함) | ★ | **예** (마이그레이션 C) |
+| 2 | JR-1 | `job_descriptions` 컬럼 8개 drop: `extraction_status`·`extraction`·`extraction_job_id`·`extraction_provider`·`extraction_model`·`tech_keywords`·`requirements_hash`·`detected_language` + CHECK 7개·FK `job_descriptions_extraction_job_fkey`·인덱스 `job_descriptions_extraction_job_id_idx` | ★ | **예** (C) |
+| 3 | JR-1·JR-7 | public RPC drop: `begin_jd_extraction`·`apply_jd_extraction`·`fail_jd_extraction`·`update_failed_jd_raw_text`·`purge_unused_jd_preview_outputs`. private 헬퍼 drop: `jd_apply_extraction_result`·`jd_extraction_job_matches`·`jd_extraction_result_valid`·`jd_sids_exist`·`jd_extraction_mark_failed`·`ai_jobs_release_jd_extraction`(+ 트리거)·`jd_sids_valid`(다른 사용처 없으면) | ★ | **예** (마이그레이션 B — public RPC drop, 데이터 손실은 없지만 되돌릴 수 없고 옛 코드 호출이 깨진다) |
+| 4 | JR-Q3·JR-5 | **데이터 행 삭제(변환 없음)**: `jd_requirement` 근거 전부, `application_document` 소유 `jd_sentence` 근거 전부, 서류 대화 `structured_draft` 안의 JD 출처 원소 | ★ | **예** (마이그레이션 A) |
+| 5 | JR-Q1 | `evidence_links_source_type_check`에서 `jd_requirement` 제거 | ★ | **예** (C) |
+| 6 | JR-1 | API 삭제: `POST /api/job-descriptions/extract-preview`, `POST /api/application-projects/{id}/jd-extraction`. 크론의 `purge_unused_jd_preview_outputs` 호출 삭제 | ★ | 아니다 |
+| 7 | JR-1·JR-5 | 코드 삭제: AI-01 파이프라인 일체(`ai-01.*` 프롬프트·스키마·검증·픽스처, `src/server/jobs/jd-extraction`), 컨텍스트 빌더 `REQ-n`, AI-04·AI-12의 원문 입력, 자소서 근거 허용 목록·칩의 JD 출처, 오류 매핑 `jd_has_results`·`jd_raw_text_locked`·`jd_failure_not_input`·`jd_not_extracted`, 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록 | ★ | 아니다 |
+| 8 | JR-Q5 | **남기는 과거 값**(CHECK 그대로, 새 행 없음): `jd_extraction`(job_type·feature), `ai_jobs_jd_extraction_check`, `not_a_jd`(+ `error_category` 식), 출처 `ai`, **옛 인사이트 행(`schema_version = 1`)과 그 나머지 근거**(화면에 본문을 보이지 않고 지우지도 않음) | | 아니다 |
 
 **백엔드 — 바꿀 것 / 새로 만들 것**
 
 | # | 결정 | 할 일 | ★ | 파괴적 |
 |---|------|-------|---|--------|
-| 8 | JR-1·JR-2·JR-3 | `create_application_project`: `p_preview_job_id` 제거(옛 시그니처 drop 후 재생성), Q53-1 생성 게이트 삭제, 이름 항상 결정(`user`/`default`, CF-A7), 문장 0개 원문 `jd_no_sentences`(400), 반환 `{application_project_id, job_description_id, created, name, name_source}`(`preview_*` 삭제). 이름 헬퍼 `private.application_fallback_name`·`application_compose_name`은 본문·시그니처 그대로, 생성 RPC는 `p_name`이 비면 늘 `application_fallback_name`을 부르고 직접 `compose_name` 분기·"추출 대기" null 이름 분기를 지운다(추출 쪽 호출자 drop, DM 11.11 (3) #10 — 비파괴) | ★ | 아니다 |
-| 9 | JR-Q4 | 신설 `update_jd_raw_text(p_application_project_id, p_raw_text, p_raw_text_hash, p_sentences)` → `{application_project_id, job_description_id, raw_text_edited_at}`, `authenticated`만, 조건 0~7(DM 2.6.1 — 완료 인사이트·`jd_sentence` 근거·저장 안 한 대화 제안의 공고 근거·실행 중 작업이 없을 때만), 판정 헬퍼 `private.jd_raw_text_lock_reason` `[가정]`. JD 조회에 `rawTextEditable`·`rawTextLockedReason` | ★ | 아니다 |
-| 10 | JR-Q4 | `private.job_descriptions_guard`: 원문 3컬럼(`raw_text`·`raw_text_hash`·`sentences`) 변경은 `raw_text_edited_at` 변경과 함께일 때만(컬럼 drop 전에 교체) | ★ | 아니다 |
-| 11 | JR-3·JR-Q2 | `insights.requirements_hash` → **`raw_text_hash`**(rename + CHECK·ready CHECK 식, 값 = JD `raw_text_hash` 복사). `private.insight_payload_valid`·`complete_insight`: `hashes.raw_text_hash`, JD 해시 불일치 → `stale_run`. `begin_insight`: `jd_not_extracted` 삭제, 0문장 → `jd_no_sentences` 409 | ★ | 예 (rename, 마이그레이션 A) |
-| 12 | JR-3 | `private.writing_chat_document_greeting`·`start_document_writing_chat`: "요건 추출 전" 인사 분기·`extraction_status` 읽기 삭제(인사 3종) | ★ | 아니다 |
-| 13 | JR-1 | `private.delete_account_data`: `jd_requirements` delete 줄 삭제 | ★ | 아니다 |
-| 14 | JR-2·JR-4 | `POST /api/job-descriptions/fetch` 응답 `{rawText}`만(`companyName`·`positionTitle` 제거 — `JobPosting` 미리 채우기 폐기) | ★ | 아니다 |
-| 15 | JR-Q3 | **마이그레이션 A `…_r16_jd_raw_text_convert`**(DESTRUCTIVE): 변환 전 행 수 집계(push 전 읽기 전용 집계를 `_workspace/backend/R16/release-counts.md`에 + `raise notice`) → 진행 중 `jd_extraction` 작업 `canceled`/`canceled` → `jd_preview` 작업 `output`·`step_outputs` 비우기 → `name is null` 백필(`default`) → 인사이트 `result`·`match_stage_result`를 schema 2로 변환(`MT-n`, 근거 `item_key` `requirement_matches.<uuid>` → `MT-n`) → `jd_requirement` 근거 → 첫 문장 `jd_sentence`(중복·원본 없음은 삭제) → 서류 대화 `structured_draft` 출처 변환 → #11 rename | ★ | **예** |
-| 16 | — | **마이그레이션 B `…_r16_jd_raw_text_rpcs`**(#3·#8~#13 함수 교체·신설·drop), **C `…_r16_drop_jd_extraction`**(#1·#2·#6 + 최종 단언: `jd_requirement` 근거 0 · schema 1 인사이트 0 · null 이름 0 · 진행 중 추출 0 · 근거 수 보존식 — 하나라도 거짓이면 롤백). 배포: A·B·C push → 바로 코드 배포 `[가정]`, **원격 push는 사용자**, 되돌리기 불가라 백업 시점은 릴리스 체크리스트. `database.types.ts` 재생성, pgTAP은 DM 11.11 (3) #13 | ★ | **예** |
-| 17 | — | 변경 없음 확인: `get_data_readiness`, `get_ai_usage_summary`, `get_deletion_impact` | | |
+| 9 | JR-1·JR-2 | `create_application_project`: `p_preview_job_id` 제거(옛 시그니처 drop 후 재생성), Q53-1 생성 게이트 삭제, 이름 항상 결정(`user`/`default`, CF-A7 — 이름 헬퍼 `private.application_fallback_name`·`application_compose_name`은 본문·시그니처 그대로, `p_name`이 비면 늘 `application_fallback_name`), 문장 0개 원문 `jd_no_sentences`, 반환 `{application_project_id, job_description_id, created, name, name_source}` | ★ | 아니다 |
+| 10 | **JR-6** | **생성 Server Action의 인사이트 자동 시작**: RPC 성공 뒤 별도 단계. 조건 = AI 연결(활성 키 `valid`/`needs_check` + 동의) · D-01 · 문장 ≥ 1 · 진행 중 인사이트 없음 → 수동 시작과 같은 서비스로 작업 1개. 아니면·실패하면 건너뛰고 생성은 성공. 응답 `insightJobId`·`insightSkipReason`(`ai_not_connected`·`key_invalid`·`consent_required`·`insufficient_data`·`no_sentences`·`in_progress`·`start_failed`). 같은 `p_id` 재시도는 자동 시작 안 함 | ★ | 아니다 |
+| 11 | **JR-7** | 신설 `update_jd_raw_text(p_application_project_id, p_raw_text, p_raw_text_hash, p_sentences)` → `{application_project_id, job_description_id, raw_text_edited_at}`, `authenticated`만. 조건 = 인자·문장 ≥ 1 · 내 것 · **진행 중 `insight` 작업 없음**(`jd_job_in_progress`) · 내용 변경(`jd_raw_text_unchanged`). 기존 인사이트·근거는 그대로(stale로 보임). JD 조회 `rawTextEditable`·`rawTextLockedReason`(`job_in_progress` \| null). `private.job_descriptions_guard`: 원문 변경은 `raw_text_edited_at` 변경과 함께일 때만(컬럼 drop 전에 교체) | ★ | 아니다 |
+| 12 | JR-Q1·JR-5 | 근거 허용 목록 `private.evidence_allowed_sources`·`evidence_links_check_source`: **`insight` = 커리어 5종 + `jd_sentence`, `application_document` = 커리어 5종 + `user_note`**. 서류 저장·제안 패치(`save_application_document`·`private.doc_evidence_row`·`doc_proposal_sources`·`doc_replace_slot_evidence`·`wc_doc_evidence`·`wc_doc_sources`)도 같은 목록 | ★ | 아니다 |
+| 13 | JR-3·JR-7 | `insights.requirements_hash` → **`raw_text_hash`**(rename + CHECK, 값 = JD `raw_text_hash` 복사, 과거 행은 JD 현재 값). `private.insight_payload_valid`·`complete_insight`: `hashes.raw_text_hash`, `schema_version = 2`, JD 해시 불일치 → `stale_run`. `begin_insight`: `jd_not_extracted` 삭제, 0문장 → `jd_no_sentences`. 조회 `schemaVersion`(1 → "다시 만들어야 해요")·`staleReasons.{career, rawText}`(`rawText` = `insights.raw_text_hash ≠ job_descriptions.raw_text_hash`) | ★ | 예 (rename, 마이그레이션 A) |
+| 14 | JR-5 | `start_writing_chat`: `return_target.params.insight_id`·`insight_item_key`(`gaps.{n}`) 검사 `[가정: 이름]`. `private.writing_chat_document_greeting`·`start_document_writing_chat`: "요건 추출 전" 분기 삭제(인사 3종). `private.delete_account_data`: `jd_requirements` 줄 삭제 | ★ | 아니다 |
+| 15 | JR-2·JR-4 | `POST /api/job-descriptions/fetch` 응답 `{rawText}`만(`JobPosting` 회사명·포지션명 제거) | ★ | 아니다 |
+| 16 | JR-Q3 (b) | **마이그레이션 A `…_r16_jd_raw_text_cleanup`**(DESTRUCTIVE): push 전 읽기 전용 집계 10항목(`_workspace/backend/R16/release-counts.md` + `raise notice`) → 진행 중 `jd_extraction` 작업 `canceled`/`canceled` → `jd_preview` 출력 비우기·`name is null` 백필 → #4 행 삭제 → #13 rename. **B `…_r16_jd_raw_text_rpcs`**(#3·#9·#11~#14 함수). **C `…_r16_drop_jd_extraction`**(#1·#2·#5 + 최종 단언: `jd_requirement` 근거 0 · 자소서 `jd_sentence` 근거 0 · 대화 제안 JD 출처 0 · null 이름 0 · 진행 중 추출 0 — 하나라도 거짓이면 롤백). 배포: A·B·C push → 바로 코드 배포 `[가정]`, **원격 push는 사용자**, 되돌리기 불가라 백업 시점은 릴리스 체크리스트. 타입 재생성·pgTAP은 DM 11.11 (3) #13 | ★ | **예** |
+| 17 | — | 변경 없음 확인: `get_data_readiness`, `get_ai_usage_summary`, `get_deletion_impact`. AI-04가 인사이트를 읽는 데 grant 변경 없음(`insights` 읽기 기존) | | |
 
 **AI** (`resumate-backend` ai-pipeline — 상세 AI v4.16 0.v416)
 
 | # | 결정 | 할 일 | ★ |
 |---|------|-------|---|
-| 18 | JR-Q2 | AI-02 재구성: **1a 식별 `ai-02.identify.v1` 신설**(경량 등급, 경력 팩 없이 원문 문장만, `requirement_text` ≤ 120자·`sids` 1~5개, 최대 15개, 단계 1a schema v1) → **1b 판정 `ai-02.match.v6`**(기본 등급, 8개씩 배치 병렬, 빠진 판정 채우기·`stalled` 방어 유지, schema 1→2) → **종합 `ai-02.synthesize.v6`**(`requirement_refs` = `MT-n`). 진행 `progress.stage` `prepare`→`identify`→`match`(배치 done/total)→`synthesize`→`validate`, 사용량 `call_key` `insight.identify`(한 인사이트에 경량·기본 등급 혼재, `insights.model`은 1b·종합 값 — DM 2.7.0). 서버 키 `match_key` `MT-n`, 저장 참조 `match_keys`, `input_hash`에 `raw_text_hash`, `stale.raw_text` | ★ |
-| 19 | JR-3 | AI-04 프롬프트 `ai-04.generate.v7`·`ai-04.adjust.v7`·`ai-04.extract.v2`·`ai-04.reply.v2`(원문 문장 입력, JD를 캐시 프리픽스 안에, 출력 schema 4→5 `requirement_refs` 삭제). AI-12 게이트 진입 `ai-12.reply.v8` `[가정]`(원문 문장 전체). 공통 블록 `common.v5` `[가정]`(`REQ-1` 예시 삭제 — 모든 기능의 `prompt_version`이 함께 바뀜) | ★ |
-| 20 | JR-Q1 | 근거 검증(V-*): `jd_requirement` 거부, `jd_sentence` `sids` 존재 검사, `source_label` = 문장 앞 40자. 오류 분류에서 `not_a_jd` 새 값 없음 | ★ |
-| 21 | JR-1 | 평가 세트(NFR-AI-04)에서 AI-01 항목 삭제, 인사이트 1a 식별 품질(요건 누락·과잉) 항목 추가 — AI v4.16 6장 | |
+| 18 | JR-Q2 보류(임시) | **AI-02 임시 최소 수정**: 입력 = 커리어 팩 + 원문 문장 전체(`Sn`). 단계 1을 **한 호출**(원문에서 요건 식별 + 판정, `requirement_text` ≤ 120자·`sids`, 최대 15개, 서버 키 `match_key` `MT-n`) → 단계 2 종합(`match_keys`). `match_stage_result` `{prompt_version, items}`, `call_key` `insight.match.1`·`insight.synthesize`, 결과 `schema_version = 2`, 재사용은 schema 2만. 프롬프트 버전은 AI v4.16 0.v416 표(`ai-02.match`·`ai-02.synthesize` +1). **`identify` 단계·`ai-02.identify.v1`은 만들지 않는다.** 알려진 위험: 단계 1 지연 40~75초 추정 — 실측해 기록(재설계 사이클 입력) | ★ |
+| 19 | JR-5 | **AI-04**: 공고 원문 블록 삭제 → 최신 ready 인사이트(`schema_version = 2`, 요건 판정·강점·보완점·지원 방향) 블록(경력 팩 뒤 캐시 프리픽스) + 커리어 + 문항·메모. 인사이트가 없으면 커리어만 + 안내 줄, stale이어도 쓰고 안내 줄 `[가정]`. 근거에서 `jd_sentence` 거부. 프롬프트 `ai-04.*` +1(AI 0.v416). **AI-12 게이트 진입**: 원문 대신 그 보완점 항목(`ai-12.reply.v8`). AI-09는 인사이트를 읽는다 `[가정]`. 공통 블록 `common.v5`(`REQ-1` 예시 삭제 — 모든 기능의 `prompt_version`이 함께 바뀜) | ★ |
+| 20 | JR-6 | 인사이트 트리거 = 생성 직후 자동(AI 연결 시) + 수동, 무료 등급 순차 규칙 그대로, 자동 시작도 사용량 기록. 비용: 인사이트 1회 약 $0.11, 예시 월 약 $1.2~1.5(자동 시작으로 인사이트 월 2 → 3회) | |
+| 21 | JR-1 | 평가 세트(NFR-AI-04)에서 AI-01 항목 삭제(AI v4.16 6장) | |
 
 **UI** (`resumate-ui`) — 상세 UX v5.21 5.1o
 
 | # | 결정 | 할 일 |
 |---|------|-------|
-| 1 | JR-1·JR-2 | **S-14 추가 모달**: [다음]은 URL 가져오기만 기다림(직접 입력이면 서버 요청 없이 ②로), ② 지원 기업·포지션·**마감일(새 칸, 일 단위, 비우기)** 모두 선택·직접 입력, 공고 내용만 필수. AI 미리 채우기·`JobPosting` 채움·추출 로딩·"요건 n개" 줄·Q53-1 판정·`previewJobId` 전송 삭제. 짧은 공고 경고 문구 "인사이트가 더 정확해져요". `jd_no_sentences` 문구 |
-| 2 | JR-1·JR-Q1·JR-Q4 | **S-46 채용 공고 탭(S-15)**: 요건 목록·"핵심" 배지·"요건 정리하기"·재추출·추출 실패 안내 삭제. `raw_text` + `sentences` 오프셋 하이라이트(`?tab=jd&s=S3,S4`), [공고 내용 수정]은 `rawTextEditable`일 때만, 아니면 `rawTextLockedReason` 이유 문구 2종 |
-| 3 | JR-Q2 | **S-46 인사이트 탭(S-16)**: 요건별 판정 표 = 단계 1 원소(`requirement_text` + "공고 원문" 링크 = `sids` 전체 강조), 강점·보완점의 요건 표시는 `match_keys`로 표 행을 찾아 문구로. "요건 추출 먼저" 조건 삭제 |
-| 4 | JR-3 | **S-46 작성**: [자기소개서 작성 시작] = 검증 → 저장만, 시작 영역 ④ "요건 추출 전"·추출이 도는 자리 삭제, 대화는 바로 열림 |
-| 5 | JR-Q1 | **근거 칩 C-01·C-11·C-15**: `REQ`("JD 요건") 칩 종류 삭제, `jd_sentence` "공고 원문" 칩(행 하나 = 문장 하나), "공고 원문에서" |
-| 6 | JR-1·JR-Q2 | **C-03 진행 문구**: `prepare` "준비 중" · `identify` "공고에서 요건 찾는 중" · `match` "요건별로 내 커리어와 맞춰 보는 중"(무료 등급 처리 단위는 `match`에만). AI-01 진행 문구 삭제. **C-20**: `not_a_jd`·요건 추출 행 삭제 |
-| 7 | JR-1 | C-18 "요건 정리하기" 진입점, 구현 상수 `AI_FEATURE_NAMES`의 "요건 정리" 삭제. C-05 자기소개서 삭제 영향 줄 "JD·요건" → "공고" |
+| 1 | JR-1·JR-2·JR-6 | **S-14 추가 모달**: [다음]은 URL 가져오기만 기다림(직접 입력이면 서버 요청 없이 ②로). ② 지원 기업·포지션·**마감일(새 칸, 일 단위)** 모두 선택·직접 입력, 공고 내용만 필수. AI 미리 채우기·`JobPosting` 채움·추출 로딩·"요건 n개"·Q53-1 판정·`previewJobId` 삭제. AI 연결이면 [자기소개서 작성] 위에 "인사이트를 자동으로 만들어요" 안내 줄(C-19) `[가정: 문구]`. `jd_no_sentences` 문구 |
+| 2 | JR-7·JR-Q1 | **S-46 채용 공고 탭(S-15)**: 요건 목록·"요건 정리하기"·재추출·추출 실패 안내 삭제. `raw_text` + `sentences` 오프셋 하이라이트(`?tab=jd&s=S3,S4`). **[공고 내용 수정]은 늘 보이고**, 인사이트가 대기·실행 중일 때만 비활성 + "인사이트를 만드는 중에는 수정할 수 없어요"(`rawTextLockedReason = job_in_progress`) |
+| 3 | JR-Q2 보류·JR-Q3·JR-6·JR-7 | **S-46 인사이트 탭(S-16)**: 판정 표 = 단계 1 원소(`requirement_text` + "공고 원문" 링크 = `sids` 전체 강조, 강점·보완점 요건 표시는 `match_keys`), "요건 추출 먼저" 삭제, "임시 상태" 줄. 자동 시작이면 진행 표시·완료 토스트·실패 다시 시도. `schemaVersion = 1` → "공고 처리 방식이 바뀌어 다시 만들어야 해요" + [다시 생성](본문 없음). `staleReasons.rawText` → "공고가 바뀌었어요 — 다시 생성" |
+| 4 | JR-5 | **S-46 작성**: [자기소개서 작성 시작] = 검증 → 저장만. "AI가 읽는 내용" = 커리어 + 최신 인사이트 + 대화(공고 원문 없음). 인사이트가 없거나 만드는 중일 때 안내 줄. 자소서 제안 카드·근거 칩에 공고 출처 없음 |
+| 5 | JR-Q1·JR-5 | **근거 칩 C-01·C-11·C-15**: `REQ` 칩 삭제, `jd_sentence` "공고 원문" 칩은 **인사이트에서만**(행 하나 = 문장 하나) |
+| 6 | JR-1·JR-Q2 | **C-03 진행 문구**: 인사이트 `prepare` "준비 중" → `match` "요건별로 내 커리어와 맞춰 보는 중"(한 단계, 처리 단위 표시 없음). AI-01 진행 문구 삭제. **C-20**: `not_a_jd`·요건 추출 행 삭제 |
+| 7 | JR-1·JR-5 | C-18 "요건 정리하기" 진입점, 상수 `AI_FEATURE_NAMES`의 "요건 정리" 삭제. C-05 삭제 영향 줄 "JD·요건" → "공고". S-16 보완점 → S-10 패널로 갈 때 `insight_id`·`insight_item_key` 전달 |
 | 8 | JR-Q5 | **사용량 표(S-24 ②·S-42)**: 기본 4행 + 과거 기록이 있는 달에만 맨 아래 "JD 요건 추출(종료)" 행 |
-| 9 | JR-1 | 데이터 계층 mock·타입: 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록, fetch 응답 `companyName`·`positionTitle` 제거, `rawTextEditable`·`rawTextLockedReason` 추가 |
+| 9 | JR-1·JR-6·JR-7 | 데이터 계층 mock·타입: 조회 계약의 `extraction*`·`detectedLanguage`·요건 목록, fetch 응답 `companyName`·`positionTitle` 제거, `rawTextEditable`·`rawTextLockedReason`·`schemaVersion`·`staleReasons.rawText`·생성 응답 `insightJobId`·`insightSkipReason` 추가 |
 
-**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md`와 `ai-pipeline-impl` 스킬 설명의 AI-01·`REQ-n` 서술 — **반영 2026-11-14**(원본·Codex 사본, `ai-feature-spec` 포함, CHANGELOG). 남은 것: 백엔드 하네스 `resumate-backend/references/slice-catalog.md` S5 행의 AI-01·`jd_requirements` 서술 — `resumate-backend` R16에서 정리.
+**리더 (하네스)**: `.claude/skills/resumate-planning/references/product-context.md`와 `ai-feature-spec`·`ai-pipeline-impl` 스킬 설명의 AI-01·`REQ-n` 서술 — **반영 2026-11-14**(원본·Codex 사본, CHANGELOG). 남은 것: 백엔드 하네스 `resumate-backend/references/slice-catalog.md` S5 행의 AI-01·`jd_requirements` 서술 — `resumate-backend` R16에서 정리.
+
+**다음 기획 사이클**: 인사이트 재설계(JR-Q2 보류분) — AI-02 구조·S-16 화면·출력 모양을 한 번에 다시 정한다. 입력: 임시 구현의 단계 1 지연 실측값.

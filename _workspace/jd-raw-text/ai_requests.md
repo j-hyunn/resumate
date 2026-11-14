@@ -145,3 +145,26 @@ AI 작성 대화 근거 별칭 `M-n`(`writing_chat_message`, C-3)과 JR-Q2 (a)�
 ### L-4 AI-12 게이트 진입 입력 (DM-11) — **리더 판단 2026-11-14: 원문 문장 전체 + `ai-12.reply.v8` 유지 `[가정]`**
 
 결정 입력에 없던 자리다(JR-1이 원천 테이블을 지워 생긴 귀결). AI 명세는 JR-3의 원칙대로 **원문 문장 전체**로 바꾸고 `ai-12.reply.v7` → `v8` `[가정]`으로 적었다. 대안: 게이트 진입의 JD 블록을 없앤다(질문 주제를 대상 프로젝트에서만 잡음, 비용 0, R-31 기능 축소). 사용자에게 물을지 리더가 판단.
+
+---
+
+## 4. 후속 확정 요청 (2026-11-14, 사용자 결정 대기 답변 반영 — AI v4.16 같은 판)
+
+기준: `_workspace/00_input/planning-decisions-jd-raw-text.md` "후속 확정". 위 1~3절 중 아래와 어긋나는 것은 이 절이 이긴다.
+
+### data-architect
+
+- **F-DM-1 (JR-Q2 보류 → 1a/1b 걷음)**: DM-2·DM-2a 회신의 1a/1b 모양은 **쓰지 않는다**. `match_stage_result` = `{prompt_version, items: [{match_key, requirement_text, sids, status, model_status, rationale, missing_aspect}]}`(배치 정보 없음, 단계 1 한 호출). `progress.stage`에 `identify`를 **더하지 않는다**(`prepare` → `match` 0/1 → 1/1 → `synthesize` → `validate`). `call_key`는 `insight.match.1` + `insight.synthesize`(`insight.identify` 없음), 한 인사이트 안 등급은 기본 하나. `insights.result` 원소 모양·`match_key`·`match_keys`·`MT-n`·`raw_text_hash`는 그대로.
+- **F-DM-2 (JR-Q3 (b))**: `jd_requirement` 근거 행은 변환 없이 삭제(DM-4 회신의 변환 전제 철회). 옛 인사이트(`schema_version` 1)는 그대로 두고 화면이 "다시 만들어야 해요"를 보인다 — AI-04·AI-12는 `schema_version` 1 인사이트를 입력으로 쓰지 않으므로, 조회 RPC가 최신 ready 인사이트를 돌려줄 때 `schema_version`도 함께 돌려줄 것.
+- **F-DM-3 (JR-5 — AI-04 입력)**: 자소서 대화 턴의 컨텍스트 조립이 **`job_descriptions.sentences`를 읽지 않고** 그 지원 건의 **최신 ready 인사이트**(`insights` `is_latest` + `status = ready` + `schema_version` 2)의 `result`에서 `requirement_matches[].{requirement_text, status, missing_aspect}`, `strengths[].{title, description}`, `gaps[].{match_keys→requirement_text, gap_kind, description}`, `strategy.{positioning, project_priorities}`를 읽는다. `app_ai_writer`의 `insights` 읽기 grant 확인. stale(공고·커리어 변경)이어도 읽는다 `[가정]` — 그래서 "stale 여부"(`raw_text_hash` ≠ JD 현재 값, `career_snapshot_hash` ≠ 현재)를 함께 돌려주면 시작 인사 안내 줄에 쓴다. `company_name`·`position_title`은 계속 읽는다(사용자 입력 메타).
+- **F-DM-4 (JR-5 — 근거 허용)**: 자소서 정본(`owner_type = 'application_document'`) 저장 RPC가 받는 근거 `source_type`에서 **`jd_sentence` 제외**(커리어 5종 + `user_note`). DM-7 회신의 "서류 대화 `structured_draft`의 `jd_sentence` 출처 0" 조건은 대상이 없어진다. `jd_sentence`는 `owner_type = 'insight'`에만.
+- **F-DM-5 (JR-5 — AI-12 게이트)**: 게이트 진입 대화의 `return_target`이 **출발한 보완점의 `item_key`**(`gaps.{n}`)를 담을 수 있게 해 달라(없으면 AI 쪽은 `gaps[]` 전부 최대 5개를 넣는다). DM-11 회신의 `job_descriptions.sentences` 읽기 경로는 게이트에서는 더 쓰지 않는다.
+- **F-DM-6 (JR-6 — 자동 시작)**: 지원 건 생성 경로(생성 RPC → 생성 API)가 성공 뒤 **AI 연결(활성 키 + 동의) 이고 D-01 충족이면** 인사이트 작업 1개를 만든다(`begin_insight`와 같은 검사, 공급자·등급은 그 시점 활성 값). 연결 안 됨·D-01 미달이면 만들지 않고 오류도 내지 않는다(응답에 `insight_auto_started: false` 같은 표시 — 이름은 DM). 자동 시작 실패는 생성 트랜잭션과 분리(생성은 성공). 같은 지원 건 진행 중 작업이 있으면 만들지 않는다.
+- **F-DM-7 (JR-7 — 원문 수정)**: `update_jd_raw_text`의 "결과 없을 때만" 조건 삭제. 인사이트 stale 판정 = `insights.raw_text_hash` ≠ `job_descriptions.raw_text_hash`. 실행 중 인사이트가 있을 때 (가) 수정을 막는다 / (나) 작업을 끝내고 결과를 stale로 보인다(`complete_insight`의 `stale_run`은 이때 빼야 결과가 남는다) — **둘 중 단순한 쪽을 DM이 정해 알려 달라**(AI 명세는 둘 다 받게 적었다). 자소서 쪽 조건(DM-7의 서류 대화 조건)은 JR-5로 필요 없다.
+
+### ux-planner
+
+- **F-UX-1**: 진행 단계에서 `identify`를 지운다(위 F-DM-1). `match`는 0/1 → 1/1, 약 40~75초(임시 상태의 알려진 위험).
+- **F-UX-2 (JR-5·JR-6)**: AI-04 시작 인사 앞 "인사이트 상태 줄" 3종 `[가정: 문구]` — 없음 / 만드는 중 / 공고·경력 변경 뒤. 최종 문구 UX.
+- **F-UX-3 (JR-7)**: 인사이트 탭 "공고가 바뀌었어요 — 다시 생성"(F-P2-07 자리). 옛 인사이트(`schema_version` 1) "공고 처리 방식이 바뀌어 다시 만들어야 해요" + [다시 생성].
+- **F-UX-4 (JR-5)**: 자소서 근거 칩에 원문 문장 칩이 생기지 않는다(근거 = 커리어 + 메모). 원문 문장 칩은 인사이트 탭에만.

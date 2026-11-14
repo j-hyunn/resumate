@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiLock } from "@/components/common/ai-lock"
+import { AiLock, type AiLockEntry } from "@/components/common/ai-lock"
 import { ProviderBadge } from "@/components/common/provider-badge"
 import { PAGE_LIMITS, PANEL_COPY } from "@/lib/data/career-v45-shared"
 import type { AiPanelController, PanelBlock } from "./use-ai-panel"
@@ -22,15 +22,24 @@ export function PanelInputArea({
   panel,
   renderClosedActions,
   onDirectInput,
+  lockCopy,
+  lockEntry = "writing_chat",
+  closedCopy,
 }: {
   panel: AiPanelController
   renderClosedActions?: (panel: AiPanelController) => React.ReactNode
   onDirectInput?: () => void
+  /** C-18 description; default = the S-10 / S-44 copy for `panel.target` */
+  lockCopy?: string
+  lockEntry?: AiLockEntry
+  /** closed-box line; default = the S-10 / S-44 rule below */
+  closedCopy?: string
 }) {
+  const lockDescription = lockCopy ?? PANEL_COPY.lock[panel.target]
   if (panel.locked) {
     return (
       <div className="shrink-0 px-3 pt-3 pb-3">
-        <AiLock entry="writing_chat" size="inline" description={PANEL_COPY.lock[panel.target]} alternativeLabel="직접 입력" onAlternative={onDirectInput} actionName="Resumate AI에게 보내기" />
+        <AiLock entry={lockEntry} size="inline" description={lockDescription} alternativeLabel="직접 입력" onAlternative={onDirectInput} actionName="Resumate AI에게 보내기" />
       </div>
     )
   }
@@ -41,7 +50,7 @@ export function PanelInputArea({
         <div className="space-y-2 rounded-2xl border border-dashed border-input bg-card p-3">
           <p className="flex items-start gap-2 text-sm">
             <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-            {full ? PANEL_COPY.messageLimit : PANEL_COPY.chatClosed}
+            {closedCopy ?? (full ? PANEL_COPY.messageLimit : PANEL_COPY.chatClosed)}
           </p>
           <div className="flex flex-wrap gap-2">
             {renderClosedActions?.(panel)}
@@ -59,7 +68,7 @@ export function PanelInputArea({
     <div className="shrink-0">
       {panel.block ? (
         <div className="px-3 pt-3">
-          <BlockNotice panel={panel} block={panel.block} />
+          <BlockNotice panel={panel} block={panel.block} lockDescription={lockDescription} lockEntry={lockEntry} />
         </div>
       ) : null}
       <ChipRow panel={panel} />
@@ -70,7 +79,7 @@ export function PanelInputArea({
   )
 }
 
-function BlockNotice({ panel, block }: { panel: AiPanelController; block: PanelBlock }) {
+function BlockNotice({ panel, block, lockDescription, lockEntry }: { panel: AiPanelController; block: PanelBlock; lockDescription: string; lockEntry: AiLockEntry }) {
   const newChat = (
     <Button variant="outline" size="sm" onClick={() => void panel.newChat()}>
       새 대화
@@ -78,7 +87,7 @@ function BlockNotice({ panel, block }: { panel: AiPanelController; block: PanelB
   )
   switch (block.kind) {
     case "key_invalid":
-      return <AiErrorNotice code="key_invalid" size="inline" lockEntry="writing_chat" />
+      return <AiErrorNotice code="key_invalid" size="inline" lockEntry={lockEntry} />
     case "invalid_form_snapshot":
       return (
         <Alert variant="warning">
@@ -125,7 +134,7 @@ function BlockNotice({ panel, block }: { panel: AiPanelController; block: PanelB
         </Alert>
       )
     case "ai_not_connected":
-      return <AiLock entry="writing_chat" size="inline" description={PANEL_COPY.lock[panel.target]} actionName="Resumate AI에게 보내기" />
+      return <AiLock entry={lockEntry} size="inline" description={lockDescription} actionName="Resumate AI에게 보내기" />
     case "connection_check_failed":
       return (
         <Alert variant="destructive" className="flex items-center gap-2">

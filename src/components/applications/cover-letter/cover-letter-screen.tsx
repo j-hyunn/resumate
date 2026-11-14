@@ -20,12 +20,13 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { ArrowUpRight, MoreHorizontal, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
+import { submitFailedMessage } from "@/lib/data/labels"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DocTitleInput, InlineField, InlineFields, PANEL_WIDTH } from "@/components/common/doc-inputs"
+import { DocTitleInput, FieldRow, FieldRows, PANEL_WIDTH } from "@/components/common/doc-inputs"
 import { DocBody, DocHead, type DocPanelPlacement } from "@/components/common/shell/doc-body"
 import {
   CrumbRow,
@@ -73,6 +74,13 @@ import {
   type QuestionForm,
 } from "./question-form"
 
+/**
+ * 세로 탭 한 칸 — 공통 알약 탭의 선택 색(연한 초록)을 시안 3의 **회색 바탕 + 검은 글자**로 바꾼다 `[UI-가정]`.
+ * 같은 변형 접두사로 써야 tailwind-merge가 기본 알약 색을 대체한다.
+ */
+const TAB_PILL =
+  "h-10 w-full justify-start px-4 text-foreground group-data-[variant=pill]/tabs-list:h-10 group-data-[variant=pill]/tabs-list:text-foreground group-data-[variant=pill]/tabs-list:data-active:bg-muted group-data-[variant=pill]/tabs-list:data-active:text-foreground dark:group-data-[variant=pill]/tabs-list:data-active:bg-muted dark:group-data-[variant=pill]/tabs-list:data-active:text-foreground max-lg:w-auto max-lg:justify-center"
+
 export type CoverLetterTab = "cover_letter" | "jd" | "insight"
 
 export interface CoverLetterScreenData {
@@ -85,6 +93,8 @@ export interface CoverLetterScreenData {
   source_url: string | null
   /** null = 문항 설정 상태 (CF-A11) */
   document: ApplicationDocument | null
+  /** 문항 설정 상태의 첫 문항 `question_id` — **서버가 만든다**(서버 HTML과 하이드레이션이 같은 id를 쓰게) */
+  seed_question_ids: string[]
   /** `getEvidence("application_document", doc.id)` — C-11 */
   evidence: Record<string, EvidenceView[]>
   /** 키가 있고 요건이 아직 없다 → [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 */
@@ -138,7 +148,7 @@ export function CoverLetterScreen({
   const docRef = React.useRef<ApplicationDocument | null>(data.document)
   // 첫 폼은 **한 번만** 만든다 — 만들 때마다 새 `question_id`가 생겨 기준선과 어긋나지 않게
   const [initialForms] = React.useState<QuestionForm[]>(() => {
-    const forms = previewForms(data.document, previewState)
+    const forms = previewForms(data.document, previewState, data.seed_question_ids)
     slots.markUsed(forms.map((f) => f.slot))
     return forms
   })
@@ -319,6 +329,9 @@ export function CoverLetterScreen({
             return false
           default:
             setSaveState("failed")
+            // 문항 설정 상태는 상단 저장 상태 표시가 `idle`로 고정(CF-S3·S5)이라 "저장 실패"가 어디에도 안 보였다
+            // (2026-11-10 "작성 시작을 눌러도 아무 동작이 없다"). 정본 행을 만드는 [자기소개서 작성 시작]의 실패는 알린다
+            if (opts.createRow) toast.error(submitFailedMessage("자기소개서"))
             return false
         }
       }
@@ -471,7 +484,7 @@ export function CoverLetterScreen({
   const saveUi: SaveUiState = state === "questions" ? "idle" : uiState
 
   const head = (
-    <DocHead className="space-y-2" label="자기소개서 정보">
+    <DocHead className="space-y-3" label="자기소개서 정보">
       <div className="flex items-start gap-2">
         <DocTitleInput
           ref={nameRef}
@@ -511,18 +524,37 @@ export function CoverLetterScreen({
         </p>
       ) : null}
 
-      <InlineFields>
-        {/* 지원 직무·JD 상세는 작성 상태 머리에만 (시안 4) */}
+      {/* 라벨/값 줄 (시안 2·3: 왼쪽 회색 라벨 열 + 오른쪽 컨트롤) — S-10 머리의 `FieldRows`를 그대로 쓴다.
+          마감일(두 상태) → 지원 직무 · JD 상세(작성 상태만, 확정 항목) */}
+      <FieldRows className="max-w-2xl">
+        <FieldRow label="마감일" labelId="cl-deadline-label">
+          {/* 일 단위 (CF-4) — 시안의 연·월 두 셀렉트 대신 같은 높이·테두리의 날짜 칸 하나 */}
+          <Input
+            type="date"
+            aria-labelledby="cl-deadline-label"
+            className="w-[11rem]"
+            value={deadline}
+            onChange={(e) => {
+              setDeadline(e.target.value)
+              if (saveState !== "saving") setSaveState("idle")
+            }}
+          />
+          {deadline ? (
+            <Button variant="ghost" size="icon-xs" aria-label="마감일 비우기" onClick={() => setDeadline("")}>
+              <X aria-hidden />
+            </Button>
+          ) : null}
+        </FieldRow>
         {state === "writing" ? (
           <>
-            <InlineField label="지원 직무">
+            <FieldRow label="지원 직무">
               {data.position_title ? (
                 <span className="text-sm">{data.position_title}</span>
               ) : (
                 <span className="text-sm text-muted-foreground">포지션 없음</span>
               )}
-            </InlineField>
-            <InlineField label="채용 공고">
+            </FieldRow>
+            <FieldRow label="채용 공고">
               {data.source_url ? (
                 <Button variant="link" size="sm" className="h-auto px-0" asChild>
                   <a href={data.source_url} target="_blank" rel="noopener noreferrer">
@@ -536,36 +568,11 @@ export function CoverLetterScreen({
                   JD 상세
                 </Button>
               )}
-            </InlineField>
+            </FieldRow>
           </>
         ) : null}
-        <InlineField label="마감일">
-          <span className="flex items-center gap-1">
-            {/* 일 단위 (CF-4) — 연·월 선택을 쓰지 않는다 */}
-            <Input
-              type="date"
-              aria-label="마감일"
-              className="w-[11rem]"
-              value={deadline}
-              onChange={(e) => {
-                setDeadline(e.target.value)
-                if (saveState !== "saving") setSaveState("idle")
-              }}
-            />
-            {deadline ? (
-              <Button variant="ghost" size="icon-xs" aria-label="마감일 비우기" onClick={() => setDeadline("")}>
-                <X aria-hidden />
-              </Button>
-            ) : null}
-          </span>
-        </InlineField>
-      </InlineFields>
+      </FieldRows>
 
-      {state === "writing" && doc ? (
-        <p className="text-xs text-muted-foreground tabular-nums">
-          문항 {forms.length}개 · 답변 {forms.filter((f) => f.body.trim()).length}개 · 마지막 수정 {formatRelative(updatedAt ?? doc.updated_at)}
-        </p>
-      ) : null}
       {pageError ? (
         <p className="text-sm text-destructive" role="alert">
           {pageError}
@@ -605,6 +612,7 @@ export function CoverLetterScreen({
         placement.setWideOpen(true)
         panel.focusInput()
       }}
+      meta={doc ? `문항 ${forms.length}개 · 답변 ${forms.filter((f) => f.body.trim()).length}개 · 마지막 수정 ${formatRelative(updatedAt ?? doc.updated_at)}` : null}
       onRevealProposal={(slot) => {
         // 좁은 화면이면 시트를 열고, 넓은 화면이면 패널을 연 뒤 그 문항의 제안 자리로 간다 (UQ-749)
         if (placement.mode === "narrow") placement.setSheetOpen(true)
@@ -644,9 +652,10 @@ export function CoverLetterScreen({
       <Separator className="shrink-0" />
 
       {state === "questions" ? (
-        // 문항 설정 상태: 탭 목록·AI 패널 없이 한 열
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 max-md:px-4">
-          <div className="mx-auto w-full max-w-prose-edit">
+        // 문항 설정 상태: 탭 목록·AI 패널 없이 가운데 좁은 한 열 (시안 2 — 위아래 여백 넉넉히)
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-16 pb-10 max-md:px-4 max-md:pt-8">
+          {/* 시안 2의 열 폭 약 600px(그림 830px ÷ 1.39) — 59 QA UQ-762 */}
+          <div className="mx-auto w-full max-w-[37.5rem]">
             <QuestionSetup
               applicationProjectId={apId}
               allocateSlot={allocateSlot}
@@ -674,18 +683,19 @@ export function CoverLetterScreen({
       ) : (
         <Tabs value={tab} onValueChange={changeTab} orientation="vertical" className="min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 max-lg:flex-col">
+            {/* 세로 알약 탭 (시안 3: 알약 폭 약 140px = 열 164px − 왼쪽 여백 24px, 59 QA UQ-765, 선택 탭 = 회색 바탕 알약, 구분선 없음) — 공통 `Tabs` `variant="pill"` */}
             <TabsList
               variant="pill"
-              className="w-40 shrink-0 flex-col items-stretch gap-1 border-r px-3 py-4 max-lg:w-full max-lg:flex-row max-lg:border-r-0 max-lg:border-b max-lg:px-4 max-lg:py-2"
+              className="w-[10.25rem] shrink-0 flex-col items-stretch gap-1 py-6 pl-6 max-lg:w-full max-lg:flex-row max-lg:border-b max-lg:px-4 max-lg:py-2"
             >
               {/* 탭 이름 — CF-U3 확정: 작성 화면 탭은 "자소서" */}
-              <TabsTrigger value="cover_letter" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="cover_letter" className={TAB_PILL}>
                 자소서
               </TabsTrigger>
-              <TabsTrigger value="jd" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="jd" className={TAB_PILL}>
                 채용 공고
               </TabsTrigger>
-              <TabsTrigger value="insight" className="justify-start max-lg:justify-center">
+              <TabsTrigger value="insight" className={TAB_PILL}>
                 인사이트
               </TabsTrigger>
             </TabsList>
@@ -709,7 +719,9 @@ export function CoverLetterScreen({
                 }
                 aside={
                   <CoverLetterPanel
-                    panel={{ ...panel, hide: () => placement.setWideOpen(false) }}
+                    panel={panel}
+                    placement={placement}
+                    onDirectInput={() => document.querySelector<HTMLElement>(`[aria-label="문항 1 내용"]`)?.focus()}
                     questions={forms.map((f) => ({ slot: f.slot, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
                     filled={applied.map((a) => ({ slot: a.slot, rev: a.rev }))}
                     onFill={onFill}
@@ -760,21 +772,21 @@ export function CoverLetterScreen({
  * - `questions-max` → 5문항("+ 문항 추가" 비활성)
  * - `empty-answers` → 정본 행의 제목·답변을 비운 작성 상태(빈 상태 상자)
  */
-function previewForms(doc: ApplicationDocument | null, state: string | null): QuestionForm[] {
+function previewForms(doc: ApplicationDocument | null, state: string | null, ids: readonly string[]): QuestionForm[] {
   if (state === "questions-invalid") {
-    const forms = seedQuestionForms()
+    const forms = seedQuestionForms(ids)
     forms[0] = { ...forms[0], question_text: "" }
     forms[1] = { ...forms[1], char_limit: "" }
     return forms
   }
   if (state === "questions-max") {
-    const forms = seedQuestionForms()
+    const forms = seedQuestionForms(ids)
     // 기본 3문항(q_1~q_3) 다음 번호를 받는다 (q_4·q_5)
     while (forms.length < COVER_LETTER_MAX_QUESTIONS)
-      forms.push({ ...newQuestionForm(nextSlot(forms.map((f) => f.slot))), question_text: `추가 문항 ${forms.length + 1}` })
+      forms.push({ ...newQuestionForm(nextSlot(forms.map((f) => f.slot)), ids[forms.length]), question_text: `추가 문항 ${forms.length + 1}` })
     return forms
   }
-  if (!doc) return seedQuestionForms()
+  if (!doc) return seedQuestionForms(ids)
   const forms = toQuestionForms(doc.body)
   if (state === "empty-answers") return forms.map((f) => ({ ...f, answer_title: "", body: "", blocks: [] }))
   return forms

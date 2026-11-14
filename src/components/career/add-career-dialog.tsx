@@ -11,12 +11,11 @@
  * 상세 패널과 같은 "프로젝트 내용"으로 쓴다.
  */
 import * as React from "react"
-import { CircleAlert, Loader2, X } from "lucide-react"
+import { X } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -28,6 +27,18 @@ import { createCareerItemAction, updateCareerItemAction, type NewCareerItem } fr
 import { nn } from "./form-parts"
 import { educationTypeOnSave, enrollmentStatusOnSave } from "./education-derive"
 import { afterCareerItemSaved } from "@/components/common/return-target"
+import {
+  FormDialog,
+  FormDialogBody,
+  FormDialogFooter,
+  FormDialogForm,
+  FormDialogHeader,
+  FormDialogSubmit,
+  FormField,
+  FormFieldError,
+  FormFillField,
+  FormSection,
+} from "@/components/common/form-dialog"
 
 export type AddCareerKind = "experience" | "education" | "project"
 
@@ -208,18 +219,13 @@ export function AddCareerDialog({
 }) {
   const formKind = editing?.kind ?? kind ?? null
   return (
-    <Dialog open={formKind !== null} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        onCloseAutoFocus={onCloseAutoFocus}
-        className="flex max-h-[calc(100dvh-2rem)] w-[602px] flex-col gap-4 rounded-[20px] p-5 sm:max-w-[602px] lg:h-[calc(100dvh-200px)] lg:max-h-[840px]"
-      >
-        {/* key: every open starts from an empty (or the row's) form */}
-        {formKind ? (
-          <AddCareerForm key={editing ? editing.row.id : formKind} kind={formKind} editing={editing} onCreated={onCreated} onSaved={onSaved} />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+    // 공통 입력 모달 틀 (`FormDialog`, 58 런에 이 파일에서 꺼냈다 — 모양·동작 그대로)
+    <FormDialog open={formKind !== null} onOpenChange={onOpenChange} onCloseAutoFocus={onCloseAutoFocus}>
+      {/* key: every open starts from an empty (or the row's) form */}
+      {formKind ? (
+        <AddCareerForm key={editing ? editing.row.id : formKind} kind={formKind} editing={editing} onCreated={onCreated} onSaved={onSaved} />
+      ) : null}
+    </FormDialog>
   )
 }
 
@@ -277,29 +283,24 @@ function AddCareerForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <DialogTitle className="flex-1 text-xl leading-normal font-semibold">{editing ? EDIT_TITLES[kind] : TITLES[kind]}</DialogTitle>
-        <DialogDescription className="sr-only">{editing ? "내용을 고치고 저장하기를 누르면 반영돼요" : "내용을 채우고 추가하기를 누르면 커리어 목록에 추가돼요"}</DialogDescription>
-        <DialogClose asChild>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="닫기">
-            <X className="size-6" aria-hidden />
-          </Button>
-        </DialogClose>
-      </div>
+    <FormDialogForm onSubmit={submit}>
+      <FormDialogHeader
+        title={editing ? EDIT_TITLES[kind] : TITLES[kind]}
+        description={editing ? "내용을 고치고 저장하기를 누르면 반영돼요" : "내용을 채우고 추가하기를 누르면 커리어 목록에 추가돼요"}
+      />
 
-      <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-1">
+      <FormDialogBody>
         {kind === "experience" ? (
-          <Section title="재직 정보">
-            <Field id="add-org" label="회사명" error={errors.org}>
+          <FormSection title="재직 정보">
+            <FormField id="add-org" label="회사명" error={errors.org}>
               <Input id="add-org" placeholder="회사 명 입력" value={values.org} onChange={(e) => set({ org: e.target.value })} {...invalid("add-org", errors.org)} />
-            </Field>
+            </FormField>
             <PeriodField label="재직 기간" ongoingLabel={ongoingLabel} value={values.period} onChange={(period) => set({ period })} startError={errors.start} endError={errors.end} />
             <div className="grid gap-x-2 sm:grid-cols-2">
-              <Field id="add-rank" label="직급" error={errors.rank}>
+              <FormField id="add-rank" label="직급" error={errors.rank}>
                 <Input id="add-rank" placeholder="직급 입력" value={values.rank} onChange={(e) => set({ rank: e.target.value })} {...invalid("add-rank", errors.rank)} />
-              </Field>
-              <Field id="add-position" label="직책">
+              </FormField>
+              <FormField id="add-position" label="직책">
                 <Input
                   id="add-position"
                   placeholder="직책 입력"
@@ -308,11 +309,11 @@ function AddCareerForm({
                   aria-invalid={errors.rank ? true : undefined}
                   aria-describedby={errors.rank ? "add-rank-error" : undefined}
                 />
-              </Field>
-              <Field id="add-dept" label="부서">
+              </FormField>
+              <FormField id="add-dept" label="부서">
                 <Input id="add-dept" placeholder="부서 입력" value={values.department} onChange={(e) => set({ department: e.target.value })} />
-              </Field>
-              <Field id="add-type" label="고용 형태">
+              </FormField>
+              <FormField id="add-type" label="고용 형태">
                 <Select value={values.employment_type} onValueChange={(v) => set({ employment_type: v as EmploymentType })}>
                   <SelectTrigger id="add-type" className="w-full">
                     <SelectValue placeholder="고용 형태 선택" />
@@ -325,32 +326,32 @@ function AddCareerForm({
                     ))}
                   </SelectContent>
                 </Select>
-              </Field>
+              </FormField>
             </div>
-          </Section>
+          </FormSection>
         ) : kind === "education" ? (
-          <Section title="교육 정보">
-            <Field id="add-name" label="교육 명">
+          <FormSection title="교육 정보">
+            <FormField id="add-name" label="교육 명">
               <Input id="add-name" placeholder="교육 명 입력" value={values.name} onChange={(e) => set({ name: e.target.value })} />
-            </Field>
-            <Field id="add-org" label="운영 기관" error={errors.org}>
+            </FormField>
+            <FormField id="add-org" label="운영 기관" error={errors.org}>
               <Input id="add-org" placeholder="운영 기관 입력" value={values.org} onChange={(e) => set({ org: e.target.value })} {...invalid("add-org", errors.org)} />
-            </Field>
+            </FormField>
             <PeriodField label="교육 기간" ongoingLabel={ongoingLabel} value={values.period} onChange={(period) => set({ period })} startError={errors.start} endError={errors.end} />
-          </Section>
+          </FormSection>
         ) : (
-          <Section title="프로젝트 정보">
+          <FormSection title="프로젝트 정보">
             <div className="grid gap-x-2 sm:grid-cols-2">
-              <Field id="add-name" label="서비스 명" error={errors.name}>
+              <FormField id="add-name" label="서비스 명" error={errors.name}>
                 <Input id="add-name" placeholder="서비스 명 입력" value={values.name} onChange={(e) => set({ name: e.target.value })} {...invalid("add-name", errors.name)} />
-              </Field>
-              <Field id="add-role" label="역할">
+              </FormField>
+              <FormField id="add-role" label="역할">
                 <Input id="add-role" placeholder="역할 입력" value={values.role} onChange={(e) => set({ role: e.target.value })} />
-              </Field>
+              </FormField>
             </div>
             <PeriodField label="진행 기간" ongoingLabel={ongoingLabel} value={values.period} onChange={(period) => set({ period })} startError={errors.start} endError={errors.end} />
             <SkillsField value={values.skills} onChange={(skills) => set({ skills })} />
-            <Field id="add-link" label="프로젝트 링크" error={errors.link}>
+            <FormField id="add-link" label="프로젝트 링크" error={errors.link}>
               <Input
                 id="add-link"
                 type="url"
@@ -360,14 +361,11 @@ function AddCareerForm({
                 onChange={(e) => set({ link: e.target.value })}
                 {...invalid("add-link", errors.link)}
               />
-            </Field>
-          </Section>
+            </FormField>
+          </FormSection>
         )}
 
-        <section className="flex min-h-48 flex-1 flex-col gap-2">
-          <Label htmlFor="add-body" className="text-base font-medium">
-            {kind === "experience" ? "근무 내용" : kind === "education" ? "교육 내용" : "프로젝트 내용"}
-          </Label>
+        <FormFillField id="add-body" label={kind === "experience" ? "근무 내용" : kind === "education" ? "교육 내용" : "프로젝트 내용"}>
           <Textarea
             id="add-body"
             className="min-h-48 flex-1 resize-none text-base leading-[1.75]"
@@ -375,52 +373,18 @@ function AddCareerForm({
             value={values.body}
             onChange={(e) => set({ body: e.target.value })}
           />
-        </section>
-      </div>
+        </FormFillField>
+      </FormDialogBody>
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={pending}>
-          {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
-          {editing ? "저장하기" : "추가하기"}
-        </Button>
-      </div>
-    </form>
+      <FormDialogFooter>
+        <FormDialogSubmit pending={pending}>{editing ? "저장하기" : "추가하기"}</FormDialogSubmit>
+      </FormDialogFooter>
+    </FormDialogForm>
   )
 }
 
 function invalid(id: string, error: string | undefined) {
   return error ? { "aria-invalid": true as const, "aria-describedby": `${id}-error` } : {}
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-base font-medium">{title}</h3>
-      <div className="flex flex-col">{children}</div>
-    </section>
-  )
-}
-
-function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 py-2">
-      <Label htmlFor={id} className="text-sm font-normal">
-        {label}
-      </Label>
-      {children}
-      <FieldError id={`${id}-error`} message={error} />
-    </div>
-  )
-}
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null
-  return (
-    <p id={id} className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
-      <CircleAlert className="size-4 shrink-0" aria-hidden />
-      {message}
-    </p>
-  )
 }
 
 /** 연도·월 ~ 연도·월 + 재직 중 / 진행 중, on one row (wraps on narrow screens) */
@@ -465,7 +429,7 @@ function PeriodField({
           {ongoingLabel}
         </Label>
       </div>
-      <FieldError id="add-period-error" message={error} />
+      <FormFieldError id="add-period-error" message={error} />
     </div>
   )
 }

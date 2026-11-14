@@ -61,6 +61,8 @@ export const AI_LOCK_RECOMMEND = "Gemini 무료 키로 결제 없이 시작할 �
 export interface AiLockProps {
   entry: AiLockEntry
   size?: "area" | "inline"
+  /** 영역형을 카드 틀 없이 그린다 — 컨테이너에 바로 보일 때(S-46 인사이트 탭, 2026-11-10). 기본 false */
+  bare?: boolean
   /** override the 기능 설명 */
   description?: string
   /**
@@ -102,6 +104,7 @@ function useConnectLinks(returnHref: string | undefined, feature: AiFeatureKey, 
 }
 
 export function AiLock({
+  bare = false,
   entry,
   size = "area",
   description,
@@ -162,10 +165,11 @@ export function AiLock({
   }
 
   return (
-    <Card
+    <LockFrame
+      bare={bare}
       role="region"
       aria-label={`${featureLabel ?? AI_FEATURE_NAMES[featureKey]} 잠김`}
-      className={cn("max-w-xl gap-4 p-6", className)}
+      className={cn(bare ? "flex max-w-xl flex-col gap-4" : "max-w-xl gap-4 p-6", className)}
     >
       <div className="grid size-10 place-items-center rounded-full bg-primary-subtle">
         <PlugZap className="size-5 text-primary-text" aria-hidden />
@@ -198,7 +202,7 @@ export function AiLock({
           </div>
         </>
       ) : null}
-    </Card>
+    </LockFrame>
   )
 }
 
@@ -268,4 +272,9 @@ export function AiLockPopup({
       </DialogContent>
     </Dialog>
   )
+}
+
+/** 영역형의 틀 — 기본은 카드, `bare`면 틀 없는 블록 */
+function LockFrame({ bare, ...props }: React.ComponentProps<"div"> & { bare: boolean }) {
+  return bare ? <div {...props} /> : <Card {...props} />
 }

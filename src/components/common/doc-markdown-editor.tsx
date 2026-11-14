@@ -41,6 +41,11 @@ export interface DocTextareaProps {
    * `className` so a short body still looks like a writing area.
    */
   grow?: boolean
+  /**
+   * 읽기 전용 마크다운 보기 (S-46 채용 공고 탭의 공고 원문, 2026-11-10 사용자 요청). 입력칸처럼 보이지 않게
+   * `textbox` 역할·hover 바탕을 뺀다. 기본값 false — S-10·S-44 편집 동작은 그대로다.
+   */
+  readOnly?: boolean
   className?: string
   onFocus?: () => void
   onBlur?: () => void
@@ -144,7 +149,7 @@ export function rawValueOf(el: HTMLElement | null): string | null {
 }
 
 export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(function DocTextarea(
-  { value, onValueChange, id, placeholder, maxLength, onLimitReached, grow, className, onFocus, onBlur, ...aria },
+  { value, onValueChange, id, placeholder, maxLength, onLimitReached, grow, readOnly = false, className, onFocus, onBlur, ...aria },
   ref,
 ) {
   // the last markdown this editor emitted / was given — a `value` that differs came from outside (AI fill, restore)
@@ -155,17 +160,20 @@ export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(funct
   })
 
   const attributes = React.useMemo(() => {
-    const a: Record<string, string> = { role: "textbox", "aria-multiline": "true", class: cn(EDITOR_CLASS, grow ? undefined : CAPPED_CLASS, className) }
+    const a: Record<string, string> = readOnly
+      ? { "aria-readonly": "true", class: cn(EDITOR_CLASS, "hover:bg-transparent", grow ? undefined : CAPPED_CLASS, className) }
+      : { role: "textbox", "aria-multiline": "true", class: cn(EDITOR_CLASS, grow ? undefined : CAPPED_CLASS, className) }
     if (id) a.id = id
     if (aria["aria-label"]) a["aria-label"] = aria["aria-label"]
     if (aria["aria-labelledby"]) a["aria-labelledby"] = aria["aria-labelledby"]
     if (aria["aria-describedby"]) a["aria-describedby"] = aria["aria-describedby"]
     if (aria["aria-invalid"] === true || aria["aria-invalid"] === "true") a["aria-invalid"] = "true"
     return a
-  }, [id, grow, className, aria["aria-label"], aria["aria-labelledby"], aria["aria-describedby"], aria["aria-invalid"]]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, grow, readOnly, className, aria["aria-label"], aria["aria-labelledby"], aria["aria-describedby"], aria["aria-invalid"]]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: !readOnly,
     extensions: [
       // codeBlock / link / tables stay on: AI-13 drafts can hold table and code blocks, and a field that can't
       // show a block drops it on the next save (backend QA R-1)
@@ -237,6 +245,11 @@ export const DocTextarea = React.forwardRef<HTMLElement, DocTextareaProps>(funct
       .setContent(value, { contentType: "markdown", emitUpdate: false })
       .run()
   }, [editor, value])
+
+  // `readOnly`가 바뀌면 편집 가능 여부도 따른다 (모달의 처리 중 잠금 등). 첫 값은 useEditor의 `editable`이 정한다
+  React.useEffect(() => {
+    if (editor && editor.isEditable === readOnly) editor.setEditable(!readOnly, false)
+  }, [editor, readOnly])
 
   React.useImperativeHandle(ref, () => (editor?.view.dom ?? null) as HTMLElement, [editor])
 

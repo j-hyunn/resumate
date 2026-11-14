@@ -10,11 +10,22 @@ const KEY = "__resumateMockDb" as const
 
 type GlobalWithDb = typeof globalThis & { [KEY]?: MockDb }
 
+/** stores already checked for missing tables (once per store object) */
+const backfilled = new WeakSet<object>()
+
 export function getMockDb(): MockDb {
   // Backstop for mock-isolation.test.ts: fixtures must never serve a production request
   if (process.env.NODE_ENV === "production") throw new Error("The mock store is not available in production")
   const g = globalThis as GlobalWithDb
   if (!g[KEY]) g[KEY] = createFixtures()
+  // a store created by an older dev build (HMR keeps globalThis) lacks tables added since — e.g. `cover_letter_chats`
+  // (R15): fill only the missing top-level tables from fresh fixtures, keep everything else as it is
+  const db = g[KEY] as unknown as Record<string, unknown>
+  if (!backfilled.has(g[KEY])) {
+    backfilled.add(g[KEY])
+    const fresh = createFixtures() as unknown as Record<string, unknown>
+    for (const k of Object.keys(fresh)) if (!(k in db)) db[k] = fresh[k]
+  }
   // a store created before v5.3 (dev HMR) lacks the mock controls
   g[KEY].mock_controls = { ...defaultMockControls(), ...g[KEY].mock_controls }
   return g[KEY]

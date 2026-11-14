@@ -272,7 +272,8 @@ export function InsightView(props: InsightViewProps) {
 
         {!running && !latest && !failedCategory && connection && !connection.active_provider ? (
           // C-18 영역형 (기존 결과 없음)
-          <AiLock entry="insight" size="area" featureLabel="인사이트" alternativeHref={routes.career()} />
+          // 카드 안이 아니라 컨테이너에 바로 (2026-11-10 사용자 요청)
+          <AiLock entry="insight" size="area" bare featureLabel="인사이트" alternativeHref={routes.career()} />
         ) : !running && !latest && !failedCategory ? (
           <Card className="max-w-2xl gap-4 p-6">
             <h2 className="text-lg leading-7 font-semibold">이 공고에 내 커리어가 얼마나 맞는지 정리해 드려요</h2>

@@ -5,6 +5,7 @@
  * 직접 수정 표시) + 기술 키워드. 요건마다 원문 문장(source_sids)이 연결된다.
  * 요건 수정(F-P2-03)은 Could라 MVP에서 읽기 전용.
  */
+import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ArrowUpRight, Loader2, PenLine, TextSearch } from "lucide-react"
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiLock } from "@/components/common/ai-lock"
 import { AiRunButton } from "@/components/common/ai-run-button"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 import { isAiRejected } from "@/components/common/ai-rejection"
@@ -83,8 +83,10 @@ export function JdView({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
-      <Card className="gap-3 p-5 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
+    // (2026-11-10 사용자 요청) 원문은 카드 없이 컨테이너 폭 전체를 쓴다. 오른쪽 열(요건)이 비면 — 예: AI 미연결로
+    // "요건 정리하기"가 아무것도 그리지 않을 때 — 그 div를 감춰(`empty:hidden`) 원문만 꽉 차게 보인다
+    <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+      <section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3 xl:flex-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
           <span className="flex items-center gap-1">
@@ -103,6 +105,11 @@ export function JdView({
         <JdRawSavedNote />
         {edit.editing ? (
           <JdRawEditor applicationProjectId={applicationProjectId} rawText={rawText} previewSave={previewSave} />
+        ) : !active ? (
+          // 공고 원문은 마크다운으로 보인다 (2026-11-10 사용자 요청 — "일반 텍스트 입력창이 아니라 마크다운 형식으로").
+          // 공통 마크다운 편집기를 읽기 전용으로 쓴다. 요건 근거를 눌러 문장을 강조할 때는 글자 위치(offset)로 강조해야
+          // 해서 아래 일반 글 보기로 바꾼다 `[UI-가정]`
+          <DocTextarea value={rawText} onValueChange={() => {}} readOnly grow aria-label="공고 원문" className="min-h-0" />
         ) : (
         <p className="text-base leading-[1.75] whitespace-pre-wrap">
           {segments(rawText, sentences).map((seg, i) => {
@@ -123,12 +130,12 @@ export function JdView({
           })}
         </p>
         )}
-      </Card>
+      </section>
 
       {requirementsSlot ? (
-        <div className="space-y-6">{requirementsSlot}</div>
+        <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">{requirementsSlot}</div>
       ) : (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">
         {seniority ? (
           <p className="text-sm text-muted-foreground">
             경력 조건: <span className="text-foreground">{seniority}</span>
@@ -355,8 +362,8 @@ export function RunExtraction({
   const edit = useJdRawEdit()
   const previewWrite = usePreviewWriteGuard()
   const [pending, setPending] = React.useState<false | "running" | "already">(false)
-  if (connection && !connection.active_provider)
-    return <AiLock entry="requirements" size="area" featureLabel="요건 정리" alternativeNote="공고 원문은 그대로 볼 수 있어요" />
+  // AI 미연결이면 원문 오른쪽에 잠금 안내를 두지 않는다 (2026-11-10 사용자 요청) — 원문만 보인다
+  if (connection && !connection.active_provider) return null
   return (
     <Card className="max-w-xl gap-3 p-5">
       <h2 className="text-lg leading-7 font-semibold">요건 정리 전</h2>

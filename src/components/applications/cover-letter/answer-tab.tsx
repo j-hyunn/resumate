@@ -12,12 +12,10 @@
  * 값은 폼에만 남고 저장은 상단 바 "저장하기"다.
  */
 import * as React from "react"
-import { ChevronDown, ChevronUp, Copy, ListChecks, MoreHorizontal, Pencil, Sparkles, Trash2, TriangleAlert } from "lucide-react"
+import { ChevronDown, ChevronUp, Copy, ListChecks, MoreHorizontal, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
-import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,13 +23,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
-import { DocTextarea, flashElement, highlightRange } from "@/components/common/doc-inputs"
-import { AiLock } from "@/components/common/ai-lock"
-import { InputGuide } from "@/components/common/input-guide"
+import { DocTextarea, DocTitleInput, flashElement, highlightRange } from "@/components/common/doc-inputs"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 import type { EvidenceView } from "@/lib/data/evidence"
-import { ANSWER_NOTE, QUESTION_MAX_NOTE, QUESTION_MIN_NOTE } from "@/lib/data/cover-letter-copy"
+import { QUESTION_MAX_NOTE, QUESTION_MIN_NOTE } from "@/lib/data/cover-letter-copy"
 import { COVER_LETTER_LIMITS, COVER_LETTER_MAX_QUESTIONS } from "@/lib/data/cover-letter-defaults"
 import { COUNT_BASIS_LABELS } from "../labels"
 import { QuestionNoteField, QuestionSettingsRow, QuestionTextField } from "./question-fields"
@@ -54,6 +49,7 @@ export function AnswerTab({
   /** 반영하지 않은 제안이 있는 문항 slot (패널이 붙으면 채워진다 — 지금은 빈 집합) */
   unappliedSlots,
   highlight,
+  meta = null,
 }: {
   forms: QuestionForm[]
   /** 새 문항의 슬롯 — 화면의 발급기가 준다 (안정 키, 재사용 금지 — UQ-740) */
@@ -71,6 +67,8 @@ export function AnswerTab({
   unappliedSlots?: Set<string>
   /** C-02 근거 구간 강조 (`?range=`) */
   highlight?: { slot: string; start: number; end: number } | null
+  /** 요약 한 줄 "문항 n개 · 답변 m개 · 마지막 수정 …" (머리에서 이 탭 머리로 옮겼다 — 58 런) */
+  meta?: string | null
 }) {
   const connection = useAiConnection()
   const locked = connection !== null && !connection.active_provider
@@ -78,6 +76,8 @@ export function AnswerTab({
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({})
   const [noteOpen, setNoteOpen] = React.useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = React.useState<number | null>(null)
+  /** 지금 내용을 쓰는 문항 (글자 수 줄을 그때 보인다) */
+  const [focused, setFocused] = React.useState<string | null>(null)
   const bodyRefs = React.useRef<Record<string, HTMLElement | null>>({})
 
   const patch = (i: number, p: Partial<QuestionForm>) => onChange(forms.map((f, idx) => (idx === i ? { ...f, ...p } : f)))
@@ -116,49 +116,53 @@ export function AnswerTab({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">{ANSWER_NOTE}</p>
-        <InputGuide guide="G-2" />
+    <div className="space-y-6">
+      {/* 머리 (시안 3): 굵은 "자기소개서" + 오른쪽 ⋯ — 전체 복사는 이 메뉴로 옮겼다 `[UI-가정]` */}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <h2 className="text-xl leading-8 font-bold">자기소개서</h2>
+          {meta ? <p className="text-xs text-muted-foreground tabular-nums">{meta}</p> : null}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" className="mt-1" aria-label="자기소개서 본문 메뉴">
+              <MoreHorizontal aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => {
+                void copy(allClipboardText(forms), "자기소개서 전체")
+                onCopied()
+              }}
+            >
+              <Copy aria-hidden />
+              전체 복사
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="flex items-center justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void copy(allClipboardText(forms), "자기소개서 전체")
-            onCopied()
-          }}
-        >
-          <Copy aria-hidden />
-          전체 복사
-        </Button>
-      </div>
-
-      {/* 빈 상태 — 문항이 3개 이하면 "바로 초안을" (R-CF-8) */}
+      {/* 빈 상태 — 답변이 하나도 없을 때만 (R-CF-8). 시안의 빈 문서 모양을 해치지 않게 상자 대신 한 묶음의 작은 글 `[UI-가정]` */}
       {!anyAnswer ? (
-        <Alert variant="info">
-          <Sparkles aria-hidden />
-          <AlertTitle className="space-y-2 font-normal">
-            <span className="block">
+        <div className="space-y-1.5 text-sm text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Sparkles className="size-4 text-ai" aria-hidden />
+            <span>
               {forms.length <= 3
                 ? "아직 답변이 비어 있어요. 오른쪽 Resumate AI와 대화하면 바로 초안을 제안해 드려요"
                 : "아직 답변이 비어 있어요. 오른쪽 Resumate AI와 대화하면 먼저 1~3번 문항부터 초안을 제안해 드려요"}
             </span>
-            {locked ? (
-              <AiLock entry="draft" size="inline" />
-            ) : (
-              <Button variant="outline" size="sm" onClick={onOpenPanel}>
-                <Sparkles className="text-ai" aria-hidden />
+            {locked ? null : (
+              <Button variant="link" size="sm" className="h-auto px-0" onClick={onOpenPanel}>
                 AI와 초안 쓰기
               </Button>
             )}
-          </AlertTitle>
-        </Alert>
+          </p>
+        </div>
       ) : null}
 
-      <ol className="space-y-8">
+      <ol className="space-y-10">
         {forms.map((f, i) => {
           const idPrefix = `qa-${f.question_id}`
           const isEditing = Boolean(editing[f.question_id])
@@ -168,32 +172,36 @@ export function AnswerTab({
           const count = countChars(f.body, f.count_basis)
           const over = limit > 0 ? count - limit : 0
           const hasProposal = unappliedSlots?.has(f.slot) ?? false
+          // 글자 수는 S-10 STAR 칸 규칙처럼 **필요할 때만**: 이 문항을 쓰는 중 · 90% 이상 · 초과 `[UI-가정]`
+          const showCount = focused === f.question_id || over > 0 || (limit > 0 && count >= limit * 0.9) || Boolean(errors[i]?.body)
           return (
-            <li key={f.question_id} className="space-y-2">
+            <li key={f.question_id} className="group/question space-y-1">
+              {/* 문항 문장 (작은 회색, 읽기 전용) + 작게 드러나는 표식·메뉴 */}
               <div className="flex items-start gap-2">
-                <span className="mt-1 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">문항 {i + 1}</span>
-                {isEditing ? null : <p className="min-w-0 flex-1 text-base font-semibold">{f.question_text || "문항을 입력해 주세요"}</p>}
+                {isEditing ? (
+                  <span className="min-w-0 flex-1 text-sm text-muted-foreground tabular-nums">문항 {i + 1} 편집</span>
+                ) : (
+                  <p className="min-w-0 flex-1 pt-1 text-sm text-muted-foreground">
+                    <span className="sr-only">문항 {i + 1}. </span>
+                    {f.question_text || "문항을 입력해 주세요"}
+                  </p>
+                )}
                 <span className="ml-auto flex shrink-0 items-center gap-1">
                   {hasProposal ? (
-                    <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onRevealProposal(f.slot)}>
-                      <Badge variant="ai">
+                    <button
+                      type="button"
+                      className="rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      onClick={() => onRevealProposal(f.slot)}
+                    >
+                      <Badge variant="ai" className="h-5 gap-1 px-1.5">
                         <Sparkles className="size-3" aria-hidden />
                         AI 제안 있음
                       </Badge>
-                    </Button>
+                    </button>
                   ) : null}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={isCollapsed ? `문항 ${i + 1} 펼치기` : `문항 ${i + 1} 접기`}
-                    aria-expanded={!isCollapsed}
-                    onClick={() => setCollapsed((s) => ({ ...s, [f.question_id]: !isCollapsed }))}
-                  >
-                    {isCollapsed ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
-                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" aria-label={`문항 ${i + 1} 메뉴`}>
+                      <Button variant="ghost" size="icon-sm" aria-label={`문항 ${i + 1} 메뉴`} className={REVEAL}>
                         <MoreHorizontal aria-hidden />
                       </Button>
                     </DropdownMenuTrigger>
@@ -205,6 +213,16 @@ export function AnswerTab({
                       <DropdownMenuItem onSelect={() => void copy(questionClipboardText(f, i + 1), `문항 ${i + 1}`)}>
                         <Copy aria-hidden />
                         이 문항 복사
+                      </DropdownMenuItem>
+                      {!noteShown ? (
+                        <DropdownMenuItem onSelect={() => setNoteOpen((s) => ({ ...s, [f.question_id]: true }))}>
+                          <ListChecks aria-hidden />
+                          메모 추가
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem onSelect={() => setCollapsed((s) => ({ ...s, [f.question_id]: !isCollapsed }))}>
+                        {isCollapsed ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
+                        {isCollapsed ? "펼치기" : "접기"}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {/* 순서 변경은 메뉴로만 — 드래그를 두지 않는다(키보드와 같은 길) */}
@@ -262,14 +280,15 @@ export function AnswerTab({
 
               {isCollapsed ? null : (
                 <>
-                  {/* 제목 — 테두리 없는 문서형 입력 (A-13 예외). 글자 수 제한에 넣지 않는다 (CF-6) */}
-                  <Input
-                    aria-label={`문항 ${i + 1} 답변 제목`}
+                  {/* 제목 — L-02 문서형 입력 `DocTitleInput`(S-10·S-44 머리 제목과 같은 것), 본문 크기로. 글자 수에 넣지 않는다 (CF-6) */}
+                  <DocTitleInput
+                    label={`문항 ${i + 1} 답변 제목`}
+                    aria-required={false}
                     value={f.answer_title}
                     maxLength={COVER_LETTER_LIMITS.answer_title}
-                    placeholder="답변 제목"
-                    aria-invalid={errors[i]?.answer_title ? true : undefined}
-                    className="-mx-2 h-auto rounded-md border-0 bg-transparent px-2 py-1 text-lg font-semibold shadow-none hover:bg-accent/60 focus-visible:ring-0"
+                    placeholder="제목"
+                    invalid={Boolean(errors[i]?.answer_title)}
+                    className="text-base leading-7 font-bold"
                     onChange={(e) => patch(i, { answer_title: e.target.value })}
                   />
                   {errors[i]?.answer_title ? (
@@ -278,16 +297,19 @@ export function AnswerTab({
                     </p>
                   ) : null}
 
+                  {/* 내용 — L-02 문서형 입력 `DocTextarea`(S-10 STAR · S-44 본문과 같은 것), 내용만큼 자란다 */}
                   <DocTextarea
                     ref={(el) => {
                       bodyRefs.current[f.slot] = el
                     }}
-                    aria-label={`문항 ${i + 1} 답변`}
+                    aria-label={`문항 ${i + 1} 내용`}
                     aria-invalid={errors[i]?.body ? true : undefined}
                     grow
-                    className="min-h-40"
+                    className="min-h-12"
                     value={f.body}
-                    placeholder="답변을 입력하거나 오른쪽 Resumate AI의 초안을 반영해 주세요"
+                    placeholder="내용"
+                    onFocus={() => setFocused(f.question_id)}
+                    onBlur={() => setFocused((x) => (x === f.question_id ? null : x))}
                     onValueChange={(v) => {
                       patch(i, { body: v })
                       // 본문을 고치면 근거 구간 강조를 지운다
@@ -296,59 +318,51 @@ export function AnswerTab({
                   />
 
                   {/* 글자 수 표시 (A12·CL-A4) — 내용만 센다 */}
-                  <div className="space-y-0.5">
-                    <p
-                      className={
-                        over > 0
-                          ? "flex items-center gap-1.5 text-xs font-medium text-warning-subtle-foreground tabular-nums"
-                          : "text-xs font-medium text-muted-foreground tabular-nums"
-                      }
-                    >
-                      {over > 0 ? <TriangleAlert className="size-3.5 text-warning" aria-hidden /> : null}
-                      현재 {count.toLocaleString("ko-KR")}자 / 제한 {limit.toLocaleString("ko-KR")}자({COUNT_BASIS_LABELS[f.count_basis]})
-                    </p>
-                    {over > 0 ? (
-                      <p className="text-xs text-warning-subtle-foreground">
-                        {over <= Math.round(limit * 0.1)
-                          ? `제한보다 ${over.toLocaleString("ko-KR")}자 많아요. AI 보정 범위(최대 10% 초과) 안이라 그대로 두었어요. 제출처 제한을 확인해 주세요`
-                          : // [UI-가정] 110%를 넘으면 수만 알린다
-                            `제한보다 ${over.toLocaleString("ko-KR")}자 많아요`}
+                  {showCount ? (
+                    <div className="space-y-0.5">
+                      <p
+                        className={
+                          over > 0
+                            ? "flex items-center gap-1.5 text-xs font-medium text-warning-subtle-foreground tabular-nums"
+                            : "text-xs font-medium text-muted-foreground tabular-nums"
+                        }
+                      >
+                        {over > 0 ? <TriangleAlert className="size-3.5 text-warning" aria-hidden /> : null}
+                        현재 {count.toLocaleString("ko-KR")}자 / 제한 {limit.toLocaleString("ko-KR")}자({COUNT_BASIS_LABELS[f.count_basis]})
                       </p>
-                    ) : null}
-                    {errors[i]?.body ? (
-                      <p className="text-sm text-destructive" role="alert">
-                        {errors[i]?.body}
-                      </p>
-                    ) : null}
-                  </div>
+                      {over > 0 ? (
+                        <p className="text-xs text-warning-subtle-foreground">
+                          {over <= Math.round(limit * 0.1)
+                            ? `제한보다 ${over.toLocaleString("ko-KR")}자 많아요. AI 보정 범위(최대 10% 초과) 안이라 그대로 두었어요. 제출처 제한을 확인해 주세요`
+                            : // [UI-가정] 110%를 넘으면 수만 알린다
+                              `제한보다 ${over.toLocaleString("ko-KR")}자 많아요`}
+                        </p>
+                      ) : null}
+                      {errors[i]?.body ? (
+                        <p className="text-sm text-destructive" role="alert">
+                          {errors[i]?.body}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                  {/* C-11 (접힘) — 근거의 원천은 그 문항 초안 제안의 sources[] (CF-S1) */}
+                  {/* C-11 (접힘) — 근거의 원천은 그 문항 초안 제안의 sources[] (CF-S1). 근거가 없으면 그리지 않는다 */}
                   <SourcesUsed items={sourcesOf(evidence, f.slot)} questionNumber={i + 1} />
 
-                  {/* 메모 (접힘, CF-A10) — 편집 모드가 아니어도 "메모" 버튼으로 펼친다 */}
-                  {!isEditing ? (
-                    noteShown ? (
-                      <QuestionNoteField idPrefix={idPrefix} form={f} errors={errors[i]} onChange={(p) => patch(i, p)} />
-                    ) : (
-                      <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={() => setNoteOpen((s) => ({ ...s, [f.question_id]: true }))}>
-                        <ListChecks className="size-4" aria-hidden />
-                        메모
-                      </Button>
-                    )
-                  ) : null}
+                  {/* 메모 (접힘, CF-A10) — ⋯ "메모 추가"로 펼친다. 값이 있으면 펼친 채로 */}
+                  {!isEditing && noteShown ? <QuestionNoteField idPrefix={idPrefix} form={f} errors={errors[i]} onChange={(p) => patch(i, p)} /> : null}
                 </>
               )}
-              {i < forms.length - 1 ? <Separator className="mt-8" /> : null}
             </li>
           )
         })}
       </ol>
 
-      {/* "+ 문항 추가"는 작성 상태에도 있다 (문항 편집, CL-8) */}
+      {/* "+ 문항 추가 n/5" — 문항 설정 상태와 같은 고스트 버튼 (작성 상태에도 있다, CL-8) */}
       <div className="space-y-1.5">
         <Button
-          variant="outline"
-          className="w-full border-dashed"
+          variant="ghost"
+          className="-ml-3 text-muted-foreground"
           disabled={full}
           onClick={() => {
             const next = newQuestionForm(allocateSlot())
@@ -357,7 +371,8 @@ export function AnswerTab({
             window.setTimeout(() => flashElement(document.getElementById(`qa-${next.question_id}-edit-text`)), 60)
           }}
         >
-          + 문항 추가 <span className="tabular-nums">{forms.length}/{COVER_LETTER_MAX_QUESTIONS}</span>
+          <Plus aria-hidden />
+          문항 추가 <span className="tabular-nums">{forms.length}/{COVER_LETTER_MAX_QUESTIONS}</span>
         </Button>
         {full ? <p className="text-sm text-muted-foreground">{QUESTION_MAX_NOTE}</p> : null}
       </div>
@@ -373,6 +388,13 @@ export function AnswerTab({
     </div>
   )
 }
+
+/**
+ * 문항 ⋯ 메뉴 — 시안처럼 평소에는 숨기고 그 문항에 마우스를 올리거나 포커스가 들어올 때 보인다 `[UI-가정]`.
+ * 마우스가 없는 기기(터치)는 늘 보인다. 메뉴가 열려 있는 동안도 보인다.
+ */
+const REVEAL =
+  "[@media(hover:hover)]:opacity-0 group-hover/question:opacity-100 group-focus-within/question:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
 
 /**
  * 그 문항의 근거 목록 — `{slot}.sources.{n}` 키를 **n 순서대로** 모은다(주 근거가 먼저, CF-S2:

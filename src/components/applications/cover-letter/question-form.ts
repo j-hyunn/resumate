@@ -39,10 +39,14 @@ function newQuestionId(): string {
 }
 
 /** 기본 3문항 (문구 OD-D1 K-28, 글자 수 제한 **800** = CF-U2 — 시안의 600은 쓰지 않는다) */
-export function seedQuestionForms(): QuestionForm[] {
+/**
+ * `ids` = 서버가 만든 `question_id`들. 서버 렌더와 브라우저 하이드레이션이 **같은 id**를 써야 `id`·`htmlFor`가
+ * 어긋나지 않는다(2026-11-10 하이드레이션 오류 — 렌더마다 `randomUUID()`가 서로 다른 값을 냈다). 없으면 여기서 만든다.
+ */
+export function seedQuestionForms(ids?: readonly string[]): QuestionForm[] {
   return COVER_LETTER_DEFAULT_QUESTIONS.map((q, i) => ({
     slot: `q_${i + 1}`,
-    question_id: newQuestionId(),
+    question_id: ids?.[i] ?? newQuestionId(),
     question_text: q.question_text ?? "",
     answer_title: "",
     char_limit: String(COVER_LETTER_DEFAULT_CHAR_LIMIT),
@@ -149,10 +153,10 @@ export function slotsInUse(sources: {
 }
 
 /** "+ 문항 추가": 빈 문항 하나 (글자 수 제한 800 미리 채움). `slot`은 발급기에서 받는다 */
-export function newQuestionForm(slot: string): QuestionForm {
+export function newQuestionForm(slot: string, id?: string): QuestionForm {
   return {
     slot,
-    question_id: newQuestionId(),
+    question_id: id ?? newQuestionId(),
     question_text: "",
     answer_title: "",
     char_limit: String(COVER_LETTER_DEFAULT_CHAR_LIMIT),

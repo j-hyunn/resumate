@@ -19,11 +19,10 @@ import { useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { mockCoverLetterTurn } from "@/lib/mock/cover-letter-turn"
 import { realCoverLetterTurn } from "@/lib/data/ai-stream-client"
-import { shouldAdoptReread } from "./panel-rules"
+import { coverLetterMessageLimitReached, shouldAdoptReread } from "./panel-rules"
 import { storedSourceCards } from "@/lib/data/cover-letter-chat-types"
 import {
   COVER_LETTER_DRAFT_LIMIT,
-  COVER_LETTER_MESSAGE_LIMIT,
   coverLetterChips,
   coverLetterGreeting,
   firstTurnOffer,
@@ -59,6 +58,8 @@ export interface CoverLetterPanelController {
   /** 키 상태 — 잠겼으면 패널만 잠긴다 (왼쪽 본문·저장·복사는 그대로, CL-8) */
   locked: boolean
   lockReason: "ai_not_connected" | "key_invalid" | "ai_consent_required" | null
+  /** C-21 동의 창 — 동의가 필요할 때 `send`가 연다. 패널이 그린다 (58 런: 그려지지 않던 것을 바로잡음) */
+  consentDialog: React.ReactNode
   chats: CoverLetterChatSummary[]
   chat: CoverLetterChatView | null
   messages: CoverLetterPanelMessage[]
@@ -199,7 +200,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const draftRemaining = Math.max(0, COVER_LETTER_DRAFT_LIMIT - draftCount)
   const draftLimitReached = draftRemaining === 0
   const messageCount = messages.filter((m) => m.role === "user" || m.role === "assistant").length
-  const messageLimitReached = messageCount >= COVER_LETTER_MESSAGE_LIMIT - 1
+  const messageLimitReached = coverLetterMessageLimitReached(messageCount)
 
   const answered = opts.formSnapshot.filter((q) => q.body.trim()).length
   const greeting = coverLetterGreeting({ answered, total: opts.formSnapshot.length, requirementsPending: opts.requirementsPending })
@@ -503,6 +504,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
     bindInput,
     locked,
     lockReason,
+    consentDialog: consent.dialog,
     chats,
     chat,
     messages,

@@ -3,13 +3,14 @@ import { ScreenSuspense } from "@/components/common/screen-suspense"
 import { PageShellSkeleton } from "@/components/common/shell/page-shell-skeleton"
 import { getPreviewState, previewErrorCode } from "@/lib/preview-state"
 import { getApplicationProject, getJobDescription } from "@/lib/data/applications"
+import { COVER_LETTER_MAX_QUESTIONS } from "@/lib/data/cover-letter-defaults"
 import { getCoverLetterDocument } from "@/lib/data/cover-letters"
 import { getCoverLetterChat, listCoverLetterChats } from "@/lib/data/cover-letter-chats"
 import { getEvidence } from "@/lib/data/evidence"
 import { CoverLetterScreen, type CoverLetterTab } from "@/components/applications/cover-letter/cover-letter-screen"
 import { JdTab } from "@/components/applications/cover-letter/jd-tab"
 import { InsightTab } from "@/components/applications/cover-letter/insight-tab"
-import { extractFirstPreviewFail, jdRunState } from "../../_lib/jd-state"
+import { extractFirstPreviewFail, jdRunState } from "@/app/(dashboard)/(gated)/applications/_lib/jd-state"
 
 /**
  * S-46 자기소개서 작성 — **한 주소 두 상태** (UX v5.20 S-46, CF-A11).
@@ -81,8 +82,10 @@ async function Screen({ params, searchParams }: Props) {
         position_title: jd?.position_title ?? null,
         source_url: jd?.source_url ?? null,
         document,
+        // 문항 설정 상태의 첫 문항 id는 서버에서 한 번 만든다 — 브라우저가 다시 만들면 하이드레이션이 어긋난다
+        seed_question_ids: Array.from({ length: COVER_LETTER_MAX_QUESTIONS }, () => crypto.randomUUID()),
         evidence,
-        // 키가 있고 요건이 아직 없을 때만 [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 (FL-03)
+        // 요건이 아직 없는가(jd-state). AI 연결 여부는 화면(QuestionSetup)이 함께 본다 — 키가 있을 때만 AI-01을 먼저 (FL-03)
         extract_first: run.extractFirst,
         chats,
         open_chat: openChat,

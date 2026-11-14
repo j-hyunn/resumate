@@ -11,12 +11,18 @@
  *    **마감일 칸은 없다**(CF-2 — S-46 머리에서 정한다). [자기소개서 작성] = 생성(`previewJobId`·
  *    `source_url` 함께) → S-46 문항 설정 상태. 보드에서 열었으면 라벨이 "추가하기"이고 보드에 남는다.
  *
+ * (58 런) 틀은 공통 `FormDialog`(S-08 커리어 추가 모달과 같은 틀 — 폭 602 · 데스크톱 고정 높이, 두 단계 같은 크기)이고,
+ * 칸은 공통 `FormSection`·`FormField`·`FormFieldError`다. 단계 표시는 두지 않는다(시안 1). 좁은 화면은 그 틀 그대로
+ * (화면 폭 − 2rem)이다 — 옛 전체 화면 시트(UQ-745)는 커리어 모달과 맞추며 버렸다 `[UI-가정]`.
+ *
  * 작성 중 자동 저장 없음(CF-A17): 입력이 있는 채로 닫으면 확인 한 줄. C-21·키 교체로 떠날 때만
  * 브라우저 세션에 입력을 남긴다(`form-draft.ts`의 규칙 그대로, 주소에는 넣지 않는다).
  */
+import { cn } from "@/lib/utils"
+import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CloudAlert, Info, Loader2, Sparkles, TriangleAlert } from "lucide-react"
+import { CloudAlert, Info, Sparkles, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -29,25 +35,30 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiLock } from "@/components/common/ai-lock"
+import {
+  FormDialog,
+  FormDialogBody,
+  FormDialogFooter,
+  FormDialogForm,
+  FormDialogHeader,
+  FormDialogSubmit,
+  FormField,
+  FormFieldError,
+  FormSection,
+} from "@/components/common/form-dialog"
 import { notifyAiConnectionChanged, useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { CharCount } from "@/components/common/input-guide"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
-import { ProviderBadge } from "@/components/common/provider-badge"
 import { readAiConnectReturn } from "@/components/common/ai-connect-return"
 import { setNavOrigin } from "@/components/common/return-target"
 import { isAiRejected } from "@/lib/data/ai-errors"
 import { JD_FETCH_FAILED_MESSAGE } from "@/lib/data/cover-letter-copy"
 import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
-import { cn } from "@/lib/utils"
 import { keepsFormDraftOnLeave, previewRefusalAction } from "./form-draft"
 import { createApplicationAction, extractJdPreviewAction, fetchJobPostingAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
@@ -55,8 +66,6 @@ import { createApplicationAction, extractJdPreviewAction, fetchJobPostingAction 
 const FIELD_MAX = 200
 /** URL은 2,048자까지 `[가정]` (UX S-14 입력 검사) */
 const URL_MAX = 2_048
-
-const STEP_NAMES = ["JD 입력", "지원 기업 / 포지션"] as const
 
 type Phase = "idle" | "fetching" | "extracting" | "creating"
 
@@ -335,201 +344,175 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
 
   return (
     <>
-      <Dialog open={open} onOpenChange={close}>
-        <DialogContent
-          // 좁은 화면(<640)은 **전체 화면 시트**(UX S-14 · 5.6.2) — 높이 제한은 넓은 화면에서만 (UQ-745)
-          className="overflow-y-auto sm:max-h-[85dvh] sm:max-w-2xl max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:rounded-none"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">자기소개서 작성</DialogTitle>
-            <DialogDescription className="sr-only">공고 URL 또는 공고 내용으로 새 자기소개서를 만들어요</DialogDescription>
-            <StepIndicator current={step} onGo={(i) => i < step && setStep(i as 0 | 1)} />
-          </DialogHeader>
+      {/* 공통 입력 모달 틀 (`FormDialog` — S-08 커리어 추가 모달과 같은 틀: 폭 602 · 모서리 20 · 데스크톱 고정 높이).
+          시안 1의 모달 폭(그림 836px ÷ 1.39)이 이 틀이다. 두 단계 모두 같은 크기다 */}
+      <FormDialog open={open} onOpenChange={close}>
+        <FormDialogForm id={step === 0 ? "add-ap-step1" : "add-ap-step2"} onSubmit={step === 0 ? submitStep1 : submitStep2}>
+          <FormDialogHeader
+            title="자기소개서 추가"
+            description={step === 0 ? "1단계 JD 입력 — 공고 URL 또는 공고 내용을 넣어 주세요" : "2단계 지원 기업 / 포지션 — 기업·포지션과 공고 내용을 확인해 주세요"}
+          />
 
-          {step === 0 ? (
-            <form id="add-ap-step1" onSubmit={submitStep1} className="space-y-5" noValidate>
-              {restored ? (
-                // [UI-가정] 복원 안내
-                <p className="text-sm text-muted-foreground" role="status">
-                  작성하던 내용을 불러왔어요
-                </p>
-              ) : null}
-              <div className="space-y-1.5">
-                <Label htmlFor="add-ap-url">포지션 공고 URL</Label>
-                <Input
-                  id="add-ap-url"
-                  type="url"
-                  inputMode="url"
-                  placeholder="https://"
-                  value={url}
-                  maxLength={URL_MAX}
-                  disabled={busy || directTrimmed.length > 0}
-                  aria-invalid={urlTouched && urlInvalid ? true : undefined}
-                  aria-describedby={urlTouched && urlInvalid ? "add-ap-url-error" : undefined}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onBlur={() => setUrlTouched(true)}
-                />
-                {urlTouched && urlInvalid ? (
-                  <p id="add-ap-url-error" className="text-sm text-destructive" role="alert">
-                    공고 주소를 확인해 주세요
+          <FormDialogBody>
+            {step === 0 ? (
+              <>
+                {restored ? (
+                  // [UI-가정] 복원 안내 (C-21·키 교체 왕복에서 돌아왔을 때만)
+                  <p className="text-sm text-muted-foreground" role="status">
+                    작성하던 내용을 불러왔어요
                   </p>
-                ) : directTrimmed.length > 0 ? (
-                  // [UI-가정] 배타 안내
-                  <p className="text-sm text-muted-foreground">URL과 직접 입력은 하나만 쓸 수 있어요</p>
                 ) : null}
-              </div>
-
-              <div className="flex items-center gap-3" aria-hidden>
-                <Separator className="flex-1" />
-                <span className="text-sm text-muted-foreground">또는</span>
-                <Separator className="flex-1" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="add-ap-direct">직접 입력</Label>
-                <Textarea
-                  id="add-ap-direct"
-                  className="min-h-56 font-sans text-base"
-                  placeholder="공고 내용을 붙여넣어 주세요"
-                  value={direct}
-                  disabled={busy || urlTrimmed.length > 0}
-                  onChange={(e) => setDirect(e.target.value)}
-                />
-                <div className="flex items-start justify-between gap-2">
-                  <LengthWarning text={directTrimmed} />
-                  <CharCount count={directTrimmed.length} limit={JD_RAW_TEXT_MAX} />
-                </div>
-              </div>
-            </form>
-          ) : (
-            <form id="add-ap-step2" onSubmit={submitStep2} className="space-y-5" noValidate>
-              {invalidUrlRefused ? (
-                <div className="space-y-1">
-                  {/* `invalid_source_url`(400) — AI 실패가 아니라 입력 거부라 C-20을 쓰지 않는다 `[UI-가정]` */}
-                  <p className="text-sm text-destructive" role="alert">
-                    공고 주소를 저장할 수 없어요
-                  </p>
-                  {/* [UI-가정] 주소만 빼고 다시 보낸다 (입력 유지) */}
-                  <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={() => void create({ withoutUrl: true })}>
-                    주소 없이 만들기
-                  </Button>
-                </div>
-              ) : null}
-              {createFailed ? (
-                <p className="text-sm text-destructive" role="alert">
-                  만들지 못했어요. 다시 시도해 주세요
-                </p>
-              ) : null}
-              {extractFailed ? <AiErrorNotice code="provider_unavailable" size="inline" /> : null}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="add-ap-company">지원 기업</Label>
-                  {/* 미리 채운 값도 보통 글자로 — 출처 배지를 두지 않는다 (CF-A6) */}
-                  <Input id="add-ap-company" value={company} maxLength={FIELD_MAX} onChange={(e) => setCompany(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="add-ap-position">지원 포지션</Label>
-                  <Input id="add-ap-position" value={position} maxLength={FIELD_MAX} onChange={(e) => setPosition(e.target.value)} />
-                </div>
-              </div>
-
-              {fetchFailed ? (
-                <Alert variant="warning">
-                  <CloudAlert aria-hidden />
-                  <AlertTitle className="font-normal">{JD_FETCH_FAILED_MESSAGE}</AlertTitle>
-                </Alert>
-              ) : null}
-
-              <div className="space-y-1.5">
-                <div className="flex items-end justify-between gap-2">
-                  <Label htmlFor="add-ap-raw">
-                    공고 내용 <span className="text-destructive" aria-hidden>*</span>
-                    <span className="sr-only">필수</span>
-                  </Label>
-                </div>
-                {requirementCount !== null && requirementCount > 0 ? (
-                  rawEdited ? (
-                    <p className="flex items-center gap-1.5 text-sm text-warning-subtle-foreground">
-                      <TriangleAlert className="size-3.5 text-warning" aria-hidden />
-                      공고 내용을 고쳐서 요건은 만든 뒤 다시 정리해요
-                    </p>
-                  ) : (
-                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Sparkles className="size-3.5 text-ai" aria-hidden />
-                      공고에서 요건 {requirementCount}개를 미리 정리해 두었어요
-                    </p>
-                  )
-                ) : null}
-                <Textarea
-                  id="add-ap-raw"
-                  className="min-h-72 font-sans text-base"
-                  placeholder="공고 내용을 붙여넣어 주세요"
-                  value={raw}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setRaw(e.target.value)
-                    setRawEdited(true)
-                  }}
-                  required
-                />
-                <div className="flex items-start justify-between gap-2">
-                  <LengthWarning text={rawTrimmed} />
-                  <CharCount count={rawTrimmed.length} limit={JD_RAW_TEXT_MAX} />
-                </div>
-                <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                  <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                  {/* U-6, 예외 Q53-2 */}
-                  만든 뒤에는 공고 내용을 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요
-                </p>
-              </div>
-            </form>
-          )}
-
-          <DialogFooter className="sm:justify-between">
-            <div className="flex items-center">
-              {step === 1 ? (
-                <Button type="button" variant="muted-ghost" disabled={busy} onClick={() => setStep(0)}>
-                  이전
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex flex-col items-stretch gap-1 sm:items-end">
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                {step === 0 ? (
-                  <>
-                    {/* 키가 있으면 [다음] 옆 C-19 (AI-01이 돈다). 없으면 C-18 인라인 — 막지 않는다 */}
-                    {keyless ? (
-                      <AiLock
-                        entry="requirements"
-                        size="inline"
-                        description="AI를 연결하면 공고에서 회사명·포지션명·마감일·요건을 정리해 드려요"
-                      />
-                    ) : (
-                      <ProviderBadge />
-                    )}
-                    <Button
-                      type="submit"
-                      form="add-ap-step1"
-                      className="min-w-[12rem]"
-                      disabled={busy || urlInvalid || (!urlTrimmed && !directTrimmed)}
-                    >
-                      {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
-                      {nextLabel}
+                <FormSection title="JD 입력" fill>
+                  <FormField id="add-ap-url" label="포지션 공고" error={urlTouched && urlInvalid ? "공고 주소를 확인해 주세요" : undefined}>
+                    <Input
+                      id="add-ap-url"
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://www.jd.com"
+                      value={url}
+                      maxLength={URL_MAX}
+                      disabled={busy || directTrimmed.length > 0}
+                      aria-invalid={urlTouched && urlInvalid ? true : undefined}
+                      aria-describedby={urlTouched && urlInvalid ? "add-ap-url-error" : "add-ap-exclusive"}
+                      onChange={(e) => setUrl(e.target.value)}
+                      onBlur={() => setUrlTouched(true)}
+                    />
+                    {/* [UI-가정] 배타 안내 — 상시 줄 대신 화면 낭독기용 설명으로만 (시안에 보조 문구 없음) */}
+                    <span id="add-ap-exclusive" className="sr-only">
+                      URL과 직접 입력은 하나만 쓸 수 있어요
+                    </span>
+                  </FormField>
+                  {/* 마지막 칸이 남은 높이를 채운다 (커리어 모달의 내용 칸과 같은 방식) */}
+                  <FormField id="add-ap-direct" label="직접 입력" fill>
+                    <Textarea
+                      id="add-ap-direct"
+                      className="min-h-48 flex-1 resize-none text-base leading-[1.75]"
+                      placeholder="포지션 공고 내용을 입력해주세요."
+                      value={direct}
+                      disabled={busy || urlTrimmed.length > 0}
+                      aria-describedby="add-ap-exclusive"
+                      onChange={(e) => setDirect(e.target.value)}
+                    />
+                    <InputChecks text={directTrimmed} />
+                  </FormField>
+                </FormSection>
+              </>
+            ) : (
+              <>
+                {/* 상황이 생겼을 때만 — 입력 거부·만들기 실패·미리 보기 추출 실패 */}
+                {invalidUrlRefused ? (
+                  <div className="space-y-1">
+                    {/* `invalid_source_url`(400) — AI 실패가 아니라 입력 거부라 C-20을 쓰지 않는다 `[UI-가정]` */}
+                    <FormFieldError id="add-ap-source-url-error" message="공고 주소를 저장할 수 없어요" />
+                    {/* [UI-가정] 주소만 빼고 다시 보낸다 (입력 유지) */}
+                    <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={() => void create({ withoutUrl: true })}>
+                      주소 없이 만들기
                     </Button>
-                  </>
-                ) : (
-                  <Button type="submit" form="add-ap-step2" disabled={phase === "creating" || !rawTrimmed}>
-                    {phase === "creating" ? <Loader2 className="animate-spin" aria-hidden /> : null}
-                    {phase === "creating" ? "만드는 중…" : primaryLabel}
-                  </Button>
-                )}
-              </div>
+                  </div>
+                ) : null}
+                {createFailed ? <FormFieldError id="add-ap-create-error" message="만들지 못했어요. 다시 시도해 주세요" /> : null}
+                {extractFailed ? <AiErrorNotice code="provider_unavailable" size="inline" /> : null}
+
+                <FormSection title="지원 기업 / 포지션">
+                  {/* 미리 채운 값도 보통 글자로 — 출처 배지를 두지 않는다 (CF-A6) */}
+                  <FormField id="add-ap-company" label="지원 기업">
+                    <Input id="add-ap-company" placeholder="기업 명" value={company} maxLength={FIELD_MAX} onChange={(e) => setCompany(e.target.value)} />
+                  </FormField>
+                  <FormField id="add-ap-position" label="지원 포지션">
+                    <Input id="add-ap-position" placeholder="포지션 명" value={position} maxLength={FIELD_MAX} onChange={(e) => setPosition(e.target.value)} />
+                  </FormField>
+                </FormSection>
+
+                <FormSection title="공고 내용" fill>
+                  {fetchFailed ? (
+                    <Alert variant="warning">
+                      <CloudAlert aria-hidden />
+                      <AlertTitle className="font-normal">{JD_FETCH_FAILED_MESSAGE}</AlertTitle>
+                    </Alert>
+                  ) : null}
+                  <FormField
+                    id="add-ap-raw"
+                    fill
+                    label={
+                      <>
+                        직접 입력
+                        <span className="sr-only">(필수)</span>
+                      </>
+                    }
+                  >
+                    {requirementCount !== null && requirementCount > 0 ? (
+                      rawEdited ? (
+                        <p className="flex items-center gap-1.5 text-sm text-warning-subtle-foreground">
+                          <TriangleAlert className="size-3.5 text-warning" aria-hidden />
+                          공고 내용을 고쳐서 요건은 만든 뒤 다시 정리해요
+                        </p>
+                      ) : (
+                        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Sparkles className="size-3.5 text-ai" aria-hidden />
+                          공고에서 요건 {requirementCount}개를 미리 정리해 두었어요
+                        </p>
+                      )
+                    ) : null}
+                    <div className="group/raw flex min-h-0 flex-1 flex-col gap-2">
+                      {/* (2026-11-10) 가져온 공고는 마크다운이라 같은 공통 마크다운 편집기로 보인다 — 공통 Textarea와 같은 테두리 틀.
+                          편집기는 사용자가 고치기 전에는 값을 다시 내보내지 않아(emitUpdate:false) 가져온 원문 그대로 저장된다 →
+                          미리 보기 해시 대조(CF-A17)가 그대로 맞는다 */}
+                      <div
+                        className={cn(
+                          "flex min-h-48 flex-1 flex-col overflow-y-auto rounded-control border border-input bg-transparent px-2.5 py-2 transition-colors dark:bg-input/30",
+                          busy && "cursor-not-allowed bg-input/50 opacity-50",
+                        )}
+                      >
+                        <DocTextarea
+                          id="add-ap-raw"
+                          placeholder="포지션 공고 내용을 입력해주세요."
+                          value={raw}
+                          readOnly={busy}
+                          aria-describedby="add-ap-raw-note"
+                          onValueChange={(v) => {
+                            setRaw(v)
+                            setRawEdited(true)
+                          }}
+                          grow
+                          className="mx-0 min-h-0 flex-1 px-0 py-0 hover:bg-transparent"
+                        />
+                      </div>
+                      <InputChecks text={rawTrimmed} />
+                      {/* U-6 (예외 Q53-2) — 공고 칸에 포커스가 있을 때만 보인다 `[UI-가정]`(시안에 상시 보조 문구 없음). 낭독기는 늘 읽는다 */}
+                      <p id="add-ap-raw-note" className="sr-only flex items-start gap-1.5 text-sm text-muted-foreground group-focus-within/raw:not-sr-only">
+                        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                        만든 뒤에는 공고 내용을 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요
+                      </p>
+                    </div>
+                  </FormField>
+                </FormSection>
+              </>
+            )}
+          </FormDialogBody>
+
+          <FormDialogFooter className={step === 1 ? "items-start justify-between" : "items-start"}>
+            {step === 1 ? (
+              // 시안에 없지만 ①로 돌아가는 길은 남긴다 (입력 유지) `[UI-가정]`
+              <Button type="button" variant="muted-ghost" disabled={busy} onClick={() => setStep(0)}>
+                이전
+              </Button>
+            ) : null}
+            <div className="flex flex-col items-end gap-1.5">
+              {step === 0 ? (
+                <FormDialogSubmit pending={busy} disabled={urlInvalid || (!urlTrimmed && !directTrimmed)}>
+                  {nextLabel}
+                </FormDialogSubmit>
+              ) : (
+                <FormDialogSubmit pending={phase === "creating"} disabled={!rawTrimmed}>
+                  {phase === "creating" ? "만드는 중…" : primaryLabel}
+                </FormDialogSubmit>
+              )}
+              {/* Q53-1 게이트 — 생겼을 때만 (키 무효 C-20) */}
               {keyInvalidShown ? <AiErrorNotice code="key_invalid" size="inline" /> : null}
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </FormDialogFooter>
+        </FormDialogForm>
+      </FormDialog>
 
       {/* 닫기 확인 (CF-A17) — 미리 보기에 이미 토큰을 썼기 때문에 묻는다 */}
       <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
@@ -561,38 +544,19 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
   )
 }
 
-/** 5.7 `StepIndicator` 재사용 — 2단(지난 단계는 누를 수 있다) */
-function StepIndicator({ current, onGo }: { current: number; onGo: (i: number) => void }) {
+/**
+ * 공고 칸 아래 줄 — 길이 경고(짧음·김, 막지 않는다)와 글자 수. 시안에 상시 보조 줄이 없으므로 **문제가 있을 때만**
+ * (경고가 있거나 상한의 90%를 넘었을 때) 보인다 `[UI-가정]`.
+ */
+function InputChecks({ text }: { text: string }) {
+  const warn = text.length > 0 && (text.length < JD_RAW_TEXT_SHORT || text.length > JD_RAW_TEXT_LONG)
+  const near = text.length >= JD_RAW_TEXT_MAX * 0.9
+  if (!warn && !near) return null
   return (
-    <>
-      <ol className="mt-3 hidden items-center gap-2 text-sm md:flex" aria-label="추가 단계">
-        {STEP_NAMES.map((name, i) => {
-          const done = i < current
-          const now = i === current
-          return (
-            <li key={name} className="flex items-center gap-2" aria-current={now ? "step" : undefined}>
-              {i > 0 ? <span className="h-px w-8 bg-border" aria-hidden /> : null}
-              <button
-                type="button"
-                disabled={!done}
-                onClick={() => onGo(i)}
-                className={cn(
-                  "grid size-6 place-items-center rounded-full text-sm font-semibold",
-                  now ? "bg-primary text-primary-foreground" : done ? "bg-primary-subtle text-primary-subtle-foreground" : "border border-input text-muted-foreground",
-                )}
-              >
-                {i + 1}
-                <span className="sr-only">{done ? " (완료)" : ""}</span>
-              </button>
-              <span className={cn(now && "font-medium")}>{name}</span>
-            </li>
-          )
-        })}
-      </ol>
-      <p className="mt-3 text-sm text-muted-foreground tabular-nums md:hidden">
-        {current + 1} / {STEP_NAMES.length} · {STEP_NAMES[current]}
-      </p>
-    </>
+    <div className="flex items-start justify-between gap-2">
+      <LengthWarning text={text} />
+      {near ? <CharCount count={text.length} limit={JD_RAW_TEXT_MAX} /> : <span />}
+    </div>
   )
 }
 

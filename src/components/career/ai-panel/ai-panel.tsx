@@ -37,7 +37,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiLock } from "@/components/common/ai-lock"
+import { AiLock, type AiLockEntry } from "@/components/common/ai-lock"
 import { DeleteConfirmDialog } from "@/components/common/delete-confirm-dialog"
 import { StreamingCaret } from "@/components/common/streaming"
 import { useDocBodyMode } from "@/components/common/shell/doc-body"
@@ -71,11 +71,43 @@ export interface AiPanelProps {
    * `panel.failure` and calls `panel.retry`.
    */
   hideDraftTurnFailure?: boolean | ((failure: TurnFailure) => boolean)
+  /**
+   * Copy that differs per screen. Omitted = the S-10 / S-44 copy for `panel.target` (`PANEL_COPY.lock`,
+   * `PANEL_NOTICE`). S-46 (서류 대화) passes its own C-18 description and start-area notice.
+   */
+  copy?: AiPanelCopy
+  /** C-18 entry of the area / inline lock (FL-19 return feature). Default "writing_chat" (S-10 · S-44). */
+  lockEntry?: AiLockEntry
   className?: string
 }
 
-export function AiPanel({ panel, renderProposal, proposalInline, renderClosedActions, renderAboveInput, onUserMessageClick, onDirectInput, hideDraftTurnFailure, className }: AiPanelProps) {
+export interface AiPanelCopy {
+  /** C-18 description (area + inline lock) */
+  lock?: string
+  /** start-area fixed notice (Info line) */
+  notice?: string
+  /**
+   * the closed-chat box line. Omitted = the S-10 / S-44 rule (≥ 40 messages → `PANEL_COPY.messageLimit`, else
+   * `chatClosed`). S-46 closes at 39 and passes its own message-limit line (UQ-764).
+   */
+  closed?: string
+}
+
+export function AiPanel({
+  panel,
+  renderProposal,
+  proposalInline,
+  renderClosedActions,
+  renderAboveInput,
+  onUserMessageClick,
+  onDirectInput,
+  hideDraftTurnFailure,
+  copy,
+  lockEntry = "writing_chat",
+  className,
+}: AiPanelProps) {
   const [deleting, setDeleting] = React.useState<string | null>(null)
+  const lockCopy = copy?.lock ?? PANEL_COPY.lock[panel.target]
   const areaLock = panel.locked && !panel.chat && panel.chats.length === 0
   return (
     <aside aria-label="Resumate AI" className={cn("relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl bg-panel text-panel-foreground", className)}>
@@ -84,9 +116,9 @@ export function AiPanel({ panel, renderProposal, proposalInline, renderClosedAct
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="m-4 space-y-3 rounded-lg border bg-card p-5">
             <AiLock
-              entry="writing_chat"
+              entry={lockEntry}
               size="area"
-              description={PANEL_COPY.lock[panel.target]}
+              description={lockCopy}
               alternativeLabel="직접 입력"
               onAlternative={onDirectInput}
               className="max-w-none border-0 p-0 shadow-none"
@@ -101,6 +133,8 @@ export function AiPanel({ panel, renderProposal, proposalInline, renderClosedAct
             panel={panel}
             onUserMessageClick={onUserMessageClick}
             onDeleteChat={() => panel.chat && setDeleting(panel.chat.id)}
+            notice={copy?.notice ?? PANEL_NOTICE[panel.target]}
+            lockEntry={lockEntry}
             proposal={proposalInline && renderProposal ? renderProposal(panel) : null}
             hideFailure={Boolean(
               panel.failure &&
@@ -109,7 +143,14 @@ export function AiPanel({ panel, renderProposal, proposalInline, renderClosedAct
           />
           {renderProposal && !proposalInline ? <ProposalDock>{renderProposal(panel)}</ProposalDock> : null}
           {renderAboveInput ? <div className="shrink-0 px-3 pt-2 empty:hidden">{renderAboveInput(panel)}</div> : null}
-          <PanelInputArea panel={panel} renderClosedActions={renderClosedActions} onDirectInput={onDirectInput} />
+          <PanelInputArea
+            panel={panel}
+            renderClosedActions={renderClosedActions}
+            onDirectInput={onDirectInput}
+            lockCopy={lockCopy}
+            lockEntry={lockEntry}
+            closedCopy={copy?.closed}
+          />
         </>
       )}
       {panel.consentDialog}
@@ -317,10 +358,15 @@ function MessageList({
   onDeleteChat,
   proposal,
   hideFailure,
+  notice,
+  lockEntry,
 }: {
   panel: AiPanelController
   onUserMessageClick?: (m: WritingChatMessageView) => void
   onDeleteChat: () => void
+  /** start-area fixed notice */
+  notice: string
+  lockEntry: AiLockEntry
   /** inline proposal (proposalInline): after the latest AI turn, streaming reply included */
   proposal?: React.ReactNode
   hideFailure?: boolean
@@ -412,7 +458,7 @@ function MessageList({
             {startArea ? (
               <MessageScrollerItem messageId="notice" className="flex items-start gap-1.5 pl-8 text-sm text-muted-foreground">
                 <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {PANEL_NOTICE[panel.target]}
+                {notice}
               </MessageScrollerItem>
             ) : null}
             {/* streaming reply (C-04): announced on completion only (A-6) */}
@@ -449,7 +495,7 @@ function MessageList({
                   requestPath
                   retryLabel="다시 보내기"
                   onRetry={panel.retry}
-                  lockEntry="writing_chat"
+                  lockEntry={lockEntry}
                 />
               </MessageScrollerItem>
             ) : null}

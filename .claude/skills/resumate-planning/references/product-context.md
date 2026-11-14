@@ -11,7 +11,7 @@ An AI career management service that accumulates a user's experience and project
 | Pillar | Scope | Key question |
 |--------|-------|--------------|
 | P1. Career data management | Experiences, educations, projects (STAR per project), standalone projects and their deliverables, skills; filled in directly or through the Resumate AI writing chat | How far can we reduce input friction without the AI inventing anything? |
-| P2. Application projects (JD insights & 자기소개서) | Per application: JD (pasted, or fetched server-side from a posting URL — CF-10), requirement extraction, insight, and **one document: 자기소개서 문항 답변** (up to 5 questions, each with a user-set char limit and an answer title), written through the Resumate AI chat and anchored to P1 data. 경력기술서 was removed (2026-11-08, CF-1). The 지원 현황 board is a 4-stage kanban (before_apply · document · assignment · closed, RM-2) and needs no AI | How do we keep every output traceable to the user's own data or the JD? |
+| P2. Application projects (JD insights & 자기소개서) | Per application: JD (pasted, or fetched server-side from a posting URL — CF-10; the JD is used as raw text with no AI processing — jd-raw-text JR-1, 2026-11-14), insight, and **one document: 자기소개서 문항 답변** (up to 5 questions, each with a user-set char limit and an answer title), written through the Resumate AI chat and anchored to P1 data. 경력기술서 was removed (2026-11-08, CF-1). The 지원 현황 board is a 4-stage kanban (before_apply · document · assignment · closed, RM-2) and needs no AI | How do we keep every output traceable to the user's own data or the JD? |
 
 P1 is the input to P2. P1 data quality determines the quality of the whole service; keep this in mind in every design decision.
 

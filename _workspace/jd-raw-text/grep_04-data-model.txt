@@ -1,0 +1,113 @@
+3:> 작성: data-architect / 기준 입력: **v4.15: `_workspace/00_input/planning-decisions-cover-letter-flow.md`(결정 사이클 `cover-letter-flow` — CF-1
+4:> 상태: **v4.15 — 자기소개서 관리 → 추가 → 작성 흐름 재설계(결정 사이클 `cover-letter-flow`, 2026-11-08)** · 짝 판: PRD v4.17 
+35:| **DM-18 (v4.3)** | **공고 원문은 만든 뒤 바꾸지 않는다(U-6·D-19). 예외는 입력 원인으로 요건 추출에 실패했거나 추출은 �
+42:- v4 적용 테이블: `insights`, ~~`drafts`·`draft_sections`~~(**v4.13 폐기 ★, CL-3** — 서류의 공급자·모델 메타는 `writing_chat_messages
+87:  job_descriptions ||--o{ jd_requirements : "extracted into"
+349:- 설명: 독립 프로젝트 아래 사용자가 직접 쓰는 산출물(제목 + 마크다운 본문), 여러 개. 파일 업로드가 아니다(Storage �
+473:  - **서류 대화 `start_document_writing_chat(p_application_project_id uuid, p_document_kind text, p_form_snapshot jsonb default null)`** (**v4.13 신설
+667:- **정본 행이 생기는 때 (v4.15 정렬, CF-A11 — UX DM-3)**: 행을 만드는 길은 **이 RPC(첫 저장)뿐**이다(~~11.8 배포 4단계(이관)
+709:  3. **AI-01 추출 `apply_jd_extraction` (★ 신설 분기)**: AI-01 출력의 **`deadline`**(~~`YYYY-MM-DD` 또는 null~~ **(v4.15 정렬, AI 요청 3) `
+710:  - 목록 D-day는 값이 있을 때만(화면 계산, KST 기준). `fail_jd_extraction`은 마감일을 건드리지 않는다.
+712:  - `name_source` 뜻(값 3개 그대로): **`user`** = 사용자가 입력·확인한 기업명으로 만든 이름 또는 사용자가 직접 바꾼 이�
+713:  - **2단계 값의 출처 (v4.15 정렬 — UX DM-2)**: 2단계에서 보낸 회사명·포지션명은 AI·`JobPosting`이 미리 채운 값이어도 **`
+714:  - 바뀌는 함수 ★: `private.application_compose_name`(조립식), `private.application_fallback_name`(키 없는 경로 — 포지션만 있을 때�
+743:#### job_descriptions / jd_requirements (v2와 같음 + v4 변경)
+744:- **v4 키 없는 JD (D-30)**: 키 없이 만들면 `extraction_status = 'pending'`(= 추출 전, 키 없음 포함), 이름은 사용자 입력(`name_sourc
+747:- **(v4.15 정렬, CF-A5 — AI 요청 4) `extraction` jsonb의 `schema_version` 1 → 2**: 2판에 `deadline`(`{value, source_sids}`)이 생긴다. **과�
+749:  - AI 쓰기 경로: `app_ai_writer`는 `application_projects`·`job_descriptions`·`jd_requirements`를 직접 update하지 않고 `begin_jd_extraction` /
+750:  - 기본 이름: **"새 자기소개서 (YYYY-MM-DD)"**(v4.4 후속 CR-23, 화면 표기 변경에 맞춤 `[가정]` — 이전 "새 기업 JD …". 이�
+751:  - `jd_extraction` 작업이 성공하지 못하고 끝나면(멈춤 처리 포함) 트리거가 그 작업으로 `running`인 JD를 `failed`로 바꾸고 
+756:U-6·D-19 "JD 필수·교체 불가"의 유일한 예외다. 그 밖의 경우(추출 전, 요건이 있는 추출 성공, 공급자·키·시스템 원인 
+764:  p_raw_text_hash text,
+766:) returns jsonb  -- {application_project_id, job_description_id, extraction_status: 'pending', raw_text_edited_at, ai_run_allowed}
+779:| 2 | `extraction_status = 'failed'`. `running`인데 그 작업이 이미 `failed`로 끝난 행도 실패로 본다(읽기 규칙과 같음, 트리거가 
+780:| 3 | `jd_requirements` 0행(`origin` 무관) | `jd_raw_text_locked` |
+781:| 4 | **실패 행에만 적용(`succeeded`는 건너뜀).** `extraction_job_id`의 작업이 `job_type = 'jd_extraction'`, `status = 'failed'`, `error_code
+785:- 조건 5는 실패 행에서는 방어용이다. 인사이트·서류는 모두 `extraction_status = 'succeeded'`를 요구하므로 실패 행에는 문�
+786:- **`succeeded` + 요건 0개는 AI-01 정상 경로에서 생기지 않는 안전망이다**(AI-01: 요건 0개면 `not_a_jd` 또는 `schema_invalid`로 �
+787:- 조건 1은 UX S-15 ③(요건 추출·인사이트 — v4.14, RM-1)보다 넓게 쓰여 있지만, 서류 작업은 추출 성공을 요구하므로 이 
+788:- `insufficient_data`는 제외한다. 커리어 데이터 부족이라 원문과 무관하고 AI-01이 내지도 않는다(C-09로 간다, Q53-9).
+789:- **`ai_jobs` 90일 정리 뒤** `extraction_job_id`가 null이면 원인을 알 수 없어 `jd_failure_not_input`이다 `[가정]`. "요건 정리하기"�
+796:| `invalid_raw_text` / `invalid_raw_text_hash` / `invalid_sentences` | 400 `[가정]` | `create_application_project`와 같은 검사(공백뿐, 50,000자 �
+808:| `raw_text`, `raw_text_hash`, `sentences` | 인자 값 |
+809:| `detected_language`, `extraction`, `tech_keywords`, `requirements_hash` | null |
+810:| `extraction_status` | `'pending'` |
+831:- AI-01은 `input_hash`를 쓰지 않는다(구현 `null`, `begin_jd_extraction`이 `succeeded`를 거부하는 것으로 충분). 그래서 재추출이 �
+832:- 뒤 기능의 `input_hash`는 `requirements_hash`를 포함하고 재사용 대상은 성공·`ready` 행뿐이다. 조건 5로 그런 행이 없고 `requ
+833:- `requirements_hash`에 원문이 들어가지 않아도(AI-01) 문제없다. 수정이 일어나는 시점에 비교할 이전 해시가 없다.
+836:1. 마이그레이션: `job_descriptions.raw_text_edited_at` timestamptz null, RPC + grant. **`private.job_descriptions_guard` 트리거 완화**: 지금은
+837:2. **`ensureJdExtracted` 순서 변경**: 지금은 `begin_jd_extraction` 전에 `sentences`를 읽는다. 읽은 직후 수정이 끼어들면 옛 문장 �
+843:> 순서: ① 1단계 "JD 입력"(공고 URL 또는 직접 입력) → [다음] → ② 2단계 "지원 기업 / 포지션" + "공고 내용"(고칠 수 있
+847:| [다음] — URL을 넣었을 때 | **URL 가져오기 엔드포인트**(Route Handler, 동기, AI 아님 — 7장·11.10). 응답 `{rawText, companyName,
+849:| 2단계 | 채움 우선순위(CF-A6): AI-01 미리 보기 값 → `JobPosting` 값 → 빈 칸. **사용자가 고친 값이 최종이다.** 모달이 들
+850:| [자기소개서 작성] | **`create_application_project(..., p_source_url, p_preview_job_id)`** ★ 한 번 — 지원 프로젝트 + JD 행(`raw_text` =
+851:| 모달을 닫음 | 아무 행도 만들지 않는다. 미리 보기 작업 행·사용량 행은 **지원 프로젝트 없이 남는다**(토큰은 이미
+855:- **엔드포인트**: Route Handler `POST /api/job-descriptions/extract-preview` `[가정: 이름]`, 동기(AI-01과 같은 경량 등급·15초 목표). �
+856:- **`ai_jobs` 행**: `job_type = 'jd_extraction'`(새 job_type을 만들지 않는다 — 미터 기능 "요건 추출"과 프롬프트가 같다), **`targe
+857:- **CHECK 교체 ★**: 지금 `ai_jobs_jd_extraction_check`는 `jd_extraction`이면 `target_type = 'job_description' and target_id is not null and applica
+859:- **사용량 `ai_usage_records`**: 호출마다 1행, `feature = 'jd_extraction'`, `job_type = 'jd_extraction'`, `ai_job_id` = 미리 보기 작업, **`app
+860:- **연결 (생성 때)**: `create_application_project`가 `p_preview_job_id`를 받으면 ① 소유자 = 나, `job_type = 'jd_extraction'`, `target_type =
+861:- **적용 (원문이 같을 때)**: ~~`params.raw_text_hash = p_raw_text_hash`이면~~ **RPC가 `p_raw_text`로 다시 계산한 해시가 `params.raw_text
+862:- **버림 (2단계에서 공고 내용을 고쳤을 때 — CF-A17)**: 해시가 다르면 요건·`deadline`을 적용하지 않고 `extraction_status = '
+863:- **원문 정규화와 해시 (v4.15 정렬, AI 요청 2 — ★ 코드)**: 미리 보기·생성·원문 수정(2.6.1) 세 경로가 **같은 서버 함�
+864:- **쓰이지 않은 미리 보기 작업의 정리 (v4.15 정렬, AI 요청 1)**: 연결되지 않은(`target_type = 'jd_preview' and target_id is null`) �
+865:- **"AI 없이 계속" — CF-U1 (Q53-1 변경 여부, UX DM-1 나머지) — 확정 2026-11-08 (사용자): (a) Q53-1 유지, (b) 채택하지 않음**: [�
+866:- **왜 결과를 서버 작업 행에 두는가 (CF-A17 문구 "모달이 들고 있다가 함께 보낸다"와 다른 점 — 리더 확인 요청)**: 모
+867:- **생성 RPC 인자 추가 ★**: `create_application_project(p_id, p_raw_text, p_raw_text_hash, p_sentences, p_company_name, p_position_title, p_name, p_
+905:- `create_application_project`가 insert **전에** 활성 공급자를 판정한다. 활성 공급자 없음 → 통과(추출 없이 저장, D-30) / 키 `
+1109:| `job_type` | CHECK에 **`key_verification`** 추가(F-AI-01·02 확인 호출도 같은 실행·기록 경로). 전체: `jd_extraction`, `insight`, `care
+1117:| `error_code` | CHECK 값 교체(AI C-11.1 + 아래 1개): 공급자 원인 `rate_limited`, `daily_quota_exhausted`, `billing_required`, `key_invalid`, `m
+1118:| `error_category` | generated stored, **값 재정의**(AI C-11.1): `provider_limit`(rate_limited, daily_quota_exhausted) / `user_account`(billing_require
+1127:| `target_type` | **v4.2 (구현 반영)** 값: `writing_chat`(`writing_chat_turn`, **(v4.13 ★)** `career_description`·`cover_letter`도 이 값 — `ta
+1137:  | (2) **새 작업 시작** | **인사이트 "다시 생성"**(F-P2-07, 새 `insight` 작업 행 + 새 `insights` 버전 행 `version_no + 1`, 성공하�
+1141:    - **요청 범위 작업 유형**: `jd_extraction`, `draft_source_ranking`, `career_description`, `cover_letter`, `key_verification`, `writing_chat_tur
+1142:    - **입력 원인 실패**(`error_category = 'input'`): `input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`. 같은 입력으로 같은
+1168:| `feature` | text | not null, CHECK in (`jd_extraction`, `insight`, `career_description`, `cover_letter`, `writing_chat`, `key_verification`, `writing_ass
+1285:### 2.11 AI 연결 (v4 BYOK 신설, F-AI-01~09, NFR-KEY-01~09)
+1289:- 설명: 사용자별 공급자 API 키. **사용자당 공급자별 1개**(최대 3개, F-AI-01 (1)).
+1332:- 등록·교체·다시 확인도 같은 경로: 서버 액션이 `ai_jobs`(`job_type = 'key_verification'`)를 만들고 실행한다. 등록·교체는 
+1340:| `save_provider_key(p_user_id, p_key_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id, p_encryption_version default 1, key_la
+1406:| ⑤ **요청 범위 작업 시작**(2026-11-06 추가) — JD 요건 추출(AI-01, 동기), ~~서류 3종 AI-11·AI-03·AI-04(동기·SSE)~~ **(v4.15, R-
+1407:| ⑥ **지원 프로젝트 생성**(v4.3, Q53-1, `create_application_project`) | HTTP 409, 행 없음 | 거부 안 함(추출 없이 저장, D-30) | `ai_c
+1410:- **경로 ② 판정 순서**(2026-11-06, 2026-11-06 재검토 R-69로 전체 순서 보강 — 구현 42f7611과 같음): 작업 없음 404 `not_found` �
+1488:| 프로젝트 내용 | `description` | `content` | **`description`** | `educations.description`("교육 내용")과 같은 말·같은 컬럼명. `content
+1557:> 결정 입력이 이미 고정한 이름은 `answer_title`(CF-A4)·AI-01 `deadline`(CF-A5)·`job_descriptions.source_url`(CF-A16)이다. **★표 없는 
+1564:| AI-01 마감일 출력 | **`deadline`** = `{value: "YYYY-MM-DD" \| null, source_sids}`(v4.15 정렬 — AI 명세 v4.15 모양) → `deadline.value`를 `
+1566:| 요건 미리 보기 | **`POST /api/job-descriptions/extract-preview`** → `{previewJobId, companyName, positionTitle, deadline, requirementCount}` / `a
+1709:| application_projects | 본인 | RPC | 본인(`name`, `deadline`, `memo`). **`stage`·`stage_outcome`·`stage_changed_at`은 RPC만**. v4.2: AI 쪽 `name`
+1711:| job_descriptions / jd_requirements | 본인 | RPC(`create_application_project`, v4.3: 동의 필요·키 무효면 거부, 2.7.1. **v4.15: `source_url`�
+1724:  - 읽기: 커리어 6개 테이블 select(v4.4: experiences, educations, projects, **project_deliverables**, skills, project_skills — `project_details`
+1726:  - **RPC로만 쓰기**: 대화(`apply_structured_draft_patch`, `begin_assistant_message`, `finish_assistant_message` 등), JD 추출(`begin/apply/fail_jd
+1809:  - 화면: true면 AI 실행 버튼(요건 추출·~~서류 3종~~ 자소서 대화((v4.15, R-CF-10))·인사이트·AI 작성 대화·다시 시도 — v
+1839:| F-AP-01 지원 프로젝트 만들기 | W `application_projects`(`stage = before_apply`, **v4.15: 이름 "{기업 명} 자기소개서"**), `job_descript
+1850:| F-P2-02 요건 추출 확인 | R/W `job_descriptions`(`extraction*`), `jd_requirements`, `ai_jobs` | — |
+1851:| F-P2-04 인사이트 | R 커리어(팩: 소속 STAR, 독립 내용·산출물), `jd_requirements`; W `insights`, `evidence_links`(`project`·`project_del
+1855:| ~~F-DOC-01 경력기술서 (**v4.13 전면 개정 ★**, CL-1·CL-3)~~ **(v4.15 폐기, CF-1 — 아래는 기록)** | R 커리어(팩), `jd_requirements
+1868:| **F-AI-01 키 등록** (v4) | R `ai_providers`, `ai_disclosures`; W `ai_provider_keys`, `ai_jobs`(`key_verification`), `ai_usage_records`(`key_verificati
+1952:| **요건 미리 보기 추출 (v4.15 ★, CF-A17)** | **Route Handler `POST /api/job-descriptions/extract-preview`**(동기, AI-01 경량) `[가정: 이�
+1953:| **자기소개서 만들기 (v4.15 ★, CF-8·CF-A17)** | Server Action → RPC `create_application_project(…, p_source_url, p_preview_job_id)` — 2�
+1955:| **서류 작성 화면 조회 (v4.13 ★, CL-1·CL-4)** | Server Component | R: `application_documents` **1행**(`where application_project_id = ? and do
+1957:| **서류 대화 시작 (v4.13 ★)** | Server Action → definer RPC `start_document_writing_chat(p_application_project_id, p_document_kind, p_form_snaps
+1980:| **실패 작업 다시 시도** (v4.2) | **경우 (1) 같은 행**: `POST /api/ai-jobs/{id}/retry`, 같은 행 `failed → queued`, **다시 시도 시�
+1998:| ~~**CF-DM-1**~~ **닫힘 (v4.15, CF-A17 — 리더 판단 `[가정]`, 2026-11-08)** | 추가 모달에서 행을 만드는 시점과 [다음]의 AI-01 | 
+2000:| ~~**CF-U1**~~ **닫힘 (확정 2026-11-08 (사용자) — (a) Q53-1 유지)** (v4.15 정렬 신규, UX DM-1 나머지) | 추가 모달 [다음]에서 동
+2030:| D-28, D-29, D-30, D-33, D-34, D-36, D-37 (v4) | 활성 공급자 1개 / 서버 암호화 저장 / 키 없는 JD pending / 미터 계산 / 운영비 개�
+2067:- MVP 사용자 테이블 **28** (v4: `usage_events` 삭제, `ai_provider_keys`·`ai_data_use_consents`·`ai_usage_records` 추가 / **v4.4: `project_detai
+2079:| **v4.15** | 2026-11-08 | **자기소개서 관리 → 추가 → 작성 흐름 재설계 (결정 사이클 `cover-letter-flow` — `_workspace/00_input/p
+2108:| **v4.3** | 2026-10-30 | **UI v5.3 QA 사용자 결정 반영(Q53-1~9).** **Q53-2**: U-6·D-19 예외로 입력 원인(`not_a_jd`·`input_too_long`·`safe
+2403:> **main 병합 정합 (2026-11-08)**: v4.14 `remove-mock-interview`가 **이미 구현됐다**(`20261113003000_r14_remove_mock_interview`, `_workspace/bac
+2410:| 2 ★ | CF-10·CF-A17 | `create_application_project` — `20261107000100_w0_create_application_project_gate` | 뒤 인자 **`p_source_url text default nu
+2412:| 4 ★ | CF-2·CF-A5 | `apply_jd_extraction` — `20261031000500_s5_jd_extraction_rpcs`(+ `20261101000400_s6_jd_extraction_lock_order`) | ~~`p_result -> '
+2414:| 5a ★ | CF-A17 | `ai_jobs_jd_extraction_check` — `20261031000300_s5_application_project_fks` | `… or (target_type = 'jd_preview' and (target_id is n
+2415:| 5b ★ | CF-A17 | `create_application_project` + `apply_jd_extraction` 내부 함수 분리 | `p_preview_job_id` 인자, 미리 보기 검사·연결(`ai
+2417:| 7 | — | 타입·pgTAP | `database.types.ts` 재생성(#1·#2 뒤), pgTAP: `source_url` CHECK, `jd_preview` 작업 CHECK·연결·해시 같음/다름·
+2419:| 9 ★ | CF-A17 (v4.15 정렬, AI 요청 2) | `create_application_project`(#5b와 같은 교체) | 미리 보기 적용 판단에서 **`p_raw_text`로 sha
+2428:| 동작 | 서버가 일반 브라우저처럼 요청한다(브라우저 직접 요청은 CORS로 안 된다). ① schema.org `JobPosting`(JSON-LD)에서 �
+2440:| 요건 미리 보기 라우트(신설) | `POST /api/job-descriptions/extract-preview` — 문장 분할·해시는 생성과 같은 코드, AI-01 호출�
+2441:| 지원 프로젝트 생성 액션 | 2단계 [자기소개서 작성]에서 1회 호출, `p_source_url`·`p_preview_job_id` 전달. `preview_applied = fal
+2442:| AI-01 파이프라인 | 출력 스키마 `deadline` 추가(AI 명세 v4.15), `apply_jd_extraction`에 그대로 넘긴다 |
+2499:`name`(≤ 100자, null = 추출 대기), `name_source` CHECK in (`user`, `ai`, `default`)(v4.15 뜻은 2.6 "이름 규칙"), `deadline` date(v4.15: AI-01�
+2502:`application_project_id`(unique, 복합 FK cascade, 변경 불가), `raw_text`(1~50,000자, **변경 불가. 유일한 예외는 입력 원인으로 요건
+2504:### A.7 jd_requirements
+2508:`application_project_id`(복합 FK cascade), `version_no`(`unique (application_project_id, version_no)`), `is_latest`(ready 행만), `status` CHECK in (`ge
+2529:`job_type` CHECK in (`jd_extraction`, `insight`, `career_description`, `draft_source_ranking`, `cover_letter`, `writing_chat_turn`, `key_verification`, `wr

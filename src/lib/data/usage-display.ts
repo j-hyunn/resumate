@@ -9,7 +9,8 @@ import type { AiUsageFeature } from "@/types/db"
 
 export const USAGE_FEATURE_DISPLAY_GROUPS: ReadonlyArray<{ label: string; features: readonly AiUsageFeature[] }> = [
   { label: "프로젝트/산출물 작성 AI 채팅", features: ["writing_chat"] },
-  { label: "요건 추출", features: ["jd_extraction"] },
+  // R17-7: AI-01 no longer runs; pre-R17 usage rows keep their feature value and this legacy label
+  { label: "채용 공고 분석(이전)", features: ["jd_extraction"] },
   { label: "인사이트", features: ["insight"] },
   { label: "자기소개서 작성 AI 채팅", features: ["career_description", "cover_letter"] },
   { label: "연결 확인", features: ["key_verification"] },

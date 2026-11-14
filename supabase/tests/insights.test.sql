@@ -32,6 +32,8 @@ insert into public.application_projects (id, user_id, name, name_source) values
   ('a0000000-aaaa-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', '에이 – 백엔드', 'ai'),
   ('a0000000-aaaa-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', '대기', 'user'),
   ('a0000000-aaaa-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', '씨', 'user'),
+  -- R17: P4 has no JD row at all (not reachable through create_application_project; tests the gate).
+  ('a0000000-aaaa-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', '공고 없음', 'user'),
   ('b0000000-aaaa-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'B', 'user');
 update public.application_projects set last_activity_at = '2026-01-01' where id = 'a0000000-aaaa-0000-0000-000000000001';
 insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
@@ -70,7 +72,7 @@ insert into t_payload values ('{
                             "requirement_ids": ["a0000000-8888-0000-0000-000000000001"]}],
              "gaps": [], "strategy": {"positioning": "p", "item_key": "strategy.positioning", "project_priorities": []}},
   "match_stage_result": {"schema_version": 1, "matches": []},
-  "hashes": {"requirements_hash": "rh", "career_snapshot_hash": "ch1", "input_hash": "ih1"},
+  "hashes": {"jd_text_hash": "rh", "career_snapshot_hash": "ch1", "input_hash": "ih1"},
   "meta": {"schema_version": 1, "prompt_version": "ai-02.match.v1+ai-02.synthesize.v1+common.v1",
            "provider": "gemini", "model": "gemini-x", "model_tier": "default", "connection_tier": "free",
            "validation_report": {"removed_evidence": 0}, "usage": {"input_tokens": 10, "output_tokens": 5}},
@@ -108,7 +110,9 @@ insert into public.ai_jobs (id, job_type, application_project_id, target_type, t
    'a0000000-dddd-0000-0000-000000000001', 'running', 1, 'gemini', 'light', 'free'),
   -- insight job whose target is another project
   ('a0000000-7777-0000-0000-000000000004', 'insight', 'a0000000-aaaa-0000-0000-000000000001', 'application_project',
-   'a0000000-aaaa-0000-0000-000000000003', 'running', 1, 'gemini', 'default', 'free');
+   'a0000000-aaaa-0000-0000-000000000003', 'running', 1, 'gemini', 'default', 'free'),
+  ('a0000000-7777-0000-0000-000000000005', 'insight', 'a0000000-aaaa-0000-0000-000000000004', 'application_project',
+   'a0000000-aaaa-0000-0000-000000000004', 'running', 1, 'gemini', 'default', 'free');
 
 select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000003')$$,
                  'P0001', 'invalid_ai_job', 'begin: jd_extraction job refused');
@@ -118,8 +122,9 @@ select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-00000000
                  'P0001', 'invalid_ai_job', 'begin: job of another project refused');
 select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000001', gen_random_uuid())$$,
                  'P0001', 'invalid_ai_job', 'begin: unknown job');
-select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000002', 'a0000000-7777-0000-0000-000000000002')$$,
-                 'P0001', 'jd_not_extracted', 'begin: JD not extracted (D-30 runs extraction first)');
+-- R17: the gate is "a JD row exists" (a pending JD passes — see r17_jd_raw_text.test.sql).
+select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000004', 'a0000000-7777-0000-0000-000000000005')$$,
+                 'P0001', 'job_description_not_found', 'begin: project without a JD row');
 select throws_ok($$select public.begin_insight('b0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000001')$$,
                  'P0001', 'application_project_not_found', 'begin: another user''s project');
 
@@ -215,12 +220,12 @@ select is((current_setting('t.r1')::jsonb) - 'completed_at' - 'insight_id',
           '{"applied": true, "application_project_id": "a0000000-aaaa-0000-0000-000000000001", "version_no": 1,
             "status": "ready", "is_latest": true, "previous_latest_id": null, "evidence_count": 4}'::jsonb,
           'complete: applied, latest, 4 evidence rows');
-select results_eq($$select status, is_latest, requirements_hash, career_snapshot_hash, input_hash, schema_version, prompt_version,
+select results_eq($$select status, is_latest, coalesce(requirements_hash, '-') || '/' || jd_text_hash, career_snapshot_hash, input_hash, schema_version, prompt_version,
                            provider, model, model_tier, connection_tier, completed_at is not null,
                            result ->> 'basis_note', match_stage_result ->> 'schema_version',
                            validation_report ->> 'removed_evidence', usage ->> 'input_tokens'
                       from public.insights where id = current_setting('t.i1')::uuid$$,
-                  $$values ('ready'::text, true, 'rh'::text, 'ch1'::text, 'ih1'::text, 1,
+                  $$values ('ready'::text, true, '-/rh'::text, 'ch1'::text, 'ih1'::text, 1,
                             'ai-02.match.v1+ai-02.synthesize.v1+common.v1'::text, 'gemini'::text, 'gemini-x'::text,
                             'default'::text, 'free'::text, true, '입력된 경력 데이터 기준 분석입니다'::text, '1'::text,
                             '0'::text, '10'::text)$$,

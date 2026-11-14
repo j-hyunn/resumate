@@ -1108,13 +1108,15 @@ describe("QA-S3b-01 / -05 run gates", () => {
     expect(h.scheduled).toHaveLength(0);
   });
 
-  it.each(["key_verification", "writing_chat_turn", "jd_extraction", "draft_source_ranking", "career_description", "cover_letter"] as const)("%s jobs are not requeued by the generic retry (QA-S3b-05, S4 다시 보내기, S5 sync route, QA-S7-02 draft routes)", async (jobType) => {
+  // R17: `jd_extraction` is a legacy row type (LEGACY_AI_JOB_TYPES) — still refused, by the legacy check.
+  it.each(["key_verification", "writing_chat_turn", "jd_extraction", "draft_source_ranking", "career_description", "cover_letter"] as const)("%s jobs are not requeued by the generic retry (QA-S3b-05, S4 다시 보내기, R17 legacy AI-01, QA-S7-02 draft routes)", async (jobType) => {
     const h = setup(def([llmStep("match")]), { responses: [] });
     const id = "00000000-0000-4000-8000-0000000000aa";
     await h.store.insert({
       id,
       userId: USER,
-      jobType,
+      // a legacy DB value is not an AiJobType any more (R17)
+      jobType: jobType as never,
       applicationProjectId: null,
       targetType: jobType === "writing_chat_turn" ? "writing_chat" : "ai_provider",
       targetId: "00000000-0000-5000-8000-0000000000bb",

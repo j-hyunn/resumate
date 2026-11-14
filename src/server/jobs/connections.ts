@@ -21,10 +21,9 @@ import {
 import type { JobRecord } from "./types";
 
 /**
- * Production connection + key wiring shared by the job runner, the sync AI-01
- * extraction, the AI-12 turn, and job steps that run nested work (S6 insight
- * `prepare` → ensureJdExtracted). Split out of app-runner.ts (S6) so job
- * definitions can import it without an import cycle.
+ * Production connection + key wiring shared by the job runner and the AI-12 /
+ * AI-04 turns. Split out of app-runner.ts (S6) so job definitions can import
+ * it without an import cycle. (R17: the AI-01 extraction callers are gone.)
  */
 function devEnvActive(env: DevAiEnv): boolean {
   return env.nodeEnv !== "production" && !!env.provider && !!env.apiKey;

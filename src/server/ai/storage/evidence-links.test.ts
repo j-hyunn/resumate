@@ -8,13 +8,11 @@ import { resolveRefs, stripEvidence, toEvidenceLinkRows } from "./evidence-links
 
 const pack = buildCareerPack(careerRowsFixture(), { asOf: { year: 2026, month: 10 } });
 const raw = "결제 API 운영 경험이 필요합니다.";
-const jd = buildJdContext({
-  jobDescriptionId: "jd-uuid",
-  sentences: splitJdSentences(raw),
-  requirements: [{ id: "req-uuid", category: "required", content: "결제 API 운영", importance: "high", source_sids: ["S1"], sort_order: 1, updated_at: "2026-03-01T00:00:00.000Z" }],
-  includeSentences: "all",
-});
-const aliases = AliasMap.merge(pack.aliases, jd.aliases);
+const jd = buildJdContext({ jobDescriptionId: "jd-uuid", sentences: splitJdSentences(raw), rawTextHash: "h" });
+// (R17) No builder emits REQ-n any more; `jd_requirement` stays a storable legacy source type, so the generic mapper is still tested with a hand-made entry.
+const legacy = new AliasMap();
+legacy.add({ alias: "REQ-1", sourceType: "jd_requirement", id: "req-uuid", fields: { "": "결제 API 운영" }, snapshotAt: "2026-03-01T00:00:00.000Z", label: "결제 API 운영", parents: [] });
+const aliases = AliasMap.merge(pack.aliases, jd.aliases, legacy);
 const now = new Date("2026-10-26T00:00:00.000Z");
 const owner = { ownerType: "insight" as const, ownerId: "insight-uuid", applicationProjectId: "ap-uuid" };
 

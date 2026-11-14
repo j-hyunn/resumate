@@ -15,7 +15,7 @@ export const AS_OF = { year: 2026, month: 10 } as const;
 
 export function jdParts() {
   const input = koInput();
-  return { sentences: input.sentences, requirements: input.requirements, positionTitle: input.positionTitle };
+  return { sentences: input.sentences, positionTitle: input.positionTitle, rawTextHash: input.rawTextHash };
 }
 
 export function a(aliases: AliasMap, type: EvidenceSourceType, id: string): string {

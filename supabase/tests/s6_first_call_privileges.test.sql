@@ -20,20 +20,7 @@ select lives_ok($$select * from public.insights$$, 'authenticated: select insigh
 reset role;
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"app_ai_writer"}';
-select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
-                    provider, model_tier, connection_tier) values
-                   ('aaaaaaaa-7777-0000-0000-000000000001', 'jd_extraction', 'aaaaaaaa-aaaa-0000-0000-000000000001',
-                    'job_description', current_setting('t.jd')::uuid, 'running', 1, 'anthropic', 'light', 'paid')$$,
-                'app_ai_writer: jd_extraction job');
-select lives_ok($$select public.begin_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001')$$,
-                'app_ai_writer: begin_jd_extraction');
-select lives_ok($$select public.apply_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001', 1,
-            '{"detected_language":"ko","company_name":null,"position_title":null,
-              "requirements":[{"category":"responsibility","content":"결제 API 설계","keywords":[],"importance":"high","source_sids":["S1"]}],
-              "tech_keywords":[],"requirements_hash":"rh","extraction":{"schema_version":1}}',
-            'anthropic', 'claude-haiku-5-5')$$, 'app_ai_writer: apply_jd_extraction');
-select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000001', 1)$$, 'app_ai_writer: complete extraction job');
-
+-- R17: no JD extraction step before the insight.
 select lives_ok($$select * from public.insights$$, 'app_ai_writer: select insights');
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
                     provider, model_tier, connection_tier) values
@@ -46,7 +33,7 @@ select is(public.complete_insight(current_setting('t.i')::uuid, 'aaaaaaaa-7777-0
             jsonb_build_object(
               'result', '{"schema_version":1}'::jsonb,
               'match_stage_result', '{"matches":[]}'::jsonb,
-              'hashes', '{"requirements_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
+              'hashes', '{"jd_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
               'meta', '{"schema_version":1,"prompt_version":"pv","provider":"anthropic","model":"claude-sonnet-5-5",
                         "model_tier":"default","connection_tier":"paid","validation_report":null,"usage":null}'::jsonb,
               'evidence', jsonb_build_array(
@@ -54,11 +41,9 @@ select is(public.complete_insight(current_setting('t.i')::uuid, 'aaaaaaaa-7777-0
                                    'source_id', 'aaaaaaaa-6666-0000-0000-000000000001', 'source_field', 'name'),
                 jsonb_build_object('item_key', 'strengths.0', 'sort_order', 1, 'source_type', 'jd_sentence',
                                    'source_id', current_setting('t.jd'), 'source_field', null,
-                                   'source_locator', '{"sid":"S1","start":0,"end":9}'::jsonb),
-                jsonb_build_object('item_key', 'strengths.0', 'sort_order', 2, 'source_type', 'jd_requirement',
-                                   'source_id', (select id from public.jd_requirements limit 1), 'source_field', null))))
+                                   'source_locator', '{"sid":"S1","start":0,"end":9}'::jsonb))))
             ->> 'evidence_count',
-          '3', 'app_ai_writer: complete_insight');
+          '2', 'app_ai_writer: complete_insight');
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000002', 1)$$, 'app_ai_writer: complete insight job');
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
                     provider, model_tier, connection_tier) values

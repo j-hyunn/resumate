@@ -1,14 +1,10 @@
 import { z } from "zod";
-import { AiProviderSchema, ErrorEvent } from "./ai";
+import { ErrorEvent, JobErrorCodeSchema } from "./ai";
 import { JD_SOURCE_URL_MAX } from "./jd-fetch";
 import {
   APPLICATION_STAGES,
-  JD_EXTRACTION_STATUSES,
   JD_FIELD_SOURCES,
   NAME_SOURCES,
-  REQUIREMENT_CATEGORIES,
-  REQUIREMENT_IMPORTANCES,
-  REQUIREMENT_ORIGINS,
   STAGE_OUTCOMES,
   type AiErrorCode,
   type ApplicationStage,
@@ -16,8 +12,12 @@ import {
 
 /**
  * S5 application projects & JD contracts (F-AP-01·02·03·05, F-P2-01·02,
- * F-ST-01~05, AI-01; DM §2.6 / A.5–A.7 / §7; UX S-13, S-14, S-31, S-15, S-39,
+ * F-ST-01~05; DM §2.6 / A.5–A.7 / §7; UX S-13, S-14, S-31, S-15, S-39,
  * C-12~C-14, FL-06).
+ *
+ * R17 (2026-11-14): the JD is used as raw text only — AI-01 extraction, the requirement preview
+ * and every extraction field (status, requirements, keywords, seniority, failure) left these
+ * contracts. The DB keeps the columns / `jd_requirements` rows for pre-R17 data (R17-2/3).
  *
  * Action inputs and DTOs are camelCase. Sentences keep the DB jsonb shape
  * `{sid, text, start, end}` (DM A.6 storage format, offsets in UTF-16 units).
@@ -45,8 +45,9 @@ export function isValidSourceUrl(url: string): boolean {
 /**
  * Refusals the S-14 create path shows under their own code. `invalid_source_url` (400) drives
  * "주소 없이 만들기": the RPC builds no row, so the screen resends the same `id` without the URL.
+ * R17 [가정 R17-9]: `key_invalid` / `ai_consent_required` are gone — registering a JD uses no AI.
  */
-export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "key_invalid", "ai_consent_required", "application_project_id_conflict"] as const;
+export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "application_project_id_conflict"] as const;
 export type CreateApplicationErrorCode = (typeof CREATE_APPLICATION_ERROR_CODES)[number];
 /** db notes [가정]: company_name / position_title ≤ 200. */
 export const JD_TITLE_MAX = 200;
@@ -54,7 +55,6 @@ export const JD_TITLE_MAX = 200;
 export const JD_SHORT_WARNING_CHARS = 200;
 /** C-2 8k-token cap [가정]: ≈ 24,000 characters → `long_jd` warning. */
 export const JD_LONG_WARNING_CHARS = 24_000;
-/** Card name while extraction is pending (name null, no company / position, S-14). */
 /** R4 CR-23 [가정]: the screens call an application project "자기소개서" (DB default "새 자기소개서 (날짜)"). */
 export const PENDING_DISPLAY_NAME = "새 자기소개서";
 
@@ -68,8 +68,6 @@ export const ApplicationStageSchema = z.enum(APPLICATION_STAGES);
 export const StageOutcomeSchema = z.enum(STAGE_OUTCOMES);
 export const NameSourceSchema = z.enum(NAME_SOURCES);
 export const JdFieldSourceSchema = z.enum(JD_FIELD_SOURCES);
-export const JdExtractionStatusSchema = z.enum(JD_EXTRACTION_STATUSES);
-export const RequirementCategorySchema = z.enum(REQUIREMENT_CATEGORIES);
 
 // ---------- create (S-14) ----------
 
@@ -105,12 +103,6 @@ export const CreateApplicationProjectInput = z.object({
       .transform(normalizeSourceUrlScheme)
       .optional(),
   ),
-  /**
-   * R15 (CF-A17, D11): the `ai_jobs` row of the 요건 미리 보기 run. The RPC reads the
-   * **server's** `output` (never requirements sent by the screen) after recomputing the
-   * hash from `p_raw_text`, and always links the job even when it drops the result.
-   */
-  previewJobId: uuid.optional(),
 });
 export type CreateApplicationProjectInput = z.input<typeof CreateApplicationProjectInput>;
 
@@ -149,9 +141,8 @@ export type JdRawTextLock = Exclude<JdRawTextRefusalCode, "jd_raw_text_unchanged
 export type UpdateFailedJdRawTextResult = {
   applicationProjectId: string;
   jobDescriptionId: string;
-  extractionStatus: "pending";
   rawTextEditedAt: string;
-  /** Same rule as check_ai_run_allowed. Saving never starts AI (D-30): the user presses "요건 정리하기". */
+  /** Same rule as check_ai_run_allowed. Saving never starts AI. */
   aiRunAllowed: boolean;
   warnings: JdInputWarning[];
 };
@@ -171,54 +162,15 @@ export type CreateApplicationProjectResult = {
   name: string | null;
   nameSource: (typeof NAME_SOURCES)[number] | null;
   displayName: string;
-  extractionStatus: (typeof JD_EXTRACTION_STATUSES)[number];
   /**
-   * The AI run gate passed (active provider, key not invalid, current consent):
-   * the screen calls `POST /api/application-projects/{id}/jd-extraction` right
-   * away ("공고를 분석하고 있어요"). False → no extraction (D-30), C-18 hint.
+   * Same rule as check_ai_run_allowed (active provider, key not invalid, current consent).
+   * R17: replaces `shouldExtract` — nothing starts after creation; the screens use it for the
+   * C-18 connection hint only.
    */
-  shouldExtract: boolean;
+  aiRunAllowed: boolean;
   /** False when the same id already existed (idempotent retry; the input was ignored). */
   created: boolean;
-  /** R15 D11: the preview's requirements were written into this JD (no AI-01 call needed). */
-  previewApplied: boolean;
-  /** Why the preview was not applied; null when it was, or when no `previewJobId` was sent. */
-  previewSkipReason: PreviewSkipReason | null;
   warnings: JdInputWarning[];
-};
-
-// ---------- 요건 미리 보기 (A2, CF-A17 / DM 2.6.2) ----------
-
-/**
- * `create_application_project` return `preview_skip_reason` (R15 D11, db notes ②-3).
- * The job row is linked to the new project in every case, including these.
- */
-export const PREVIEW_SKIP_REASONS = ["preview_not_found", "preview_expired", "preview_mismatch"] as const;
-export type PreviewSkipReason = (typeof PREVIEW_SKIP_REASONS)[number];
-
-/** `ai_jobs.finished_at` + this window — after it the result is `preview_expired` and the cron empties it. */
-export const PREVIEW_TTL_HOURS = 24;
-
-export const ExtractJdPreviewInput = z.object({
-  rawText: z
-    .string()
-    .max(JD_RAW_TEXT_MAX)
-    .refine((v) => v.trim().length > 0, { message: "empty_raw_text" }),
-});
-export type ExtractJdPreviewInput = z.input<typeof ExtractJdPreviewInput>;
-
-/**
- * `POST /api/job-descriptions/extract-preview` 200 body. The requirement text itself is
- * **not** here — it stays in `ai_jobs.output` on the server (CF-A17: the screen can never
- * send requirements back as `origin = 'ai'`).
- */
-export type ExtractJdPreviewResult = {
-  previewJobId: string;
-  companyName: string | null;
-  positionTitle: string | null;
-  /** `YYYY-MM-DD`, only when AI-01's 검사 1~4 all passed; the create RPC checks it again. */
-  deadline: string | null;
-  requirementCount: number;
 };
 
 // ---------- update / delete ----------
@@ -299,7 +251,7 @@ export type ApplicationProgress = {
 type NameFields = {
   name: string | null;
   nameSource: (typeof NAME_SOURCES)[number] | null;
-  /** name → "회사명 – 포지션명" → "새 자기소개서" (추출 대기). */
+  /** name → "{회사명} 자기소개서" → "새 자기소개서". */
   displayName: string;
 };
 
@@ -313,13 +265,6 @@ export type ApplicationProjectListItem = NameFields & {
   stageChangedAt: string;
   lastActivityAt: string;
   createdAt: string;
-  extractionStatus: (typeof JD_EXTRACTION_STATUSES)[number];
-  /**
-   * QA-S5-02: when `extractionStatus = 'failed'`, the failure of the job that
-   * last ran the extraction (C-20 copy by category / failureCause; `stalled`
-   * after a dead run, `canceled` after a refused one). Null otherwise.
-   */
-  lastExtractionFailure: JdExtractionFailure | null;
   progress: ApplicationProgress;
 };
 
@@ -344,42 +289,22 @@ export type ApplicationHub = ApplicationProjectListItem & {
   positionTitleSource: (typeof JD_FIELD_SOURCES)[number] | null;
   jd: {
     jobDescriptionId: string;
-    extractionStatus: (typeof JD_EXTRACTION_STATUSES)[number];
-    requirementCount: number;
-    /** C-19 result badge (kept after ai_jobs cleanup). */
-    extractionProvider: z.infer<typeof AiProviderSchema> | null;
-    extractionModel: string | null;
   };
 };
 
 export type JdSentenceDto = { sid: string; text: string; start: number; end: number };
 
-export type JdRequirementDto = {
-  id: string;
-  category: (typeof REQUIREMENT_CATEGORIES)[number];
-  content: string;
-  keywords: string[];
-  importance: (typeof REQUIREMENT_IMPORTANCES)[number];
-  sourceSids: string[];
-  sortOrder: number;
-  origin: (typeof REQUIREMENT_ORIGINS)[number];
-  isUserEdited: boolean;
-};
-
-/** The C-11 error shape of the SSE `error` event, without `type` (same copy rules, C-20). */
-export const AiFailureSchema = ErrorEvent.omit({ type: true });
+/**
+ * The C-11 error shape of the SSE `error` event, without `type` (same copy rules, C-20).
+ * R17 (QA-02): read from stored job rows, so the code may also be a legacy one (`not_a_jd`).
+ */
+export const AiFailureSchema = ErrorEvent.omit({ type: true }).extend({ code: z.union([JobErrorCodeSchema, z.literal("internal_error")]) });
 export type AiFailure = z.infer<typeof AiFailureSchema>;
 
 /** The `error` event fields without `type` (one C-11 failure shape for JSON bodies). */
 export function toAiFailure(event: z.infer<typeof ErrorEvent>): AiFailure {
   return AiFailureSchema.parse(event);
 }
-
-export type JdExtractionFailure = AiFailure & {
-  jobId: string | null;
-  /** When the failed run ended. */
-  failedAt: string | null;
-};
 
 export type JdView = {
   applicationProjectId: string;
@@ -393,41 +318,11 @@ export type JdView = {
   /** Why not, null when editable. `jd_has_results` → S-15 "새 기업 JD 추가" (Q53-11). */
   rawTextLock: JdRawTextLock | null;
   sentences: JdSentenceDto[];
-  detectedLanguage: string | null;
   companyName: string | null;
   companyNameSource: (typeof JD_FIELD_SOURCES)[number] | null;
   positionTitle: string | null;
   positionTitleSource: (typeof JD_FIELD_SOURCES)[number] | null;
-  extractionStatus: (typeof JD_EXTRACTION_STATUSES)[number];
-  requirements: JdRequirementDto[];
-  techKeywords: { keyword: string; sourceSids: string[] }[];
-  /** AI-01 `seniority` (null when absent / not extracted). */
-  seniority: { minYears: number | null; maxYears: number | null; label: string; sourceSids: string[] } | null;
-  /** `extraction.is_likely_jd` — false → S-15 JD 판별 경고. null before extraction. */
-  isLikelyJd: boolean | null;
-  /** `extraction.warnings` (e.g. 복수 포지션). */
-  extractionWarnings: string[];
-  /** C-19 badge: the provider / model that extracted the requirements. */
-  extractedBy: { provider: z.infer<typeof AiProviderSchema>; model: string } | null;
-  /** Latest failure when extraction_status = failed (C-20; `not_a_jd` → "채용 공고가 아닌 텍스트로 보여요"). */
-  lastFailure: JdExtractionFailure | null;
 };
-
-// ---------- sync extraction route (AI-01, C-6 동기) ----------
-
-/**
- * `POST /api/application-projects/{id}/jd-extraction` — 200 body `{ data }`:
- * - `succeeded`: requirements stored; `jd` is the refreshed S-15 view.
- * - `failed`: a C-11 failure (connection gate, provider, input). `jd` is the
- *   view after the failure (raw text intact, status failed / pending).
- *   `jobId` null when nothing started (connection gate before the job).
- * Non-AI errors use the plain `{ error: {code, message} }` body:
- * 401, 404, 409 `already_extracted` (D-19: re-extraction = failed retry only),
- * 409 `extraction_in_progress`.
- */
-export type JdExtractionResponse =
-  | { status: "succeeded"; jobId: string; jd: JdView }
-  | { status: "failed"; jobId: string | null; error: AiFailure; jd: JdView };
 
 /** Connection-gate codes a sync AI route answers with (F-AI-08 lock). */
 export type GateCode = Extract<AiErrorCode, "key_missing" | "key_invalid">;

@@ -109,13 +109,11 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_source_url: { message: "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요.", status: 400 },
   invalid_outcome: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요." },
   not_closed: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요.", status: 409 },
-  already_extracted: { message: "이미 요건을 정리한 공고예요.", status: 409 },
-  extraction_in_progress: { message: "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  user_edited_requirements_exist: { message: "직접 수정한 요건이 있어 다시 정리할 수 없어요.", status: 409 },
+  // R17: the AI-01 raises (already_extracted, extraction_in_progress, user_edited_requirements_exist,
+  // jd_not_extracted, invalid_extraction_result) are gone with their RPCs.
   // S6 insights (db notes "RPC 시그니처")
   insight_not_found: { message: "인사이트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   insight_in_progress: { message: "인사이트를 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  jd_not_extracted: { message: "공고 요건을 먼저 정리해야 해요.", status: 409 },
   invalid_insight_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   /**
    * R15-DB-9: the per-owner allowed-source check moved from a `23514` CHECK into
@@ -142,7 +140,6 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // QA-W0-05: program errors, unreachable from the app paths (server-built values, no user update grant)
   job_description_immutable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sentences: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_extraction_result: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // apply_structured_draft_patch: user-session rule violations (db notes "거부 사유")
   invalid_patch: { message: "입력값을 확인해 주세요." },
   invalid_value: { message: "입력값을 확인해 주세요." },
@@ -237,7 +234,6 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_raw_text_hash: "internal_error",
   job_description_immutable: "internal_error",
   invalid_sentences: "internal_error",
-  invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
   // UQ-759: `invalid_source_url` keeps its own code (no alias) — S-14 "주소 없이 만들기" keys on it.
   direct_write_not_allowed: "forbidden",

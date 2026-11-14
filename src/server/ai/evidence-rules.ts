@@ -11,6 +11,11 @@
  *
  * (R14, AI spec v4.14 RM-1) `interview_answer` (`ANS-n`) is gone with the mock
  * interview features (AI-05/06/07).
+ *
+ * (R17, JD AI 처리 제거) `jd_requirement` (`REQ-n`) is **legacy**: no context
+ * builder emits REQ-n any more (AI-01 is gone), so a model citing one fails V-1.
+ * The type stays here because the DB allow list and old `evidence_links` rows
+ * (v1 insights) keep it (plan R17-1/R17-2); JD evidence is `jd_sentence` only.
  */
 
 export const EVIDENCE_SOURCE_TYPES = [

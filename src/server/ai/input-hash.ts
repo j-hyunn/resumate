@@ -3,7 +3,8 @@ import type { ProviderId } from "./providers/types";
 
 /**
  * C-6 동일 입력 재사용 (PRD 6.4):
- * input_hash = hash(feature, prompt_version, provider, model, career_snapshot_hash, requirements_hash, feature params).
+ * input_hash = hash(feature, prompt_version, provider, model, career_snapshot_hash, jd_text_hash, feature params).
+ * (R17) jd_text_hash = job_descriptions.raw_text_hash (the AI-01 requirements_hash is gone).
  * (v4) provider is part of the hash: switching the active provider never reuses a result.
  *
  * `feature` is the ai_jobs.job_type. `params` must hold only what changes the
@@ -17,12 +18,12 @@ export type InputHashParts = {
   provider: ProviderId;
   model: string;
   careerSnapshotHash: string | null;
-  requirementsHash: string | null;
+  jdTextHash: string | null;
   params?: Record<string, unknown>;
 };
 
-/** 2: provider added (S3a, C-6 v4). */
-export const INPUT_HASH_VERSION = 2;
+/** 2: provider added (S3a, C-6 v4). 3: requirements_hash → jd_text_hash (R17). */
+export const INPUT_HASH_VERSION = 3;
 
 export function computeInputHash(parts: InputHashParts): string {
   return hashCanonical({
@@ -32,7 +33,7 @@ export function computeInputHash(parts: InputHashParts): string {
     provider: parts.provider,
     model: parts.model,
     career_snapshot_hash: parts.careerSnapshotHash,
-    requirements_hash: parts.requirementsHash,
+    jd_text_hash: parts.jdTextHash,
     params: parts.params ?? {},
   });
 }

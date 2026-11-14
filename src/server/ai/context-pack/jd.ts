@@ -1,5 +1,4 @@
 import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
-import { hashCanonical } from "../hash";
 import { AliasMap } from "./aliases";
 
 /**
@@ -58,7 +57,7 @@ function wrappedEmphasis(text: string): boolean {
  *
  * Empty and
  * marker-/symbol-only segments are skipped, so a symbol-only raw text yields []
- * (stored as is; AI-01 then ends with not_a_jd without a call). IDs are S1, S2, … in text order.
+ * (stored as is). IDs are S1, S2, … in text order.
  */
 export function splitJdSentences(raw: string): JdSentence[] {
   const sentences: JdSentence[] = [];
@@ -126,109 +125,50 @@ export function splitJdSentences(raw: string): JdSentence[] {
   return sentences;
 }
 
-/** Minimal requirement shape the context needs (jd_requirements, DM A.7). */
-export type JdRequirementInput = {
-  id: string;
-  category: "responsibility" | "required" | "preferred";
-  content: string;
-  importance: "high" | "normal";
-  source_sids: readonly string[];
-  sort_order: number;
-  updated_at: string | null;
-};
-
-/**
- * `job_descriptions.requirements_hash` (C-6) — the single rule, used both when
- * AI-01 results are applied (apply_jd_extraction p_result) and when later
- * features build their JD context, so the two always agree. Row ids are not
- * part of it (they don't exist yet at extraction time); importance is, since
- * it is rendered into prompts ("중요"). Order = sort_order.
- */
-export function computeRequirementsHash(
-  requirements: readonly Pick<JdRequirementInput, "category" | "content" | "importance" | "source_sids" | "sort_order">[],
-): string {
-  const ordered = requirements.map((r, i) => ({ r, i })).sort((a, b) => a.r.sort_order - b.r.sort_order || a.i - b.i);
-  return hashCanonical({
-    v: REQUIREMENTS_HASH_VERSION,
-    requirements: ordered.map(({ r }) => ({
-      category: r.category,
-      content: r.content,
-      importance: r.importance,
-      source_sids: [...r.source_sids].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)) || (a < b ? -1 : a > b ? 1 : 0)),
-    })),
-  });
-}
-
-export const REQUIREMENTS_HASH_VERSION = 1;
-
 export type JdContext = {
   /** `<jd>…</jd>` user block. Never log it. */
   text: string;
+  /** S1…Sn → `jd_sentence` (source_id = job_descriptions.id, locator {sid, start, end}). */
   aliases: AliasMap;
-  /** Hash of the requirement list as given to the model (C-6 requirements_hash). */
-  requirementsHash: string;
-  /** V-5 sources: requirement and sentence texts. */
+  /**
+   * (R17) The JD part of C-6 input_hash: `job_descriptions.raw_text_hash`,
+   * passed through. The sentences are a deterministic split of that text
+   * (no LLM), so the raw-text hash identifies the block. Replaces the
+   * AI-01 `requirements_hash`.
+   */
+  jdTextHash: string;
+  /** V-5 sources: position title and sentence texts. */
   numberTexts: string[];
-};
-
-const CATEGORY_LABEL: Record<JdRequirementInput["category"], string> = {
-  responsibility: "주요 업무",
-  required: "자격 요건",
-  preferred: "우대 사항",
+  sentenceCount: number;
 };
 
 /**
- * Builds the JD block: requirements as REQ-1… (by sort_order), and — only for
- * steps that need them (AI-02 stage 1) — the sentences, either all or just
- * those cited by the requirements. `jobDescriptionId` is the source_id of
- * sentence evidence (sentences are not rows).
+ * (R17) Builds the JD block from the raw text only — the AI requirement
+ * extraction (AI-01) is gone: optional `position_title` (user input) and
+ * **every** sentence as `S-n`. Sentences are not rows, so `jobDescriptionId`
+ * is the source_id of sentence evidence. No sentences → no `<sentences>` block.
  */
 export function buildJdContext(input: {
   jobDescriptionId: string;
   jobDescriptionUpdatedAt?: string | null;
   sentences: readonly JdSentence[];
-  requirements: readonly JdRequirementInput[];
-  includeSentences: "none" | "cited" | "all";
   positionTitle?: string | null;
+  /** `job_descriptions.raw_text_hash`. */
+  rawTextHash: string;
 }): JdContext {
   const aliases = new AliasMap();
-  const requirements = [...input.requirements].sort((a, b) => a.sort_order - b.sort_order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const out: string[] = ["<jd>"];
   const numberTexts: string[] = [];
   const escape = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞").replace(/\n/g, " ");
 
-  if (input.positionTitle) {
-    out.push(`position_title: ${escape(input.positionTitle)}`);
-    numberTexts.push(input.positionTitle);
+  const title = input.positionTitle?.trim();
+  if (title) {
+    out.push(`position_title: ${escape(title)}`);
+    numberTexts.push(title);
   }
-  out.push("<requirements>");
-  requirements.forEach((r, i) => {
-    const alias = `REQ-${i + 1}`;
-    aliases.add({
-      alias,
-      sourceType: "jd_requirement",
-      id: r.id,
-      fields: { [WHOLE_SOURCE_FIELD]: r.content },
-      snapshotAt: r.updated_at,
-      label: r.content.length > 40 ? `${r.content.slice(0, 40)}…` : r.content,
-      parents: [],
-    });
-    const sids = r.source_sids.length ? ` (근거 문장: ${r.source_sids.join(", ")})` : "";
-    out.push(`${alias} [${CATEGORY_LABEL[r.category]}${r.importance === "high" ? ", 중요" : ""}] ${escape(r.content)}${sids}`);
-    numberTexts.push(r.content);
-  });
-  out.push("</requirements>");
-
-  const cited = new Set(requirements.flatMap((r) => r.source_sids));
-  const sentences =
-    input.includeSentences === "all"
-      ? input.sentences
-      : input.includeSentences === "cited"
-        ? input.sentences.filter((s) => cited.has(s.sid))
-        : [];
-  if (sentences.length) {
+  if (input.sentences.length) {
     out.push("<sentences>");
-    for (const s of sentences) {
+    for (const s of input.sentences) {
       aliases.add({
         alias: s.sid,
         sourceType: "jd_sentence",
@@ -246,10 +186,5 @@ export function buildJdContext(input: {
   }
   out.push("</jd>");
 
-  return {
-    text: out.join("\n"),
-    aliases,
-    requirementsHash: computeRequirementsHash(requirements),
-    numberTexts,
-  };
+  return { text: out.join("\n"), aliases, jdTextHash: input.rawTextHash, numberTexts, sentenceCount: input.sentences.length };
 }

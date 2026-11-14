@@ -67,9 +67,10 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"f0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'true'::jsonb,
           'readiness: consent_required true without C-21');
-select throws_ok($$select public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-                     '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb)$$,
-                 'P0001', 'ai_consent_required', 'path ⑥ without C-21: ai_consent_required');
+-- R17 [가정 R17-9]: registering a posting runs no AI, so there is no consent gate; AI stays not allowed.
+select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'ai_run_allowed',
+          'false', 'path ⑥ without C-21: saved (no gate since R17), AI not allowed');
 reset role;
 
 set local role app_ai_writer;
@@ -108,7 +109,7 @@ select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'fa
           'readiness: consent_required false after C-21');
 select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'ai_run_allowed',
-          'true', 'path ⑥ after C-21: AI allowed');
+          'true', 'path ⑥ after C-21 (same id replay): AI allowed');
 reset role;
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"f0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';

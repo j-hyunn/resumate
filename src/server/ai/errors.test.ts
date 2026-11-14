@@ -17,7 +17,6 @@ describe("retryPolicy (C-11.3)", () => {
       "input_too_long",
       "safety_blocked",
       "insufficient_data",
-      "not_a_jd",
       "stalled",
       "canceled",
     ] as const) {

@@ -49,18 +49,16 @@ import {
   FormFieldError,
   FormSection,
 } from "@/components/common/form-dialog"
-import { notifyAiConnectionChanged, useAiConnection } from "@/components/common/ai-connection-context"
 import { useAiConsentGate } from "@/components/common/consent-gate"
 import { CharCount } from "@/components/common/input-guide"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { readAiConnectReturn } from "@/components/common/ai-connect-return"
 import { setNavOrigin } from "@/components/common/return-target"
-import { isAiRejected } from "@/lib/data/ai-errors"
 import { JD_FETCH_FAILED_MESSAGE } from "@/lib/data/cover-letter-copy"
 import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
-import { keepsFormDraftOnLeave, previewRefusalAction } from "./form-draft"
-import { createApplicationAction, extractJdPreviewAction, fetchJobPostingAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
+import { keepsFormDraftOnLeave } from "./form-draft"
+import { createApplicationAction, fetchJobPostingAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** v5.3 S-14: 지원 기업·지원 포지션 각 200자 (구현 값 `[가정]`) */
 const FIELD_MAX = 200
@@ -80,7 +78,6 @@ export interface AddApplicationDialogProps {
 
 export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, previewState = null }: AddApplicationDialogProps) {
   const router = useRouter()
-  const connection = useAiConnection()
   const consent = useAiConsentGate()
   const previewWrite = usePreviewWriteGuard()
 
@@ -119,8 +116,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     return () => window.clearTimeout(t)
   }, [step])
 
-  const keyless = connection !== null && !connection.active_provider
-  const keyInvalid = connection?.key_status === "invalid"
 
   // --- 입력 보존 (C-21·키 교체 왕복만, UX S-14 "입력 보존") ------------------
   React.useEffect(() => {
@@ -223,41 +218,16 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       }
     }
 
-    // 본문이 있고 키가 있으면 AI-01 미리 보기 (행 없음, CF-A17)
-    let preview: { previewJobId: string; companyName: string | null; positionTitle: string | null; deadline: string | null; requirementCount: number } | null = null
-    if (text && !keyless) {
-      setPhase("extracting")
-      const r = await extractJdPreviewAction(text).catch(() => null)
-      if (r && isAiRejected(r)) {
-        // 경로 ⑥: 화면 판정과 서버 판정이 어긋났다(다른 탭에서 키·동의가 바뀜 등). **원인별로** 처리한다
-        // (UQ-751 · UX S-14 Q53-1 표 · R15: 409 `key_invalid`·`ai_consent_required`, 그 밖은 C-20)
-        notifyAiConnectionChanged()
-        const action = previewRefusalAction(r.refusal)
-        if (action === "stay_key_invalid") {
-          setPhase("idle")
-          setKeyInvalidShown(true)
-          return
-        }
-        if (action === "consent") {
-          setPhase("idle")
-          consent.open(() => void goNext())
-          return
-        }
-        if (action === "step2_with_notice") setExtractFailed(true)
-      } else if (r) preview = r
-      // AI-01이 실패하면 막지 않고 ②로 간다 (UX S-14 `[가정]`) — ② 머리에 C-20 축약
-      else setExtractFailed(true)
-    }
-
+    // R17: no AI-01 requirement preview — ② uses what the user typed (and the URL's JobPosting values)
     setFetchFailed(failedFetch)
     setRaw(text)
     setRawEdited(false)
-    setPreviewJobId(preview?.previewJobId ?? null)
-    setPreviewDeadline(preview?.deadline ?? null)
-    setRequirementCount(preview?.requirementCount ?? null)
-    // 채움 순서: ① AI-01 추출값 ② URL 공고의 `JobPosting` 값 ③ 빈 칸 (CF-A6)
-    setCompany(preview?.companyName ?? fetchedCompany ?? "")
-    setPosition(preview?.positionTitle ?? fetchedPosition ?? "")
+    setPreviewJobId(null)
+    setPreviewDeadline(null)
+    setRequirementCount(null)
+    // 채움 순서 (R17): URL 공고의 `JobPosting` 값 → 빈 칸
+    setCompany(fetchedCompany ?? "")
+    setPosition(fetchedPosition ?? "")
     setPhase("idle")
     setStep(1)
   }
@@ -266,10 +236,9 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     e.preventDefault()
     setUrlTouched(true)
     if (urlInvalid || (!urlTrimmed && !directTrimmed) || busy) return
-    // Q53-1: 요청을 보내지 않고 막는다 (키 없음은 막지 않는다 — CF-U1 우회 버튼 없음)
-    if (keyInvalid) return setKeyInvalidShown(true)
+    // R17 [가정 R17-9]: ① [다음] calls no AI any more — no key / consent gate here
     if (previewWrite.stop()) return
-    consent.guard(() => void goNext())
+    void goNext()
   }
 
   // --- ② [자기소개서 작성] --------------------------------------------------
@@ -284,8 +253,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       company_name: company.trim() || null,
       position_title: position.trim() || null,
       source_url: opts.withoutUrl ? null : urlTrimmed || null,
-      preview_job_id: previewJobId,
-      preview_deadline: previewDeadline,
     }).catch(() => null)
 
     // `invalid_source_url`(400)은 값으로 온다 — 던진 오류는 Server Action 경계에서 `code`를 잃는다
@@ -299,18 +266,7 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       setCreateFailed(true)
       return
     }
-    if (isAiRejected(result)) {
-      // 경로 ⑥ (행 없음, 입력 유지)
-      setPhase("idle")
-      notifyAiConnectionChanged()
-      if (result.refusal === "key_invalid") setKeyInvalidShown(true)
-      else consent.open(() => void create(opts))
-      return
-    }
-    // 미리 보기가 버려졌을 때 조용히 삼키지 않는다 (R15 `preview_skip_reason`) — [UI-가정] 문구
-    if (previewJobId && !result.preview_applied && result.preview_skip_reason) {
-      toast("공고 내용이 달라져 미리 정리한 요건은 쓰지 않았어요. 만든 뒤 '채용 공고' 탭에서 다시 정리해요")
-    }
+    // R17 [가정 R17-9]: creation has no AI gate (no `{ rejected }`) and no preview result
     clearFormDraft(fromBoard)
     const id = result.id
     reset()

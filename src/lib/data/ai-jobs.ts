@@ -9,7 +9,6 @@ import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { advanceMockJob, recordMockUsage, retryMockJob } from "@/lib/mock/ai"
 import { routes } from "@/lib/routes"
-import { ensureJdRequirementsInDb } from "./applications"
 import { applicationDisplayName } from "./labels"
 import { isPreviewRequest } from "./source"
 import { isAppError } from "@/lib/contracts/errors"
@@ -110,8 +109,7 @@ function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
   // C-13: one usage row per provider call (failed calls too). No reserve/charge (D-34).
   if (job.status !== "canceled")
     recordMockUsage(db, {
-      // a `prepare` failure never reached this job's own AI call: the failed call is the requirement extraction
-      job_type: job.params?.mock_fail_at_prepare === true ? "jd_extraction" : job.job_type,
+      job_type: job.job_type,
       ai_job_id: job.id,
       application_project_id: job.application_project_id,
       provider: job.provider,
@@ -260,13 +258,8 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
     refresh(db, job)
     return clone(jobView(db, job))
   }
-  const prepareFailed = job.params?.mock_fail_at_prepare === true
+  // R17: no requirement extraction in `prepare` any more — a retry just runs the job again
   retryMockJob(job, opts, db)
-  // `prepare`부터 다시 (S-16): the requirements are extracted again; the same failure ends the job the same way
-  if (prepareFailed && job.application_project_id) {
-    const extraction = await ensureJdRequirementsInDb(db, job.application_project_id)
-    if (extraction.failed) Object.assign(job, { params: { ...job.params, mock_fail: extraction.failed, mock_fail_at_prepare: true } })
-  }
   // the rows the job produces go back to their in-progress state (UQ-49, R-63)
   if (job.job_type === "insight") {
     const insight = db.insights.find((i) => i.ai_job_id === job.id)
@@ -277,7 +270,7 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
 
 /**
  * Mock: advances this application's running async jobs and writes what they produced. For rules that
- * read "no job is running" (update_failed_jd_raw_text condition 1). AI-01 jobs have their own path.
+ * read "no job is running" (update_failed_jd_raw_text condition 1). `jd_extraction` = R17 legacy rows, skipped.
  */
 export function refreshApplicationJobs(db: MockDb, applicationProjectId: string) {
   for (const job of db.ai_jobs) {

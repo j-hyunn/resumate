@@ -5,8 +5,13 @@ import type { ReadinessFeature } from "./career";
 import type { EvidenceChip } from "./evidence";
 
 /**
- * S6 insight contracts (AI-02; F-P2-04/05/07/09, F-AP-06, D-30; DM A.8, §6;
+ * S6 insight contracts (AI-02; F-P2-04/05/07/09, F-AP-06; DM A.8, §6;
  * UX S-16, C-01/C-02/C-03/C-20).
+ *
+ * R17 (2026-11-14): the JD is used as raw text. AI-02 reads the requirements from the JD
+ * sentences itself, so a v2 result carries its own requirement list (`requirement_matches[]
+ * .requirement`, ids `M1…Mn`). v1 results (before R17) still point at preserved
+ * `jd_requirements` rows (R17-2); the read service resolves both into `InsightRequirement`.
  */
 
 // ---------- enums (insights.status CHECK, AI-02 output) ----------
@@ -39,7 +44,7 @@ export type StartInsightInput = z.input<typeof StartInsightInput>;
 /**
  * 200 `{ data }`:
  * - `reused: true` — the same input (provider, model, career snapshot,
- *   requirements, prompt version) already has a ready insight: show it, no
+ *   JD raw text, prompt version) already has a ready insight: show it, no
  *   job, no provider call, no usage record (C-6, NFR-AI-08).
  * - `reused: false` — a job was started (`inProgress: false`) or one is
  *   already running for this project (`inProgress: true`, D-34). Poll
@@ -64,16 +69,19 @@ export type InsufficientDataResponse = {
 
 /**
  * `AiJobStatusResponse.partial` for an insight job (S-16 부분 결과, C-03):
- * stage-1 verdicts as soon as batches finish — before the insight is saved,
- * so no evidence chips yet. Requirement text comes from `InsightView.requirements`.
+ * stage-1 verdicts once the (single, R17) match call finished — before the insight is saved,
+ * so no evidence chips yet. R17: the requirement text comes with each match (`requirement`).
  */
 export type InsightJobPartial = {
   kind: "insight_matches";
+  /** R17: stage 1 is one call, so 1 when the partial exists. Name kept for the screens. */
   batchesDone: number;
-  /** Null until the match stage knows its batch count. */
+  /** R17: always 1. */
   batchesTotal: number | null;
   requirementMatches: Array<{
     requirementId: string;
+    /** R17: the requirement the model read from the JD (null on a malformed checkpoint). */
+    requirement: InsightRequirement | null;
     status: MatchStatus;
     rationale: string;
     missingAspect: string | null;
@@ -83,17 +91,20 @@ export type InsightJobPartial = {
 // ---------- read: getInsight (S-16) ----------
 
 export type InsightRequirement = {
+  /** v2: `M{n}` (per insight); v1: the legacy `jd_requirements.id`. */
   id: string;
   category: RequirementCategory;
   content: string;
   importance: RequirementImportance;
   sortOrder: number;
+  /** R17: the JD sentences (`S{n}`) the requirement quotes (v1: the row's `source_sids`). */
+  sentenceIds: string[];
 };
 
 export type InsightRequirementMatch = {
   itemKey: string;
   requirementId: string;
-  /** Null when the requirement row no longer exists. */
+  /** v2: from the result itself; v1: null when the legacy requirement row no longer exists. */
   requirement: InsightRequirement | null;
   status: MatchStatus;
   rationale: string;
@@ -154,10 +165,15 @@ export type InsightResultView = {
   connectionTier: ConnectionTier | null;
   promptVersion: string | null;
   /**
-   * F-P2-07 MVP "데이터 변경됨": the current career snapshot or requirement
-   * list differs from what this insight was made from. Show it with "다시 생성".
+   * F-P2-07 MVP "데이터 변경됨": the current career snapshot or the JD differs from what this
+   * insight was made from. Show it with "다시 생성".
    */
   stale: boolean;
+  /**
+   * `requirements` keeps its name for the screens but, since R17, means **the JD raw text
+   * changed** (`insights.jd_text_hash` ≠ `job_descriptions.raw_text_hash`). A v1 insight (made
+   * from extracted requirements, no `jd_text_hash`) always reads `requirements: true`.
+   */
   staleReasons: { career: boolean; requirements: boolean };
   basisNote: string;
   dataSufficiency: { level: (typeof INSIGHT_DATA_SUFFICIENCY_LEVELS)[number]; hints: string[] };
@@ -185,10 +201,12 @@ export type InsightLastFailure = AiFailure & { jobId: string; failedAt: string |
 
 export type InsightView = {
   applicationProjectId: string;
-  /** JD requirements now (contents instead of REQ-n aliases), sort_order order. */
+  /**
+   * The requirements of the shown insight, in order (R17: v2 from its result, v1 from the
+   * preserved `jd_requirements` rows). Empty when there is no insight yet.
+   */
   requirements: InsightRequirement[];
-  extractionStatus: "pending" | "running" | "succeeded" | "failed";
-  /** S-16 "공고를 고쳤어요…" (only while extractionStatus = pending, DM 2.6.1). */
+  /** Last JD raw-text edit (DM 2.6.1; failures before it are not shown). */
   rawTextEditedAt: string | null;
   /** Latest ready insight (or the requested version); null = 아직 없음. */
   insight: InsightResultView | null;

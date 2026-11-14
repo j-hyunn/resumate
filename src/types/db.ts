@@ -155,6 +155,7 @@ export type ConnectionTier = "free" | "paid"
 /** ai_provider_keys.status */
 export type ProviderKeyStatus = "valid" | "invalid" | "needs_check"
 
+/** `jd_extraction` = R17 legacy rows only (AI-01 no longer runs; the DB CHECK keeps the value) */
 export type AiJobType =
   | "jd_extraction"
   | "insight"
@@ -182,6 +183,7 @@ export type AiErrorCode =
   | "stalled"
   | "canceled"
   | "insufficient_data"
+  /** R17 legacy (AI-01's refusal): only on rows written before R17 */
   | "not_a_jd"
 /** ai_jobs.error_category (generated column, v4: 5값) */
 export type AiErrorCategory = "provider_limit" | "user_account" | "transient" | "input" | "system"
@@ -210,7 +212,7 @@ export type AiProgressStage =
   | "adjust_length"
   | "synthesize_regen"
 
-/** ai_usage_records.feature (04 §2.9.2) */
+/** ai_usage_records.feature (04 §2.9.2). `jd_extraction` = R17 legacy usage rows (still shown on the meter) */
 export type AiUsageFeature =
   | "jd_extraction"
   | "insight"
@@ -763,6 +765,18 @@ export type JdRequirement = Row<"jd_requirements", {
 export type RequirementMatchStatus = "met" | "partial" | "no_evidence"
 export type GapActionType = "add_data" | "reframe" | "prepare_answer"
 
+/**
+ * R17 v2 requirement (`schema_version` 2): the model reads it from the JD raw text, so it lives in the
+ * result itself. `requirement_id` is then `M{n}` (per insight), not a `jd_requirements` row id.
+ */
+export interface InsightResultRequirement {
+  content: string
+  category: JdRequirementCategory
+  importance: JdRequirementImportance
+  /** JD sentences (`S{n}`) it quotes */
+  sentence_ids: string[]
+}
+
 /** insights.result stored form (03 AI-02; evidence moved to evidence_links, item_key only) */
 export interface InsightResult {
   schema_version: number
@@ -770,7 +784,10 @@ export interface InsightResult {
   data_sufficiency: { level: "ok" | "thin"; hints: string[] }
   requirement_matches: Array<{
     item_key: string
+    /** v1: jd_requirements.id · v2 (R17): `M{n}` */
     requirement_id: Uuid
+    /** v2 (R17) only; v1 rows read the requirement from `jd_requirements` */
+    requirement?: InsightResultRequirement
     status: RequirementMatchStatus
     rationale: string
     missing_aspect: string | null
@@ -1035,7 +1052,7 @@ export interface ApplicationDocument {
  * 들여온 계약이 정본이다 — `src/lib/contracts/application-document.ts`
  * (`SaveApplicationDocumentInput`·`SaveApplicationDocumentResult`·`AppliedDocumentProposal`·
  * `DocumentApplicationValues`·`DocumentSaveErrorCode`) · `src/lib/contracts/application.ts`
- * (`ExtractJdPreviewResult`·`PreviewSkipReason`) · `src/lib/contracts/jd-fetch.ts`
+ * (R17: 미리 보기 계약 삭제) · `src/lib/contracts/jd-fetch.ts`
  * (`FetchJobDescriptionResult`·`JdFetchErrorCode`). 화면·데이터 계층은 그 파일에서 직접 import한다.
  */
 
@@ -1254,8 +1271,7 @@ export type AiRetryRefusalCode =
   | "ai_consent_required"
   | "ai_connection_changed"
 export type AiGateRefusalCode = AiStartRefusalCode | AiRetryRefusalCode
-/** ⑥ create_application_project (Q53-1, 04 §2.11.7): HTTP 409 before the insert, no row */
-export type ApplicationCreateRefusalCode = "ai_consent_required" | "key_invalid"
+// R17 [가정 R17-9]: `ApplicationCreateRefusalCode` removed — create_application_project has no AI gate.
 /** RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1), in check order */
 export type JdRawTextRefusalCode =
   | "invalid_raw_text"

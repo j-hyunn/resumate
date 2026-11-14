@@ -63,7 +63,7 @@ const ROW = {
   status: "ready",
   is_latest: true,
   result: RESULT,
-  requirements_hash: "r",
+  jd_text_hash: "r",
   career_snapshot_hash: "c",
   provider: "gemini",
   model: "gemini-x",
@@ -79,7 +79,7 @@ describe("toInsightResultView", () => {
     const keys = [`requirement_matches.${REQ1}`, "strengths.0", "gaps.0.actions.1", "strategy.positioning", "strategy.project_priorities.0"];
     const view = toInsightResultView(ROW, {
       chips: new Map(keys.map((k) => [k, [chip(k)]])),
-      requirements: new Map([[REQ1, { id: REQ1, category: "required", content: "Spring", importance: "high", sortOrder: 0 }]]),
+      requirements: new Map([[REQ1, { id: REQ1, category: "required", content: "Spring", importance: "high", sortOrder: 0, sentenceIds: [] }]]),
       projectNames: new Map([[PRJ, "결제 시스템"]]),
       stale: { career: true, requirements: false },
     });
@@ -163,7 +163,7 @@ describe("resolveInsightRun — failures of the old raw text (DM 2.6.1)", () => 
     progress: {},
     provider: "gemini",
     connection_tier: "free",
-    error_code: "not_a_jd",
+    error_code: "input_too_long",
     retry_after: null,
     quota_resets_at: null,
     finished_at: "2026-11-01T00:00:00Z",
@@ -174,11 +174,25 @@ describe("resolveInsightRun — failures of the old raw text (DM 2.6.1)", () => 
 
   it("a job failed before the edit isn't surfaced; never edited → as before", () => {
     expect(resolveInsightRun([row({})], null, -Infinity, EDITED).lastFailure).toBeNull();
-    expect(resolveInsightRun([row({})], null, -Infinity, null).lastFailure).toMatchObject({ code: "not_a_jd", jobId: "j1" });
+    expect(resolveInsightRun([row({})], null, -Infinity, null).lastFailure).toMatchObject({ code: "input_too_long", jobId: "j1" });
+  });
+
+  it("R17 QA-02: a legacy `not_a_jd` row is an input failure without retry (same rule as the runner / status)", () => {
+    expect(resolveInsightRun([row({ error_code: "not_a_jd" })], null, -Infinity, null).lastFailure).toEqual({
+      code: "not_a_jd",
+      category: "input",
+      failureCause: null,
+      message: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요.",
+      retryable: false,
+      retryAfter: null,
+      quotaResetsAt: null,
+      jobId: "j1",
+      failedAt: "2026-11-01T00:00:00Z",
+    });
   });
 
   it("a job failed after the edit is surfaced", () => {
-    expect(resolveInsightRun([row({ finished_at: "2026-11-03T00:00:00Z" })], null, -Infinity, EDITED).lastFailure).toMatchObject({ code: "not_a_jd" });
+    expect(resolveInsightRun([row({ finished_at: "2026-11-03T00:00:00Z" })], null, -Infinity, EDITED).lastFailure).toMatchObject({ code: "input_too_long" });
   });
 
   it("a generating row whose job failed before the edit isn't surfaced either; a gone job can't be compared", () => {

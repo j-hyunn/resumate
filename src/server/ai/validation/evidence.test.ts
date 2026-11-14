@@ -8,15 +8,11 @@ import { buildSelectionScope, checkEvidence, validateItem, type EvidenceContext,
 
 const pack = buildCareerPack(careerRowsFixture(), { asOf: { year: 2026, month: 10 } });
 const jdRaw = "결제 API 운영 경험이 필요합니다.\nKafka 경험 우대";
-const jd = buildJdContext({
-  jobDescriptionId: "jd-1",
-  sentences: splitJdSentences(jdRaw),
-  requirements: [
-    { id: "req-uuid-1", category: "required", content: "결제 API 운영 경험", importance: "high", source_sids: ["S1"], sort_order: 1, updated_at: null },
-  ],
-  includeSentences: "all",
-});
-const aliases = AliasMap.merge(pack.aliases, jd.aliases);
+const jd = buildJdContext({ jobDescriptionId: "jd-1", sentences: splitJdSentences(jdRaw), rawTextHash: "h" });
+// (R17) No builder emits REQ-n any more; `jd_requirement` stays a legacy source type the generic validator still knows.
+const legacy = new AliasMap();
+legacy.add({ alias: "REQ-1", sourceType: "jd_requirement", id: "req-uuid-1", fields: { "": "결제 API 운영 경험" }, snapshotAt: null, label: "결제 API 운영 경험", parents: [] });
+const aliases = AliasMap.merge(pack.aliases, jd.aliases, legacy);
 const ctx: EvidenceContext = { aliases, learnings: "forbidden" };
 
 const action: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" };

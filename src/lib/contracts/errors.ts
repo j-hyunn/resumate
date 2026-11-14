@@ -24,9 +24,15 @@ export const AI_ERROR_CODES = [
   "stalled",
   "canceled",
   "insufficient_data",
-  "not_a_jd",
 ] as const;
 export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
+
+/**
+ * R17: `not_a_jd` was AI-01's refusal and is no longer produced. The DB CHECK keeps it for
+ * pre-R17 job rows (phase-2 narrows it); readers treat it as an unknown code.
+ */
+export const LEGACY_AI_ERROR_CODES = ["not_a_jd"] as const;
+export type LegacyAiErrorCode = (typeof LEGACY_AI_ERROR_CODES)[number];
 
 /** Generic application error codes. */
 export const APP_ERROR_CODES = [

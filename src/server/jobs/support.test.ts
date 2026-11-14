@@ -87,7 +87,7 @@ const base: JobRecord = {
   finishedAt: null,
   createdAt: "2026-10-26T00:00:00Z",
   updatedAt: "2026-10-26T00:00:01Z",
-  stepOutputs: { match: { privateModelOutput: true } },
+  stepOutputs: { match: { v: 2, matches: [], privateModelOutput: true } }, // R17-shaped checkpoint (a pre-R17 one blocks the retry, QA-03)
   meta: { runBase: 1, waitBase: 0, retries: { match: { rate_limited: 2 } } },
 };
 
@@ -213,7 +213,6 @@ describe("contracts mirror", () => {
     input_too_long: ["input", "input_rejected"],
     safety_blocked: ["input", "input_rejected"],
     insufficient_data: ["input", null],
-    not_a_jd: ["input", null],
     schema_invalid: ["system", null],
     timeout: ["system", null],
     stalled: ["system", null],

@@ -1,27 +1,40 @@
 import type { AliasMap } from "../context-pack/aliases";
 import type { ConnectionTier, ModelTier, NormalizedUsage, ProviderId } from "../providers/types";
-import { AI02_OUTPUT_SCHEMA_VERSION, type InsightActionType, type InsightGapKind, type InsightMatchStatus } from "../schemas/AI-02";
+import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
+import {
+  AI02_OUTPUT_SCHEMA_VERSION,
+  type InsightActionType,
+  type InsightGapKind,
+  type InsightMatchStatus,
+  type RequirementCategory,
+  type RequirementImportance,
+} from "../schemas/AI-02";
 import type { ValidatedEvidence } from "../validation/evidence";
-import type { Ai02ValidationReport, FinalSynthesis, ValidatedMatch } from "../validation/insight";
+import { MATCH_REF_PATTERN, type Ai02ValidationReport, type FinalSynthesis, type ValidatedMatch } from "../validation/insight";
 import { toEvidenceLinkRows, type EvidenceLinkInsert } from "./evidence-links";
 
 /**
- * AI-02 → `complete_insight(p_payload)` (db-engineer notes S6 "p_payload 모양").
+ * AI-02 → `complete_insight(p_payload)`, **result schema_version 2** (R17).
  * C-3 storage mapping:
  * - `result` holds no evidence; each item carries its `item_key`
- *   (`requirement_matches.<요건uuid>`, `strengths.n`, `gaps.n`,
- *   `gaps.n.actions.m`, `strategy.positioning`, `strategy.project_priorities.n`).
- * - alias references become UUIDs and the keys are renamed accordingly
- *   (`requirement_ref` → `requirement_id`, `requirement_refs` → `requirement_ids`,
- *   `project_priorities[].ref` → `project_id`), as C-3 does for
- *   `target_requirement_refs` → `target_requirement_ids`.
+ *   (`requirement_matches.M{n}`, `strengths.n`, `gaps.n`, `gaps.n.actions.m`,
+ *   `strategy.positioning`, `strategy.project_priorities.n`).
+ * - v2: requirements are no longer rows (AI-01 is gone). Each match carries
+ *   its `requirement` {content, category, importance, sentence_ids}; its id
+ *   is the insight-internal `M{n}`. Key names stay as in v1
+ *   (`requirement_id`, `requirement_ids`) so the screen contract keeps its
+ *   shape (plan R17-5); model refs `M-n` become `M{n}`.
+ * - `project_priorities[].ref` → `project_id` (UUID).
  * - evidence → `evidence[]` rows in EvidenceLinkInsert keys (owner keys are
- *   filled by the RPC; a placeholder owner is used and ignored there).
+ *   filled by the RPC; a placeholder owner is used and ignored there). A
+ *   match's rows = its career evidence + one `jd_sentence` row per cited
+ *   sentence (quote = the sentence, locator {sid, start, end}). No new
+ *   `jd_requirement` rows (R17-1).
  */
 
 export const INSIGHT_BASIS_NOTE = "입력된 경력 데이터 기준 분석입니다";
 export const INSIGHT_ITEM_KEYS = {
-  match: (requirementId: string) => `requirement_matches.${requirementId}`,
+  match: (matchId: string) => `requirement_matches.${matchId}`,
   strength: (n: number) => `strengths.${n}`,
   gap: (n: number) => `gaps.${n}`,
   action: (n: number, m: number) => `gaps.${n}.actions.${m}`,
@@ -36,13 +49,23 @@ const QUOTE_MAX = 2000;
 export type InsightDataSufficiency = { level: "ok" | "thin"; hints: string[] };
 export type InsightSummaryCounts = Record<InsightMatchStatus, number>;
 
+/** v2 requirement as stored in the result (no jd_requirements row). */
+export type InsightRequirement = {
+  content: string;
+  category: RequirementCategory;
+  importance: RequirementImportance;
+  sentence_ids: string[];
+};
+
 export type InsightResult = {
   schema_version: number;
   basis_note: string;
   data_sufficiency: InsightDataSufficiency;
   requirement_matches: Array<{
     item_key: string;
+    /** `M{n}`. */
     requirement_id: string;
+    requirement: InsightRequirement;
     status: InsightMatchStatus;
     rationale: string;
     missing_aspect: string | null;
@@ -66,12 +89,12 @@ export type InsightResult = {
 export type InsightMatchStageResult = {
   schema_version: number;
   prompt_version: string;
-  batches: number;
   matches: Array<{
     requirement_id: string;
+    requirement: InsightRequirement;
     status: InsightMatchStatus;
-    /** The model's verdict before server rules (null = the model skipped it). */
-    model_status: InsightMatchStatus | null;
+    /** The model's verdict before server rules. */
+    model_status: InsightMatchStatus;
     rationale: string;
     missing_aspect: string | null;
   }>;
@@ -80,7 +103,7 @@ export type InsightMatchStageResult = {
 export type CompleteInsightPayload = {
   result: InsightResult;
   match_stage_result: InsightMatchStageResult;
-  hashes: { requirements_hash: string; career_snapshot_hash: string; input_hash: string };
+  hashes: { jd_text_hash: string; career_snapshot_hash: string; input_hash: string };
   meta: {
     schema_version: number;
     prompt_version: string;
@@ -102,11 +125,10 @@ export function toCompleteInsightPayload(input: {
   synthesis: FinalSynthesis;
   aliases: AliasMap;
   dataSufficiency: InsightDataSufficiency;
-  hashes: { requirementsHash: string; careerSnapshotHash: string; inputHash: string };
+  hashes: { jdTextHash: string; careerSnapshotHash: string; inputHash: string };
   meta: {
     promptVersion: string;
     matchPromptVersion: string;
-    batches: number;
     provider: ProviderId;
     model: string;
     modelTier: ModelTier;
@@ -117,18 +139,26 @@ export function toCompleteInsightPayload(input: {
   now: Date;
 }): CompleteInsightPayload {
   const { aliases } = input;
+  const idByRef = new Map(input.matches.map((m) => [m.ref, m.requirementId]));
   const reqId = (ref: string): string => {
-    const id = aliases.resolveId(ref, "jd_requirement");
-    // Refs were validated against this map; a miss is a programming error.
-    if (!id) throw new Error("toCompleteInsightPayload: unknown requirement alias");
+    const id = idByRef.get(ref);
+    // Refs were validated against the matches; a miss is a programming error.
+    if (!id || !MATCH_REF_PATTERN.test(ref)) throw new Error("toCompleteInsightPayload: unknown match ref");
     return id;
   };
   const items: Array<{ itemKey: string; evidence: readonly ValidatedEvidence[] }> = [];
+  const toRequirement = (m: ValidatedMatch): InsightRequirement => ({
+    content: m.requirement.content,
+    category: m.requirement.category,
+    importance: m.requirement.importance,
+    sentence_ids: [...m.requirement.sentenceIds],
+  });
 
   const requirement_matches = input.matches.map((m) => {
     const item_key = INSIGHT_ITEM_KEYS.match(m.requirementId);
-    if (m.evidence.length) items.push({ itemKey: item_key, evidence: m.evidence });
-    return { item_key, requirement_id: m.requirementId, status: m.status, rationale: m.rationale, missing_aspect: m.missingAspect };
+    const evidence = [...m.evidence, ...sentenceEvidence(m.requirement.sentenceIds, aliases)];
+    if (evidence.length) items.push({ itemKey: item_key, evidence });
+    return { item_key, requirement_id: m.requirementId, requirement: toRequirement(m), status: m.status, rationale: m.rationale, missing_aspect: m.missingAspect };
   });
 
   const summary_counts: InsightSummaryCounts = { met: 0, partial: 0, no_evidence: 0 };
@@ -180,9 +210,9 @@ export function toCompleteInsightPayload(input: {
     match_stage_result: {
       schema_version: AI02_OUTPUT_SCHEMA_VERSION,
       prompt_version: input.meta.matchPromptVersion,
-      batches: input.meta.batches,
       matches: input.matches.map((m) => ({
         requirement_id: m.requirementId,
+        requirement: toRequirement(m),
         status: m.status,
         model_status: m.modelStatus,
         rationale: m.rationale,
@@ -190,7 +220,7 @@ export function toCompleteInsightPayload(input: {
       })),
     },
     hashes: {
-      requirements_hash: input.hashes.requirementsHash,
+      jd_text_hash: input.hashes.jdTextHash,
       career_snapshot_hash: input.hashes.careerSnapshotHash,
       input_hash: input.hashes.inputHash,
     },
@@ -206,4 +236,17 @@ export function toCompleteInsightPayload(input: {
     },
     evidence,
   };
+}
+
+/**
+ * The cited sentences of a match as `jd_sentence` evidence: quote = the
+ * sentence text (C-3 jd_sentence has no field), locator from the alias entry.
+ * Sentence ids were checked against this map; a miss is a programming error.
+ */
+function sentenceEvidence(sentenceIds: readonly string[], aliases: AliasMap): ValidatedEvidence[] {
+  return sentenceIds.map((sid) => {
+    const entry = aliases.get(sid);
+    if (!entry || entry.sourceType !== "jd_sentence") throw new Error("toCompleteInsightPayload: unknown sentence");
+    return { source_type: "jd_sentence", ref: sid, field: null, quote: entry.fields[WHOLE_SOURCE_FIELD] ?? null, quote_adjusted: false };
+  });
 }

@@ -271,14 +271,14 @@ isOneToOne: false
                   ]
                 },"insights": {
                   Row: {
-                    "ai_job_id": string | null,"application_project_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"id": string,"input_hash": string | null,"is_latest": boolean,"match_stage_result": Json | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"requirements_hash": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null,"version_no": number
+                    "ai_job_id": string | null,"application_project_id": string,"career_snapshot_hash": string | null,"completed_at": string | null,"connection_tier": string | null,"created_at": string,"id": string,"input_hash": string | null,"is_latest": boolean,"jd_text_hash": string | null,"match_stage_result": Json | null,"model": string | null,"model_tier": string | null,"prompt_version": string | null,"provider": string | null,"requirements_hash": string | null,"result": Json | null,"run_generation": number | null,"schema_version": number | null,"status": string,"updated_at": string,"usage": Json | null,"user_id": string,"validation_report": Json | null,"version_no": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_job_id"?: string | null,"application_project_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no": number
+                    "ai_job_id"?: string | null,"application_project_id": string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"jd_text_hash"?: string | null,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no": number
                   }
                   Update: {
-                    "ai_job_id"?: string | null,"application_project_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no"?: number
+                    "ai_job_id"?: string | null,"application_project_id"?: string,"career_snapshot_hash"?: string | null,"completed_at"?: string | null,"connection_tier"?: string | null,"created_at"?: string,"id"?: string,"input_hash"?: string | null,"is_latest"?: boolean,"jd_text_hash"?: string | null,"match_stage_result"?: Json | null,"model"?: string | null,"model_tier"?: string | null,"prompt_version"?: string | null,"provider"?: string | null,"requirements_hash"?: string | null,"result"?: Json | null,"run_generation"?: number | null,"schema_version"?: number | null,"status"?: string,"updated_at"?: string,"usage"?: Json | null,"user_id"?: string,"validation_report"?: Json | null,"version_no"?: number
                   }
                   Relationships: [
                     {
@@ -572,9 +572,6 @@ isOneToOne: false
               "message_count": number,"message_id": string,"sequence": number
             }[]
                            },
-"apply_jd_extraction":
-{ Args: { "p_ai_job_id": string,"p_job_description_id": string,"p_model": string,"p_provider": string,"p_result": Json,"p_run_generation": number }; Returns: Json
-                           },
 "apply_structured_draft_patch":
 { Args: { "p_patch": Json,"p_writing_chat_id": string }; Returns: Json
                            },
@@ -585,9 +582,6 @@ isOneToOne: false
                            },
 "begin_insight":
 { Args: { "p_ai_job_id": string,"p_application_project_id": string }; Returns: string
-                           },
-"begin_jd_extraction":
-{ Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: undefined
                            },
 "check_ai_run_allowed":
 { Args: { "p_ai_job_id": string }; Returns: string
@@ -609,7 +603,7 @@ isOneToOne: false
             }[]
                            },
 "create_application_project":
-{ Args: { "p_company_name"?: string,"p_deadline"?: string,"p_id": string,"p_name"?: string,"p_position_title"?: string,"p_preview_job_id"?: string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json,"p_source_url"?: string }; Returns: Json
+{ Args: { "p_company_name"?: string,"p_deadline"?: string,"p_id": string,"p_name"?: string,"p_position_title"?: string,"p_raw_text": string,"p_raw_text_hash": string,"p_sentences": Json,"p_source_url"?: string }; Returns: Json
                            },
 "delete_account":
 { Args: { "p_subject_hash": string }; Returns: Json
@@ -622,9 +616,6 @@ isOneToOne: false
                            },
 "fail_insight":
 { Args: { "p_ai_job_id": string,"p_insight_id": string }; Returns: boolean
-                           },
-"fail_jd_extraction":
-{ Args: { "p_ai_job_id": string,"p_job_description_id": string }; Returns: boolean
                            },
 "finish_assistant_message":
 { Args: { "p_content": string,"p_message_id": string,"p_status": string }; Returns: undefined
@@ -694,9 +685,6 @@ isOneToOne: false
 { Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
                            },
 "purge_old_ai_usage_records":
-{ Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
-                           },
-"purge_unused_jd_preview_outputs":
 { Args: { "p_limit"?: number,"p_now"?: string }; Returns: number
                            },
 "record_consents":

@@ -16,10 +16,12 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).not.toMatch(/<InputGuide guide="G-2"/)
   })
 
-  it("② 채용 공고 탭: AI 미연결이면 원문 오른쪽 잠금 영역을 그리지 않는다", () => {
+  // R17: the 요건 영역 ("요건 정리하기") is gone — with nothing to show the right column isn't drawn.
+  it("② 채용 공고 탭: 요건 영역이 비면 원문 오른쪽 열을 그리지 않는다 (R17)", () => {
     const src = read("../jd-view.tsx")
-    expect(src).toMatch(/if \(connection && !connection\.active_provider\) return null/)
+    expect(src).toMatch(/requirements\.length === 0 && techKeywords\.length === 0 && !seniority \? null/)
     expect(src).not.toMatch(/<AiLock entry="requirements" size="area"/)
+    expect(src).not.toMatch(/retryJdExtractionAction/)
   })
 
   it("③ 채용 공고 원문은 읽기 전용 마크다운으로 보인다 (강조할 문장이 있을 때만 일반 글)", () => {
@@ -41,10 +43,10 @@ describe("S-46 탭 안내 정리", () => {
     expect(src.match(/empty:hidden xl:flex-1/g)?.length).toBe(2)
   })
 
-  it("⑥ 자기소개서 추가 모달에도 AI 잠금 안내를 두지 않는다 (키 없으면 미리 보기만 건너뛴다)", () => {
+  it("⑥ 자기소개서 추가 모달에도 AI 잠금 안내를 두지 않는다 (R17: 요건 미리 보기 호출이 없다)", () => {
     const src = read("../add-application-dialog.tsx")
     expect(src).not.toMatch(/<AiLock\b/)
-    expect(src).toMatch(/if \(text && !keyless\)/)
+    expect(src).not.toMatch(/extractJdPreviewAction/)
   })
 
   it("⑦ 추가 모달 ② 공고 내용 칸은 마크다운 편집기 — 고치기 전에는 값을 다시 내보내지 않는다(해시 대조 유지)", () => {

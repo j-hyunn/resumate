@@ -91,10 +91,10 @@ select results_eq(format($$select project_id, application_project_id::text, docu
                               "draft_count": 0, "clarifications": [], "schema_version": 1,
                               "sensitive_flags_count": 0}'::jsonb, 0::smallint)$$,
                   'the chat row: no project, the document target, null return_target, the empty document draft');
--- Greeting shape 4 (요건 추출 전) because extraction_status is still pending.
-select ok((select content like '채용 공고의 요건을 아직%' from public.writing_chat_messages
+-- R17: the JD row exists, so the "요건 추출 전" branch is never used, even with extraction_status pending.
+select ok((select content not like '채용 공고의 요건을 아직%' from public.writing_chat_messages
             where writing_chat_id = current_setting('t.chat')::uuid and sequence = 1),
-          'greeting: the "요건 추출 전" branch, stored as sequence 1');
+          'greeting: not the "요건 추출 전" branch (R17), stored as sequence 1');
 select ok((select content like '%민감정보%' from public.writing_chat_messages
             where writing_chat_id = current_setting('t.chat')::uuid and sequence = 1),
           'greeting: the sensitive-information line is appended');

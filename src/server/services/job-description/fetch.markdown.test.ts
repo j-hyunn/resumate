@@ -259,7 +259,7 @@ describe("CF-A17 — fetched Markdown hashes the same at the create boundary", (
     expect(normalizeJdRawText(fetched)).toBe(fetched);
     expect(fetched).toBe(fetched.normalize("NFC"));
 
-    const db = fakeSupabase({}, () => ({ application_project_id: "p", job_description_id: "j", name: null, name_source: null, extraction_status: "pending", ai_run_allowed: false, created: true, preview_applied: false, preview_skip_reason: null }));
+    const db = fakeSupabase({}, () => ({ application_project_id: "p", job_description_id: "j", name: null, name_source: null, ai_run_allowed: false, created: true }));
     await createApplicationProject(db.client as UserSupabaseClient, { id: "00000000-0000-4000-8000-0000000000a1", rawText: fetched });
     const args = db.rpcCalls[0]!.args as { p_raw_text: string; p_raw_text_hash: string; p_sentences: Array<{ text: string; start: number; end: number }> };
     expect(args.p_raw_text).toBe(fetched);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildJdContext, splitJdSentences, type JdRequirementInput } from "./jd";
+import { buildJdContext, splitJdSentences } from "./jd";
 
 const JD = `[가상테크] 백엔드 개발자 채용
 
@@ -62,29 +62,37 @@ describe("splitJdSentences (C-2)", () => {
   });
 });
 
-describe("buildJdContext", () => {
+describe("buildJdContext (R17: raw text only)", () => {
   const sentences = splitJdSentences(JD);
-  const requirements: JdRequirementInput[] = [
-    { id: "r2", category: "preferred", content: "Kafka 운영 경험", importance: "normal", source_sids: ["S9"], sort_order: 2, updated_at: null },
-    { id: "r1", category: "required", content: "경력 3.5년 이상", importance: "high", source_sids: ["S6"], sort_order: 1, updated_at: null },
-  ];
 
-  it("aliases requirements by sort_order and only cited sentences when asked", () => {
-    const ctx = buildJdContext({ jobDescriptionId: "jd-1", sentences, requirements, includeSentences: "cited" });
-    expect(ctx.aliases.get("REQ-1")?.id).toBe("r1");
-    expect(ctx.aliases.get("REQ-2")?.id).toBe("r2");
-    expect(ctx.aliases.get("S6")).toMatchObject({ sourceType: "jd_sentence", id: "jd-1", locator: { sid: "S6", start: sentences[5].start } });
-    expect(ctx.aliases.has("S1")).toBe(false);
-    expect(ctx.text).toContain("REQ-1 [자격 요건, 중요] 경력 3.5년 이상 (근거 문장: S6)");
-    expect(ctx.text.startsWith("<jd>")).toBe(true);
+  it("lists every sentence as S-n with locator aliases, after the position title", () => {
+    const ctx = buildJdContext({ jobDescriptionId: "jd-1", sentences, positionTitle: "백엔드 <개발자>", rawTextHash: "h-raw" });
+    expect(ctx.text.startsWith("<jd>\nposition_title: 백엔드 ＜개발자＞\n<sentences>\nS1: ")).toBe(true);
+    expect(ctx.text.endsWith("</sentences>\n</jd>")).toBe(true);
+    expect(ctx.sentenceCount).toBe(sentences.length);
+    for (const s of sentences) {
+      expect(ctx.text).toContain(`${s.sid}: `);
+      expect(ctx.aliases.get(s.sid)).toMatchObject({ sourceType: "jd_sentence", id: "jd-1", locator: { sid: s.sid, start: s.start, end: s.end } });
+    }
+    expect(ctx.text).not.toMatch(/REQ-\d|<requirements>/);
+    expect([...ctx.aliases.values()].every((e) => e.sourceType === "jd_sentence")).toBe(true);
   });
 
-  it("omits sentences for later steps and hashes requirements independent of input order", () => {
-    const a = buildJdContext({ jobDescriptionId: "jd-1", sentences, requirements, includeSentences: "none" });
-    const b = buildJdContext({ jobDescriptionId: "jd-1", sentences, requirements: [...requirements].reverse(), includeSentences: "all" });
-    expect(a.text).not.toContain("<sentences>");
-    expect(a.requirementsHash).toBe(b.requirementsHash);
-    expect(b.aliases.has("S1")).toBe(true);
+  it("passes the stored raw_text_hash through as jdTextHash", () => {
+    const a = buildJdContext({ jobDescriptionId: "jd-1", sentences, rawTextHash: "abc" });
+    expect(a.jdTextHash).toBe("abc");
+    expect(a.text).not.toContain("position_title");
+  });
+
+  it("number sources are the title and every sentence", () => {
+    const ctx = buildJdContext({ jobDescriptionId: "jd-1", sentences, positionTitle: "3년차 백엔드", rawTextHash: "h" });
+    expect(ctx.numberTexts).toEqual(["3년차 백엔드", ...sentences.map((s) => s.text)]);
+  });
+
+  it("no sentences → no <sentences> block", () => {
+    const ctx = buildJdContext({ jobDescriptionId: "jd-1", sentences: [], rawTextHash: "h" });
+    expect(ctx.text).toBe("<jd>\n</jd>");
+    expect(ctx.sentenceCount).toBe(0);
   });
 });
 

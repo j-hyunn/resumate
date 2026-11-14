@@ -46,7 +46,7 @@ reset role;
 -- the shared validators refuse a profile source
 select is(private.insight_payload_valid(jsonb_build_object(
             'result', '{}'::jsonb, 'match_stage_result', '{}'::jsonb,
-            'hashes', '{"requirements_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
+            'hashes', '{"jd_text_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
             'meta', '{"schema_version":1,"prompt_version":"p","provider":"gemini","model":"m",
                       "model_tier":"default","connection_tier":"free"}'::jsonb,
             'evidence', jsonb_build_array(jsonb_build_object(
@@ -55,7 +55,7 @@ select is(private.insight_payload_valid(jsonb_build_object(
           false, 'insight payload with a profile source is invalid');
 select is(private.insight_payload_valid(jsonb_build_object(
             'result', '{}'::jsonb, 'match_stage_result', '{}'::jsonb,
-            'hashes', '{"requirements_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
+            'hashes', '{"jd_text_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
             'meta', '{"schema_version":1,"prompt_version":"p","provider":"gemini","model":"m",
                       "model_tier":"default","connection_tier":"free"}'::jsonb,
             'evidence', jsonb_build_array(jsonb_build_object(

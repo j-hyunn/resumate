@@ -22,9 +22,11 @@ describe("[자기소개서 작성 시작]은 실패를 삼키지 않는다", () 
     expect(src).toMatch(/if \(opts\.createRow\) toast\.error\(submitFailedMessage\("자기소개서"\)\)/)
   })
 
-  it("선행 추출 요청이 던져도 '정리 중'에 묶이지 않는다", () => {
+  // R17: the requirements-first extraction is gone — `useRequirementsFirst` is a pass-through.
+  it("R17: 선행 추출이 없다 — run(next)는 바로 next를 부른다", () => {
     const src = read("../extract-first.tsx")
-    expect(src).toMatch(/catch \(err\) \{\s*\/\/[^\n]*\n\s*setBusy\(false\)\s*\n\s*throw err/)
+    expect(src).toMatch(/run: async \(next\) => next\(\)/)
+    expect(src).not.toMatch(/retryJdExtractionAction|getJdExtractionStateAction/)
   })
 })
 

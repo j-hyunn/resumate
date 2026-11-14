@@ -2,30 +2,28 @@ import "server-only"
 /**
  * W3: the real branch of applications.ts (S-13 / S-14 / S-15 / S-16 / S-17~S-19 reads). The screens read table
  * rows, so the summaries run the same rules as the mock (`summarize`) over real rows and take the
- * values the services decide (effective extraction status, progress counts) from the services.
+ * values the services decide (progress counts) from the services. R17: no extraction state.
  */
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 import { JD_RAW_TEXT_REFUSAL_CODES, type ApplicationProjectListItem } from "@/lib/contracts/application"
-import { AppError, isAppError } from "@/lib/contracts/errors"
+import { AppError } from "@/lib/contracts/errors"
 import type { MockDb } from "@/lib/mock/fixtures"
 import * as applicationActions from "@/server/actions/application"
 import * as insightActions from "@/server/actions/insight"
 import { requireConsentedUser } from "@/server/auth/session"
 import { mapDbError } from "@/server/db/errors"
 import type { UserSupabaseClient } from "@/server/db/types"
-import { startJdExtractionInBackground } from "@/server/jobs/jd-extraction"
 import type {
-  AiGateRefusalCode,
   ApplicationProject,
   ApplicationStage,
   Insight,
   InsightResult,
+  InsightResultRequirement,
   JdRawTextRefusalCode,
   JdRequirement,
   JobDescription,
 } from "@/types/db"
-import type { AiRejected } from "./ai-errors"
 import type { ApplicationSummary, JobDescriptionWithRequirements, ListApplicationsOptions, UpdateFailedJdRawTextResult } from "./applications"
 import { summarize } from "./applications"
 import { refusalOf, unwrap } from "./source"
@@ -64,7 +62,7 @@ async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProje
     return [
       {
         ...summary,
-        job_description: summary.job_description && { ...summary.job_description, extraction_status: item.extractionStatus },
+        job_description: summary.job_description,
         insight_state: item.progress.insight,
         draft_count: item.progress.draftCount,
       },
@@ -89,16 +87,15 @@ export async function realGetApplicationProject(id: string): Promise<Application
 
 // ---------------- S-14 ----------------
 
-/** Gate refusals (Q53-1) come back from the RPC as 409 `AppError`s: nothing was inserted. */
+/** R17 [가정 R17-9]: no AI gate on creation, and nothing starts afterwards (no AI-01). */
 export async function realCreateApplicationProject(input: {
   raw_text: string
   name?: string | null
   deadline?: string | null
   company_name?: string | null
   position_title?: string | null
-  /** R15: the posting URL (CF-10) and the 요건 미리 보기 작업 (CF-A17), both optional. */
+  /** R15: the posting URL (CF-10), optional. */
   source_url?: string | null
-  preview_job_id?: string | null
 }): Promise<ApplicationProject> {
   const created = unwrap(
     await applicationActions.createApplicationProject({
@@ -109,12 +106,9 @@ export async function realCreateApplicationProject(input: {
       name: input.name ?? undefined,
       deadline: input.deadline ?? undefined,
       sourceUrl: input.source_url ?? undefined,
-      previewJobId: input.preview_job_id ?? undefined,
     }),
   )
-  const { supabase, user } = await requireConsentedUser()
-  // D-30: with a usable key AI-01 starts right away. A failed start leaves the JD `pending` ("요건 정리하기").
-  if (created.shouldExtract) await startJdExtractionInBackground(supabase, user.id, created.applicationProjectId).catch(() => null)
+  const { supabase } = await requireConsentedUser()
   const { data, error } = await supabase.from("application_projects").select("*").eq("id", created.applicationProjectId).single()
   if (error) throw mapDbError(error)
   return data as unknown as ApplicationProject
@@ -128,6 +122,8 @@ export async function realGetJobDescription(applicationProjectId: string): Promi
   if ("error" in view && view.error.code === "not_found") return null
   const jd = unwrap(view)
   const { supabase } = await requireConsentedUser()
+  // R17: the row is read as stored; legacy `jd_requirements` rows are still listed (pre-R17 JDs) so
+  // v1 insights keep their requirement texts on S-16. New JDs have none.
   const [row, requirements] = await Promise.all([
     supabase.from("job_descriptions").select("*").eq("id", jd.jobDescriptionId).single(),
     supabase.from("jd_requirements").select("*").eq("job_description_id", jd.jobDescriptionId).order("sort_order"),
@@ -135,10 +131,8 @@ export async function realGetJobDescription(applicationProjectId: string): Promi
   if (row.error) throw mapDbError(row.error)
   return {
     ...(row.data as unknown as JobDescription),
-    // pending JDs have no keywords yet (null in the DB, W0)
+    // legacy column (R17: never filled any more; null in the DB)
     tech_keywords: (row.data.tech_keywords ?? []) as unknown as JobDescription["tech_keywords"],
-    // a `running` row whose job already ended reads failed (resolveExtraction)
-    extraction_status: jd.extractionStatus,
     requirements: rowsOf(requirements) as unknown as JdRequirement[],
     raw_text_editable: jd.rawTextEditable,
     raw_text_lock: jd.rawTextLock,
@@ -171,26 +165,6 @@ export async function realGetJdRequirement(id: string): Promise<JdRequirement | 
   return data as unknown as JdRequirement | null
 }
 
-/**
- * "요건 정리하기" (S-15, S-17~S-19). Starts the sync extraction without holding the screen (it polls the JD).
- * Path ⑤: a connection refusal changes nothing and goes back to the run button.
- */
-export async function realRetryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
-  if (!isUuid(applicationProjectId)) return false
-  const { supabase, user } = await requireConsentedUser()
-  try {
-    const started = await startJdExtractionInBackground(supabase, user.id, applicationProjectId)
-    if (started.status === "failed" && (started.jobId === null || started.code === "key_missing" || started.code === "key_invalid")) {
-      return { rejected: started.code, refusal: started.code === "key_invalid" ? ("key_invalid" satisfies AiGateRefusalCode) : null }
-    }
-    return true
-  } catch (err) {
-    if (isAppError(err) && err.code === "extraction_in_progress") return "already"
-    if (isAppError(err) && err.code === "not_found") return false
-    throw err
-  }
-}
-
 // ---------------- S-16 ----------------
 
 type Obj = Record<string, unknown>
@@ -198,6 +172,19 @@ const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const strs = (v: unknown): string[] => arr(v).filter((x): x is string => typeof x === "string")
 const str = (v: unknown): string => (typeof v === "string" ? v : "")
+
+/** R17 v2 `requirement_matches[].requirement` → typed (null when absent / malformed). */
+function resultRequirement(value: unknown): InsightResultRequirement | null {
+  const r = obj(value)
+  const content = str(r.content)
+  if (!content) return null
+  return {
+    content,
+    category: r.category === "responsibility" || r.category === "preferred" ? r.category : "required",
+    importance: r.importance === "high" ? "high" : "normal",
+    sentence_ids: strs(r.sentence_ids),
+  }
+}
 
 /**
  * The stored result, with the keys evidence hangs on filled the way services/insight/read.ts fills them
@@ -218,7 +205,9 @@ export function normalizeInsightResult(value: unknown): InsightResult | null {
       const m = obj(raw)
       const requirementId = str(m.requirement_id)
       if (!requirementId || (m.status !== "met" && m.status !== "partial" && m.status !== "no_evidence")) return []
-      return [{ item_key: str(m.item_key) || `requirement_matches.${requirementId}`, requirement_id: requirementId, status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
+      // R17 v2: the requirement travels with the match (v1 has none — read from jd_requirements)
+      const requirement = resultRequirement(m.requirement)
+      return [{ item_key: str(m.item_key) || `requirement_matches.${requirementId}`, requirement_id: requirementId, ...(requirement ? { requirement } : {}), status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
     }),
     summary_counts: { met: count("met"), partial: count("partial"), no_evidence: count("no_evidence") },
     strengths: arr(r.strengths).map((raw, n) => {
@@ -283,6 +272,7 @@ export async function realGetInsightState(applicationProjectId: string): Promise
           result: null,
           match_stage_result: null,
           requirements_hash: null,
+          jd_text_hash: null,
           completed_at: null,
           provider: job.provider,
           model_tier: job.model_tier,

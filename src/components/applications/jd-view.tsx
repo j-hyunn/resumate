@@ -4,42 +4,18 @@
  * S-15 JD·요건 (F-P2-02): 왼쪽 "공고 원문"(문장 하이라이트) / 오른쪽 요건 목록(카테고리별, 핵심 배지,
  * 직접 수정 표시) + 기술 키워드. 요건마다 원문 문장(source_sids)이 연결된다.
  * 요건 수정(F-P2-03)은 Could라 MVP에서 읽기 전용.
+ * R17: 요건은 더 이상 추출하지 않는다 — 요건·키워드·경력 조건이 모두 비어 있으면 오른쪽 열을 그리지 않아
+ * 원문만 보인다 (요건 목록 영역 재설계는 UI 요청).
  */
 import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ArrowUpRight, Loader2, PenLine, TextSearch } from "lucide-react"
+import { ArrowUpRight, PenLine, TextSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiRunButton } from "@/components/common/ai-run-button"
-import { useAiConnection } from "@/components/common/ai-connection-context"
-import { isAiRejected } from "@/components/common/ai-rejection"
-import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
-import { isInputCausedFailure } from "@/lib/data/ai-errors"
-import { refusalOf } from "./extract-first"
 import { JdRawEditButton, JdRawEditor, JdRawPanelTitle, JdRawSavedNote, useJdRawEdit } from "./jd-raw-edit"
-import type { AiErrorCode, AiJob, AiRetryRefusalCode, JdRequirement, JdSentence } from "@/types/db"
+import type { JdRequirement, JdSentence } from "@/types/db"
 import { cn } from "@/lib/utils"
 import { IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS, REQUIREMENT_CATEGORY_ORDER } from "./labels"
-import { retryJdExtractionAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
-
-/** "started here" marker for the running view (UQ-530); keeps `from` so the return link survives */
-function useExtractingUrl() {
-  const pathname = usePathname()
-  const params = useSearchParams()
-  return () => {
-    const next = new URLSearchParams(params.toString())
-    next.set("extracting", "self")
-    return `${pathname}?${next.toString()}`
-  }
-}
-
-/** S-15 수정 중: "요건 정리하기" 자리 (명세 문구) */
-function SaveFirstNote() {
-  return <p className="text-sm text-muted-foreground">저장한 뒤 정리할 수 있어요</p>
-}
 
 export function JdView({
   applicationProjectId,
@@ -134,7 +110,7 @@ export function JdView({
 
       {requirementsSlot ? (
         <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">{requirementsSlot}</div>
-      ) : (
+      ) : requirements.length === 0 && techKeywords.length === 0 && !seniority ? null : (
       <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">
         {seniority ? (
           <p className="text-sm text-muted-foreground">
@@ -233,166 +209,5 @@ function segments(raw: string, sentences: JdSentence[]): Array<{ sid: string | n
   return out
 }
 
-/**
- * AI-01 실패 → C-20 block in the 요건 영역 (not_a_jd → "채용 공고가 아닌 텍스트로 보여요"). v5.3: request
- * path (A14 countdown "{N}초 뒤 다시 보낼 수 있어요"), input-caused failures have no retry (R-69) —
- * "고친 뒤 요건 정리하기로 새로 실행해 주세요". The retry is a **new** extraction on the active provider.
- * Q53-2: an editable JD's C-20 button is "공고 원문 고치기" (C-20 "입력 원인 실패의 이동"); the cause line
- * stays until the save.
- */
-export function ExtractionFailed({
-  applicationProjectId,
-  code,
-  job,
-  previewRefusal = null,
-  rerunnable = true,
-}: {
-  applicationProjectId: string
-  code: AiErrorCode
-  /** false: `succeeded` + 요건 0개 — begin_jd_extraction refuses `succeeded`, so only the text edit moves on (Q53-11) */
-  rerunnable?: boolean
-  /** failed ai_jobs row (provider / retry_after / quota_resets_at) */
-  job?: Pick<AiJob, "provider" | "retry_after" | "quota_resets_at"> | null
-  /** `?state=retry-*` preview of a refused retry */
-  previewRefusal?: AiRetryRefusalCode | null
-}) {
-  const router = useRouter()
-  const extractingUrl = useExtractingUrl()
-  const edit = useJdRawEdit()
-  const previewWrite = usePreviewWriteGuard()
-  const [retrying, setRetrying] = React.useState(false)
-  const [refusal, setRefusal] = React.useState<AiRetryRefusalCode | null>(previewRefusal)
-  const [already, setAlready] = React.useState(false)
-  const retry = async () => {
-    if (previewWrite.stop()) return
-    setRefusal(null)
-    setRetrying(true)
-    const r = await retryJdExtractionAction(applicationProjectId)
-    if (isAiRejected(r)) {
-      setRefusal(await refusalOf(r))
-      setRetrying(false)
-      return
-    }
-    if (typeof r === "object" && "already" in r) setAlready(true)
-    router.replace(extractingUrl())
-    router.refresh()
-  }
-  const inputCaused = isInputCausedFailure(code)
-  // [UI-가정] previews without a job: request-path wait of 20 s (A14 mock default)
-  const [fallbackWait] = React.useState(() => new Date(Date.now() + 20_000).toISOString())
-  return (
-    <div className="space-y-2">
-      <AiErrorNotice
-        code={code}
-        provider={job?.provider}
-        retryAfter={job?.retry_after ?? (code === "rate_limited" || code === "provider_unavailable" ? fallbackWait : null)}
-        quotaResetsAt={job?.quota_resets_at}
-        onRetry={inputCaused ? undefined : () => void retry()}
-        retrying={retrying}
-        refusal={refusal}
-        lockEntry="requirements"
-        requestPath
-        rerunLabel="요건 정리하기"
-        reduceTarget="공고 원문"
-        onFocusInput={edit.editable && !edit.editing ? edit.start : undefined}
-        inputLabel="공고 원문 고치기"
-      />
-      {/*
-        UQ-513: input-caused failures have no "다시 시도" (R-69) — the run button "요건 정리하기" (+ C-19)
-        starts a new extraction instead of a dead end. 수정 중에는 비활성 (Q53-2).
-      */}
-      {inputCaused && !already && rerunnable ? (
-        retrying ? (
-          <ExtractingLine />
-        ) : (
-          <>
-            <AiRunButton
-              lock={{ entry: "requirements" }}
-              variant="outline"
-              disabled={edit.editing}
-              onRun={async () => {
-                if (previewWrite.stop()) return undefined
-                const r = await retryJdExtractionAction(applicationProjectId)
-                if (isAiRejected(r)) return r
-                setRetrying(true)
-                if (typeof r === "object" && "already" in r) setAlready(true)
-                router.replace(extractingUrl())
-                router.refresh()
-                return undefined
-              }}
-            >
-              요건 정리하기
-            </AiRunButton>
-            {edit.editing ? <SaveFirstNote /> : null}
-          </>
-        )
-      ) : null}
-      {already ? <ExtractingLine already /> : null}
-    </div>
-  )
-}
-
-/** "공고 요건 정리 중" spinner in the run button's place; "이미 정리하고 있어요" when another path runs it (02 S-15 v5.3) */
-export function ExtractingLine({ already = false }: { already?: boolean }) {
-  return (
-    <p className="flex items-center gap-2 text-sm font-medium text-ai-subtle-foreground" role="status">
-      <Loader2 className="size-4 animate-spin text-ai" aria-hidden />
-      {already ? "이미 정리하고 있어요" : "공고 요건 정리 중"}
-    </p>
-  )
-}
-
-/**
- * v4: JD registered without a key (extraction pending, no job) → C-18 영역형, or "요건 정리하기"
- * once a key is connected (02 C-18 진입점 "요건 정리하기 (S-15)"). Raw text stays visible below.
- * v5.3: while the request runs the button's place shows "공고 요건 정리 중"; a start refusal goes back to
- * AiRunButton (C-18 / C-21 / key_invalid).
- */
-export function RunExtraction({
-  applicationProjectId,
-  unknownFailure = false,
-}: {
-  applicationProjectId: string
-  /** S-15 "원인을 알 수 없는 실패" (실패 기록이 정리됨, 04 §2.6.1): no edit button, 다시 정리만 */
-  unknownFailure?: boolean
-}) {
-  const router = useRouter()
-  const extractingUrl = useExtractingUrl()
-  const connection = useAiConnection()
-  const edit = useJdRawEdit()
-  const previewWrite = usePreviewWriteGuard()
-  const [pending, setPending] = React.useState<false | "running" | "already">(false)
-  // AI 미연결이면 원문 오른쪽에 잠금 안내를 두지 않는다 (2026-11-10 사용자 요청) — 원문만 보인다
-  if (connection && !connection.active_provider) return null
-  return (
-    <Card className="max-w-xl gap-3 p-5">
-      <h2 className="text-lg leading-7 font-semibold">요건 정리 전</h2>
-      {/* D-30: 키를 연결해도 자동으로 추출하지 않음 — 사용자가 누를 때만 */}
-      <p className="text-base text-muted-foreground">
-        {unknownFailure ? "요건을 정리하지 못했어요. 다시 정리해 보세요" : "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요"}
-      </p>
-      {pending ? (
-        <ExtractingLine already={pending === "already"} />
-      ) : (
-        <AiRunButton
-          lock={{ entry: "requirements" }}
-          disabled={edit.editing}
-          onRun={async () => {
-            if (previewWrite.stop()) return undefined
-            const r = await retryJdExtractionAction(applicationProjectId)
-            if (isAiRejected(r)) return r
-            setPending(typeof r === "object" && "already" in r ? "already" : "running")
-            edit.clearSaved()
-            // UQ-530: mark "started here" so the running view says "공고 요건 정리 중" (not "이미 정리하고 있어요")
-            router.replace(extractingUrl())
-            router.refresh()
-            return undefined
-          }}
-        >
-          요건 정리하기
-        </AiRunButton>
-      )}
-      {edit.editing ? <SaveFirstNote /> : null}
-    </Card>
-  )
-}
+// R17 (2026-11-14): `ExtractionFailed`, `ExtractingLine`, `RunExtraction` ("요건 정리하기", AI-01) are gone —
+// the JD is used as raw text, so there is no requirement extraction to start, wait for, or retry.

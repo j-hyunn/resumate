@@ -54,7 +54,7 @@ create function pg_temp.meta(p_provider text, p_tier text) returns jsonb languag
 $f$;
 create function pg_temp.insight_payload(p_provider text, p_tier text) returns jsonb language sql as $f$
   select jsonb_build_object('result', '{"schema_version":1}'::jsonb, 'match_stage_result', '{"matches":[]}'::jsonb,
-    'hashes', '{"requirements_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
+    'hashes', '{"jd_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
     'meta', pg_temp.meta(p_provider, p_tier) || '{"schema_version":1}', 'evidence', '[]'::jsonb);
 $f$;
 create function pg_temp.question(p_seq int, p_req uuid, p_provider text, p_tier text) returns jsonb language sql as $f$

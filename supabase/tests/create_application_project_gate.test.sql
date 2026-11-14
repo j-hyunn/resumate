@@ -1,4 +1,6 @@
--- W0 Q53-1 (DM 2.7.1, 2.11.7 path ⑥): create_application_project refuses before any insert; existing id skips the gate.
+-- W0 Q53-1 gate, revised in R17 `[가정 R17-9]`: registering a posting runs no AI, so create_application_project
+-- no longer refuses on an invalid key or a missing AI consent. Every connection state saves the posting; only
+-- ai_run_allowed reflects the connection. An existing id is still a replay, someone else's id still a conflict.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -8,7 +10,7 @@ insert into auth.users (id, email, aud, role) values
   ('b0000000-0000-0000-0000-000000000002', 'b@example.test', 'authenticated', 'authenticated'),
   ('c0000000-0000-0000-0000-000000000003', 'c@example.test', 'authenticated', 'authenticated');
 
--- A: gemini free, valid, consent. B: inactive key only (no active provider). C: no key at all.
+-- A: gemini free, valid, consent. C: no key at all.
 insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key_ciphertext, key_nonce, wrapped_dek, kek_id, key_last4, status) values
   ('a0000000-9999-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'gemini', 'free', '\x01', '\x02', '\x03', 'env-v1', 'ag01', 'valid');
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
@@ -23,57 +25,37 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"c0000000-0000-0000-0000-000000000003","role":"authenticated"}';
 select is(public.create_application_project('c0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args), '회사', '포지션')
             - 'application_project_id' - 'job_description_id',
-          '{"name":"회사 자기소개서","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true,
-            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
-          'no active provider: passes, saved key-less (D-30)');
+          '{"name":"회사 자기소개서","name_source":"user","ai_run_allowed":false,"created":true}'::jsonb,
+          'no active provider: saved key-less (R17 return shape)');
 
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args)) ->> 'ai_run_allowed',
-          'true', 'valid key + consent: passes');
+          'true', 'valid key + consent: saved, AI allowed');
 reset role;
 
--- needs_check passes.
-update public.ai_provider_keys set status = 'needs_check' where user_id = 'a0000000-0000-0000-0000-000000000001';
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000002', '원문', 'h', (select s from t_args)) ->> 'created',
-          'true', 'needs_check: passes');
-reset role;
-
--- Invalid key.
+-- Invalid key: saved anyway (R17), AI not allowed.
 update public.ai_provider_keys set status = 'invalid' where user_id = 'a0000000-0000-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h', (select s from t_args))$$,
-                 'P0001', 'key_invalid', 'invalid key: key_invalid');
-select is((select count(*)::int from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000003'), 0,
-          'invalid key: no orphan project');
-select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000003'), 0,
-          'invalid key: no orphan JD');
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args)) ->> 'created',
-          'false', 'existing id: gate not checked, created false');
-select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000003', repeat('x', 50001), 'h', (select s from t_args))$$,
-                 'P0001', 'invalid_raw_text', 'arguments are checked before the gate');
+select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h', (select s from t_args))
+            - 'application_project_id' - 'job_description_id' - 'name',
+          '{"name_source":"default","ai_run_allowed":false,"created":true}'::jsonb,
+          'invalid key: no key_invalid gate since R17, saved with the default name');
+select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000003'), 1,
+          'invalid key: the JD is saved');
+select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000004', repeat('x', 50001), 'h', (select s from t_args))$$,
+                 'P0001', 'invalid_raw_text', 'arguments are still checked');
 reset role;
 
--- Consent required: the disclosure consent is gone.
+-- Consent missing: saved anyway (R17), AI not allowed.
 update public.ai_provider_keys set status = 'valid' where user_id = 'a0000000-0000-0000-0000-000000000001';
 delete from public.ai_data_use_consents where user_id = 'a0000000-0000-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h', (select s from t_args))$$,
-                 'P0001', 'ai_consent_required', 'no consent: ai_consent_required');
-select is((select count(*)::int from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000003'), 0,
-          'no consent: no orphan project');
-reset role;
-
--- Same id after consent creates normally.
-insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged) values
-  ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
-set local role authenticated;
-set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h', (select s from t_args)) ->> 'created',
-          'true', 'same id after consent: created');
+select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h', (select s from t_args)) ->> 'ai_run_allowed',
+          'false', 'no consent: no ai_consent_required gate since R17, saved, AI not allowed');
+select is((select count(*)::int from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000005'), 1,
+          'no consent: the project is saved');
 
 -- Someone else's id stays a conflict, whatever the caller's connection.
 set local request.jwt.claims = '{"sub":"c0000000-0000-0000-0000-000000000003","role":"authenticated"}';

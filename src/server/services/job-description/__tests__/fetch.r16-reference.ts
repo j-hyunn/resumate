@@ -1,8 +1,9 @@
 /**
- * TEST-ONLY — the pre-hotfix (R15, main `e9ea714`) regex implementation of `fetch.ts`, kept verbatim
- * so `fetch.redos.test.ts` can prove the hotfix produces **byte-identical output** on normal and
- * fuzzed input (QA-R16-02). It contains the super-linear regexes the hotfix removes: never import it
- * from app code, and never feed it large input (the differential test uses small strings only).
+ * TEST-ONLY — the R16 regex implementation of `fetch.ts` as committed in `df106bc` (before the
+ * hotfix merge and QA-R16-01), kept verbatim except the `../ssrf` import path, so
+ * `fetch.redos.test.ts` can prove the linear scanners give **byte-identical Markdown**. It contains
+ * the super-linear regexes the fix removes: never import it from app code, and never feed it large
+ * input (the differential test uses small strings only).
  */
 import {
   JD_FETCH_MAX_BYTES,
@@ -240,17 +241,227 @@ function findCloseTag(html: string, from: number, tag: string): number {
   return -1;
 }
 
-const BLOCK_TAGS = /<\/?(p|div|br|li|tr|h[1-6]|section|article|header|footer|blockquote|pre|dd|dt|dl|ul|ol|table|thead|tbody|figure|figcaption|hr|address|main)\b[^>]*>/gi;
+// ---------------- HTML → Markdown (R16) ----------------
+//
+// The fetched posting is stored as **Markdown** so S-46's editor (TipTap + `@tiptap/markdown`,
+// `TableKit` on) keeps headings, lists, emphasis and tables. Regex-based like the rest of this file
+// — no DOM in the runtime, no new dependency. Markdown characters that occur in the posting's own
+// text are **not** escaped `[가정]` (a stray `*` rendering oddly beats `\` littering the 원문),
+// except `|` inside a table cell, which would break the table.
 
-/** HTML → plain text with one line per block element, entities decoded. */
-export function htmlToText(html: string): string {
-  let text = stripBoilerplateBlocks(stripDroppedElements(html));
-  text = text.replace(/<!--[\s\S]*?-->/g, " ");
-  text = text.replace(/<(td|th)\b[^>]*>/gi, "\t");
-  text = text.replace(BLOCK_TAGS, "\n");
-  text = text.replace(/<[^>]*>/g, " ");
-  text = decodeEntities(text);
-  return normalizeText(text);
+/** Blocks separated by a blank line (one newline is a soft break inside a paragraph in Markdown). */
+const BLOCK_TAGS = /<\/?(p|div|section|article|blockquote|pre|dd|dt|dl|figure|figcaption|hr|address|main|header|footer|thead|tbody|tfoot)\b[^>]*>/gi;
+/** Tags that must not appear inside a `**…**` / `_…_` run (the emphasis is dropped instead). */
+const BLOCKISH_INSIDE = /<\/?(p|div|section|article|blockquote|pre|ul|ol|li|table|tr|td|th|h[1-6]|dl|dd|dt|br|hr)\b/i;
+
+/** Placeholder for a finished table, so later passes (entities, whitespace) never touch it. */
+const TABLE_TOKEN = (n: number) => `\u0000TABLE${n}\u0000`;
+const TABLE_TOKEN_RE = /\u0000TABLE(\d+)\u0000/g;
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, " ");
+}
+
+/** One line of text: tags out, entities decoded, whitespace collapsed. */
+function inlineText(html: string): string {
+  return decodeEntities(stripTags(html)).replace(/\s+/g, " ").trim();
+}
+
+/** `<strong>/<b>` → `**…**`, `<em>/<i>` → `_…_` (never `*`: at a line start it reads as a list). */
+function convertEmphasis(html: string): string {
+  const wrap = (marker: string) => (_m: string, _tag: string, inner: string) => {
+    // A block inside the run can't be wrapped in Markdown: keep the content, drop the emphasis.
+    if (BLOCKISH_INSIDE.test(inner)) return inner;
+    const lead = /^\s*/.exec(inner)![0];
+    const trail = /\s*$/.exec(inner)![0];
+    const core = inner.slice(lead.length, inner.length - trail.length);
+    // Empty runs (`<b> </b>`) would leave a stray `** **`.
+    if (inlineText(core) === "") return inner;
+    // Keep the spaces outside the markers: `** 주요 **` is not bold in Markdown.
+    return `${lead}${marker}${core}${marker}${trail}`;
+  };
+  return html
+    .replace(/<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi, wrap("**"))
+    .replace(/<(em|i)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi, wrap("_"));
+}
+
+/** `h1`–`h6` → atx heading on its own paragraph. Inner tags are flattened (no emphasis in a heading). */
+function convertHeadings(html: string): string {
+  return html.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi, (_m, level: string, inner: string) => {
+    const text = inlineText(inner.replace(/<br\s*\/?>/gi, " "));
+    return text ? `\n\n${"#".repeat(Number(level))} ${text}\n\n` : "\n\n";
+  });
+}
+
+/**
+ * `ul > li` → `- `, `ol > li` → `1. ` (the renderer numbers them). Innermost list first, so a nested
+ * list is already text when its parent is converted; nesting flattens (lines are trimmed — accepted).
+ * Blocks inside an item are folded into the item's line so the marker never stands alone.
+ */
+function convertLists(html: string): string {
+  const innermost = /<(ul|ol)\b[^>]*>((?:(?!<(?:ul|ol)\b)[\s\S])*?)<\/\1\s*>/gi;
+  let out = html;
+  for (let guard = 0; guard < 50; guard++) {
+    const next = out.replace(innermost, (_m, tag: string, inner: string) => {
+      const marker = tag.toLowerCase() === "ol" ? "1. " : "- ";
+      const items = inner
+        .replace(/<\/?(p|div|span|section)\b[^>]*>/gi, " ")
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<\/li\s*>/gi, "")
+        .split(/<li\b[^>]*>/i)
+        .slice(1)
+        // An item with no text (`<li><b></b></li>`) would leave a bare "-" line: drop it.
+        .filter((item) => inlineText(item) !== "")
+        .map((item) => `\n${marker}${item}`)
+        .join("");
+      return items ? `\n\n${items}\n\n` : "\n\n";
+    });
+    if (next === out) break;
+    out = next;
+  }
+  // An orphan <li> (no list around it) still reads as an item.
+  return out.replace(/<\/li\s*>/gi, "").replace(/<li\b[^>]*>/gi, "\n- ");
+}
+
+type TableCell = { text: string; colspan: number; rowspan: number; header: boolean };
+
+/** One table cell's text: emphasis kept, links as text, line breaks folded, `|` escaped. */
+function cellText(inner: string, flatTables: readonly string[]): string {
+  const withInner = inner.replace(TABLE_TOKEN_RE, (_m, n: string) => ` ${flatTables[Number(n)] ?? ""} `);
+  return inlineText(convertEmphasis(withInner).replace(/<br\s*\/?>/gi, " ")).replace(/\|/g, "\\|");
+}
+
+function spanOf(attrs: string, name: "colspan" | "rowspan"): number {
+  const m = new RegExp(`${name}\\s*=\\s*["']?(\\d+)`, "i").exec(attrs);
+  const n = m ? Number(m[1]) : 1;
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, 50) : 1;
+}
+
+/**
+ * GFM table (R16, UI 확인 2026-11-12: the editor's `TableKit` renders it as a real table).
+ * The header row is the first row with a `<th>`, else the first row (GFM needs one), followed by
+ * `| --- |`. colspan → trailing empty cells, rowspan → an empty cell in the rows below, and every
+ * row is padded to the widest one.
+ */
+function renderTable(inner: string, flatTables: readonly string[]): { markdown: string; flat: string } {
+  const rows: TableCell[][] = [];
+  for (const tr of inner.matchAll(/<tr\b[^>]*>([\s\S]*?)(?=<tr\b|<\/table|$)/gi)) {
+    const cells: TableCell[] = [];
+    for (const td of tr[1]!.matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)(?=<(?:td|th)\b|<\/tr\s*>|$)/gi)) {
+      cells.push({ text: cellText(td[3]!.replace(/<\/(td|th)\s*>/gi, ""), flatTables), colspan: spanOf(td[2]!, "colspan"), rowspan: spanOf(td[2]!, "rowspan"), header: td[1]!.toLowerCase() === "th" });
+    }
+    if (cells.length > 0) rows.push(cells);
+  }
+  if (rows.length === 0) return { markdown: "", flat: "" };
+
+  // Lay the cells on a grid: rowspan reserves the column in the rows below.
+  const grid: string[][] = [];
+  const reserved: number[] = [];
+  rows.forEach((cells, r) => {
+    const line: string[] = [];
+    let col = 0;
+    const take = () => {
+      while ((reserved[col] ?? 0) > 0) {
+        reserved[col]!--;
+        line.push("");
+        col++;
+      }
+    };
+    for (const cell of cells) {
+      take();
+      line.push(cell.text);
+      if (cell.rowspan > 1) reserved[col] = Math.max(reserved[col] ?? 0, cell.rowspan - 1);
+      col++;
+      for (let k = 1; k < cell.colspan; k++) {
+        line.push("");
+        col++;
+      }
+    }
+    take();
+    grid[r] = line;
+  });
+  // A table with no text at all (layout scaffolding) would leave `|  |` / `| --- |`: emit nothing.
+  if (grid.every((l) => l.every((c) => c === ""))) return { markdown: "", flat: "" };
+  const width = Math.max(...grid.map((l) => l.length));
+  for (const l of grid) while (l.length < width) l.push("");
+
+  const headerIndex = Math.max(0, rows.findIndex((cells) => cells.some((c) => c.header)));
+  const ordered = [grid[headerIndex]!, ...grid.filter((_, i) => i !== headerIndex)];
+  const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
+  const markdown = [line(ordered[0]!), line(Array.from({ length: width }, () => "---")), ...ordered.slice(1).map(line)].join("\n");
+  return { markdown, flat: grid.flat().filter(Boolean).join(" ") };
+}
+
+/** Innermost table first; each finished table becomes a token so nothing later rewrites it. */
+function convertTables(html: string, tables: string[], flatTables: string[]): string {
+  const innermost = /<table\b[^>]*>((?:(?!<table\b)[\s\S])*?)<\/table\s*>/gi;
+  let out = html;
+  for (let guard = 0; guard < 50; guard++) {
+    const next = out.replace(innermost, (_m, inner: string) => {
+      const { markdown, flat } = renderTable(inner, flatTables);
+      if (!markdown) return "\n\n";
+      tables.push(markdown);
+      flatTables.push(flat);
+      return `\n\n${TABLE_TOKEN(tables.length - 1)}\n\n`;
+    });
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/**
+ * HTML → Markdown (R16). Headings `#`…`######`, `- ` / `1. ` lists, `**bold**`, `_italic_`, `<br>` =
+ * line break, blocks separated by a **blank line**, GFM tables, links as their text only (a posting
+ * URL may carry tracking tokens — CF-A16), images / scripts / styles dropped.
+ */
+export function htmlToMarkdown(html: string): string {
+  const tables: string[] = [];
+  const flatTables: string[] = [];
+  let md = stripBoilerplateBlocks(stripDroppedElements(html));
+  md = md.replace(/<!--[\s\S]*?-->/g, " ");
+  md = md.replace(/<img\b[^>]*>/gi, " ");
+  md = convertTables(md, tables, flatTables);
+  md = convertHeadings(md);
+  md = convertLists(md);
+  md = convertEmphasis(md);
+  md = md.replace(/<br\s*\/?>/gi, "\n");
+  md = md.replace(BLOCK_TAGS, "\n\n");
+  md = md.replace(/<\/?(li|tr|td|th|table|ul|ol)\b[^>]*>/gi, "\n");
+  // Links (and every other inline tag) keep their text only.
+  md = stripTags(md);
+  md = decodeEntities(md);
+  md = normalizeText(md);
+  // NFC like `normalizeJdRawText` (A3), so the string the screen receives is byte-identical to what
+  // the preview and create paths hash and store (CF-A17) — a site serving NFD Hangul can't skew it.
+  return md.replace(TABLE_TOKEN_RE, (_m, n: string) => tables[Number(n)] ?? "").normalize("NFC");
+}
+
+/**
+ * Characters of the Markdown that are the posting's own text — the `fetch_too_short` floor and the
+ * "which source has more" comparison must not move because of syntax (R16). Drops heading / list
+ * markers at a line start, `**`, `_…_` runs, table syntax (`|`, the `| --- |` line) and **blank
+ * lines** (the paragraph separators R16 adds); each remaining line break counts as one character,
+ * the same as the old one-line-per-block text, so the 200 floor keeps its meaning.
+ */
+export function markdownTextLength(md: string): number {
+  const ESC_PIPE = "\u0001";
+  return md
+    .replace(/\\\|/g, ESC_PIPE)
+    .split("\n")
+    .filter((line) => !/^\|(?:\s*:?-{3,}:?\s*\|)+$/.test(line.trim()))
+    .map((line) =>
+      line
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/^(?:[-*+]|\d+\.)\s+/, "")
+        .replace(/\*\*/g, "")
+        .replace(/(^|[^\w])_(\S(?:[^_\n]*\S)?)_(?=[^\w]|$)/g, "$1$2")
+        .replace(/\s*\|\s*/g, " ")
+        .trim(),
+    )
+    .filter((line) => line !== "")
+    .join("\n")
+    .replace(new RegExp(ESC_PIPE, "g"), "|").length;
 }
 
 /** Collapses runs of spaces / blank lines and trims each line. */
@@ -468,8 +679,18 @@ async function download(start: string, deps: Resolved, signal: AbortSignal, dead
   }
 }
 
-function truncate(text: string): string {
-  return text.length > JD_FETCH_RAW_TEXT_MAX ? text.slice(0, JD_FETCH_RAW_TEXT_MAX) : text;
+/**
+ * `raw_text` is capped at 50,000 characters of **Markdown** (the stored string). R16: cut at a line
+ * boundary so a `**…**` pair or a table row is never split; a single line longer than the cap is
+ * cut hard, dropping an unmatched trailing `**`.
+ */
+export function truncate(text: string): string {
+  if (text.length <= JD_FETCH_RAW_TEXT_MAX) return text;
+  const window = text.slice(0, JD_FETCH_RAW_TEXT_MAX);
+  const cut = window.lastIndexOf("\n");
+  if (cut > 0) return window.slice(0, cut).trimEnd();
+  const pairs = window.match(/\*\*/g)?.length ?? 0;
+  return pairs % 2 === 1 ? window.slice(0, window.lastIndexOf("**")).trimEnd() : window;
 }
 
 function codeOf(err: unknown): string {
@@ -512,8 +733,8 @@ export async function fetchJobDescription(
       try {
         const framePage = await download(frame, d, controller.signal, deadlineAt);
         bytes += framePage.bytes;
-        const frameText = htmlToText(framePage.html);
-        if (frameText.length >= JD_FETCH_MIN_CHARS) {
+        const frameText = htmlToMarkdown(framePage.html);
+        if (markdownTextLength(frameText) >= JD_FETCH_MIN_CHARS) {
           const framePosting = extractJobPosting(framePage.html);
           posting = {
             title: posting.title ?? framePosting.title,
@@ -528,11 +749,12 @@ export async function fetchJobDescription(
       }
     }
 
-    const pageText = htmlToText(page.html);
-    const descriptionText = posting.descriptionHtml ? htmlToText(posting.descriptionHtml) : "";
-    // The JSON-LD description is the posting body when the page markup gives less.
-    const rawText = truncate(descriptionText.length > pageText.length ? descriptionText : pageText);
-    if (rawText.length < JD_FETCH_MIN_CHARS) throw jdFetchError("fetch_too_short");
+    const pageText = htmlToMarkdown(page.html);
+    const descriptionText = posting.descriptionHtml ? htmlToMarkdown(posting.descriptionHtml) : "";
+    // The JSON-LD description is the posting body when the page markup gives less (compared on the
+    // text itself, so Markdown syntax never tips the choice — R16).
+    const rawText = truncate(markdownTextLength(descriptionText) > markdownTextLength(pageText) ? descriptionText : pageText);
+    if (markdownTextLength(rawText) < JD_FETCH_MIN_CHARS) throw jdFetchError("fetch_too_short");
 
     d.log("jd_fetch.succeeded", { host, code: "ok", bytes, elapsedMs: d.now() - startedAt });
     return { rawText, companyName: posting.companyName, positionTitle: posting.title };

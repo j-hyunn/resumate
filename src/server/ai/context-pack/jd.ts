@@ -16,25 +16,80 @@ export type JdSentence = {
   end: number;
 };
 
-/** Leading list markers stripped from a sentence (the offsets skip them too). */
-const BULLET = /^(?:[-*•·▪■□○●◦✓✔☑➢▶►※>]+|\(?\d{1,2}[.)]|\(?[a-zA-Z가-힣][.)](?=\s))\s*/;
+/**
+ * Leading list markers stripped from a sentence (the offsets skip them too).
+ * (R16) `*` counts as a marker only when it is a **single** star — `**` opens
+ * markdown bold and must not be half-eaten (`**주요 업무**` → `주요 업무**`).
+ * `[가정]` A single star without a following space (`*우대`) stays a marker, as
+ * before R16, so plain-text JDs split exactly as they did.
+ */
+const BULLET = /^(?:[-•·▪■□○●◦✓✔☑➢▶►※>]+|\*(?!\*)|\(?\d{1,2}[.)]|\(?[a-zA-Z가-힣][.)](?=\s))\s*/;
+
+/**
+ * (R16) A GFM table row: the line opens with `|` and closes with an unescaped
+ * `|`. `[가정]` One row = one sentence — it is not split into cells nor at
+ * sentence ends inside a cell. The separator row (`| --- | :---: |`) has no
+ * letter or number and is skipped like any symbol-only segment.
+ */
+const TABLE_ROW = /^\s*\|.*(?<!\\)\|\s*$/;
+
+/** (R16) Markdown ATX heading marker at the start of a line: `#` × 1–6 + space. */
+const ATX_HEADING = /^#{1,6}[ \t]+/;
+
+/** (R16) A segment wrapped whole in `**…**` or `__…__` (inner text non-empty, no pair inside). */
+function wrappedEmphasis(text: string): boolean {
+  if (text.length < 5) return false;
+  const open = text.slice(0, 2);
+  if ((open !== "**" && open !== "__") || !text.endsWith(open)) return false;
+  const inner = text.slice(2, -2);
+  return inner.trim() !== "" && !inner.includes(open) && !/^\s|\s$/.test(inner);
+}
 
 /**
  * Splits by line breaks, then within a line after `.`, `!`, `?`, `。` followed
- * by whitespace (so "3.5년" and "Node.js" stay whole). Empty and
+ * by whitespace (so "3.5년" and "Node.js" stay whole).
+ *
+ * (R16) The URL fetch returns markdown. Only the **edges** move — the text is
+ * never rewritten, so `raw.slice(start, end) === text` still holds (C-2, V-*):
+ * a line-leading ATX heading (`## 자격 요건`), then the list marker, then a
+ * segment wrapped whole in `**…**` / `__…__`; a GFM table row loses only its
+ * outer `|` (inner `|` and escaped `\|` stay). Emphasis inside a sentence
+ * (`Java **필수**`) stays as written. Text without markdown splits as before.
+ *
+ * Empty and
  * marker-/symbol-only segments are skipped, so a symbol-only raw text yields []
  * (stored as is; AI-01 then ends with not_a_jd without a call). IDs are S1, S2, … in text order.
  */
 export function splitJdSentences(raw: string): JdSentence[] {
   const sentences: JdSentence[] = [];
-  const pushSegment = (from: number, to: number) => {
+  const pushSegment = (from: number, to: number, atLineStart: boolean, tableRow = false) => {
     let start = from;
     let end = to;
     while (start < end && /\s/.test(raw[start])) start++;
     while (end > start && /\s/.test(raw[end - 1])) end--;
+    if (tableRow) {
+      // Outer pipes only: the leading `|` and an unescaped trailing `|`.
+      if (raw[start] === "|") start++;
+      if (end - 1 > start && raw[end - 1] === "|" && raw[end - 2] !== "\\") end--;
+      while (start < end && /\s/.test(raw[start])) start++;
+      while (end > start && /\s/.test(raw[end - 1])) end--;
+      if (end <= start) return;
+      const text = raw.slice(start, end);
+      if (!/[\p{L}\p{N}]/u.test(text)) return;
+      sentences.push({ sid: `S${sentences.length + 1}`, text, start, end });
+      return;
+    }
+    if (atLineStart) {
+      const heading = ATX_HEADING.exec(raw.slice(start, end));
+      if (heading) start += heading[0].length;
+    }
     const bullet = BULLET.exec(raw.slice(start, end));
     if (bullet) start += bullet[0].length;
     while (start < end && /\s/.test(raw[start])) start++;
+    if (wrappedEmphasis(raw.slice(start, end))) {
+      start += 2;
+      end -= 2;
+    }
     if (end <= start) return;
     const text = raw.slice(start, end);
     // QA-S5-01: any Unicode letter or number is content (Cyrillic, Arabic, Thai …); symbol-only segments are skipped.
@@ -52,16 +107,20 @@ export function splitJdSentences(raw: string): JdSentence[] {
   }
 
   function splitLine(from: number, to: number) {
+    if (TABLE_ROW.test(raw.slice(from, to))) {
+      pushSegment(from, to, true, true);
+      return;
+    }
     let segStart = from;
     for (let i = from; i < to; i++) {
       const ch = raw[i];
       const next = raw[i + 1];
       if ((ch === "." || ch === "!" || ch === "?" || ch === "。") && (i + 1 >= to || /\s/.test(next))) {
-        pushSegment(segStart, i + 1);
+        pushSegment(segStart, i + 1, segStart === from);
         segStart = i + 1;
       }
     }
-    pushSegment(segStart, to);
+    pushSegment(segStart, to, segStart === from);
   }
 
   return sentences;

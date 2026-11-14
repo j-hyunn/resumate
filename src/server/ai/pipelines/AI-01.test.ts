@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EN_FRONTEND, INJECTION, KO_BACKEND, KO_DATA_NOISY, NOT_A_JD, output } from "../__fixtures__/AI-01/jds";
+import { EN_FRONTEND, INJECTION, KO_BACKEND, KO_DATA_NOISY, KO_MARKDOWN, NOT_A_JD, output } from "../__fixtures__/AI-01/jds";
 import { computeRequirementsHash, splitJdSentences } from "../context-pack/jd";
 import { AiError } from "../errors";
 import { createFakeLlm } from "../fake-llm";
@@ -192,5 +192,42 @@ describe("extractJdRequirements — prompt input and logging", () => {
     const result = await extractJdRequirements(input(KO_BACKEND.raw), { llm: createFakeLlm([{ json: KO_BACKEND.output }]) });
     const rows = result.payload.requirements.map((r, i) => ({ ...r, id: `id-${9 - i}`, updated_at: null }));
     expect(computeRequirementsHash(rows)).toBe(result.requirementsHash);
+  });
+});
+
+/** (R16) The URL fetch returns markdown (headings, markers, bold, GFM tables). */
+describe("extractJdRequirements — markdown posting (R16)", () => {
+  const today = "2026-11-12";
+
+  it("shows the model clean sentence lines and keeps every sid / quote check passing", async () => {
+    const sentences = splitJdSentences(KO_MARKDOWN.raw);
+    // What the model sees in <jd>: markers off the edges, inline bold and inner pipes kept.
+    expect(sentences.map((s) => `${s.sid}: ${s.text}`)).toEqual([
+      "S1: 아자소프트 백엔드 엔지니어",
+      "S2: 주요 업무",
+      "S3: 주문 API 설계 및 운영",
+      "S4: 배치 작업 성능 개선",
+      "S5: 자격 요건",
+      "S6: **필수**: Java 3년 이상",
+      "S7: Spring 기반 서버 개발 경험",
+      "S8: 서류 접수 마감: 2026.12.20까지",
+      "S9: 구분 | 내용",
+      "S10: 근무지 | 서울 판교",
+    ]);
+    for (const s of sentences) expect(KO_MARKDOWN.raw.slice(s.start, s.end)).toBe(s.text);
+
+    const llm = createFakeLlm([{ json: KO_MARKDOWN.output }]);
+    const result = await extractJdRequirements({ sentences, companyName: null, positionTitle: null, today }, { llm });
+    const jdBlock = llm.requests[0].userBlocks[0].text;
+    expect(jdBlock).toContain("S2: 주요 업무");
+    expect(jdBlock).not.toMatch(/S\d+: #/);
+
+    expect(result.report.requirements_dropped_no_sid).toBe(0);
+    expect(result.report.sids_dropped).toBe(0);
+    expect(result.output.requirements).toHaveLength(4);
+    // deadline check 3 (year/month/day in the cited sentence) passes on the heading line.
+    expect(result.output.deadline).toEqual({ value: "2026-12-20", source_sids: ["S8"], usable: true });
+    expect(result.output.company_name?.value).toBe("아자소프트");
+    expect(result.payload.other_sids).toEqual(["S2", "S5", "S9", "S10"]);
   });
 });

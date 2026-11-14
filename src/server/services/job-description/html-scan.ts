@@ -426,3 +426,253 @@ export function stripCdataOpen(body: string): string {
   }
   return body;
 }
+
+// ---------------- R16 Markdown conversion (QA-R16-01) ----------------
+//
+// R16's element regexes pair an open tag with its close through a lazy `[\s\S]*?` — from every
+// unclosed open tag the regex searched to the end of the string (O(n²)). The scanners below find
+// the same matches from precomputed, sorted position lists: candidate starts come from a literal
+// regex scan (native, linear, the same `/i` folding as the original), the open tag ends at the
+// first `>` after its name (a cached `indexOf`, monotonic so amortised O(n)), and the lazy body ends
+// at the first matching close at or after it (binary search).
+
+/** Ascending start positions of the literal `lit` (lowercase ASCII), matched like a non-unicode `/i`. */
+const literalRegexes = new Map<string, RegExp>();
+
+function positionsCI(s: string, lit: string): number[] {
+  // Cached per literal: table rows / cells call this once per row, ~280k times on a hostile table.
+  let re = literalRegexes.get(lit);
+  if (!re) {
+    re = new RegExp(lit.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"), "gi");
+    literalRegexes.set(lit, re);
+  }
+  re.lastIndex = 0;
+  const out: number[] = [];
+  // `test` + `lastIndex` allocates nothing per match; non-unicode `/i` maps each character to one
+  // character, so a match is always `lit.length` long.
+  while (re.test(s)) out.push(re.lastIndex - lit.length);
+  return out;
+}
+
+/** First index `i` with `xs[i] >= x` (`xs.length` when none). */
+function lowerBound(xs: ArrayLike<number>, x: number): number {
+  let lo = 0;
+  let hi = xs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid]! < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Positions of `<name\b` (CI). */
+function boundaryStarts(s: string, name: string): number[] {
+  return positionsCI(s, `<${name}`).filter((p) => {
+    const c = p + 1 + name.length;
+    return c >= s.length || !isWordChar(s.charCodeAt(c));
+  });
+}
+
+/** `/<\/name\s*>/gi` matches as `{pos, end}` (CI). */
+function closeTags(s: string, name: string): { pos: number[]; end: number[] } {
+  const pos: number[] = [];
+  const end: number[] = [];
+  for (const p of positionsCI(s, `</${name}`)) {
+    let j = p + 2 + name.length;
+    while (j < s.length && isJsSpace(s.charCodeAt(j))) j++;
+    if (s.charCodeAt(j) === 62 /* > */) {
+      pos.push(p);
+      end.push(j + 1);
+    }
+  }
+  return { pos, end };
+}
+
+/** Merges per-name ascending position lists into one ascending `[pos, nameIndex]` stream. */
+function mergeStarts(lists: readonly number[][]): { pos: number[]; name: number[] } {
+  const pos: number[] = [];
+  const name: number[] = [];
+  const at = lists.map(() => 0);
+  for (;;) {
+    let best = -1;
+    for (let k = 0; k < lists.length; k++) {
+      if (at[k]! < lists[k]!.length && (best === -1 || lists[k]![at[k]!]! < lists[best]![at[best]!]!)) best = k;
+    }
+    if (best === -1) break;
+    pos.push(lists[best]![at[best]!]!);
+    name.push(best);
+    at[best]!++;
+  }
+  return { pos, name };
+}
+
+/** Where a candidate open tag's name is followed by what the regex needs after it. */
+export type OpenTagRule =
+  /** `(?:\s[^>]*)?>` — a JS space or `>` right after the name (`<b>`, `<b class=x>`, not `<br>`). */
+  | "attrs"
+  /** `\b[^>]*>` — a non-word character (or the end) right after the name. */
+  | "boundary";
+
+function openStarts(s: string, names: readonly string[], rule: OpenTagRule): { pos: number[]; name: number[] } {
+  return mergeStarts(
+    names.map((n) =>
+      rule === "boundary"
+        ? boundaryStarts(s, n)
+        : positionsCI(s, `<${n}`).filter((p) => {
+            const c = s.charCodeAt(p + 1 + n.length);
+            return c === 62 || isJsSpace(c);
+          }),
+    ),
+  );
+}
+
+/**
+ * `s.replace(/<(n1|n2|…)OPEN(BODY)<\/\1\s*>/gi, (_, name, inner) => rep(name, inner))` where OPEN is
+ * the `rule` and BODY is `[\s\S]*?`, or with `tempered` the "stop at the next open of the family"
+ * body `(?:(?!<(?:n1|n2|…)\b)[\s\S])*?` (R16 tables and lists; `rule` must then be "boundary").
+ * `rep` gets the tag name **as written** (the `\1` backreference compares case-insensitively).
+ *
+ * Names are lowercase ASCII and no name can match where another does (`strong`/`b`, `em`/`i`,
+ * `ul`/`ol`, `h1`…`h6`, `table`), so the alternation order never matters.
+ */
+export function replacePairedElements(
+  s: string,
+  names: readonly string[],
+  rule: OpenTagRule,
+  tempered: boolean,
+  rep: (name: string, inner: string) => string,
+): string {
+  // Most calls are on one table cell's text with no tag at all.
+  if (s.indexOf("<") === -1) return s;
+  const opens = openStarts(s, names, rule);
+  if (opens.pos.length === 0) return s;
+  const closes = names.map((n) => closeTags(s, n));
+  // The tempered body may not cross `<name\b` of any family name — exactly the open candidates.
+  const blockers = tempered ? opens.pos : null;
+  let out = "";
+  let cursor = 0;
+  let gt = -1;
+  for (let t = 0; t < opens.pos.length; t++) {
+    const pos = opens.pos[t]!;
+    if (pos < cursor) continue;
+    const ni = opens.name[t]!;
+    const from = pos + 1 + names[ni]!.length;
+    // `[^>]*>`: the first `>` after the name. Cached — candidates only move right. None → no later
+    // open tag can end either.
+    if (gt < from) {
+      gt = s.indexOf(">", from);
+      if (gt === -1) break;
+    }
+    const q = gt + 1;
+    const c = closes[ni]!;
+    const k = lowerBound(c.pos, q);
+    if (k === c.pos.length) continue;
+    const closePos = c.pos[k]!;
+    if (blockers) {
+      const b = lowerBound(blockers, q);
+      if (b < blockers.length && blockers[b]! < closePos) continue;
+    }
+    out += s.slice(cursor, pos) + rep(s.slice(pos + 1, from), s.slice(q, closePos));
+    cursor = c.end[k]!;
+  }
+  return cursor === 0 ? s : out + s.slice(cursor);
+}
+
+/** One `<name …>` segment of {@link openSegments}. */
+export type OpenSegment = { name: string; attrs: string; body: string };
+
+/**
+ * `[...s.matchAll(/<(n1|n2|…)\b([^>]*)>([\s\S]*?)(?=STOP|$)/gi)]` as `{name, attrs, body}`, where
+ * `stops` are the ascending positions at which STOP matches (the lookahead).
+ */
+function openSegments(s: string, names: readonly string[], stops: readonly number[]): OpenSegment[] {
+  const opens = openStarts(s, names, "boundary");
+  const out: OpenSegment[] = [];
+  let cursor = 0;
+  let gt = -1;
+  for (let t = 0; t < opens.pos.length; t++) {
+    const pos = opens.pos[t]!;
+    if (pos < cursor) continue;
+    const from = pos + 1 + names[opens.name[t]!]!.length;
+    if (gt < from) {
+      gt = s.indexOf(">", from);
+      if (gt === -1) break;
+    }
+    const q = gt + 1;
+    const k = lowerBound(stops, q);
+    const end = k < stops.length ? stops[k]! : s.length;
+    out.push({ name: s.slice(pos + 1, from), attrs: s.slice(from, gt), body: s.slice(q, end) });
+    cursor = end;
+  }
+  return out;
+}
+
+function mergedPositions(lists: readonly number[][]): number[] {
+  return mergeStarts(lists).pos;
+}
+
+/** R16 table rows: `inner.matchAll(/<tr\b[^>]*>([\s\S]*?)(?=<tr\b|<\/table|$)/gi)` → bodies. */
+export function tableRows(inner: string): string[] {
+  const stops = mergedPositions([boundaryStarts(inner, "tr"), positionsCI(inner, "</table")]);
+  return openSegments(inner, ["tr"], stops).map((seg) => seg.body);
+}
+
+/** R16 cells: `row.matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)(?=<(?:td|th)\b|<\/tr\s*>|$)/gi)`. */
+export function tableCells(row: string): OpenSegment[] {
+  const stops = mergedPositions([boundaryStarts(row, "td"), boundaryStarts(row, "th"), closeTags(row, "tr").pos]);
+  return openSegments(row, ["td", "th"], stops);
+}
+
+/** `s.split(/<name\b[^>]*>/i)` (split matches like a global regex: leftmost, non-overlapping). */
+export function splitAtOpenTags(s: string, name: string): string[] {
+  const out: string[] = [];
+  let cursor = 0;
+  let gt = -1;
+  for (const pos of boundaryStarts(s, name)) {
+    if (pos < cursor) continue;
+    const from = pos + 1 + name.length;
+    if (gt < from) {
+      gt = s.indexOf(">", from);
+      if (gt === -1) break;
+    }
+    out.push(s.slice(cursor, pos));
+    cursor = gt + 1;
+  }
+  out.push(s.slice(cursor));
+  return out;
+}
+
+/** Length of the leading JS-space run (what a leading-`\s*` regex captures). */
+export function leadingSpaceLength(s: string): number {
+  let i = 0;
+  while (i < s.length && isJsSpace(s.charCodeAt(i))) i++;
+  return i;
+}
+
+/** Length of `/\s*$/.exec(s)[0]` — the regex is O(k²) on a long inner run of spaces. */
+export function trailingSpaceLength(s: string): number {
+  let i = s.length;
+  while (i > 0 && isJsSpace(s.charCodeAt(i - 1))) i--;
+  return s.length - i;
+}
+
+/**
+ * R16 `markdownTextLength`'s pipe-collapsing replace (`\s*`, `|`, `\s*` → one space, global) —
+ * the regex is O(k²) on a long run of spaces without a `|`.
+ */
+export function collapsePipes(s: string): string {
+  let out = "";
+  let p = 0; // start of the text not yet copied
+  for (let i = s.indexOf("|"); i !== -1; i = s.indexOf("|", i)) {
+    // Leading `\s*`: back over spaces, but never into the previous match.
+    let a = i;
+    while (a > p && isJsSpace(s.charCodeAt(a - 1))) a--;
+    let b = i + 1;
+    while (b < s.length && isJsSpace(s.charCodeAt(b))) b++;
+    out += s.slice(p, a) + " ";
+    p = b;
+    i = b;
+  }
+  return out + s.slice(p);
+}

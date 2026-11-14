@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JD_FETCH_MIN_CHARS, JD_FETCH_RAW_TEXT_MAX } from "@/lib/contracts/jd-fetch";
-import { JdFetchRateLimiter, bodyFrameUrl, decodeHtml, extractJobPosting, fetchJobDescription, htmlToText } from "./fetch";
+import { JdFetchRateLimiter, bodyFrameUrl, decodeHtml, extractJobPosting, fetchJobDescription, htmlToMarkdown } from "./fetch";
 import type { LookupFn } from "./ssrf";
 
 /**
@@ -53,9 +53,9 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string> {
 const LONG_KO = "백엔드 개발자를 모십니다. 자격 요건과 우대 사항을 확인해 주세요. ".repeat(12);
 const page = (bodyHtml: string) => `<!doctype html><html><head><title>t</title></head><body>${bodyHtml}</body></html>`;
 
-describe("htmlToText", () => {
+describe("htmlToMarkdown", () => {
   it("drops script/style/nav/footer, keeps one line per block and decodes entities", () => {
-    const text = htmlToText(
+    const text = htmlToMarkdown(
       page(
         `<nav>메뉴 홈 로그인</nav><script>var x = "지원하기";</script><style>.a{}</style>` +
           `<div class="footer">회사소개 이용약관</div>` +

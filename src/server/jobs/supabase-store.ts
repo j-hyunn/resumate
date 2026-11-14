@@ -1,5 +1,5 @@
-import { StoredAiJobProgressSchema } from "@/lib/contracts/ai";
-import { AI_PROVIDERS, CONNECTION_TIERS, type AiErrorCode, type AiJobStatus, type AiJobType, type AiProvider, type ConnectionTier, type ModelTier } from "@/lib/contracts/enums";
+import { StoredAiJobProgressSchema, type JobErrorCode } from "@/lib/contracts/ai";
+import { AI_PROVIDERS, CONNECTION_TIERS, type AiJobStatus, type AiJobType, type AiProvider, type ConnectionTier, type ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import type { Json, TablesUpdate } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
@@ -88,7 +88,7 @@ export function toJobRecord(row: Row): JobRecord {
     nextRunAt: row.next_run_at,
     retryAfter: row.retry_after,
     quotaResetsAt: row.quota_resets_at,
-    errorCode: row.error_code as AiErrorCode | null,
+    errorCode: row.error_code as JobErrorCode | null,
     inputHash: row.input_hash,
     cancelRequestedAt: row.cancel_requested_at,
     heartbeatAt: row.heartbeat_at,

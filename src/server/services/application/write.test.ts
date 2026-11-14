@@ -28,7 +28,7 @@ describe("updateFailedJdRawText (Q53-2, DM 2.6.1)", () => {
         args: { p_application_project_id: ID, p_raw_text: normalized, p_raw_text_hash: sha256Hex(normalized), p_sentences: splitJdSentences(normalized) },
       },
     ]);
-    expect(result).toEqual({ applicationProjectId: ID, jobDescriptionId: JD, extractionStatus: "pending", rawTextEditedAt: "2026-11-02T00:00:00Z", aiRunAllowed: false, warnings: ["short_jd"] });
+    expect(result).toEqual({ applicationProjectId: ID, jobDescriptionId: JD, rawTextEditedAt: "2026-11-02T00:00:00Z", aiRunAllowed: false, warnings: ["short_jd"] });
   });
 
   it("reports ai_run_allowed but never starts anything", async () => {
@@ -57,19 +57,33 @@ describe("updateFailedJdRawText (Q53-2, DM 2.6.1)", () => {
   });
 });
 
-describe("createApplicationProject gate (Q53-1, DM 2.11.7 path 6)", () => {
-  it.each(["key_invalid", "ai_consent_required"])("%s → 409, no result", async (code) => {
-    const db = fakeSupabase({}, () => {
-      throw raised(code);
+describe("createApplicationProject (R17: raw text only, no AI gate)", () => {
+  it("sends the 9-arg RPC (no p_preview_job_id) and returns no extraction / preview fields", async () => {
+    const db = fakeSupabase({}, () => ({ application_project_id: ID, job_description_id: JD, name: "새 자기소개서 (2026-11-14)", name_source: "default", ai_run_allowed: true, created: true }));
+    const result = await createApplicationProject(db.client as UserSupabaseClient, CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, companyName: "가나다" }));
+    expect(Object.keys(db.rpcCalls[0]!.args).sort()).toEqual(["p_company_name", "p_id", "p_raw_text", "p_raw_text_hash", "p_sentences"]);
+    expect(result).toEqual({
+      applicationProjectId: ID,
+      jobDescriptionId: JD,
+      name: "새 자기소개서 (2026-11-14)",
+      nameSource: "default",
+      displayName: "새 자기소개서 (2026-11-14)",
+      aiRunAllowed: true,
+      created: true,
+      warnings: expect.any(Array),
     });
-    await expect(createApplicationProject(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code, status: 409 });
+  });
+
+  it("previewJobId is no longer part of the input", () => {
+    const parsed = CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, previewJobId: ID });
+    expect(parsed).not.toHaveProperty("previewJobId");
   });
 });
 
 // ---------------- UQ-759 (R15 후속 4): the source URL ----------------
 
 describe("createApplicationProject source URL (UQ-759)", () => {
-  const created = { application_project_id: ID, job_description_id: JD, name: null, name_source: null, extraction_status: "pending", ai_run_allowed: false, created: true, preview_applied: false, preview_skip_reason: null };
+  const created = { application_project_id: ID, job_description_id: JD, name: null, name_source: null, ai_run_allowed: false, created: true };
   const parse = (sourceUrl: string) => CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, sourceUrl });
 
   it.each([

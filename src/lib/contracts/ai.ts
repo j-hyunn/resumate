@@ -7,12 +7,14 @@ import {
   CONNECTION_TIERS,
   ERROR_CATEGORIES,
   FAILURE_CAUSES,
+  LEGACY_AI_ERROR_CODES,
   MODEL_TIERS,
   USAGE_FEATURES,
   type AiErrorCode,
   type ErrorCategory,
   type FailureCause,
 } from "./enums";
+import type { LegacyAiErrorCode } from "./errors";
 
 /**
  * AI contracts shared by the server (job runner, SSE routes) and the frontend
@@ -34,7 +36,6 @@ const CATEGORY_BY_CODE: Record<AiErrorCode, ErrorCategory> = {
   input_too_long: "input",
   safety_blocked: "input",
   insufficient_data: "input",
-  not_a_jd: "input",
   schema_invalid: "system",
   timeout: "system",
   stalled: "system",
@@ -52,14 +53,38 @@ const FAILURE_CAUSE_BY_CODE: Partial<Record<AiErrorCode, FailureCause>> = {
   safety_blocked: "input_rejected",
 };
 
+/**
+ * R17 (QA-02): pre-R17 job rows may still carry `not_a_jd` (AI-01's refusal). One rule everywhere:
+ * an **input** failure with no retry (category `input`, no failure cause, `isManuallyRetryable`
+ * false → the runner's retry answers 409 `ai_job_not_retryable`), its own message, and the code
+ * kept as is in job-row shapes (`AiJobErrorSchema`, `AiFailure`). New runs never produce it.
+ */
+export const LEGACY_AI_ERROR_MESSAGES: Record<LegacyAiErrorCode, string> = {
+  not_a_jd: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요.",
+};
+
+/** A job row's error code: current codes plus the legacy ones (`ai_jobs.error_code` CHECK). */
+export type JobErrorCode = AiErrorCode | LegacyAiErrorCode;
+export const JobErrorCodeSchema = z.enum([...AI_ERROR_CODES, ...LEGACY_AI_ERROR_CODES]);
+
+export function isLegacyAiErrorCode(code: string | null | undefined): code is LegacyAiErrorCode {
+  return (LEGACY_AI_ERROR_CODES as readonly string[]).includes(code ?? "");
+}
+
 /** Same mapping as the DB generated column `error_category` (backend-qa compares the two). */
-export function errorCategoryOf(code: AiErrorCode): ErrorCategory {
-  return CATEGORY_BY_CODE[code];
+export function errorCategoryOf(code: JobErrorCode): ErrorCategory {
+  if (isLegacyAiErrorCode(code)) return "input";
+  return CATEGORY_BY_CODE[code] ?? "system";
+}
+
+/** Message for a job row's error code (legacy codes have their own table). */
+export function jobErrorMessageOf(code: JobErrorCode): string {
+  return isLegacyAiErrorCode(code) ? LEGACY_AI_ERROR_MESSAGES[code] : AI_ERROR_MESSAGES[code];
 }
 
 /** Same mapping as the DB generated column `failure_cause`: F-AI-08 cause, null for the other codes. */
-export function failureCauseOf(code: AiErrorCode): FailureCause | null {
-  return FAILURE_CAUSE_BY_CODE[code] ?? null;
+export function failureCauseOf(code: JobErrorCode): FailureCause | null {
+  return isLegacyAiErrorCode(code) ? null : (FAILURE_CAUSE_BY_CODE[code] ?? null);
 }
 
 /**
@@ -67,7 +92,7 @@ export function failureCauseOf(code: AiErrorCode): FailureCause | null {
  * failure except the input category (fix the input and start again). Key and
  * billing causes are retryable once the user fixed the connection.
  */
-export function isManuallyRetryable(code: AiErrorCode): boolean {
+export function isManuallyRetryable(code: JobErrorCode): boolean {
   return errorCategoryOf(code) !== "input" && code !== "canceled";
 }
 
@@ -89,7 +114,6 @@ export const AI_ERROR_MESSAGES: Record<AiErrorCode, string> = {
   input_too_long: "입력이 너무 길어 AI가 처리할 수 없습니다.",
   safety_blocked: "AI 공급자의 안전 정책으로 요청이 처리되지 않았습니다.",
   insufficient_data: "커리어 데이터가 부족합니다.",
-  not_a_jd: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요.",
   schema_invalid: "AI 응답을 처리하지 못했습니다. 다시 시도해 주세요.",
   timeout: "AI 작업 시간이 초과되었습니다. 다시 시도해 주세요.",
   stalled: "AI 작업이 중단되었습니다. 다시 시도해 주세요.",
@@ -138,7 +162,8 @@ export const AiJobProgressSchema = z.object({
 export type AiJobProgress = z.infer<typeof AiJobProgressSchema>;
 
 export const AiJobErrorSchema = z.object({
-  code: AiErrorCodeSchema,
+  /** R17 (QA-02): a pre-R17 row may carry a legacy code (`not_a_jd`). */
+  code: JobErrorCodeSchema,
   category: ErrorCategorySchema,
   /** F-AI-08 cause (screens pick the cause copy by it); null for system / key_missing codes. */
   failureCause: FailureCauseSchema.nullable(),

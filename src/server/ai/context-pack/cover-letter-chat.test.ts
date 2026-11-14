@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { KO_JD_HASH } from "../__fixtures__/AI-02/insight";
 import { coverLetterContext, questionRow } from "../__fixtures__/S7/cover-letter-chat";
 import {
   firstDraftChipLabel,
@@ -17,8 +18,13 @@ describe("buildCoverLetterChatContext", () => {
     const ctx = coverLetterContext();
     expect(ctx.packText).toContain("EXP-1");
     expect(ctx.packText).toContain("PRJ-1");
-    // JD 요건은 REQ-n, 소개 문장은 S-n으로 따로 들어온다.
-    expect(ctx.jdText).toContain("REQ-1");
+    // (R17) JD는 원문 문장 전체(S-n)뿐이다 — 요건 REQ-n·회사 소개 구분 없음.
+    expect(ctx.jdText).not.toMatch(/REQ-\d/);
+    const sids = [...ctx.aliases.values()].filter((e) => e.sourceType === "jd_sentence").map((e) => e.alias);
+    expect(sids.length).toBeGreaterThan(10);
+    for (const sid of sids) expect(ctx.jdText).toContain(`${sid}: `);
+    expect([...ctx.aliases.values()].some((e) => e.sourceType === "jd_requirement")).toBe(false);
+    expect(ctx.jdTextHash).toBe(KO_JD_HASH);
     expect(ctx.careerSnapshotHash).toMatch(/^[0-9a-f]{64}$/);
   });
 

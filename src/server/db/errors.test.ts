@@ -62,7 +62,7 @@ describe("W0 refusals", () => {
     expect(mapDbError({ code: "P0001", message: "jd_has_results", details: "x" }).details).toBeUndefined();
   });
 
-  it.each(["key_invalid", "ai_consent_required"])("create_application_project gate %s → 409 (Q53-1)", (raise) => {
+  it.each(["key_invalid", "ai_consent_required"])("connection gate raise %s → 409 (Q53-1; R17: no longer raised by create_application_project)", (raise) => {
     expect(mapDbError({ code: "P0001", message: raise })).toMatchObject({ code: raise, status: 409 });
   });
 

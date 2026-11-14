@@ -1,5 +1,5 @@
 import { InsightView, type RequirementInfo } from "@/components/applications/insight-view"
-import { parseMatchStage } from "@/components/applications/insight-parse"
+import { parseMatchStage, requirementsByIdFrom } from "@/components/applications/insight-parse"
 import { getApplicationProject, getInsightState, getJobDescription } from "@/lib/data/applications"
 import { getProject } from "@/lib/data/career"
 import { getEvidence } from "@/lib/data/evidence"
@@ -51,8 +51,10 @@ export async function InsightTab({ applicationProjectId: id, searchParams: sp }:
     const project = await getProject(p.project_id)
     if (project) projectNames[p.project_id] = project.name ?? "이름 없는 프로젝트"
   }
-  const requirements: Record<string, RequirementInfo> = {}
-  for (const r of jd?.requirements ?? []) requirements[r.id] = { content: r.content, category: r.category, importance: r.importance }
+  const legacyRequirements: Record<string, RequirementInfo> = {}
+  for (const r of jd?.requirements ?? []) legacyRequirements[r.id] = { content: r.content, category: r.category, importance: r.importance }
+  // R17: a v2 insight carries its own requirements (`M{n}`); v1 reads the legacy jd_requirements rows
+  const requirements: Record<string, RequirementInfo> = requirementsByIdFrom([...(latest?.result?.requirement_matches ?? []), ...(partialMatches ?? [])], legacyRequirements)
   const careerChanged = Object.values(evidence).some((list) => list.some((e) => e.status !== "ok"))
   const failed = previewErrorCode(state)
 

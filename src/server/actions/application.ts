@@ -29,8 +29,8 @@ import * as writes from "@/server/services/application/write";
  * S5 application project Server Actions (DM §7 보드 조회·단계 이동·결과 기록,
  * F-AP-01·02·05, F-ST-01~05; UX S-13, S-14, S-31, S-15, S-39, C-12~C-14,
  * FL-06). Thin: consent-gated user session → zod → service. None of these
- * calls an AI provider (requirement extraction is the sync route
- * `POST /api/application-projects/{id}/jd-extraction`).
+ * calls an AI provider (R17: the JD is stored and used as raw text; there is
+ * no extraction route any more).
  */
 
 /** S-14 만들기: project + JD (raw text, server sentence split) + `created` stage event. */

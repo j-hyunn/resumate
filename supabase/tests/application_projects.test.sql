@@ -45,8 +45,7 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '에이비씨페이 백엔드' || chr(10) || 'Java 경험',
             'hash1', (select v from t_s), null, null, null, '2026-11-30') - 'job_description_id',
           '{"application_project_id":"a0000000-aaaa-0000-0000-000000000001","name":null,"name_source":"default",
-            "extraction_status":"pending","ai_run_allowed":false,"created":true,
-            "preview_applied":false,"preview_skip_reason":null}'::jsonb
+            "ai_run_allowed":false,"created":true}'::jsonb
             || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
           'no key, no company/position -> default name (KST date)');
 select is((select array[stage, coalesce(stage_outcome, '-'), deadline::text] from public.application_projects
@@ -78,8 +77,7 @@ select is(public.create_application_project('a0000000-aaaa-0000-0000-00000000000
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, null, '  내 지원  ', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":true,
-            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
+          '{"name":"내 지원","name_source":"user","ai_run_allowed":false,"created":true}'::jsonb,
           'user name wins');
 -- R15 (CF-A7 `[가정]`): the company name is cut to its first 94 characters (' 자기소개서' is 6) -> 100 total.
 select is(char_length(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h',
@@ -90,9 +88,8 @@ select is(char_length(public.create_application_project('a0000000-aaaa-0000-0000
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '다른 원문', 'h2',
             '[{"sid":"S1","text":"다른","start":0,"end":2}]', null, null, '다른 이름', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","extraction_status":"pending","ai_run_allowed":false,"created":false,
-            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
-          'replay with the same id returns the existing row (created=false); the preview is not applied again');
+          '{"name":"내 지원","name_source":"user","ai_run_allowed":false,"created":false}'::jsonb,
+          'replay with the same id returns the existing row (created=false)');
 select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000004'),
           1, 'replay did not create a second JD');
 select is((select count(*)::int from public.application_stage_events where application_project_id = 'a0000000-aaaa-0000-0000-000000000004'),
@@ -109,9 +106,9 @@ select lives_ok($$select public.create_application_project(gen_random_uuid(), re
                 'raw text of exactly 50,000 accepted');
 select throws_ok($$select public.create_application_project(gen_random_uuid(), '원문', ' ', '[{"sid":"S1","text":"x","start":0,"end":1}]')$$,
                  'P0001', 'invalid_raw_text_hash', 'blank hash');
--- QA-S5-01: a JD that splits into 0 sentences is still saved (extraction then ends as not_a_jd).
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000009', '----', 'h', '[]') ->> 'extraction_status',
-          'pending', 'empty sentences accepted (raw JD always saved)');
+-- QA-S5-01: a JD that splits into 0 sentences is still saved.
+select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000009', '----', 'h', '[]') ->> 'created',
+          'true', 'empty sentences accepted (raw JD always saved)');
 select is((select sentences from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000009'),
           '[]'::jsonb, 'empty sentences stored');
 select throws_ok($$select public.create_application_project(gen_random_uuid(), '원문', 'h', null)$$,
@@ -184,17 +181,15 @@ set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","r
 select is(public.create_application_project('b0000000-aaaa-0000-0000-000000000001', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션', null, null)
             - 'job_description_id' - 'application_project_id',
-          -- R15 (CF-9 ★): a company name names the application right away, key or no key. Only without one
-          -- does the name still wait for the extraction.
-          '{"name":"회사 자기소개서","name_source":"user","extraction_status":"pending","ai_run_allowed":true,
-            "created":true,"preview_applied":false,"preview_skip_reason":null}'::jsonb,
+          -- R15 (CF-9 ★): a company name names the application right away, key or no key.
+          '{"name":"회사 자기소개서","name_source":"user","ai_run_allowed":true,"created":true}'::jsonb,
           'usable key + company -> "{회사명} 자기소개서" (user) right away');
 select is(public.create_application_project('b0000000-aaaa-0000-0000-00000000000b', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, '포지션', null, null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":null,"name_source":null,"extraction_status":"pending","ai_run_allowed":true,"created":true,
-            "preview_applied":false,"preview_skip_reason":null}'::jsonb,
-          'usable key, no company -> the name still waits for the extraction (null)');
+          '{"name_source":"default","ai_run_allowed":true,"created":true}'::jsonb
+            || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
+          'usable key, no company -> default name right away (R17 [가정 R17-8]: no extraction to wait for)');
 select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h',
                    '[{"sid":"S1","text":"원문","start":0,"end":2}]')$$,
                  'P0001', 'application_project_id_conflict', 'another user''s id refused');
@@ -215,14 +210,14 @@ select throws_ok($$select public.move_application_stage('a0000000-aaaa-0000-0000
 select throws_ok($$select public.set_application_outcome('a0000000-aaaa-0000-0000-000000000001', 'passed')$$,
                  'P0001', 'application_project_not_found', 'B cannot set A outcome');
 
--- Q53-1: an invalid active key refuses creation up front (key-less gate tests: create_application_project_gate.test.sql).
+-- Q53-1 revised in R17 [가정 R17-9]: an invalid active key no longer refuses creation (no AI runs here).
 reset role;
 update public.ai_provider_keys set status = 'invalid' where id = 'b0000000-9999-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}';
-select throws_ok($$select public.create_application_project('b0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션')$$,
-          'P0001', 'key_invalid', 'invalid key -> refused before insert (Q53-1)');
+select is(public.create_application_project('b0000000-aaaa-0000-0000-000000000002', '원문', 'h',
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션') ->> 'ai_run_allowed',
+          'false', 'invalid key -> saved, AI not allowed (R17)');
 
 -- Anonymous callers.
 reset role;

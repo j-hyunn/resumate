@@ -1,25 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { AiError, ProviderError } from "@/server/ai/errors";
 import type { Llm } from "@/server/ai/llm";
-import type { JdRequirementInput } from "@/server/ai/context-pack/jd";
 import { FREE_TIER_MIN_INTERVAL_MS } from "@/server/jobs/constants";
 import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext, type ProviderContext } from "@/server/jobs/provider-context";
 import { createJobRunner } from "@/server/jobs/runner";
 import { toAiJobStatusResponse } from "@/server/jobs/status";
+import { AiJobStatusResponseSchema, errorCategoryOf, isManuallyRetryable } from "@/lib/contracts/ai";
 import type { JobTypeDefinition } from "@/server/jobs/types";
-import type { EnsureJdResult } from "@/server/services/application/extraction";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, memoryScope, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { InsightRpcError, type InsightInputs, type InsightStore } from "./db";
-import { batchIds, createInsightJobDefinition, pickFailure, savedBatches, type InsightBatch, type InsightPipeline } from "./job";
+import { createInsightJobDefinition, hasPreR17Checkpoint, type InsightMatchStage, type InsightPipeline } from "./job";
 import { insightJobPartial } from "./partial";
 import { AppError } from "@/lib/contracts/errors";
 import { emptyCareerRows } from "@/server/ai/context-pack/career-rows";
 
 /**
- * S6 insight job on the REAL runner (memory stores, scripted provider through
- * the real createLlm): paid parallel batches, free-tier one-batch-per-run with
- * call spacing, per-batch saving so retries never re-call a finished batch,
- * D-30 extraction first, stale runs, cancel, partial results.
+ * S6 insight job on the REAL runner (memory stores, scripted provider through the real createLlm).
+ * R17: the JD is its raw text — stage 1 is ONE call (no batches, no extraction first); the JD text
+ * hash is fixed at prepare and a change mid-run ends the job `stalled`.
  */
 
 const USER = "00000000-0000-4000-8000-000000000001";
@@ -29,28 +27,22 @@ const PAID: ProviderContext = { provider: "anthropic", connectionTier: "paid", k
 const FREE: ProviderContext = { provider: "gemini", connectionTier: "free", keyStatus: "valid" };
 const OK: ScriptedResponse = { json: { ok: true } };
 
-function requirements(n: number): JdRequirementInput[] {
-  return Array.from({ length: n }, (_, i) => ({
-    id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
-    category: "required",
-    content: `요건 ${i + 1}`,
-    importance: "normal",
-    source_sids: [],
-    sort_order: i,
-    updated_at: null,
-  }));
-}
-
-function inputs(n: number): InsightInputs {
+function inputs(rawTextHash = "jd-h"): InsightInputs {
   return {
-    jd: { jobDescriptionId: "jd-1", updatedAt: null, extractionStatus: "succeeded", extractionJobId: null, rawTextEditedAt: null, sentences: [], positionTitle: null, seniorityLabel: null },
-    requirements: requirements(n),
+    jd: {
+      jobDescriptionId: "jd-1",
+      updatedAt: null,
+      rawTextHash,
+      rawTextEditedAt: null,
+      sentences: [{ sid: "S1", text: "Spring 경험", start: 0, end: 9 }],
+      positionTitle: null,
+    },
     careerRows: emptyCareerRows({ year: 2026, month: 11 }),
   };
 }
 
-type FakeCtx = { ids: string[] };
-type FakeBatch = InsightBatch & { v: 1 };
+type FakeCtx = { jdTextHash: string };
+type FakeMatch = InsightMatchStage & { v: 2 };
 
 function call(llm: Llm, callKey: string, signal: AbortSignal) {
   return llm.complete({ feature: "AI-02.test", promptVersion: "t", callKey, systemBlocks: [], userBlocks: [{ text: "u" }], outputSchema: null, signal });
@@ -58,21 +50,21 @@ function call(llm: Llm, callKey: string, signal: AbortSignal) {
 
 type FakeAttempt = { kind: "first" | "regen"; violations: string[] };
 
-function fakePipeline(calls: string[], firstViolations: string[] = []): InsightPipeline<FakeCtx, FakeBatch, FakeAttempt> {
+function fakePipeline(calls: string[], firstViolations: string[] = []): InsightPipeline<FakeCtx, FakeMatch, FakeAttempt> {
   return {
     promptVersion: "ai-02.test",
     tier: "default",
-    batchSize: 8,
-    buildContext: (i) => ({ ids: i.requirements.map((r) => r.id) }),
-    requirementIds: (c) => c.ids,
-    hashes: () => ({ careerSnapshotHash: "career-h", requirementsHash: "req-h" }),
+    buildContext: (i) => ({ jdTextHash: i.jd.rawTextHash }),
+    hashes: (c) => ({ careerSnapshotHash: "career-h", jdTextHash: c.jdTextHash }),
     async match(input, deps) {
-      calls.push(`match.${input.batchIndex + 1}`);
-      await call(deps.llm, `insight.match.${input.batchIndex + 1}`, deps.signal);
+      calls.push("match");
+      await call(deps.llm, "insight.match", deps.signal);
       return {
-        v: 1,
-        batchIndex: input.batchIndex,
-        matches: input.requirementIds.map((id) => ({ requirement_id: id, status: "met" as const, rationale: "r", missing_aspect: null })),
+        v: 2,
+        jdTextHash: input.context.jdTextHash,
+        matches: [
+          { requirement_id: "M1", requirement: { content: "Spring", category: "required", importance: "high", sentence_ids: ["S1"] }, status: "met" as const, rationale: "r", missing_aspect: null },
+        ],
       };
     },
     async synthesize(_input, deps) {
@@ -87,7 +79,7 @@ function fakePipeline(calls: string[], firstViolations: string[] = []): InsightP
       return { kind: "regen", violations: [] };
     },
     finalize: (input) => ({
-      payload: { batches: input.batches.length, provider: input.provider, ...(input.regen ? { regen: true } : {}), snapshot: input.snapshot },
+      payload: { matches: input.match.matches.length, provider: input.provider, ...(input.regen ? { regen: true } : {}), snapshot: input.snapshot },
       inputHash: "input-h",
     }),
     inputHash: () => "input-h",
@@ -114,12 +106,13 @@ class FakeInsightStore implements InsightStore {
 type SetupOpts = {
   context?: ProviderContext;
   responses?: ScriptedResponse[];
-  reqs?: number;
-  ensure?: () => Promise<EnsureJdResult>;
-  failMatch?: (batchIndex: number) => Error | null;
+  /** null = the project / JD is gone. */
+  noJd?: boolean;
+  /** Throw this from the match call instead of calling (once per entry). */
+  failMatch?: () => Error | null;
   stepTimeoutMs?: number;
-  /** Requirement count the DB returns after the first load (requirements edited mid-run). */
-  reqsLater?: number;
+  /** JD raw-text hash the DB returns after the first load (raw text edited mid-run). */
+  jdHashLater?: string;
   /** V-5 violations of the first synthesis answer (→ synthesize_regen calls). */
   firstViolations?: string[];
   /** Make the regeneration call throw this once. */
@@ -134,7 +127,6 @@ function setup(opts: SetupOpts = {}) {
   const scripted = createScriptedAdapter(context.provider, opts.responses ?? [], clock.ms);
   const insights = new FakeInsightStore();
   const calls: string[] = [];
-  const ensureCalls: string[] = [];
   let loads = 0;
   const base = fakePipeline(calls, opts.firstViolations);
   let regenFailed = false;
@@ -142,9 +134,9 @@ function setup(opts: SetupOpts = {}) {
     pipeline: {
       ...base,
       async match(input, deps) {
-        const err = opts.failMatch?.(input.batchIndex) ?? null;
+        const err = opts.failMatch?.() ?? null;
         if (err) {
-          calls.push(`match.${input.batchIndex + 1}`);
+          calls.push("match");
           throw err;
         }
         return base.match(input, deps);
@@ -159,13 +151,10 @@ function setup(opts: SetupOpts = {}) {
       },
     },
     storeFor: () => insights,
-    ensureJd: async (ctx, id) => {
-      ensureCalls.push(`${ctx.provider}:${ctx.connectionTier}:${id}`);
-      return opts.ensure ? opts.ensure() : { status: "already_extracted" };
-    },
     loadInputs: async () => {
       loads++;
-      return inputs(loads > 1 && opts.reqsLater !== undefined ? opts.reqsLater : (opts.reqs ?? 20));
+      if (opts.noJd) return null;
+      return inputs(loads > 1 && opts.jdHashLater !== undefined ? opts.jdHashLater : "jd-h");
     },
     now: clock.now,
   });
@@ -208,63 +197,53 @@ function setup(opts: SetupOpts = {}) {
     await runner.getStatus({ jobId, userId: USER });
     await drain();
   }
-  return { clock, store, usage, scripted, insights, calls, ensureCalls, runner, drain, start, wake, job: (id: string) => store.jobs.get(id)! };
+  return { clock, store, usage, scripted, insights, calls, runner, drain, start, wake, job: (id: string) => store.jobs.get(id)! };
 }
 
-describe("insight job — paid tier (parallel batches)", () => {
-  it("runs prepare → match (3 batches in one step) → synthesize → validate; one usage record per call", async () => {
-    const h = setup({ responses: [OK, OK, OK, OK], reqs: 20 });
+describe("insight job — paid tier (one stage-1 call, R17)", () => {
+  it("runs prepare → match (1 call) → synthesize → validate; one usage record per call", async () => {
+    const h = setup({ responses: [OK, OK] });
     const jobId = await h.start();
     await h.drain();
     const job = h.job(jobId);
     expect(job.status).toBe("succeeded");
-    expect(h.calls.sort()).toEqual(["match.1", "match.2", "match.3", "synthesize"]);
-    expect(h.usage.forJob(jobId)).toHaveLength(4);
-    expect(h.usage.forJob(jobId).map((r) => r.callKey).sort()).toEqual(["insight.match.1", "insight.match.2", "insight.match.3", "insight.synthesize"]);
+    expect(h.calls).toEqual(["match", "synthesize"]);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match", "insight.synthesize"]);
     expect(h.insights.begins).toEqual([jobId]);
     expect(h.insights.completes).toEqual([
-      { runGeneration: job.runGeneration, payload: { batches: 3, provider: "anthropic", snapshot: { careerSnapshotHash: "career-h", requirementsHash: "req-h" } } },
+      { runGeneration: job.runGeneration, payload: { matches: 1, provider: "anthropic", snapshot: { careerSnapshotHash: "career-h", jdTextHash: "jd-h" } } },
     ]);
+    expect(job.stepOutputs.prepare).toEqual({ insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "career-h", jdTextHash: "jd-h" } });
     expect(job.stepOutputs.synthesize_regen).toEqual({ regen: null });
     expect(job.stepOutputs.validate).toEqual({ insightId: INSIGHT_ID, versionNo: 1 });
-    // The partial batches were dropped once the stage completed.
-    expect(job.meta.partials).toBeUndefined();
-    expect(h.ensureCalls).toEqual([`anthropic:paid:${PROJECT}`]);
+    // S-16 partial once the match checkpoint exists: the requirement travels with the verdict.
+    const partial = toAiJobStatusResponse(job).partial as ReturnType<typeof insightJobPartial>;
+    expect(partial).toMatchObject({ kind: "insight_matches", batchesDone: 1, batchesTotal: 1 });
+    expect(partial!.requirementMatches[0]).toMatchObject({ requirementId: "M1", requirement: { content: "Spring", sentenceIds: ["S1"] }, status: "met" });
   });
 
-  it("a failed batch is retried alone; finished batches are not called again (C-11.3 per call)", async () => {
-    // batches 1 and 3 succeed, batch 2 hits provider_unavailable → scheduled retry of the step.
-    const h = setup({ responses: [OK, { error: "provider_unavailable" }, OK, OK, OK], reqs: 20 });
+  it("a retryable match failure is scheduled (next_run_at) and the wake calls match once more", async () => {
+    const h = setup({ responses: [{ error: "provider_unavailable" }, OK, OK] });
     const jobId = await h.start();
     await h.drain();
     let job = h.job(jobId);
     expect(job.status).toBe("queued");
     expect(job.nextRunAt).not.toBeNull();
-    expect(job.progress).toMatchObject({ stage: "match", done: 2, total: 3 });
-    const saved = job.meta.partials?.match as { batches: FakeBatch[] };
-    expect(saved.batches.map((b) => b.batchIndex)).toEqual([0, 2]);
-    // S-16 partial: verdicts of the saved batches only.
-    const partial = toAiJobStatusResponse(job).partial as ReturnType<typeof insightJobPartial>;
-    expect(partial).toMatchObject({ kind: "insight_matches", batchesDone: 2, batchesTotal: 3 });
-    expect(partial!.requirementMatches).toHaveLength(12); // batches 1 (8) + 3 (4)
-
+    expect(insightJobPartial(job)).toBeNull();
     await h.wake(jobId);
     job = h.job(jobId);
     expect(job.status).toBe("succeeded");
-    expect(h.calls.filter((c) => c.startsWith("match"))).toHaveLength(4); // 3 + the one retry
-    expect(h.calls.filter((c) => c === "match.2")).toHaveLength(2);
-    expect(h.usage.forJob(jobId)).toHaveLength(5); // failed call recorded too
+    expect(h.calls).toEqual(["match", "match", "synthesize"]);
+    expect(h.usage.forJob(jobId)).toHaveLength(3); // the failed call is recorded too
     expect(h.insights.completes).toHaveLength(1);
   });
 
-  it("a batch that finally fails fails the job (no partial insight); manual retry re-calls only that batch", async () => {
+  it("a match that finally fails fails the job; a manual retry resumes at match", async () => {
     let thrown = false;
     const h = setup({
-      responses: [OK, OK, OK, OK, OK],
-      reqs: 20,
-      // The 2nd batch fails schema_invalid once (the pipeline already used its V-6 retry → not retryable).
-      failMatch: (batchIndex) => {
-        if (batchIndex !== 1 || thrown) return null;
+      responses: [OK, OK],
+      failMatch: () => {
+        if (thrown) return null;
         thrown = true;
         return new AiError("schema_invalid", { retryable: false });
       },
@@ -272,103 +251,80 @@ describe("insight job — paid tier (parallel batches)", () => {
     const jobId = await h.start();
     await h.drain();
     let job = h.job(jobId);
-    expect(job.status).toBe("failed");
-    expect(job.errorCode).toBe("schema_invalid");
+    expect(job).toMatchObject({ status: "failed", errorCode: "schema_invalid" });
     expect(h.insights.completes).toHaveLength(0);
-    expect((job.meta.partials?.match as { batches: FakeBatch[] }).batches).toHaveLength(2);
-
-    const retried = await h.runner.retryJob({ jobId, userId: USER });
-    expect(retried.inProgress).toBe(false);
+    await h.runner.retryJob({ jobId, userId: USER });
     await h.drain();
     job = h.job(jobId);
     expect(job.status).toBe("succeeded");
-    expect(h.calls.filter((c) => c === "match.1")).toHaveLength(1);
-    expect(h.calls.filter((c) => c === "match.3")).toHaveLength(1);
-    expect(h.calls.filter((c) => c === "match.2")).toHaveLength(2);
-    expect(h.usage.forJob(jobId)).toHaveLength(4); // the thrown attempt made no provider call
+    expect(h.calls).toEqual(["match", "match", "synthesize"]);
+    expect(h.usage.forJob(jobId)).toHaveLength(2); // the thrown attempt made no provider call
   });
 
-  it("QA-S6-02: a step deadline cutting a slow batch keeps the finished batch; the retry calls only the slow one", async () => {
-    // 12 requirements → 2 batches: batch 1 answers at once, batch 2 hangs past the step deadline.
-    const h = setup({ responses: [OK, { hang: true }, OK, OK], reqs: 12, stepTimeoutMs: 200 });
+  it("the JD raw text changed after prepare → stalled, nothing completed", async () => {
+    const h = setup({ responses: [OK, OK], jdHashLater: "jd-h-edited" });
     const jobId = await h.start();
     await h.drain();
-    const job = h.job(jobId);
-    expect(job.status).toBe("succeeded");
-    expect(h.calls.filter((c) => c === "match.1")).toHaveLength(1);
-    expect(h.calls.filter((c) => c === "match.2")).toHaveLength(2);
-    const keys = h.usage.forJob(jobId).map((r) => r.callKey);
-    expect(keys.filter((k) => k === "insight.match.1")).toHaveLength(1);
-    expect(keys.filter((k) => k === "insight.match.2")).toHaveLength(2); // the timed-out call is recorded too
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+    expect(h.calls).toEqual([]);
+    expect(h.insights.completes).toHaveLength(0);
   });
 
-  it("QA-S6-09: later steps judge the requirement list fixed at prepare, not one edited mid-run", async () => {
-    const h = setup({ responses: [OK, OK, OK, OK], reqs: 20, reqsLater: 3 });
+  it("a step deadline on the match call is retried once (timeout) and recorded", async () => {
+    const h = setup({ responses: [{ hang: true }, OK, OK], stepTimeoutMs: 200 });
     const jobId = await h.start();
     await h.drain();
+    if (h.job(jobId).status === "queued") await h.wake(jobId);
     expect(h.job(jobId).status).toBe("succeeded");
-    expect(h.calls.filter((c) => c.startsWith("match"))).toHaveLength(3); // 20 requirements → 3 batches
-    expect((h.job(jobId).stepOutputs.prepare as { requirements: unknown[] }).requirements).toHaveLength(20);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey).filter((k) => k === "insight.match")).toHaveLength(2);
   });
 
   it("stale_run from complete_insight never completes the job without a ready row", async () => {
-    const h = setup({ responses: [OK, OK], reqs: 3 });
+    const h = setup({ responses: [OK, OK] });
     h.insights.applied = false;
     const jobId = await h.start();
     await h.drain();
-    expect(h.job(jobId).status).toBe("failed");
-    expect(h.job(jobId).errorCode).toBe("stalled");
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
   });
 
   it("a cancel requested during match ends canceled; no synthesize, no complete", async () => {
-    const h = setup({ responses: [{ hang: true }], reqs: 3 });
+    const h = setup({ responses: [{ hang: true }] });
     const jobId = await h.start();
     const run = h.drain();
     await new Promise((r) => setTimeout(r, 20));
     h.store.requestCancel(jobId);
     await run;
     expect(h.job(jobId).status).toBe("canceled");
-    expect(h.calls).toEqual(["match.1"]);
+    expect(h.calls).toEqual(["match"]);
     expect(h.insights.completes).toHaveLength(0);
     expect(h.usage.forJob(jobId)).toHaveLength(1);
   });
 });
 
-
-describe("insight job — free tier (C-12 one batch per run)", () => {
-  it("each batch is its own run spaced ≥ FREE_TIER_MIN_INTERVAL_MS; progress match n/3 and partial grow", async () => {
-    const h = setup({ context: FREE, responses: [OK, OK, OK, OK], reqs: 20 });
+describe("insight job — free tier (C-12 spacing)", () => {
+  it("match and synthesize are separate runs spaced ≥ FREE_TIER_MIN_INTERVAL_MS; prepare needs no spacing", async () => {
+    const h = setup({ context: FREE, responses: [OK, OK] });
     const jobId = await h.start();
     await h.drain();
-    // prepare (no call) → match batch 1 → STEP_CONTINUE → spacing wait for batch 2.
     let job = h.job(jobId);
     expect(job.status).toBe("queued");
-    expect(job.progress).toMatchObject({ stage: "match", done: 1, total: 3 });
-    expect(Date.parse(job.nextRunAt!) - h.clock.ms()).toBe(FREE_TIER_MIN_INTERVAL_MS);
-    expect(insightJobPartial(job)).toMatchObject({ batchesDone: 1, batchesTotal: 3 });
-
-    await h.wake(jobId);
-    job = h.job(jobId);
-    expect(job.progress).toMatchObject({ stage: "match", done: 2, total: 3 });
-    await h.wake(jobId); // batch 3 → stage done → spacing before synthesize
-    job = h.job(jobId);
     expect(job.stepOutputs.match).toBeDefined();
-    expect(insightJobPartial(job)).toMatchObject({ batchesDone: 3, batchesTotal: 3 });
+    expect(job.progress).toMatchObject({ stage: "match", done: 1, total: 1 });
+    expect(Date.parse(job.nextRunAt!) - h.clock.ms()).toBe(FREE_TIER_MIN_INTERVAL_MS);
     await h.wake(jobId);
     job = h.job(jobId);
     expect(job.status).toBe("succeeded");
-    expect(h.calls).toEqual(["match.1", "match.2", "match.3", "synthesize"]);
+    expect(h.calls).toEqual(["match", "synthesize"]);
     const times = h.usage.forJob(jobId).map((r) => Date.parse(r.occurredAt));
     for (let i = 1; i < times.length; i++) expect(times[i]! - times[i - 1]!).toBeGreaterThanOrEqual(FREE_TIER_MIN_INTERVAL_MS);
-    expect(h.ensureCalls).toEqual([`gemini:free:${PROJECT}`]);
   });
 });
 
 describe("insight job — synthesis split (QA-S6-03)", () => {
   it("free tier: synthesize and the V-5 regeneration are separate runs spaced ≥ 6 s; validate needs no spacing", async () => {
-    const h = setup({ context: FREE, responses: [OK, OK, OK], reqs: 3, firstViolations: ["37%"] });
+    const h = setup({ context: FREE, responses: [OK, OK, OK], firstViolations: ["37%"] });
     const jobId = await h.start();
-    await h.drain(); // prepare → match (1 batch) → spacing before synthesize
+    await h.drain(); // prepare → match → spacing before synthesize
     await h.wake(jobId); // synthesize → spacing before synthesize_regen
     let job = h.job(jobId);
     expect(job.status).toBe("queued");
@@ -377,23 +333,21 @@ describe("insight job — synthesis split (QA-S6-03)", () => {
     await h.wake(jobId); // regen → validate (no call, no spacing) → done
     job = h.job(jobId);
     expect(job.status).toBe("succeeded");
-    expect(h.calls).toEqual(["match.1", "synthesize", "synthesize.regen"]);
+    expect(h.calls).toEqual(["match", "synthesize", "synthesize.regen"]);
     expect(h.insights.completes[0]!.payload).toMatchObject({ regen: true });
-    const times = h.usage.forJob(jobId).map((r) => Date.parse(r.occurredAt));
-    for (let i = 1; i < times.length; i++) expect(times[i]! - times[i - 1]!).toBeGreaterThanOrEqual(FREE_TIER_MIN_INTERVAL_MS);
   });
 
   it("a failed regeneration is retried alone: the first synthesis call is not made again", async () => {
-    const h = setup({ responses: [OK, OK, OK], reqs: 3, firstViolations: ["37%"], failRegenOnce: new ProviderError("timeout") });
+    const h = setup({ responses: [OK, OK, OK], firstViolations: ["37%"], failRegenOnce: new ProviderError("timeout") });
     const jobId = await h.start();
     await h.drain();
     expect(h.job(jobId).status).toBe("succeeded");
-    expect(h.calls).toEqual(["match.1", "synthesize", "synthesize.regen", "synthesize.regen"]);
-    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match.1", "insight.synthesize", "insight.synthesize.regen"]);
+    expect(h.calls).toEqual(["match", "synthesize", "synthesize.regen", "synthesize.regen"]);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match", "insight.synthesize", "insight.synthesize.regen"]);
   });
 
-  it("requirements_changed from the pipeline ends the job stalled, no retry", async () => {
-    const h = setup({ responses: [OK, OK], reqs: 3, firstViolations: ["1"], failRegenOnce: Object.assign(new Error("changed"), { code: "requirements_changed" }) });
+  it("requirements_changed from the pipeline (JD text changed since stage 1) ends the job stalled, no retry", async () => {
+    const h = setup({ responses: [OK, OK], firstViolations: ["1"], failRegenOnce: Object.assign(new Error("changed"), { code: "requirements_changed" }) });
     const jobId = await h.start();
     await h.drain();
     expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
@@ -401,82 +355,102 @@ describe("insight job — synthesis split (QA-S6-03)", () => {
   });
 
   it("no V-5 violation: synthesize_regen passes without a call", async () => {
-    const h = setup({ context: FREE, responses: [OK, OK], reqs: 3 });
+    const h = setup({ context: FREE, responses: [OK, OK] });
     const jobId = await h.start();
     await h.drain();
-    await h.wake(jobId); // synthesize → regen skipped (no spacing) → validate → done
+    await h.wake(jobId);
     expect(h.job(jobId).status).toBe("succeeded");
-    expect(h.calls).toEqual(["match.1", "synthesize"]);
+    expect(h.calls).toEqual(["match", "synthesize"]);
   });
 });
 
-describe("insight job — prepare (D-30)", () => {
-  it("extraction failure ends the job with that cause (retry_after kept), no match call", async () => {
-    const retryAfter = "2026-10-28T00:05:00.000Z";
-    const h = setup({ ensure: async () => ({ status: "failed", jobId: "x", code: "rate_limited", retryAfter, quotaResetsAt: null }) });
-    const jobId = await h.start();
-    await h.drain();
-    const job = h.job(jobId);
-    expect(job.status).toBe("failed");
-    expect(job.errorCode).toBe("rate_limited");
-    expect(job.retryAfter).not.toBeNull();
-    expect(h.calls).toEqual([]);
-    expect(h.insights.begins).toEqual([]);
-  });
-
-  it("extraction runs first, then the insight continues on the same job", async () => {
-    const h = setup({ responses: [OK, OK], reqs: 5, ensure: async () => ({ status: "succeeded", jobId: "extract-job" }) });
-    const jobId = await h.start();
-    await h.drain();
-    expect(h.job(jobId).status).toBe("succeeded");
-    expect(h.job(jobId).stepOutputs.prepare).toMatchObject({ insightId: INSIGHT_ID, requirementCount: 5, extractedJobId: "extract-job" });
-  });
-
-  it("extraction_in_progress (non-AI refusal) fails stalled without a provider call", async () => {
-    const h = setup({ ensure: async () => Promise.reject(new AppError("extraction_in_progress", "x", { status: 409 })) });
+describe("insight job — prepare (R17: no extraction first)", () => {
+  it("no JD (project gone) → stalled without begin or a provider call", async () => {
+    const h = setup({ noJd: true });
     const jobId = await h.start();
     await h.drain();
     expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
-  });
-
-  it("a JD with zero requirements fails not_a_jd (input) without a call", async () => {
-    const h = setup({ reqs: 0 });
-    const jobId = await h.start();
-    await h.drain();
-    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "not_a_jd" });
+    expect(h.insights.begins).toEqual([]);
     expect(h.usage.forJob(jobId)).toHaveLength(0);
   });
-});
 
-describe("insight job helpers", () => {
-  it("batchIds splits by size in order", () => {
-    expect(batchIds(["a", "b", "c"], 2)).toEqual([["a", "b"], ["c"]]);
-    expect(batchIds([], 8)).toEqual([]);
+  it("begin_insight refusals (job_description_not_found, insight_in_progress) become a system failure", async () => {
+    for (const raise of ["job_description_not_found", "insight_in_progress"]) {
+      const h = setup();
+      h.insights.begin = async () => {
+        throw new InsightRpcError(raise, new AppError(raise));
+      };
+      const jobId = await h.start();
+      await h.drain();
+      expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+      expect(h.calls).toEqual([]);
+    }
   });
 
-  it("savedBatches keeps only batches that still match the plan", () => {
-    const plan = [["a", "b"], ["c"]];
-    const ok = { batchIndex: 0, matches: [{ requirement_id: "a" }, { requirement_id: "b" }] };
-    const moved = { batchIndex: 1, matches: [{ requirement_id: "x" }] };
-    const saved = savedBatches({ batches: [ok, moved, { batchIndex: 7, matches: [] }] }, plan);
-    expect([...saved.keys()]).toEqual([0]);
-    expect(savedBatches(null, plan).size).toBe(0);
-  });
-
-  it("pickFailure prefers cancel, then provider errors", () => {
-    const provider = new ProviderError("rate_limited");
-    const canceled = new AiError("canceled");
-    expect(pickFailure([new Error("x"), provider])).toBe(provider);
-    expect(pickFailure([provider, canceled])).toBe(canceled);
-  });
-
-  it("InsightRpcError refusals become a system failure", async () => {
-    const h = setup({ reqs: 3 });
-    h.insights.begin = async () => {
-      throw new InsightRpcError("insight_in_progress", new AppError("insight_in_progress"));
-    };
+  it("a pre-R17 checkpoint (`{ batches }` match output) can't continue: stalled", async () => {
+    const h = setup({ responses: [OK] });
     const jobId = await h.start();
+    // Simulate an in-flight pre-R17 job: replace the stored checkpoints after prepare.
+    const job = h.job(jobId);
+    job.stepOutputs = { prepare: { insightId: INSIGHT_ID, requirementCount: 3, snapshot: { careerSnapshotHash: "c", requirementsHash: "r" } } };
     await h.drain();
     expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+  });
+});
+
+describe("pre-R17 job rows (R17 QA-02 / QA-03)", () => {
+  /** A failed insight job (match failed for good) whose row we then age into a pre-R17 shape. */
+  async function failedJob() {
+    const h = setup({ responses: [], failMatch: () => new AiError("schema_invalid", { retryable: false }) });
+    const jobId = await h.start();
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "schema_invalid" });
+    return { h, jobId };
+  }
+
+  it("QA-02: a legacy `not_a_jd` row is input / no retry everywhere: category, status response (schema-valid message), runner retry 409", async () => {
+    expect(errorCategoryOf("not_a_jd")).toBe("input");
+    expect(isManuallyRetryable("not_a_jd")).toBe(false);
+    const { h, jobId } = await failedJob();
+    h.job(jobId).errorCode = "not_a_jd";
+    const status = toAiJobStatusResponse(h.job(jobId));
+    expect(AiJobStatusResponseSchema.safeParse(status).success).toBe(true);
+    expect(status).toMatchObject({
+      error: { code: "not_a_jd", category: "input", failureCause: null, message: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요." },
+      errorCategory: "input",
+      canRetry: false,
+      retry: null,
+    });
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+    expect(h.job(jobId).status).toBe("failed");
+  });
+
+  it("QA-03: a failed job with a pre-R17 prepare checkpoint is refused up front (409, canRetry false) instead of ending stalled", async () => {
+    const { h, jobId } = await failedJob();
+    // Before the age-up the retry would be offered.
+    expect(toAiJobStatusResponse(h.job(jobId)).canRetry).toBe(true);
+    h.job(jobId).stepOutputs = { prepare: { insightId: INSIGHT_ID, requirementCount: 3, extractedJobId: null, snapshot: { careerSnapshotHash: "c", requirementsHash: "r" } } };
+    expect(toAiJobStatusResponse(h.job(jobId))).toMatchObject({ canRetry: false, retry: null });
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "schema_invalid" });
+    expect(h.calls.filter((c) => c === "match")).toHaveLength(1); // nothing ran again
+  });
+
+  it("QA-03: a pre-R17 match checkpoint (`{ batches }`) is refused too; R17 checkpoints are not", () => {
+    const r17Prepare = { insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "c", jdTextHash: "h" } };
+    expect(hasPreR17Checkpoint({})).toBe(false);
+    expect(hasPreR17Checkpoint({ prepare: r17Prepare })).toBe(false);
+    expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { v: 2, matches: [] } })).toBe(false);
+    expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { batches: [] } })).toBe(true);
+    expect(hasPreR17Checkpoint({ prepare: { insightId: INSIGHT_ID, snapshot: { careerSnapshotHash: "c", requirementsHash: "r" } } })).toBe(true);
+  });
+
+  it("QA-03: the user can still start a new run on the same project (regenerate path is a new job)", async () => {
+    const { h, jobId } = await failedJob();
+    h.job(jobId).stepOutputs = { prepare: { insightId: INSIGHT_ID, snapshot: { careerSnapshotHash: "c", requirementsHash: "r" } } };
+    const h2 = setup({ responses: [OK, OK] });
+    const next = await h2.start();
+    await h2.drain();
+    expect(h2.job(next).status).toBe("succeeded");
   });
 });

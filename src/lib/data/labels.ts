@@ -80,7 +80,8 @@ export function aiStageLabel(
 
 /** S-42 기능별 표 기능 이름 (ai_usage_records.feature, 02 S-42) */
 export const AI_USAGE_FEATURE_LABELS: Record<AiUsageFeature, string> = {
-  jd_extraction: "요건 추출",
+  // R17-7: legacy (pre-R17 usage rows only)
+  jd_extraction: "채용 공고 분석(이전)",
   insight: "인사이트",
   // (v5.20, CF-1) 경력기술서 폐기. 값은 과거 사용량 행 보존용으로 CHECK에 남아 있고(decisions 4.23
   // 백엔드 7), S-42 표는 usage-display.ts가 두 값을 한 줄로 합쳐 보인다

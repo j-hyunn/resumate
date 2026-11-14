@@ -32,7 +32,7 @@ describe("usageRowsOf (S-42 5행)", () => {
     const rows = usageRowsOf(undefined)
     expect(rows.map((r) => r.label)).toEqual([
       "프로젝트/산출물 작성 AI 채팅",
-      "요건 추출",
+      "채용 공고 분석(이전)",
       "인사이트",
       "자기소개서 작성 AI 채팅",
       "연결 확인",

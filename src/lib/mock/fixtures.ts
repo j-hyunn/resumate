@@ -908,6 +908,8 @@ export function createFixtures(): MockDb {
       is_latest: true,
       status: "ready",
       requirements_hash: "req-hash-1",
+      // R17: pre-R17 (v1) rows have no jd_text_hash
+      jd_text_hash: null,
       completed_at: daysAgo(6),
       match_stage_result: null,
       result: {
@@ -954,6 +956,8 @@ export function createFixtures(): MockDb {
       is_latest: false,
       status: "generating",
       requirements_hash: "req-hash-2",
+      // R17: pre-R17 (v1) rows have no jd_text_hash
+      jd_text_hash: null,
       completed_at: null,
       match_stage_result: null,
       result: null,

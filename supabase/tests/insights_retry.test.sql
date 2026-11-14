@@ -22,7 +22,7 @@ select ('c0000000-dddd-0000-0000-00000000000' || n)::uuid, 'c0000000-0000-0000-0
 
 create temp table t_payload (v jsonb);
 insert into t_payload values ('{"result":{"schema_version":1},"match_stage_result":{"matches":[]},
-  "hashes":{"requirements_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"},
+  "hashes":{"jd_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"},
   "meta":{"schema_version":1,"prompt_version":"pv","provider":"gemini","model":"m","model_tier":"default",
           "connection_tier":"free","validation_report":null,"usage":null},"evidence":[]}');
 grant select on t_payload to app_ai_writer;

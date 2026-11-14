@@ -42,18 +42,7 @@ select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_
                   values ('aaaaaaaa-7777-0000-0000-000000000001', 'jd_extraction', 'aaaaaaaa-aaaa-0000-0000-000000000001',
                           'job_description', current_setting('t.jd')::uuid, 'running', 1, 'anthropic', 'light', 'paid')$$,
                 'app_ai_writer: jd_extraction job');
-select lives_ok($$select public.begin_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001')$$,
-                'app_ai_writer: begin_jd_extraction');
-select is(public.apply_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001', 1,
-            '{"schema_version":1,"detected_language":"ko","is_likely_jd":true,
-              "company_name":{"value":"회사","source_sids":["S1"]},"position_title":{"value":"백엔드","source_sids":["S1"]},
-              "seniority":null,
-              "requirements":[{"category":"responsibility","content":"백엔드 개발","keywords":["백엔드"],"importance":"high","source_sids":["S1"]}],
-              "tech_keywords":[],"other_sids":[],"warnings":[],"requirements_hash":"rh","extraction":{"schema_version":1}}',
-            'anthropic', 'claude-haiku-5-5') ->> 'name',
-          '회사 자기소개서', 'app_ai_writer: apply_jd_extraction');
-select lives_ok($$select public.fail_jd_extraction(current_setting('t.jd')::uuid, 'aaaaaaaa-7777-0000-0000-000000000001')$$,
-                'app_ai_writer: fail_jd_extraction (no-op after success)');
+-- R17: begin / apply / fail_jd_extraction are gone; an old-style jd_extraction job row still completes (legacy CHECK).
 select lives_ok($$select public.complete_ai_job('aaaaaaaa-7777-0000-0000-000000000001', 1)$$, 'app_ai_writer: complete job');
 select lives_ok($$insert into public.ai_usage_records (feature, job_type, ai_job_id, application_project_id, provider, model,
                     model_tier, connection_tier, usage_source, outcome, price_table_version, estimated_cost_usd)

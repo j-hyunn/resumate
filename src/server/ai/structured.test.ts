@@ -61,7 +61,7 @@ describe("computeInputHash (C-6 v4)", () => {
     provider: "anthropic" as const,
     model: "claude-sonnet-5-5",
     careerSnapshotHash: "c",
-    requirementsHash: "r",
+    jdTextHash: "r",
     params: { a: 1, b: [2] },
   };
   it("is stable under key order and changes with prompt_version, provider, model, or params", () => {
@@ -70,6 +70,7 @@ describe("computeInputHash (C-6 v4)", () => {
     expect(computeInputHash({ ...parts, provider: "openai" })).not.toBe(computeInputHash(parts));
     expect(computeInputHash({ ...parts, model: "claude-opus-5-5" })).not.toBe(computeInputHash(parts));
     expect(computeInputHash({ ...parts, params: { a: 2, b: [2] } })).not.toBe(computeInputHash(parts));
+    expect(computeInputHash({ ...parts, jdTextHash: "r2" })).not.toBe(computeInputHash(parts));
     expect(computeInputHash(parts)).toMatch(/^[0-9a-f]{64}$/);
   });
 });

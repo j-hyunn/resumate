@@ -27,7 +27,6 @@ import {
   type V9Message,
   type V9Project,
 } from "../validation/v9";
-import type { GateRequirement } from "./gate-requirements";
 import { computeFocusSlots, quickChips, type FocusPlan, type GateFeature, type QuickChip, type ReadinessMissing, type RequestedSlot } from "./focus-slots";
 
 /**
@@ -42,8 +41,8 @@ import { computeFocusSlots, quickChips, type FocusPlan, type GateFeature, type Q
  *   so a project edit between turns does not invalidate the message prefix.
  *
  * Only this conversation, its proposal, and this project go to the model — no
- * other project, no other chat of the same project, no JD (the gate's
- * requirement list goes to the reply call only, R-31). No name or contact (C-7).
+ * other project, no other chat of the same project, no JD (R17: the gate's
+ * requirement block of R-31 is gone with AI-01). No name or contact (C-7).
  */
 
 export type WritingChatMessageRow = {
@@ -108,12 +107,6 @@ export type WritingChatTurnInput = {
   formSnapshot?: ProjectFormSnapshot | null;
   /** return_target.feature + get_data_readiness() `missing` for that feature (recomputed every turn). */
   gate: { feature: GateFeature; missing: readonly ReadinessMissing[] } | null;
-  /**
-   * R-31: selectGateRequirements() for return_target.application_project_id.
-   * Reply call only, and only while `gate` is set; empty / omitted → no block.
-   * Never a source: extract and V-9 never see it.
-   */
-  gateRequirements?: readonly GateRequirement[];
   requestedSlot: RequestedSlot | null;
   /**
    * begin_assistant_message `is_final`: this reply is the last message the

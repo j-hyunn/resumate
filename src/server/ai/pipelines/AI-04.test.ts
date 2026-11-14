@@ -23,6 +23,7 @@ function source(ctx: CoverLetterChatContext, projectId: string) {
     education_ref: null,
     role: "primary",
     rationale: "직무 역량 요건과 가장 가깝습니다",
+    // R17: no longer in the schema — a stray key from a model is stripped (requirement_ids stays []).
     requirement_refs: ["REQ-1"],
     reuse_reason: null,
     evidence: [{ source_type: "project", ref: prj, field: "name", quote: null }],
@@ -85,6 +86,19 @@ describe("compose (초안 턴)", () => {
     expect(op.slot).toBe("q_1");
     expect(op.draft.answer_title).toBe("응답 시간을 0.7초로 줄인 병목 분석");
     expect(op.draft.blocks[0].block_id).toBe("q_1.1");
+  });
+
+  it("emits requirement_ids: [] on blocks and selected sources (R17, [가정 R17-10])", async () => {
+    const ctx = coverLetterContext({}, 3);
+    const { result, events } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1")]) }], ["q_1"]);
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
+    expect(op.draft.blocks.length).toBeGreaterThan(0);
+    for (const b of op.draft.blocks) expect(b.requirement_ids).toEqual([]);
+    const selected = events.find((e) => e.type === "sources_selected");
+    if (selected?.type !== "sources_selected") throw new Error("no sources_selected");
+    expect(selected.sources.length).toBeGreaterThan(0);
+    for (const s of selected.sources) expect(s.requirement_ids).toEqual([]);
   });
 
   it("drops only the title when it claims a number the body does not have — the body survives", async () => {

@@ -147,7 +147,7 @@ select set_eq(
   array['get_data_readiness', 'complete_ai_job', 'mark_provider_key_invalid', 'record_provider_key_success',
         'check_ai_run_allowed',
         'begin_assistant_message', 'finish_assistant_message', 'mark_writing_chat_extracted', 'apply_structured_draft_patch',
-        'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction',
+        -- R17: begin / apply / fail_jd_extraction dropped.
         'begin_insight', 'complete_insight', 'fail_insight',
         'retry_ai_job',
         -- R13: the context-pack assembly calls the total-experience-months wrapper through PostgREST.
@@ -222,9 +222,8 @@ select set_eq(
                          'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction')
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['create_application_project:authenticated', 'move_application_stage:authenticated',
-        'set_application_outcome:authenticated', 'begin_jd_extraction:app_ai_writer',
-        'apply_jd_extraction:app_ai_writer', 'fail_jd_extraction:app_ai_writer'],
-  'S5 application / JD RPC execute matrix');
+        'set_application_outcome:authenticated'],
+  'S5 application / JD RPC execute matrix (R17: the extraction RPCs are gone)');
 
 -- S5 (DM §5): user-session write privileges on the application tables. application_projects: DELETE +
 -- UPDATE (name, deadline, memo) only; stage events / JD / requirements: none (RPC + cascade only).
@@ -312,8 +311,7 @@ select set_eq(
   array['sweep_stalled_ai_jobs(timestamp with time zone)',
         'claim_due_ai_jobs(timestamp with time zone,integer)',
         'purge_old_ai_jobs(timestamp with time zone,integer)',
-        -- R15 (CF-A17): the unused preview result cleanup, one line in the ai_jobs cron.
-        'purge_unused_jd_preview_outputs(timestamp with time zone,integer)',
+        -- R17: purge_unused_jd_preview_outputs dropped with the preview extraction.
         'purge_old_ai_usage_records(timestamp with time zone,integer)',
         'purge_old_account_deletion_logs(timestamp with time zone,integer)',
         'save_provider_key(uuid,text,text,bytea,bytea,bytea,text,text,text,text,uuid,text,smallint)',

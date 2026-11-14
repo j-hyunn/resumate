@@ -20,8 +20,8 @@ import { INSIGHT_JOB_TYPE, INSIGHT_TARGET_TYPE, type InsightPipeline } from "./j
  * reuse against ready insights unless `regenerate` (no job, no call, no usage)
  * → start the `insight` job (or follow the one in flight).
  *
- * input_hash can only be computed once the JD has requirements; a JD that is
- * not extracted yet has no insight to reuse, and the job extracts it first (D-30).
+ * R17: the JD part of input_hash is its raw_text_hash, so it is known as soon as
+ * the project exists (no extraction first). `inputs` is null only when the JD is gone.
  */
 
 export type StartInsightDeps = {

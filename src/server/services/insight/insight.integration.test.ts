@@ -2,7 +2,6 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
 import { CreateProjectInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
-import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { ProviderError } from "@/server/ai/errors";
 import type { Llm } from "@/server/ai/llm";
 import { silentAiLogger } from "@/server/ai/log";
@@ -18,13 +17,11 @@ import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticPr
 import { createJobRunner } from "@/server/jobs/runner";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
-import { createJdExtractionDb } from "@/server/services/application/db";
-import { ensureJdExtracted } from "@/server/services/application/extraction";
 import { loadProgress } from "@/server/services/application/read";
 import { createApplicationProject, deleteApplicationProject } from "@/server/services/application/write";
 import { createProject, getDeletionImpact, saveExperience, saveProject } from "@/server/services/career";
 import { connectTestProvider } from "@/test/ai-connection-db";
-import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
+import { KO_BACKEND } from "@/test/jd-fixtures";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { createInsightStore, loadInsightInputs } from "./db";
@@ -36,12 +33,13 @@ import { startInsight } from "./start";
 
 /**
  * S6 end-to-end against the local stack (S6 plan API 7 "로컬 DB 통합"):
- * start (readiness, gate) → job: prepare extracts the JD first (D-30) →
- * match → synthesize → complete_insight (evidence_links) → read with chips →
- * input_hash reuse → career edit → stale + "변경됨" chip → regenerate swaps
- * latest → deletion impact counts insights → RLS → project delete cascades.
- * Real AI-01 / AI-02 pipelines, scripted provider (model outputs built from
- * the same context the job builds). Skips without the stack or S6 tables.
+ * start (readiness, gate) → job: prepare (R17: no extraction — the JD raw text) →
+ * match (one call) → synthesize → complete_insight (v2 result, jd_text_hash,
+ * evidence_links incl. jd_sentence) → read with chips and the result's own
+ * requirements → input_hash reuse → career edit → stale + "변경됨" chip →
+ * regenerate swaps latest → deletion impact counts insights → RLS → project
+ * delete cascades. Real AI-02 pipeline, scripted provider (model outputs built
+ * from the same context the job builds). Skips without the stack or S6 tables.
  */
 
 const stack = readLocalSupabase();
@@ -99,27 +97,44 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   /** The context the job will build (same rows, same builder). */
   async function context(): Promise<InsightContext> {
     const inputs = await loadInsightInputs(createAiWriterClient(userId), project);
-    if (!inputs) throw new Error("JD not extracted");
+    if (!inputs) throw new Error("no JD");
     return pipeline.buildContext(inputs);
   }
+
+  /** JD sentence alias (S-n) whose text contains the needle. */
+  function sid(ctx: InsightContext, needle: string): string {
+    const entry = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence" && (e.fields[""] ?? "").includes(needle));
+    if (!entry) throw new Error(`no sentence ${needle}`);
+    return entry.alias;
+  }
+
+  /** R17: the model reads the requirements from the JD sentences (v2 stage 1, one call). */
+  const REQS = [
+    { requirement: "결제 승인·정산 API 설계 및 운영", category: "responsibility" as const, importance: "high" as const, needle: "결제 승인·정산" },
+    { requirement: "Java/Kotlin 기반 Spring 서버 개발 경험", category: "required" as const, importance: "high" as const, needle: "Spring" },
+    { requirement: "Kafka 등 메시지 큐 운영 경험", category: "preferred" as const, importance: "normal" as const, needle: "Kafka" },
+  ];
 
   function matchResponse(): () => Promise<ScriptedResponse> {
     return async () => {
       const ctx = await context();
       const prj = ctx.aliases.aliasOf("project", ids.project)!;
       const output: Ai02MatchOutput = {
-        schema_version: 1,
-        matches: ctx.requirements.map((r, i) =>
-          i === 0
+        schema_version: 2,
+        matches: REQS.map((r, i) => ({
+          requirement: r.requirement,
+          category: r.category,
+          importance: r.importance,
+          sentence_refs: [sid(ctx, r.needle)],
+          ...(i === 0
             ? {
-                requirement_ref: r.ref,
                 status: "met" as const,
                 rationale: "결제 승인 API를 직접 개선한 행동이 있습니다.",
                 missing_aspect: null,
                 evidence: [{ source_type: "project" as const, ref: prj, field: "action", quote: ACTION }],
               }
-            : { requirement_ref: r.ref, status: "no_evidence" as const, rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] },
-        ),
+            : { status: "no_evidence" as const, rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] }),
+        })),
       };
       return { json: output };
     };
@@ -130,9 +145,10 @@ describe.skipIf(!ready)("insights (local stack)", () => {
       const ctx = await context();
       const prj = ctx.aliases.aliasOf("project", ids.project)!;
       const sentence = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence")!.alias;
-      const [req1, req2] = ctx.requirements;
+      // R17: stage-2 refs point at the server-assigned match ids M-n.
+      const [req1, req2] = [{ ref: "M-1" }, { ref: "M-2" }];
       const output: Ai02SynthesisOutput = {
-        schema_version: 1,
+        schema_version: 2,
         strengths: [
           {
             title: "결제 승인 API 개선",
@@ -170,24 +186,6 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     const definition = createInsightJobDefinition({
       pipeline,
       storeFor: createInsightStore,
-      ensureJd: (ctx, id) =>
-        ensureJdExtracted(
-          {
-            userId: ctx.userId,
-            jds: createJdExtractionDb(ctx.db, ctx.db),
-            store: createSupabaseJobStore(ctx.db),
-            usage: createSupabaseUsageStore(ctx.db),
-            providerContext: createStaticProviderContext({ provider: ctx.provider, connectionTier: ctx.connectionTier, keyStatus: "valid" }),
-            keySource,
-            keyStatus: createRecordingKeyStatusReporter(),
-            runGate: null,
-            createLlm,
-            extract: productionJdExtractorForTests,
-            log,
-          },
-          id,
-          { signal: ctx.signal },
-        ),
       log,
     });
     const runner = createJobRunner<Llm>({
@@ -256,12 +254,12 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(jobs.data).toEqual([]);
   });
 
-  it("first run: D-30 extraction in prepare → match → synthesize → ready insight with evidence", async () => {
+  it("first run (R17): prepare → match (one call) → synthesize → ready v2 insight with evidence and jd_text_hash", async () => {
     await saveExperience(user, SaveExperienceInput.parse({ id: ids.experience, companyName: "알파", startMonth: "2021-03", jobPosition: "백엔드", isCurrent: true }));
     await createProject(user, CreateProjectInput.parse({ id: ids.project, name: "결제 개선", affiliation: { type: "experience", id: ids.experience } }));
     await saveProject(user, SaveProjectInput.parse({ id: ids.project, startMonth: "2024-02", situation: "피크 시간 응답이 느렸다", action: ACTION }));
 
-    queue.push({ json: KO_BACKEND.output }, matchResponse(), synthesisResponse());
+    queue.push(matchResponse(), synthesisResponse());
     const h = harness();
     const out = await h.start(user, userId, project);
     expect(out).toMatchObject({ kind: "started", data: { reused: false, inProgress: false } });
@@ -272,16 +270,18 @@ describe.skipIf(!ready)("insights (local stack)", () => {
 
     const job = await admin.from("ai_jobs").select("status, job_type, target_type, target_id, model_tier, input_hash, error_code").eq("id", jobId).single();
     expect(job.data).toMatchObject({ status: "succeeded", job_type: "insight", target_type: "application_project", target_id: project, model_tier: "default" });
-    // The extraction ran as its own jd_extraction job (usage meter "요건 추출").
+    // R17: no jd_extraction job — the JD raw text goes to AI-02 directly.
     const extraction = await admin.from("ai_jobs").select("status").eq("user_id", userId).eq("job_type", "jd_extraction");
-    expect(extraction.data).toEqual([{ status: "succeeded" }]);
+    expect(extraction.data).toEqual([]);
     const usage = await admin.from("ai_usage_records").select("feature, call_key, outcome").eq("user_id", userId).order("occurred_at");
-    expect(usage.data!.map((u) => u.feature)).toEqual(["jd_extraction", "insight", "insight"]);
-    expect(usage.data!.filter((u) => u.feature === "insight").map((u) => u.call_key).sort()).toEqual(["insight.match.1", "insight.synthesize"]);
+    expect(usage.data!.map((u) => u.feature)).toEqual(["insight", "insight"]);
+    expect(usage.data!.map((u) => u.call_key).sort()).toEqual(["insight.match", "insight.synthesize"]);
 
-    const rows = await admin.from("insights").select("id, version_no, status, is_latest, input_hash, ai_job_id").eq("application_project_id", project);
+    const jd = await admin.from("job_descriptions").select("raw_text_hash").eq("application_project_id", project).single();
+    const rows = await admin.from("insights").select("id, version_no, status, is_latest, input_hash, ai_job_id, jd_text_hash, requirements_hash, result").eq("application_project_id", project);
     expect(rows.data).toHaveLength(1);
-    expect(rows.data![0]).toMatchObject({ version_no: 1, status: "ready", is_latest: true, ai_job_id: jobId });
+    expect(rows.data![0]).toMatchObject({ version_no: 1, status: "ready", is_latest: true, ai_job_id: jobId, jd_text_hash: jd.data!.raw_text_hash, requirements_hash: null });
+    expect(rows.data![0]!.result).toMatchObject({ schema_version: 2, requirement_matches: [{ requirement_id: "M1", requirement: { content: REQS[0]!.requirement } }, {}, {}] });
     firstInsightId = rows.data![0]!.id;
     const links = await admin.from("evidence_links").select("item_key, source_type").eq("owner_type", "insight").eq("owner_id", firstInsightId);
     expect(links.data!.length).toBeGreaterThanOrEqual(4);
@@ -299,13 +299,15 @@ describe.skipIf(!ready)("insights (local stack)", () => {
 
   it("read: matches with requirement contents, evidence chips, provider badge, not stale; progress ready", async () => {
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
-    expect(view.extractionStatus).toBe("succeeded");
-    expect(view.requirements).toHaveLength(6);
+    // R17: the requirements come from the v2 result itself (M1…Mn).
+    expect(view.requirements.map((r) => r.id)).toEqual(["M1", "M2", "M3"]);
+    expect(view.requirements[0]).toMatchObject({ content: REQS[0]!.requirement, category: "responsibility", importance: "high" });
+    expect(view.requirements[0]!.sentenceIds).toHaveLength(1);
     expect(view.activeJob).toBeNull();
     expect(view.lastFailure).toBeNull();
     const insight = view.insight!;
     expect(insight).toMatchObject({ id: firstInsightId, versionNo: 1, provider: "anthropic", modelTier: "default", connectionTier: "paid", stale: false });
-    expect(insight.requirementMatches).toHaveLength(6);
+    expect(insight.requirementMatches).toHaveLength(3);
     const met = insight.requirementMatches.find((m) => m.status === "met")!;
     expect(met.requirement?.content).toBeTruthy();
     expect(met.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["프로젝트 · 행동"]));
@@ -335,6 +337,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   it("career edit → stale (F-P2-07) and the chip shows 변경됨; regenerate swaps latest", async () => {
     await saveProject(user, SaveProjectInput.parse({ id: ids.project, result: "응답 시간이 줄었다" }));
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
+    // `requirements` = "JD raw text changed" since R17: unchanged here.
     expect(view.insight).toMatchObject({ stale: true, staleReasons: { career: true, requirements: false } });
     const met = view.insight!.requirementMatches.find((m) => m.status === "met")!;
     expect(met.evidence.find((c) => c.sourceType === "project")?.state).toBe("changed");
@@ -386,9 +389,9 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(row.data).toEqual({ status: "ready", is_latest: true, version_no: 3 });
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
     expect(view).toMatchObject({ insight: { versionNo: 3 }, lastFailure: null, activeJob: null });
-    // No extra jd_extraction: prepare's checkpoint was kept.
+    // R17: never a jd_extraction job.
     const extraction = await admin.from("ai_jobs").select("id").eq("user_id", userId).eq("job_type", "jd_extraction");
-    expect(extraction.data).toHaveLength(1);
+    expect(extraction.data).toEqual([]);
   });
 
   it("R2 (C-11.4, R-63): a failed run retried on another active provider overwrites the same insights row with the new provider", async () => {

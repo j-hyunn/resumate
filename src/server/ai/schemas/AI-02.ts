@@ -2,10 +2,14 @@ import { z } from "zod";
 import { ModelEvidenceSchema } from "../validation/evidence";
 
 /**
- * AI-02 JD 인사이트 model output, schema_version 1 (AI spec AI-02 "출력 스키마").
+ * AI-02 JD 인사이트 model output, **schema_version 2** (R17: JD AI 처리 제거).
  * Two schemas for the two-stage chain:
- * - stage 1 (`match`, one per batch): `matches[]`
- * - stage 2 (`synthesize`): `strengths`, `gaps`, `strategy`
+ * - stage 1 (`match`, ONE call): `matches[]` — the model reads the requirements
+ *   straight from the raw JD sentences (S-n) and judges each one: the short
+ *   requirement text, category, importance, the sentences it comes from, the
+ *   verdict. v1 judged an AI-01 requirement list (REQ-n) in batches.
+ * - stage 2 (`synthesize`): `strengths`, `gaps`, `strategy`; `requirement_refs`
+ *   point at the server-assigned match ids `M-n`.
  * `basis_note`, `data_sufficiency`, `requirement_matches`, `summary_counts`
  * of the final form are server-built (card: "summary_counts는 서버가 계산").
  *
@@ -14,7 +18,7 @@ import { ModelEvidenceSchema } from "../validation/evidence";
  * (V-6); the server trims (strengths ≤ 3, priorities ≤ 5) after validation.
  */
 
-export const AI02_OUTPUT_SCHEMA_VERSION = 1;
+export const AI02_OUTPUT_SCHEMA_VERSION = 2;
 
 /** Screen labels: 충족 / 부분 충족 / 근거 없음. */
 export const INSIGHT_MATCH_STATUSES = ["met", "partial", "no_evidence"] as const;
@@ -28,6 +32,12 @@ export type InsightGapKind = (typeof INSIGHT_GAP_KINDS)[number];
 export const INSIGHT_ACTION_TYPES = ["add_data", "reframe", "prepare_answer"] as const;
 export type InsightActionType = (typeof INSIGHT_ACTION_TYPES)[number];
 
+/** (R17, moved from the deleted AI-01 schema) requirement category / importance. */
+export const REQUIREMENT_CATEGORIES = ["responsibility", "required", "preferred"] as const;
+export type RequirementCategory = (typeof REQUIREMENT_CATEGORIES)[number];
+export const REQUIREMENT_IMPORTANCES = ["high", "normal"] as const;
+export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
+
 const Ref = z.string().max(20);
 const Refs = z.array(Ref).max(20);
 const Evidence = z.array(ModelEvidenceSchema).max(12);
@@ -35,7 +45,12 @@ const Evidence = z.array(ModelEvidenceSchema).max(12);
 // ---------- stage 1 ----------
 
 export const Ai02MatchSchema = z.object({
-  requirement_ref: Ref,
+  /** Short requirement in the posting's own words (server trims to 200). */
+  requirement: z.string().max(600),
+  category: z.enum(REQUIREMENT_CATEGORIES),
+  importance: z.enum(REQUIREMENT_IMPORTANCES),
+  /** The JD sentences (S-n) the requirement is read from; ≥ 1 after validation, else the match is dropped. */
+  sentence_refs: Refs,
   status: z.enum(INSIGHT_MATCH_STATUSES),
   rationale: z.string().max(800),
   missing_aspect: z.string().max(400).nullable(),
@@ -44,7 +59,8 @@ export const Ai02MatchSchema = z.object({
 
 export const Ai02MatchOutputSchema = z.object({
   schema_version: z.literal(AI02_OUTPUT_SCHEMA_VERSION),
-  matches: z.array(Ai02MatchSchema).max(30),
+  // Generous for V-6; the server keeps the first AI02_MAX_MATCHES.
+  matches: z.array(Ai02MatchSchema).max(40),
 });
 
 export type Ai02Match = z.infer<typeof Ai02MatchSchema>;

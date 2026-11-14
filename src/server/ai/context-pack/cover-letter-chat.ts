@@ -12,7 +12,7 @@ import { AliasMap } from "./aliases";
 import { buildCareerPack, type CareerPack } from "./career-pack";
 import type { CareerRows } from "./career-rows";
 import { bodyForModel, bodyHash, charLength, esc, factAlias, isComposeRequest, type BodyForModel } from "./deliverable-chat";
-import { buildJdContext, type JdRequirementInput, type JdSentence } from "./jd";
+import { buildJdContext, type JdSentence } from "./jd";
 import type { YearMonth } from "./months";
 import { sourceLabel } from "./selection";
 import type { WritingChatMessageRow } from "./writing-chat";
@@ -24,7 +24,7 @@ import type { WritingChatMessageRow } from "./writing-chat";
  * | 원천 | 쓰는 호출 |
  * |------|-----------|
  * | 커리어 컨텍스트 팩 **전체** (`EXP`·`EDU`·`PRJ`·`DLV`·`SKL`) | extract(참조 없음) · reply · compose |
- * | JD 요건 (`REQ-n`) + 회사·직무 소개 문장 (`S-n`) | reply · compose |
+ * | JD 원문 문장 **전체** (`S-n`, R17 — AI 요건 추출 없음) | reply · compose |
  * | 문항 정의와 **지금 답변**(`form_snapshot` 우선, 없으면 정본) | reply · compose |
  * | 문항 메모 (`NOTE-{문항 번호}`) | reply · compose |
  * | 대화 메시지 (`M{sequence}`) · 정리된 사실 (`F{n}`) | extract · reply · compose |
@@ -94,14 +94,15 @@ export type CoverLetterFormSnapshot = {
   }>;
 };
 
+/** (R17) The JD is its raw text only: every sentence + the user's position title. */
 export type CoverLetterJdInput = {
   jobDescriptionId: string;
   jobDescriptionUpdatedAt: string | null;
+  /** `job_descriptions.sentences` (all of them). */
   sentences: readonly JdSentence[];
-  /** `job_descriptions.extraction.other_sids` (회사·직무 소개 문장). */
-  companySids: readonly string[];
-  requirements: readonly JdRequirementInput[];
   positionTitle: string | null;
+  /** `job_descriptions.raw_text_hash`. */
+  rawTextHash: string;
 };
 
 export type CoverLetterInsightSignal = {
@@ -176,7 +177,8 @@ export type CoverLetterChatContext = {
   jdText: string;
   referenceText: string | null;
   careerSnapshotHash: string;
-  requirementsHash: string;
+  /** = job_descriptions.raw_text_hash (R17). */
+  jdTextHash: string;
   /** usable facts by alias (`F{n}` over draft.facts). */
   factAliases: ReadonlyMap<string, CoverLetterFact>;
   messages: ReadonlyMap<string, V9Message>;
@@ -239,15 +241,13 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
   // ① 커리어 컨텍스트 팩 — 전체 (CL-Q1). 이 호출이 유일한 조립 지점이다.
   const pack = buildCareerPack(input.careerRows, { asOf: input.asOf });
 
-  // ② JD: 요건 전부 + 회사·직무 소개 문장만 (AI-04 입력 컨텍스트).
-  const companySids = new Set(input.jd.companySids);
+  // ② JD: 원문 문장 전체 (R17 — 요건 REQ-n·회사 소개 구분 없음).
   const jd = buildJdContext({
     jobDescriptionId: input.jd.jobDescriptionId,
     jobDescriptionUpdatedAt: input.jd.jobDescriptionUpdatedAt,
-    sentences: input.jd.sentences.filter((s) => companySids.has(s.sid)),
-    requirements: input.jd.requirements,
-    includeSentences: "all",
+    sentences: input.jd.sentences,
     positionTitle: input.jd.positionTitle,
+    rawTextHash: input.jd.rawTextHash,
   });
 
   // ③ 문항 (정본 + 폼 스냅숏) + 메모 별칭.
@@ -360,7 +360,7 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
     jdText: jd.text,
     referenceText,
     careerSnapshotHash: pack.careerSnapshotHash,
-    requirementsHash: jd.requirementsHash,
+    jdTextHash: jd.jdTextHash,
     factAliases,
     messages,
     messageAliasById,

@@ -1,8 +1,17 @@
-import { AI_ERROR_MESSAGES, errorCategoryOf, failureCauseOf, isManuallyRetryable, type AiJobRetryPreview, type AiJobStatusResponse } from "@/lib/contracts/ai";
+import { errorCategoryOf, jobErrorMessageOf, failureCauseOf, isManuallyRetryable, type AiJobRetryPreview, type AiJobStatusResponse } from "@/lib/contracts/ai";
 import type { ActiveConnection, ProviderContextSource } from "./provider-context";
 import { REQUEST_SCOPED_JOB_TYPES } from "./runner";
+import { hasPreR17Checkpoint } from "@/server/services/insight/job";
 import { insightJobPartial } from "@/server/services/insight/partial";
 import type { JobRecord } from "./types";
+
+/**
+ * Retries the runner refuses because of the stored checkpoints (insight `retryBlocked`, R17 QA-03),
+ * so the status never offers a button the retry route answers with 409. Pure (no DB read).
+ */
+export function retryBlockedByCheckpoint(job: Pick<JobRecord, "jobType" | "stepOutputs">): boolean {
+  return job.jobType === "insight" && hasPreR17Checkpoint(job.stepOutputs);
+}
 
 /** Feature partial results for `useAiJob().partial` (S6: AI-02 stage-1 verdicts). Null when the feature has none. */
 export function jobPartial(job: JobRecord): unknown {
@@ -48,7 +57,7 @@ export function toAiJobStatusResponse(
   job: JobRecord,
   partial: unknown = jobPartial(job),
   active: ActiveConnection | null = null,
-  retryBlocked = false,
+  retryBlocked = retryBlockedByCheckpoint(job),
 ): AiJobStatusResponse {
   const ended = job.status === "failed" || job.status === "canceled";
   const code = ended ? job.errorCode : null;
@@ -61,7 +70,7 @@ export function toAiJobStatusResponse(
     status: job.status,
     progress: { stage: job.progress.stage, done: job.progress.done, total: job.progress.total },
     partial,
-    error: code && category ? { code, category, failureCause, message: AI_ERROR_MESSAGES[code] } : null,
+    error: code && category ? { code, category, failureCause, message: jobErrorMessageOf(code) } : null,
     errorCategory: category,
     failureCause,
     retryAfter: job.status === "failed" ? job.retryAfter : null,

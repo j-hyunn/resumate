@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { KO_BACKEND, NOT_A_JD } from "@/server/ai/__fixtures__/AI-01/jds";
+import { KO_BACKEND } from "@/test/jd-fixtures";
 import type { ProviderAdapter } from "@/server/ai/providers/types";
 import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
@@ -130,7 +130,6 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
   });
 
   const apps = () => import("./applications");
-  const drafts = () => import("./drafts");
   const deletion = () => import("./deletion");
   const evidence = () => import("./evidence");
   const guard = () => import("./ai-guard");
@@ -138,7 +137,6 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
 
   it("S-14 without a key: saved, default name, pending with no job; the JD is readable; AI starts are refused", async () => {
     const { createApplicationProject, getJobDescription, getApplicationProject, listApplicationProjects, startInsight } = await apps();
-    const { retryJdExtraction } = await drafts();
     const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw, deadline: "2026-12-31" });
     expect(ap.name_source).toBe("default");
     await settle();
@@ -151,74 +149,41 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(summary?.insight_status).toMatchObject({ kind: "none", failure: null });
     expect((await listApplicationProjects()).map((a) => a.id)).toContain(ap.id);
     expect(await getApplicationProject("not-a-uuid")).toBeNull();
-    expect(await retryJdExtraction(ap.id)).toMatchObject({ rejected: "key_missing" });
     const { withAiGuard } = await guard();
     expect(await withAiGuard(() => startInsight(ap.id))).toMatchObject({ refusal: "ai_not_connected" });
   });
 
   let project = "";
 
-  it("S-14 with a key: AI-01 starts in the background and the JD reads `running` right away, then the requirements", async () => {
+  it("S-14 with a key (R17): nothing starts — the JD stays `pending` with no job, the name comes from the company", async () => {
     await connectTestProvider(admin, user, userId, "anthropic", "paid");
-    const { createApplicationProject, getJobDescription, getJdRequirement, getApplicationProject } = await apps();
-    h.queue.push({ json: KO_BACKEND.output, delayMs: 300 });
+    const { createApplicationProject, getJobDescription, getApplicationProject } = await apps();
     const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw, company_name: "베타", position_title: "백엔드" });
     project = ap.id;
-    // R15 D11/D12 (CF-9): a company name names the 자기소개서 right away, with or without a key —
-    // it no longer waits for the extraction.
     expect(ap).toMatchObject({ name: "베타 자기소개서", name_source: "user" });
-    expect((await getJobDescription(ap.id))?.extraction_status).toBe("running");
     await settle();
-    const jd = await getJobDescription(ap.id);
-    expect(jd?.extraction_status).toBe("succeeded");
-    expect(jd?.requirements.length).toBeGreaterThan(0);
-    expect(jd).toMatchObject({ raw_text_editable: false, raw_text_lock: "jd_raw_text_locked" });
-    expect(await getJdRequirement(jd!.requirements[0]!.id)).toMatchObject({ content: jd!.requirements[0]!.content });
-    expect((await getApplicationProject(ap.id))?.job_description).toMatchObject({ company_name: "베타", position_title: "백엔드", extraction_status: "succeeded" });
+    expect(await getJobDescription(ap.id)).toMatchObject({ extraction_status: "pending", extraction_job_id: null, requirements: [], raw_text_lock: "jd_raw_text_locked" });
+    expect((await admin.from("ai_jobs").select("id").eq("application_project_id", ap.id)).data).toEqual([]);
+    expect((await getApplicationProject(ap.id))?.job_description).toMatchObject({ company_name: "베타", position_title: "백엔드" });
   });
 
-  it("Q53-1: an invalid key and a missing consent refuse before any row (AiRejected shape)", async () => {
+  it("R17-9: creation has no AI gate — a withdrawn consent still saves the JD", async () => {
     const { createApplicationProject, listApplicationProjects } = await apps();
-    const { withAiGuard } = await guard();
     const before = (await listApplicationProjects()).length;
-    const key = await user.from("ai_provider_keys_public").select("provider").eq("provider", "anthropic").single();
-    expect(key.error).toBeNull();
-    const writer = createAiWriterClient(userId);
-    const jobs = await admin.from("ai_jobs").select("id").eq("user_id", userId).eq("status", "succeeded").limit(1).single();
-    const marked = await writer.rpc("mark_provider_key_invalid", { p_ai_job_id: jobs.data!.id, p_failure_cause: "key_invalid" });
-    expect(marked.error).toBeNull();
-    expect(await withAiGuard(() => createApplicationProject({ raw_text: KO_BACKEND.raw }))).toMatchObject({ rejected: "key_invalid", refusal: "key_invalid" });
-    expect((await listApplicationProjects()).length).toBe(before);
-    await connectTestProvider(admin, user, userId, "anthropic", "paid");
     await admin.from("ai_data_use_consents").update({ withdrawn_at: new Date().toISOString() }).eq("user_id", userId);
-    expect(await withAiGuard(() => createApplicationProject({ raw_text: KO_BACKEND.raw }))).toMatchObject({ refusal: "ai_consent_required" });
-    expect((await listApplicationProjects()).length).toBe(before);
+    const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw });
+    expect(ap.id).toBeTruthy();
+    expect((await listApplicationProjects()).length).toBe(before + 1);
+    await (await deletion()).deleteApplicationProject(ap.id);
     await connectTestProvider(admin, user, userId, "anthropic", "paid");
   });
 
-  it("S-15 raw text: input-caused failure → editable; refusals map to the screen's codes; save → pending; re-extract", async () => {
-    const { createApplicationProject, getJobDescription, updateFailedJdRawText } = await apps();
-    const { retryJdExtraction } = await drafts();
-    h.queue.push({ json: NOT_A_JD.output });
-    const ap = await createApplicationProject({ raw_text: NOT_A_JD.raw });
-    await settle();
-    const failed = await getJobDescription(ap.id);
-    expect(failed).toMatchObject({ extraction_status: "failed", raw_text_editable: true, raw_text_lock: null });
-    expect(await updateFailedJdRawText(ap.id, NOT_A_JD.raw)).toEqual({ refused: "jd_raw_text_unchanged" });
+  it("S-15 raw text (R17-6): a new JD is locked; refusals map to the screen's codes", async () => {
+    const { createApplicationProject, updateFailedJdRawText } = await apps();
+    const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw });
+    expect(await updateFailedJdRawText(ap.id, "또 다른 공고")).toEqual({ refused: "jd_raw_text_locked" });
     expect(await updateFailedJdRawText(crypto.randomUUID(), "새 공고")).toEqual({ refused: "job_description_not_found" });
     expect(await updateFailedJdRawText(ap.id, "   ")).toEqual({ refused: "invalid_raw_text" });
-    const saved = await updateFailedJdRawText(ap.id, KO_BACKEND.raw);
-    expect(saved).toMatchObject({ application_project_id: ap.id, extraction_status: "pending", ai_run_allowed: true });
-    expect(await getJobDescription(ap.id)).toMatchObject({ extraction_status: "pending", extraction_job_id: null, raw_text: KO_BACKEND.raw });
-    h.queue.push({ json: KO_BACKEND.output, delayMs: 300 });
-    expect(await retryJdExtraction(ap.id)).toBe(true);
-    expect(await retryJdExtraction(ap.id)).toBe("already");
-    await settle();
-    const done = await getJobDescription(ap.id);
-    expect(done?.extraction_status).toBe("succeeded");
-    expect(done?.raw_text_lock).toBe("jd_raw_text_locked");
-    expect(await updateFailedJdRawText(ap.id, "또 다른 공고")).toEqual({ refused: "jd_raw_text_locked" });
-    expect(await retryJdExtraction(ap.id)).toBe(true); // already extracted: the screen's poll reads `succeeded`
     await (await deletion()).deleteApplicationProject(ap.id);
   });
 
@@ -227,11 +192,22 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const { withAiGuard } = await guard();
     const db = await import("@/server/services/insight/db");
     const { productionInsightPipeline } = await import("@/server/jobs/insight");
-    const context = async () => (productionInsightPipeline as unknown as { buildContext: (i: unknown) => { aliases: { aliasOf: (t: string, id: string) => string; values: () => Iterable<{ sourceType: string; alias: string }> }; requirements: Array<{ ref: string }> } }).buildContext(await db.loadInsightInputs(createAiWriterClient(userId), project));
+    type Ctx = { aliases: { aliasOf: (t: string, id: string) => string; values: () => Iterable<{ sourceType: string; alias: string; fields: Record<string, string> }> } };
+    const context = async () => (productionInsightPipeline as unknown as { buildContext: (i: unknown) => Ctx }).buildContext(await db.loadInsightInputs(createAiWriterClient(userId), project));
+    const sid = (ctx: Ctx, needle: string) => [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence" && (e.fields[""] ?? "").includes(needle))!.alias;
+    // R17: stage 1 reads the requirements from the JD sentences (v2, one call); stage 2 refs are M-n.
     h.queue.push(async () => {
       const ctx = await context();
       const prj = ctx.aliases.aliasOf("project", ids.project);
-      return { json: { schema_version: 1, matches: ctx.requirements.map((r, i) => (i === 0 ? { requirement_ref: r.ref, status: "met", rationale: "직접 개선한 행동이 있습니다.", missing_aspect: null, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] } : { requirement_ref: r.ref, status: "no_evidence", rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] })) } };
+      return {
+        json: {
+          schema_version: 2,
+          matches: [
+            { requirement: "결제 승인·정산 API 설계 및 운영", category: "responsibility", importance: "high", sentence_refs: [sid(ctx, "결제 승인·정산")], status: "met", rationale: "직접 개선한 행동이 있습니다.", missing_aspect: null, evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] },
+            { requirement: "Kafka 등 메시지 큐 운영 경험", category: "preferred", importance: "normal", sentence_refs: [sid(ctx, "Kafka")], status: "no_evidence", rationale: "근거 없음", missing_aspect: "관련 경험", evidence: [] },
+          ],
+        },
+      };
     });
     h.queue.push(async () => {
       const ctx = await context();
@@ -239,10 +215,10 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
       const sentence = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence")!.alias;
       return {
         json: {
-          schema_version: 1,
-          strengths: [{ title: "결제 승인 API 개선", description: "결제 승인 API의 병목을 직접 찾아 개선했습니다.", requirement_refs: [ctx.requirements[0]!.ref], evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] }],
-          gaps: [{ requirement_refs: [ctx.requirements[1]!.ref], gap_kind: "no_evidence", description: "관련 경험이 확인되지 않습니다.", actions: [{ type: "add_data", text: "관련 프로젝트가 있다면 추가해 주세요.", evidence: [] }], evidence: [{ source_type: "jd_sentence", ref: sentence, field: null, quote: null }] }],
-          strategy: { positioning: "결제 API 성능을 개선해 온 엔지니어입니다.", positioning_evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], project_priorities: [{ rank: 1, ref: prj, reason: "가장 직접 연결됩니다.", requirement_refs: [ctx.requirements[0]!.ref] }] },
+          schema_version: 2,
+          strengths: [{ title: "결제 승인 API 개선", description: "결제 승인 API의 병목을 직접 찾아 개선했습니다.", requirement_refs: ["M-1"], evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }] }],
+          gaps: [{ requirement_refs: ["M-2"], gap_kind: "no_evidence", description: "관련 경험이 확인되지 않습니다.", actions: [{ type: "add_data", text: "관련 프로젝트가 있다면 추가해 주세요.", evidence: [] }], evidence: [{ source_type: "jd_sentence", ref: sentence, field: null, quote: null }] }],
+          strategy: { positioning: "결제 API 성능을 개선해 온 엔지니어입니다.", positioning_evidence: [{ source_type: "project", ref: prj, field: "action", quote: ACTION }], project_priorities: [{ rank: 1, ref: prj, reason: "가장 직접 연결됩니다.", requirement_refs: ["M-1"] }] },
         },
       };
     });
@@ -262,7 +238,8 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     const state = await getInsightState(project);
     expect(state.generating).toBeNull();
     const result = state.latest?.result;
-    expect(result?.requirement_matches[0]).toMatchObject({ status: "met", rationale: expect.any(String) });
+    // R17 v2: the requirement travels with the match (no jd_requirements row)
+    expect(result?.requirement_matches[0]).toMatchObject({ requirement_id: "M1", requirement: { content: "결제 승인·정산 API 설계 및 운영", category: "responsibility" }, status: "met", rationale: expect.any(String) });
     expect(result?.requirement_matches[0]?.item_key).toBeTruthy();
     expect(result?.strengths[0]?.item_key).toBeTruthy();
     expect(result?.strategy.project_priorities[0]).toMatchObject({ project_id: ids.project, rank: 1 });
@@ -282,23 +259,5 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
     expect(await getApplicationProject(project)).toBeNull();
   });
 
-  /**
-   * R15-DB-8: condition 5 of `update_failed_jd_raw_text` no longer has a 서류 branch (the
-   * 경력기술서 is gone and 자소서 answers are not built from the requirement rows), so a JD that
-   * succeeded with **no** requirements and no insight stays editable. The old version of this test
-   * built a 경력기술서 section to lock it; that path is retired.
-   */
-  it("Q53-11 (R15): succeeded with no requirements stays editable; a ready insight locks it", async () => {
-    const { createApplicationProject, getJobDescription, updateFailedJdRawText } = await apps();
-    // AI-01 refuses an empty list itself (retry → schema_invalid), so the state is set up by removing the rows.
-    h.queue.push({ json: KO_BACKEND.output });
-    const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw });
-    await settle();
-    const extracted = await getJobDescription(ap.id);
-    const removed = await admin.from("jd_requirements").delete().eq("job_description_id", extracted!.id);
-    expect(removed.error).toBeNull();
-    expect(await getJobDescription(ap.id)).toMatchObject({ extraction_status: "succeeded", requirements: [], raw_text_editable: true, raw_text_lock: null });
-    const saved = await updateFailedJdRawText(ap.id, "다른 공고 원문입니다. 백엔드 개발자를 찾습니다.");
-    expect(saved).toMatchObject({ application_project_id: ap.id, extraction_status: "pending" });
-  });
+  // R17: the R15-DB-8 "succeeded with no requirements" case needed AI-01 — it is covered on the RPC (pgTAP).
 });

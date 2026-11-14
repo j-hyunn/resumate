@@ -4,7 +4,6 @@ import { CreateApplicationProjectInput } from "@/lib/contracts/application";
 import { CoverLetterDraftSchema } from "@/server/ai/schemas/cover-letter-draft";
 import { DocumentTurnEventSchema, DocumentWritingChatDto, type DocumentTurnEvent } from "@/lib/contracts/writing-chat";
 import { ProviderError } from "@/server/ai/errors";
-import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
@@ -16,10 +15,7 @@ import { saveApplicationDocument, startDocumentWritingChat } from "@/server/serv
 import { createApplicationProject } from "@/server/services/application/write";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
-import { extractJdPreview, type JdPreviewDeps } from "@/server/services/application/preview";
-import { extractJdRequirements, jdPreviewSummary } from "@/server/ai/pipelines/AI-01";
-import { silentAiLogger } from "@/server/ai/log";
-import type { JdPreviewExtractor } from "@/server/services/application/preview";
+import { KO_BACKEND } from "@/test/jd-fixtures";
 import { createTurnChatDb } from "./db";
 import { createDeliverablePipelines, createDocumentPipelines, createWritingChatPipelines } from "./pipelines";
 import { prepareTurn, runTurn, type TurnRequest } from "./turn";
@@ -38,13 +34,8 @@ import type { TurnDeps } from "./types";
  * combination belongs here, not in the unit test.
  *
  * Covered: 정본 저장 → 대화 시작 → 질문 턴 → **초안 턴(compose)** → `apply_structured_draft_patch`
- * 서류 분기 저장 → 사용량 행 → 미리 보기 게이트 409(행 0건) → 미리 보기 성공·생성 적용·`preview_mismatch`.
+ * 서류 분기 저장 → 사용량 행. (R17: the 요건 미리 보기 part is gone with AI-01.)
  */
-
-const previewExtractorForTests: JdPreviewExtractor = async (input, deps) => {
-  const result = await extractJdRequirements(input, { llm: deps.llm, signal: deps.signal, callKey: deps.callKey, jobId: deps.jobId, logger: silentAiLogger });
-  return { payload: result.payload, summary: jdPreviewSummary(result), model: result.meta.model, promptVersion: result.promptVersion };
-};
 
 const stack = readLocalSupabase();
 const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "application_documents")) : false;
@@ -53,7 +44,7 @@ type Client = SupabaseClient<Database>;
 const FAKE_KEY = "sk-FAKE-r15-document-chat-0000";
 
 const extractOut = {
-  schema_version: 4,
+  schema_version: 5,
   draft_type: "cover_letter",
   turn_kind: "extract",
   intent: null,
@@ -129,7 +120,7 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
    */
   function composeOutput(slots: readonly string[]) {
     return {
-      schema_version: 4,
+      schema_version: 5,
       draft_type: "cover_letter",
       turn_kind: "compose",
       questions: slots.map((slot, i) => ({
@@ -142,7 +133,6 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
             education_ref: null,
             role: "primary",
             rationale: "결제 도메인 경험이 이 문항의 핵심입니다.",
-            requirement_refs: [],
             reuse_reason: null,
             evidence: [{ source_type: "project", ref: "PRJ-1", field: "action", quote: ACTION }],
           },
@@ -154,7 +144,6 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
             evidence: [{ source_type: "project", ref: "PRJ-1", field: "action", quote: ACTION }],
             source_fact_ids: [],
             source_body_quotes: [],
-            requirement_refs: [],
             placeholders: [],
           },
         ],
@@ -429,13 +418,13 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
     replies.push({ json: composeOutput(["q_1"]) });
     replies.push({
       json: {
-        schema_version: 4,
+        schema_version: 5,
         draft_type: "cover_letter",
         turn_kind: "adjust_length",
         questions: [
           {
             question_slot: "q_1",
-            paragraphs: [{ block_id: "q_1-p1", text: corrected, evidence, source_fact_ids: [], source_body_quotes: [], requirement_refs: [], placeholders: [] }],
+            paragraphs: [{ block_id: "q_1-p1", text: corrected, evidence, source_fact_ids: [], source_body_quotes: [], placeholders: [] }],
           },
         ],
       },
@@ -539,7 +528,7 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
     extracts.push({ json: { ...extractOut, intent: "compose_draft" } });
     replies.push({
       json: {
-        schema_version: 4,
+        schema_version: 5,
         draft_type: "cover_letter",
         turn_kind: "compose",
         questions: [
@@ -547,8 +536,8 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
             question_slot: "q_1",
             question_class: "job_competency",
             sources: [
-              { project_ref: prjEdu, experience_ref: null, education_ref: parentEdu, role: "primary", rationale: "평가 설계 경험", requirement_refs: [], reuse_reason: null, evidence: ev(prjEdu, EDU_ACTION) },
-              { project_ref: prjDoomed, experience_ref: parentExp, education_ref: null, role: "supporting", rationale: "절차 정리 경험", requirement_refs: [], reuse_reason: null, evidence: ev(prjDoomed, DOOMED_ACTION) },
+              { project_ref: prjEdu, experience_ref: null, education_ref: parentEdu, role: "primary", rationale: "평가 설계 경험", reuse_reason: null, evidence: ev(prjEdu, EDU_ACTION) },
+              { project_ref: prjDoomed, experience_ref: parentExp, education_ref: null, role: "supporting", rationale: "절차 정리 경험", reuse_reason: null, evidence: ev(prjDoomed, DOOMED_ACTION) },
             ],
             paragraphs: [
               {
@@ -557,7 +546,6 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
                 evidence: [...ev(prjEdu, EDU_ACTION), ...ev(prjDoomed, DOOMED_ACTION)],
                 source_fact_ids: [],
                 source_body_quotes: [],
-                requirement_refs: [],
                 placeholders: [],
               },
             ],
@@ -864,106 +852,4 @@ describe.skipIf(!ready)("R15 서류 대화 (local stack): 저장 · 대화 시�
   }, 120_000);
 });
 
-describe.skipIf(!ready)("R15 요건 미리 보기 (local stack): 게이트 · 적용 · preview_mismatch", { timeout: 60_000 }, () => {
-  const s = stack!;
-  let admin: Client;
-  let user: Client;
-  let userId = "";
-  const logs: string[] = [];
-  const responses: ScriptedResponse[] = [];
-
-  function previewDeps(keyStatus: "valid" | "invalid"): JdPreviewDeps {
-    const writer = createAiWriterClient(userId);
-    const adapter = createScriptedAdapter("anthropic", [...responses], Date.now);
-    responses.length = 0;
-    return {
-      userId,
-      store: createSupabaseJobStore(writer),
-      usage: createSupabaseUsageStore(writer),
-      providerContext: createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus }),
-      keySource: createStaticKeySource(FAKE_KEY, () => new ProviderError("key_missing")),
-      keyStatus: createRecordingKeyStatusReporter(),
-      runGate: null,
-      createLlm: (input: LlmFactoryInput) => scriptedLlmFactory(adapter.adapter, Date.now)(input),
-      // Same wiring as production (`jobs/jd-preview.ts`), with the silent logger.
-      extract: previewExtractorForTests,
-      log: (event, fields) => void logs.push(JSON.stringify({ event, ...fields })),
-    };
-  }
-
-  beforeEach(() => {
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", s.url);
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", s.anonKey);
-    vi.stubEnv("SUPABASE_JWT_SECRET", s.jwtSecret);
-    vi.stubEnv("CRON_SECRET", "test-cron-secret-0000");
-    resetServerEnvCache();
-  });
-
-  beforeAll(async () => {
-    admin = createClient<Database>(s.url, s.serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const email = `r15-prev-${crypto.randomUUID()}@example.test`;
-    const password = `pw-${crypto.randomUUID()}`;
-    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    if (created.error || !created.data.user) throw new Error(`createUser failed: ${created.error?.message}`);
-    userId = created.data.user.id;
-    user = createClient<Database>(s.url, s.anonKey, { auth: { persistSession: false } });
-    const signIn = await user.auth.signInWithPassword({ email, password });
-    if (signIn.error) throw new Error(`signIn failed: ${signIn.error.message}`);
-  });
-
-  afterAll(async () => {
-    if (!userId) return;
-    await admin.from("ai_usage_records").delete().eq("user_id", userId);
-    await admin.from("ai_jobs").delete().eq("user_id", userId);
-    await admin.auth.admin.deleteUser(userId);
-    resetServerEnvCache();
-  });
-
-  it("the gate 409 writes no ai_jobs row, a success writes the jd_preview row, and the create RPC applies it / reports preview_mismatch", async () => {
-    // 1. gate 409 (key invalid) → no job row, no usage row.
-    await expect(extractJdPreview(previewDeps("invalid"), KO_BACKEND.raw)).rejects.toMatchObject({ code: "key_invalid" });
-    const none = await admin.from("ai_jobs").select("id").eq("user_id", userId);
-    expect(none.data ?? []).toHaveLength(0);
-
-    // 2. success → one ai_jobs row with the R15 jd_preview combination + one usage row.
-    responses.push({ json: KO_BACKEND.output });
-    const preview = await extractJdPreview(previewDeps("valid"), KO_BACKEND.raw);
-    const job = await admin.from("ai_jobs").select("*").eq("id", preview.previewJobId).single();
-    expect(job.data).toMatchObject({ job_type: "jd_extraction", target_type: "jd_preview", target_id: null, application_project_id: null, status: "succeeded" });
-    expect(job.data?.output).not.toBeNull();
-    const usage = await admin.from("ai_usage_records").select("feature, application_project_id").eq("user_id", userId);
-    expect(usage.data).toHaveLength(1);
-    expect(usage.data?.[0]).toMatchObject({ feature: "jd_extraction", application_project_id: null });
-
-    // 3. the create RPC applies it (hash recomputed from p_raw_text) and links the job + usage row.
-    const okId = crypto.randomUUID();
-    const applied = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: okId, rawText: KO_BACKEND.raw, previewJobId: preview.previewJobId }));
-    expect(applied.previewApplied).toBe(true);
-    expect(applied.previewSkipReason).toBeNull();
-    expect(applied.extractionStatus).toBe("succeeded");
-    const linked = await admin.from("ai_jobs").select("target_id, application_project_id").eq("id", preview.previewJobId).single();
-    expect(linked.data?.application_project_id).toBe(okId);
-
-    // 4. a different raw text with the same preview id → preview_mismatch (the sent hash is not trusted).
-    responses.push({ json: KO_BACKEND.output });
-    const second = await extractJdPreview(previewDeps("valid"), KO_BACKEND.raw);
-    const badId = crypto.randomUUID();
-    const mismatch = await createApplicationProject(
-      user,
-      CreateApplicationProjectInput.parse({ id: badId, rawText: `${KO_BACKEND.raw}\n다른 문장을 한 줄 붙였다.`, previewJobId: second.previewJobId }),
-    );
-    expect(mismatch.previewApplied).toBe(false);
-    expect(mismatch.previewSkipReason).toBe("preview_mismatch");
-    const linkedAnyway = await admin.from("ai_jobs").select("application_project_id").eq("id", second.previewJobId).single();
-    expect(linkedAnyway.data?.application_project_id).toBe(badId);
-
-    // 5. an invalid source URL is refused before any row is made.
-    const urlId = crypto.randomUUID();
-    await expect(
-      createApplicationProject(user, CreateApplicationProjectInput.parse({ id: urlId, rawText: KO_BACKEND.raw, sourceUrl: "https://example.test/a" })),
-    ).resolves.toMatchObject({ applicationProjectId: urlId });
-
-    const all = logs.join("\n");
-    expect(all).not.toContain(FAKE_KEY);
-  }, 60_000);
-});
+// R17: the R15 요건 미리 보기 block (AI-01 preview → create applies it / preview_mismatch) is gone with AI-01.

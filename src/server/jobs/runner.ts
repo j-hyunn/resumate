@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { errorCategoryOf, failureCauseOf, type RetryAiJobResponse, type StartAiJobResponse, type StoredAiJobProgress } from "@/lib/contracts/ai";
 import type { AiErrorCode, AiJobType, AiProvider, ConnectionTier, ModelTier } from "@/lib/contracts/enums";
+import { LEGACY_AI_JOB_TYPES } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { AiError, isAiError, ProviderError } from "@/server/ai/errors";
 import { resolveModel } from "@/server/ai/providers/models";
@@ -63,7 +64,8 @@ import { STEP_CONTINUE } from "./types";
 export const REQUEST_SCOPED_JOB_TYPES: ReadonlySet<AiJobType> = new Set<AiJobType>([
   "key_verification", // QA-S3b-05: re-run from the connection screen
   "writing_chat_turn", // S4: "다시 보내기" (POST /api/writing-chats/{id}/turns?retry=1)
-  "jd_extraction", // S5: POST /api/application-projects/{id}/jd-extraction again
+  // R17: `jd_extraction` (AI-01) is gone — a legacy row is neither registered nor request-scoped;
+  // the run path ends it `stalled` (no definition) and retryJob refuses it (LEGACY_AI_JOB_TYPES).
   // R15 (CF-1·CF-A3): the three S7 서류 routes are retired. `draft_source_ranking` and
   // `career_description` stay in the list only for rows inside the 90-day retention window;
   // `cover_letter` now means one 서류 대화 턴 (POST /api/writing-chats/{id}/turns).
@@ -279,6 +281,8 @@ export function createJobRunner<TLlm>(deps: RunnerDeps<TLlm>) {
     // S7 (QA-S7-02): drafts run inside their request (AI-11 sync, AI-03 / AI-04 SSE) with no registry step;
     // "다시 시도" calls the generation route again (a new job; a career description gets a new draft row).
     if (REQUEST_SCOPED_JOB_TYPES.has(job.jobType)) throw notRetryable();
+    // R17: a pre-R17 `jd_extraction` row has no feature to rerun.
+    if ((LEGACY_AI_JOB_TYPES as readonly string[]).includes(job.jobType)) throw notRetryable();
     const def = definitionOf(job.jobType);
     // Q53-5: nothing to redo on this row, whatever the connection state says.
     if (def.retryBlocked && (await def.retryBlocked({ db: scope.db, job }))) throw notRetryable();

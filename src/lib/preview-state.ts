@@ -103,7 +103,7 @@ export function withPreviewState(path: string, state: PreviewState | null): stri
 
 /**
  * `?state=` → the error_code a failed AI run shows (C-20). v4: ai-failed = system schema_invalid,
- * ai-failed-input = not_a_jd, ai-failed-timeout = timeout, ai-failed-<cause> = the 7 causes,
+ * ai-failed-input = input_too_long (R17: `not_a_jd` is no longer produced), ai-failed-timeout = timeout, ai-failed-<cause> = the 7 causes,
  * key-missing = ST-AI-KEY-MISSING. `limit` was removed (no service limit, D-34).
  */
 export function previewErrorCode(
@@ -119,7 +119,6 @@ export function previewErrorCode(
   | "input_too_long"
   | "safety_blocked"
   | "schema_invalid"
-  | "not_a_jd"
   | "timeout"
   | null {
   switch (state) {
@@ -145,7 +144,7 @@ export function previewErrorCode(
     case "ai-failed":
       return "schema_invalid"
     case "ai-failed-input":
-      return "not_a_jd"
+      return "input_too_long"
     case "ai-failed-timeout":
       return "timeout"
     // v5.3: input-caused (no retry) / request-path wait / retry previews use a retryable cause

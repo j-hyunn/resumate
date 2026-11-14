@@ -1,12 +1,10 @@
 /**
  * A3 (R15, plan 1-C): the single normalization of a pasted / fetched JD raw text.
  *
- * Creation (`create_application_project`), the raw-text edit (DM 2.6.1
- * `update_failed_jd_raw_text`) and the requirement preview route
- * (`POST /api/job-descriptions/extract-preview`) must all produce **one** string
- * and derive the split, the hash and the stored raw text from it — otherwise the
- * preview's `raw_text_hash` / `sentence_count` can never match the creation call
- * and `create_application_project` always answers `preview_mismatch`.
+ * Creation (`create_application_project`) and the raw-text edit (DM 2.6.1
+ * `update_failed_jd_raw_text`) must produce **one** string and derive the split,
+ * the hash and the stored raw text from it (R17: the hash is also the AI input's
+ * `jd_text_hash`, so the same text must always hash the same).
  *
  * Rules (`[가정]`, R15 plan A3):
  *   1. `\r\n` and `\r` → `\n`

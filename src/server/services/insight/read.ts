@@ -1,4 +1,4 @@
-import { aiErrorEvent } from "@/lib/contracts/ai";
+import { aiErrorEvent, errorCategoryOf, isLegacyAiErrorCode, jobErrorMessageOf } from "@/lib/contracts/ai";
 import { isFailureBeforeRawTextEdit, toAiFailure } from "@/lib/contracts/application";
 import { AI_ERROR_CODES, AI_PROVIDERS, CONNECTION_TIERS, MODEL_TIERS, type AiErrorCode, type AiProvider, type ConnectionTier, type ModelTier } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
@@ -19,9 +19,9 @@ import {
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
-import { extractionJobToCheck, loadExtractionJobs, resolveExtraction } from "@/server/services/application/read";
 import { loadEvidenceChips } from "@/server/services/evidence";
-import { loadInsightInputs, loadInsightJd, loadInsightRequirements, type InsightInputs } from "./db";
+import { loadInsightInputs, loadInsightJd, loadLegacyRequirements, type InsightInputs } from "./db";
+import { isV2Result, legacyRequirements, v2Requirements } from "./requirements";
 import { INSIGHT_JOB_TYPE, type InsightPipeline } from "./job";
 
 /**
@@ -32,7 +32,9 @@ import { INSIGHT_JOB_TYPE, type InsightPipeline } from "./job";
  *   evidence chips (shared evidence service), requirement contents instead of
  *   aliases, project names for priorities, the C-19 provider badge.
  * - F-P2-07 MVP "데이터 변경됨": `stale` when the current career snapshot hash
- *   or requirements hash differs from the stored one (same builders as the job).
+ *   or the JD raw-text hash differs from the stored one (same builders as the job).
+ * - R17: requirements come from the shown insight — v2 from its result, v1 from
+ *   the preserved `jd_requirements` rows (no extraction status any more).
  * - The insight job in flight (C-03) and the last failed run after the shown
  *   result (C-20). A `generating` row is never shown; whether something is
  *   generating is decided by the job (db notes: a generating row whose job
@@ -48,7 +50,7 @@ export type InsightReadDeps = {
 const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 const INSIGHT_COLUMNS =
-  "id, version_no, status, is_latest, result, requirements_hash, career_snapshot_hash, provider, model, model_tier, connection_tier, prompt_version, created_at, completed_at";
+  "id, version_no, status, is_latest, result, jd_text_hash, career_snapshot_hash, provider, model, model_tier, connection_tier, prompt_version, created_at, completed_at";
 
 type InsightRow = {
   id: string;
@@ -56,7 +58,8 @@ type InsightRow = {
   status: string;
   is_latest: boolean;
   result: Json | null;
-  requirements_hash: string | null;
+  /** R17 (v2). Null on a v1 row (it stored `requirements_hash`, not read any more). */
+  jd_text_hash: string | null;
   career_snapshot_hash: string | null;
   provider: string | null;
   model: string | null;
@@ -237,6 +240,10 @@ export function resolveInsightRun(
 /** C-20 failure of a failed insight job (same shape as the S5 JD failure). */
 function toFailure(row: JobRow): InsightLastFailure | null {
   if (row.status !== "failed") return null;
+  // R17 (QA-02): a pre-R17 `not_a_jd` row is an input failure without retry (same rule as the runner and status).
+  if (isLegacyAiErrorCode(row.error_code)) {
+    return { code: row.error_code, category: errorCategoryOf(row.error_code), failureCause: null, message: jobErrorMessageOf(row.error_code), retryable: false, retryAfter: null, quotaResetsAt: null, jobId: row.id, failedAt: row.finished_at };
+  }
   const code = oneOf<AiErrorCode>(AI_ERROR_CODES, row.error_code) ?? "stalled";
   return { ...toAiFailure(aiErrorEvent(code, { retryAfter: row.retry_after, quotaResetsAt: row.quota_resets_at })), jobId: row.id, failedAt: row.finished_at };
 }
@@ -288,26 +295,23 @@ export async function getInsight(user: UserSupabaseClient, input: { applicationP
 
   let insightQuery = user.from("insights").select(INSIGHT_COLUMNS).eq("application_project_id", applicationProjectId).eq("status", "ready");
   insightQuery = input.version ? insightQuery.eq("version_no", input.version) : insightQuery.eq("is_latest", true);
-  const [requirementRows, insightResult, jobs, pendingResult, extractionJobs] = await Promise.all([
-    loadInsightRequirements(user, jd.jobDescriptionId),
+  const [insightResult, jobs, pendingResult] = await Promise.all([
     insightQuery.limit(1),
     loadLatestInsightJobs(user, applicationProjectId),
     // Newest version that isn't ready: a `generating` row whose job ended counts as failed (db notes).
     user.from("insights").select("status, ai_job_id").eq("application_project_id", applicationProjectId).neq("status", "ready").order("version_no", { ascending: false }).limit(1),
-    loadExtractionJobs(user, extractionJobToCheck({ extraction_status: jd.extractionStatus, extraction_job_id: jd.extractionJobId })),
   ]);
   if (pendingResult.error) throw mapDbError(pendingResult.error);
   if (insightResult.error) throw mapDbError(insightResult.error);
   const row = ((insightResult.data ?? [])[0] ?? null) as InsightRow | null;
   if (input.version && !row) throw new AppError("insight_not_found", "인사이트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
-  const requirements: InsightRequirement[] = requirementRows.map((r) => ({
-    id: r.id,
-    category: r.category,
-    content: r.content,
-    importance: r.importance,
-    sortOrder: r.sort_order,
-  }));
+  // R17: v2 carries its own requirement list; v1 points at the preserved jd_requirements rows.
+  const requirements: InsightRequirement[] = !row
+    ? []
+    : isV2Result(row.result)
+      ? v2Requirements(row.result)
+      : legacyRequirements(await loadLegacyRequirements(user, jd.jobDescriptionId));
   const requirementMap = new Map(requirements.map((r) => [r.id, r]));
 
   let insight: InsightResultView | null = null;
@@ -326,7 +330,6 @@ export async function getInsight(user: UserSupabaseClient, input: { applicationP
   return {
     applicationProjectId,
     requirements,
-    extractionStatus: resolveExtraction({ extraction_status: jd.extractionStatus, extraction_job_id: jd.extractionJobId }, extractionJobs).status,
     rawTextEditedAt: jd.rawTextEditedAt,
     insight,
     activeJob: active,
@@ -346,6 +349,8 @@ async function staleness(
   const now = deps.pipeline.hashes(deps.pipeline.buildContext(inputs));
   return {
     career: row.career_snapshot_hash !== null && row.career_snapshot_hash !== now.careerSnapshotHash,
-    requirements: row.requirements_hash !== null && row.requirements_hash !== now.requirementsHash,
+    // `requirements` = "the JD raw text changed" since R17 (key kept for the screens). A v1 row
+    // has no jd_text_hash: it was made from extracted requirements, so it always reads changed.
+    requirements: row.jd_text_hash === null || row.jd_text_hash !== now.jdTextHash,
   };
 }

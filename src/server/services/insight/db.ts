@@ -1,6 +1,7 @@
 import { AppError } from "@/lib/contracts/errors";
 import { loadCareerRows, type CareerRows } from "@/server/ai/context-pack/career-rows";
-import type { JdRequirementInput, JdSentence } from "@/server/ai/context-pack/jd";
+import type { JdSentence } from "@/server/ai/context-pack/jd";
+import type { RequirementCategory, RequirementImportance } from "@/lib/contracts/enums";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
@@ -16,37 +17,41 @@ import { parseSentences } from "@/server/services/application/db";
 export type InsightJd = {
   jobDescriptionId: string;
   updatedAt: string | null;
-  extractionStatus: "pending" | "running" | "succeeded" | "failed";
-  extractionJobId: string | null;
+  /** R17: the JD part of the AI-02 input hash (`insights.jd_text_hash`). */
+  rawTextHash: string;
   /** DM 2.6.1: failures that ended before this belong to the old text. */
   rawTextEditedAt: string | null;
+  /** C-2 deterministic split of the raw text (all of it goes to AI-02, R17). */
   sentences: JdSentence[];
+  /** User-entered position title. */
   positionTitle: string | null;
-  /** job_descriptions.extraction.seniority.label */
-  seniorityLabel: string | null;
 };
 
 export type InsightInputs = {
   jd: InsightJd;
-  requirements: JdRequirementInput[];
   careerRows: CareerRows;
 };
 
-type Client = AiWriterSupabaseClient | UserSupabaseClient;
+/**
+ * A pre-R17 (v1) insight's requirement: the preserved `jd_requirements` row (R17-2). Read only to
+ * show insights whose result points at row ids; nothing writes these rows any more.
+ */
+export type LegacyRequirementRow = {
+  id: string;
+  category: RequirementCategory;
+  content: string;
+  importance: RequirementImportance;
+  source_sids: string[];
+  sort_order: number;
+};
 
-function seniorityLabelOf(extraction: Json | null): string | null {
-  if (!extraction || typeof extraction !== "object" || Array.isArray(extraction)) return null;
-  const seniority = (extraction as Record<string, unknown>).seniority;
-  if (!seniority || typeof seniority !== "object" || Array.isArray(seniority)) return null;
-  const label = (seniority as Record<string, unknown>).label;
-  return typeof label === "string" && label.trim() ? label : null;
-}
+type Client = AiWriterSupabaseClient | UserSupabaseClient;
 
 /** The project's JD (null = no project / not the user's). */
 export async function loadInsightJd(db: Client, applicationProjectId: string): Promise<InsightJd | null> {
   const { data, error } = await db
     .from("job_descriptions")
-    .select("id, updated_at, extraction_status, extraction_job_id, raw_text_edited_at, sentences, position_title, extraction")
+    .select("id, updated_at, raw_text_hash, raw_text_edited_at, sentences, position_title")
     .eq("application_project_id", applicationProjectId)
     .maybeSingle();
   if (error) throw mapDbError(error);
@@ -54,41 +59,38 @@ export async function loadInsightJd(db: Client, applicationProjectId: string): P
   return {
     jobDescriptionId: data.id,
     updatedAt: data.updated_at,
-    extractionStatus: data.extraction_status as InsightJd["extractionStatus"],
-    extractionJobId: data.extraction_job_id,
+    rawTextHash: data.raw_text_hash,
     rawTextEditedAt: data.raw_text_edited_at,
     sentences: parseSentences(data.sentences),
     positionTitle: data.position_title,
-    seniorityLabel: seniorityLabelOf(data.extraction),
   };
 }
 
-/** jd_requirements of the JD, sort_order order (DM A.7). */
-export async function loadInsightRequirements(db: Client, jobDescriptionId: string): Promise<JdRequirementInput[]> {
+/** Legacy (v1) `jd_requirements` rows of the JD, sort_order order (DM A.7) — v1 insight display only. */
+export async function loadLegacyRequirements(db: Client, jobDescriptionId: string): Promise<LegacyRequirementRow[]> {
   const { data, error } = await db
     .from("jd_requirements")
-    .select("id, category, content, importance, source_sids, sort_order, updated_at")
+    .select("id, category, content, importance, source_sids, sort_order")
     .eq("job_description_id", jobDescriptionId)
     .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
   if (error) throw mapDbError(error);
   return (data ?? []).map((r) => ({
     id: r.id,
-    category: r.category as JdRequirementInput["category"],
+    category: r.category as RequirementCategory,
     content: r.content,
-    importance: r.importance as JdRequirementInput["importance"],
+    importance: r.importance as RequirementImportance,
     source_sids: r.source_sids ?? [],
     sort_order: r.sort_order,
-    updated_at: r.updated_at,
   }));
 }
 
-/** Everything AI-02 reads, or null when the JD isn't extracted (or the project is gone). */
+/** Everything AI-02 reads, or null when the project (or its JD) is gone. R17: no extraction gate. */
 export async function loadInsightInputs(db: Client, applicationProjectId: string): Promise<InsightInputs | null> {
   const jd = await loadInsightJd(db, applicationProjectId);
-  if (!jd || jd.extractionStatus !== "succeeded") return null;
-  const [requirements, careerRows] = await Promise.all([loadInsightRequirements(db, jd.jobDescriptionId), loadCareerRows(db)]);
-  return { jd, requirements, careerRows };
+  if (!jd) return null;
+  const careerRows = await loadCareerRows(db);
+  return { jd, careerRows };
 }
 
 // ---------------- RPCs (app_ai_writer) ----------------

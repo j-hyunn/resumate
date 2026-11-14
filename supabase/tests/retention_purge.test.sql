@@ -167,8 +167,7 @@ select set_eq(
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['purge_old_ai_jobs:service_role',
         'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role',
-        -- R15 (CF-A17): the unused preview result cleanup.
-        'purge_unused_jd_preview_outputs:service_role',
+        -- R17: purge_unused_jd_preview_outputs dropped with the preview extraction.
         'purge_inactive_account:service_role'],
   'purge RPCs: service_role only');
 select is_empty($$select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace

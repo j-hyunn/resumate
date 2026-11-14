@@ -1,4 +1,3 @@
-import { selectGateRequirements, type GateRequirement, type GateRequirementRow } from "@/server/ai/context-pack/gate-requirements";
 import { buildWritingChatContext, type ProjectFormSnapshot as AiProjectFormSnapshot, type WritingChatContext, type WritingChatTurnInput } from "@/server/ai/context-pack/writing-chat";
 import type { DeliverableChatTurnInput, DeliverableFormSnapshot as AiDeliverableFormSnapshot } from "@/server/ai/context-pack/deliverable-chat";
 import { isDeliverableSlot } from "@/server/ai/context-pack/deliverable-slots";
@@ -11,26 +10,26 @@ import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient } from "@/server/db/types";
 import { getDataReadiness } from "@/server/services/career/rpc";
 import type { AiLogger } from "@/server/ai/log";
-import { WRITING_CHAT_SLOTS, type RequirementCategory, type RequirementImportance } from "@/lib/contracts/enums";
+import { WRITING_CHAT_SLOTS } from "@/lib/contracts/enums";
 import * as ai04 from "@/server/ai/pipelines/AI-04";
 import * as ai04in from "@/server/ai/context-pack/cover-letter-chat";
 import type { ReplyNotice as Ai04ReplyNotice } from "@/server/ai/prompts/AI-04";
 import { loadCareerRows } from "@/server/ai/context-pack/career-rows";
 import { DOCUMENT_SLOT_RE } from "@/lib/contracts/writing-chat";
 import { parseSentences } from "@/server/services/application/db";
-import { loadInsightRequirements } from "@/server/services/insight/db";
 import type { DeliverablePipelines, DeliverablePlan, DocumentPipelines, DocumentPlan, Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
  * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
  * Builds `WritingChatTurnInput` once per turn from the snapshot plus the context reads the
  * pack needs (app_ai_writer: the chat's project row read fresh every turn + its parent's name /
- * status, readiness and JD requirements for gate chats; **no `profiles` read** — R13 SD-6). Reads only — the
+ * status and readiness for gate chats; **no `profiles` read** — R13 SD-6). R17 [가정 R17-4]: the gate's
+ * JD requirement block (R-31 `loadGateRequirements`) is gone with AI-01. Reads only — the
  * turn never writes career tables (NFR-AI-05).
  */
 
 // R13 (v4.12, SD-6 / DM 2.1.5): the pack no longer reads `profiles` — 내 정보는 어떤 프롬프트에도 들어가지 않는다.
-type Loaded = Pick<WritingChatTurnInput, "project" | "gate" | "gateRequirements">;
+type Loaded = Pick<WritingChatTurnInput, "project" | "gate">;
 
 async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<Loaded> {
   const chat = snap.chat;
@@ -55,13 +54,11 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
   const parentRow = parentRes.data as { company_name?: string | null; institution_name?: string | null; status: string } | null;
 
   let gate: WritingChatTurnInput["gate"] = null;
-  let gateRequirements: GateRequirement[] = [];
   if (chat.returnTarget) {
-    const [readiness, requirements] = await Promise.all([getDataReadiness(db), loadGateRequirements(db, chat.returnTarget.application_project_id)]);
+    const readiness = await getDataReadiness(db);
     const key = chat.returnTarget.feature === "insight" ? "insight" : "draft";
     const f = readiness.features[key];
     gate = { feature: chat.returnTarget.feature, missing: f.ready ? [] : f.missing };
-    gateRequirements = requirements;
   }
 
   return {
@@ -86,44 +83,7 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
       learnings: p.learnings,
     },
     gate,
-    gateRequirements,
   };
-}
-
-/**
- * R-31 (S5): the gate's JD requirements for the reply call — high importance
- * first, then requirements with weak career evidence (ai `selectGateRequirements`).
- * No JD, no requirements yet, or the project was deleted → [] (no block).
- * Reads as app_ai_writer (RLS: this user's rows only); never writes.
- */
-export async function loadGateRequirements(db: AiWriterSupabaseClient, applicationProjectId: string): Promise<GateRequirement[]> {
-  const jd = await db.from("job_descriptions").select("id").eq("application_project_id", applicationProjectId).maybeSingle();
-  if (jd.error) throw mapDbError(jd.error);
-  if (!jd.data) return [];
-  const [reqs, skills, projects, deliverables] = await Promise.all([
-    db.from("jd_requirements").select("id, category, content, keywords, importance, sort_order").eq("job_description_id", jd.data.id).order("sort_order"),
-    db.from("skills").select("name, normalized_name"),
-    db.from("projects").select("name, situation, task, action, result, role, description").eq("status", "complete"),
-    db.from("project_deliverables").select("title"),
-  ]);
-  for (const r of [reqs, skills, projects, deliverables]) if (r.error) throw mapDbError(r.error);
-  const rows: GateRequirementRow[] = (reqs.data ?? []).map((r) => ({
-    id: r.id,
-    category: r.category as RequirementCategory,
-    content: r.content,
-    keywords: r.keywords ?? [],
-    importance: r.importance as RequirementImportance,
-    sort_order: r.sort_order,
-  }));
-  if (rows.length === 0) return [];
-  const texts: string[] = [];
-  // v4.4 (ai notes §5.1): complete projects' STAR / role / description + deliverable titles.
-  for (const p of projects.data ?? []) texts.push(...[p.name, p.situation, p.task, p.action, p.result, p.role, p.description].filter((t): t is string => !!t));
-  for (const d of deliverables.data ?? []) if (d.title) texts.push(d.title);
-  return selectGateRequirements(rows, {
-    skillNames: (skills.data ?? []).map((s) => s.normalized_name ?? s.name),
-    texts,
-  });
 }
 
 export function toTurnInput(snap: TurnSnapshot, loaded: Loaded): WritingChatTurnInput {
@@ -364,10 +324,9 @@ type DocumentLoaded = Pick<ai04in.CoverLetterChatTurnInput, "questions" | "caree
 
 /**
  * AI-04 input reads (app_ai_writer, RLS = this user): the 자기소개서 정본's `body.questions[]`, the
- * whole career pack (CL-Q1: every turn gets the full pack until RAG), the JD's sentences and
- * requirement rows, and the latest ready insight's strengths as a soft signal. Reads only (NFR-AI-05).
- *
- * `extraction.other_sids` (회사·직무 소개 문장) comes from the JD row, like AI-01's own split.
+ * whole career pack (CL-Q1: every turn gets the full pack until RAG), every JD sentence of the
+ * raw text + its `raw_text_hash` (R17: no requirement rows, no 회사 소개 문장 split), and the latest
+ * ready insight's strengths as a soft signal. Reads only (NFR-AI-05).
  */
 export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<DocumentLoaded> {
   const chat = snap.chat;
@@ -376,7 +335,7 @@ export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnS
   if (!applicationProjectId || !documentKind) throw new AppError("internal_error", undefined, { status: 500 });
   const [docRes, jdRes, careerRows, insightRes] = await Promise.all([
     db.from("application_documents").select("body").eq("application_project_id", applicationProjectId).eq("document_kind", documentKind).maybeSingle(),
-    db.from("job_descriptions").select("id, updated_at, sentences, position_title, extraction").eq("application_project_id", applicationProjectId).maybeSingle(),
+    db.from("job_descriptions").select("id, updated_at, sentences, position_title, raw_text_hash").eq("application_project_id", applicationProjectId).maybeSingle(),
     loadCareerRows(db),
     db
       .from("insights")
@@ -390,7 +349,6 @@ export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnS
   for (const r of [docRes, jdRes, insightRes]) if (r.error) throw mapDbError(r.error);
   // The chat cascades with its application project; a missing JD is a race with a delete.
   if (!jdRes.data) throw new AppError("not_found", "대상 자기소개서를 찾을 수 없습니다.");
-  const requirements = await loadInsightRequirements(db, jdRes.data.id);
   return {
     // No 정본 row yet (the chat may start before the first save): no questions, greeting case ②.
     questions: documentQuestionRows(docRes.data?.body),
@@ -399,9 +357,8 @@ export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnS
       jobDescriptionId: jdRes.data.id,
       jobDescriptionUpdatedAt: jdRes.data.updated_at,
       sentences: parseSentences(jdRes.data.sentences),
-      companySids: otherSidsOf(jdRes.data.extraction),
-      requirements,
       positionTitle: jdRes.data.position_title,
+      rawTextHash: jdRes.data.raw_text_hash,
     },
     insightSignal: insightSignalOf(insightRes.data?.result),
   };
@@ -431,15 +388,8 @@ function documentQuestionRows(body: unknown): ai04in.CoverLetterQuestionRow[] {
   return out;
 }
 
-/** `job_descriptions.extraction.other_sids` (회사·직무 소개 문장; not requirement evidence). */
-function otherSidsOf(extraction: unknown): string[] {
-  if (!extraction || typeof extraction !== "object" || Array.isArray(extraction)) return [];
-  const sids = (extraction as Record<string, unknown>).other_sids;
-  return Array.isArray(sids) ? sids.filter((s): s is string => typeof s === "string") : [];
-}
-
 /** AI-02 result → the soft 강점 signal AI-04 may lean on (never a source of facts). */
-function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
+export function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
   const r = result as Record<string, unknown>;
   const strengths = Array.isArray(r.strengths)
@@ -449,7 +399,11 @@ function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
         .map((s) => ({ title: typeof s.title === "string" ? s.title : "", description: typeof s.description === "string" ? s.description : "" }))
         .filter((s) => s.title !== "")
     : [];
-  const positioning = typeof r.positioning === "string" && r.positioning.trim() ? r.positioning : null;
+  // The stored AI-02 result keeps positioning under `strategy` (storage/insight.ts InsightResult); a top-level
+  // `positioning` is accepted only as a fallback for hand-written rows.
+  const strategy = r.strategy && typeof r.strategy === "object" && !Array.isArray(r.strategy) ? (r.strategy as Record<string, unknown>) : null;
+  const rawPositioning = strategy && typeof strategy.positioning === "string" ? strategy.positioning : r.positioning;
+  const positioning = typeof rawPositioning === "string" && rawPositioning.trim() ? rawPositioning : null;
   if (strengths.length === 0 && positioning === null) return null;
   return { strengths, positioning };
 }

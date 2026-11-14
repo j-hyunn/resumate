@@ -1,41 +1,34 @@
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput, ListApplicationProjectsInput, MoveApplicationStageInput } from "@/lib/contracts/application";
-import { ProviderError } from "@/server/ai/errors";
-import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
 import { createAiWriterClient } from "@/server/db/ai-writer";
 import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
-import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticProviderContext } from "@/server/jobs/provider-context";
+import type { NewJob as JobInsert } from "@/server/jobs/types";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import { createProject, saveExperience as createExperience, getApplicationProjectDeletionImpact } from "@/server/services/career";
 import { startWritingChat } from "@/server/services/writing-chat/chat";
-import { loadGateRequirements } from "@/server/services/writing-chat/pipelines";
-import { productionJdExtractorForTests } from "@/test/jd-extraction-fakes";
-import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
-import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
-import { createJdExtractionDb } from "./db";
-import type { JdExtractionDeps } from "./extraction";
-import { runJdExtraction } from "./extraction-response";
+import { KO_BACKEND } from "@/test/jd-fixtures";
+import { hasPsql, hasTable, isStackReady, readLocalSupabase, runPsql } from "@/test/local-supabase";
 import { getApplicationHub, getBoard, getJdView, listApplicationProjects } from "./read";
 import { createApplicationProject, deleteApplicationProject, moveApplicationStage, setApplicationOutcome, updateApplicationProject, updateFailedJdRawText } from "./write";
 
 /**
- * S5 end-to-end against the local stack: create (no key → default / user
- * names, shouldExtract false) → sync extraction (real AI-01 pipeline,
- * scripted provider, real begin/apply RPCs) → name / requirements / badge →
- * 409 already_extracted → stage moves + history → board / list / hub → R-31
- * gate requirements + chat start ownership → delete (cascade, usage kept with
- * null project, late usage insert of the deleted project kept). Skips when
- * the stack isn't running or S5 isn't migrated.
+ * S5 end-to-end against the local stack, R17 (the JD is used as raw text): create (no AI gate,
+ * default / user names, raw text + sentences, no extraction fields) → JD view (raw text only) →
+ * stage moves + history → board / list / hub → gate chat start ownership → raw-text edit rule
+ * (R17-6: the RPC is unchanged) → delete (cascade, usage kept with null project, late usage insert
+ * of the deleted project kept). Skips when the stack isn't running or S5 isn't migrated.
  */
 
 const stack = readLocalSupabase();
 const ready = stack ? (await isStackReady(stack)) && (await hasTable(stack, "application_projects")) : false;
 
 type Client = SupabaseClient<Database>;
-const FAKE_KEY = "sk-ant-FAKE-integration-key-0000";
 
 describe.skipIf(!ready)("application projects & JD (local stack)", () => {
   const s = stack!;
@@ -45,25 +38,25 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
   let userId = "";
   let otherId = "";
   const logs: string[] = [];
-  const responses: ScriptedResponse[] = [];
 
-  function extractionDeps(): JdExtractionDeps {
-    const writer = createAiWriterClient(userId);
-    const adapter = createScriptedAdapter("anthropic", [...responses], Date.now);
-    responses.length = 0;
-    const log = (event: string, fields: Record<string, unknown>) => void logs.push(JSON.stringify({ event, ...fields }));
+  /** A queued ai_jobs row of this user (job type / target as given). */
+  function jobRow(over: Partial<JobInsert> & Pick<JobInsert, "jobType">): JobInsert {
     return {
+      id: crypto.randomUUID(),
       userId,
-      jds: createJdExtractionDb(user, writer),
-      store: createSupabaseJobStore(writer),
-      usage: createSupabaseUsageStore(writer),
-      providerContext: createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" }),
-      keySource: createStaticKeySource(FAKE_KEY, () => new ProviderError("key_missing")),
-      keyStatus: createRecordingKeyStatusReporter(),
-      runGate: null,
-      createLlm: (input) => scriptedLlmFactory(adapter.adapter, Date.now)(input),
-      extract: productionJdExtractorForTests,
-      log,
+      applicationProjectId: null,
+      targetType: null,
+      targetId: null,
+      provider: "anthropic",
+      modelTier: "default",
+      connectionTier: "paid",
+      params: {},
+      inputHash: null,
+      promptVersion: null,
+      model: null,
+      progress: { stage: "prepare", done: 0, total: 1 },
+      meta: { runBase: 1, waitBase: 0, retries: {} },
+      ...over,
     };
   }
 
@@ -114,7 +107,9 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
 
   it("create without a key: default name, raw text + sentences stored, no extraction; idempotent retry", async () => {
     const created = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectA, rawText: KO_BACKEND.raw }));
-    expect(created).toMatchObject({ applicationProjectId: projectA, nameSource: "default", extractionStatus: "pending", shouldExtract: false, created: true });
+    expect(created).toMatchObject({ applicationProjectId: projectA, nameSource: "default", aiRunAllowed: false, created: true });
+    // R17: the create result has no extraction / preview fields.
+    expect(Object.keys(created).sort()).toEqual(["aiRunAllowed", "applicationProjectId", "created", "displayName", "jobDescriptionId", "name", "nameSource", "warnings"]);
     // R4 (CR-23 [가정]): the default name reads "새 자기소개서 (날짜)".
     expect(created.name).toMatch(/^새 자기소개서 \(\d{4}-\d{2}-\d{2}\)$/);
     expect(created.warnings).toEqual([]);
@@ -126,8 +121,11 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(view.rawText).toBe(KO_BACKEND.raw);
     expect(view.sentences).toHaveLength(13);
     for (const sentence of view.sentences) expect(view.rawText.slice(sentence.start, sentence.end)).toBe(sentence.text);
-    expect(view.requirements).toEqual([]);
-    expect(view.extractedBy).toBeNull();
+    // R17: the view is the raw text — no requirements, keywords, extraction status or failure.
+    expect(view).not.toHaveProperty("requirements");
+    expect(view).not.toHaveProperty("extractionStatus");
+    // No ai_jobs row was created (nothing is extracted after creation).
+    expect((await admin.from("ai_jobs").select("id").eq("application_project_id", projectA)).data).toEqual([]);
   });
 
   it("create with company + position and no key: '회사명 – 포지션명' (user); short JD warning", async () => {
@@ -155,46 +153,6 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     await expect(startWritingChat(otherUser, { projectId: crypto.randomUUID(), returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } })).rejects.toMatchObject({
       code: "not_found",
     });
-  });
-
-  it("sync extraction: requirements stored, name replaced (default → ai), badge, one usage row; then 409", async () => {
-    responses.push({ json: KO_BACKEND.output });
-    const res = await runJdExtraction(user, extractionDeps(), projectA);
-    expect(res.status).toBe("succeeded");
-    if (res.status !== "succeeded") throw new Error("unreachable");
-    expect(res.jd.extractionStatus).toBe("succeeded");
-    expect(res.jd.requirements).toHaveLength(6);
-    expect(res.jd.requirements[0]).toMatchObject({ category: "responsibility", origin: "ai", isUserEdited: false, sourceSids: ["S4"] });
-    expect(res.jd.companyName).toBe("에이비씨페이");
-    expect(res.jd.companyNameSource).toBe("ai");
-    expect(res.jd.isLikelyJd).toBe(true);
-    expect(res.jd.seniority?.minYears).toBe(5);
-    expect(res.jd.extractedBy?.provider).toBe("anthropic");
-    expect(res.jd.techKeywords.map((k) => k.keyword)).toContain("Kafka");
-
-    const hub = await getApplicationHub(user, projectA);
-    expect(hub).toMatchObject({ name: "에이비씨페이 자기소개서", nameSource: "ai", stage: "before_apply" });
-    expect(hub.jd.requirementCount).toBe(6);
-
-    const job = await admin.from("ai_jobs").select("status, job_type, application_project_id, model_tier").eq("id", res.jobId).single();
-    expect(job.data).toMatchObject({ status: "succeeded", job_type: "jd_extraction", application_project_id: projectA, model_tier: "light" });
-    const usage = await admin.from("ai_usage_records").select("feature, outcome, application_project_id").eq("ai_job_id", res.jobId);
-    expect(usage.data).toEqual([{ feature: "jd_extraction", outcome: "succeeded", application_project_id: projectA }]);
-
-    await expect(runJdExtraction(user, extractionDeps(), projectA)).rejects.toMatchObject({ code: "already_extracted", status: 409 });
-    // C-7: no JD text and no key in logs.
-    const all = logs.join("\n");
-    expect(all).not.toContain("결제 승인·정산");
-    expect(all).not.toContain("FAKE-integration");
-  });
-
-  it("failed extraction keeps the raw text and reports the failure; the same route retries", async () => {
-    responses.push({ error: "key_invalid" });
-    const res = await runJdExtraction(user, extractionDeps(), projectB);
-    expect(res).toMatchObject({ status: "failed", error: { code: "key_invalid", category: "user_account", failureCause: "key_invalid", retryable: true } });
-    expect(res.jd.extractionStatus).toBe("failed");
-    expect(res.jd.rawText).toBe("짧은 공고");
-    expect(res.jd.lastFailure).toMatchObject({ code: "key_invalid", jobId: res.jobId });
   });
 
   it("stage moves: 4 stages, closed + outcome, leaving closed clears it, history kept", async () => {
@@ -237,188 +195,90 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(updated).toMatchObject({ name: "내가 붙인 이름", nameSource: "user", memo: "메모" });
   });
 
-  it("R-31: gate requirements for the reply call (high first, then weak evidence), via app_ai_writer", async () => {
-    const picked = await loadGateRequirements(createAiWriterClient(userId), projectA);
-    expect(picked.length).toBeGreaterThan(0);
-    expect(picked.length).toBeLessThanOrEqual(8);
-    expect(picked[0]!.reason).toBe("high");
-    expect(await loadGateRequirements(createAiWriterClient(userId), projectB)).toEqual([]);
-    // Another user's project is invisible to this user's writer.
-    expect(await loadGateRequirements(createAiWriterClient(otherId), projectA)).toEqual([]);
-    // R4: a gate chat opens on an affiliated project of the user.
+  it("hub: the JD card is the raw text only (R17); a gate chat opens on an affiliated project", async () => {
+    const hub = await getApplicationHub(user, projectA);
+    expect(hub.jd).toEqual({ jobDescriptionId: expect.any(String) });
+    expect(hub).not.toHaveProperty("lastExtractionFailure");
+    // R17 [가정 R17-4]: the gate chat has no JD requirement block — starting one only needs ownership.
     const exp = await createExperience(user, { id: crypto.randomUUID(), companyName: "가나다", startMonth: "2022-01", jobPosition: "백엔드" });
     const prj = await createProject(user, { name: "결제", affiliation: { type: "experience", id: exp.id } });
     const { writingChatId } = await startWritingChat(user, { projectId: prj.id, returnTarget: { applicationProjectId: projectA, feature: "insight", params: {} } });
     expect(writingChatId).toBeTruthy();
   });
 
-  it("QA-S5-01: symbol-only raw text is saved (0 sentences); extraction ends not_a_jd with no provider call", async () => {
+  it("QA-S5-01: symbol-only raw text is saved (0 sentences)", async () => {
     const id = crypto.randomUUID();
     const created = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
-    expect(created).toMatchObject({ applicationProjectId: id, extractionStatus: "pending", created: true });
+    expect(created).toMatchObject({ applicationProjectId: id, created: true });
     expect((await getJdView(user, id)).sentences).toEqual([]);
-
-    responses.push({ json: KO_BACKEND.output }); // must stay unused
-    const res = await runJdExtraction(user, extractionDeps(), id);
-    expect(res).toMatchObject({ status: "failed", error: { code: "not_a_jd", category: "input", retryable: false } });
-    expect(res.jd.extractionStatus).toBe("failed");
-    expect(res.jd.lastFailure).toMatchObject({ code: "not_a_jd", jobId: res.jobId });
-    const usage = await admin.from("ai_usage_records").select("id").eq("ai_job_id", res.jobId!);
-    expect(usage.data).toEqual([]);
     await deleteApplicationProject(user, id);
   });
 
-  it("Q53-2: input-caused failure → editable; edit → pending with new sentences; refusals follow the view; re-extraction uses the new text", async () => {
+  it("R17-6: the raw-text edit RPC is unchanged — a new (pending) JD is locked; a legacy input-caused failure is editable", async () => {
     const id = crypto.randomUUID();
     await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
-    const before = await getJdView(user, id);
-    expect(before).toMatchObject({ rawTextEditable: false, rawTextLock: "jd_raw_text_locked", rawTextEditedAt: null }); // pending
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_raw_text_locked", rawTextEditedAt: null });
+    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_raw_text_locked", status: 409 });
 
-    const failed = await runJdExtraction(user, extractionDeps(), id);
-    expect(failed.jd).toMatchObject({ extractionStatus: "failed", rawTextEditable: true, rawTextLock: null });
+    // A pre-R17 JD whose AI-01 run failed for an input cause (legacy rows, written as the local superuser).
+    if (!s.dbUrl || !hasPsql()) return await deleteApplicationProject(user, id);
+    const legacyJob = crypto.randomUUID();
+    // psql -c doesn't interpolate :'vars' — go through a file
+    const sqlFile = join(tmpdir(), `r17-legacy-${legacyJob}.sql`);
+    writeFileSync(
+      sqlFile,
+      `insert into public.ai_jobs (id, user_id, job_type, application_project_id, target_type, target_id, status, provider, model_tier, connection_tier, error_code, finished_at)
+                select :'job'::uuid, :'uid'::uuid, 'jd_extraction', :'ap'::uuid, 'job_description', jd.id, 'failed', 'anthropic', 'light', 'paid', 'not_a_jd', now()
+                  from public.job_descriptions jd where jd.application_project_id = :'ap'::uuid
+                on conflict (id) do nothing;
+                update public.job_descriptions set extraction_status = 'failed', extraction_job_id = :'job'::uuid where application_project_id = :'ap'::uuid;`,
+    );
+    const markLegacyFailure = () => runPsql(s.dbUrl!, { file: sqlFile }, { job: legacyJob, uid: userId, ap: id });
+    markLegacyFailure();
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });
 
     await expect(updateFailedJdRawText(user, { id, rawText: "  ----\n• • •\n" })).rejects.toMatchObject({ code: "jd_raw_text_unchanged", status: 409 });
     await expect(updateFailedJdRawText(otherUser, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found", status: 404 });
-    await expect(updateFailedJdRawText(user, { id: crypto.randomUUID(), rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found" });
-
     const saved = await updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw });
-    expect(saved).toMatchObject({ applicationProjectId: id, extractionStatus: "pending", aiRunAllowed: false, warnings: [] });
-
+    expect(saved).toMatchObject({ applicationProjectId: id, aiRunAllowed: false, warnings: [] });
     const after = await getJdView(user, id);
-    expect(after).toMatchObject({ rawText: KO_BACKEND.raw, extractionStatus: "pending", lastFailure: null, rawTextEditable: false, rawTextLock: "jd_raw_text_locked", techKeywords: [] });
+    expect(after).toMatchObject({ rawText: KO_BACKEND.raw, rawTextEditable: false, rawTextLock: "jd_raw_text_locked" });
     expect(Date.parse(after.rawTextEditedAt!)).toBe(Date.parse(saved.rawTextEditedAt));
     expect(after.sentences).toHaveLength(13);
-    for (const sentence of after.sentences) expect(after.rawText.slice(sentence.start, sentence.end)).toBe(sentence.text);
-    await expect(updateFailedJdRawText(user, { id, rawText: `${KO_BACKEND.raw} 또 고침` })).rejects.toMatchObject({ code: "jd_raw_text_locked" });
 
-    responses.push({ json: KO_BACKEND.output });
-    const done = await runJdExtraction(user, extractionDeps(), id);
-    expect(done.status).toBe("succeeded");
-    expect(done.jd).toMatchObject({ extractionStatus: "succeeded", rawTextEditable: false, rawTextLock: "jd_raw_text_locked" });
-    expect(done.jd.requirements).toHaveLength(6);
-    await deleteApplicationProject(user, id);
-  });
-
-  it("Q53-2: getJdView lock reasons against real rows: not an input cause, empty results, job in progress", async () => {
-    const id = crypto.randomUUID();
-    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
-    const failed = await runJdExtraction(user, extractionDeps(), id);
-    const jobId = failed.jobId!;
-
-    await admin.from("ai_jobs").update({ error_code: "timeout" }).eq("id", jobId);
-    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_failure_not_input" });
-    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_failure_not_input" });
-    await admin.from("ai_jobs").update({ error_code: "not_a_jd" }).eq("id", jobId);
-
-    /**
-     * Condition 5 reads against the real tables. R15-DB-8: the 서류 branch is gone, so a saved
-     * 자기소개서 정본 no longer locks the raw text — only a ready insight or JD evidence does.
-     * (The positive rows need the AI writer's full flow; pgTAP covers them on the RPC,
-     * `jdRawTextLockOf` on the view.)
-     */
-    const saved = await user.rpc("save_application_document", {
-      p_application_project_id: id,
-      p_document_kind: "cover_letter",
-      p_body: { questions: [{ slot: "q_1", question_text: "지원 동기", char_limit: 800, body: "지원 동기를 씁니다." }] },
-    });
-    expect(saved.error).toBeNull();
-    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });
-
-    // Condition 1: any job type on the project.
-    const writer = createAiWriterClient(userId);
-    const inFlight = crypto.randomUUID();
-    await createSupabaseJobStore(writer).insert({
-      id: inFlight,
-      userId,
-      jobType: "insight",
-      applicationProjectId: id,
-      targetType: null,
-      targetId: null,
-      provider: "anthropic",
-      modelTier: "default",
-      connectionTier: "paid",
-      params: {},
-      inputHash: null,
-      promptVersion: null,
-      model: null,
-      progress: { stage: "prepare", done: 0, total: 1 },
-      meta: { runBase: 1, waitBase: 0, retries: {} },
-    });
+    // Condition 1: any job type in flight on the project locks it.
+    markLegacyFailure();
+    await createSupabaseJobStore(createAiWriterClient(userId)).insert(jobRow({ jobType: "insight", applicationProjectId: id }));
     await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_job_in_progress" });
-    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_job_in_progress" });
-
-    await deleteApplicationProject(user, id);
-  });
-
-  it("QA-S5-02: a run that died (job closed as stalled) leaves the JD failed with lastFailure = stalled", async () => {
-    const id = crypto.randomUUID();
-    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: KO_BACKEND.raw }));
-    const writer = createAiWriterClient(userId);
-    const store = createSupabaseJobStore(writer);
-    const jd = await user.from("job_descriptions").select("id").eq("application_project_id", id).single();
-    const jobId = crypto.randomUUID();
-    await store.insert({
-      id: jobId,
-      userId,
-      jobType: "jd_extraction",
-      applicationProjectId: id,
-      targetType: "job_description",
-      targetId: jd.data!.id,
-      provider: "anthropic",
-      modelTier: "light",
-      connectionTier: "paid",
-      params: {},
-      inputHash: null,
-      promptVersion: null,
-      model: null,
-      progress: { stage: "extract", done: 0, total: 1 },
-      meta: { runBase: 1, waitBase: 0, retries: {} },
-    });
-    const claimed = await store.claim(jobId, { now: new Date().toISOString(), staleBefore: new Date(Date.now() + 1000).toISOString() });
-    await createJdExtractionDb(user, writer).begin(jd.data!.id, jobId);
-    expect((await getJdView(user, id)).extractionStatus).toBe("running");
-
-    // The function died; the stalled sweep (or any non-success end) closes the job.
-    expect(await store.finish(jobId, claimed!.runGeneration, { status: "failed", errorCode: "stalled", finishedAt: new Date().toISOString(), nextRunAt: null })).toBe(true);
-
-    const view = await getJdView(user, id);
-    expect(view.extractionStatus).toBe("failed");
-    expect(view.lastFailure).toMatchObject({ code: "stalled", category: "system", retryable: true, jobId });
-    const listed = (await listApplicationProjects(user, ListApplicationProjectsInput.parse({}))).find((p) => p.id === id)!;
-    expect(listed.extractionStatus).toBe("failed");
-    expect(listed.lastExtractionFailure).toMatchObject({ code: "stalled", jobId });
-    const hub = await getApplicationHub(user, id);
-    expect(hub.lastExtractionFailure?.code).toBe("stalled");
-
-    // The same route recovers it.
-    responses.push({ json: KO_BACKEND.output });
-    expect((await runJdExtraction(user, extractionDeps(), id)).status).toBe("succeeded");
-    expect((await getApplicationHub(user, id)).lastExtractionFailure).toBeNull();
     await deleteApplicationProject(user, id);
   });
 
   it("delete: in-flight job cancel requested, cascade, usage kept with null project; late usage insert kept", async () => {
     const writer = createAiWriterClient(userId);
     const store = createSupabaseJobStore(writer);
-    const jd = await user.from("job_descriptions").select("id").eq("application_project_id", projectB).single();
+    const usage = createSupabaseUsageStore(writer);
     const inflight = crypto.randomUUID();
-    await store.insert({
-      id: inflight,
-      userId,
-      jobType: "jd_extraction",
+    await store.insert(jobRow({ id: inflight, jobType: "insight", applicationProjectId: projectB, targetType: "application_project", targetId: projectB }));
+    const usageRow = (outcome: "succeeded" | "failed", errorCode: "canceled" | null) => ({
+      occurredAt: new Date().toISOString(),
+      feature: "insight" as const,
+      jobType: "insight" as const,
+      aiJobId: inflight,
+      callKey: "insight.match",
       applicationProjectId: projectB,
-      targetType: "job_description",
-      targetId: jd.data!.id,
-      provider: "anthropic",
-      modelTier: "light",
-      connectionTier: "paid",
-      params: {},
-      inputHash: null,
-      promptVersion: null,
-      model: null,
-      progress: { stage: "extract", done: 0, total: 1 },
-      meta: { runBase: 1, waitBase: 0, retries: {} },
+      provider: "anthropic" as const,
+      model: "claude-sonnet-5-5",
+      modelTier: "default" as const,
+      connectionTier: "paid" as const,
+      usage: { inputTokens: 10, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 5, reasoningTokens: null, usageSource: "provider_reported" as const },
+      outcome,
+      errorCode,
+      priceTableVersion: "unpriced",
+      inputCostUsd: 0,
+      outputCostUsd: 0,
+      estimatedCostUsd: 0,
     });
+    await usage.insert(usageRow("succeeded", null));
     const usageBefore = await admin.from("ai_usage_records").select("id").eq("application_project_id", projectB);
     expect(usageBefore.data!.length).toBeGreaterThan(0);
 
@@ -432,28 +292,9 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(kept.data!.every((u) => u.application_project_id === null)).toBe(true);
 
     // A runner that finishes its call after the delete still records the call (FK → null project).
-    const usage = createSupabaseUsageStore(writer);
-    await usage.insert({
-      occurredAt: new Date().toISOString(),
-      feature: "jd_extraction",
-      jobType: "jd_extraction",
-      aiJobId: inflight,
-      callKey: "jd_extraction",
-      applicationProjectId: projectB,
-      provider: "anthropic",
-      model: "claude-haiku-5-5",
-      modelTier: "light",
-      connectionTier: "paid",
-      usage: { inputTokens: 10, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 5, reasoningTokens: null, usageSource: "provider_reported" },
-      outcome: "failed",
-      errorCode: "canceled",
-      priceTableVersion: "unpriced",
-      inputCostUsd: 0,
-      outputCostUsd: 0,
-      estimatedCostUsd: 0,
-    });
+    await usage.insert(usageRow("failed", "canceled"));
     const late = await admin.from("ai_usage_records").select("application_project_id").eq("ai_job_id", inflight);
-    expect(late.data).toEqual([{ application_project_id: null }]);
+    expect(late.data).toEqual([{ application_project_id: null }, { application_project_id: null }]);
 
     await expect(deleteApplicationProject(user, projectB)).rejects.toMatchObject({ code: "not_found" });
   });

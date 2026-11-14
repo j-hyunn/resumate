@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_JOB_TYPES } from "@/lib/contracts/enums";
+import { AI_JOB_TYPES, LEGACY_AI_JOB_TYPES } from "@/lib/contracts/enums";
 import "./definitions";
 import { getJobType } from "./registry";
 import { REQUEST_SCOPED_JOB_TYPES } from "./runner";
@@ -18,5 +18,13 @@ describe("job type coverage (QA-S9-06)", () => {
 
   it("the request-scoped set has no stray values", () => {
     for (const t of REQUEST_SCOPED_JOB_TYPES) expect(AI_JOB_TYPES).toContain(t);
+  });
+
+  it("R17: legacy job types are neither registered nor request-scoped (never run, never retried)", () => {
+    for (const t of LEGACY_AI_JOB_TYPES) {
+      expect(getJobType(t as never)).toBeUndefined();
+      expect(REQUEST_SCOPED_JOB_TYPES.has(t as never)).toBe(false);
+      expect(AI_JOB_TYPES).not.toContain(t);
+    }
   });
 });

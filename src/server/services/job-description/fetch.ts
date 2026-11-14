@@ -11,6 +11,17 @@ import {
   type JdFetchErrorCode,
 } from "@/lib/contracts/jd-fetch";
 import { isAppError } from "@/lib/contracts/errors";
+import {
+  boilerplateOpenTags,
+  closeTagFinder,
+  frameSrcValues,
+  ldJsonBodies,
+  removeElements,
+  replaceAnyTag,
+  replaceComments,
+  replaceNamedTags,
+  stripCdataOpen,
+} from "./html-scan";
 import { assertSafeUrl, defaultLookup, type LookupFn } from "./ssrf";
 
 /**
@@ -186,11 +197,23 @@ const DROPPED_ELEMENTS = ["script", "style", "noscript", "template", "svg", "hea
 const BOILERPLATE_ATTR =
   /(^|[\s_-])(gnb|lnb|snb|nav|navi|menu|breadcrumb|banner|advert|adsense|ad[_-]?(area|wrap|box)|cookie|popup|layer[_-]?pop|sidebar|side[_-]?bar|related|recomm|recommend|share|sns|copyright|footer|header|pagination|paging|search[_-]?form|login)([\s_-]|$)/i;
 
+/**
+ * Hotfix QA-R16-02: the same two passes per tag as R15's
+ * `<tag\b[^>]*>[\s\S]*?</tag\s*>` then `<tag\b[^>]*\/?>` regexes, run by linear scanners with
+ * identical match semantics (`html-scan.ts`) — the regexes were O(n²) on unclosed tags.
+ */
 function stripDroppedElements(html: string): string {
   let out = html;
+  let lower = out.toLowerCase();
   for (const tag of DROPPED_ELEMENTS) {
-    out = out.replace(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}\\s*>`, "gi"), " ");
-    out = out.replace(new RegExp(`<${tag}\\b[^>]*/?>`, "gi"), " ");
+    // Both passes need a `<tag`; skip the two full scans when the document has none. `toLowerCase`
+    // can only add false positives (a non-ASCII character lowering to ASCII), which just fall back
+    // to the exact scan — never a false negative, so the output can't change.
+    if (!lower.includes(`<${tag}`)) continue;
+    const before = out;
+    out = removeElements(out, tag, " ");
+    out = replaceNamedTags(out, new Set([tag]), false, " ");
+    if (out !== before) lower = out.toLowerCase();
   }
   return out;
 }
@@ -202,47 +225,60 @@ function stripDroppedElements(html: string): string {
  * miss only leaves extra text, never wrong text.
  */
 function stripBoilerplateBlocks(html: string): string {
-  const open = /<(div|section|ul|ol|dl|table)\b[^>]*(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>/gi;
+  // Hotfix QA-R16-02: R15's `open` regex (`<(div|…)\b[^>]*(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>`)
+  // was O(n³), and its close-tag search re-scanned to the end for every unclosed block (O(n²)).
+  // Same matches, same resume points, in O(n): `boilerplateOpenTags` + a per-tag close finder.
+  const closeFinders = new Map<string, (from: number) => number>();
+  const closeOf = (tag: string, from: number) => {
+    let finder = closeFinders.get(tag);
+    if (!finder) {
+      finder = closeTagFinder(html, tag);
+      closeFinders.set(tag, finder);
+    }
+    return finder(from);
+  };
   let out = "";
   let cursor = 0;
-  let match: RegExpExecArray | null;
-  while ((match = open.exec(html)) !== null) {
-    if (match.index < cursor) continue;
-    const [whole, tagRaw, attr] = [match[0], match[1]!, match[2]!];
-    if (!BOILERPLATE_ATTR.test(attr)) continue;
-    const tag = tagRaw.toLowerCase();
-    const end = findCloseTag(html, open.lastIndex, tag);
-    if (end === -1) continue;
-    out += html.slice(cursor, match.index);
-    cursor = end;
-    open.lastIndex = end;
-    void whole;
+  const opens = boilerplateOpenTags(html);
+  let step = opens.next();
+  while (!step.done) {
+    const match = step.value;
+    let resume: number | undefined;
+    if (match.index >= cursor && BOILERPLATE_ATTR.test(match.value)) {
+      const end = closeOf(match.name, match.end);
+      if (end !== -1) {
+        out += html.slice(cursor, match.index);
+        cursor = end;
+        resume = end;
+      }
+    }
+    step = opens.next(resume);
   }
   return out + html.slice(cursor);
 }
 
-/** Index just past the matching close tag of an already-open element. */
-function findCloseTag(html: string, from: number, tag: string): number {
-  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, "gi");
-  re.lastIndex = from;
-  let depth = 1;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    depth += m[1] === "/" ? -1 : 1;
-    if (depth === 0) return re.lastIndex;
-  }
-  return -1;
-}
+/** R15's `BLOCK_TAGS` regex names (`<\/?(…)\b[^>]*>`), matched by `replaceNamedTags`. */
+const BLOCK_TAGS = new Set([
+  "p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "header", "footer", "blockquote",
+  "pre", "dd", "dt", "dl", "ul", "ol", "table", "thead", "tbody", "figure", "figcaption", "hr", "address", "main",
+]);
+const CELL_TAGS = new Set(["td", "th"]);
 
-const BLOCK_TAGS = /<\/?(p|div|br|li|tr|h[1-6]|section|article|header|footer|blockquote|pre|dd|dt|dl|ul|ol|table|thead|tbody|figure|figcaption|hr|address|main)\b[^>]*>/gi;
-
-/** HTML → plain text with one line per block element, entities decoded. */
+/**
+ * HTML → plain text with one line per block element, entities decoded.
+ *
+ * Hotfix QA-R16-02: every step is the R15 regex's exact semantics run by a linear scanner
+ * (`html-scan.ts`), so normal pages come out byte-identical and a 2 MB hostile page can't pin the
+ * CPU (the regexes were O(n²)–O(n³) and, being synchronous, also blocked the 10 s deadline timer).
+ */
 export function htmlToText(html: string): string {
-  let text = stripBoilerplateBlocks(stripDroppedElements(html));
-  text = text.replace(/<!--[\s\S]*?-->/g, " ");
-  text = text.replace(/<(td|th)\b[^>]*>/gi, "\t");
-  text = text.replace(BLOCK_TAGS, "\n");
-  text = text.replace(/<[^>]*>/g, " ");
+  // NUL passed through to rawText and Postgres refused it ("null character not permitted"), so
+  // the fetch succeeded and the create / preview failed. Never part of a posting.
+  let text = stripBoilerplateBlocks(stripDroppedElements(html.replace(/\u0000/g, "")));
+  text = replaceComments(text, " ");
+  text = replaceNamedTags(text, CELL_TAGS, false, "\t");
+  text = replaceNamedTags(text, BLOCK_TAGS, true, "\n");
+  text = replaceAnyTag(text, " ");
   text = decodeEntities(text);
   return normalizeText(text);
 }
@@ -284,7 +320,8 @@ function hasType(node: Record<string, unknown>, type: string): boolean {
 
 function asText(value: unknown): string | null {
   if (typeof value === "string") {
-    const trimmed = decodeEntities(value).replace(/\s+/g, " ").trim();
+    // NUL never reaches company_name / position_title (Postgres refuses it — hotfix QA-R16-02).
+    const trimmed = decodeEntities(value.replace(/\u0000/g, "")).replace(/\s+/g, " ").trim();
     return trimmed === "" ? null : trimmed;
   }
   if (Array.isArray(value)) {
@@ -301,13 +338,13 @@ function asText(value: unknown): string | null {
 /** schema.org `JobPosting` from any `<script type="application/ld+json">` block. */
 export function extractJobPosting(html: string): JobPostingFields {
   const empty: JobPostingFields = { title: null, companyName: null, descriptionHtml: null };
-  const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script\s*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
+  // Hotfix QA-R16-02: R15's `<script\b[^>]*type…[^>]*>([\s\S]*?)<\/script\s*>` regex was O(n²) on
+  // unclosed scripts, and its CDATA prefix `^\s*(?:\/\/)?\s*` O(k²) on leading whitespace.
+  for (const body of ldJsonBodies(html)) {
     let parsed: unknown;
     try {
       // Some pages wrap the JSON in a CDATA section.
-      parsed = JSON.parse(m[1]!.replace(/^\s*(?:\/\/)?\s*<!\[CDATA\[/, "").replace(/\]\]>\s*$/, ""));
+      parsed = JSON.parse(stripCdataOpen(body).replace(/\]\]>\s*$/, ""));
     } catch {
       continue;
     }
@@ -333,11 +370,9 @@ function hostMatches(host: string, domain: string): boolean {
 
 /** All `<iframe src>` / `<frame src>` values on the page, in document order. */
 function frameSources(html: string): string[] {
-  const out: string[] = [];
-  const re = /<(?:iframe|frame)\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) out.push(decodeEntities(m[1]!));
-  return out;
+  // Hotfix QA-R16-02: R15's `<(?:iframe|frame)\b[^>]*\bsrc…[^>]*>` regex was O(n³) — and it runs on
+  // every fetched page, before the 사람인 / 잡코리아 host check.
+  return frameSrcValues(html).map(decodeEntities);
 }
 
 /**

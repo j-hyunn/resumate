@@ -1,0 +1,67 @@
+# 결정 사이클 `jd-raw-text` — 채용 공고 AI 처리(AI-01) 폐기, 원문 텍스트 그대로 사용
+
+- 날짜: 2026-11-14
+- 출처: 사용자 원문 (2026-11-14) — "채용 공고는 AI 부분 필요 없어. 원문 텍스트 그대로만 사용"
+- 기준 문서: PRD v4.17 · UX v5.20 · AI v4.15 · DM v4.15 (`docs/planning/`, 2026-11-10 CF-S9·UQ-762 정정까지). 작업 원본 `_workspace/0x_*.md`는 같은 판 + 지난 사이클 요청 절만 더 붙어 있다 — 본문 기준은 `docs/planning/`.
+- 새 판: **PRD v4.18 · UX v5.21 · AI v4.16 · DM v4.16**. 바뀐 문장 표기 `(v{N}, JR-n)` / `(v{N}, JR-Qn [가정])`.
+- 같이 도는 작업: 백엔드 세션 `jd-raw-backend`가 같은 방향으로 코드를 고친다. 이 문서가 기획 기준이다.
+
+## 사용자 확정 (2026-11-14)
+
+| ID | 결정 | 바뀌는 기존 결정 | 영향 |
+|----|------|------------------|------|
+| **JR-1** | **AI-01 JD 요건 추출 폐기**(ID 재사용 금지, AI-03처럼 취소선 + "v4.16 폐기"). 함께 지움: `jd_requirements` 테이블·별칭 `REQ-n`·근거 `source_type = 'jd_requirement'`·`requirements_hash`, 추출 상태 컬럼(`extraction_status`·`extraction`·`extraction_job_id`·`extraction_provider`·`extraction_model`·`tech_keywords`), 추출 RPC(`begin_jd_extraction`·`apply_jd_extraction`·`fail_jd_extraction`), 미리 보기 추출(`POST /api/job-descriptions/extract-preview`, `ai_jobs.target_type = 'jd_preview'`, `params.raw_text_hash`·`sentence_count`, 생성 RPC `p_preview_job_id`, 반환 `preview_applied`·`preview_skip_reason`, 정리 크론의 미리 보기 규칙), `ai_jobs.job_type = 'jd_extraction'`, 오류 `not_a_jd`, AI-01 진행 문구, 사용량 기능 행 "JD 요건 추출", 프롬프트 `ai-01.*`, 평가 세트의 AI-01 항목, 성능 목표 "JD 요건 추출 15초", D-30(추출 시점), 화면의 "요건 정리하기"·요건 목록·추출 다시 실행 자리 | D-30, Q53-1 중 추출 관련, Q53-11, CF-A5, CF-A6, CF-A17, F-P2-02·F-P2-03(요건 확인·수정), A13 | PRD·UX·AI·DM |
+| **JR-2** | 추가 모달 2단계의 **기업명·포지션명·마감일은 사용자가 직접 입력**한다. AI 미리 채우기 없음, 로딩 상태 없음. **URL 가져오기는 공고 원문 텍스트만 채운다** — `JobPosting` 구조화 값으로 기업명·포지션명을 미리 채우던 것(CF-A15 일부)도 뺀다 `[가정: "원문 텍스트만"의 귀결]`. 필수 여부는 **v5.20 규칙 그대로** — 기업명·포지션명·마감일 모두 비워도 만들 수 있고, 기업명이 비면 이름은 "새 자기소개서 (YYYY-MM-DD)"(CF-A7). (리더 정정 2026-11-14: 처음 판에 '기업명·포지션명 필수'로 잘못 적었다 — UX LEAD-1·PRD UX-Q1) | CF-2(마감일은 JD에서 AI가 추출), CF-A6, CF-A15 일부 | PRD·UX·DM |
+| **JR-3** | **AI-02 인사이트·AI-04 자기소개서 작성 대화는 JD 원문 텍스트(정규화된 `raw_text`, 결정적 문장 분할 `sentences`의 `Sn`)를 그대로 입력**으로 받는다. "추출을 먼저 끝내야 대화를 연다/인사이트를 만든다", "요건이 없으면 거부", 추출 실패·`pending` 분기 같은 선행 조건을 모두 지운다 | C-2 "AI-01 이후 단계는 요건 목록", A13, C-6 추출 선행 순서 | AI·UX·DM·PRD |
+| **JR-4** | URL에서 공고 가져오기(`POST /api/job-descriptions/fetch`, F-P2-10)는 AI가 아니므로 **남긴다**(실패 판정·문구 그대로) | — | 변경 없음(문장 정리만) |
+
+## 리더 권장안 — 사용자 확인 전까지 `[가정]`으로 쓰고 `decisions.md`에 `[결정 필요]`로 올린다
+
+### JR-Q1 JD 근거 표현 (`REQ-n` 대체)
+
+| 안 | 내용 | 장점 | 단점 |
+|----|------|------|------|
+| **(a) 권장** | **기존 결정적 문장 ID `Sn`(`jd_sentence`)만 쓴다.** 서버가 저장 때 원문을 줄·불릿·마침표로 나눈 `job_descriptions.sentences`가 이미 있고 구현돼 있다(C-2, `src/server/ai/context-pack/jd.ts`). 모델은 원문을 `[S12] …` 꼴로 받고 근거를 `{source_type:"jd_sentence", ref:"S12"}`로 단다. 칩은 원문 문장 하이라이트 | AI 없이 결정적, 서버가 존재 검증(V-1) 가능, 이미 저장·트리거·칩이 있음, 새 스키마 없음 | 문장 단위라 "요건 한 개"가 여러 문장일 때 칩이 여러 개 |
+| (b) | 원문 인용 문장(`quote`) — 모델이 원문 일부를 그대로 인용, 서버가 부분 문자열 검사 | 자유로운 범위 | 인용 변형으로 검증 실패가 잦음, 새 저장 모양 필요 |
+| (c) | 공고 전체를 출처 하나(`JD`)로 | 가장 단순 | 근거가 "공고 전체"라 검증·하이라이트 의미 없음, NFR-AI-01 근거 강제 약화 |
+
+### JR-Q2 AI-02 요건 매칭 단계 구조
+
+| 안 | 내용 | 장점 | 단점 |
+|----|------|------|------|
+| **(a) 권장** | **2단계 체인 유지, 단계 1이 원문에서 요건을 스스로 식별해 판정한다.** 단계 1 입력 = 경력 팩 + 원문 문장 전체(`Sn`). 출력 `matches[]` 원소 = `{requirement_text(원문 표현을 짧게, ≤ 120자), sids:["S3","S4"], status, rationale, missing_aspect, evidence}` 최대 15개 `[가정]`, **배치 없이 1회 호출**(배치는 요건 목록을 나누던 장치라 사라진다). 단계 2 강점·보완점·우선순위의 `requirement_refs`는 단계 1 원소 키(`M-n`, 서버가 붙임)를 가리킨다. 요건 식별 결과는 인사이트 결과 안에만 있고 **별도 테이블로 저장하지 않는다**(JD 자체에 AI 처리 결과를 붙이지 않는다 — JR-1의 취지) | 화면 S-16 "요건별 판정 표"가 살아 있음, 단계 2·검증 규칙 대부분 재사용, AI-01 비용(1회)이 사라져 전체 비용 비슷 | 단계 1 출력이 길어져 지연 증가(배치 병렬 상실) — 15개 상한·낮은 사고 설정으로 p90 40초 실측 필요, 실행마다 요건 식별이 달라질 수 있음 |
+| (b) | 1회 호출로 통합(판정+종합) | 호출 수 최소 | 출력 길어 지연·검증 실패 시 전체 재생성 |
+| (c) | 요건별 판정 표 폐기, 강점·보완점·지원 방향만 (근거는 `Sn`) | 가장 단순·저렴 | 인사이트 화면 핵심 표가 사라짐, UX 변경 큼 |
+
+**리더 판단 (2026-11-14, AI L-1·L-2)**: (a)의 단계 1을 **1a 식별(경량 등급, `requirement_text`·`sids`만, 1회) → 1b 판정(기본 등급, 8개씩 배치 병렬)**로 나눈다 — 1회 호출안은 출력 4~4.5k로 지연 40~75초라 p90 40초·함수 60초 한도를 넘을 수 있다. 원소 키 접두사는 대화 메시지 별칭 `M-n`과 겹치지 않게 **`MT-n`**. 저장 키 원소 `match_key`, 참조 `match_keys`(모델 출력 `requirement_refs`) — DM이 확정.
+
+### JR-Q3 기존 `jd_requirements` 데이터·근거 행 처리
+
+| 안 | 내용 | 장점 | 단점 |
+|----|------|------|------|
+| **(a) 권장** | **변환 후 drop.** `-- DESTRUCTIVE:` 마이그레이션 하나에서 ① 기존 인사이트 `result.requirement_matches[]`·`match_stage_result`의 요건 참조(REQ uuid)를 그 요건의 `text` → `requirement_text`, `source_sids` → `sids`로 바꿔 JR-Q2 (a) 새 모양으로 백필 ② `evidence_links.source_type = 'jd_requirement'` 행을 그 요건의 첫 `source_sid`를 가리키는 `jd_sentence` 행으로 바꿈(같은 owner·item_key에 같은 sid가 이미 있으면 삭제) ③ `jd_requirements`·추출 컬럼 drop, CHECK에서 `jd_requirement`·`jd_extraction`·`jd_preview` 제거(과거 `ai_jobs`·사용량 행은 아래 JR-Q5). 변환 전 운영 행 수를 세어 기록 | 사용자 인사이트·자소서 근거 손실 없음, 옛 결과도 새 화면으로 표시 | 마이그레이션 복잡도 중간 |
+| (b) | 그냥 drop + `jd_requirement` 근거 행 삭제, 기존 인사이트는 "옛 형식 — 다시 생성" 안내 | 단순 | 사용자 인사이트 근거 손실, 재생성 비용은 사용자 부담(BYOK) |
+| (c) | 테이블을 읽기 전용으로 남겨 옛 인사이트만 표시 | 손실 없음 | 죽은 테이블·두 표시 경로 유지 |
+
+선례: CF-M1(행이 있으면 멈추는 가드), RM-3(DESTRUCTIVE 마이그레이션, 원격 push는 사용자).
+
+### JR-Q4 공고 원문 수정 예외 (DM-18, Q53-2·Q53-11)
+
+지금 예외는 "입력 원인으로 추출 실패 / 요건 0개" JD만 `update_failed_jd_raw_text`로 고칠 수 있다 — 추출이 없어지면 이 조건이 성립하지 않는다.
+
+| 안 | 내용 |
+|----|------|
+| **(a) 권장** | **원문에서 나온 결과가 없는 동안에는 고칠 수 있다** — 조건 = `insights.status = 'ready'` 0행 AND `evidence_links.source_type = 'jd_sentence'` 0행(기존 조건 5만 남김). RPC 이름 `update_jd_raw_text`로 바꿈(옛 이름 제거) `[가정]`. 화면 진입점: 채용 공고 탭 [공고 내용 수정](결과가 있으면 숨김 + 이유 문구) |
+| (b) | 예외 없이 완전 불변(D-19 원형) — 잘못 넣었으면 지우고 다시 만든다 |
+
+### JR-Q5 (리더 판단, 묻지 않음 `[가정]`) 과거 기록 보존
+
+- `ai_usage_records.feature`의 `jd_extraction`, `ai_jobs.job_type = 'jd_extraction'`·`target_type = 'jd_preview'` 과거 행: `career_description` 선례(CF-A3)대로 **CHECK에 남기고 새 행은 막는다**(사용량 이번 달 표에는 과거 기록이 있을 때만 "JD 요건 추출(종료)" 행 — 또는 표에서 숨김: UX가 CF-A3 처리와 같게 맞춘다). 진행 중이던 `jd_extraction` 작업은 마이그레이션이 `failed`(`cause = 'cancelled'`류, DM이 기존 값에서 고름)로 닫는다.
+- 비용: AI-04는 매 턴 요건 목록(1k~1.5k) 대신 원문 문장(1.5k~3k, 상한 8k)을 받는다 — 7장·CL-Q1 예시 월 비용을 다시 계산한다(캐시 프리픽스에 JD를 둬 증가분 상쇄 여부 명시). AI-02는 AI-01 1회 비용이 빠지고 단계 1 입력이 원문으로 바뀐다.
+- `job_descriptions.detected_language`: 추출이 채우던 값이면 지우거나 서버 규칙으로 — DM이 현재 원천을 확인해 정한다.
+- 데이터 부족 게이트·`get_data_readiness()`가 요건 수를 보던 곳이 있으면 원문 존재로 바꾼다.
+
+## 백엔드·UI 후속 (decisions.md 4장에 옮긴다 — 담당 문서가 확정한 이름으로)
+
+- 백엔드 ★: 위 JR-1 목록의 API·테이블·컬럼·RPC·job_type·CHECK 제거, 생성 RPC에서 `p_preview_job_id` 제거, AI-02 프롬프트 `ai-02.match.v?` → 새 버전(원문 입력·요건 식별), `ai-02.synthesize` 새 버전(`requirement_refs` → `M-n`), AI-04 프롬프트 새 버전(원문 입력), 컨텍스트 빌더의 `REQ-n` 별칭 제거, 근거 검증 허용 목록에서 `jd_requirement` 제거, JR-Q3 변환 마이그레이션, JR-Q4 RPC.
+- UI: 추가 모달 2단계(직접 입력, 로딩 없음), 채용 공고 탭(요건 목록·요건 정리하기 제거, 원문 + 문장 하이라이트), 인사이트 탭(요건 표 = 단계 1 원소), 근거 칩(`REQ` 칩 제거), AI-01 진행 문구·오류 문구(`not_a_jd`) 제거, 사용량 표 행.

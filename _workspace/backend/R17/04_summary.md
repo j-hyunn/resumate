@@ -36,5 +36,5 @@ R17-1~10(계획), R17-db1, R17-AI-1~6, R17-api1~8 — 기획과 어긋날 수 �
 - 새 env 없음. UI 최소 수정이 같은 PR.
 
 ## 범위 밖 후속
-- QA-05(R17 이전 버그): `writing-chat/pipelines.ts:402`가 `result.positioning`을 읽지만 저장 위치는 `strategy.positioning` → AI-04 포지셔닝 신호가 늘 비어 있음.
+- ~~QA-05(R17 이전 버그)~~ **해결 2026-11-14**: `insightSignalOf`가 `strategy.positioning`을 읽도록 수정(최상위 `positioning`은 폴백), 테스트 `writing-chat/pipelines.test.ts`.
 - 2단 파괴 마이그레이션(기획 확정 후).

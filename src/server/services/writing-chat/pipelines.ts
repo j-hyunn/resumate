@@ -389,7 +389,7 @@ function documentQuestionRows(body: unknown): ai04in.CoverLetterQuestionRow[] {
 }
 
 /** AI-02 result → the soft 강점 signal AI-04 may lean on (never a source of facts). */
-function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
+export function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
   const r = result as Record<string, unknown>;
   const strengths = Array.isArray(r.strengths)
@@ -399,7 +399,11 @@ function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
         .map((s) => ({ title: typeof s.title === "string" ? s.title : "", description: typeof s.description === "string" ? s.description : "" }))
         .filter((s) => s.title !== "")
     : [];
-  const positioning = typeof r.positioning === "string" && r.positioning.trim() ? r.positioning : null;
+  // The stored AI-02 result keeps positioning under `strategy` (storage/insight.ts InsightResult); a top-level
+  // `positioning` is accepted only as a fallback for hand-written rows.
+  const strategy = r.strategy && typeof r.strategy === "object" && !Array.isArray(r.strategy) ? (r.strategy as Record<string, unknown>) : null;
+  const rawPositioning = strategy && typeof strategy.positioning === "string" ? strategy.positioning : r.positioning;
+  const positioning = typeof rawPositioning === "string" && rawPositioning.trim() ? rawPositioning : null;
   if (strengths.length === 0 && positioning === null) return null;
   return { strengths, positioning };
 }

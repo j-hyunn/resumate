@@ -1,4 +1,4 @@
--- S5 application_projects / job_descriptions / jd_requirements / application_stage_events:
+-- S5 application_projects / job_descriptions / application_stage_events (R17: jd_requirements dropped):
 -- RLS, cross-user isolation, column limits, create_application_project (name rules D-30, idempotency, validation).
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -12,17 +12,17 @@ insert into auth.users (id, email, aud, role) values
 -- RLS on and the exact policy sets (DM §5).
 select ok((select bool_and(relrowsecurity) from pg_class
             where oid in ('public.application_projects'::regclass, 'public.application_stage_events'::regclass,
-                          'public.job_descriptions'::regclass, 'public.jd_requirements'::regclass)),
-          'RLS enabled on the 4 S5 tables');
+                          'public.job_descriptions'::regclass)),
+          'RLS enabled on the 3 S5 tables');
 select policies_are('public', 'application_projects',
   array['application_projects_select_own', 'application_projects_update_own', 'application_projects_delete_own',
         'application_projects_select_ai_writer']);
 select policies_are('public', 'application_stage_events', array['application_stage_events_select_own']);
 select policies_are('public', 'job_descriptions', array['job_descriptions_select_own', 'job_descriptions_select_ai_writer']);
-select policies_are('public', 'jd_requirements', array['jd_requirements_select_own', 'jd_requirements_select_ai_writer']);
+select hasnt_table('public', 'jd_requirements', 'R17: jd_requirements dropped');
 select ok((select bool_and(prosecdef) from pg_proc
             where proname in ('create_application_project', 'move_application_stage', 'set_application_outcome',
-                              'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction')
+                              'update_jd_raw_text')
               and pronamespace = 'public'::regnamespace),
           'S5 RPCs are security definer');
 
@@ -45,7 +45,7 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '에이비씨페이 백엔드' || chr(10) || 'Java 경험',
             'hash1', (select v from t_s), null, null, null, '2026-11-30') - 'job_description_id',
           '{"application_project_id":"a0000000-aaaa-0000-0000-000000000001","name":null,"name_source":"default",
-            "ai_run_allowed":false,"created":true}'::jsonb
+            "created":true}'::jsonb
             || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
           'no key, no company/position -> default name (KST date)');
 select is((select array[stage, coalesce(stage_outcome, '-'), deadline::text] from public.application_projects
@@ -55,9 +55,9 @@ select results_eq($$select event_type, from_stage, to_stage, from_outcome, to_ou
                     where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'$$,
                   $$values ('created'::text, null::text, 'before_apply'::text, null::text, null::text)$$,
                   'created event recorded');
-select is((select array[raw_text_hash, extraction_status, coalesce(company_name, '-')] from public.job_descriptions
+select is((select array[raw_text_hash, coalesce(company_name, '-')] from public.job_descriptions
             where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'),
-          array['hash1', 'pending', '-'], 'JD stored pending');
+          array['hash1', '-'], 'JD stored with the raw text hash');
 
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000002', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '  에이비씨페이 ', '백엔드 엔지니어', null, null)
@@ -77,7 +77,7 @@ select is(public.create_application_project('a0000000-aaaa-0000-0000-00000000000
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, null, '  내 지원  ', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","ai_run_allowed":false,"created":true}'::jsonb,
+          '{"name":"내 지원","name_source":"user","created":true}'::jsonb,
           'user name wins');
 -- R15 (CF-A7 `[가정]`): the company name is cut to its first 94 characters (' 자기소개서' is 6) -> 100 total.
 select is(char_length(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h',
@@ -88,7 +88,7 @@ select is(char_length(public.create_application_project('a0000000-aaaa-0000-0000
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000004', '다른 원문', 'h2',
             '[{"sid":"S1","text":"다른","start":0,"end":2}]', null, null, '다른 이름', null)
             - 'job_description_id' - 'application_project_id',
-          '{"name":"내 지원","name_source":"user","ai_run_allowed":false,"created":false}'::jsonb,
+          '{"name":"내 지원","name_source":"user","created":false}'::jsonb,
           'replay with the same id returns the existing row (created=false)');
 select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000004'),
           1, 'replay did not create a second JD');
@@ -106,11 +106,11 @@ select lives_ok($$select public.create_application_project(gen_random_uuid(), re
                 'raw text of exactly 50,000 accepted');
 select throws_ok($$select public.create_application_project(gen_random_uuid(), '원문', ' ', '[{"sid":"S1","text":"x","start":0,"end":1}]')$$,
                  'P0001', 'invalid_raw_text_hash', 'blank hash');
--- QA-S5-01: a JD that splits into 0 sentences is still saved.
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000009', '----', 'h', '[]') ->> 'created',
-          'true', 'empty sentences accepted (raw JD always saved)');
-select is((select sentences from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000009'),
-          '[]'::jsonb, 'empty sentences stored');
+-- R17 (DM v4.16 §2.6): a text that splits into 0 sentences is refused (replaces QA-S5-01), no row created.
+select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000009', '----', 'h', '[]')$$,
+                 'P0001', 'jd_no_sentences', '0 sentences -> jd_no_sentences');
+select is((select count(*)::int from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000009'),
+          0, 'jd_no_sentences leaves no row');
 select throws_ok($$select public.create_application_project(gen_random_uuid(), '원문', 'h', null)$$,
                  'P0001', 'invalid_sentences', 'null sentences');
 select throws_ok($$select public.create_application_project(gen_random_uuid(), '원문', 'h', '{"sid":"S1"}')$$,
@@ -148,7 +148,7 @@ select throws_ok($$update public.application_projects set stage_changed_at = now
                  '42501', null, 'user cannot update stage_changed_at directly');
 select throws_ok($$update public.application_projects set name_source = 'ai' where id = 'a0000000-aaaa-0000-0000-000000000001'$$,
                  '42501', null, 'user cannot update name_source directly');
-select throws_ok($$update public.job_descriptions set extraction_status = 'succeeded'$$,
+select throws_ok($$update public.job_descriptions set company_name = 'x'$$,
                  '42501', null, 'user cannot update job_descriptions');
 select throws_ok($$delete from public.job_descriptions$$, '42501', null, 'user cannot delete job_descriptions');
 select throws_ok($$update public.application_stage_events set to_stage = 'closed'$$, '42501', null, 'user cannot update events');
@@ -182,12 +182,12 @@ select is(public.create_application_project('b0000000-aaaa-0000-0000-00000000000
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션', null, null)
             - 'job_description_id' - 'application_project_id',
           -- R15 (CF-9 ★): a company name names the application right away, key or no key.
-          '{"name":"회사 자기소개서","name_source":"user","ai_run_allowed":true,"created":true}'::jsonb,
+          '{"name":"회사 자기소개서","name_source":"user","created":true}'::jsonb,
           'usable key + company -> "{회사명} 자기소개서" (user) right away');
 select is(public.create_application_project('b0000000-aaaa-0000-0000-00000000000b', '원문', 'h',
             '[{"sid":"S1","text":"원문","start":0,"end":2}]', null, '포지션', null, null)
             - 'job_description_id' - 'application_project_id',
-          '{"name_source":"default","ai_run_allowed":true,"created":true}'::jsonb
+          '{"name_source":"default","created":true}'::jsonb
             || jsonb_build_object('name', '새 자기소개서 (' || to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD') || ')'),
           'usable key, no company -> default name right away (R17 [가정 R17-8]: no extraction to wait for)');
 select throws_ok($$select public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h',
@@ -216,8 +216,8 @@ update public.ai_provider_keys set status = 'invalid' where id = 'b0000000-9999-
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"b0000000-0000-0000-0000-000000000002","role":"authenticated"}';
 select is(public.create_application_project('b0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션') ->> 'ai_run_allowed',
-          'false', 'invalid key -> saved, AI not allowed (R17)');
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]', '회사', '포지션') ->> 'created',
+          'true', 'invalid key -> saved (R17: no gate)');
 
 -- Anonymous callers.
 reset role;
@@ -240,14 +240,5 @@ select throws_ok($$update public.application_projects set stage_outcome = 'passe
                  '23514', null, 'outcome only when closed');
 select throws_ok($$update public.application_projects set name = null where id = 'a0000000-aaaa-0000-0000-000000000004'$$,
                  '23514', null, 'name null requires name_source null');
-select throws_ok($$insert into public.jd_requirements (user_id, job_description_id, category, content, source_sids)
-                   select user_id, id, 'required', 'x', '{}' from public.job_descriptions
-                    where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'$$,
-                 '23514', null, 'requirement needs at least one source sid');
-select throws_ok($$insert into public.jd_requirements (user_id, job_description_id, category, content, source_sids)
-                   select user_id, id, 'required', 'x', '{X1}' from public.job_descriptions
-                    where application_project_id = 'a0000000-aaaa-0000-0000-000000000001'$$,
-                 '23514', null, 'source sid shape');
-
 select * from finish();
 rollback;

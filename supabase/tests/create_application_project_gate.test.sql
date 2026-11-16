@@ -1,6 +1,6 @@
--- W0 Q53-1 gate, revised in R17 `[가정 R17-9]`: registering a posting runs no AI, so create_application_project
--- no longer refuses on an invalid key or a missing AI consent. Every connection state saves the posting; only
--- ai_run_allowed reflects the connection. An existing id is still a replay, someone else's id still a conflict.
+-- W0 Q53-1 gate, removed in R17 (DM v4.16 §2.6.2, 4.24 #9): registering a posting runs no AI, so
+-- create_application_project never refuses on an invalid key or a missing AI consent, and its return has no
+-- ai_run_allowed key any more. An existing id is still a replay, someone else's id still a conflict.
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
@@ -25,12 +25,12 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"c0000000-0000-0000-0000-000000000003","role":"authenticated"}';
 select is(public.create_application_project('c0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args), '회사', '포지션')
             - 'application_project_id' - 'job_description_id',
-          '{"name":"회사 자기소개서","name_source":"user","ai_run_allowed":false,"created":true}'::jsonb,
+          '{"name":"회사 자기소개서","name_source":"user","created":true}'::jsonb,
           'no active provider: saved key-less (R17 return shape)');
 
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args)) ->> 'ai_run_allowed',
-          'true', 'valid key + consent: saved, AI allowed');
+select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000001', '원문', 'h', (select s from t_args)) ? 'ai_run_allowed',
+          false, 'valid key + consent: saved, no ai_run_allowed key (R17 5-key return)');
 reset role;
 
 -- Invalid key: saved anyway (R17), AI not allowed.
@@ -39,7 +39,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000003', '원문', 'h', (select s from t_args))
             - 'application_project_id' - 'job_description_id' - 'name',
-          '{"name_source":"default","ai_run_allowed":false,"created":true}'::jsonb,
+          '{"name_source":"default","created":true}'::jsonb,
           'invalid key: no key_invalid gate since R17, saved with the default name');
 select is((select count(*)::int from public.job_descriptions where application_project_id = 'a0000000-aaaa-0000-0000-000000000003'), 1,
           'invalid key: the JD is saved');
@@ -52,8 +52,8 @@ update public.ai_provider_keys set status = 'valid' where user_id = 'a0000000-00
 delete from public.ai_data_use_consents where user_id = 'a0000000-0000-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
-select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h', (select s from t_args)) ->> 'ai_run_allowed',
-          'false', 'no consent: no ai_consent_required gate since R17, saved, AI not allowed');
+select is(public.create_application_project('a0000000-aaaa-0000-0000-000000000005', '원문', 'h', (select s from t_args)) ->> 'created',
+          'true', 'no consent: no ai_consent_required gate since R17, saved');
 select is((select count(*)::int from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000005'), 1,
           'no consent: the project is saved');
 

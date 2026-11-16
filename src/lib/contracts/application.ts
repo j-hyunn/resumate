@@ -15,9 +15,11 @@ import {
  * F-ST-01~05; DM §2.6 / A.5–A.7 / §7; UX S-13, S-14, S-31, S-15, S-39,
  * C-12~C-14, FL-06).
  *
- * R17 (2026-11-14): the JD is used as raw text only — AI-01 extraction, the requirement preview
- * and every extraction field (status, requirements, keywords, seniority, failure) left these
- * contracts. The DB keeps the columns / `jd_requirements` rows for pre-R17 data (R17-2/3).
+ * R17 (DM v4.16, decisions 4.24): the JD is used as raw text only — AI-01 extraction, the
+ * requirement preview and every extraction field (status, requirements, keywords, seniority,
+ * detected language, failure) left these contracts, and the DB dropped the columns and
+ * `jd_requirements`. The raw text can be edited at any time except while an insight runs (JR-7),
+ * and creation may start the insight automatically (JR-6).
  *
  * Action inputs and DTOs are camelCase. Sentences keep the DB jsonb shape
  * `{sid, text, start, end}` (DM A.6 storage format, offsets in UTF-16 units).
@@ -45,9 +47,10 @@ export function isValidSourceUrl(url: string): boolean {
 /**
  * Refusals the S-14 create path shows under their own code. `invalid_source_url` (400) drives
  * "주소 없이 만들기": the RPC builds no row, so the screen resends the same `id` without the URL.
- * R17 [가정 R17-9]: `key_invalid` / `ai_consent_required` are gone — registering a JD uses no AI.
+ * `jd_no_sentences` (400): the text has no sentence (DM 2.6.2) — no row either.
+ * R17 (4.24 #9): `key_invalid` / `ai_consent_required` are gone — registering a JD uses no AI.
  */
-export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "application_project_id_conflict"] as const;
+export const CREATE_APPLICATION_ERROR_CODES = ["invalid_source_url", "jd_no_sentences", "application_project_id_conflict"] as const;
 export type CreateApplicationErrorCode = (typeof CREATE_APPLICATION_ERROR_CODES)[number];
 /** db notes [가정]: company_name / position_title ≤ 200. */
 export const JD_TITLE_MAX = 200;
@@ -115,9 +118,9 @@ export function jdInputWarnings(rawText: string): JdInputWarning[] {
   return out;
 }
 
-// ---------- raw text edit (S-15, Q53-2 / Q53-11, DM 2.6.1) ----------
+// ---------- raw text edit (S-15, JR-7, DM 2.6.1) ----------
 
-export const UpdateFailedJdRawTextInput = z.object({
+export const UpdateJdRawTextInput = z.object({
   /** application_projects.id */
   id: uuid,
   /** Same rules as S-14. Stored as sent: sentence offsets index this exact text. */
@@ -126,24 +129,26 @@ export const UpdateFailedJdRawTextInput = z.object({
     .max(JD_RAW_TEXT_MAX)
     .refine((v) => v.trim().length > 0, { message: "empty_raw_text" }),
 });
-export type UpdateFailedJdRawTextInput = z.input<typeof UpdateFailedJdRawTextInput>;
+export type UpdateJdRawTextInput = z.input<typeof UpdateJdRawTextInput>;
 
 /**
- * `update_failed_jd_raw_text` refusals the screen handles (HTTP 409, in check order;
- * condition 6 last). `jd_has_results` on a succeeded JD → "새 기업 JD 추가" (S-15).
+ * `update_jd_raw_text` refusals the screen handles under their own code, in check order
+ * (DM 2.6.1): `jd_no_sentences` (400), `jd_job_in_progress` (409 — an insight job is queued /
+ * running on this project), `jd_raw_text_unchanged` (409). Plus `not_found` (404).
+ * Retired with `update_failed_jd_raw_text`: `jd_raw_text_locked`, `jd_failure_not_input`, `jd_has_results`.
  */
-export const JD_RAW_TEXT_REFUSAL_CODES = ["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged"] as const;
+export const JD_RAW_TEXT_REFUSAL_CODES = ["jd_no_sentences", "jd_job_in_progress", "jd_raw_text_unchanged"] as const;
 export type JdRawTextRefusalCode = (typeof JD_RAW_TEXT_REFUSAL_CODES)[number];
 
-/** Why `getJdView` says the text can't be edited: conditions 1~5 (6 needs the new text). */
-export type JdRawTextLock = Exclude<JdRawTextRefusalCode, "jd_raw_text_unchanged">;
+/** Why `getJdView` says the text can't be edited now (DM 2.6.1 — the only lock left). */
+export const JD_RAW_TEXT_LOCKED_REASONS = ["job_in_progress"] as const;
+export type JdRawTextLockedReason = (typeof JD_RAW_TEXT_LOCKED_REASONS)[number];
 
-export type UpdateFailedJdRawTextResult = {
+/** Existing insights and evidence stay (they read "공고가 바뀌었어요" through `staleReasons.rawText`). */
+export type UpdateJdRawTextResult = {
   applicationProjectId: string;
   jobDescriptionId: string;
   rawTextEditedAt: string;
-  /** Same rule as check_ai_run_allowed. Saving never starts AI. */
-  aiRunAllowed: boolean;
   warnings: JdInputWarning[];
 };
 
@@ -156,21 +161,32 @@ export function isFailureBeforeRawTextEdit(finishedAt: string | null | undefined
   return Date.parse(finishedAt) < Date.parse(rawTextEditedAt);
 }
 
+/**
+ * JR-6 (DM 2.6.2, 4.24 #10) — why the create action did not start the insight. In check order:
+ * no active provider / key (`ai_not_connected`), key `invalid` (`key_invalid`), consent missing or
+ * outdated (`consent_required`), D-01 not met (`insufficient_data`), no JD sentence
+ * (`no_sentences`), an insight job already queued / running (`in_progress`), starting threw
+ * (`start_failed` — creation still succeeded; the insight tab shows the usual state).
+ */
+export const INSIGHT_SKIP_REASONS = ["ai_not_connected", "key_invalid", "consent_required", "insufficient_data", "no_sentences", "in_progress", "start_failed"] as const;
+export type InsightSkipReason = (typeof INSIGHT_SKIP_REASONS)[number];
+
 export type CreateApplicationProjectResult = {
   applicationProjectId: string;
   jobDescriptionId: string;
   name: string | null;
   nameSource: (typeof NAME_SOURCES)[number] | null;
   displayName: string;
-  /**
-   * Same rule as check_ai_run_allowed (active provider, key not invalid, current consent).
-   * R17: replaces `shouldExtract` — nothing starts after creation; the screens use it for the
-   * C-18 connection hint only.
-   */
-  aiRunAllowed: boolean;
   /** False when the same id already existed (idempotent retry; the input was ignored). */
   created: boolean;
   warnings: JdInputWarning[];
+  /**
+   * JR-6: the insight job started right after creation (poll `GET /api/ai-jobs/{id}`), or null.
+   * A same-id replay (`created: false`) never starts one (both fields null).
+   */
+  insightJobId: string | null;
+  /** Null when started (or on a replay); otherwise why not. */
+  insightSkipReason: InsightSkipReason | null;
 };
 
 // ---------- update / delete ----------
@@ -313,10 +329,13 @@ export type JdView = {
   rawText: string;
   /** Last raw text edit (null = never edited, DM 2.6.1). */
   rawTextEditedAt: string | null;
-  /** "공고 원문 고치기" shows: conditions 1~5 of update_failed_jd_raw_text. The RPC decides finally. */
+  /**
+   * [공고 내용 수정] is always shown; disabled while an insight job is queued / running (DM 2.6.1,
+   * JR-7). The RPC decides finally (`jd_job_in_progress`).
+   */
   rawTextEditable: boolean;
-  /** Why not, null when editable. `jd_has_results` → S-15 "새 기업 JD 추가" (Q53-11). */
-  rawTextLock: JdRawTextLock | null;
+  /** `job_in_progress` when not editable, else null ("인사이트를 만드는 중에는 수정할 수 없어요"). */
+  rawTextLockedReason: JdRawTextLockedReason | null;
   sentences: JdSentenceDto[];
   companyName: string | null;
   companyNameSource: (typeof JD_FIELD_SOURCES)[number] | null;

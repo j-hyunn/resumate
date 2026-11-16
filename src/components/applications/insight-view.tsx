@@ -53,10 +53,11 @@ import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { startInsightAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { isAiRejected } from "@/components/common/ai-rejection"
 
+/** R17 (schema 2): a requirement is its `requirement_text` (keyed by `match_key`, `MT-n`) — no category / importance */
 export interface RequirementInfo {
   content: string
-  category: JdRequirementCategory
-  importance: JdRequirementImportance
+  category?: JdRequirementCategory
+  importance?: JdRequirementImportance
 }
 
 export interface InsightViewProps {
@@ -374,7 +375,7 @@ function InsightResultView({
             <Card key={s.item_key} className="gap-2 p-5">
               <h3 className="text-base leading-6 font-semibold">{plain(s.title)}</h3>
               <p className="text-base leading-[1.75]">{plain(s.description)}</p>
-              <RequirementRefs ids={s.requirement_ids} label={reqLabel} />
+              <RequirementRefs ids={s.match_keys} label={reqLabel} />
               <EvidenceChips items={evidence[s.item_key]} />
             </Card>
           ))
@@ -393,7 +394,7 @@ function InsightResultView({
             <Card key={g.item_key} className="gap-3 p-5">
               <div className="flex flex-wrap items-center gap-2">{STATUS_BADGE[g.gap_kind]}</div>
               <p className="text-base leading-[1.75]">{plain(g.description)}</p>
-              <RequirementRefs ids={g.requirement_ids} label={reqLabel} />
+              <RequirementRefs ids={g.match_keys} label={reqLabel} />
               <EvidenceChips items={evidence[g.item_key]} />
               <ul className="space-y-3 border-t pt-3">
                 {g.actions.map((a) => (
@@ -412,8 +413,9 @@ function InsightResultView({
                             variant="outline"
                             size="sm"
                             onRun={() => {
-                              markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })
-                              choose.open({ requirementId: g.requirement_ids[0] ?? null })
+                              // DM 2.7.0 AI-12 게이트 진입: the gate chat reads this gap (start_writing_chat checks both keys)
+                              markCareerReturn({ ...returnTarget, params: { insight_id: latest.id, insight_item_key: g.item_key } })
+                              choose.open({ requirementId: null })
                             }}
                           >
                             <Sparkles aria-hidden />
@@ -424,8 +426,9 @@ function InsightResultView({
                             size="sm"
                             disabled={choose.loading}
                             onClick={() => {
-                              markCareerReturn({ ...returnTarget, params: { gap_item_key: g.item_key, requirement_ids: g.requirement_ids } })
-                              choose.open({ requirementId: g.requirement_ids[0] ?? null })
+                              // DM 2.7.0 AI-12 게이트 진입: the gate chat reads this gap (start_writing_chat checks both keys)
+                              markCareerReturn({ ...returnTarget, params: { insight_id: latest.id, insight_item_key: g.item_key } })
+                              choose.open({ requirementId: null })
                             }}
                           >
                             직접 입력
@@ -469,7 +472,7 @@ function InsightResultView({
                           <span className="font-medium text-muted-foreground">삭제된 프로젝트</span>
                         )}
                         <p className="text-sm text-muted-foreground">{plain(p.reason)}</p>
-                        <RequirementRefs ids={p.requirement_ids} label={reqLabel} />
+                        <RequirementRefs ids={p.match_keys} label={reqLabel} />
                         <EvidenceChips items={evidence[p.item_key]} className="mt-1" />
                       </div>
                     </li>
@@ -490,7 +493,7 @@ function RequirementText({ info, fallback }: { info: RequirementInfo | undefined
         {info?.importance === "high" ? <Badge variant="secondary">{IMPORTANCE_HIGH_LABEL}</Badge> : null}
         <span>{info?.content ?? fallback}</span>
       </p>
-      {info ? <p className="text-sm text-muted-foreground">{REQUIREMENT_CATEGORY_LABELS[info.category]}</p> : null}
+      {info?.category ? <p className="text-sm text-muted-foreground">{REQUIREMENT_CATEGORY_LABELS[info.category]}</p> : null}
     </div>
   )
 }
@@ -540,7 +543,7 @@ function MatchTable({
               {matches.map((m) => (
                 <TableRow key={m.item_key}>
                   <TableCell className="align-top whitespace-normal">
-                    <RequirementText info={requirements[m.requirement_id]} fallback={reqLabel(m.requirement_id)} />
+                    <RequirementText info={requirements[m.match_key]} fallback={m.requirement_text || reqLabel(m.match_key)} />
                   </TableCell>
                   <TableCell className="align-top">{STATUS_BADGE[m.status]}</TableCell>
                   <TableCell className="align-top whitespace-normal">
@@ -558,7 +561,7 @@ function MatchTable({
             <li key={m.item_key}>
               <Card size="sm" className="gap-2 px-4">
                 <div className="flex items-start justify-between gap-2">
-                  <RequirementText info={requirements[m.requirement_id]} fallback={reqLabel(m.requirement_id)} />
+                  <RequirementText info={requirements[m.match_key]} fallback={m.requirement_text || reqLabel(m.match_key)} />
                   {STATUS_BADGE[m.status]}
                 </div>
                 <p className="text-sm">{plain(m.rationale)}</p>

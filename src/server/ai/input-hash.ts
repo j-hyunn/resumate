@@ -3,8 +3,9 @@ import type { ProviderId } from "./providers/types";
 
 /**
  * C-6 동일 입력 재사용 (PRD 6.4):
- * input_hash = hash(feature, prompt_version, provider, model, career_snapshot_hash, jd_text_hash, feature params).
- * (R17) jd_text_hash = job_descriptions.raw_text_hash (the AI-01 requirements_hash is gone).
+ * input_hash = hash(feature, prompt_version, provider, model, career_snapshot_hash, raw_text_hash, feature params).
+ * (v4.16) raw_text_hash = job_descriptions.raw_text_hash copied at prepare (DM 2.7.0 — the JD raw-text
+ * hash, not a hash of the sentence list); the AI-01 requirements_hash is gone.
  * (v4) provider is part of the hash: switching the active provider never reuses a result.
  *
  * `feature` is the ai_jobs.job_type. `params` must hold only what changes the
@@ -18,11 +19,15 @@ export type InputHashParts = {
   provider: ProviderId;
   model: string;
   careerSnapshotHash: string | null;
-  jdTextHash: string | null;
+  /** job_descriptions.raw_text_hash (AI-02 only; null for features without a JD input). */
+  rawTextHash: string | null;
   params?: Record<string, unknown>;
 };
 
-/** 2: provider added (S3a, C-6 v4). 3: requirements_hash → jd_text_hash (R17). */
+/**
+ * 2: provider added (S3a, C-6 v4). 3: requirements_hash → raw_text_hash (R17, v4.16; never
+ * released under another key name, so no further bump for the R17b rename).
+ */
 export const INPUT_HASH_VERSION = 3;
 
 export function computeInputHash(parts: InputHashParts): string {
@@ -33,7 +38,7 @@ export function computeInputHash(parts: InputHashParts): string {
     provider: parts.provider,
     model: parts.model,
     career_snapshot_hash: parts.careerSnapshotHash,
-    jd_text_hash: parts.jdTextHash,
+    raw_text_hash: parts.rawTextHash,
     params: parts.params ?? {},
   });
 }

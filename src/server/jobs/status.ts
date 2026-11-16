@@ -1,7 +1,8 @@
 import { errorCategoryOf, jobErrorMessageOf, failureCauseOf, isManuallyRetryable, type AiJobRetryPreview, type AiJobStatusResponse } from "@/lib/contracts/ai";
 import type { ActiveConnection, ProviderContextSource } from "./provider-context";
 import { REQUEST_SCOPED_JOB_TYPES } from "./runner";
-import { hasPreR17Checkpoint } from "@/server/services/insight/job";
+import { hasPreR17Checkpoint, insightRetryBlocked } from "@/server/services/insight/job";
+import type { UserSupabaseClient } from "@/server/db/types";
 import { insightJobPartial } from "@/server/services/insight/partial";
 import type { JobRecord } from "./types";
 
@@ -11,6 +12,15 @@ import type { JobRecord } from "./types";
  */
 export function retryBlockedByCheckpoint(job: Pick<JobRecord, "jobType" | "stepOutputs">): boolean {
   return job.jobType === "insight" && hasPreR17Checkpoint(job.stepOutputs);
+}
+
+/**
+ * Same refusal as the runner's `retryBlocked` with the DB read it needs (QA-07: an insight whose JD raw
+ * text changed since prepare), for `GET /api/ai-jobs/{id}`. Only read for a failed insight job.
+ */
+export async function loadRetryBlocked(job: JobRecord, db: UserSupabaseClient): Promise<boolean> {
+  if (job.jobType !== "insight" || job.status !== "failed") return retryBlockedByCheckpoint(job);
+  return insightRetryBlocked(db, job);
 }
 
 /** Feature partial results for `useAiJob().partial` (S6: AI-02 stage-1 verdicts). Null when the feature has none. */

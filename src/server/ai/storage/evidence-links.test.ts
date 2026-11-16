@@ -9,10 +9,8 @@ import { resolveRefs, stripEvidence, toEvidenceLinkRows } from "./evidence-links
 const pack = buildCareerPack(careerRowsFixture(), { asOf: { year: 2026, month: 10 } });
 const raw = "결제 API 운영 경험이 필요합니다.";
 const jd = buildJdContext({ jobDescriptionId: "jd-uuid", sentences: splitJdSentences(raw), rawTextHash: "h" });
-// (R17) No builder emits REQ-n any more; `jd_requirement` stays a storable legacy source type, so the generic mapper is still tested with a hand-made entry.
-const legacy = new AliasMap();
-legacy.add({ alias: "REQ-1", sourceType: "jd_requirement", id: "req-uuid", fields: { "": "결제 API 운영" }, snapshotAt: "2026-03-01T00:00:00.000Z", label: "결제 API 운영", parents: [] });
-const aliases = AliasMap.merge(pack.aliases, jd.aliases, legacy);
+// (v4.16, 4.24 #5) `jd_requirement` is gone; JD evidence is `jd_sentence` only.
+const aliases = AliasMap.merge(pack.aliases, jd.aliases);
 const now = new Date("2026-10-26T00:00:00.000Z");
 const owner = { ownerType: "insight" as const, ownerId: "insight-uuid", applicationProjectId: "ap-uuid" };
 
@@ -25,7 +23,7 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
         evidence: [
           { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다" },
           { source_type: "jd_sentence", ref: "S1" },
-          { source_type: "jd_requirement", ref: "REQ-1" },
+          { source_type: "jd_requirement" as never, ref: "REQ-1" },
           // (v4.12, SD-6) `profile` is no longer a source type: V-2 drops it before storage.
           { source_type: "profile" as never, ref: "PROFILE", field: "desired_job_title" },
         ],
@@ -58,8 +56,8 @@ describe("toEvidenceLinkRows (C-3 저장)", () => {
         source_snapshot_at: now.toISOString(),
         source_locator: { sid: "S1", start: 0, end: raw.length },
       }),
-      expect.objectContaining({ sort_order: 2, source_type: "jd_requirement", source_id: "req-uuid", source_field: null, source_snapshot_at: "2026-03-01T00:00:00.000Z" }),
     ]);
+    expect(rows.some((r) => (r.source_type as string) === "jd_requirement")).toBe(false);
     // No `profile` row is ever written any more (DM 2.8 insert trigger rejects it).
     expect(rows.some((r) => r.source_type === "profile")).toBe(false);
     for (const row of rows) expect(row).not.toHaveProperty("user_id");
@@ -130,7 +128,7 @@ describe("stripEvidence / resolveRefs", () => {
   });
 
   it("resolves aliases of the expected type to UUIDs and counts unknown ones", () => {
-    expect(resolveRefs(aliases, ["REQ-1", "REQ-1", "REQ-9", "PRJ-2"], "jd_requirement")).toEqual({ ids: ["req-uuid"], unknown: 2 });
+    expect(resolveRefs(aliases, ["S1", "S1", "S9", "PRJ-2"], "jd_sentence")).toEqual({ ids: ["jd-uuid"], unknown: 2 });
     expect(resolveRefs(aliases, ["PRJ-2"], "project")).toEqual({ ids: [IDS.prjPay], unknown: 0 });
   });
 });

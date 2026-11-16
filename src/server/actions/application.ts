@@ -7,7 +7,7 @@ import {
   MoveApplicationStageInput,
   SetApplicationOutcomeInput,
   UpdateApplicationProjectInput,
-  UpdateFailedJdRawTextInput,
+  UpdateJdRawTextInput,
   type ApplicationBoard,
   type ApplicationHub,
   type ApplicationProjectListItem,
@@ -16,43 +16,68 @@ import {
   type JdView,
   type MoveApplicationStageResult,
   type StageChangeResult,
-  type UpdateFailedJdRawTextResult,
+  type UpdateJdRawTextResult,
 } from "@/lib/contracts/application";
 import type { ApplicationProjectDeletionImpact } from "@/lib/contracts/career";
 import { invalid, runAction, type ActionResult } from "@/lib/contracts/errors";
 import { getApplicationProjectDeletionImpact as loadApplicationProjectDeletionImpact } from "@/server/services/career";
+import { getSiteOrigin } from "@/server/auth/site-url";
 import { requireConsentedUser } from "@/server/auth/session";
+import { createAppJobRunner } from "@/server/jobs/app-runner";
+import { connections } from "@/server/jobs/connections";
+import { productionInsightPipeline } from "@/server/jobs/insight";
+import { logJobEvent } from "@/server/jobs/log";
+import { autoStartInsight } from "@/server/services/insight/auto-start";
 import * as reads from "@/server/services/application/read";
 import * as writes from "@/server/services/application/write";
 
 /**
  * S5 application project Server Actions (DM §7 보드 조회·단계 이동·결과 기록,
  * F-AP-01·02·05, F-ST-01~05; UX S-13, S-14, S-31, S-15, S-39, C-12~C-14,
- * FL-06). Thin: consent-gated user session → zod → service. None of these
- * calls an AI provider (R17: the JD is stored and used as raw text; there is
- * no extraction route any more).
+ * FL-06). Thin: consent-gated user session → zod → service. Only the create action may
+ * start AI work — the automatic insight start (JR-6) after a new row; everything else here is
+ * AI-free (R17: the JD is stored and used as raw text).
  */
 
-/** S-14 만들기: project + JD (raw text, server sentence split) + `created` stage event. */
+/**
+ * S-14 만들기: project + JD (raw text, server sentence split) + `created` stage event, then — for a
+ * NEW row only, never a same-id replay — the automatic insight start (JR-6, DM 2.6.2): same
+ * service as the manual start, skipped silently when AI isn't connected / D-01 fails / a run is in
+ * flight, and any start error is swallowed (creation already succeeded).
+ */
 export async function createApplicationProject(input: unknown): Promise<ActionResult<CreateApplicationProjectResult>> {
   const parsed = CreateApplicationProjectInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
-    const { supabase } = await requireConsentedUser();
-    return writes.createApplicationProject(supabase, parsed.data);
+    const { supabase, user } = await requireConsentedUser();
+    const created = await writes.createApplicationProject(supabase, parsed.data);
+    if (!created.created) return { ...created, insightJobId: null, insightSkipReason: null };
+    const auto = await autoStartInsight(
+      {
+        userId: user.id,
+        user: supabase,
+        providerContext: connections().context,
+        runner: { startJob: async (job) => createAppJobRunner(await getSiteOrigin()).startJob(job) },
+        pipeline: productionInsightPipeline,
+        log: logJobEvent,
+      },
+      created.applicationProjectId,
+    );
+    return { ...created, ...auto };
   });
 }
 
 /**
- * S-15 공고 원문 수정 (Q53-2 / Q53-11, DM 2.6.1): replaces the text and sends the JD back to
- * `pending`. No AI, no key needed. 409 codes in `JD_RAW_TEXT_REFUSAL_CODES`.
+ * S-15 공고 내용 수정 (JR-7, DM 2.6.1): RPC `update_jd_raw_text` — any time except while an
+ * insight runs. Existing insights stay (stale). No AI, no key needed. Own codes in
+ * `JD_RAW_TEXT_REFUSAL_CODES`.
  */
-export async function updateFailedJdRawText(input: unknown): Promise<ActionResult<UpdateFailedJdRawTextResult>> {
-  const parsed = UpdateFailedJdRawTextInput.safeParse(input);
+export async function updateJdRawText(input: unknown): Promise<ActionResult<UpdateJdRawTextResult>> {
+  const parsed = UpdateJdRawTextInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   return runAction(async () => {
     const { supabase } = await requireConsentedUser();
-    return writes.updateFailedJdRawText(supabase, parsed.data);
+    return writes.updateJdRawText(supabase, parsed.data);
   });
 }
 
@@ -141,7 +166,7 @@ export async function getApplicationHub(input: unknown): Promise<ActionResult<Ap
   });
 }
 
-/** S-15 JD · 요건. */
+/** S-15 채용 공고 (원문 + 문장, `rawTextEditable` / `rawTextLockedReason`). */
 export async function getJdView(input: unknown): Promise<ActionResult<JdView>> {
   const parsed = ApplicationProjectIdInput.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);

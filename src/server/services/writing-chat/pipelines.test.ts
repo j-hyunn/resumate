@@ -1,33 +1,64 @@
 import { describe, expect, it } from "vitest";
-import { insightSignalOf } from "./pipelines";
+import type { AiWriterSupabaseClient } from "@/server/db/types";
+import { fakeSupabase } from "@/test/fake-supabase";
+import { loadGateGaps } from "./pipelines";
 
-describe("insightSignalOf (AI-02 result → AI-04 soft signal)", () => {
-  it("reads positioning from strategy.positioning, where the stored result keeps it", () => {
-    const signal = insightSignalOf({
-      strengths: [{ title: "결제 성능 개선", description: "응답 시간 단축" }],
-      strategy: { positioning: "결제 도메인 백엔드 경험을 앞세운다", positioning_item_key: "strategy.positioning", project_priorities: [] },
-    });
-    expect(signal).toEqual({
-      strengths: [{ title: "결제 성능 개선", description: "응답 시간 단축" }],
-      positioning: "결제 도메인 백엔드 경험을 앞세운다",
-    });
+/**
+ * AI-12 게이트 진입 (DM v4.16 2.7.0, 4.24 #14 / #19): the gate gaps come from the insight the chat was
+ * opened from (`return_target.params.insight_id` / `insight_item_key`), else the project's latest
+ * ready schema-2 insight — never the JD.
+ */
+
+const AP = "00000000-0000-4000-8000-0000000000a1";
+const INS_OLD = "00000000-0000-4000-8000-0000000000b1";
+const INS_LATEST = "00000000-0000-4000-8000-0000000000b2";
+
+const result = (label: string) => ({
+  schema_version: 2,
+  requirement_matches: [
+    { match_key: "MT-1", requirement_text: `${label} 요건 1`, status: "partial", missing_aspect: null },
+    { match_key: "MT-2", requirement_text: `${label} 요건 2`, status: "no_evidence", missing_aspect: null },
+  ],
+  strengths: [],
+  gaps: [
+    { item_key: "gaps.0", match_keys: ["MT-1"], gap_kind: "partial", description: `${label} 보완 0` },
+    { item_key: "gaps.1", match_keys: ["MT-2"], gap_kind: "no_evidence", description: `${label} 보완 1` },
+  ],
+  strategy: { positioning: null, project_priorities: [] },
+});
+
+function db(rows: Array<Record<string, unknown>>) {
+  return fakeSupabase({ insights: rows, job_descriptions: [{ application_project_id: AP, sentences: "never read" }] }).client as AiWriterSupabaseClient;
+}
+
+const base = { application_project_id: AP, status: "ready", career_snapshot_hash: "c", raw_text_hash: "r" };
+const OLD = { ...base, id: INS_OLD, is_latest: false, schema_version: 2, result: result("이전") };
+const LATEST = { ...base, id: INS_LATEST, is_latest: true, schema_version: 2, result: result("최신") };
+const target = (params: Record<string, unknown>) => ({ application_project_id: AP, feature: "insight" as const, params, created_at: "2026-11-16T00:00:00Z" });
+
+describe("loadGateGaps", () => {
+  it("insight_id + insight_item_key → that insight's one gap", async () => {
+    const gaps = await loadGateGaps(db([OLD, LATEST]), target({ insight_id: INS_OLD, insight_item_key: "gaps.1" }));
+    expect(gaps).toEqual([{ requirementTexts: ["이전 요건 2"], gapKind: "no_evidence", description: "이전 보완 1" }]);
   });
 
-  it("returns a positioning-only signal when there are no strengths", () => {
-    expect(insightSignalOf({ strengths: [], strategy: { positioning: "포지셔닝" } })).toEqual({ strengths: [], positioning: "포지셔닝" });
+  it("insight_id only → every gap of that insight", async () => {
+    const gaps = await loadGateGaps(db([OLD, LATEST]), target({ insight_id: INS_OLD }));
+    expect(gaps.map((g) => g.description)).toEqual(["이전 보완 0", "이전 보완 1"]);
   });
 
-  it("treats a blank or null strategy.positioning as absent", () => {
-    expect(insightSignalOf({ strengths: [], strategy: { positioning: "  " } })).toBeNull();
-    expect(insightSignalOf({ strengths: [], strategy: { positioning: null } })).toBeNull();
+  it("no keys → the latest ready schema-2 insight's gaps", async () => {
+    const gaps = await loadGateGaps(db([OLD, LATEST]), target({}));
+    expect(gaps.map((g) => g.description)).toEqual(["최신 보완 0", "최신 보완 1"]);
   });
 
-  it("falls back to a top-level positioning", () => {
-    expect(insightSignalOf({ positioning: "옛 형태" })).toEqual({ strengths: [], positioning: "옛 형태" });
+  it("an insight_id that is gone falls back to the latest one [가정 R17b-api-3]", async () => {
+    const gaps = await loadGateGaps(db([LATEST]), target({ insight_id: INS_OLD, insight_item_key: "gaps.0" }));
+    expect(gaps).toEqual([{ requirementTexts: ["최신 요건 1"], gapKind: "partial", description: "최신 보완 0" }]);
   });
 
-  it("returns null for non-objects", () => {
-    expect(insightSignalOf(null)).toBeNull();
-    expect(insightSignalOf([])).toBeNull();
+  it("only a schema-1 insight (or none) → no gate gaps", async () => {
+    await expect(loadGateGaps(db([{ ...LATEST, schema_version: 1 }]), target({}))).resolves.toEqual([]);
+    await expect(loadGateGaps(db([]), target({}))).resolves.toEqual([]);
   });
 });

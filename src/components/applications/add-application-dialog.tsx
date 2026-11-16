@@ -200,8 +200,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     setExtractFailed(false)
     setKeyInvalidShown(false)
     let text = directTrimmed
-    let fetchedCompany: string | null = null
-    let fetchedPosition: string | null = null
     let failedFetch = false
 
     if (urlTrimmed) {
@@ -212,22 +210,21 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
         failedFetch = true
         text = ""
       } else {
+        // R17 4.24 #15: the fetch answers `{ rawText }` only — 지원 기업·포지션 stay what the user types
         text = got.rawText
-        fetchedCompany = got.companyName
-        fetchedPosition = got.positionTitle
       }
     }
 
-    // R17: no AI-01 requirement preview — ② uses what the user typed (and the URL's JobPosting values)
+    // R17: no AI-01 requirement preview — ② uses what the user types (JR-2)
     setFetchFailed(failedFetch)
     setRaw(text)
     setRawEdited(false)
     setPreviewJobId(null)
     setPreviewDeadline(null)
     setRequirementCount(null)
-    // 채움 순서 (R17): URL 공고의 `JobPosting` 값 → 빈 칸
-    setCompany(fetchedCompany ?? "")
-    setPosition(fetchedPosition ?? "")
+    // JR-2 (4.24 #15): no `JobPosting` pre-fill — ② starts empty
+    setCompany("")
+    setPosition("")
     setPhase("idle")
     setStep(1)
   }

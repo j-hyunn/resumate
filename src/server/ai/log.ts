@@ -48,7 +48,24 @@ export type AiUsageRecordFailedLog = {
   provider: ProviderId;
 };
 
-export type AiLogEntry = AiCallLog | AiValidationLog | AiUsageRecordFailedLog;
+/**
+ * (R17b, decisions 4.24 #18) Wall time of a multi-call pipeline stage (AI-02
+ * stage 1: one call, retries included). Ids, counts and milliseconds only.
+ */
+export type AiStageTimingLog = {
+  event: "ai_stage_timing";
+  jobId: string | null;
+  feature: string;
+  callKey: string;
+  promptVersion: string;
+  latencyMs: number;
+  /** Logical calls of the stage (AI-02 stage 1: 1, or 2 after an empty result). */
+  calls: number;
+  /** Provider calls incl. V-6 retries. */
+  attempts: number;
+};
+
+export type AiLogEntry = AiCallLog | AiValidationLog | AiUsageRecordFailedLog | AiStageTimingLog;
 export type AiLogger = (entry: AiLogEntry) => void;
 
 export const consoleAiLogger: AiLogger = (entry) => {

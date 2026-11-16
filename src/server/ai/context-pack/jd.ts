@@ -131,21 +131,22 @@ export type JdContext = {
   /** S1…Sn → `jd_sentence` (source_id = job_descriptions.id, locator {sid, start, end}). */
   aliases: AliasMap;
   /**
-   * (R17) The JD part of C-6 input_hash: `job_descriptions.raw_text_hash`,
-   * passed through. The sentences are a deterministic split of that text
-   * (no LLM), so the raw-text hash identifies the block. Replaces the
-   * AI-01 `requirements_hash`.
+   * The JD part of C-6 input_hash: `job_descriptions.raw_text_hash`, passed
+   * through (DM 2.7.0 — copied to `insights.raw_text_hash`). The sentences are
+   * a deterministic split of that text done once at save time, so one JD row's
+   * hash and sentences are 1:1.
    */
-  jdTextHash: string;
+  rawTextHash: string;
   /** V-5 sources: position title and sentence texts. */
   numberTexts: string[];
   sentenceCount: number;
 };
 
 /**
- * (R17) Builds the JD block from the raw text only — the AI requirement
+ * (v4.16) Builds the JD block from the raw text only — the AI requirement
  * extraction (AI-01) is gone: optional `position_title` (user input) and
- * **every** sentence as `S-n`. Sentences are not rows, so `jobDescriptionId`
+ * **every** sentence as `S-n`. (JR-5) Only AI-02 reads the raw text; AI-04 and
+ * the AI-12 gate read the insight instead. Sentences are not rows, so `jobDescriptionId`
  * is the source_id of sentence evidence. No sentences → no `<sentences>` block.
  */
 export function buildJdContext(input: {
@@ -186,5 +187,5 @@ export function buildJdContext(input: {
   }
   out.push("</jd>");
 
-  return { text: out.join("\n"), aliases, jdTextHash: input.rawTextHash, numberTexts, sentenceCount: input.sentences.length };
+  return { text: out.join("\n"), aliases, rawTextHash: input.rawTextHash, numberTexts, sentenceCount: input.sentences.length };
 }

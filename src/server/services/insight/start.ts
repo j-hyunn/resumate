@@ -1,6 +1,6 @@
 import { AppError } from "@/lib/contracts/errors";
 import type { ReadinessFeature } from "@/lib/contracts/career";
-import type { StartInsightResponse } from "@/lib/contracts/insight";
+import { INSIGHT_SCHEMA_VERSION, type StartInsightResponse } from "@/lib/contracts/insight";
 import { resolveModel } from "@/server/ai/providers/models";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
@@ -22,6 +22,11 @@ import { INSIGHT_JOB_TYPE, INSIGHT_TARGET_TYPE, type InsightPipeline } from "./j
  *
  * R17: the JD part of input_hash is its raw_text_hash, so it is known as soon as
  * the project exists (no extraction first). `inputs` is null only when the JD is gone.
+ * A JD without sentences is refused here (409 `jd_no_sentences`, same rule as `begin_insight`,
+ * DM 2.7.0) — only legacy rows can have none (the create / edit RPCs refuse it).
+ * Reuse only matches the latest ready **schema 2** insight (4.24 #18).
+ *
+ * Also the service behind the automatic start after creation (JR-6, `autoStartInsight`).
  */
 
 export type StartInsightDeps = {
@@ -44,23 +49,25 @@ export const INSUFFICIENT_DATA_MESSAGE = "인사이트를 만들려면 완료된
 
 const notConnected = () => new AppError("ai_not_connected", "AI 연결이 필요합니다. 키를 등록한 뒤 다시 시도해 주세요.", { status: 409 });
 const keyInvalid = () => new AppError("key_invalid", "AI 키가 유효하지 않습니다. 키를 확인해 다시 연결해 주세요.", { status: 409 });
+export const jdNoSentences = () => new AppError("jd_no_sentences", "공고 내용에서 문장을 찾지 못했어요. 채용 공고 탭에서 공고 내용을 고쳐 주세요.", { status: 409 });
 
 /**
  * QA-S6-06: reuse only the CURRENT latest insight when its input_hash matches
  * (an older ready version with the same hash is not reused: S-16 shows the
  * latest, so "reused" must point at what the screen shows). Otherwise a new job.
+ * Only a `schema_version = 2` row is reusable (DM 2.7.0): a schema-1 row is "다시 만들어야 해요".
  */
 export async function findReusableInsight(user: UserSupabaseClient, applicationProjectId: string, inputHash: string): Promise<string | null> {
   const { data, error } = await user
     .from("insights")
-    .select("id, input_hash")
+    .select("id, input_hash, schema_version")
     .eq("application_project_id", applicationProjectId)
     .eq("is_latest", true)
     .eq("status", "ready")
     .limit(1);
   if (error) throw mapDbError(error);
   const latest = data?.[0];
-  return latest && latest.input_hash === inputHash ? latest.id : null;
+  return latest && latest.schema_version === INSIGHT_SCHEMA_VERSION && latest.input_hash === inputHash ? latest.id : null;
 }
 
 export async function startInsight(deps: StartInsightDeps, applicationProjectId: string, input: { regenerate: boolean }): Promise<StartInsightOutcome> {
@@ -78,6 +85,7 @@ export async function startInsight(deps: StartInsightDeps, applicationProjectId:
   const model = resolveModel(context.provider, pipeline.tier);
 
   const inputs = await (deps.loadInputs ?? loadInsightInputs)(user, applicationProjectId);
+  if (inputs && inputs.jd.sentences.length === 0) throw jdNoSentences();
   const hashes = inputs ? pipeline.hashes(pipeline.buildContext(inputs)) : null;
 
   if (hashes && !input.regenerate) {

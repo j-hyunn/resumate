@@ -96,7 +96,7 @@ export async function loadDocumentSourceLabels(supabase: UserSupabaseClient, dra
       return { sourceType, sourceId, label: joinSourceLabel(educationLabel(sourceId), null) || null, deleted: false };
     }
     // `toStoredSources` only stores project / experience / education today; any other storable type
-    // (`user_note`, `jd_requirement`, …) gets the evidence chip's kind label — `user_note` = "내 메모".
+    // (`user_note`, …) gets the evidence chip's kind label — `user_note` = "내 메모".
     // Untracked types are "current" unless deleted, as on the chip. `[가정]`
     const kind = (EVIDENCE_KIND_LABELS as Record<string, string | undefined>)[sourceType as EvidenceSourceType];
     return { sourceType, sourceId, label: kind ?? null, deleted: false };

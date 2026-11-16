@@ -14,7 +14,7 @@ export interface JdRunState {
 }
 
 export function jdRunState(
-  jd: Pick<JobDescription, "extraction_status" | "extraction_job_id"> | null | undefined,
+  jd: Pick<JobDescription, "id"> | null | undefined,
   state: string | null,
 ): JdRunState {
   void jd

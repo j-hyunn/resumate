@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { EvidenceChip } from "@/lib/contracts/evidence";
-import { resolveInsightRun, toInsightResultView, type JobRow } from "./read";
+import { resolveInsightRun, toInsightResultView, withRawTextStale, type JobRow } from "./read";
 
 /** Stored AI-02 result (ai storage/insight.ts InsightResult) → S-16 view. */
 
-const REQ1 = "00000000-0000-4000-8000-000000000001";
-const REQ2 = "00000000-0000-4000-8000-000000000002";
 const PRJ = "00000000-0000-4000-8000-0000000000a1";
 
 function chip(itemKey: string): EvidenceChip {
@@ -28,20 +26,21 @@ function chip(itemKey: string): EvidenceChip {
   };
 }
 
+/** schema 2 (DM v4.16 2.7.0): MT-n requirement items, `match_keys`. */
 const RESULT = {
-  schema_version: 1,
+  schema_version: 2,
   basis_note: "입력된 경력 데이터 기준 분석입니다",
   data_sufficiency: { level: "thin", hints: ["few_projects"] },
   requirement_matches: [
-    { item_key: `requirement_matches.${REQ1}`, requirement_id: REQ1, status: "met", rationale: "r1", missing_aspect: null },
-    { item_key: `requirement_matches.${REQ2}`, requirement_id: REQ2, status: "no_evidence", rationale: "r2", missing_aspect: "Kafka" },
+    { item_key: "requirement_matches.MT-1", match_key: "MT-1", requirement_text: "Spring 서버 개발", sids: ["S2", "S3"], status: "met", rationale: "r1", missing_aspect: null },
+    { item_key: "requirement_matches.MT-2", match_key: "MT-2", requirement_text: "Kafka 운영", sids: ["S5"], status: "no_evidence", rationale: "r2", missing_aspect: "Kafka" },
   ],
   summary_counts: { met: 1, partial: 0, no_evidence: 1 },
-  strengths: [{ item_key: "strengths.0", title: "t", description: "d", requirement_ids: [REQ1] }],
+  strengths: [{ item_key: "strengths.0", title: "t", description: "d", match_keys: ["MT-1"] }],
   gaps: [
     {
       item_key: "gaps.0",
-      requirement_ids: [REQ2],
+      match_keys: ["MT-2"],
       gap_kind: "no_evidence",
       description: "g",
       actions: [
@@ -53,7 +52,7 @@ const RESULT = {
   strategy: {
     positioning: "포지셔닝",
     positioning_item_key: "strategy.positioning",
-    project_priorities: [{ item_key: "strategy.project_priorities.0", rank: 1, project_id: PRJ, reason: "이유", requirement_ids: [REQ1] }],
+    project_priorities: [{ item_key: "strategy.project_priorities.0", rank: 1, project_id: PRJ, reason: "이유", match_keys: ["MT-1"] }],
   },
 };
 
@@ -63,50 +62,75 @@ const ROW = {
   status: "ready",
   is_latest: true,
   result: RESULT,
-  jd_text_hash: "r",
+  schema_version: 2,
+  raw_text_hash: "r",
   career_snapshot_hash: "c",
   provider: "gemini",
   model: "gemini-x",
   model_tier: "default",
   connection_tier: "free",
-  prompt_version: "ai-02.v1",
+  prompt_version: "ai-02.match.v6+ai-02.synthesize.v6+common.v5",
   created_at: "2026-11-01T00:00:00.000Z",
   completed_at: "2026-11-01T00:00:40.000Z",
 };
 
 describe("toInsightResultView", () => {
-  it("maps items, chips by item_key, requirement contents, project names, F-P2-09 add_data links", () => {
-    const keys = [`requirement_matches.${REQ1}`, "strengths.0", "gaps.0.actions.1", "strategy.positioning", "strategy.project_priorities.0"];
+  it("maps schema-2 items (MT-n, requirement_text, sids), chips by item_key, match_keys, project names, F-P2-09 add_data links", () => {
+    const keys = ["requirement_matches.MT-1", "strengths.0", "gaps.0.actions.1", "strategy.positioning", "strategy.project_priorities.0"];
     const view = toInsightResultView(ROW, {
       chips: new Map(keys.map((k) => [k, [chip(k)]])),
-      requirements: new Map([[REQ1, { id: REQ1, category: "required", content: "Spring", importance: "high", sortOrder: 0, sentenceIds: [] }]]),
       projectNames: new Map([[PRJ, "결제 시스템"]]),
-      stale: { career: true, requirements: false },
+      stale: { career: true, rawText: false },
     });
     expect(view).toMatchObject({
       id: "i1",
       versionNo: 2,
+      schemaVersion: 2,
       provider: "gemini",
       connectionTier: "free",
       stale: true,
-      staleReasons: { career: true, requirements: false },
+      staleReasons: { career: true, rawText: false },
       dataSufficiency: { level: "thin", hints: ["few_projects"] },
       summaryCounts: { met: 1, partial: 0, no_evidence: 1 },
     });
-    expect(view.requirementMatches[0]).toMatchObject({ requirementId: REQ1, requirement: { content: "Spring" }, status: "met" });
+    expect(view.requirementMatches[0]).toMatchObject({ itemKey: "requirement_matches.MT-1", matchKey: "MT-1", requirementText: "Spring 서버 개발", sentenceIds: ["S2", "S3"], status: "met" });
     expect(view.requirementMatches[0]!.evidence).toHaveLength(1);
-    expect(view.requirementMatches[1]).toMatchObject({ requirement: null, evidence: [] });
-    expect(view.gaps[0]!.actions[0]).toMatchObject({ type: "add_data", relatedRequirementIds: [REQ2], evidence: [] });
-    expect(view.gaps[0]!.actions[1]).toMatchObject({ type: "prepare_answer", relatedRequirementIds: [] });
+    expect(view.requirementMatches[1]).toMatchObject({ matchKey: "MT-2", evidence: [] });
+    expect(view.strengths[0]).toMatchObject({ matchKeys: ["MT-1"] });
+    expect(view.gaps[0]).toMatchObject({ itemKey: "gaps.0", matchKeys: ["MT-2"] });
+    expect(view.gaps[0]!.actions[0]).toMatchObject({ type: "add_data", relatedMatchKeys: ["MT-2"], evidence: [] });
+    expect(view.gaps[0]!.actions[1]).toMatchObject({ type: "prepare_answer", relatedMatchKeys: [] });
     expect(view.gaps[0]!.actions[1]!.evidence).toHaveLength(1);
     expect(view.strategy.positioning).toMatchObject({ text: "포지셔닝" });
-    expect(view.strategy.projectPriorities[0]).toMatchObject({ projectId: PRJ, projectName: "결제 시스템", rank: 1 });
+    expect(view.strategy.projectPriorities[0]).toMatchObject({ projectId: PRJ, projectName: "결제 시스템", rank: 1, matchKeys: ["MT-1"] });
   });
 
-  it("tolerates malformed members (drops them)", () => {
+  it("QA-06: rawText stale → the insight's jd_sentence chips read changed with no old-split locator; career chips untouched", () => {
+    const jd: EvidenceChip = { ...chip("gaps.0"), sourceType: "jd_sentence", sourceField: null, kindLabel: "공고 원문", target: { type: "jd_sentence", jobDescriptionId: "jd", sid: "S5", start: 10, end: 20 } };
+    const chips = new Map([["gaps.0", [jd, chip("gaps.0")]]]);
+    const stale = toInsightResultView(ROW, { chips, projectNames: new Map(), stale: { career: false, rawText: true } });
+    expect(stale.gaps[0]!.evidence[0]).toMatchObject({ sourceType: "jd_sentence", state: "changed", target: { type: "jd_sentence", sid: null, start: null, end: null } });
+    expect(stale.gaps[0]!.evidence[1]).toMatchObject({ sourceType: "project", state: "current" });
+    const fresh = toInsightResultView(ROW, { chips, projectNames: new Map(), stale: { career: false, rawText: false } });
+    expect(fresh.gaps[0]!.evidence[0]).toMatchObject({ state: "current", target: { sid: "S5", start: 10, end: 20 } });
+    expect(withRawTextStale({ ...jd, state: "deleted" }).state).toBe("deleted");
+  });
+
+  it("rawText stale alone makes the view stale (공고가 바뀌었어요)", () => {
+    const view = toInsightResultView(ROW, { chips: new Map(), projectNames: new Map(), stale: { career: false, rawText: true } });
+    expect(view).toMatchObject({ stale: true, staleReasons: { career: false, rawText: true } });
+  });
+
+  it("schema 1 (JR-Q3 (b)): no body, schemaVersion 1 — the screen asks to regenerate", () => {
+    const legacy = { ...ROW, schema_version: 1, result: { ...RESULT, requirement_matches: [{ item_key: "requirement_matches.x", requirement_id: "x", status: "met", rationale: "r" }] } };
+    const view = toInsightResultView(legacy, { chips: new Map([["strengths.0", [chip("strengths.0")]]]), projectNames: new Map(), stale: { career: false, rawText: false } });
+    expect(view).toMatchObject({ schemaVersion: 1, basisNote: "", requirementMatches: [], strengths: [], gaps: [], strategy: { positioning: null, projectPriorities: [] }, summaryCounts: { met: 0, partial: 0, no_evidence: 0 } });
+  });
+
+  it("tolerates malformed members (drops them); a v1-shaped match without match_key is dropped", () => {
     const view = toInsightResultView(
-      { ...ROW, result: { requirement_matches: [{ status: "bogus" }], gaps: [{ gap_kind: "x" }], strategy: null } },
-      { chips: new Map(), requirements: new Map(), projectNames: new Map(), stale: { career: false, requirements: false } },
+      { ...ROW, result: { requirement_matches: [{ status: "bogus" }, { requirement_id: "r", status: "met" }], gaps: [{ gap_kind: "x" }], strategy: null } },
+      { chips: new Map(), projectNames: new Map(), stale: { career: false, rawText: false } },
     );
     expect(view.requirementMatches).toEqual([]);
     expect(view.gaps).toEqual([]);

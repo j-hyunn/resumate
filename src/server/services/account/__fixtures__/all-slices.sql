@@ -22,7 +22,6 @@ declare
   chat uuid := gen_random_uuid();
   ap uuid := gen_random_uuid();
   jd uuid := gen_random_uuid();
-  req uuid := gen_random_uuid();
   ins uuid := gen_random_uuid();
   drf uuid := gen_random_uuid();
   sec uuid := gen_random_uuid();
@@ -64,8 +63,7 @@ begin
   insert into public.application_stage_events (user_id, application_project_id, event_type, to_stage) values (u, ap, 'created', 'before_apply');
   insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences)
     values (jd, u, ap, '결제 팀', 'h', '[{"sid":"S1","text":"결제 팀","start":0,"end":4}]');
-  insert into public.jd_requirements (id, user_id, job_description_id, category, content, source_sids, sort_order)
-    values (req, u, jd, 'required', 'Kafka', '{S1}', 0);
+  -- R17 (4.24 #1): jd_requirements is dropped
   -- S6 insight + evidence
   insert into public.insights (id, user_id, application_project_id, version_no) values (ins, u, ap, 1);
   insert into public.evidence_links (user_id, application_project_id, owner_type, owner_id, item_key, source_type, source_id, source_field)

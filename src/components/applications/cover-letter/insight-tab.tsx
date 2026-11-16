@@ -51,10 +51,8 @@ export async function InsightTab({ applicationProjectId: id, searchParams: sp }:
     const project = await getProject(p.project_id)
     if (project) projectNames[p.project_id] = project.name ?? "이름 없는 프로젝트"
   }
-  const legacyRequirements: Record<string, RequirementInfo> = {}
-  for (const r of jd?.requirements ?? []) legacyRequirements[r.id] = { content: r.content, category: r.category, importance: r.importance }
-  // R17: a v2 insight carries its own requirements (`M{n}`); v1 reads the legacy jd_requirements rows
-  const requirements: Record<string, RequirementInfo> = requirementsByIdFrom([...(latest?.result?.requirement_matches ?? []), ...(partialMatches ?? [])], legacyRequirements)
+  // R17 (schema 2): the insight carries its own requirements (`MT-n` → requirement_text)
+  const requirements: Record<string, RequirementInfo> = requirementsByIdFrom([...(latest?.result?.requirement_matches ?? []), ...(partialMatches ?? [])])
   const careerChanged = Object.values(evidence).some((list) => list.some((e) => e.status !== "ok"))
   const failed = previewErrorCode(state)
 
@@ -72,7 +70,7 @@ export async function InsightTab({ applicationProjectId: id, searchParams: sp }:
       readiness={readiness}
       activeChatId={chats[0]?.id ?? null}
       {...jdRunState(jd, state)}
-      rawTextEdited={state === "raw-edited" || (!state && Boolean(jd?.raw_text_edited_at) && jd?.extraction_status === "pending")}
+      rawTextEdited={state === "raw-edited"}
       gateChatFailure={gateChatFailurePreview(state)}
       careerChanged={careerChanged}
       lateFailure={previewEmpty || generating ? null : ap.insight_status.failure}

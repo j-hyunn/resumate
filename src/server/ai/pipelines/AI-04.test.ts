@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coverLetterContext, questionRow } from "../__fixtures__/S7/cover-letter-chat";
+import { coverLetterContext, insightInput, questionRow } from "../__fixtures__/S7/cover-letter-chat";
 import { a, IDS } from "../__fixtures__/S7/drafts";
 import type { CoverLetterChatContext } from "../context-pack/cover-letter-chat";
 import { selectDraftBatch } from "../context-pack/cover-letter-chat";
@@ -99,6 +99,39 @@ describe("compose (초안 턴)", () => {
     if (selected?.type !== "sources_selected") throw new Error("no sources_selected");
     expect(selected.sources.length).toBeGreaterThan(0);
     for (const s of selected.sources) expect(s.requirement_ids).toEqual([]);
+  });
+
+  it("(JR-5) a jd_sentence / jd_requirement evidence is rejected (V-1); the paragraph keeps its career evidence", async () => {
+    const ctx = coverLetterContext({ insight: insightInput() }, 3);
+    const projectId = ctx.pack.aliases.get("PRJ-1")!.id;
+    const p = paragraph(ctx, projectId);
+    const withJd = {
+      ...p,
+      evidence: [...p.evidence, { source_type: "jd_sentence", ref: "S3", field: null, quote: null }],
+    };
+    const { result } = await run(ctx, [{ json: composeOutput(ctx, [question(ctx, "q_1", { paragraphs: [withJd] })]) }], ["q_1"]);
+    const op = result.patch.ops.find((o) => o.op === "replace_draft");
+    if (op?.op !== "replace_draft") throw new Error("no replace_draft");
+    const types = op.draft.blocks.flatMap((b) => b.evidence.map((e) => e.source_type));
+    expect(types).toContain("project");
+    expect(types).not.toContain("jd_sentence");
+    expect(result.validationReport.evidence_removed_v1_ref).toBeGreaterThanOrEqual(1);
+  });
+
+  it("(JR-5) the prompt carries <insight> after the pack, never <jd>; no insight → the guidance line in <task>", async () => {
+    const withInsight = coverLetterContext({ insight: insightInput() }, 3);
+    const a1 = await run(withInsight, [{ json: composeOutput(withInsight, [question(withInsight, "q_1")]) }], ["q_1"]);
+    const blocks1 = a1.llm.requests[0].userBlocks.map((b) => b.text);
+    expect(blocks1[0].startsWith("<career_data>")).toBe(true);
+    expect(blocks1.findIndex((t) => t.startsWith("<insight>"))).toBe(2);
+    expect(blocks1.join("\n")).not.toMatch(/<jd>|<sentences>/);
+    expect(blocks1.at(-1)).not.toContain("인사이트가 아직 없습니다");
+
+    const none = coverLetterContext({}, 3);
+    const a2 = await run(none, [{ json: composeOutput(none, [question(none, "q_1")]) }], ["q_1"]);
+    const blocks2 = a2.llm.requests[0].userBlocks.map((b) => b.text);
+    expect(blocks2.some((t) => t.startsWith("<insight>"))).toBe(false);
+    expect(blocks2.at(-1)).toContain("이 지원 건의 인사이트가 아직 없습니다");
   });
 
   it("drops only the title when it claims a number the body does not have — the body survives", async () => {

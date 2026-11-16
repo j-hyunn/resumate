@@ -125,7 +125,7 @@ describe("extract — calls and errors", () => {
     expect(req.outputSchema).toMatchObject({ type: "object" });
     expect(llm.calls[0].model).toBe(llm.modelFor("light"));
     expect(r.promptVersion).toBe(AI12_EXTRACT_PROMPT_VERSION);
-    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v8\+common\.v5$/);
+    expect(AI12_EXTRACT_PROMPT_VERSION).toMatch(/^ai-12\.extract\.v7\+common\.v5$/);
     expect(llm.records).toHaveLength(1);
     expect(llm.records[0]).toMatchObject({ modelTier: "light", outcome: "succeeded" });
   });
@@ -294,8 +294,9 @@ describe("reply", () => {
     for (const f of ["situation:", "task:", "action:", "result:", "learnings:"]) expect(AI12_REPLY_SYSTEM).toContain(`- ${f}`);
     // kept guidance rules
     for (const k of ["delegation", "sensitive", "can_apply", "full_fields", "ready_to_return", "last_message", "분류(프로젝트 종류·경험 유형·역량)는 묻지 않습니다"]) expect(AI12_REPLY_SYSTEM).toContain(k);
-    // R17: the gate's requirement block is gone with AI-01.
+    // v4.16 (JR-5): the gate's AI-01 requirement block became the insight gap block.
     expect(AI12_REPLY_SYSTEM).not.toContain("gate_requirements");
+    expect(AI12_REPLY_SYSTEM).toContain("<gate_gaps>");
     expect(AI12_REPLY_SYSTEM).not.toContain("<status>");
     // QA-01: requested slot and clarifications before follow-ups, then focus_slots order
     expect(AI12_REPLY_SYSTEM).toContain("(1) 사용자가 요청한 항목(focus_slots의 reason이 requested 또는 requested_reinforce)과 되묻기(actor_ambiguous, number_vague)를 먼저 묻습니다. (2) 그다음 꼬리 질문을 합니다. (3) 그다음 focus_slots 순서를 따릅니다.");

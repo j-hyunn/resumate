@@ -5,7 +5,7 @@ import {
   type ApplicationHub,
   type ApplicationProgress,
   type ApplicationProjectListItem,
-  type JdRawTextLock,
+  type JdRawTextLockedReason,
   type JdView,
   type ListApplicationProjectsInput,
 } from "@/lib/contracts/application";
@@ -165,100 +165,38 @@ export async function getApplicationHub(supabase: UserSupabaseClient, id: string
 // ---------------- S-15 JD view ----------------
 
 /**
- * R17-6: `update_failed_jd_raw_text` is unchanged (the DB keeps its extraction-based conditions),
- * so this mirror still reads the legacy `extraction_status` / `extraction_job_id` columns and the
- * legacy `jd_requirements` count. A JD created after R17 stays `pending` → `jd_raw_text_locked`.
- * The edit rule without extraction is a planning question (spec gap); this mirrors the RPC only.
+ * DM 2.6.1 (v4.16, JR-7): the raw text is editable unless an `insight` job is queued / running on
+ * the project (same rule as `update_jd_raw_text` condition 3 — a 자소서 turn, a failed or canceled
+ * job doesn't lock it). The RPC decides finally.
  */
-
-/** DM 2.6.1 condition 4: failures the user can fix by editing the text (legacy AI-01 causes). */
-const INPUT_CAUSED_JD_FAILURES: ReadonlySet<string> = new Set(["not_a_jd", "input_too_long", "safety_blocked"]);
-
-export type JdRawTextFacts = {
-  /** Condition 1: a queued / running ai_jobs row on this project (any type). */
-  jobInProgress: boolean;
-  extractionStatus: string;
-  /** `extraction_job_id`'s row; null when pruned or never run. */
-  extractionJob: { job_type: string; status: string; error_code: string | null } | null;
-  /** Legacy `jd_requirements` rows (pre-R17). */
-  requirementCount: number;
-  /** Condition 5, read only when conditions 1~4 pass. */
-  hasResults: () => Promise<boolean>;
-};
-
-/** Conditions 1~5 of update_failed_jd_raw_text, same order and same rules (the RPC decides finally). */
-export async function jdRawTextLockOf(f: JdRawTextFacts): Promise<JdRawTextLock | null> {
-  if (f.jobInProgress) return "jd_job_in_progress";
-  const failed = f.extractionStatus === "failed" || (f.extractionStatus === "running" && f.extractionJob?.status === "failed");
-  if (!failed && f.extractionStatus !== "succeeded") return "jd_raw_text_locked";
-  if (f.requirementCount > 0) return "jd_raw_text_locked";
-  if (failed) {
-    const job = f.extractionJob;
-    if (!job || job.job_type !== "jd_extraction" || job.status !== "failed" || !INPUT_CAUSED_JD_FAILURES.has(job.error_code ?? "")) return "jd_failure_not_input";
-  }
-  return (await f.hasResults()) ? "jd_has_results" : null;
-}
-
-async function hasRowsFromThisText(supabase: UserSupabaseClient, applicationProjectId: string): Promise<boolean> {
-  const count = async (q: PromiseLike<{ count: number | null; error: { code?: string | null; message?: string | null } | null }>) => {
-    const { count: n, error } = await q;
-    if (error) throw mapDbError(error);
-    return n ?? 0;
-  };
-  const head = { count: "exact", head: true } as const;
-  /**
-   * Condition 5 (R15 `update_failed_jd_raw_text`): ready insights or JD evidence.
-   * The 서류 branch is gone (spec-gaps R15-DB-8) — a JD used only for a 자기소개서 may have its
-   * raw text edited, because the 자소서 answers are not derived from the requirement rows the way
-   * a 경력기술서 was. Keep this mirror in step with the RPC.
-   */
-  const [insights, evidence] = await Promise.all([
-    count(supabase.from("insights").select("id", head).eq("application_project_id", applicationProjectId).eq("status", "ready")),
-    count(supabase.from("evidence_links").select("id", head).eq("application_project_id", applicationProjectId).in("source_type", ["jd_requirement", "jd_sentence"])),
-  ]);
-  return insights > 0 || evidence > 0;
-}
-
-async function loadJdRawTextLock(
-  supabase: UserSupabaseClient,
-  jd: { application_project_id: string; extraction_status: string; extraction_job_id: string | null },
-  requirementCount: number,
-): Promise<JdRawTextLock | null> {
-  const [active, job] = await Promise.all([
-    supabase.from("ai_jobs").select("id", { count: "exact", head: true }).eq("application_project_id", jd.application_project_id).in("status", ["queued", "running"]),
-    jd.extraction_job_id ? supabase.from("ai_jobs").select("job_type, status, error_code").eq("id", jd.extraction_job_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-  ]);
-  if (active.error) throw mapDbError(active.error);
-  if (job.error) throw mapDbError(job.error);
-  return jdRawTextLockOf({
-    jobInProgress: (active.count ?? 0) > 0,
-    extractionStatus: jd.extraction_status,
-    extractionJob: job.data,
-    requirementCount,
-    hasResults: () => hasRowsFromThisText(supabase, jd.application_project_id),
-  });
+export async function jdRawTextLockedReasonOf(supabase: UserSupabaseClient, applicationProjectId: string): Promise<JdRawTextLockedReason | null> {
+  const { count, error } = await supabase
+    .from("ai_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("application_project_id", applicationProjectId)
+    .eq("job_type", "insight")
+    .in("status", ["queued", "running"]);
+  if (error) throw mapDbError(error);
+  return (count ?? 0) > 0 ? "job_in_progress" : null;
 }
 
 export async function getJdView(supabase: UserSupabaseClient, applicationProjectId: string): Promise<JdView> {
   const { data: jd, error } = await supabase
     .from("job_descriptions")
-    .select("id, application_project_id, raw_text, raw_text_edited_at, sentences, company_name, company_name_source, position_title, position_title_source, extraction_status, extraction_job_id")
+    .select("id, application_project_id, raw_text, raw_text_edited_at, sentences, company_name, company_name_source, position_title, position_title_source")
     .eq("application_project_id", applicationProjectId)
     .maybeSingle();
   if (error) throw mapDbError(error);
   if (!jd) throw notFound();
 
-  // Legacy rows only feed the raw-text lock mirror (R17-6); the view itself shows no requirements.
-  const reqs = await supabase.from("jd_requirements").select("id", { count: "exact", head: true }).eq("job_description_id", jd.id);
-  if (reqs.error) throw mapDbError(reqs.error);
-  const rawTextLock = await loadJdRawTextLock(supabase, jd, reqs.count ?? 0);
+  const rawTextLockedReason = await jdRawTextLockedReasonOf(supabase, applicationProjectId);
   return {
     applicationProjectId,
     jobDescriptionId: jd.id,
     rawText: jd.raw_text,
     rawTextEditedAt: jd.raw_text_edited_at,
-    rawTextEditable: rawTextLock === null,
-    rawTextLock,
+    rawTextEditable: rawTextLockedReason === null,
+    rawTextLockedReason,
     sentences: parseSentences(jd.sentences),
     companyName: jd.company_name,
     companyNameSource: jd.company_name_source as JdFieldSource | null,

@@ -1,6 +1,7 @@
 /**
- * 지원 프로젝트 data layer: application_projects, job_descriptions, jd_requirements,
- * application_stage_events, insights, drafts (+ sections/sources). Server only.
+ * 지원 프로젝트 data layer: application_projects, job_descriptions, application_stage_events,
+ * insights, drafts (+ sections/sources). Server only. R17: `jd_requirements` is dropped (the mock
+ * store keeps its legacy rows only for old fixtures).
  * Board RPCs: move_application_stage / set_application_outcome (04 §2.6).
  */
 import type {
@@ -15,19 +16,19 @@ import type {
   JdRequirement,
   JdRawTextRefusalCode,
   JobDescription,
+  InsightSkipReason,
   MoveApplicationStageResult,
   StageOutcome,
 } from "@/types/db"
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { newId, USER_ID } from "@/lib/mock/ids"
-import { activeKey, assertAiRunnable, createMockJob } from "@/lib/mock/ai"
-import { consentRequired } from "@/lib/mock/consent"
+import { assertAiRunnable, createMockJob } from "@/lib/mock/ai"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { STAGE_ORDER, composeCoverLetterName, countsAsDraft, defaultApplicationName } from "./labels"
 import { resolveAiFeatureStatus, type AiFeatureStatusView } from "./ai-feature-status"
 import { refreshApplicationJobs } from "./ai-jobs"
-import { isInputCausedJdFailure, JD_RAW_TEXT_MAX } from "./jd-raw-text"
+import { JD_RAW_TEXT_MAX } from "./jd-raw-text"
 import { previewOr } from "./source"
 import { realMoveApplicationStage, realSetApplicationOutcome, realUpdateApplicationProject } from "./board-real"
 import {
@@ -43,7 +44,7 @@ import {
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
-  job_description: Pick<JobDescription, "id" | "company_name" | "position_title" | "extraction_status"> | null
+  job_description: Pick<JobDescription, "id" | "company_name" | "position_title"> | null
   /** 인사이트 없음 / 생성 중 / 있음 */
   insight_state: "none" | "generating" | "ready"
   /** @deprecated (v5.20, CF-A14) 화면 "서류 수" 폐기 — S-39 카드는 `listCoverLetterSlotCounts()`를 쓴다 */
@@ -70,7 +71,6 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
       id: jd.id,
       company_name: jd.company_name,
       position_title: jd.position_title,
-      extraction_status: jd.extraction_status,
     },
     insight_state: insights.some((i) => i.status === "ready")
       ? "ready"
@@ -151,7 +151,7 @@ export async function getBoard(): Promise<Record<ApplicationStage, ApplicationSu
   return board
 }
 
-/** [{ sid, text, start, end }] per non-empty line (splitJdSentences of create and update_failed_jd_raw_text) */
+/** [{ sid, text, start, end }] per non-empty line (splitJdSentences of create and update_jd_raw_text) */
 function splitJdSentences(rawText: string) {
   const lines = rawText.split(/\n+/).filter(Boolean)
   let pos = 0
@@ -180,8 +180,14 @@ export interface CreateApplicationInput {
   source_url?: string | null
 }
 
-/** R17: `create_application_project` returns no preview fields any more. */
-export type CreateApplicationResult = ApplicationProject
+/**
+ * The created row + JR-6 (4.24 #10): the insight job the create action started right after the new row
+ * (null when it did not — `insight_skip_reason` says why; both null on a same-id replay).
+ */
+export type CreateApplicationResult = ApplicationProject & {
+  insight_job_id: string | null
+  insight_skip_reason: InsightSkipReason | null
+}
 
 async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<CreateApplicationResult> {
   const company = input.company_name?.trim() || null
@@ -222,19 +228,10 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     raw_text: input.raw_text,
     raw_text_hash: `hash-${jdId}`,
     sentences: splitJdSentences(input.raw_text),
-    detected_language: "ko",
     company_name: company,
     company_name_source: company ? "user" : null,
     position_title: position,
     position_title_source: position ? "user" : null,
-    // R17: legacy column, always the default `pending`
-    extraction_status: "pending",
-    extraction: null,
-    extraction_job_id: null,
-    extraction_provider: null,
-    extraction_model: null,
-    tech_keywords: [],
-    requirements_hash: null,
     raw_text_edited_at: null,
     // R15: 생성 RPC가 `p_source_url`을 받는다 (CF-10·CF-A16)
     source_url: input.source_url?.trim() || null,
@@ -250,7 +247,8 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     to_outcome: null,
     created_at: now,
   })
-  return clone(ap)
+  // JR-6: the mock never auto-starts an insight (previews show the "AI 미연결" path)
+  return clone({ ...ap, insight_job_id: null, insight_skip_reason: "ai_not_connected" as const })
 }
 
 /** S-31 헤더 인라인 수정 (name, deadline, memo only) */
@@ -349,103 +347,65 @@ export async function setApplicationOutcome(id: string, outcome: StageOutcome | 
 // ---------------------------------------------------------------------------
 
 export interface JobDescriptionWithRequirements extends JobDescription {
-  requirements: JdRequirement[]
-  /** getJdView.rawTextEditable (04 §2.6.1 조건 1~5): S-15 "공고 원문 고치기" */
+  /**
+   * getJdView.rawTextEditable (04 §2.6.1, JR-7): [공고 내용 수정] is always shown, disabled while an insight
+   * job is queued / running
+   */
   raw_text_editable: boolean
-  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 자기소개서 안내 (Q53-11) */
-  raw_text_lock: JdRawTextRefusalCode | null
+  /** `job_in_progress` when not editable, else null */
+  raw_text_locked_reason: "job_in_progress" | null
 }
 
 async function mockGetJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
   const db = await mockRequest()
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return null
-  const rawTextLock = jdRawTextLock(db, jd)
+  const locked = jdRawTextLockedReason(db, jd)
   return clone({
     ...jd,
     raw_text_edited_at: jd.raw_text_edited_at ?? null,
-    requirements: db.jd_requirements
-      .filter((r) => r.job_description_id === jd.id)
-      .sort((a, b) => a.sort_order - b.sort_order),
-    raw_text_editable: rawTextLock === null,
-    raw_text_lock: rawTextLock,
+    raw_text_editable: locked === null,
+    raw_text_locked_reason: locked,
   })
 }
 
-/**
- * Conditions 1~5 of update_failed_jd_raw_text (04 §2.6.1), in order. null = the text may be edited.
- * R17-6: the RPC is unchanged and still reads the legacy extraction columns, so a JD created after R17
- * (`pending`) is `jd_raw_text_locked`. Mirrors the RPC only.
- */
-function jdRawTextLock(db: MockDb, jd: JobDescription): JdRawTextRefusalCode | null {
+/** update_jd_raw_text condition 3 (04 §2.6.1): an insight job queued / running on this project. Mirrors the RPC only. */
+function jdRawTextLockedReason(db: MockDb, jd: JobDescription): "job_in_progress" | null {
   const apId = jd.application_project_id
   refreshApplicationJobs(db, apId)
-  // 1. no job queued / running on this application (any type)
-  if (db.ai_jobs.some((j) => j.application_project_id === apId && (j.status === "queued" || j.status === "running"))) return "jd_job_in_progress"
-  // 2. extraction failed (`running` whose job already failed counts: same as the read rule), or succeeded (Q53-11)
-  const job = db.ai_jobs.find((j) => j.id === jd.extraction_job_id) ?? null
-  const failed = jd.extraction_status === "failed" || (jd.extraction_status === "running" && job?.status === "failed")
-  if (!failed && jd.extraction_status !== "succeeded") return "jd_raw_text_locked"
-  // 3. no requirements
-  if (db.jd_requirements.some((r) => r.job_description_id === jd.id)) return "jd_raw_text_locked"
-  // 4. a failed extraction failed for an input cause (job gone after 90 days → cause unknown)
-  if (failed && (!job || job.job_type !== "jd_extraction" || job.status !== "failed" || !isInputCausedJdFailure(job.error_code))) return "jd_failure_not_input"
-  // 5. nothing was built from this text
-  const draftIds = db.drafts.filter((d) => d.application_project_id === apId).map((d) => d.id)
-  const hasResults =
-    db.insights.some((i) => i.application_project_id === apId && i.status === "ready") ||
-    db.draft_sections.some((s) => draftIds.includes(s.draft_id) && s.ai_content) ||
-    db.evidence_links.some((e) => e.application_project_id === apId && (e.source_type === "jd_requirement" || e.source_type === "jd_sentence"))
-  return hasResults ? "jd_has_results" : null
+  return db.ai_jobs.some((j) => j.application_project_id === apId && j.job_type === "insight" && (j.status === "queued" || j.status === "running")) ? "job_in_progress" : null
 }
 
 export type UpdateFailedJdRawTextResult =
-  | { application_project_id: string; job_description_id: string; extraction_status: "pending"; raw_text_edited_at: string; ai_run_allowed: boolean }
+  | { application_project_id: string; job_description_id: string; raw_text_edited_at: string }
   | { refused: JdRawTextRefusalCode }
 
 /**
- * RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1): the one exception to "JD 교체 불가". Replaces the text
- * and sentences, sends the JD back to `pending`. No AI call, no tokens (D-30); works without a key.
- * name / name_source / stage / deadline don't change; earlier ai_jobs rows stay untouched.
+ * RPC update_jd_raw_text (JR-7, 04 §2.6.1): the raw text can be edited any time except while an insight
+ * runs. Replaces the text and sentences; insights stay (they read "공고가 바뀌었어요"). No AI call, no tokens;
+ * works without a key. name / name_source / stage / deadline don't change. (Exported name kept for the screens.)
  */
 async function mockUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
   const db = await mockRequest()
   const text = rawText.trim()
   if (!text || text.length > JD_RAW_TEXT_MAX) return { refused: "invalid_raw_text" }
+  const sentences = splitJdSentences(text)
+  if (sentences.length === 0) return { refused: "jd_no_sentences" }
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return { refused: "job_description_not_found" }
-  const lock = jdRawTextLock(db, jd)
-  if (lock) return { refused: lock }
+  if (jdRawTextLockedReason(db, jd)) return { refused: "jd_job_in_progress" }
   if (text === jd.raw_text.trim()) return { refused: "jd_raw_text_unchanged" }
   const now = new Date().toISOString()
   Object.assign(jd, {
     raw_text: text,
     raw_text_hash: `hash-${jd.id}-${now}`,
-    sentences: splitJdSentences(text),
-    detected_language: null,
-    extraction: null,
-    tech_keywords: [],
-    requirements_hash: null,
-    extraction_status: "pending",
-    extraction_job_id: null,
-    extraction_provider: null,
-    extraction_model: null,
+    sentences,
     raw_text_edited_at: now,
     updated_at: now,
   })
-  // AI-filled values belong to the previous text; what the user typed stays
-  if (jd.company_name_source === "ai") Object.assign(jd, { company_name: null, company_name_source: null })
-  if (jd.position_title_source === "ai") Object.assign(jd, { position_title: null, position_title_source: null })
   const ap = db.application_projects.find((a) => a.id === applicationProjectId)
   if (ap) ap.last_activity_at = now
-  const key = activeKey(db)
-  return {
-    application_project_id: applicationProjectId,
-    job_description_id: jd.id,
-    extraction_status: "pending",
-    raw_text_edited_at: now,
-    ai_run_allowed: Boolean(key && key.status !== "invalid" && !consentRequired(db, key.provider, key.connection_tier)),
-  }
+  return { application_project_id: applicationProjectId, job_description_id: jd.id, raw_text_edited_at: now }
 }
 
 /** One requirement (S-10 "관련 요건: {요건 content}" from an S-16 보완점) */
@@ -516,9 +476,9 @@ async function mockStartInsight(
     status: "generating",
     result: null,
     match_stage_result: null,
-    requirements_hash: null,
-    // R17: the JD part of the input is its raw-text hash
-    jd_text_hash: jd?.raw_text_hash ?? null,
+    // DM 2.7.0: the JD raw-text hash the run reads (prepare)
+    raw_text_hash: jd?.raw_text_hash ?? null,
+    schema_version: null,
     completed_at: null,
   })
   return { insight_id: insightId, job_id: job.id }

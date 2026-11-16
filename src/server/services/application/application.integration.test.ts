@@ -1,6 +1,3 @@
-import { writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput, ListApplicationProjectsInput, MoveApplicationStageInput } from "@/lib/contracts/application";
@@ -13,15 +10,15 @@ import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
 import { createProject, saveExperience as createExperience, getApplicationProjectDeletionImpact } from "@/server/services/career";
 import { startWritingChat } from "@/server/services/writing-chat/chat";
 import { KO_BACKEND } from "@/test/jd-fixtures";
-import { hasPsql, hasTable, isStackReady, readLocalSupabase, runPsql } from "@/test/local-supabase";
+import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
 import { getApplicationHub, getBoard, getJdView, listApplicationProjects } from "./read";
-import { createApplicationProject, deleteApplicationProject, moveApplicationStage, setApplicationOutcome, updateApplicationProject, updateFailedJdRawText } from "./write";
+import { createApplicationProject, deleteApplicationProject, moveApplicationStage, setApplicationOutcome, updateApplicationProject, updateJdRawText } from "./write";
 
 /**
  * S5 end-to-end against the local stack, R17 (the JD is used as raw text): create (no AI gate,
  * default / user names, raw text + sentences, no extraction fields) → JD view (raw text only) →
  * stage moves + history → board / list / hub → gate chat start ownership → raw-text edit rule
- * (R17-6: the RPC is unchanged) → delete (cascade, usage kept with null project, late usage insert
+ * (JR-7: update_jd_raw_text, locked only by an insight in flight) → delete (cascade, usage kept with null project, late usage insert
  * of the deleted project kept). Skips when the stack isn't running or S5 isn't migrated.
  */
 
@@ -107,9 +104,10 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
 
   it("create without a key: default name, raw text + sentences stored, no extraction; idempotent retry", async () => {
     const created = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: projectA, rawText: KO_BACKEND.raw }));
-    expect(created).toMatchObject({ applicationProjectId: projectA, nameSource: "default", aiRunAllowed: false, created: true });
-    // R17: the create result has no extraction / preview fields.
-    expect(Object.keys(created).sort()).toEqual(["aiRunAllowed", "applicationProjectId", "created", "displayName", "jobDescriptionId", "name", "nameSource", "warnings"]);
+    expect(created).toMatchObject({ applicationProjectId: projectA, nameSource: "default", created: true });
+    // R17 (4.24 #9): the RPC part of the result has no extraction / preview / ai_run_allowed fields
+    // (the create action adds insightJobId / insightSkipReason, JR-6).
+    expect(Object.keys(created).sort()).toEqual(["applicationProjectId", "created", "displayName", "jobDescriptionId", "name", "nameSource", "warnings"]);
     // R4 (CR-23 [가정]): the default name reads "새 자기소개서 (날짜)".
     expect(created.name).toMatch(/^새 자기소개서 \(\d{4}-\d{2}-\d{2}\)$/);
     expect(created.warnings).toEqual([]);
@@ -128,7 +126,7 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect((await admin.from("ai_jobs").select("id").eq("application_project_id", projectA)).data).toEqual([]);
   });
 
-  it("create with company + position and no key: '회사명 – 포지션명' (user); short JD warning", async () => {
+  it("create with company + position and no key: '{회사명} 자기소개서' (user); short JD warning", async () => {
     const created = await createApplicationProject(
       user,
       CreateApplicationProjectInput.parse({ id: projectB, rawText: "짧은 공고", companyName: "가나다랩", positionTitle: "데이터 엔지니어", deadline: "2026-12-01" }),
@@ -206,50 +204,36 @@ describe.skipIf(!ready)("application projects & JD (local stack)", () => {
     expect(writingChatId).toBeTruthy();
   });
 
-  it("QA-S5-01: symbol-only raw text is saved (0 sentences)", async () => {
+  it("4.24 #9: symbol-only raw text (0 sentences) → jd_no_sentences (400), no row", async () => {
     const id = crypto.randomUUID();
-    const created = await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
-    expect(created).toMatchObject({ applicationProjectId: id, created: true });
-    expect((await getJdView(user, id)).sentences).toEqual([]);
-    await deleteApplicationProject(user, id);
+    await expect(createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }))).rejects.toMatchObject({ code: "jd_no_sentences", status: 400 });
+    expect((await admin.from("application_projects").select("id").eq("id", id)).data).toEqual([]);
   });
 
-  it("R17-6: the raw-text edit RPC is unchanged — a new (pending) JD is locked; a legacy input-caused failure is editable", async () => {
+  it("JR-7: update_jd_raw_text — editable any time except while an insight runs; checks in DM order", async () => {
     const id = crypto.randomUUID();
-    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "----\n• • •" }));
-    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_raw_text_locked", rawTextEditedAt: null });
-    await expect(updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "jd_raw_text_locked", status: 409 });
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id, rawText: "짧은 공고 한 줄" }));
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLockedReason: null, rawTextEditedAt: null });
 
-    // A pre-R17 JD whose AI-01 run failed for an input cause (legacy rows, written as the local superuser).
-    if (!s.dbUrl || !hasPsql()) return await deleteApplicationProject(user, id);
-    const legacyJob = crypto.randomUUID();
-    // psql -c doesn't interpolate :'vars' — go through a file
-    const sqlFile = join(tmpdir(), `r17-legacy-${legacyJob}.sql`);
-    writeFileSync(
-      sqlFile,
-      `insert into public.ai_jobs (id, user_id, job_type, application_project_id, target_type, target_id, status, provider, model_tier, connection_tier, error_code, finished_at)
-                select :'job'::uuid, :'uid'::uuid, 'jd_extraction', :'ap'::uuid, 'job_description', jd.id, 'failed', 'anthropic', 'light', 'paid', 'not_a_jd', now()
-                  from public.job_descriptions jd where jd.application_project_id = :'ap'::uuid
-                on conflict (id) do nothing;
-                update public.job_descriptions set extraction_status = 'failed', extraction_job_id = :'job'::uuid where application_project_id = :'ap'::uuid;`,
-    );
-    const markLegacyFailure = () => runPsql(s.dbUrl!, { file: sqlFile }, { job: legacyJob, uid: userId, ap: id });
-    markLegacyFailure();
-    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLock: null });
-
-    await expect(updateFailedJdRawText(user, { id, rawText: "  ----\n• • •\n" })).rejects.toMatchObject({ code: "jd_raw_text_unchanged", status: 409 });
-    await expect(updateFailedJdRawText(otherUser, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found", status: 404 });
-    const saved = await updateFailedJdRawText(user, { id, rawText: KO_BACKEND.raw });
-    expect(saved).toMatchObject({ applicationProjectId: id, aiRunAllowed: false, warnings: [] });
+    await expect(updateJdRawText(user, { id, rawText: "----\n• • •" })).rejects.toMatchObject({ code: "jd_no_sentences", status: 400 });
+    await expect(updateJdRawText(user, { id, rawText: "  짧은 공고 한 줄\n" })).rejects.toMatchObject({ code: "jd_raw_text_unchanged", status: 409 });
+    await expect(updateJdRawText(otherUser, { id, rawText: KO_BACKEND.raw })).rejects.toMatchObject({ code: "not_found", status: 404 });
+    const saved = await updateJdRawText(user, { id, rawText: KO_BACKEND.raw });
+    expect(saved).toEqual({ applicationProjectId: id, jobDescriptionId: expect.any(String), rawTextEditedAt: expect.any(String), warnings: [] });
     const after = await getJdView(user, id);
-    expect(after).toMatchObject({ rawText: KO_BACKEND.raw, rawTextEditable: false, rawTextLock: "jd_raw_text_locked" });
+    expect(after).toMatchObject({ rawText: KO_BACKEND.raw, rawTextEditable: true, rawTextLockedReason: null });
     expect(Date.parse(after.rawTextEditedAt!)).toBe(Date.parse(saved.rawTextEditedAt));
     expect(after.sentences).toHaveLength(13);
 
-    // Condition 1: any job type in flight on the project locks it.
-    markLegacyFailure();
-    await createSupabaseJobStore(createAiWriterClient(userId)).insert(jobRow({ jobType: "insight", applicationProjectId: id }));
-    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLock: "jd_job_in_progress" });
+    // Condition 3: only a queued / running `insight` job locks it (a 자소서 turn does not).
+    const store = createSupabaseJobStore(createAiWriterClient(userId));
+    const other = crypto.randomUUID();
+    await store.insert(jobRow({ id: other, jobType: "cover_letter", applicationProjectId: id }));
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: true, rawTextLockedReason: null });
+    await admin.from("ai_jobs").delete().eq("id", other);
+    await store.insert(jobRow({ jobType: "insight", applicationProjectId: id }));
+    await expect(getJdView(user, id)).resolves.toMatchObject({ rawTextEditable: false, rawTextLockedReason: "job_in_progress" });
+    await expect(updateJdRawText(user, { id, rawText: "새로운 공고 내용입니다." })).rejects.toMatchObject({ code: "jd_job_in_progress", status: 409 });
     await deleteApplicationProject(user, id);
   });
 

@@ -78,9 +78,9 @@ describe("buildJdContext (R17: raw text only)", () => {
     expect([...ctx.aliases.values()].every((e) => e.sourceType === "jd_sentence")).toBe(true);
   });
 
-  it("passes the stored raw_text_hash through as jdTextHash", () => {
+  it("passes the stored raw_text_hash through as rawTextHash", () => {
     const a = buildJdContext({ jobDescriptionId: "jd-1", sentences, rawTextHash: "abc" });
-    expect(a.jdTextHash).toBe("abc");
+    expect(a.rawTextHash).toBe("abc");
     expect(a.text).not.toContain("position_title");
   });
 

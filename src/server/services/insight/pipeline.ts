@@ -15,8 +15,8 @@ import {
 import type { InsightPipeline } from "./job";
 
 /**
- * ai-pipeline AI-02 behind the job's pipeline interface (R17 ai notes "인터페이스" §3: the JD
- * is its raw-text sentences + raw_text_hash; stage 1 is one call). Next-free.
+ * ai-pipeline AI-02 behind the job's pipeline interface (R17 ai notes "정렬 인터페이스" A: the JD
+ * is its raw-text sentences + raw_text_hash; stage 1 is one call → `MT-n` items). Next-free.
  */
 export function createAi02InsightPipeline(logger?: AiLogger): InsightPipeline<InsightContext, MatchStageResult, SynthesisAttempt> {
   return {
@@ -31,7 +31,7 @@ export function createAi02InsightPipeline(logger?: AiLogger): InsightPipeline<In
         positionTitle: inputs.jd.positionTitle,
         rawTextHash: inputs.jd.rawTextHash,
       }),
-    hashes: (context) => ({ careerSnapshotHash: context.careerSnapshotHash, jdTextHash: context.jdTextHash }),
+    hashes: (context) => ({ careerSnapshotHash: context.careerSnapshotHash, rawTextHash: context.rawTextHash }),
     match: (input, deps) => matchRequirements(input, { ...deps, logger }),
     synthesize: (input, deps) => synthesizeOnce(input, { ...deps, logger }),
     violations: (attempt) => attempt.violations,

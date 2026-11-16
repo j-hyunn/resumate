@@ -33,8 +33,8 @@ select is(public.complete_insight(current_setting('t.i')::uuid, 'aaaaaaaa-7777-0
             jsonb_build_object(
               'result', '{"schema_version":1}'::jsonb,
               'match_stage_result', '{"matches":[]}'::jsonb,
-              'hashes', '{"jd_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
-              'meta', '{"schema_version":1,"prompt_version":"pv","provider":"anthropic","model":"claude-sonnet-5-5",
+              'hashes', '{"raw_text_hash":"h","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
+              'meta', '{"schema_version":2,"prompt_version":"pv","provider":"anthropic","model":"claude-sonnet-5-5",
                         "model_tier":"default","connection_tier":"paid","validation_report":null,"usage":null}'::jsonb,
               'evidence', jsonb_build_array(
                 jsonb_build_object('item_key', 'strengths.0', 'sort_order', 0, 'source_type', 'skill',

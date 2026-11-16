@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
 import { CreateProjectInput, SaveExperienceInput, SaveProjectInput } from "@/lib/contracts/career";
@@ -17,28 +18,31 @@ import { createRecordingKeyStatusReporter, createStaticKeySource, createStaticPr
 import { createJobRunner } from "@/server/jobs/runner";
 import { createSupabaseJobStore } from "@/server/jobs/supabase-store";
 import { createSupabaseUsageStore } from "@/server/jobs/supabase-usage";
+import { loadRetryBlocked, toAiJobStatusResponse } from "@/server/jobs/status";
 import { loadProgress } from "@/server/services/application/read";
-import { createApplicationProject, deleteApplicationProject } from "@/server/services/application/write";
+import { createApplicationProject, deleteApplicationProject, updateJdRawText } from "@/server/services/application/write";
 import { createProject, getDeletionImpact, saveExperience, saveProject } from "@/server/services/career";
 import { connectTestProvider } from "@/test/ai-connection-db";
 import { KO_BACKEND } from "@/test/jd-fixtures";
 import { createScriptedAdapter, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
-import { hasTable, isStackReady, readLocalSupabase } from "@/test/local-supabase";
+import { hasPsql, hasTable, isStackReady, readLocalSupabase, runPsql } from "@/test/local-supabase";
 import { createInsightStore, loadInsightInputs } from "./db";
 import { createInsightJobDefinition } from "./job";
 import { insightJobPartial } from "./partial";
 import { createAi02InsightPipeline } from "./pipeline";
 import { getInsight } from "./read";
 import { startInsight } from "./start";
+import { autoStartInsight } from "./auto-start";
 
 /**
  * S6 end-to-end against the local stack (S6 plan API 7 "로컬 DB 통합"):
  * start (readiness, gate) → job: prepare (R17: no extraction — the JD raw text) →
- * match (one call) → synthesize → complete_insight (v2 result, jd_text_hash,
+ * match (one call, MT-n) → synthesize → complete_insight (schema 2, raw_text_hash,
  * evidence_links incl. jd_sentence) → read with chips and the result's own
  * requirements → input_hash reuse → career edit → stale + "변경됨" chip →
- * regenerate swaps latest → deletion impact counts insights → RLS → project
- * delete cascades. Real AI-02 pipeline, scripted provider (model outputs built
+ * regenerate swaps latest → raw-text edit → staleReasons.rawText → a schema-1 row
+ * reads without a body → JR-6 auto start → deletion impact counts insights → RLS →
+ * project delete cascades. Real AI-02 pipeline, scripted provider (model outputs built
  * from the same context the job builds). Skips without the stack or S6 tables.
  */
 
@@ -108,12 +112,19 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     return entry.alias;
   }
 
-  /** R17: the model reads the requirements from the JD sentences (v2 stage 1, one call). */
+  /** R17: the model reads the requirements from the JD sentences (schema-2 stage 1, one call). */
   const REQS = [
-    { requirement: "결제 승인·정산 API 설계 및 운영", category: "responsibility" as const, importance: "high" as const, needle: "결제 승인·정산" },
-    { requirement: "Java/Kotlin 기반 Spring 서버 개발 경험", category: "required" as const, importance: "high" as const, needle: "Spring" },
-    { requirement: "Kafka 등 메시지 큐 운영 경험", category: "preferred" as const, importance: "normal" as const, needle: "Kafka" },
+    { requirement: "결제 승인·정산 API 설계 및 운영", needle: "결제 승인·정산" },
+    { requirement: "Java/Kotlin 기반 Spring 서버 개발 경험", needle: "Spring" },
+    { requirement: "Kafka 등 메시지 큐 운영 경험", needle: "Kafka" },
   ];
+
+  /** The server key (`MT-n`, first sid ascending) REQS[i] gets. */
+  function mtOf(ctx: InsightContext, i: number): string {
+    const num = (needle: string) => Number(sid(ctx, needle).replace(/\D/g, ""));
+    const order = REQS.map((r, n) => ({ n, at: num(r.needle) })).sort((a, b) => a.at - b.at);
+    return `MT-${order.findIndex((o) => o.n === i) + 1}`;
+  }
 
   function matchResponse(): () => Promise<ScriptedResponse> {
     return async () => {
@@ -122,10 +133,8 @@ describe.skipIf(!ready)("insights (local stack)", () => {
       const output: Ai02MatchOutput = {
         schema_version: 2,
         matches: REQS.map((r, i) => ({
-          requirement: r.requirement,
-          category: r.category,
-          importance: r.importance,
-          sentence_refs: [sid(ctx, r.needle)],
+          requirement_text: r.requirement,
+          sids: [sid(ctx, r.needle)],
           ...(i === 0
             ? {
                 status: "met" as const,
@@ -145,8 +154,8 @@ describe.skipIf(!ready)("insights (local stack)", () => {
       const ctx = await context();
       const prj = ctx.aliases.aliasOf("project", ids.project)!;
       const sentence = [...ctx.aliases.values()].find((e) => e.sourceType === "jd_sentence")!.alias;
-      // R17: stage-2 refs point at the server-assigned match ids M-n.
-      const [req1, req2] = [{ ref: "M-1" }, { ref: "M-2" }];
+      // R17: stage-2 refs point at the server-assigned match keys MT-n.
+      const [req1, req2] = [{ ref: mtOf(ctx, 0) }, { ref: mtOf(ctx, 1) }];
       const output: Ai02SynthesisOutput = {
         schema_version: 2,
         strengths: [
@@ -254,7 +263,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(jobs.data).toEqual([]);
   });
 
-  it("first run (R17): prepare → match (one call) → synthesize → ready v2 insight with evidence and jd_text_hash", async () => {
+  it("first run (R17): prepare → match (one call) → synthesize → ready schema-2 insight with evidence and raw_text_hash", async () => {
     await saveExperience(user, SaveExperienceInput.parse({ id: ids.experience, companyName: "알파", startMonth: "2021-03", jobPosition: "백엔드", isCurrent: true }));
     await createProject(user, CreateProjectInput.parse({ id: ids.project, name: "결제 개선", affiliation: { type: "experience", id: ids.experience } }));
     await saveProject(user, SaveProjectInput.parse({ id: ids.project, startMonth: "2024-02", situation: "피크 시간 응답이 느렸다", action: ACTION }));
@@ -275,21 +284,27 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     expect(extraction.data).toEqual([]);
     const usage = await admin.from("ai_usage_records").select("feature, call_key, outcome").eq("user_id", userId).order("occurred_at");
     expect(usage.data!.map((u) => u.feature)).toEqual(["insight", "insight"]);
-    expect(usage.data!.map((u) => u.call_key).sort()).toEqual(["insight.match", "insight.synthesize"]);
+    expect(usage.data!.map((u) => u.call_key).sort()).toEqual(["insight.match.1", "insight.synthesize"]);
 
     const jd = await admin.from("job_descriptions").select("raw_text_hash").eq("application_project_id", project).single();
-    const rows = await admin.from("insights").select("id, version_no, status, is_latest, input_hash, ai_job_id, jd_text_hash, requirements_hash, result").eq("application_project_id", project);
+    const rows = await admin.from("insights").select("id, version_no, status, is_latest, input_hash, ai_job_id, raw_text_hash, schema_version, result, match_stage_result").eq("application_project_id", project);
     expect(rows.data).toHaveLength(1);
-    expect(rows.data![0]).toMatchObject({ version_no: 1, status: "ready", is_latest: true, ai_job_id: jobId, jd_text_hash: jd.data!.raw_text_hash, requirements_hash: null });
-    expect(rows.data![0]!.result).toMatchObject({ schema_version: 2, requirement_matches: [{ requirement_id: "M1", requirement: { content: REQS[0]!.requirement } }, {}, {}] });
+    expect(rows.data![0]).toMatchObject({ version_no: 1, status: "ready", is_latest: true, ai_job_id: jobId, raw_text_hash: jd.data!.raw_text_hash, schema_version: 2 });
+    const ctx = await context();
+    expect(rows.data![0]!.result).toMatchObject({ schema_version: 2 });
+    const stored = (rows.data![0]!.result as { requirement_matches: Array<{ match_key: string; requirement_text: string }> }).requirement_matches;
+    expect(stored.map((m) => m.match_key)).toEqual(["MT-1", "MT-2", "MT-3"]);
+    expect(stored.find((m) => m.match_key === mtOf(ctx, 0))!.requirement_text).toBe(REQS[0]!.requirement);
+    expect(rows.data![0]!.match_stage_result).toMatchObject({ prompt_version: expect.stringContaining("ai-02.match"), items: expect.any(Array) });
     firstInsightId = rows.data![0]!.id;
     const links = await admin.from("evidence_links").select("item_key, source_type").eq("owner_type", "insight").eq("owner_id", firstInsightId);
     expect(links.data!.length).toBeGreaterThanOrEqual(4);
     expect(links.data!.map((l) => l.source_type)).toEqual(expect.arrayContaining(["project", "jd_sentence"]));
 
-    // S-16 partial from the job's match checkpoint.
+    // S-16 partial from the job's match checkpoint; 4.24 #18: the stage-1 latency stays in the step output.
     const record = await createSupabaseJobStore(createAiWriterClient(userId)).get(jobId);
-    expect(insightJobPartial(record!)).toMatchObject({ kind: "insight_matches", batchesDone: 1, batchesTotal: 1 });
+    expect(insightJobPartial(record!)?.requirementMatches.map((m) => m.matchKey)).toEqual(["MT-1", "MT-2", "MT-3"]);
+    expect(record!.stepOutputs.match).toMatchObject({ v: 3, latencyMs: expect.any(Number) });
 
     // C-7: no career / JD text and no key in logs.
     const all = logs.join("\n");
@@ -299,22 +314,21 @@ describe.skipIf(!ready)("insights (local stack)", () => {
 
   it("read: matches with requirement contents, evidence chips, provider badge, not stale; progress ready", async () => {
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
-    // R17: the requirements come from the v2 result itself (M1…Mn).
-    expect(view.requirements.map((r) => r.id)).toEqual(["M1", "M2", "M3"]);
-    expect(view.requirements[0]).toMatchObject({ content: REQS[0]!.requirement, category: "responsibility", importance: "high" });
-    expect(view.requirements[0]!.sentenceIds).toHaveLength(1);
+    // R17: the requirements come from the schema-2 result itself (MT-1…MT-n).
+    expect(view.insight!.requirementMatches.map((m) => m.matchKey)).toEqual(["MT-1", "MT-2", "MT-3"]);
+    expect(view.insight!.requirementMatches.every((m) => m.sentenceIds.length === 1 && m.requirementText)).toBe(true);
     expect(view.activeJob).toBeNull();
     expect(view.lastFailure).toBeNull();
     const insight = view.insight!;
-    expect(insight).toMatchObject({ id: firstInsightId, versionNo: 1, provider: "anthropic", modelTier: "default", connectionTier: "paid", stale: false });
+    expect(insight).toMatchObject({ id: firstInsightId, versionNo: 1, schemaVersion: 2, provider: "anthropic", modelTier: "default", connectionTier: "paid", stale: false, staleReasons: { career: false, rawText: false } });
     expect(insight.requirementMatches).toHaveLength(3);
     const met = insight.requirementMatches.find((m) => m.status === "met")!;
-    expect(met.requirement?.content).toBeTruthy();
+    expect(met.requirementText).toBe(REQS[0]!.requirement);
     expect(met.evidence.map((c) => c.kindLabel)).toEqual(expect.arrayContaining(["프로젝트 · 행동"]));
     expect(met.evidence.every((c) => c.state === "current")).toBe(true);
     expect(insight.strengths).toHaveLength(1);
     expect(insight.gaps[0]!.actions[0]).toMatchObject({ type: "add_data" });
-    expect(insight.gaps[0]!.actions[0]!.relatedRequirementIds).toHaveLength(1);
+    expect(insight.gaps[0]!.actions[0]!.relatedMatchKeys).toHaveLength(1);
     expect(insight.gaps[0]!.evidence[0]).toMatchObject({ sourceType: "jd_sentence", state: "current" });
     expect(insight.strategy.projectPriorities[0]).toMatchObject({ projectId: ids.project, projectName: "결제 개선" });
 
@@ -337,8 +351,7 @@ describe.skipIf(!ready)("insights (local stack)", () => {
   it("career edit → stale (F-P2-07) and the chip shows 변경됨; regenerate swaps latest", async () => {
     await saveProject(user, SaveProjectInput.parse({ id: ids.project, result: "응답 시간이 줄었다" }));
     const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
-    // `requirements` = "JD raw text changed" since R17: unchanged here.
-    expect(view.insight).toMatchObject({ stale: true, staleReasons: { career: true, requirements: false } });
+    expect(view.insight).toMatchObject({ stale: true, staleReasons: { career: true, rawText: false } });
     const met = view.insight!.requirementMatches.find((m) => m.status === "met")!;
     expect(met.evidence.find((c) => c.sourceType === "project")?.state).toBe("changed");
 
@@ -425,11 +438,86 @@ describe.skipIf(!ready)("insights (local stack)", () => {
     }
   });
 
+  it("JR-7: editing the raw text keeps the insight and reads staleReasons.rawText (jd_sentence chips 'changed', QA-06); a run that failed before the edit is not retryable (QA-07); editing back reads unchanged", async () => {
+    // a run that fails for good before the edit
+    queue.push({ error: "billing_required" });
+    const h = harness();
+    const out = await h.start(user, userId, project, true);
+    if (out.kind !== "started" || out.data.reused) throw new Error("expected a job");
+    await h.drain();
+    const failed = await createSupabaseJobStore(createAiWriterClient(userId)).get(out.data.jobId);
+    expect(failed).toMatchObject({ status: "failed", errorCode: "billing_required" });
+    expect(await loadRetryBlocked(failed!, user)).toBe(false);
+
+    const before = await admin.from("job_descriptions").select("raw_text").eq("application_project_id", project).single();
+    await updateJdRawText(user, { id: project, rawText: `${KO_BACKEND.raw}\n추가 우대 사항: 결제 도메인 경험` });
+    const edited = await getInsight(user, { applicationProjectId: project }, { pipeline });
+    expect(edited.insight).toMatchObject({ stale: true, staleReasons: { rawText: true } });
+    expect(edited.insight!.requirementMatches).toHaveLength(3); // kept, not deleted
+    const jdChip = edited.insight!.gaps[0]!.evidence.find((c) => c.sourceType === "jd_sentence")!;
+    expect(jdChip).toMatchObject({ state: "changed", target: { type: "jd_sentence", sid: null, start: null, end: null } });
+
+    // QA-07: resuming it could only end canceled → refused up front, status agrees
+    expect(await loadRetryBlocked(failed!, user)).toBe(true);
+    expect(toAiJobStatusResponse(failed!, undefined, null, await loadRetryBlocked(failed!, user))).toMatchObject({ canRetry: false, retry: null });
+    await expect(h.runner.retryJob({ jobId: out.data.jobId, userId })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+
+    await updateJdRawText(user, { id: project, rawText: before.data!.raw_text });
+    const back = await getInsight(user, { applicationProjectId: project }, { pipeline });
+    expect(back.insight?.staleReasons.rawText).toBe(false);
+    expect(back.insight!.gaps[0]!.evidence.find((c) => c.sourceType === "jd_sentence")?.state).toBe("current");
+  });
+
+  it("a schema-1 insight (before R17) reads with schemaVersion 1 and no body; never reused", async () => {
+    if (!s.dbUrl || !hasPsql()) return;
+    const latest = await admin.from("insights").select("id").eq("application_project_id", project).eq("is_latest", true).single();
+    // insights accept no direct write from any API role: age the row as the local superuser.
+    const setVersion = (v: number) => runPsql(s.dbUrl!, { sql: `update public.insights set schema_version = ${v} where id = '${z.guid().parse(latest.data!.id)}'` });
+    setVersion(1);
+    try {
+      const view = await getInsight(user, { applicationProjectId: project }, { pipeline });
+      expect(view.insight).toMatchObject({ schemaVersion: 1, requirementMatches: [], strengths: [], gaps: [], strategy: { positioning: null, projectPriorities: [] } });
+      queue.push(matchResponse(), synthesisResponse());
+      const h = harness();
+      const out = await h.start(user, userId, project);
+      expect(out).toMatchObject({ kind: "started", data: { reused: false } });
+      await h.drain();
+      expect(queue).toHaveLength(0);
+    } finally {
+      setVersion(2);
+    }
+  });
+
+  it("JR-6: autoStartInsight on a new project starts one job (same service as manual) and the run ends ready", async () => {
+    const other = crypto.randomUUID();
+    await createApplicationProject(user, CreateApplicationProjectInput.parse({ id: other, rawText: KO_BACKEND.raw }));
+    try {
+      queue.push(matchResponse(), synthesisResponse());
+      const h = harness();
+      // matchResponse() builds from `project`'s context; the same raw text gives the same sentences.
+      const auto = await autoStartInsight({ userId, user, providerContext: createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" }), runner: h.runner, pipeline }, other);
+      expect(auto).toEqual({ insightJobId: expect.any(String), insightSkipReason: null });
+      // in flight → a second auto start skips with in_progress
+      await expect(autoStartInsight({ userId, user, providerContext: createStaticProviderContext({ provider: "anthropic", connectionTier: "paid", keyStatus: "valid" }), runner: h.runner, pipeline }, other)).resolves.toEqual({ insightJobId: null, insightSkipReason: "in_progress" });
+      await h.drain();
+      const job = await admin.from("ai_jobs").select("status, job_type").eq("id", auto.insightJobId!).single();
+      expect(job.data).toEqual({ status: "succeeded", job_type: "insight" });
+      const usage = await admin.from("ai_usage_records").select("feature").eq("ai_job_id", auto.insightJobId!);
+      expect(usage.data!.map((u) => u.feature)).toEqual(["insight", "insight"]);
+      // not connected → skipped, no job
+      const none = await autoStartInsight({ userId, user, providerContext: createStaticProviderContext(null), runner: h.runner, pipeline }, other);
+      expect(none).toEqual({ insightJobId: null, insightSkipReason: "ai_not_connected" });
+    } finally {
+      await deleteApplicationProject(user, other);
+    }
+  });
+
   it("deletion impact counts insights per application project (§4.2)", async () => {
     const impact = await getDeletionImpact(user, { entityType: "project", entityId: ids.project });
     expect("affected_results" in impact && impact.affected_results.by_application_project).toEqual([
-      // v1, v2, v3 (QA-S6-01 retry) + the R2 cross-provider retry row.
-      expect.objectContaining({ application_project_id: project, insights: 4, documents: 0, document_sections: 0 }),
+      // insights citing the project: v1, v2, v3 (QA-S6-01 retry), the R2 cross-provider retry row, the run after the schema-1
+      // row. The run that failed before the raw-text edit (QA-07) has no evidence, so it is not counted.
+      expect.objectContaining({ application_project_id: project, insights: 5, documents: 0, document_sections: 0 }),
     ]);
   });
 

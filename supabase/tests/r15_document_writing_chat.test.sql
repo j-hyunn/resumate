@@ -13,11 +13,9 @@ insert into auth.users (id, email, aud, role) values
 insert into public.application_projects (id, user_id, name, name_source) values
   ('a0000000-aaaa-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', '가 지원', 'user'),
   ('b0000000-aaaa-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000002', '나 지원', 'user');
-insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
-                                     extraction_status)
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences)
 values ('a0000000-1d00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-        'a0000000-aaaa-0000-0000-000000000001', '원문', 'h', '[{"sid":"S1","text":"원문","start":0,"end":2}]',
-        'pending');
+        'a0000000-aaaa-0000-0000-000000000001', '원문', 'h', '[{"sid":"S1","text":"원문","start":0,"end":2}]');
 insert into public.experiences (id, user_id, company_name, start_month) values
   ('a0000000-1111-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'A사', '2023-01-01');
 insert into public.projects (id, user_id, experience_id, name) values
@@ -91,18 +89,18 @@ select results_eq(format($$select project_id, application_project_id::text, docu
                               "draft_count": 0, "clarifications": [], "schema_version": 1,
                               "sensitive_flags_count": 0}'::jsonb, 0::smallint)$$,
                   'the chat row: no project, the document target, null return_target, the empty document draft');
--- R17: the JD row exists, so the "요건 추출 전" branch is never used, even with extraction_status pending.
-select ok((select content not like '채용 공고의 요건을 아직%' from public.writing_chat_messages
+-- R17 (DM §11.11 #8): 3 greetings only — no document yet -> the "본문 없음" one; no "요건 추출 전" branch.
+select ok((select content like '자기소개서 문항에 답할 내용을 함께 정리해 볼게요.%' from public.writing_chat_messages
             where writing_chat_id = current_setting('t.chat')::uuid and sequence = 1),
-          'greeting: not the "요건 추출 전" branch (R17), stored as sequence 1');
+          'greeting: the "본문 없음" branch (R17: no "요건 추출 전" branch), stored as sequence 1');
+select hasnt_function('private', 'writing_chat_document_greeting', array['boolean', 'integer', 'integer', 'boolean'],
+                      'R17: the 4-argument greeting (p_requirements_ready) is gone');
+select has_function('private', 'writing_chat_document_greeting', array['integer', 'integer', 'boolean'],
+                    'R17: greeting(slot_count, filled_count, free_tier)');
 select ok((select content like '%민감정보%' from public.writing_chat_messages
             where writing_chat_id = current_setting('t.chat')::uuid and sequence = 1),
           'greeting: the sensitive-information line is appended');
 reset role;
-update public.job_descriptions
-   set extraction_status = 'succeeded', extraction = '{}'::jsonb, tech_keywords = '[]'::jsonb,
-       requirements_hash = 'rh', extraction_provider = 'gemini', extraction_model = 'm'
- where id = 'a0000000-1d00-0000-0000-000000000001';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select set_config('t.chat2', public.start_document_writing_chat('a0000000-aaaa-0000-0000-000000000001',

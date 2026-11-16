@@ -24,18 +24,18 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     ? (rowsOf(await supabase.from("evidence_links").select("*").eq("owner_type", ownerType).in("owner_id", ownerIds).order("sort_order")) as unknown as EvidenceLink[])
     : []
   const idsOf = (...types: Array<EvidenceLink["source_type"]>) => uniq(links.filter((l) => types.includes(l.source_type)).map((l) => l.source_id))
-  type SourceTable = "project_deliverables" | "projects" | "experiences" | "educations" | "skills" | "jd_requirements"
+  // R17 (4.24 #1·#5): `jd_requirements` is dropped — no `jd_requirement` evidence to resolve.
+  type SourceTable = "project_deliverables" | "projects" | "experiences" | "educations" | "skills"
   const select = async <T,>(table: SourceTable, ids: string[]): Promise<T[]> => (ids.length ? (rowsOf(await supabase.from(table).select("*").in("id", ids)) as unknown as T[]) : [])
 
   type Row = Record<string, string | null>
   // DM v4.4: project_details / achievements are gone; deliverables point at their standalone project.
   const deliverables = await select<Row>("project_deliverables", idsOf("project_deliverable"))
   const projects = await select<Row>("projects", uniq([...idsOf("project"), ...deliverables.map((d) => d.project_id)]))
-  const [experiences, educations, skills, requirements, profiles] = await Promise.all([
+  const [experiences, educations, skills, profiles] = await Promise.all([
     select<Row>("experiences", uniq([...idsOf("experience"), ...projects.map((p) => p.experience_id)])),
     select<Row>("educations", uniq([...idsOf("education"), ...projects.map((p) => p.education_id)])),
     select<Row>("skills", idsOf("skill")),
-    select<Row>("jd_requirements", idsOf("jd_requirement")),
     idsOf("profile").length || links.some((l) => l.source_type === "profile") ? supabase.from("profiles").select("*").limit(1).then(rowsOf) : Promise.resolve([]),
   ])
   const db = {
@@ -47,7 +47,7 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     project_details: [],
     achievements: [],
     skills,
-    jd_requirements: requirements,
+    jd_requirements: [],
     /**
      * R15 (CF-1): `user_note` evidence no longer points at a `draft_sections` row — its
      * `source_id` is `application_documents.body.questions[].question_id` (CF-S1), which has no

@@ -164,11 +164,6 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       if (!s) return empty
       return { source_label: s.name, current_value: s.name, path: ["스킬"], href: routes.skills(), to_career: true, updated_at: s.updated_at }
     }
-    case "jd_requirement": {
-      const r = db.jd_requirements.find((x) => x.id === sid)
-      // No project → no link.
-      return { source_label: e.source_label ?? r?.content ?? "", current_value: r?.content ?? null, path: ["채용 공고", "요건"], href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd" }) : null, to_career: false, updated_at: null }
-    }
     case "jd_sentence":
       return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd" }) : null, to_career: false, updated_at: null }
     case "user_note": {

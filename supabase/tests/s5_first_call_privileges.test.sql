@@ -16,7 +16,10 @@ select lives_ok($$select set_config('t.jd', public.create_application_project('a
                 'authenticated: create_application_project');
 select lives_ok($$select * from public.application_projects$$, 'authenticated: select application_projects');
 select lives_ok($$select * from public.job_descriptions$$, 'authenticated: select job_descriptions');
-select lives_ok($$select * from public.jd_requirements$$, 'authenticated: select jd_requirements');
+-- R17: jd_requirements dropped; the raw-text edit RPC is new.
+select lives_ok($$select public.update_jd_raw_text('aaaaaaaa-aaaa-0000-0000-000000000001', '백엔드 공고 수정',
+                   'h2', '[{"sid":"S1","text":"백엔드 공고 수정","start":0,"end":9}]')$$,
+                'authenticated: update_jd_raw_text');
 select lives_ok($$select * from public.application_stage_events$$, 'authenticated: select application_stage_events');
 select lives_ok($$update public.application_projects set memo = 'm', deadline = '2026-12-01'
                    where id = 'aaaaaaaa-aaaa-0000-0000-000000000001'$$, 'authenticated: update memo / deadline');
@@ -32,11 +35,10 @@ set local request.jwt.claims = '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","r
 select lives_ok($$select id, name, stage from public.application_projects$$, 'app_ai_writer: select project header');
 -- R15 (CF-10·CF-A16): the job_descriptions grant is column-level now — source_url is not readable by the AI
 -- role, so `select *` fails and the readable columns are listed instead.
-select lives_ok($$select id, raw_text, sentences, extraction_status, company_name, position_title
+select lives_ok($$select id, raw_text, raw_text_hash, sentences, company_name, position_title
                     from public.job_descriptions$$, 'app_ai_writer: select job_descriptions');
 select throws_ok($$select source_url from public.job_descriptions$$, '42501', null,
                  'app_ai_writer cannot read job_descriptions.source_url');
-select lives_ok($$select * from public.jd_requirements$$, 'app_ai_writer: select jd_requirements');
 select lives_ok($$insert into public.ai_jobs (id, job_type, application_project_id, target_type, target_id, status, run_generation,
                     provider, model_tier, connection_tier)
                   values ('aaaaaaaa-7777-0000-0000-000000000001', 'jd_extraction', 'aaaaaaaa-aaaa-0000-0000-000000000001',

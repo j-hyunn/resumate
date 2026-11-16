@@ -76,19 +76,21 @@ select is(pg_temp.patch((select '[' || string_agg(format('{"source_type":"projec
                            || ']' from generate_series(1, 6))),
           'invalid_patch', 'more than 5 sources -> invalid_patch `[가정]`');
 select is(pg_temp.patch('"x"'), 'invalid_patch', 'sources must be an array');
+-- R17 (JR-5, 4.24 #12): the posting is not a cover letter source any more.
+select is(pg_temp.patch('[{"source_type":"jd_sentence","source_id":"a0000000-1d00-0000-0000-000000000001",
+                           "role":"supporting"}]'),
+          'invalid_patch', 'a jd_sentence slot source -> invalid_patch (R17)');
 -- (CF-1) this is not the dropped document.source_ranking.
 select is(pg_temp.patch('[{"source_type":"skill","source_id":"a0000000-4444-0000-0000-000000000001",
                            "role":"supporting"},
                           {"source_type":"project","source_id":"a0000000-3333-0000-0000-000000000001",
-                           "role":"primary"},
-                          {"source_type":"jd_sentence","source_id":"a0000000-1d00-0000-0000-000000000001",
-                           "role":"supporting"}]'),
+                           "role":"primary"}]'),
           null, 'a valid sources array is accepted');
 select is((select jsonb_agg(e ->> 'role' order by o) from public.writing_chats w,
                   lateral jsonb_array_elements(w.structured_draft
                     #> '{document,questions,0,draft,sources}') with ordinality as t (e, o)
             where w.id = current_setting('t.chat')::uuid),
-          '["supporting", "primary", "supporting"]'::jsonb,
+          '["supporting", "primary"]'::jsonb,
           'sources are stored in the array order the model sent, with their role');
 select ok((select not (structured_draft #> '{document,questions,0,draft}' ? 'source_ranking')
              from public.writing_chats where id = current_setting('t.chat')::uuid),
@@ -112,8 +114,7 @@ select results_eq($$select item_key, source_type, source_field from public.evide
                      where owner_type = 'application_document'
                        and user_id = 'a0000000-0000-0000-0000-000000000001' order by item_key$$,
                   $$values ('q_1.sources.1'::text, 'project'::text, null::text),
-                           ('q_1.sources.2', 'skill', null),
-                           ('q_1.sources.3', 'jd_sentence', null)$$,
+                           ('q_1.sources.2', 'skill', null)$$,
                   'the applied slot gets its sources rows, `primary` first, n = the array order');
 select is((select count(*)::int from public.evidence_links
             where owner_type = 'application_document' and user_id = 'a0000000-0000-0000-0000-000000000001'
@@ -145,7 +146,7 @@ select set_config('t.r', r15s.save('a0000000-aaaa-0000-0000-000000000001', 'cove
 select results_eq($$select item_key from public.evidence_links
                      where owner_type = 'application_document'
                        and user_id = 'a0000000-0000-0000-0000-000000000001' order by item_key$$,
-                  $$values ('q_1.blocks.b2'::text), ('q_1.sources.1'), ('q_1.sources.2'), ('q_1.sources.3'),
+                  $$values ('q_1.blocks.b2'::text), ('q_1.sources.1'), ('q_1.sources.2'),
                            ('q_2.sources.1')$$,
                   'no applied proposal: the sources rows of both slots survive, the block rows are rewritten');
 

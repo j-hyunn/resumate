@@ -35,16 +35,10 @@ reset role;
 insert into public.application_projects (id, user_id, name, name_source)
 select ('d0000000-aaaa-0000-0000-00000000000' || n)::uuid, 'd0000000-0000-0000-0000-000000000001', 'P' || n, 'user'
   from generate_series(1, 8) n;
-insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
-                                     extraction_status, extraction, tech_keywords, requirements_hash,
-                                     extraction_provider, extraction_model)
+-- R17: raw_text_hash = the payload's hashes.raw_text_hash (complete_insight stale_run guard).
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences)
 select ('d0000000-dddd-0000-0000-00000000000' || n)::uuid, 'd0000000-0000-0000-0000-000000000001',
-       ('d0000000-aaaa-0000-0000-00000000000' || n)::uuid, 'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]',
-       'succeeded', '{}', '[]', 'rh', 'gemini', 'm'
-  from generate_series(1, 8) n;
-insert into public.jd_requirements (id, user_id, job_description_id, category, content, source_sids, sort_order)
-select ('d0000000-8888-0000-0000-00000000000' || n)::uuid, 'd0000000-0000-0000-0000-000000000001',
-       ('d0000000-dddd-0000-0000-00000000000' || n)::uuid, 'required', 'R', '{S1}', 0
+       ('d0000000-aaaa-0000-0000-00000000000' || n)::uuid, 'x', 'rh', '[{"sid":"S1","text":"x","start":0,"end":1}]'
   from generate_series(1, 8) n;
 
 -- Payload builders (provider meta must match the job's).
@@ -54,8 +48,8 @@ create function pg_temp.meta(p_provider text, p_tier text) returns jsonb languag
 $f$;
 create function pg_temp.insight_payload(p_provider text, p_tier text) returns jsonb language sql as $f$
   select jsonb_build_object('result', '{"schema_version":1}'::jsonb, 'match_stage_result', '{"matches":[]}'::jsonb,
-    'hashes', '{"jd_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
-    'meta', pg_temp.meta(p_provider, p_tier) || '{"schema_version":1}', 'evidence', '[]'::jsonb);
+    'hashes', '{"raw_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"}'::jsonb,
+    'meta', pg_temp.meta(p_provider, p_tier) || '{"schema_version":2}', 'evidence', '[]'::jsonb);
 $f$;
 create function pg_temp.question(p_seq int, p_req uuid, p_provider text, p_tier text) returns jsonb language sql as $f$
   select jsonb_build_object(
@@ -252,7 +246,7 @@ select throws_ok($$select public.complete_insight(current_setting('t.i2')::uuid,
                                   pg_temp.insight_payload('gemini', 'free'))$$,
                  'P0001', 'invalid_ai_metadata', 'I2: generation 2 must carry the new provider meta');
 select is(public.complete_insight(current_setting('t.i2')::uuid, 'd0000000-7777-0000-0000-000000000002', 2,
-                                  pg_temp.insight_payload('openai', 'paid') || '{"meta":{"schema_version":1,"prompt_version":"pv","provider":"openai","model":"m-openai","model_tier":"heavy","connection_tier":"paid"}}')
+                                  pg_temp.insight_payload('openai', 'paid') || '{"meta":{"schema_version":2,"prompt_version":"pv","provider":"openai","model":"m-openai","model_tier":"heavy","connection_tier":"paid"}}')
             ->> 'applied', 'true', 'I2: generation 2 completes with openai');
 reset role;
 select results_eq($$select status, provider, model, model_tier from public.insights where id = current_setting('t.i2')::uuid$$,

@@ -740,14 +740,8 @@ export function createFixtures(): MockDb {
       return { sid: `S${i + 1}`, text, start, end: start + text.length }
     })
   }
-  const jd = (
-    n: number,
-    apN: number,
-    lines: string[],
-    company: string | null,
-    position: string | null,
-    status: JobDescription["extraction_status"],
-  ): JobDescription => ({
+  // R17 (4.24 #2): the extraction columns and `detected_language` are dropped
+  const jd = (n: number, apN: number, lines: string[], company: string | null, position: string | null): JobDescription => ({
     ...base(IDS.jd(n), 40 - apN),
     application_project_id: IDS.ap(apN),
     raw_text: lines.join("\n"),
@@ -755,39 +749,22 @@ export function createFixtures(): MockDb {
     // R15 (CF-10): the posting URL column; mock rows are pasted text, so null.
     source_url: null,
     sentences: sentences(lines),
-    detected_language: "ko",
     company_name: company,
     company_name_source: company ? "ai" : null,
     position_title: position,
     position_title_source: position ? "ai" : null,
-    extraction_status: status,
-    extraction:
-      status === "succeeded"
-        ? { is_likely_jd: true, seniority: n === 1 ? { min_years: 5, max_years: null, label: "5년 이상", source_sids: ["S3"] } : null }
-        : null,
-    extraction_job_id: IDS.job(n),
-    extraction_provider: status === "succeeded" ? "gemini" : null,
-    extraction_model: status === "succeeded" ? MOCK_MODELS.gemini.light : null,
-    tech_keywords: status === "succeeded" ? [{ keyword: "Kafka", source_sids: ["S5"] }] : [],
-    requirements_hash: status === "succeeded" ? `req-hash-${n}` : null,
     raw_text_edited_at: null,
   })
   const job_descriptions: JobDescription[] = [
-    jd(1, 1, jdText1, "그린뱅크", "결제 백엔드 엔지니어", "succeeded"),
-    jd(2, 2, ["하늘커머스 서버 개발자 채용", "주문·결제 서버 개발", "Spring 경력 3년 이상", "AWS 운영 경험 우대"], "하늘커머스", "서버 개발자", "succeeded"),
-    jd(3, 3, ["클라우드나인 플랫폼 엔지니어", "쿠버네티스 운영 경험", "IaC 경험 우대"], "클라우드나인", "플랫폼 엔지니어", "succeeded"),
-    jd(4, 4, ["별빛증권 백엔드 개발자", "주문 체결 시스템 개발"], "별빛증권", "백엔드 개발", "succeeded"),
-    jd(5, 5, ["Stellar Labs Senior Backend Engineer", "Design distributed systems"], "스텔라랩스", "Senior Backend Engineer", "succeeded"),
-    jd(6, 6, ["(붙여넣은 공고 원문)"], null, null, "running"),
-    // Q53-2: S-15 공고 원문 수정 대상 (job 15 = not_a_jd). 회사명·포지션명 없음, 추출 전 이름 그대로
-    {
-      ...jd(7, 7, ["안녕하세요, 이번 주 팀 회의록입니다.", "다음 주 일정은 금요일에 다시 공유드릴게요."], null, null, "failed"),
-      extraction_job_id: IDS.job(15),
-    },
-    {
-      ...jd(8, 8, ["담당 업무와 자격 요건은 추후 안내드립니다."], null, null, "succeeded"),
-      tech_keywords: [],
-    },
+    jd(1, 1, jdText1, "그린뱅크", "결제 백엔드 엔지니어"),
+    jd(2, 2, ["하늘커머스 서버 개발자 채용", "주문·결제 서버 개발", "Spring 경력 3년 이상", "AWS 운영 경험 우대"], "하늘커머스", "서버 개발자"),
+    jd(3, 3, ["클라우드나인 플랫폼 엔지니어", "쿠버네티스 운영 경험", "IaC 경험 우대"], "클라우드나인", "플랫폼 엔지니어"),
+    jd(4, 4, ["별빛증권 백엔드 개발자", "주문 체결 시스템 개발"], "별빛증권", "백엔드 개발"),
+    jd(5, 5, ["Stellar Labs Senior Backend Engineer", "Design distributed systems"], "스텔라랩스", "Senior Backend Engineer"),
+    jd(6, 6, ["(붙여넣은 공고 원문)"], null, null),
+    // Q53-2: S-15 공고 원문 수정 대상 (job 15 = legacy not_a_jd). 회사명·포지션명 없음
+    jd(7, 7, ["안녕하세요, 이번 주 팀 회의록입니다.", "다음 주 일정은 금요일에 다시 공유드릴게요."], null, null),
+    jd(8, 8, ["담당 업무와 자격 요건은 추후 안내드립니다."], null, null),
   ]
 
   const req = (
@@ -907,30 +884,30 @@ export function createFixtures(): MockDb {
       version_no: 1,
       is_latest: true,
       status: "ready",
-      requirements_hash: "req-hash-1",
-      // R17: pre-R17 (v1) rows have no jd_text_hash
-      jd_text_hash: null,
+      // DM 2.7.0 (R17): schema 2 — the requirements come from the JD sentences (`MT-n`)
+      raw_text_hash: "hash-1",
+      schema_version: 2,
       completed_at: daysAgo(6),
       match_stage_result: null,
       result: {
-        schema_version: 1,
+        schema_version: 2,
         basis_note: "입력된 경력 데이터 기준 분석입니다",
         data_sufficiency: { level: "ok", hints: [] },
         requirement_matches: [
-          { item_key: `requirement_matches.${IDS.req(1)}`, requirement_id: IDS.req(1), status: "met", rationale: "결제 승인 API 성능 개선을 직접 이끈 경험이 있습니다.", missing_aspect: null },
-          { item_key: `requirement_matches.${IDS.req(2)}`, requirement_id: IDS.req(2), status: "partial", rationale: "Spring 기반 개발 경력은 충분하지만 Kotlin 사용 근거가 적습니다.", missing_aspect: "Kotlin 실무 사용 경험" },
-          { item_key: `requirement_matches.${IDS.req(3)}`, requirement_id: IDS.req(3), status: "met", rationale: "인덱스 재설계로 응답 시간을 줄였습니다.", missing_aspect: null },
-          { item_key: `requirement_matches.${IDS.req(4)}`, requirement_id: IDS.req(4), status: "no_evidence", rationale: "메시지 큐 기반 처리 경험이 입력된 데이터에서 확인되지 않습니다.", missing_aspect: "Kafka 운영 경험" },
-          { item_key: `requirement_matches.${IDS.req(5)}`, requirement_id: IDS.req(5), status: "met", rationale: "정산 배치 재설계 경험이 있습니다.", missing_aspect: null },
+          { item_key: "requirement_matches.MT-1", match_key: "MT-1", requirement_text: "대규모 결제 승인 API 설계·운영", sids: ["S2"], status: "met", rationale: "결제 승인 API 성능 개선을 직접 이끈 경험이 있습니다.", missing_aspect: null },
+          { item_key: "requirement_matches.MT-2", match_key: "MT-2", requirement_text: "Java/Kotlin 기반 Spring 서버 개발 5년 이상", sids: ["S3"], status: "partial", rationale: "Spring 기반 개발 경력은 충분하지만 Kotlin 사용 근거가 적습니다.", missing_aspect: "Kotlin 실무 사용 경험" },
+          { item_key: "requirement_matches.MT-3", match_key: "MT-3", requirement_text: "RDBMS 성능 튜닝 경험", sids: ["S4"], status: "met", rationale: "인덱스 재설계로 응답 시간을 줄였습니다.", missing_aspect: null },
+          { item_key: "requirement_matches.MT-4", match_key: "MT-4", requirement_text: "Kafka 등 메시지 큐 기반 비동기 처리 경험", sids: ["S5"], status: "no_evidence", rationale: "메시지 큐 기반 처리 경험이 입력된 데이터에서 확인되지 않습니다.", missing_aspect: "Kafka 운영 경험" },
+          { item_key: "requirement_matches.MT-5", match_key: "MT-5", requirement_text: "정산 시스템 개발 경험", sids: ["S6"], status: "met", rationale: "정산 배치 재설계 경험이 있습니다.", missing_aspect: null },
         ],
         summary_counts: { met: 3, partial: 1, no_evidence: 1 },
         strengths: [
-          { item_key: "strengths.0", title: "대규모 결제 트래픽 성능 개선", description: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄인 경험이 JD의 결제 API 운영 요건과 직접 맞닿습니다.", requirement_ids: [IDS.req(1), IDS.req(3)] },
+          { item_key: "strengths.0", title: "대규모 결제 트래픽 성능 개선", description: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄인 경험이 JD의 결제 API 운영 요건과 직접 맞닿습니다.", match_keys: ["MT-1", "MT-3"] },
         ],
         gaps: [
           {
             item_key: "gaps.0",
-            requirement_ids: [IDS.req(4)],
+            match_keys: ["MT-4"],
             gap_kind: "no_evidence",
             description: "Kafka 기반 이벤트 처리 경험이 입력된 데이터에서 확인되지 않습니다.",
             actions: [
@@ -942,8 +919,8 @@ export function createFixtures(): MockDb {
         strategy: {
           positioning: "결제 도메인에서 성능과 안정성을 수치로 개선해 온 백엔드 엔지니어로 포지셔닝합니다.",
           project_priorities: [
-            { item_key: "strategy.project_priorities.1", rank: 1, project_id: IDS.prj(1), reason: "결제 API 운영 요건과 가장 직접적으로 연결", requirement_ids: [IDS.req(1), IDS.req(3)] },
-            { item_key: "strategy.project_priorities.2", rank: 2, project_id: IDS.prj(2), reason: "정산 우대 요건과 연결", requirement_ids: [IDS.req(5)] },
+            { item_key: "strategy.project_priorities.1", rank: 1, project_id: IDS.prj(1), reason: "결제 API 운영 요건과 가장 직접적으로 연결", match_keys: ["MT-1", "MT-3"] },
+            { item_key: "strategy.project_priorities.2", rank: 2, project_id: IDS.prj(2), reason: "정산 우대 요건과 연결", match_keys: ["MT-5"] },
           ],
         },
       },
@@ -955,9 +932,8 @@ export function createFixtures(): MockDb {
       version_no: 1,
       is_latest: false,
       status: "generating",
-      requirements_hash: "req-hash-2",
-      // R17: pre-R17 (v1) rows have no jd_text_hash
-      jd_text_hash: null,
+      raw_text_hash: "hash-2",
+      schema_version: null,
       completed_at: null,
       match_stage_result: null,
       result: null,
@@ -1285,13 +1261,14 @@ export function createFixtures(): MockDb {
   const insightId = IDS.ins(1)
   const evidence_links: EvidenceLink[] = [
     // det1 was updated 3 days ago (> snapshot 6 days ago) → "변경됨"
-    ev(1, "insight", insightId, `requirement_matches.${IDS.req(1)}`, "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
-    ev(2, "insight", insightId, `requirement_matches.${IDS.req(1)}`, "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
-    ev(3, "insight", insightId, `requirement_matches.${IDS.req(2)}`, "skill", IDS.skl(2), "name", null, { source_label: "Spring Boot", source_snapshot_at: daysAgo(1) }),
-    ev(4, "insight", insightId, `requirement_matches.${IDS.req(3)}`, "project_detail", IDS.det(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 API 응답 속도 개선" }),
-    ev(5, "insight", insightId, `requirement_matches.${IDS.req(5)}`, "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
+    ev(1, "insight", insightId, "requirement_matches.MT-1", "project_detail", IDS.det(1), "action", "APM으로 병목 쿼리를 찾아 결제 승인 테이블 인덱스를 재설계했고", { source_label: "결제 API 응답 속도 개선" }),
+    ev(2, "insight", insightId, "requirement_matches.MT-1", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
+    ev(3, "insight", insightId, "requirement_matches.MT-2", "skill", IDS.skl(2), "name", null, { source_label: "Spring Boot", source_snapshot_at: daysAgo(1) }),
+    ev(4, "insight", insightId, "requirement_matches.MT-3", "project_detail", IDS.det(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 API 응답 속도 개선" }),
+    ev(5, "insight", insightId, "requirement_matches.MT-5", "project_detail", IDS.det(3), "action", "배치를 이벤트 기반 스트리밍 처리로 바꾸고", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
     ev(6, "insight", insightId, "strengths.0", "project", IDS.prj(1), "result", "p95 응답 시간이 1.2초에서 0.7초로 줄었고", { source_label: "결제 승인 API 성능 개선", source_snapshot_at: daysAgo(1) }),
-    ev(7, "insight", insightId, "strengths.0", "jd_requirement", IDS.req(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영" }),
+    // R17 (4.24 #5): no `jd_requirement` evidence — the posting is cited by sentence (`jd_sentence`)
+    ev(7, "insight", insightId, "strengths.0", "jd_sentence", IDS.jd(1), null, null, { source_label: "대규모 결제 승인 API 설계·운영", source_locator: { sid: "S2" } }),
     ev(8, "insight", insightId, "gaps.0", "jd_sentence", null, null, null, { source_label: "Kafka 등 메시지 큐 기반 비동기 처리 경험을 우대합니다.", source_locator: { sid: "S5" } }),
     ev(9, "insight", insightId, "gaps.0.actions.1", "project_detail", IDS.det(3), "action", "실패 건 재시도 큐를 설계했습니다", { source_label: "정산 배치 처리 시간 단축", source_snapshot_at: daysAgo(1) }),
     ev(10, "insight", insightId, "strategy.positioning", "project_detail", IDS.det(1), "learnings", "성능 문제는 추측보다 측정에서 시작해야 한다는 것을 배웠습니다.", { source_label: "결제 API 응답 속도 개선" }),

@@ -1,48 +1,32 @@
 /**
  * Server- and client-safe helpers for S-16 (no "use client": the page calls parseMatchStage on the server).
+ * R17 (DM 2.7.0, schema 2): requirements live in the insight itself — `match_key` (`MT-n`),
+ * `requirement_text`, `sids`; strengths / gaps / priorities point at them with `match_keys`.
  */
-import type { InsightResult, InsightResultRequirement, RequirementMatchStatus } from "@/types/db"
+import type { InsightResult, RequirementMatchStatus } from "@/types/db"
 
 export type MatchRow = InsightResult["requirement_matches"][number]
 
-/** R17 v2 `requirement` object (content · category · importance · sentence_ids) → typed, else undefined */
-function v2Requirement(value: unknown): InsightResultRequirement | undefined {
-  if (!value || typeof value !== "object") return undefined
-  const r = value as Record<string, unknown>
-  if (typeof r.content !== "string" || !r.content) return undefined
-  return {
-    content: r.content,
-    category: r.category === "responsibility" || r.category === "preferred" ? r.category : "required",
-    importance: r.importance === "high" ? "high" : "normal",
-    sentence_ids: Array.isArray(r.sentence_ids) ? r.sentence_ids.filter((x): x is string => typeof x === "string") : [],
-  }
-}
-
-/**
- * R17: requirement texts by id for S-16. v2 results (and v2 stage-1 rows) carry the requirement in
- * each match (`M{n}`); v1 results only have ids → `legacy` (the preserved `jd_requirements` rows).
- */
-export function requirementsByIdFrom(
-  rows: ReadonlyArray<Pick<MatchRow, "requirement_id" | "requirement">>,
-  legacy: Record<string, Pick<InsightResultRequirement, "content" | "category" | "importance">>,
-): Record<string, Pick<InsightResultRequirement, "content" | "category" | "importance">> {
-  const out = { ...legacy }
-  for (const m of rows) if (m.requirement) out[m.requirement_id] = { content: m.requirement.content, category: m.requirement.category, importance: m.requirement.importance }
+/** Requirement texts by `match_key` (result rows and stage-1 partial rows). */
+export function requirementsByIdFrom(rows: ReadonlyArray<Pick<MatchRow, "match_key" | "requirement_text">>): Record<string, { content: string }> {
+  const out: Record<string, { content: string }> = {}
+  for (const m of rows) out[m.match_key] = { content: m.requirement_text }
   return out
 }
 
-/** match_stage_result (stage-1 stored form) → rows; tolerant until the foundation types it (UQ-65). R17: v2 `matches[]` keep `requirement` */
+/** match_stage_result (stage-1 stored form `{ prompt_version, items }`, DM 2.7.0) → rows; tolerant (UQ-65). */
 export function parseMatchStage(value: unknown): MatchRow[] | null {
   if (!value || typeof value !== "object") return null
   const v = value as Record<string, unknown>
-  const list = (Array.isArray(v.requirement_matches) ? v.requirement_matches : Array.isArray(v.matches) ? v.matches : null) as Array<Record<string, unknown>> | null
+  const list = (Array.isArray(v.items) ? v.items : Array.isArray(v.requirement_matches) ? v.requirement_matches : null) as Array<Record<string, unknown>> | null
   if (!list) return null
   const rows = list
-    .filter((m) => typeof m.requirement_id === "string" && (m.status === "met" || m.status === "partial" || m.status === "no_evidence"))
+    .filter((m) => typeof m.match_key === "string" && typeof m.requirement_text === "string" && (m.status === "met" || m.status === "partial" || m.status === "no_evidence"))
     .map((m) => ({
-      item_key: typeof m.item_key === "string" ? m.item_key : `requirement_matches.${m.requirement_id as string}`,
-      requirement_id: m.requirement_id as string,
-      requirement: v2Requirement(m.requirement),
+      item_key: typeof m.item_key === "string" ? m.item_key : `requirement_matches.${m.match_key as string}`,
+      match_key: m.match_key as string,
+      requirement_text: m.requirement_text as string,
+      sids: Array.isArray(m.sids) ? m.sids.filter((x): x is string => typeof x === "string") : [],
       status: m.status as RequirementMatchStatus,
       rationale: typeof m.rationale === "string" ? m.rationale : "",
       missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null,

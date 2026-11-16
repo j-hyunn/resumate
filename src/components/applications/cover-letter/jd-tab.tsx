@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { JdLockedNotice, JdRawEditProvider } from "@/components/applications/jd-raw-edit"
 import { JdView } from "@/components/applications/jd-view"
 import { getJobDescription } from "@/lib/data/applications"
-import { isInputCausedJdFailure } from "@/lib/data/jd-raw-text"
 import { getPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
 import type { AiErrorCode } from "@/types/db"
@@ -39,14 +38,9 @@ export async function JdTab({ applicationProjectId: id, searchParams: sp }: { ap
   const previewSave = state === "raw-save-failed" ? "failed" : state === "raw-save-refused" ? "refused" : rawPreview ? "ok" : null
   // R17: no requirement extraction — no "요건 정리하기" / 분석 중 / 추출 실패 상태. The tab shows the raw text.
   const editable = rawPreview ? state !== "raw-saved" && one(sp.refused) !== "1" : jd.raw_text_editable
-  // Q53-9 "요건이 있는 공고": 입력 원인 실패로 왔는데 요건이 있으면 읽기 전용 + 안내 (R17: legacy JDs with requirement rows)
-  const causeParam = one(sp.cause)
-  const lockedCause: AiErrorCode | null =
-    state === "raw-has-requirements"
-      ? "input_too_long"
-      : jd.requirements.length > 0 && isInputCausedJdFailure(causeParam as AiErrorCode)
-        ? (causeParam as AiErrorCode)
-        : null
+  // Q53-9 "요건이 있는 공고" lock notice: R17 (JR-7) the raw text is always editable (no requirement rows), so it is
+  // a `?state=raw-has-requirements` preview only (UI 요청 — remove with the S-46 채용 공고 탭 rework)
+  const lockedCause: AiErrorCode | null = state === "raw-has-requirements" ? "input_too_long" : null
   const back = !lockedCause ? returnLabel(one(sp.from)) : null
 
   return (

@@ -159,12 +159,13 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_message_state: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   message_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sequence: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  // W0 Q53-2 / Q53-11 update_failed_jd_raw_text (DM 2.6.1)
-  jd_job_in_progress: { message: "이 자기소개서에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
-  jd_raw_text_locked: { message: "지금은 공고 원문을 고칠 수 없어요. 새로고침 후 확인해 주세요.", status: 409 },
-  jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
-  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요.", status: 409 },
-  jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
+  // R17 (JR-7, DM 2.6.1) update_jd_raw_text. `jd_has_results`, `jd_raw_text_locked`, `jd_failure_not_input`
+  // and `jd_not_extracted` are gone with update_failed_jd_raw_text / begin_jd_extraction.
+  jd_job_in_progress: { message: "인사이트를 만드는 중에는 공고 내용을 수정할 수 없어요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
+  jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 내용을 고친 뒤 저장해 주세요.", status: 409 },
+  // create_application_project / update_jd_raw_text: the text has no sentence (DM 2.6 / 2.6.1, 400).
+  // begin_insight raises it too (job path → stalled; the start route answers its own 409 first).
+  jd_no_sentences: { message: "공고 내용에서 문장을 찾지 못했어요. 공고 내용을 확인해 주세요.", status: 400 },
   // S9 delete_account: the server computes the hash, so a bad one is our bug.
   invalid_subject_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // R1 get_account_deletion_state / server-only key RPCs: the server passes the session user id,

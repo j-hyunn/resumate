@@ -9,7 +9,7 @@ import { AiJobStatusResponseSchema, errorCategoryOf, isManuallyRetryable } from 
 import type { JobTypeDefinition } from "@/server/jobs/types";
 import { MemoryJobStore, MemoryUsageStore, createScriptedAdapter, fakeClock, memoryScope, scriptedLlmFactory, type ScriptedResponse } from "@/test/job-fakes";
 import { InsightRpcError, type InsightInputs, type InsightStore } from "./db";
-import { createInsightJobDefinition, hasPreR17Checkpoint, type InsightMatchStage, type InsightPipeline } from "./job";
+import { createInsightJobDefinition, hasPreR17Checkpoint, insightRetryBlocked, type InsightMatchStage, type InsightPipeline } from "./job";
 import { insightJobPartial } from "./partial";
 import { AppError } from "@/lib/contracts/errors";
 import { emptyCareerRows } from "@/server/ai/context-pack/career-rows";
@@ -41,8 +41,8 @@ function inputs(rawTextHash = "jd-h"): InsightInputs {
   };
 }
 
-type FakeCtx = { jdTextHash: string };
-type FakeMatch = InsightMatchStage & { v: 2 };
+type FakeCtx = { rawTextHash: string };
+type FakeMatch = InsightMatchStage;
 
 function call(llm: Llm, callKey: string, signal: AbortSignal) {
   return llm.complete({ feature: "AI-02.test", promptVersion: "t", callKey, systemBlocks: [], userBlocks: [{ text: "u" }], outputSchema: null, signal });
@@ -54,17 +54,16 @@ function fakePipeline(calls: string[], firstViolations: string[] = []): InsightP
   return {
     promptVersion: "ai-02.test",
     tier: "default",
-    buildContext: (i) => ({ jdTextHash: i.jd.rawTextHash }),
-    hashes: (c) => ({ careerSnapshotHash: "career-h", jdTextHash: c.jdTextHash }),
+    buildContext: (i) => ({ rawTextHash: i.jd.rawTextHash }),
+    hashes: (c) => ({ careerSnapshotHash: "career-h", rawTextHash: c.rawTextHash }),
     async match(input, deps) {
       calls.push("match");
-      await call(deps.llm, "insight.match", deps.signal);
+      await call(deps.llm, "insight.match.1", deps.signal);
       return {
-        v: 2,
-        jdTextHash: input.context.jdTextHash,
-        matches: [
-          { requirement_id: "M1", requirement: { content: "Spring", category: "required", importance: "high", sentence_ids: ["S1"] }, status: "met" as const, rationale: "r", missing_aspect: null },
-        ],
+        v: 3,
+        rawTextHash: input.context.rawTextHash,
+        latencyMs: 41_000,
+        items: [{ match_key: "MT-1", requirement_text: "Spring 서버 개발", sids: ["S1"], status: "met" as const, rationale: "r", missing_aspect: null }],
       };
     },
     async synthesize(_input, deps) {
@@ -79,7 +78,7 @@ function fakePipeline(calls: string[], firstViolations: string[] = []): InsightP
       return { kind: "regen", violations: [] };
     },
     finalize: (input) => ({
-      payload: { matches: input.match.matches.length, provider: input.provider, ...(input.regen ? { regen: true } : {}), snapshot: input.snapshot },
+      payload: { matches: input.match.items.length, provider: input.provider, ...(input.regen ? { regen: true } : {}), snapshot: input.snapshot },
       inputHash: "input-h",
     }),
     inputHash: () => "input-h",
@@ -90,13 +89,14 @@ class FakeInsightStore implements InsightStore {
   begins: string[] = [];
   completes: Array<{ runGeneration: number; payload: unknown }> = [];
   applied = true;
+  reason: string | null = null;
   async begin(_project: string, jobId: string) {
     this.begins.push(jobId);
     return INSIGHT_ID;
   }
   async complete(args: { insightId: string; jobId: string; runGeneration: number; payload: unknown }) {
     this.completes.push({ runGeneration: args.runGeneration, payload: args.payload });
-    return { applied: this.applied, versionNo: this.applied ? 1 : null };
+    return { applied: this.applied, reason: this.applied ? null : this.reason, versionNo: this.applied ? 1 : null };
   }
   async fail() {
     return true;
@@ -119,7 +119,11 @@ type SetupOpts = {
   failRegenOnce?: Error;
 };
 
+/** The JD raw-text hash the retry gate reads (QA-07); tests set it to simulate an edit after a failure. */
+let currentHash = "jd-h";
+
 function setup(opts: SetupOpts = {}) {
+  currentHash = "jd-h";
   const clock = fakeClock();
   const context = opts.context ?? PAID;
   const store = new MemoryJobStore(clock.now);
@@ -151,6 +155,7 @@ function setup(opts: SetupOpts = {}) {
       },
     },
     storeFor: () => insights,
+    loadRawTextHash: async () => currentHash,
     loadInputs: async () => {
       loads++;
       if (opts.noJd) return null;
@@ -208,18 +213,22 @@ describe("insight job — paid tier (one stage-1 call, R17)", () => {
     const job = h.job(jobId);
     expect(job.status).toBe("succeeded");
     expect(h.calls).toEqual(["match", "synthesize"]);
-    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match", "insight.synthesize"]);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match.1", "insight.synthesize"]);
     expect(h.insights.begins).toEqual([jobId]);
     expect(h.insights.completes).toEqual([
-      { runGeneration: job.runGeneration, payload: { matches: 1, provider: "anthropic", snapshot: { careerSnapshotHash: "career-h", jdTextHash: "jd-h" } } },
+      { runGeneration: job.runGeneration, payload: { matches: 1, provider: "anthropic", snapshot: { careerSnapshotHash: "career-h", rawTextHash: "jd-h" } } },
     ]);
-    expect(job.stepOutputs.prepare).toEqual({ insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "career-h", jdTextHash: "jd-h" } });
+    expect(job.stepOutputs.prepare).toEqual({ insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "career-h", rawTextHash: "jd-h" } });
+    // 4.24 #18: the measured stage-1 latency stays in the step output (redesign-cycle input).
+    expect(job.stepOutputs.match).toMatchObject({ v: 3, latencyMs: 41_000 });
     expect(job.stepOutputs.synthesize_regen).toEqual({ regen: null });
     expect(job.stepOutputs.validate).toEqual({ insightId: INSIGHT_ID, versionNo: 1 });
-    // S-16 partial once the match checkpoint exists: the requirement travels with the verdict.
+    // S-16 partial once the match checkpoint exists: the requirement travels with the verdict (MT-n).
     const partial = toAiJobStatusResponse(job).partial as ReturnType<typeof insightJobPartial>;
-    expect(partial).toMatchObject({ kind: "insight_matches", batchesDone: 1, batchesTotal: 1 });
-    expect(partial!.requirementMatches[0]).toMatchObject({ requirementId: "M1", requirement: { content: "Spring", sentenceIds: ["S1"] }, status: "met" });
+    expect(partial).toEqual({
+      kind: "insight_matches",
+      requirementMatches: [{ matchKey: "MT-1", requirementText: "Spring 서버 개발", sentenceIds: ["S1"], status: "met", rationale: "r", missingAspect: null }],
+    });
   });
 
   it("a retryable match failure is scheduled (next_run_at) and the wake calls match once more", async () => {
@@ -261,13 +270,48 @@ describe("insight job — paid tier (one stage-1 call, R17)", () => {
     expect(h.usage.forJob(jobId)).toHaveLength(2); // the thrown attempt made no provider call
   });
 
-  it("the JD raw text changed after prepare → stalled, nothing completed", async () => {
+  it("the JD raw text changed after prepare → canceled like stale_run (DM 2.6.1), nothing completed", async () => {
     const h = setup({ responses: [OK, OK], jdHashLater: "jd-h-edited" });
     const jobId = await h.start();
     await h.drain();
-    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+    expect(h.job(jobId).status).toBe("canceled");
     expect(h.calls).toEqual([]);
     expect(h.insights.completes).toHaveLength(0);
+  });
+
+  it("QA-07: a failed run whose JD raw text was edited afterwards is not retryable (409, status canRetry false); unchanged → retryable", async () => {
+    let thrown = false;
+    const h = setup({
+      responses: [OK, OK],
+      failMatch: () => {
+        if (thrown) return null;
+        thrown = true;
+        return new AiError("schema_invalid", { retryable: false });
+      },
+    });
+    const jobId = await h.start();
+    await h.drain();
+    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "schema_invalid" });
+    currentHash = "jd-h-edited";
+    expect(await insightRetryBlocked({} as never, h.job(jobId), async () => currentHash)).toBe(true);
+    expect(toAiJobStatusResponse(h.job(jobId), undefined, null, true)).toMatchObject({ canRetry: false, retry: null });
+    await expect(h.runner.retryJob({ jobId, userId: USER })).rejects.toMatchObject({ code: "ai_job_not_retryable", status: 409 });
+    expect(h.calls).toEqual(["match"]);
+    // edited back to the same text → the checkpoints fit again
+    currentHash = "jd-h";
+    expect(await insightRetryBlocked({} as never, h.job(jobId), async () => currentHash)).toBe(false);
+    await h.runner.retryJob({ jobId, userId: USER });
+    await h.drain();
+    expect(h.job(jobId).status).toBe("succeeded");
+  });
+
+  it("insightRetryBlocked: no prepare yet / JD gone / other job types → not blocked", async () => {
+    const read = async () => "other";
+    expect(await insightRetryBlocked({} as never, { jobType: "insight", stepOutputs: {}, params: { applicationProjectId: PROJECT } }, read)).toBe(false);
+    const prepared = { prepare: { insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "c", rawTextHash: "h" } } };
+    expect(await insightRetryBlocked({} as never, { jobType: "insight", stepOutputs: prepared, params: { applicationProjectId: PROJECT } }, async () => null)).toBe(false);
+    expect(await insightRetryBlocked({} as never, { jobType: "cover_letter", stepOutputs: prepared, params: { applicationProjectId: PROJECT } }, read)).toBe(false);
+    expect(await insightRetryBlocked({} as never, { jobType: "insight", stepOutputs: prepared, params: { applicationProjectId: PROJECT } }, read)).toBe(true);
   });
 
   it("a step deadline on the match call is retried once (timeout) and recorded", async () => {
@@ -276,10 +320,21 @@ describe("insight job — paid tier (one stage-1 call, R17)", () => {
     await h.drain();
     if (h.job(jobId).status === "queued") await h.wake(jobId);
     expect(h.job(jobId).status).toBe("succeeded");
-    expect(h.usage.forJob(jobId).map((r) => r.callKey).filter((k) => k === "insight.match")).toHaveLength(2);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey).filter((k) => k === "insight.match.1")).toHaveLength(2);
   });
 
-  it("stale_run from complete_insight never completes the job without a ready row", async () => {
+  it("stale_run from complete_insight (JD raw text changed after prepare, DM 2.6.1) cancels the job; usage of both calls kept", async () => {
+    const h = setup({ responses: [OK, OK] });
+    h.insights.applied = false;
+    h.insights.reason = "stale_run";
+    const jobId = await h.start();
+    await h.drain();
+    expect(h.job(jobId).status).toBe("canceled");
+    expect(h.job(jobId).stepOutputs.validate).toBeUndefined();
+    expect(h.usage.forJob(jobId)).toHaveLength(2);
+  });
+
+  it("applied: false without a reason never completes the job without a ready row", async () => {
     const h = setup({ responses: [OK, OK] });
     h.insights.applied = false;
     const jobId = await h.start();
@@ -343,14 +398,14 @@ describe("insight job — synthesis split (QA-S6-03)", () => {
     await h.drain();
     expect(h.job(jobId).status).toBe("succeeded");
     expect(h.calls).toEqual(["match", "synthesize", "synthesize.regen", "synthesize.regen"]);
-    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match", "insight.synthesize", "insight.synthesize.regen"]);
+    expect(h.usage.forJob(jobId).map((r) => r.callKey)).toEqual(["insight.match.1", "insight.synthesize", "insight.synthesize.regen"]);
   });
 
-  it("requirements_changed from the pipeline (JD text changed since stage 1) ends the job stalled, no retry", async () => {
+  it("requirements_changed from the pipeline (JD text changed since stage 1) ends the job canceled (DM 2.6.1), no retry", async () => {
     const h = setup({ responses: [OK, OK], firstViolations: ["1"], failRegenOnce: Object.assign(new Error("changed"), { code: "requirements_changed" }) });
     const jobId = await h.start();
     await h.drain();
-    expect(h.job(jobId)).toMatchObject({ status: "failed", errorCode: "stalled" });
+    expect(h.job(jobId).status).toBe("canceled");
     expect(h.calls.filter((c) => c === "synthesize.regen")).toHaveLength(1);
   });
 
@@ -436,12 +491,15 @@ describe("pre-R17 job rows (R17 QA-02 / QA-03)", () => {
     expect(h.calls.filter((c) => c === "match")).toHaveLength(1); // nothing ran again
   });
 
-  it("QA-03: a pre-R17 match checkpoint (`{ batches }`) is refused too; R17 checkpoints are not", () => {
-    const r17Prepare = { insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "c", jdTextHash: "h" } };
+  it("QA-03: a pre-R17 / first-pass match checkpoint is refused too; current (v3) checkpoints are not", () => {
+    const r17Prepare = { insightId: INSIGHT_ID, sentenceCount: 1, snapshot: { careerSnapshotHash: "c", rawTextHash: "h" } };
     expect(hasPreR17Checkpoint({})).toBe(false);
     expect(hasPreR17Checkpoint({ prepare: r17Prepare })).toBe(false);
-    expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { v: 2, matches: [] } })).toBe(false);
+    expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { v: 3, items: [] } })).toBe(false);
+    expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { v: 2, matches: [] } })).toBe(true);
     expect(hasPreR17Checkpoint({ prepare: r17Prepare, match: { batches: [] } })).toBe(true);
+    // the unreleased first-pass R17 prepare snapshot (`jdTextHash`)
+    expect(hasPreR17Checkpoint({ prepare: { insightId: INSIGHT_ID, snapshot: { careerSnapshotHash: "c", jdTextHash: "h" } } })).toBe(true);
     expect(hasPreR17Checkpoint({ prepare: { insightId: INSIGHT_ID, snapshot: { careerSnapshotHash: "c", requirementsHash: "r" } } })).toBe(true);
   });
 

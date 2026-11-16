@@ -2,14 +2,15 @@ import type { CareerRows } from "../../context-pack/career-rows";
 import { splitJdSentences } from "../../context-pack/jd";
 import type { EvidenceSourceType } from "../../evidence-rules";
 import type { InsightContext, InsightContextInput } from "../../pipelines/AI-02";
-import type { Ai02Match, Ai02MatchOutput, Ai02SynthesisOutput, RequirementCategory } from "../../schemas/AI-02";
+import type { Ai02Match, Ai02MatchOutput, Ai02SynthesisOutput } from "../../schemas/AI-02";
 import { careerRowsFixture, IDS } from "../career-rows";
 
 /**
  * Synthetic AI-02 fixtures (fictional company and person; no real postings or
  * résumés). Model outputs are built from the context so aliases (PRJ-n, DLV-n,
- * S-n …) always match the pack the pipeline builds. (R17) The JD is raw text
- * only; stage 1 is one call in which the model names the requirements itself.
+ * S-n …) always match the pack the pipeline builds. (v4.16) The JD is raw text
+ * only; stage 1 is one call in which the model names the requirements itself
+ * (requirement_text + sids); the server keys them MT-1… in JD order.
  */
 
 export const JD_ID = "70000000-0000-4000-8000-000000000001";
@@ -39,23 +40,23 @@ export const KO_JD_RAW = [
   "- 쿠버네티스 운영 경험",
 ].join("\n");
 
-export type ReqDef = { category: RequirementCategory; content: string; needle: string; importance: "high" | "normal" };
+export type ReqDef = { content: string; needle: string };
 
-/** What a model would read from KO_JD_RAW (M-1 … M-10 in this order when all are kept). */
+/** What a model would read from KO_JD_RAW (MT-1 … MT-10 in this JD order when all are kept). */
 export const KO_REQS: readonly ReqDef[] = (
   [
-    ["responsibility", "결제 승인 API 설계 및 운영", "결제 승인 API"],
-    ["responsibility", "정산 배치 시스템 개선", "정산 배치"],
-    ["responsibility", "장애 대응 체계 운영", "장애 대응"],
-    ["required", "Spring Boot 기반 서버 개발 경험", "Spring Boot"],
-    ["required", "Kotlin 사용 경험", "Kotlin"],
-    ["required", "대용량 트래픽 서비스 성능 개선 경험", "대용량 트래픽"],
-    ["required", "RDBMS 인덱스 설계 경험", "RDBMS"],
-    ["preferred", "Kafka 등 메시지 큐 운영 경험", "Kafka"],
-    ["preferred", "팀 리딩 경험", "팀 리딩"],
-    ["preferred", "쿠버네티스 운영 경험", "쿠버네티스"],
+    ["결제 승인 API 설계 및 운영", "결제 승인 API"],
+    ["정산 배치 시스템 개선", "정산 배치"],
+    ["장애 대응 체계 운영", "장애 대응"],
+    ["Spring Boot 기반 서버 개발 경험", "Spring Boot"],
+    ["Kotlin 사용 경험", "Kotlin"],
+    ["대용량 트래픽 서비스 성능 개선 경험", "대용량 트래픽"],
+    ["RDBMS 인덱스 설계 경험", "RDBMS"],
+    ["Kafka 등 메시지 큐 운영 경험", "Kafka"],
+    ["팀 리딩 경험", "팀 리딩"],
+    ["쿠버네티스 운영 경험", "쿠버네티스"],
   ] as const
-).map(([category, content, needle], i) => ({ category, content, needle, importance: i < 3 ? "high" : "normal" }));
+).map(([content, needle]) => ({ content, needle }));
 
 export function koInput(rows: CareerRows = careerRowsFixture()): InsightContextInput {
   return {
@@ -126,13 +127,11 @@ export const ev = {
   sentence: (ctx: InsightContext, needle: string): Ev => ({ source_type: "jd_sentence", ref: sidOf(ctx, needle), field: null, quote: null }),
 };
 
-/** One stage-1 match for a requirement definition; sentence_refs found by the needle. */
+/** One stage-1 match for a requirement definition; sids found by the needle. */
 export function match(ctx: InsightContext, def: ReqDef, status: Ai02Match["status"], evidence: Ev[] = [], extra: Partial<Ai02Match> = {}): Ai02Match {
   return {
-    requirement: def.content,
-    category: def.category,
-    importance: def.importance,
-    sentence_refs: [sidOf(ctx, def.needle)],
+    requirement_text: def.content,
+    sids: [sidOf(ctx, def.needle)],
     status,
     rationale: status === "no_evidence" ? "입력된 데이터에서 근거를 찾지 못함" : "관련 경험이 데이터에 있습니다.",
     missing_aspect: status === "met" ? null : "구체적인 운영 경험",
@@ -154,16 +153,16 @@ export function req(n: number): ReqDef {
 
 /**
  * Recorded-style stage-1 output for the Korean JD (rich career), one call.
- * M-1 결제 승인 API → met (action + result)
- * M-2 정산 배치    → met (action)
- * M-3 장애 대응    → met (deliverable body, standalone project)
- * M-4 Spring Boot  → met claimed with a skill tag only → partial (server)
- * M-5 Kotlin       → partial (skill)
- * M-6 대용량 트래픽 → met claimed with situation only → partial (server)
- * M-7 RDBMS 인덱스  → met (action, quote partly reworded → V-3 adjusted)
- * M-8 Kafka        → no_evidence
- * M-9 팀 리딩      → met claimed with learnings only → V-8 → no_evidence
- * M-10 쿠버네티스   → no_evidence
+ * MT-1 결제 승인 API → met (action + result)
+ * MT-2 정산 배치    → met (action)
+ * MT-3 장애 대응    → met (deliverable body, standalone project)
+ * MT-4 Spring Boot  → met claimed with a skill tag only → partial (server)
+ * MT-5 Kotlin       → partial (skill)
+ * MT-6 대용량 트래픽 → met claimed with situation only → partial (server)
+ * MT-7 RDBMS 인덱스  → met (action, quote partly reworded → V-3 adjusted)
+ * MT-8 Kafka        → no_evidence
+ * MT-9 팀 리딩      → met claimed with learnings only → V-8 → no_evidence
+ * MT-10 쿠버네티스   → no_evidence
  */
 export function koMatchOutput(ctx: InsightContext): Ai02MatchOutput {
   return matchOutput([
@@ -190,19 +189,19 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
       {
         title: "결제 승인 API 성능 개선",
         description: "결제 승인 API 응답 시간을 1.2초에서 0.7초로 줄인 경험이 결제 API 운영 요건과 맞닿습니다.",
-        requirement_refs: ["M-1", "M-7"],
+        requirement_refs: ["MT-1", "MT-7"],
         evidence: [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다"), ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다"), ev.sentence(ctx, "결제 승인 API")],
       },
       {
         title: "정산 배치 재설계",
         description: "정산 배치를 청크 단위로 재설계한 경험이 있습니다.",
-        requirement_refs: ["M-2"],
+        requirement_refs: ["MT-2"],
         evidence: [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")],
       },
     ],
     gaps: [
       {
-        requirement_refs: ["M-8"],
+        requirement_refs: ["MT-8"],
         gap_kind: "no_evidence",
         description: "Kafka 기반 메시지 큐 운영 경험이 입력된 데이터에서 확인되지 않습니다.",
         actions: [
@@ -216,7 +215,7 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
         evidence: [ev.sentence(ctx, "Kafka")],
       },
       {
-        requirement_refs: ["M-5"],
+        requirement_refs: ["MT-5"],
         gap_kind: "partial",
         description: "Kotlin을 프로젝트에서 어떻게 썼는지 서술이 없습니다.",
         actions: [{ type: "reframe", text: "개인 가계부 앱 프로젝트 내용에 Kotlin 사용 범위를 함께 설명해 보세요.", evidence: [ev.skill(ctx, IDS.sklKotlin)] }],
@@ -227,8 +226,8 @@ export function koSynthesis(ctx: InsightContext): Ai02SynthesisOutput {
       positioning: "결제 도메인에서 응답 시간과 장애 대응을 개선해 온 백엔드 엔지니어로 포지셔닝합니다.",
       positioning_evidence: [ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다")],
       project_priorities: [
-        { rank: 1, ref: prjPay, reason: "결제 승인 API 요건과 가장 직접적으로 연결됩니다.", requirement_refs: ["M-1", "M-3"] },
-        { rank: 2, ref: prjSettle, reason: "정산 배치 개선 요건과 연결됩니다.", requirement_refs: ["M-2"] },
+        { rank: 1, ref: prjPay, reason: "결제 승인 API 요건과 가장 직접적으로 연결됩니다.", requirement_refs: ["MT-1", "MT-3"] },
+        { rank: 2, ref: prjSettle, reason: "정산 배치 개선 요건과 연결됩니다.", requirement_refs: ["MT-2"] },
       ],
     },
   };

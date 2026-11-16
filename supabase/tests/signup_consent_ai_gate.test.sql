@@ -28,8 +28,8 @@ select is(public.get_data_readiness() -> 'ai_connection',
           '{"active_provider": null, "key_status": null, "connection_tier": null, "consent_required": null}'::jsonb,
           'readiness: no AI connection after sign-up');
 select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000001', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'ai_run_allowed',
-          'false', 'path ⑥: project is saved without AI (D-30), AI not allowed');
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'created',
+          'true', 'creating a project needs no AI connection (R17: path ⑥ removed, DM §2.6.2)');
 reset role;
 
 insert into public.ai_jobs (id, user_id, job_type, application_project_id, target_type, target_id, status, run_generation,
@@ -67,10 +67,10 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"f0000000-0000-0000-0000-000000000001","role":"authenticated"}';
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'true'::jsonb,
           'readiness: consent_required true without C-21');
--- R17 [가정 R17-9]: registering a posting runs no AI, so there is no consent gate; AI stays not allowed.
+-- R17 (DM §2.6.2): registering a posting runs no AI, so there is no consent gate.
 select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'ai_run_allowed',
-          'false', 'path ⑥ without C-21: saved (no gate since R17), AI not allowed');
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'created',
+          'true', 'without C-21: saved (no gate since R17)');
 reset role;
 
 set local role app_ai_writer;
@@ -108,8 +108,8 @@ values ('gemini', 'free', 'v2026-11-05', true);
 select is(public.get_data_readiness() #> '{ai_connection,consent_required}', 'false'::jsonb,
           'readiness: consent_required false after C-21');
 select is(public.create_application_project('f0000000-aaaa-0000-0000-000000000002', '원문', 'h',
-            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'ai_run_allowed',
-          'true', 'path ⑥ after C-21 (same id replay): AI allowed');
+            '[{"sid":"S1","text":"원문","start":0,"end":2}]'::jsonb) ->> 'created',
+          'false', 'after C-21 (same id replay): created false');
 reset role;
 set local role app_ai_writer;
 set local request.jwt.claims = '{"sub":"f0000000-0000-0000-0000-000000000001","role":"app_ai_writer"}';

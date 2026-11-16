@@ -1,65 +1,70 @@
 import { describe, expect, it } from "vitest";
-import { CreateApplicationProjectInput, UpdateFailedJdRawTextInput } from "@/lib/contracts/application";
+import { CreateApplicationProjectInput, UpdateJdRawTextInput } from "@/lib/contracts/application";
 import { toErrorBody } from "@/lib/contracts/errors";
 import { splitJdSentences } from "@/server/ai/context-pack/jd";
 import { sha256Hex } from "@/server/ai/hash";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { fakeSupabase } from "@/test/fake-supabase";
 import { normalizeJdRawText } from "./raw-text";
-import { createApplicationProject, updateFailedJdRawText } from "./write";
+import { createApplicationProject, updateJdRawText } from "./write";
 
 const ID = "00000000-0000-4000-8000-0000000000a1";
 const JD = "00000000-0000-4000-8000-0000000000b1";
 const RAW = "  백엔드 개발자를 찾습니다. 경력 3년 이상.\n";
 const raised = (message: string) => Object.assign(new Error(message), { code: "P0001" });
 
-describe("updateFailedJdRawText (Q53-2, DM 2.6.1)", () => {
-  const ok = { application_project_id: ID, job_description_id: JD, extraction_status: "pending", raw_text_edited_at: "2026-11-02T00:00:00Z", ai_run_allowed: false };
+describe("updateJdRawText (JR-7, DM 2.6.1)", () => {
+  const ok = { application_project_id: ID, job_description_id: JD, raw_text_edited_at: "2026-11-02T00:00:00Z" };
 
   // A3 (R15): the edit path normalizes with `normalizeJdRawText` first, then splits and hashes
-  // that one string — the same code the create path and the preview route use.
-  it("sends the normalized text with the server's sentence split and hash of the same string", async () => {
+  // that one string — the same code the create path uses.
+  it("calls update_jd_raw_text with the normalized text, the server's sentence split and hash of the same string", async () => {
     const db = fakeSupabase({}, () => ok);
     const normalized = normalizeJdRawText(RAW);
-    const result = await updateFailedJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW });
+    const result = await updateJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW });
     expect(db.rpcCalls).toEqual([
       {
-        name: "update_failed_jd_raw_text",
+        name: "update_jd_raw_text",
         args: { p_application_project_id: ID, p_raw_text: normalized, p_raw_text_hash: sha256Hex(normalized), p_sentences: splitJdSentences(normalized) },
       },
     ]);
-    expect(result).toEqual({ applicationProjectId: ID, jobDescriptionId: JD, rawTextEditedAt: "2026-11-02T00:00:00Z", aiRunAllowed: false, warnings: ["short_jd"] });
+    expect(result).toEqual({ applicationProjectId: ID, jobDescriptionId: JD, rawTextEditedAt: "2026-11-02T00:00:00Z", warnings: ["short_jd"] });
   });
 
-  it("reports ai_run_allowed but never starts anything", async () => {
-    const db = fakeSupabase({}, () => ({ ...ok, ai_run_allowed: true }));
-    await expect(updateFailedJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).resolves.toMatchObject({ aiRunAllowed: true });
-    expect(db.rpcCalls).toHaveLength(1);
-  });
-
-  it.each(["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged"])("%s → AppError 409", async (code) => {
+  it.each([
+    ["jd_job_in_progress", 409],
+    ["jd_raw_text_unchanged", 409],
+    ["jd_no_sentences", 400],
+  ])("%s → AppError %i under its own code", async (code, status) => {
     const db = fakeSupabase({}, () => {
       throw raised(code);
     });
-    await expect(updateFailedJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code, status: 409 });
+    await expect(updateJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code, status });
+  });
+
+  it("job_description_not_found → not_found 404", async () => {
+    const db = fakeSupabase({}, () => {
+      throw raised("job_description_not_found");
+    });
+    await expect(updateJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code: "not_found", status: 404 });
   });
 
   it("a response without the ids is our bug", async () => {
     const db = fakeSupabase({}, () => ({}));
-    await expect(updateFailedJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(updateJdRawText(db.client as UserSupabaseClient, { id: ID, rawText: RAW })).rejects.toMatchObject({ code: "internal_error" });
   });
 
   it("input rules match S-14: not blank, at most 50,000 characters, not trimmed", () => {
-    expect(UpdateFailedJdRawTextInput.safeParse({ id: ID, rawText: "   " }).success).toBe(false);
-    expect(UpdateFailedJdRawTextInput.safeParse({ id: ID, rawText: "x".repeat(50_001) }).success).toBe(false);
-    expect(UpdateFailedJdRawTextInput.safeParse({ id: "nope", rawText: "x" }).success).toBe(false);
-    expect(UpdateFailedJdRawTextInput.parse({ id: ID, rawText: RAW }).rawText).toBe(RAW);
+    expect(UpdateJdRawTextInput.safeParse({ id: ID, rawText: "   " }).success).toBe(false);
+    expect(UpdateJdRawTextInput.safeParse({ id: ID, rawText: "x".repeat(50_001) }).success).toBe(false);
+    expect(UpdateJdRawTextInput.safeParse({ id: "nope", rawText: "x" }).success).toBe(false);
+    expect(UpdateJdRawTextInput.parse({ id: ID, rawText: RAW }).rawText).toBe(RAW);
   });
 });
 
 describe("createApplicationProject (R17: raw text only, no AI gate)", () => {
-  it("sends the 9-arg RPC (no p_preview_job_id) and returns no extraction / preview fields", async () => {
-    const db = fakeSupabase({}, () => ({ application_project_id: ID, job_description_id: JD, name: "새 자기소개서 (2026-11-14)", name_source: "default", ai_run_allowed: true, created: true }));
+  it("sends the 9-arg RPC (no p_preview_job_id) and maps the 5-key result (4.24 #9)", async () => {
+    const db = fakeSupabase({}, () => ({ application_project_id: ID, job_description_id: JD, name: "새 자기소개서 (2026-11-14)", name_source: "default", created: true }));
     const result = await createApplicationProject(db.client as UserSupabaseClient, CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, companyName: "가나다" }));
     expect(Object.keys(db.rpcCalls[0]!.args).sort()).toEqual(["p_company_name", "p_id", "p_raw_text", "p_raw_text_hash", "p_sentences"]);
     expect(result).toEqual({
@@ -68,10 +73,16 @@ describe("createApplicationProject (R17: raw text only, no AI gate)", () => {
       name: "새 자기소개서 (2026-11-14)",
       nameSource: "default",
       displayName: "새 자기소개서 (2026-11-14)",
-      aiRunAllowed: true,
       created: true,
       warnings: expect.any(Array),
     });
+  });
+
+  it("jd_no_sentences (400) keeps its own code (no row)", async () => {
+    const db = fakeSupabase({}, () => {
+      throw raised("jd_no_sentences");
+    });
+    await expect(createApplicationProject(db.client as UserSupabaseClient, CreateApplicationProjectInput.parse({ id: ID, rawText: "• • •" }))).rejects.toMatchObject({ code: "jd_no_sentences", status: 400 });
   });
 
   it("previewJobId is no longer part of the input", () => {
@@ -83,7 +94,7 @@ describe("createApplicationProject (R17: raw text only, no AI gate)", () => {
 // ---------------- UQ-759 (R15 후속 4): the source URL ----------------
 
 describe("createApplicationProject source URL (UQ-759)", () => {
-  const created = { application_project_id: ID, job_description_id: JD, name: null, name_source: null, ai_run_allowed: false, created: true };
+  const created = { application_project_id: ID, job_description_id: JD, name: null, name_source: null, created: true };
   const parse = (sourceUrl: string) => CreateApplicationProjectInput.parse({ id: ID, rawText: RAW, sourceUrl });
 
   it.each([

@@ -61,7 +61,7 @@ const CONTEXT_ONLY_FIELDS = new Set(["situation", "task", "role"]);
  * (V-4 handles it).
  */
 export function isSituationTaskOnly(evidence: readonly ValidatedEvidence[]): boolean {
-  const career = evidence.filter((e) => e.source_type !== "jd_sentence" && e.source_type !== "jd_requirement" && e.field !== "learnings");
+  const career = evidence.filter((e) => e.source_type !== "jd_sentence" && e.field !== "learnings");
   return career.length > 0 && career.every((e) => e.source_type === "project" && e.field !== null && CONTEXT_ONLY_FIELDS.has(e.field));
 }
 

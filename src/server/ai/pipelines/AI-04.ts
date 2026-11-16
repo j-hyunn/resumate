@@ -285,6 +285,7 @@ export async function* reply(ctx: CoverLetterChatContext, deps: Ai04Deps, extraN
       focusSlot: focus?.slot ?? null,
       focusNo: focus?.index ?? null,
       notices: [...new Set(notices)],
+      insight: ctx.insightState,
     }),
     outputSchema: null,
     maxOutputTokens: AI04_REPLY_MAX_OUTPUT_TOKENS,
@@ -382,6 +383,7 @@ export async function* compose(
     })),
     tone: ctx.tone,
     style: ctx.input.style ?? null,
+    insight: ctx.insightState,
   };
 
   let accepted: { output: Ai04ComposeOutput; meta: AiCallResult } | null = null;

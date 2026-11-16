@@ -37,8 +37,8 @@ select is_empty(
 -- S3: + SELECT on ai_jobs, evidence_links (writes are column-level / RPC).
 -- S3a: usage_events / usage_limits dropped (D-34); + SELECT on ai_usage_records (own rows), ai_price_tables.
 -- S4: + SELECT on writing_chats, writing_chat_messages (writes only through the definer message / patch RPCs).
--- S5: + SELECT on job_descriptions, jd_requirements (application_projects is column-level without memo;
---     JD extraction writes only through begin / apply / fail_jd_extraction).
+-- S5: + SELECT on job_descriptions (application_projects is column-level without memo). R17: jd_requirements and
+--     the extraction RPCs dropped; no AI write path to JD rows.
 -- S6: + SELECT on insights (writes only through begin / complete / fail_insight).
 -- R15 (CL-9): + SELECT on application_documents (the turn's backup read of "the body right now"); the
 --     drafts tables are dropped. No write grant for app_ai_writer.
@@ -59,7 +59,7 @@ select set_eq(
         'skills:SELECT', 'project_skills:SELECT',
         'ai_jobs:SELECT', 'evidence_links:SELECT', 'ai_usage_records:SELECT', 'ai_price_tables:SELECT',
         'writing_chats:SELECT', 'writing_chat_messages:SELECT',
-        'jd_requirements:SELECT', 'insights:SELECT',
+        'insights:SELECT',
         'application_documents:SELECT'],
   'app_ai_writer table privileges in public: SELECT on career + AI + writing chat + JD + insight + document tables only');
 
@@ -211,18 +211,18 @@ select is_empty(
                 and has_any_column_privilege(r.oid, 'public.insights'::regclass, p.privilege_type)))$$,
   'nobody writes insights directly (service_role: SELECT / DELETE only)');
 
--- S5 (DM §5, §7): application / JD RPC execute matrix. Stage and outcome RPCs are user-session only; JD
--- extraction RPCs are app_ai_writer only.
+-- S5 (DM §5, §7): application / JD RPC execute matrix. Stage, outcome and raw-text edit RPCs are user-session only
+-- (R17: the extraction RPCs are gone, update_jd_raw_text is new).
 select set_eq(
   $$select p.proname::text || ':' || r.rolname
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       cross join (values ('anon'), ('authenticated'), ('app_ai_writer'), ('app_key_reader')) r (rolname)
      where n.nspname = 'public'
        and p.proname in ('create_application_project', 'move_application_stage', 'set_application_outcome',
-                         'begin_jd_extraction', 'apply_jd_extraction', 'fail_jd_extraction')
+                         'update_jd_raw_text')
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['create_application_project:authenticated', 'move_application_stage:authenticated',
-        'set_application_outcome:authenticated'],
+        'set_application_outcome:authenticated', 'update_jd_raw_text:authenticated'],
   'S5 application / JD RPC execute matrix (R17: the extraction RPCs are gone)');
 
 -- S5 (DM §5): user-session write privileges on the application tables. application_projects: DELETE +
@@ -232,7 +232,7 @@ select set_eq(
       from pg_class c
       cross join lateral (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p (privilege_type)
      where c.oid in ('public.application_projects'::regclass, 'public.application_stage_events'::regclass,
-                     'public.job_descriptions'::regclass, 'public.jd_requirements'::regclass)
+                     'public.job_descriptions'::regclass)
        and has_table_privilege('authenticated', c.oid, p.privilege_type)$$,
   array['application_projects:DELETE'],
   'authenticated: table-level writes on application tables = application_projects DELETE only');
@@ -242,7 +242,7 @@ select set_eq(
       join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
       cross join lateral (values ('INSERT'), ('UPDATE')) p (privilege_type)
      where c.oid in ('public.application_projects'::regclass, 'public.application_stage_events'::regclass,
-                     'public.job_descriptions'::regclass, 'public.jd_requirements'::regclass)
+                     'public.job_descriptions'::regclass)
        and has_column_privilege('authenticated', c.oid, a.attnum, p.privilege_type)$$,
   array['application_projects.name:UPDATE', 'application_projects.deadline:UPDATE', 'application_projects.memo:UPDATE'],
   'authenticated: column writes on application tables = name / deadline / memo UPDATE');
@@ -344,7 +344,7 @@ select set_eq(
         'mark_application_document_copied',
         'save_project_page', 'save_project_deliverable', 'start_deliverable_writing_chat', 'set_active_ai_provider', 'set_application_outcome',
         'start_writing_chat',
-        'update_failed_jd_raw_text', 'touch_last_active',
+        'update_jd_raw_text', 'touch_last_active',  -- R17: replaces update_failed_jd_raw_text
         'save_profile_basics', 'compute_total_experience_months'],
   'authenticated can execute exactly the S1–S9 user-session RPCs in public (R1 A19: key save / check moved to service_role; touch_last_active for inactive account deletion)');
 

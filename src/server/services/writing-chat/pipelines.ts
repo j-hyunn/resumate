@@ -15,21 +15,67 @@ import * as ai04 from "@/server/ai/pipelines/AI-04";
 import * as ai04in from "@/server/ai/context-pack/cover-letter-chat";
 import type { ReplyNotice as Ai04ReplyNotice } from "@/server/ai/prompts/AI-04";
 import { loadCareerRows } from "@/server/ai/context-pack/career-rows";
-import { DOCUMENT_SLOT_RE } from "@/lib/contracts/writing-chat";
-import { parseSentences } from "@/server/services/application/db";
+import { DOCUMENT_SLOT_RE, type ReturnTarget } from "@/lib/contracts/writing-chat";
+import { INSIGHT_SCHEMA_VERSION } from "@/lib/contracts/insight";
+import { selectGateGaps } from "@/server/ai/context-pack/gate-gaps";
 import type { DeliverablePipelines, DeliverablePlan, DocumentPipelines, DocumentPlan, Log, TurnSnapshot, WritingChatPipelines } from "./types";
 
 /**
  * Production AI-12 pipelines v4.5 (ai-pipeline `extract` / `reply`, ai notes §5).
  * Builds `WritingChatTurnInput` once per turn from the snapshot plus the context reads the
  * pack needs (app_ai_writer: the chat's project row read fresh every turn + its parent's name /
- * status and readiness for gate chats; **no `profiles` read** — R13 SD-6). R17 [가정 R17-4]: the gate's
- * JD requirement block (R-31 `loadGateRequirements`) is gone with AI-01. Reads only — the
- * turn never writes career tables (NFR-AI-05).
+ * status and readiness for gate chats; **no `profiles` read** — R13 SD-6). R17 (JR-5, DM 2.7.0
+ * "AI-12 게이트 진입"): a gate chat's reply call gets the insight gap(s) it came from
+ * (`return_target.params.insight_id` / `insight_item_key`, else the project's latest ready schema-2
+ * insight) as `gateGaps` — never the JD. Reads only — the turn never writes career tables (NFR-AI-05).
  */
 
 // R13 (v4.12, SD-6 / DM 2.1.5): the pack no longer reads `profiles` — 내 정보는 어떤 프롬프트에도 들어가지 않는다.
-type Loaded = Pick<WritingChatTurnInput, "project" | "gate">;
+type Loaded = Pick<WritingChatTurnInput, "project" | "gate" | "gateGaps">;
+
+const INSIGHT_READ_COLUMNS = "id, result, schema_version, career_snapshot_hash, raw_text_hash";
+type InsightReadRow = { id: string; result: unknown; schema_version: number | null; career_snapshot_hash: string | null; raw_text_hash: string | null };
+
+/** The project's latest ready schema-2 insight (DM 2.7.0: AI-04 input, AI-12 gate, reuse read only 2). */
+async function loadLatestInsight(db: AiWriterSupabaseClient, applicationProjectId: string): Promise<InsightReadRow | null> {
+  const { data, error } = await db
+    .from("insights")
+    .select(INSIGHT_READ_COLUMNS)
+    .eq("application_project_id", applicationProjectId)
+    .eq("is_latest", true)
+    .eq("status", "ready")
+    .eq("schema_version", INSIGHT_SCHEMA_VERSION)
+    .maybeSingle();
+  if (error) throw mapDbError(error);
+  return (data as InsightReadRow | null) ?? null;
+}
+
+/**
+ * DM 2.7.0 / ai notes "정렬 인터페이스" C: the gate gaps of a chat opened from S-16 보완점.
+ * `params.insight_id` (checked by start_writing_chat: mine, that project's) → that ready insight;
+ * otherwise — or when it is gone / not ready [가정 R17b-api-3] — the latest ready schema-2 insight of
+ * `return_target.application_project_id`. `insight_item_key` picks one gap. No insight → [] (no block).
+ */
+export async function loadGateGaps(db: AiWriterSupabaseClient, target: ReturnTarget): Promise<ReturnType<typeof selectGateGaps>> {
+  const params = target.params ?? {};
+  const insightId = typeof params.insight_id === "string" ? params.insight_id : null;
+  const itemKey = typeof params.insight_item_key === "string" ? params.insight_item_key : null;
+  let row: InsightReadRow | null = null;
+  if (insightId) {
+    const { data, error } = await db
+      .from("insights")
+      .select(INSIGHT_READ_COLUMNS)
+      .eq("id", insightId)
+      .eq("application_project_id", target.application_project_id)
+      .eq("status", "ready")
+      .maybeSingle();
+    if (error) throw mapDbError(error);
+    row = (data as InsightReadRow | null) ?? null;
+  }
+  row ??= await loadLatestInsight(db, target.application_project_id);
+  if (!row) return [];
+  return selectGateGaps({ schemaVersion: row.schema_version ?? 1, result: row.result, insightItemKey: itemKey });
+}
 
 async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<Loaded> {
   const chat = snap.chat;
@@ -54,11 +100,13 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
   const parentRow = parentRes.data as { company_name?: string | null; institution_name?: string | null; status: string } | null;
 
   let gate: WritingChatTurnInput["gate"] = null;
+  let gateGaps: WritingChatTurnInput["gateGaps"];
   if (chat.returnTarget) {
-    const readiness = await getDataReadiness(db);
+    const [readiness, gaps] = await Promise.all([getDataReadiness(db), loadGateGaps(db, chat.returnTarget)]);
     const key = chat.returnTarget.feature === "insight" ? "insight" : "draft";
     const f = readiness.features[key];
     gate = { feature: chat.returnTarget.feature, missing: f.ready ? [] : f.missing };
+    if (gaps.length > 0) gateGaps = gaps;
   }
 
   return {
@@ -83,6 +131,7 @@ async function loadPackInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): P
       learnings: p.learnings,
     },
     gate,
+    ...(gateGaps ? { gateGaps } : {}),
   };
 }
 
@@ -320,47 +369,44 @@ export function createDeliverablePipelines(opts: PipelineLogOptions = {}): Deliv
 
 // ---------------- AI-04 서류 대화 (R15, ai notes §2 (2)) ----------------
 
-type DocumentLoaded = Pick<ai04in.CoverLetterChatTurnInput, "questions" | "careerRows" | "jd" | "insightSignal">;
+type DocumentLoaded = Pick<ai04in.CoverLetterChatTurnInput, "questions" | "careerRows" | "application" | "insight">;
 
 /**
- * AI-04 input reads (app_ai_writer, RLS = this user): the 자기소개서 정본's `body.questions[]`, the
- * whole career pack (CL-Q1: every turn gets the full pack until RAG), every JD sentence of the
- * raw text + its `raw_text_hash` (R17: no requirement rows, no 회사 소개 문장 split), and the latest
- * ready insight's strengths as a soft signal. Reads only (NFR-AI-05).
+ * AI-04 input reads (app_ai_writer, RLS = this user; DM 2.7.0 "AI-04가 인사이트를 읽는 경로", JR-5):
+ * the 자기소개서 정본's `body.questions[]`, the whole career pack (CL-Q1: every turn gets the full
+ * pack until RAG), the project's company / position (user input) and the latest ready **schema 2**
+ * insight with its hashes + the JD's current `raw_text_hash` (stale check). **The JD raw text and
+ * sentences are not read.** No insight → `insight: null` (career data only). Reads only (NFR-AI-05).
  */
 export async function loadDocumentInputs(db: AiWriterSupabaseClient, snap: TurnSnapshot): Promise<DocumentLoaded> {
   const chat = snap.chat;
   const applicationProjectId = chat.applicationProjectId;
   const documentKind = chat.documentKind;
   if (!applicationProjectId || !documentKind) throw new AppError("internal_error", undefined, { status: 500 });
-  const [docRes, jdRes, careerRows, insightRes] = await Promise.all([
+  const [docRes, jdRes, careerRows, insight] = await Promise.all([
     db.from("application_documents").select("body").eq("application_project_id", applicationProjectId).eq("document_kind", documentKind).maybeSingle(),
-    db.from("job_descriptions").select("id, updated_at, sentences, position_title, raw_text_hash").eq("application_project_id", applicationProjectId).maybeSingle(),
+    db.from("job_descriptions").select("raw_text_hash, company_name, position_title").eq("application_project_id", applicationProjectId).maybeSingle(),
     loadCareerRows(db),
-    db
-      .from("insights")
-      .select("result, status, version_no")
-      .eq("application_project_id", applicationProjectId)
-      .eq("status", "ready")
-      .order("version_no", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    loadLatestInsight(db, applicationProjectId),
   ]);
-  for (const r of [docRes, jdRes, insightRes]) if (r.error) throw mapDbError(r.error);
+  for (const r of [docRes, jdRes]) if (r.error) throw mapDbError(r.error);
   // The chat cascades with its application project; a missing JD is a race with a delete.
   if (!jdRes.data) throw new AppError("not_found", "대상 자기소개서를 찾을 수 없습니다.");
   return {
     // No 정본 row yet (the chat may start before the first save): no questions, greeting case ②.
     questions: documentQuestionRows(docRes.data?.body),
     careerRows,
-    jd: {
-      jobDescriptionId: jdRes.data.id,
-      jobDescriptionUpdatedAt: jdRes.data.updated_at,
-      sentences: parseSentences(jdRes.data.sentences),
-      positionTitle: jdRes.data.position_title,
-      rawTextHash: jdRes.data.raw_text_hash,
-    },
-    insightSignal: insightSignalOf(insightRes.data?.result),
+    application: { companyName: jdRes.data.company_name, positionTitle: jdRes.data.position_title },
+    insight: insight
+      ? {
+          insightId: insight.id,
+          schemaVersion: insight.schema_version ?? 1,
+          result: insight.result,
+          careerSnapshotHash: insight.career_snapshot_hash ?? "",
+          rawTextHash: insight.raw_text_hash ?? "",
+          currentRawTextHash: jdRes.data.raw_text_hash,
+        }
+      : null,
   };
 }
 
@@ -386,26 +432,6 @@ function documentQuestionRows(body: unknown): ai04in.CoverLetterQuestionRow[] {
     });
   }
   return out;
-}
-
-/** AI-02 result → the soft 강점 signal AI-04 may lean on (never a source of facts). */
-export function insightSignalOf(result: unknown): ai04in.CoverLetterInsightSignal {
-  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
-  const r = result as Record<string, unknown>;
-  const strengths = Array.isArray(r.strengths)
-    ? r.strengths
-        .map((s) => (s && typeof s === "object" ? (s as Record<string, unknown>) : null))
-        .filter((s): s is Record<string, unknown> => s !== null)
-        .map((s) => ({ title: typeof s.title === "string" ? s.title : "", description: typeof s.description === "string" ? s.description : "" }))
-        .filter((s) => s.title !== "")
-    : [];
-  // The stored AI-02 result keeps positioning under `strategy` (storage/insight.ts InsightResult); a top-level
-  // `positioning` is accepted only as a fallback for hand-written rows.
-  const strategy = r.strategy && typeof r.strategy === "object" && !Array.isArray(r.strategy) ? (r.strategy as Record<string, unknown>) : null;
-  const rawPositioning = strategy && typeof strategy.positioning === "string" ? strategy.positioning : r.positioning;
-  const positioning = typeof rawPositioning === "string" && rawPositioning.trim() ? rawPositioning : null;
-  if (strengths.length === 0 && positioning === null) return null;
-  return { strengths, positioning };
 }
 
 export function toDocumentTurnInput(

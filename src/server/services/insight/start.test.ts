@@ -41,7 +41,7 @@ function fakeUser(tables: Record<string, Array<Record<string, unknown>>>): UserS
 const READY: ReadinessFeature = { ready: true };
 const NOT_READY: ReadinessFeature = { ready: false, missing: ["complete_project"], hints: ["project_star"], next_action: "writing_chat", suggested_project_id: "00000000-0000-4000-8000-00000000a001" };
 
-const INPUTS = { jd: {}, requirements: [], careerRows: {} } as unknown as InsightInputs;
+const INPUTS = { jd: { sentences: [{ sid: "S1", text: "Spring", start: 0, end: 6 }] }, careerRows: {} } as unknown as InsightInputs;
 
 function deps(over: {
   readiness?: ReadinessFeature;
@@ -65,8 +65,8 @@ function deps(over: {
       promptVersion: "ai-02.test",
       tier: "default",
       buildContext: () => ({}),
-      hashes: () => ({ careerSnapshotHash: "c", jdTextHash: "r" }),
-      inputHash: (p) => `${p.provider}|${p.model}|${p.careerSnapshotHash}|${p.jdTextHash}`,
+      hashes: () => ({ careerSnapshotHash: "c", rawTextHash: "r" }),
+      inputHash: (p) => `${p.provider}|${p.model}|${p.careerSnapshotHash}|${p.rawTextHash}`,
     },
     loadInputs: async () => (over.inputs === undefined ? INPUTS : over.inputs),
     getReadiness: async () => ({ features: { insight: over.readiness ?? READY } }),
@@ -94,9 +94,23 @@ describe("startInsight", () => {
 
   it("same input_hash ready → reused, no job (C-6)", async () => {
     const model = resolveModel("anthropic", "default");
-    const { d, calls } = deps({ insights: [{ id: "ins-1", application_project_id: PROJECT, input_hash: `anthropic|${model}|c|r`, status: "ready", is_latest: true }] });
+    const { d, calls } = deps({ insights: [{ id: "ins-1", application_project_id: PROJECT, input_hash: `anthropic|${model}|c|r`, status: "ready", is_latest: true, schema_version: 2 }] });
     const out = await startInsight(d, PROJECT, { regenerate: false });
     expect(out).toEqual({ kind: "started", data: { reused: true, insightId: "ins-1", jobId: null, inProgress: false } });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("4.24 #18: a schema-1 latest insight with the same hash is never reused (new job)", async () => {
+    const model = resolveModel("anthropic", "default");
+    const { d, calls } = deps({ insights: [{ id: "ins-1", application_project_id: PROJECT, input_hash: `anthropic|${model}|c|r`, status: "ready", is_latest: true, schema_version: 1 }] });
+    const out = await startInsight(d, PROJECT, { regenerate: false });
+    expect(out).toMatchObject({ kind: "started", data: { reused: false, jobId: "job-1" } });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("a JD without sentences → 409 jd_no_sentences, no job (begin_insight's rule, DM 2.7.0)", async () => {
+    const { d, calls } = deps({ inputs: { ...INPUTS, jd: { ...INPUTS.jd, sentences: [] } } });
+    await expect(startInsight(d, PROJECT, { regenerate: false })).rejects.toMatchObject({ code: "jd_no_sentences", status: 409 });
     expect(calls).toHaveLength(0);
   });
 
@@ -123,7 +137,7 @@ describe("startInsight", () => {
     expect(hashFn({ provider: "anthropic", model, modelTier: "default", connectionTier: "paid" })).toBe(`anthropic|${model}|c|r`);
   });
 
-  it("JD not extracted yet → no reuse lookup, job started without input_hash (D-30)", async () => {
+  it("JD gone (inputs null) → no reuse lookup, job started without input_hash (prepare ends it)", async () => {
     const { d, calls } = deps({ inputs: null, started: { jobId: "job-2", inProgress: true } });
     const out = await startInsight(d, PROJECT, { regenerate: false });
     expect(out).toEqual({ kind: "started", data: { reused: false, insightId: null, jobId: "job-2", inProgress: true } });

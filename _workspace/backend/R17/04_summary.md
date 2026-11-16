@@ -38,3 +38,46 @@ R17-1~10(계획), R17-db1, R17-AI-1~6, R17-api1~8 — 기획과 어긋날 수 �
 ## 범위 밖 후속
 - ~~QA-05(R17 이전 버그)~~ **해결 2026-11-14**: `insightSignalOf`가 `strategy.positioning`을 읽도록 수정(최상위 `positioning`은 폴백), 테스트 `writing-chat/pipelines.test.ts`.
 - 2단 파괴 마이그레이션(기획 확정 후).
+
+---
+
+# 정렬 (2026-11-16) — 기획 PR #77 확정 결정(3.29·4.24)에 맞춤
+
+계획 `01b_plan-align.md`. QA 정렬 2라운드 Critical 0 · Major 0 · Minor 0 (1라운드 Minor 4건 QA-06~09 해결).
+
+## 4.24 항목별
+| # | 상태 | 비고 |
+|---|------|------|
+| 1·2·5 | 완료(로컬) | 마이그레이션 C: `jd_requirements`·추출 컬럼 8개 drop, `jd_requirement` CHECK 제거, 최종 단언 |
+| 3 | 완료 | B: 추출 RPC·`update_failed_jd_raw_text`·헬퍼 drop |
+| 4 | 완료(로컬) | A: `jd_requirement` 근거·자소서 `jd_sentence` 근거·대화 제안 JD 출처 삭제 |
+| 6·7 | 완료 | 라우트·크론·코드 삭제. UI 소유 칩 분기 1곳은 UI 요청 U5 |
+| 8 | 완료 | 과거 값 CHECK 유지, schema 1 인사이트 보존 |
+| 9 | 완료 | 생성 RPC 반환 5키, `jd_no_sentences`, 게이트 없음 |
+| 10 | 완료 | 생성 Server Action 뒤 인사이트 자동 시작, `insightJobId`·`insightSkipReason` |
+| 11 | 완료 | `update_jd_raw_text`, `rawTextEditable`·`rawTextLockedReason`, 가드 교체 |
+| 12 | 완료 | 허용 목록 insight = 커리어+`jd_sentence`, 자소서 = 커리어+`user_note` |
+| 13 | 완료 | `raw_text_hash` rename, `stale_run`, `schemaVersion`, `staleReasons.rawText`(칩 포함) |
+| 14 | 완료 | `start_writing_chat` `insight_id`·`insight_item_key`, 인사 3종, `delete_account_data` |
+| 15 | 완료 | fetch `{rawText}` |
+| 16 | 완료(로컬) | A·B·C, `release-counts.md`. **원격 push는 사용자** |
+| 17 | 확인 | readiness·usage·deletion impact 변경 없음 |
+| 18 | 완료 | `MT-n`·`match_keys`·≤ 120자·최대 15·`{prompt_version, items}`. 지연 측정 장치(`latencyMs`, `ai_stage_timing`)는 있음, **실제 공급자 실측값은 아직 없음** |
+| 19 | 완료 | AI-04 = 최신 인사이트+커리어+문항·메모, `jd_sentence` 거부, AI-12 = 보완점, 프롬프트 버전 0.v416 표 |
+| 20 | 완료 | 자동 시작도 사용량 기록 |
+| 21 | 해당 없음 | 코드에 AI-01 평가 항목 없음 |
+
+## 검사
+typecheck 0 · lint 0 · Vitest 160 파일 / 2,666 통과(통합 포함) · pgTAP 65 파일 / 2,648 통과 · build 통과 · `db reset`으로 A→B→C 적용 확인, 과거 모양 데이터 씨앗 위 A→B→C 1회 실행(db-engineer). 브라우저 미확인.
+
+## UI 요청 (4.24 UI 1~9 → `02_api_notes.md` "정렬" U1~U9)
+U1 S-14 마감일 칸·자동 시작 안내 · U2 채용 공고 탭 요건 열 삭제·[공고 내용 수정] 상시 · U3 인사이트 탭 판정 표·schema 1 안내·변경 사유 · U4 자소서 "AI가 읽는 내용" · U5 `jd_requirement` 칩 분기 · U6 진행 문구·C-20 · U7 보완점 → S-10 "관련 요건" · U8 사용량 "(종료)" 행 · U9 mock 정리
+
+## 남은 `[가정]`
+`spec-gaps-R17.md` 하단 — G12(AI-02 지연, 재설계 사이클)·G16(인사 상태 줄 AI 명세 ↔ DM 2.5 불일치), 정렬 중 새 `[가정 R17b-db-1~12 · AI-1~9 · api-1~9]`(기획 확인 8건 표시).
+
+## 릴리스 (원격 push 전)
+1. 백업(되돌릴 수 없음 — A·C 파괴적)
+2. `release-counts.md`의 읽기 전용 집계 10항목 실행·기록
+3. `supabase db push`로 A(`…004800`)·B(`…004810`)·C(`…004820`) 함께 → **바로 코드 머지·배포**(옛 코드는 삭제된 RPC·컬럼을 부른다. A~B 사이 수 초 동안 옛 `complete_insight` 실패 가능)
+4. C 단언이 멈추면 A·B는 적용된 상태 — 해당 행을 고친 뒤 C만 다시 push

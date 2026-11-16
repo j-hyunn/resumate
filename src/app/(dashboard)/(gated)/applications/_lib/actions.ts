@@ -9,7 +9,7 @@
  * `prepare/finalizeCoverLetterSectionAction` · `saveEditedContentAction` · `setSectionSourcesAction` ·
  * `markDraftCopiedAction` — S-17·S-19·S-45가 없어지고 초안은 S-46 패널의 초안 턴이 만든다.
  */
-import type { AiErrorCode, ApplicationProject } from "@/types/db"
+import type { AiErrorCode, ApplicationProject, InsightSkipReason } from "@/types/db"
 import { createApplicationProject, startInsight, updateApplicationProject, updateFailedJdRawText } from "@/lib/data/applications"
 import { deleteApplicationProject } from "@/lib/data/deletion"
 import { withAiGuard } from "@/lib/data/ai-guard"
@@ -65,15 +65,20 @@ async function createApplicationGuarded(input: Parameters<typeof createApplicati
     position_title: input.position_title,
     source_url: input.source_url,
   })
-  return { id: ap.id }
+  return { id: ap.id, insight_job_id: ap.insight_job_id, insight_skip_reason: ap.insight_skip_reason }
 }
 
-/** S-14 ② [자기소개서 작성]의 결과 (R17: 미리 보기 적용 결과 키 삭제) */
+/**
+ * S-14 ② [자기소개서 작성]의 결과 (R17: 미리 보기 적용 결과 키 삭제). JR-6 (4.24 #10): 생성 직후 자동으로 시작한
+ * 인사이트 작업 id(없으면 null)와 건너뛴 이유 — 화면 표시는 UI 요청
+ */
 export interface CreateApplicationOutcome {
   id: string
+  insight_job_id: string | null
+  insight_skip_reason: InsightSkipReason | null
 }
 
-/** 채용 공고 탭 공고 원문 저장 (Q53-2, RPC update_failed_jd_raw_text): `{ refused }` = nothing changed */
+/** 채용 공고 탭 공고 원문 저장 (JR-7, RPC update_jd_raw_text): `{ refused }` = nothing changed */
 export async function updateFailedJdRawTextAction(applicationProjectId: string, rawText: string) {
   return updateFailedJdRawText(applicationProjectId, rawText)
 }

@@ -134,8 +134,8 @@ export type DraftSourceRankingResponse = {
   ranking: DraftSourceRankingItem[] | null;
   /**
    * Why it failed (logs / analytics only; the screen shows nothing): a C-11 code, `key_missing` /
-   * `key_invalid` (no AI), `jd_not_extracted`, `extraction_in_progress`, `ranking_in_progress`, or
-   * `no_rankable_projects`. Null unless `failed`.
+   * `key_invalid` (no AI), `ranking_in_progress`, or `no_rankable_projects` (R15 retired contract; the
+   * R17 extraction codes `jd_not_extracted` / `extraction_in_progress` are gone). Null unless `failed`.
    */
   reason: string | null;
 };
@@ -186,8 +186,7 @@ export const GenerationStartedEvent = z.object({
   connectionTier: z.string(),
 });
 
-// R1 A13: no `preparing` event — generation never extracts requirements; a JD without them is
-// refused before the stream (409 `jd_not_extracted` / `extraction_in_progress`).
+// R1 A13: no `preparing` event — generation never extracts requirements (R17: there is no extraction at all).
 
 /** One chosen source as streamed (AI-04 `sources_selected`; ids, not aliases). */
 export const StreamedSourceSchema = z.object({

@@ -268,10 +268,12 @@ export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];
  * insert trigger and `save_application_document` read. Outside the list → `invalid_evidence_source`
  * (`P0001`, no longer a `23514` CHECK violation — spec-gaps R15-DB-9).
  * `profile` is refused for every owner (SD-A19); `chat_message` is unconstrained (no producer).
+ * R17 (4.24 #12, JR-Q1·JR-5): `insight` = career 5 + `jd_sentence`; `application_document` = career
+ * 5 + `user_note` — the 자기소개서 never cites the posting (it reads the insight instead).
  */
 export const EVIDENCE_ALLOWED_SOURCE_TYPES = {
-  insight: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence"],
-  application_document: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence", "user_note"],
+  insight: ["experience", "education", "project", "project_deliverable", "skill", "jd_sentence"],
+  application_document: ["experience", "education", "project", "project_deliverable", "skill", "user_note"],
 } as const satisfies Partial<Record<EvidenceOwnerType, readonly string[]>>;
 
 /**
@@ -285,7 +287,7 @@ export function documentSourceItemKey(slot: string, n: number): string {
   return `${slot}.sources.${n}`;
 }
 
-/** evidence_links.source_type CHECK (DM §2.8). */
+/** evidence_links.source_type CHECK (DM §2.8; R17 4.24 #5: `jd_requirement` removed). */
 export const EVIDENCE_SOURCE_TYPES = [
   "profile",
   "experience",
@@ -293,7 +295,6 @@ export const EVIDENCE_SOURCE_TYPES = [
   "project",
   "project_deliverable",
   "skill",
-  "jd_requirement",
   "jd_sentence",
   "user_note",
 ] as const;
@@ -371,8 +372,9 @@ export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
 
 /**
  * `ai_jobs.target_type` values (no global CHECK — a per-`job_type` combination CHECK, db notes ④).
- * R17: `jd_preview` (R15 요건 미리 보기) is gone with AI-01; old rows keep it in the DB until the
- * phase-2 migration. `job_description` stays for pre-R17 `jd_extraction` rows.
+ * R17: `jd_preview` (R15 요건 미리 보기) is gone with AI-01; old rows keep it (output cleared by
+ * migration A) until the 90-day purge, and the combination CHECK keeps it (4.24 #8).
+ * `job_description` stays for pre-R17 `jd_extraction` rows.
  * `draft` / `draft_section` stay for rows inside the 90-day retention window.
  */
 export const AI_JOB_TARGET_TYPES = [
@@ -461,21 +463,8 @@ export type NameSource = (typeof NAME_SOURCES)[number];
 export const JD_FIELD_SOURCES = ["user", "ai"] as const;
 export type JdFieldSource = (typeof JD_FIELD_SOURCES)[number];
 
-/** job_descriptions.extraction_status CHECK (pending = 추출 전, 키 없음 포함; D-30). */
-export const JD_EXTRACTION_STATUSES = ["pending", "running", "succeeded", "failed"] as const;
-export type JdExtractionStatus = (typeof JD_EXTRACTION_STATUSES)[number];
-
-/** jd_requirements.category CHECK (주요 업무 / 자격요건 / 우대사항). */
-export const REQUIREMENT_CATEGORIES = ["responsibility", "required", "preferred"] as const;
-export type RequirementCategory = (typeof REQUIREMENT_CATEGORIES)[number];
-
-/** jd_requirements.importance CHECK. */
-export const REQUIREMENT_IMPORTANCES = ["high", "normal"] as const;
-export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
-
-/** jd_requirements.origin CHECK. */
-export const REQUIREMENT_ORIGINS = ["ai", "user"] as const;
-export type RequirementOrigin = (typeof REQUIREMENT_ORIGINS)[number];
+// R17 (4.24 #1·#2): `job_descriptions.extraction_status` and the `jd_requirements` CHECK mirrors
+// (category / importance / origin) are gone with their columns and table.
 
 // --- S7: drafts (DM A.9–A.11, AI-03 / AI-04 / AI-11) ---
 

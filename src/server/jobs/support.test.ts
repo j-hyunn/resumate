@@ -87,7 +87,7 @@ const base: JobRecord = {
   finishedAt: null,
   createdAt: "2026-10-26T00:00:00Z",
   updatedAt: "2026-10-26T00:00:01Z",
-  stepOutputs: { match: { v: 2, matches: [], privateModelOutput: true } }, // R17-shaped checkpoint (a pre-R17 one blocks the retry, QA-03)
+  stepOutputs: { match: { v: 3, items: [], privateModelOutput: true } }, // current (v3) checkpoint (an older one blocks the retry, QA-03)
   meta: { runBase: 1, waitBase: 0, retries: { match: { rate_limited: 2 } } },
 };
 

@@ -1,7 +1,6 @@
 import { AppError } from "@/lib/contracts/errors";
 import { loadCareerRows, type CareerRows } from "@/server/ai/context-pack/career-rows";
 import type { JdSentence } from "@/server/ai/context-pack/jd";
-import type { RequirementCategory, RequirementImportance } from "@/lib/contracts/enums";
 import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { AiWriterSupabaseClient, UserSupabaseClient } from "@/server/db/types";
@@ -17,7 +16,7 @@ import { parseSentences } from "@/server/services/application/db";
 export type InsightJd = {
   jobDescriptionId: string;
   updatedAt: string | null;
-  /** R17: the JD part of the AI-02 input hash (`insights.jd_text_hash`). */
+  /** The JD part of the AI-02 input hash; stored as `insights.raw_text_hash` (DM 2.7.0). */
   rawTextHash: string;
   /** DM 2.6.1: failures that ended before this belong to the old text. */
   rawTextEditedAt: string | null;
@@ -30,19 +29,6 @@ export type InsightJd = {
 export type InsightInputs = {
   jd: InsightJd;
   careerRows: CareerRows;
-};
-
-/**
- * A pre-R17 (v1) insight's requirement: the preserved `jd_requirements` row (R17-2). Read only to
- * show insights whose result points at row ids; nothing writes these rows any more.
- */
-export type LegacyRequirementRow = {
-  id: string;
-  category: RequirementCategory;
-  content: string;
-  importance: RequirementImportance;
-  source_sids: string[];
-  sort_order: number;
 };
 
 type Client = AiWriterSupabaseClient | UserSupabaseClient;
@@ -64,25 +50,6 @@ export async function loadInsightJd(db: Client, applicationProjectId: string): P
     sentences: parseSentences(data.sentences),
     positionTitle: data.position_title,
   };
-}
-
-/** Legacy (v1) `jd_requirements` rows of the JD, sort_order order (DM A.7) — v1 insight display only. */
-export async function loadLegacyRequirements(db: Client, jobDescriptionId: string): Promise<LegacyRequirementRow[]> {
-  const { data, error } = await db
-    .from("jd_requirements")
-    .select("id, category, content, importance, source_sids, sort_order")
-    .eq("job_description_id", jobDescriptionId)
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
-  if (error) throw mapDbError(error);
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    category: r.category as RequirementCategory,
-    content: r.content,
-    importance: r.importance as RequirementImportance,
-    source_sids: r.source_sids ?? [],
-    sort_order: r.sort_order,
-  }));
 }
 
 /** Everything AI-02 reads, or null when the project (or its JD) is gone. R17: no extraction gate. */
@@ -119,8 +86,11 @@ function rpcFailure(error: RpcError): InsightRpcError {
 export interface InsightStore {
   /** `begin_insight` → insights.id (idempotent per job). */
   begin(applicationProjectId: string, jobId: string): Promise<string>;
-  /** `complete_insight`. `applied: false` = stale run. */
-  complete(args: { insightId: string; jobId: string; runGeneration: number; payload: unknown }): Promise<{ applied: boolean; versionNo: number | null }>;
+  /**
+   * `complete_insight`. `applied: false` + `reason: 'stale_run'` = a newer generation owns the job,
+   * or the JD raw text changed after prepare (DM 2.6.1 narrow-gap defense) — nothing was saved.
+   */
+  complete(args: { insightId: string; jobId: string; runGeneration: number; payload: unknown }): Promise<{ applied: boolean; reason: string | null; versionNo: number | null }>;
   /** `fail_insight` (only the job's own generating row). */
   fail(insightId: string, jobId: string): Promise<boolean>;
 }
@@ -141,8 +111,12 @@ export function createInsightStore(writer: AiWriterSupabaseClient): InsightStore
         p_payload: payload as Json,
       });
       if (error) throw rpcFailure(error);
-      const row = (data ?? {}) as { applied?: unknown; version_no?: unknown };
-      return { applied: row.applied === true, versionNo: typeof row.version_no === "number" ? row.version_no : null };
+      const row = (data ?? {}) as { applied?: unknown; reason?: unknown; version_no?: unknown };
+      return {
+        applied: row.applied === true,
+        reason: typeof row.reason === "string" ? row.reason : null,
+        versionNo: typeof row.version_no === "number" ? row.version_no : null,
+      };
     },
     async fail(insightId, jobId) {
       const { data, error } = await writer.rpc("fail_insight", { p_insight_id: insightId, p_ai_job_id: jobId });

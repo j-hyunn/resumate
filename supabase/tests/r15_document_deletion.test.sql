@@ -19,7 +19,7 @@ insert into public.projects (id, user_id, experience_id, name, result) values
 insert into public.skills (id, user_id, name) values
   ('a0000000-4444-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'PostgreSQL');
 insert into public.insights (user_id, application_project_id, version_no, is_latest, status, result,
-                             match_stage_result, requirements_hash, career_snapshot_hash, input_hash,
+                             match_stage_result, raw_text_hash, career_snapshot_hash, input_hash,
                              schema_version, prompt_version, provider, model, model_tier, connection_tier,
                              completed_at)
 values ('a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001', 1, true, 'ready', '{}',

@@ -51,8 +51,8 @@ describe("prompt text carries no profile value (SD-6)", () => {
     expect(AI02_SYSTEM).not.toContain("seniority");
   });
 
-  it("AI-04 future_plan grounds 성장 방향 in the JD (SD-6)", () => {
-    expect(AI04_SYSTEM).toContain("성장 방향은 <jd>의 주요 업무 문장(S 번호)과 스킬 근거로 씁니다");
+  it("AI-04 future_plan grounds 성장 방향 in the insight requirements + skills (SD-6, v4.16 JR-5)", () => {
+    expect(AI04_SYSTEM).toContain("기여할 영역과 성장 방향은 <insight>의 요건과 스킬 근거로 씁니다");
   });
 
 });
@@ -80,14 +80,15 @@ describe("prompt text carries no mock-interview rule (R14)", () => {
 });
 
 /**
- * (R17, JD AI 처리 제거) AI-01 is gone — its prompt name is never reused.
- * `common.v4` → `common.v5` (REQ-1 dropped from the alias examples), so every
- * stored string moves. AI-02 v5 → v6 (raw sentences, one-call stage 1, M-n),
- * AI-04 generate/adjust v6 → v7 and extract/reply v1 → v2 (shared data rules:
- * no REQ-n, no requirement_refs, no no_requirements notice), AI-12 v7 → v8
- * (<gate_requirements> removed). AI-13 keeps its call versions.
+ * AI spec v4.16 0.v416 table, exactly (R17b): AI-01 is gone — its prompt name
+ * is never reused. `common.v4` → `common.v5` (REQ-1 dropped from the alias
+ * examples), so every stored string moves. AI-02 v5 → v6 (raw sentences,
+ * one-call stage 1, MT-n), AI-04 generate/adjust v6 → v7 and extract/reply
+ * v1 → v2 (<insight> instead of <jd>, no requirement_refs, no no_requirements
+ * notice), AI-12 reply v7 → v8 (<gate_gaps>), AI-12 extract and AI-13 keep
+ * their call versions.
  */
-describe("prompt versions (R17)", () => {
+describe("prompt versions (AI v4.16 0.v416)", () => {
   it("bumps the common suffix", () => {
     expect(COMMON_PROMPT_VERSION).toBe("common.v5");
   });
@@ -100,13 +101,13 @@ describe("prompt versions (R17)", () => {
     ["AI-04 adjust", AI04_ADJUST_PROMPT_VERSION, "ai-04.adjust.v7+common.v5"],
     ["AI-04 extract", AI04_EXTRACT_PROMPT_VERSION, "ai-04.extract.v2+common.v5"],
     ["AI-04 reply", AI04_REPLY_PROMPT_VERSION, "ai-04.reply.v2+common.v5"],
-    ["AI-12 extract", AI12_EXTRACT_PROMPT_VERSION, "ai-12.extract.v8+common.v5"],
     ["AI-12 reply", AI12_REPLY_PROMPT_VERSION, "ai-12.reply.v8+common.v5"],
   ])("%s is bumped", (_, actual, expected) => {
     expect(actual).toBe(expected);
   });
 
   it.each<[string, string, string]>([
+    ["AI-12 extract", AI12_EXTRACT_PROMPT_VERSION, "ai-12.extract.v7+common.v5"],
     ["AI-13 extract", AI13_EXTRACT_PROMPT_VERSION, "ai-13.extract.v3+common.v5"],
     ["AI-13 reply", AI13_REPLY_PROMPT_VERSION, "ai-13.reply.v3+common.v5"],
     ["AI-13 compose", AI13_COMPOSE_PROMPT_VERSION, "ai-13.compose.v2+common.v5"],
@@ -143,8 +144,35 @@ describe("prompt text carries no AI-01 requirement artifact (R17)", () => {
     expect(system).not.toMatch(/REQ-?\d|REQ 번호|gate_requirements|other_sids|seniority/);
   });
 
-  it("AI-04 has no requirement_refs field any more; AI-02 refs point at M-n", () => {
+  it("AI-02 refers to the match keys as MT-n only (no R17-first-cut M-n)", () => {
+    expect(AI02_SYSTEM).not.toMatch(/\bM-\d|\bM 번호/);
+  });
+
+  it("AI-04 has no requirement_refs field any more; AI-02 refs point at MT-n", () => {
     for (const system of [AI04_SYSTEM, AI04_EXTRACT_SYSTEM, AI04_REPLY_SYSTEM]) expect(system).not.toContain("requirement_refs");
-    expect(AI02_SYSTEM).toContain("requirement_refs에 관련 M 번호");
+    expect(AI02_SYSTEM).toContain("requirement_refs에 관련 MT 번호");
+  });
+
+  it("AI-02 stage 1 (v4.16 임시안): ≤ 15, requirement_text ≤ 120 + sids 1–5, no category / importance", () => {
+    expect(AI02_SYSTEM).toContain("최대 15개");
+    expect(AI02_SYSTEM).toContain("requirement_text: 공고 표현을 짧게 줄인 명사구 한 줄(120자 이내)");
+    expect(AI02_SYSTEM).toContain("sids: 그 요건이 적힌 문장의 S번호 1~5개");
+    expect(AI02_SYSTEM).toContain("사용자 경력에 맞춰 요건을 고르거나 바꾸거나 빼지 않습니다");
+    expect(AI02_SYSTEM).not.toMatch(/category|importance|sentence_refs/);
+  });
+
+  it("(JR-5) AI-04 reads no JD raw text: <insight> + <application>, insight is never evidence", () => {
+    for (const system of [AI04_SYSTEM, AI04_EXTRACT_SYSTEM, AI04_REPLY_SYSTEM]) {
+      expect(system).not.toMatch(/<jd>|<reference>|S 번호|JD 문장/);
+      expect(system).toContain("<insight>");
+      expect(system).toContain("인사이트의 문장을 evidence로 달거나 사실처럼 인용하지 않습니다");
+      expect(system).toContain("채용 공고 원문은 입력에 없습니다");
+    }
+  });
+
+  it("(JR-5) AI-12 reply steers the gate turn with <gate_gaps>, never as a source; extract has no gate rules", () => {
+    expect(AI12_REPLY_SYSTEM).toContain("<gate_gaps>는 사용자가 지원하려는 공고의 인사이트에서");
+    expect(AI12_REPLY_SYSTEM).toContain("정리 결과의 출처도 아닙니다");
+    expect(AI12_EXTRACT_SYSTEM).not.toContain("지원 공고 보완점");
   });
 });

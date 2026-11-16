@@ -50,8 +50,8 @@ select is(pg_temp.check_values('evidence_links_owner_type_check'),
           array['application_document', 'chat_message', 'insight'],
           'evidence owner_type: interview owners removed (R15: draft_section out, application_document in)');
 select is(pg_temp.check_values('evidence_links_source_type_check'),
-          array['education', 'experience', 'jd_requirement', 'jd_sentence', 'profile', 'project', 'project_deliverable',
-                'skill', 'user_note'], 'evidence source_type: interview_answer removed');
+          array['education', 'experience', 'jd_sentence', 'profile', 'project', 'project_deliverable',
+                'skill', 'user_note'], 'evidence source_type: interview_answer removed (R17: jd_requirement removed)');
 select is(pg_temp.check_values('writing_chats_return_target_check'),
           array['career_description', 'cover_letter', 'feature', 'insight', 'object'], 'return_target feature: 3 values (+ the object / feature literals)');
 select is_empty($$select conname from pg_constraint where conname = 'evidence_links_detached_check'$$,
@@ -76,7 +76,7 @@ insert into public.job_descriptions (id, user_id, application_project_id, raw_te
 insert into public.application_stage_events (user_id, application_project_id, event_type, to_stage) values
   ('a1400000-0000-0000-0000-000000000001', 'a1400000-aaaa-0000-0000-000000000001', 'created', 'before_apply');
 insert into public.insights (id, user_id, application_project_id, version_no, is_latest, status, result,
-                             match_stage_result, requirements_hash, career_snapshot_hash, input_hash, schema_version,
+                             match_stage_result, raw_text_hash, career_snapshot_hash, input_hash, schema_version,
                              prompt_version, provider, model, model_tier, connection_tier, completed_at)
 values ('a1400000-1a51-0000-0000-000000000001', 'a1400000-0000-0000-0000-000000000001',
         'a1400000-aaaa-0000-0000-000000000001', 1, true, 'ready', '{}', '{}', 'rh', 'ch', 'ih', 1, 'pv', 'gemini', 'm',

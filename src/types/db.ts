@@ -85,9 +85,11 @@ export type StageOutcome = "passed" | "failed"
 export type StageEventType = "created" | "stage_changed" | "outcome_changed"
 
 export type FieldSource = "user" | "ai"
-export type ExtractionStatus = "pending" | "running" | "succeeded" | "failed"
+/** @deprecated R17 (4.24 #1): `jd_requirements` was dropped — mock fixtures / legacy screens only. */
 export type JdRequirementCategory = "responsibility" | "required" | "preferred"
+/** @deprecated R17 (4.24 #1): mock fixtures / legacy screens only. */
 export type JdRequirementImportance = "high" | "normal"
+/** @deprecated R17 (4.24 #1): mock fixtures / legacy screens only. */
 export type JdRequirementOrigin = "ai" | "user"
 
 export type InsightStatus = "generating" | "ready" | "failed"
@@ -139,7 +141,7 @@ export type EvidenceSourceType =
   /** @deprecated R4: no longer stored (DM v4.4); kept for the mock fixtures */
   | "achievement"
   | "skill"
-  | "jd_requirement"
+  /** R17 (4.24 #5, JR-Q1): insight evidence only — the 자기소개서 never cites the posting (JR-5) */
   | "jd_sentence"
   | "user_note"
 /** project_details STAR fields used as evidence_links.source_field for project_detail */
@@ -713,21 +715,6 @@ export type ApplicationStageEvent = Row<"application_stage_events", {
   to_outcome: StageOutcome | null
 }>
 
-/** AI-01 seniority (03 AI-01 output): e.g. { min_years: 5, max_years: null, label: "5년 이상", source_sids: ["S3"] } */
-export interface JdSeniority {
-  min_years: number | null
-  max_years: number | null
-  label: string
-  source_sids: string[]
-}
-
-/** job_descriptions.extraction (AI-01 output kept on the row) */
-export interface JdExtraction {
-  is_likely_jd?: boolean
-  seniority?: JdSeniority | null
-  [key: string]: unknown
-}
-
 export interface JdSentence {
   sid: string
   text: string
@@ -735,28 +722,35 @@ export interface JdSentence {
   end: number
 }
 
-/** job_descriptions (A.6) */
+/** job_descriptions (A.6). R17 (4.24 #2): the extraction columns and `detected_language` are dropped. */
 export type JobDescription = Row<"job_descriptions", {
   sentences: JdSentence[]
   company_name_source: FieldSource | null
   position_title_source: FieldSource | null
-  extraction_status: ExtractionStatus
-  extraction: JdExtraction | null
-  extraction_provider: AiProviderName | null
-  tech_keywords: { keyword: string; source_sids: string[]; }[]
-  /**
-   * (v4.15, CF-10·CF-A16) 공고 URL. 컬럼이 아직 배포되지 않아 **생성 타입 대기**이고 real 분기가
-   * 채우지 않는다 — 그래서 optional이다 (백엔드 요청). S-46 머리 "JD 상세"가 읽는다.
-   */
+  /** (v4.15, CF-10·CF-A16) 공고 URL. S-46 머리 "JD 상세"가 읽는다. */
   source_url?: string | null
 }>
 
-/** jd_requirements (A.7) */
-export type JdRequirement = Row<"jd_requirements", {
+/**
+ * @deprecated R17 (4.24 #1): the `jd_requirements` table is dropped. Kept as a plain shape only for
+ * the mock fixtures and the legacy S-15 requirement column / S-10 "관련 요건" line (UI 요청) —
+ * the real data layer never returns one.
+ */
+export interface JdRequirement {
+  id: Uuid
+  user_id: Uuid
+  created_at: Timestamp
+  updated_at: Timestamp
+  job_description_id: Uuid
   category: JdRequirementCategory
+  content: string
+  keywords: string[]
   importance: JdRequirementImportance
+  source_sids: string[]
+  sort_order: number
   origin: JdRequirementOrigin
-}>
+  is_user_edited: boolean
+}
 
 // ---------------------------------------------------------------------------
 // 2.7 인사이트·서류
@@ -766,37 +760,34 @@ export type RequirementMatchStatus = "met" | "partial" | "no_evidence"
 export type GapActionType = "add_data" | "reframe" | "prepare_answer"
 
 /**
- * R17 v2 requirement (`schema_version` 2): the model reads it from the JD raw text, so it lives in the
- * result itself. `requirement_id` is then `M{n}` (per insight), not a `jd_requirements` row id.
+ * insights.result stored form, **schema_version 2** (DM v4.16 2.7.0, AI-02 R17 임시 — evidence lives in
+ * evidence_links, item_key only). Stage 1 reads the requirements from the JD raw text: each
+ * `requirement_matches[]` element has its own `match_key` (`MT-n`), `requirement_text` and the JD
+ * sentences it came from (`sids`); stage 2 points at them with `match_keys`.
+ * A schema-1 row (before R17) is not shown — `normalizeInsightResult` returns empty lists for it.
  */
-export interface InsightResultRequirement {
-  content: string
-  category: JdRequirementCategory
-  importance: JdRequirementImportance
-  /** JD sentences (`S{n}`) it quotes */
-  sentence_ids: string[]
-}
-
-/** insights.result stored form (03 AI-02; evidence moved to evidence_links, item_key only) */
 export interface InsightResult {
   schema_version: number
   basis_note: string
   data_sufficiency: { level: "ok" | "thin"; hints: string[] }
   requirement_matches: Array<{
+    /** `requirement_matches.MT-n` */
     item_key: string
-    /** v1: jd_requirements.id · v2 (R17): `M{n}` */
-    requirement_id: Uuid
-    /** v2 (R17) only; v1 rows read the requirement from `jd_requirements` */
-    requirement?: InsightResultRequirement
+    /** `MT-n` */
+    match_key: string
+    requirement_text: string
+    /** JD sentences (`S{n}`) — "공고 원문" link */
+    sids: string[]
     status: RequirementMatchStatus
     rationale: string
     missing_aspect: string | null
   }>
   summary_counts: { met: number; partial: number; no_evidence: number }
-  strengths: Array<{ item_key: string; title: string; description: string; requirement_ids: Uuid[] }>
+  strengths: Array<{ item_key: string; title: string; description: string; match_keys: string[] }>
   gaps: Array<{
+    /** `gaps.{n}` — `insight_item_key` of a gate chat started from this gap (DM 2.7.0) */
     item_key: string
-    requirement_ids: Uuid[]
+    match_keys: string[]
     gap_kind: RequirementMatchStatus
     description: string
     actions: Array<{ item_key: string; type: GapActionType; text: string }>
@@ -809,22 +800,26 @@ export interface InsightResult {
       rank: number
       project_id: Uuid
       reason: string
-      requirement_ids: Uuid[]
+      match_keys: string[]
     }>
   }
 }
 
 /**
- * insights.match_stage_result — AI-02 stage 1 (요건 매칭) stored form: the merged batch
- * matches, evidence removed (item_key only). Filled as soon as stage 1 finishes so S-16
- * can show the 판정 표 before stage 2 (C-03 부분 결과, A3 UQ-65).
+ * insights.match_stage_result — AI-02 stage 1 stored form (DM 2.7.0): `{ prompt_version, items }`,
+ * evidence removed, no batch fields. Written with the insight (complete_insight).
  */
 export interface InsightMatchStageResult {
-  schema_version: number
-  /** batches finished so far / total batches */
-  batches_done: number
-  batches_total: number
-  requirement_matches: InsightResult["requirement_matches"]
+  prompt_version: string
+  items: Array<{
+    match_key: string
+    requirement_text: string
+    sids: string[]
+    status: RequirementMatchStatus
+    model_status: RequirementMatchStatus
+    rationale: string
+    missing_aspect: string | null
+  }>
 }
 
 /** insights (A.8) */
@@ -1272,16 +1267,25 @@ export type AiRetryRefusalCode =
   | "ai_connection_changed"
 export type AiGateRefusalCode = AiStartRefusalCode | AiRetryRefusalCode
 // R17 [가정 R17-9]: `ApplicationCreateRefusalCode` removed — create_application_project has no AI gate.
-/** RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1), in check order */
+/**
+ * JR-6 (DM 2.6.2, 4.24 #10): why the create action did not start the insight. Same list as
+ * `INSIGHT_SKIP_REASONS` in lib/contracts/application.ts.
+ */
+export type InsightSkipReason =
+  | "ai_not_connected"
+  | "key_invalid"
+  | "consent_required"
+  | "insufficient_data"
+  | "no_sentences"
+  | "in_progress"
+  | "start_failed"
+
+/** RPC update_jd_raw_text (JR-7, 04 §2.6.1), in check order */
 export type JdRawTextRefusalCode =
   | "invalid_raw_text"
-  | "invalid_raw_text_hash"
-  | "invalid_sentences"
+  | "jd_no_sentences"
   | "job_description_not_found"
   | "jd_job_in_progress"
-  | "jd_raw_text_locked"
-  | "jd_failure_not_input"
-  | "jd_has_results"
   | "jd_raw_text_unchanged"
 
 export type DeletionEntityType =

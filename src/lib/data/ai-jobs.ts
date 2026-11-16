@@ -66,14 +66,19 @@ async function realJobById(jobId: string): Promise<AiJobView | null> {
   return row ? realJobView(row) : null
 }
 
-/** Mock AI-02 stage-1 matches for an application's requirements (deterministic by order). */
+/**
+ * Mock AI-02 stage-1 matches (R17 schema 2, DM 2.7.0): one `MT-n` per JD sentence after the title (≤ 15),
+ * deterministic by order — the mock reads the requirements from the raw text like the real stage 1.
+ */
 function mockMatches(db: MockDb, applicationProjectId: string) {
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  const reqs = db.jd_requirements.filter((r) => r.job_description_id === jd?.id).sort((a, b) => a.sort_order - b.sort_order)
+  const sentences = (jd?.sentences ?? []).slice(1, 16)
   const statuses = ["met", "partial", "no_evidence"] as const
-  return reqs.map((r, i) => ({
-    item_key: `requirement_matches.${r.id}`,
-    requirement_id: r.id,
+  return sentences.map((sentence, i) => ({
+    item_key: `requirement_matches.MT-${i + 1}`,
+    match_key: `MT-${i + 1}`,
+    requirement_text: sentence.text.slice(0, 120),
+    sids: [sentence.sid],
     status: statuses[i % 3],
     rationale: "입력된 경력 데이터 기준 판단입니다.",
     missing_aspect: i % 3 === 0 ? null : "구체적인 본인 기여",
@@ -84,21 +89,24 @@ function mockMatches(db: MockDb, applicationProjectId: string) {
 function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
   const now = new Date().toISOString()
 
-  // AI-02 stage 1 partial result: fill match_stage_result per finished batch (A3 UQ-65)
+  // AI-02 stage 1 partial result (A3 UQ-65): stage 1 is one call (R17), so the whole list appears once it is done
   if (job.job_type === "insight") {
     const insight = db.insights.find((i) => i.ai_job_id === job.id)
     const p = job.progress
-    if (insight && p && p.stage !== "prepare") {
-      const total = p.stage === "match" ? (p.total ?? 1) : (job.params?.mock_units as number | undefined) ?? p.total ?? 1
-      const done = p.stage === "match" ? (p.done ?? 0) : total
-      if (done > 0 && (insight.match_stage_result?.batches_done ?? 0) < done) {
-        const all = mockMatches(db, insight.application_project_id)
-        const per = Math.ceil(all.length / Math.max(1, total))
+    if (insight && p && p.stage !== "prepare" && !insight.match_stage_result) {
+      const done = p.stage === "match" ? (p.done ?? 0) : 1
+      if (done > 0) {
         insight.match_stage_result = {
-          schema_version: 1,
-          batches_done: done,
-          batches_total: total,
-          requirement_matches: all.slice(0, Math.min(all.length, per * done)),
+          prompt_version: "ai-02.match.v6+common.v5",
+          items: mockMatches(db, insight.application_project_id).map((m) => ({
+            match_key: m.match_key,
+            requirement_text: m.requirement_text,
+            sids: m.sids,
+            status: m.status,
+            model_status: m.status,
+            rationale: m.rationale,
+            missing_aspect: m.missing_aspect,
+          })),
         }
       }
     }
@@ -129,8 +137,9 @@ function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
         is_latest: true,
         completed_at: now,
         updated_at: now,
+        schema_version: 2,
         result: {
-          schema_version: 1,
+          schema_version: 2,
           basis_note: "입력된 경력 데이터 기준 분석입니다",
           data_sufficiency: { level: "ok", hints: [] },
           requirement_matches: matches,
@@ -270,7 +279,7 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
 
 /**
  * Mock: advances this application's running async jobs and writes what they produced. For rules that
- * read "no job is running" (update_failed_jd_raw_text condition 1). `jd_extraction` = R17 legacy rows, skipped.
+ * read "no insight is running" (update_jd_raw_text condition 3). `jd_extraction` = R17 legacy rows, skipped.
  */
 export function refreshApplicationJobs(db: MockDb, applicationProjectId: string) {
   for (const job of db.ai_jobs) {

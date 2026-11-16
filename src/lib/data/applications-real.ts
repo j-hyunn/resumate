@@ -2,7 +2,8 @@ import "server-only"
 /**
  * W3: the real branch of applications.ts (S-13 / S-14 / S-15 / S-16 / S-17~S-19 reads). The screens read table
  * rows, so the summaries run the same rules as the mock (`summarize`) over real rows and take the
- * values the services decide (progress counts) from the services. R17: no extraction state.
+ * values the services decide (progress counts) from the services. R17: no extraction state, the JD's
+ * raw text is editable unless an insight runs (JR-7), creation may start the insight (JR-6).
  */
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
@@ -19,12 +20,11 @@ import type {
   ApplicationStage,
   Insight,
   InsightResult,
-  InsightResultRequirement,
   JdRawTextRefusalCode,
   JdRequirement,
   JobDescription,
 } from "@/types/db"
-import type { ApplicationSummary, JobDescriptionWithRequirements, ListApplicationsOptions, UpdateFailedJdRawTextResult } from "./applications"
+import type { ApplicationSummary, CreateApplicationResult, JobDescriptionWithRequirements, ListApplicationsOptions, UpdateFailedJdRawTextResult } from "./applications"
 import { summarize } from "./applications"
 import { refusalOf, unwrap } from "./source"
 
@@ -43,7 +43,7 @@ async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProje
   const ids = items.map((i) => i.id)
   const [projects, jds, insights, jobs] = await Promise.all([
     supabase.from("application_projects").select("*").in("id", ids),
-    supabase.from("job_descriptions").select("id, application_project_id, company_name, position_title, extraction_status, raw_text_edited_at").in("application_project_id", ids),
+    supabase.from("job_descriptions").select("id, application_project_id, company_name, position_title, raw_text_edited_at").in("application_project_id", ids),
     supabase.from("insights").select("id, application_project_id, status, is_latest, completed_at, updated_at, ai_job_id").in("application_project_id", ids),
     supabase.from("ai_jobs").select(FEATURE_JOB_COLUMNS).in("application_project_id", ids).order("created_at", { ascending: true }),
   ])
@@ -87,7 +87,10 @@ export async function realGetApplicationProject(id: string): Promise<Application
 
 // ---------------- S-14 ----------------
 
-/** R17 [가정 R17-9]: no AI gate on creation, and nothing starts afterwards (no AI-01). */
+/**
+ * No AI gate on creation (4.24 #9). JR-6: the create action may start the insight right after a new
+ * row — `insight_job_id` / `insight_skip_reason` carry what happened (4.24 #10).
+ */
 export async function realCreateApplicationProject(input: {
   raw_text: string
   name?: string | null
@@ -96,7 +99,7 @@ export async function realCreateApplicationProject(input: {
   position_title?: string | null
   /** R15: the posting URL (CF-10), optional. */
   source_url?: string | null
-}): Promise<ApplicationProject> {
+}): Promise<CreateApplicationResult> {
   const created = unwrap(
     await applicationActions.createApplicationProject({
       id: randomUUID(),
@@ -111,7 +114,7 @@ export async function realCreateApplicationProject(input: {
   const { supabase } = await requireConsentedUser()
   const { data, error } = await supabase.from("application_projects").select("*").eq("id", created.applicationProjectId).single()
   if (error) throw mapDbError(error)
-  return data as unknown as ApplicationProject
+  return { ...(data as unknown as ApplicationProject), insight_job_id: created.insightJobId, insight_skip_reason: created.insightSkipReason }
 }
 
 // ---------------- S-15 ----------------
@@ -122,28 +125,20 @@ export async function realGetJobDescription(applicationProjectId: string): Promi
   if ("error" in view && view.error.code === "not_found") return null
   const jd = unwrap(view)
   const { supabase } = await requireConsentedUser()
-  // R17: the row is read as stored; legacy `jd_requirements` rows are still listed (pre-R17 JDs) so
-  // v1 insights keep their requirement texts on S-16. New JDs have none.
-  const [row, requirements] = await Promise.all([
-    supabase.from("job_descriptions").select("*").eq("id", jd.jobDescriptionId).single(),
-    supabase.from("jd_requirements").select("*").eq("job_description_id", jd.jobDescriptionId).order("sort_order"),
-  ])
+  const row = await supabase.from("job_descriptions").select("*").eq("id", jd.jobDescriptionId).single()
   if (row.error) throw mapDbError(row.error)
   return {
     ...(row.data as unknown as JobDescription),
-    // legacy column (R17: never filled any more; null in the DB)
-    tech_keywords: (row.data.tech_keywords ?? []) as unknown as JobDescription["tech_keywords"],
-    requirements: rowsOf(requirements) as unknown as JdRequirement[],
     raw_text_editable: jd.rawTextEditable,
-    raw_text_lock: jd.rawTextLock,
+    raw_text_locked_reason: jd.rawTextLockedReason,
   }
 }
 
 const RAW_TEXT_REFUSALS = [...JD_RAW_TEXT_REFUSAL_CODES, "not_found", "invalid_input"] as const
 
-/** spec-gaps ⑰: the DM's codes → the screen's refusal names. */
+/** RPC update_jd_raw_text (JR-7): the DM's codes → the screen's refusal names. */
 export async function realUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
-  const r = refusalOf(await applicationActions.updateFailedJdRawText({ id: applicationProjectId, rawText }), RAW_TEXT_REFUSALS)
+  const r = refusalOf(await applicationActions.updateJdRawText({ id: applicationProjectId, rawText }), RAW_TEXT_REFUSALS)
   if ("refused" in r) {
     const refused: JdRawTextRefusalCode = r.refused === "not_found" ? "job_description_not_found" : r.refused === "invalid_input" ? "invalid_raw_text" : r.refused
     return { refused }
@@ -151,18 +146,14 @@ export async function realUpdateFailedJdRawText(applicationProjectId: string, ra
   return {
     application_project_id: r.data.applicationProjectId,
     job_description_id: r.data.jobDescriptionId,
-    extraction_status: "pending",
     raw_text_edited_at: r.data.rawTextEditedAt,
-    ai_run_allowed: r.data.aiRunAllowed,
   }
 }
 
+/** R17 (4.24 #1): `jd_requirements` is dropped — there is no requirement row to show (S-10 "관련 요건", UI 요청). */
 export async function realGetJdRequirement(id: string): Promise<JdRequirement | null> {
-  if (!isUuid(id)) return null
-  const { supabase } = await requireConsentedUser()
-  const { data, error } = await supabase.from("jd_requirements").select("*").eq("id", id).maybeSingle()
-  if (error) throw mapDbError(error)
-  return data as unknown as JdRequirement | null
+  void id
+  return null
 }
 
 // ---------------- S-16 ----------------
@@ -173,46 +164,35 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const strs = (v: unknown): string[] => arr(v).filter((x): x is string => typeof x === "string")
 const str = (v: unknown): string => (typeof v === "string" ? v : "")
 
-/** R17 v2 `requirement_matches[].requirement` → typed (null when absent / malformed). */
-function resultRequirement(value: unknown): InsightResultRequirement | null {
-  const r = obj(value)
-  const content = str(r.content)
-  if (!content) return null
-  return {
-    content,
-    category: r.category === "responsibility" || r.category === "preferred" ? r.category : "required",
-    importance: r.importance === "high" ? "high" : "normal",
-    sentence_ids: strs(r.sentence_ids),
-  }
-}
-
 /**
  * The stored result, with the keys evidence hangs on filled the way services/insight/read.ts fills them
  * (`item_key` may be absent in stored rows), so a chip lookup and the service read agree.
+ * Schema 2 only (DM 2.7.0): a schema-1 result is not converted — it comes back with its version and empty
+ * lists (the screen shows "다시 만들어야 해요", UI 요청).
  */
-export function normalizeInsightResult(value: unknown): InsightResult | null {
+export function normalizeInsightResult(value: unknown, schemaVersion: number | null = 2): InsightResult | null {
   if (!value || typeof value !== "object") return null
-  const r = value as Obj
+  const version = schemaVersion ?? 1
+  const r = (version === 2 ? value : {}) as Obj
   const strategy = obj(r.strategy)
   const counts = obj(r.summary_counts)
   const count = (k: string) => (typeof counts[k] === "number" ? (counts[k] as number) : 0)
   const sufficiency = obj(r.data_sufficiency)
   return {
-    schema_version: typeof r.schema_version === "number" ? r.schema_version : 1,
+    schema_version: version,
     basis_note: str(r.basis_note),
     data_sufficiency: { level: sufficiency.level === "thin" ? "thin" : "ok", hints: strs(sufficiency.hints) },
     requirement_matches: arr(r.requirement_matches).flatMap((raw) => {
       const m = obj(raw)
-      const requirementId = str(m.requirement_id)
-      if (!requirementId || (m.status !== "met" && m.status !== "partial" && m.status !== "no_evidence")) return []
-      // R17 v2: the requirement travels with the match (v1 has none — read from jd_requirements)
-      const requirement = resultRequirement(m.requirement)
-      return [{ item_key: str(m.item_key) || `requirement_matches.${requirementId}`, requirement_id: requirementId, ...(requirement ? { requirement } : {}), status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
+      const matchKey = str(m.match_key)
+      const text = str(m.requirement_text)
+      if (!matchKey || !text || (m.status !== "met" && m.status !== "partial" && m.status !== "no_evidence")) return []
+      return [{ item_key: str(m.item_key) || `requirement_matches.${matchKey}`, match_key: matchKey, requirement_text: text, sids: strs(m.sids), status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
     }),
     summary_counts: { met: count("met"), partial: count("partial"), no_evidence: count("no_evidence") },
     strengths: arr(r.strengths).map((raw, n) => {
       const s = obj(raw)
-      return { item_key: str(s.item_key) || `strengths.${n}`, title: str(s.title), description: str(s.description), requirement_ids: strs(s.requirement_ids) }
+      return { item_key: str(s.item_key) || `strengths.${n}`, title: str(s.title), description: str(s.description), match_keys: strs(s.match_keys) }
     }),
     gaps: arr(r.gaps).flatMap((raw, n) => {
       const g = obj(raw)
@@ -220,7 +200,7 @@ export function normalizeInsightResult(value: unknown): InsightResult | null {
       return [
         {
           item_key: str(g.item_key) || `gaps.${n}`,
-          requirement_ids: strs(g.requirement_ids),
+          match_keys: strs(g.match_keys),
           gap_kind: g.gap_kind,
           description: str(g.description),
           actions: arr(g.actions).flatMap((rawAction, m) => {
@@ -237,7 +217,7 @@ export function normalizeInsightResult(value: unknown): InsightResult | null {
         const p = obj(raw)
         const projectId = str(p.project_id)
         if (!projectId) return []
-        return [{ item_key: str(p.item_key) || `strategy.project_priorities.${n}`, rank: typeof p.rank === "number" ? p.rank : n + 1, project_id: projectId, reason: str(p.reason), requirement_ids: strs(p.requirement_ids) }]
+        return [{ item_key: str(p.item_key) || `strategy.project_priorities.${n}`, rank: typeof p.rank === "number" ? p.rank : n + 1, project_id: projectId, reason: str(p.reason), match_keys: strs(p.match_keys) }]
       }),
     },
   }
@@ -271,8 +251,8 @@ export async function realGetInsightState(applicationProjectId: string): Promise
           version_no: 0,
           result: null,
           match_stage_result: null,
-          requirements_hash: null,
-          jd_text_hash: null,
+          raw_text_hash: null,
+          schema_version: null,
           completed_at: null,
           provider: job.provider,
           model_tier: job.model_tier,
@@ -281,7 +261,7 @@ export async function realGetInsightState(applicationProjectId: string): Promise
           updated_at: job.created_at,
         } as unknown as Insight)
       : null
-  return { latest: latest ? ({ ...latest, result: normalizeInsightResult(latest.result) } as unknown as Insight) : null, generating }
+  return { latest: latest ? ({ ...latest, result: normalizeInsightResult(latest.result, latest.schema_version) } as unknown as Insight) : null, generating }
 }
 
 /**

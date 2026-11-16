@@ -9,9 +9,9 @@ import {
   MATCH_STATUSES,
   type GapActionType,
   type GapKind,
+  INSIGHT_SCHEMA_VERSION,
   type InsightActiveJob,
   type InsightLastFailure,
-  type InsightRequirement,
   type InsightResultView,
   type InsightView,
   type MatchStatus,
@@ -20,8 +20,7 @@ import type { Json } from "@/server/db/database.types";
 import { mapDbError } from "@/server/db/errors";
 import type { UserSupabaseClient } from "@/server/db/types";
 import { loadEvidenceChips } from "@/server/services/evidence";
-import { loadInsightInputs, loadInsightJd, loadLegacyRequirements, type InsightInputs } from "./db";
-import { isV2Result, legacyRequirements, v2Requirements } from "./requirements";
+import { loadInsightInputs, loadInsightJd, type InsightInputs } from "./db";
 import { INSIGHT_JOB_TYPE, type InsightPipeline } from "./job";
 
 /**
@@ -29,12 +28,14 @@ import { INSIGHT_JOB_TYPE, type InsightPipeline } from "./job";
  * C-03, C-19, C-20). User session only (RLS = ownership).
  *
  * - The latest ready insight (or a requested ready version), its items with
- *   evidence chips (shared evidence service), requirement contents instead of
- *   aliases, project names for priorities, the C-19 provider badge.
- * - F-P2-07 MVP "데이터 변경됨": `stale` when the current career snapshot hash
- *   or the JD raw-text hash differs from the stored one (same builders as the job).
- * - R17: requirements come from the shown insight — v2 from its result, v1 from
- *   the preserved `jd_requirements` rows (no extraction status any more).
+ *   evidence chips (shared evidence service), the schema-2 requirement items
+ *   (`MT-n`, `requirement_text`, `sids`) and `match_keys`, project names for
+ *   priorities, the C-19 provider badge.
+ * - `schemaVersion` (DM 2.7.0): a schema-1 insight is returned without a body —
+ *   the screen asks to regenerate it (UX DM-12).
+ * - F-P2-07 MVP "데이터 변경됨": `staleReasons.career` = the current career snapshot
+ *   hash differs (same builder as the job); `staleReasons.rawText` =
+ *   `insights.raw_text_hash` ≠ `job_descriptions.raw_text_hash` (DM 2.6.1).
  * - The insight job in flight (C-03) and the last failed run after the shown
  *   result (C-20). A `generating` row is never shown; whether something is
  *   generating is decided by the job (db notes: a generating row whose job
@@ -50,7 +51,7 @@ export type InsightReadDeps = {
 const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
 const INSIGHT_COLUMNS =
-  "id, version_no, status, is_latest, result, jd_text_hash, career_snapshot_hash, provider, model, model_tier, connection_tier, prompt_version, created_at, completed_at";
+  "id, version_no, status, is_latest, result, schema_version, raw_text_hash, career_snapshot_hash, provider, model, model_tier, connection_tier, prompt_version, created_at, completed_at";
 
 type InsightRow = {
   id: string;
@@ -58,8 +59,10 @@ type InsightRow = {
   status: string;
   is_latest: boolean;
   result: Json | null;
-  /** R17 (v2). Null on a v1 row (it stored `requirements_hash`, not read any more). */
-  jd_text_hash: string | null;
+  /** 2 = the current shape; 1 = made from the dropped requirement list (no body shown). */
+  schema_version: number | null;
+  /** The JD raw-text hash the insight was made from (DM 2.7.0; old rows were back-filled). */
+  raw_text_hash: string | null;
   career_snapshot_hash: string | null;
   provider: string | null;
   model: string | null;
@@ -101,25 +104,30 @@ export function toInsightResultView(
   row: InsightRow,
   ctx: {
     chips: ChipsByItem;
-    requirements: ReadonlyMap<string, InsightRequirement>;
     projectNames: ReadonlyMap<string, string>;
-    stale: { career: boolean; requirements: boolean };
+    stale: { career: boolean; rawText: boolean };
   },
 ): InsightResultView {
-  const r = obj(row.result);
-  const chipsOf = (key: string) => ctx.chips.get(key) ?? [];
+  const schemaVersion = row.schema_version ?? 1;
+  // JR-Q3 (b): a schema-1 result is not converted and not shown — empty body, "다시 만들어야 해요".
+  const r = schemaVersion === INSIGHT_SCHEMA_VERSION ? obj(row.result) : {};
+  // DM 2.6.1 / 2.7.0 (QA-06): the insight's `jd_sentence` chips follow `staleReasons.rawText` — after a raw-text
+  // edit their `sid` / offsets belong to the old split, so they read "changed" and carry no locator to highlight.
+  const chipsOf = (key: string) => (ctx.chips.get(key) ?? []).map((c) => (ctx.stale.rawText ? withRawTextStale(c) : c));
 
   const requirementMatches = arr(r.requirement_matches).flatMap((raw) => {
     const m = obj(raw);
     const status = oneOf<MatchStatus>(MATCH_STATUSES, m.status);
-    const requirementId = str(m.requirement_id);
-    if (!status || !requirementId) return [];
-    const itemKey = str(m.item_key) || `requirement_matches.${requirementId}`;
+    const matchKey = str(m.match_key);
+    const requirementText = str(m.requirement_text);
+    if (!status || !matchKey || !requirementText) return [];
+    const itemKey = str(m.item_key) || `requirement_matches.${matchKey}`;
     return [
       {
         itemKey,
-        requirementId,
-        requirement: ctx.requirements.get(requirementId) ?? null,
+        matchKey,
+        requirementText,
+        sentenceIds: strs(m.sids),
         status,
         rationale: str(m.rationale),
         missingAspect: strOrNull(m.missing_aspect),
@@ -131,7 +139,7 @@ export function toInsightResultView(
   const strengths = arr(r.strengths).map((raw, n) => {
     const s = obj(raw);
     const itemKey = str(s.item_key) || `strengths.${n}`;
-    return { itemKey, title: str(s.title), description: str(s.description), requirementIds: strs(s.requirement_ids), evidence: chipsOf(itemKey) };
+    return { itemKey, title: str(s.title), description: str(s.description), matchKeys: strs(s.match_keys), evidence: chipsOf(itemKey) };
   });
 
   const gaps = arr(r.gaps).flatMap((raw, n) => {
@@ -139,16 +147,16 @@ export function toInsightResultView(
     const gapKind = oneOf<GapKind>(GAP_KINDS, g.gap_kind);
     if (!gapKind) return [];
     const itemKey = str(g.item_key) || `gaps.${n}`;
-    const requirementIds = strs(g.requirement_ids);
+    const matchKeys = strs(g.match_keys);
     const actions = arr(g.actions).flatMap((rawAction, m) => {
       const a = obj(rawAction);
       const type = oneOf<GapActionType>(GAP_ACTION_TYPES, a.type);
       if (!type) return [];
       const actionKey = str(a.item_key) || `gaps.${n}.actions.${m}`;
       // F-P2-09: add_data opens S-36 / S-10 with "관련 요건: …" from the gap's requirements.
-      return [{ itemKey: actionKey, type, text: str(a.text), evidence: chipsOf(actionKey), relatedRequirementIds: type === "add_data" ? requirementIds : [] }];
+      return [{ itemKey: actionKey, type, text: str(a.text), evidence: chipsOf(actionKey), relatedMatchKeys: type === "add_data" ? matchKeys : [] }];
     });
-    return [{ itemKey, requirementIds, gapKind, description: str(g.description), evidence: chipsOf(itemKey), actions }];
+    return [{ itemKey, matchKeys, gapKind, description: str(g.description), evidence: chipsOf(itemKey), actions }];
   });
 
   const strategy = obj(r.strategy);
@@ -167,7 +175,7 @@ export function toInsightResultView(
           projectId,
           projectName: ctx.projectNames.get(projectId) ?? null,
           reason: str(p.reason),
-          requirementIds: strs(p.requirement_ids),
+          matchKeys: strs(p.match_keys),
           evidence: chipsOf(itemKey),
         },
       ];
@@ -190,9 +198,10 @@ export function toInsightResultView(
     modelTier: enumOrNull<ModelTier>(MODEL_TIERS, row.model_tier),
     connectionTier: enumOrNull<ConnectionTier>(CONNECTION_TIERS, row.connection_tier),
     promptVersion: row.prompt_version,
-    stale: ctx.stale.career || ctx.stale.requirements,
+    schemaVersion,
+    stale: ctx.stale.career || ctx.stale.rawText,
     staleReasons: ctx.stale,
-    basisNote: str(r.basis_note) || "입력된 경력 데이터 기준 분석입니다",
+    basisNote: schemaVersion === INSIGHT_SCHEMA_VERSION ? str(r.basis_note) || "입력된 경력 데이터 기준 분석입니다" : "",
     dataSufficiency: { level: sufficiency.level === "thin" ? "thin" : "ok", hints: strs(sufficiency.hints) },
     summaryCounts,
     requirementMatches,
@@ -203,6 +212,13 @@ export function toInsightResultView(
       projectPriorities,
     },
   };
+}
+
+/** A `jd_sentence` chip of an insight whose JD raw text changed: "변경됨", no old-split locator. */
+export function withRawTextStale(chip: EvidenceChip): EvidenceChip {
+  if (chip.sourceType !== "jd_sentence") return chip;
+  const target = chip.target && chip.target.type === "jd_sentence" ? { ...chip.target, sid: null, start: null, end: null } : chip.target;
+  return { ...chip, state: chip.state === "deleted" ? "deleted" : "changed", target };
 }
 
 /**
@@ -306,30 +322,23 @@ export async function getInsight(user: UserSupabaseClient, input: { applicationP
   const row = ((insightResult.data ?? [])[0] ?? null) as InsightRow | null;
   if (input.version && !row) throw new AppError("insight_not_found", "인사이트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
 
-  // R17: v2 carries its own requirement list; v1 points at the preserved jd_requirements rows.
-  const requirements: InsightRequirement[] = !row
-    ? []
-    : isV2Result(row.result)
-      ? v2Requirements(row.result)
-      : legacyRequirements(await loadLegacyRequirements(user, jd.jobDescriptionId));
-  const requirementMap = new Map(requirements.map((r) => [r.id, r]));
-
   let insight: InsightResultView | null = null;
   if (row) {
-    const priorities = arr(obj(obj(row.result).strategy).project_priorities).map((p) => str(obj(p).project_id)).filter(Boolean);
+    const v2 = row.schema_version === INSIGHT_SCHEMA_VERSION;
+    const priorities = v2 ? arr(obj(obj(row.result).strategy).project_priorities).map((p) => str(obj(p).project_id)).filter(Boolean) : [];
     const [chips, projectNames, stale] = await Promise.all([
-      loadEvidenceChips(user, { ownerType: "insight", ownerIds: [row.id] }),
+      // A schema-1 body is not shown, so its remaining evidence isn't read either (#8: kept, not shown).
+      v2 ? loadEvidenceChips(user, { ownerType: "insight", ownerIds: [row.id] }) : Promise.resolve(new Map<string, ChipsByItem>()),
       loadProjectNames(user, priorities),
-      staleness(user, applicationProjectId, row, deps),
+      staleness(user, applicationProjectId, row, jd.rawTextHash, deps),
     ]);
-    insight = toInsightResultView(row, { chips: chips.get(row.id) ?? new Map(), requirements: requirementMap, projectNames, stale });
+    insight = toInsightResultView(row, { chips: chips.get(row.id) ?? new Map(), projectNames, stale });
   }
 
   const { activeJob: active, lastFailure } = resolveInsightRun(jobs, (pendingResult.data ?? [])[0] ?? null, insight ? Date.parse(insight.completedAt) : -Infinity, jd.rawTextEditedAt);
 
   return {
     applicationProjectId,
-    requirements,
     rawTextEditedAt: jd.rawTextEditedAt,
     insight,
     activeJob: active,
@@ -337,20 +346,21 @@ export async function getInsight(user: UserSupabaseClient, input: { applicationP
   };
 }
 
-/** F-P2-07 MVP: current hashes (same builders as the job) vs. the stored ones. */
+/**
+ * F-P2-07 MVP. `career`: the current career snapshot (same builder as the job) vs the stored one.
+ * `rawText`: `insights.raw_text_hash` ≠ `job_descriptions.raw_text_hash` (DM 2.6.1 — a column
+ * compare, so editing back to the same text reads "not changed").
+ */
 async function staleness(
   user: UserSupabaseClient,
   applicationProjectId: string,
   row: InsightRow,
+  currentRawTextHash: string,
   deps: InsightReadDeps,
-): Promise<{ career: boolean; requirements: boolean }> {
+): Promise<{ career: boolean; rawText: boolean }> {
+  const rawText = row.raw_text_hash !== currentRawTextHash;
   const inputs = await (deps.loadInputs ?? loadInsightInputs)(user, applicationProjectId);
-  if (!inputs) return { career: false, requirements: false };
+  if (!inputs) return { career: false, rawText };
   const now = deps.pipeline.hashes(deps.pipeline.buildContext(inputs));
-  return {
-    career: row.career_snapshot_hash !== null && row.career_snapshot_hash !== now.careerSnapshotHash,
-    // `requirements` = "the JD raw text changed" since R17 (key kept for the screens). A v1 row
-    // has no jd_text_hash: it was made from extracted requirements, so it always reads changed.
-    requirements: row.jd_text_hash === null || row.jd_text_hash !== now.jdTextHash,
-  };
+  return { career: row.career_snapshot_hash !== null && row.career_snapshot_hash !== now.careerSnapshotHash, rawText };
 }

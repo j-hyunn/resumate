@@ -12,10 +12,10 @@
  * (R14, AI spec v4.14 RM-1) `interview_answer` (`ANS-n`) is gone with the mock
  * interview features (AI-05/06/07).
  *
- * (R17, JD AI 처리 제거) `jd_requirement` (`REQ-n`) is **legacy**: no context
- * builder emits REQ-n any more (AI-01 is gone), so a model citing one fails V-1.
- * The type stays here because the DB allow list and old `evidence_links` rows
- * (v1 insights) keep it (plan R17-1/R17-2); JD evidence is `jd_sentence` only.
+ * (AI spec v4.16, JR-1·JR-Q1 (a), decisions 4.24 #5) `jd_requirement` (`REQ-n`)
+ * is gone: no context builder emits REQ-n (AI-01 is gone), its rows are deleted
+ * and the DB CHECK drops it. JD evidence is `jd_sentence` only — and (JR-5)
+ * only on insights (AI-02); AI-04 rejects it by its allow list.
  */
 
 export const EVIDENCE_SOURCE_TYPES = [
@@ -25,7 +25,6 @@ export const EVIDENCE_SOURCE_TYPES = [
   "project_deliverable",
   "skill",
   "jd_sentence",
-  "jd_requirement",
   "user_note",
   "writing_chat_message",
 ] as const;
@@ -63,7 +62,6 @@ export const EVIDENCE_RULES: Readonly<Record<EvidenceSourceType, Rule>> = {
   project_deliverable: { ref: /^DLV-\d+$/, fields: ["title", "body"], quoteRequired: ["body"] },
   skill: { ref: /^SKL-\d+$/, fields: ["name"], quoteRequired: [] },
   jd_sentence: { ref: /^S\d+$/, fields: [], quoteRequired: [] },
-  jd_requirement: { ref: /^REQ-\d+$/, fields: [], quoteRequired: [] },
   user_note: { ref: /^NOTE-\d+$/, fields: [], quoteRequired: ["*"] },
   writing_chat_message: { ref: /^M-\d+$/, fields: [], quoteRequired: ["*"] },
 };

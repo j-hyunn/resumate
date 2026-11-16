@@ -10,7 +10,7 @@ export const maxDuration = 60;
 /**
  * `POST /api/job-descriptions/fetch` — 공고 URL 가져오기 (CF-10, R15 A1).
  *
- * Request `{ url }` → 200 `{ data: { rawText, companyName, positionTitle } }`.
+ * Request `{ url }` → 200 `{ data: { rawText } }` (R17 4.24 #15: no `JobPosting` company / title).
  * **No AI** (CF-A15: works without a provider key) and **no DB write** — no
  * `ai_jobs`, no `ai_usage_records`, no usage meter (CF-A16).
  *

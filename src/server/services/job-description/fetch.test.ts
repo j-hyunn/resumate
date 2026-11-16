@@ -168,8 +168,8 @@ describe("fetchJobDescription", () => {
         },
       }),
     );
-    expect(result.companyName).toBe("에이비씨페이");
-    expect(result.positionTitle).toBe("백엔드 개발자");
+    // R17 4.24 #15: the response is `{ rawText }` only (JobPosting company / title are not returned).
+    expect(Object.keys(result)).toEqual(["rawText"]);
     expect(result.rawText.length).toBeGreaterThanOrEqual(JD_FETCH_MIN_CHARS);
     expect(result.rawText).toContain("자격 요건");
   });
@@ -190,8 +190,7 @@ describe("fetchJobDescription", () => {
       }),
     );
     expect(result.rawText).toContain("자격 요건");
-    expect(result.companyName).toBeNull();
-    expect(result.positionTitle).toBeNull();
+    expect(Object.keys(result)).toEqual(["rawText"]);
   });
 
   it("truncates rawText at 50,000 characters", async () => {
@@ -322,7 +321,7 @@ describe("fetchJobDescription", () => {
     await run("u1");
     await run("u1");
     expect(await codeOf(() => run("u1"))).toBe("too_many_requests");
-    await expect(run("u2")).resolves.toMatchObject({ companyName: null });
+    await expect(run("u2")).resolves.toHaveProperty("rawText");
   });
 
   it("logs host, code, bytes and elapsed only — never body text, URL path or query", async () => {

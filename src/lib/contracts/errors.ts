@@ -29,7 +29,7 @@ export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 
 /**
  * R17: `not_a_jd` was AI-01's refusal and is no longer produced. The DB CHECK keeps it for
- * pre-R17 job rows (phase-2 narrows it); readers treat it as an unknown code.
+ * pre-R17 job rows for good (4.24 #8 / JR-Q5); readers show it as a legacy input failure without retry.
  */
 export const LEGACY_AI_ERROR_CODES = ["not_a_jd"] as const;
 export type LegacyAiErrorCode = (typeof LEGACY_AI_ERROR_CODES)[number];

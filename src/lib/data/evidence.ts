@@ -164,8 +164,20 @@ function resolve(db: MockDb, e: EvidenceLink): Omit<EvidenceView, "id" | "item_k
       if (!s) return empty
       return { source_label: s.name, current_value: s.name, path: ["스킬"], href: routes.skills(), to_career: true, updated_at: s.updated_at }
     }
-    case "jd_sentence":
-      return { source_label: e.source_label ?? "", current_value: e.source_label, path: ["공고 원문"], href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd" }) : null, to_career: false, updated_at: null }
+    case "jd_sentence": {
+      // (v5.21, JR-Q1) C-02 → S-46 채용 공고 탭에서 그 문장 하나를 강조 (`?tab=jd&s=S3` — 칩 하나 = 문장 하나, DM 2.8 `source_locator.sid`).
+      // 공고가 바뀐 인사이트(`staleReasons.rawText`)는 화면(S-16)이 강조 없는 주소로 덮는다
+      const locator = e.source_locator as { sid?: unknown } | null
+      const sentence = typeof locator?.sid === "string" ? locator.sid : undefined
+      return {
+        source_label: e.source_label ?? "",
+        current_value: e.source_label,
+        path: ["공고 원문"],
+        href: e.application_project_id ? routes.coverLetter(e.application_project_id, { tab: "jd", s: sentence }) : null,
+        to_career: false,
+        updated_at: null,
+      }
+    }
     case "user_note": {
       // (v5.20, CF-1 · R15) `source_id`는 자소서 정본의 `body.questions[].question_id`다 — 테이블
       // 조인으로 풀 수 없어서 **화면(여기)이 문항 번호·메모를 조립한다**(백엔드가 못 하는 자리라고

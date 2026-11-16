@@ -1,21 +1,25 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { JdLockedNotice, JdRawEditProvider } from "@/components/applications/jd-raw-edit"
+import { JdRawEditProvider } from "@/components/applications/jd-raw-edit"
 import { JdView } from "@/components/applications/jd-view"
+import { parseSentenceParam } from "@/components/applications/jd-highlight"
 import { getJobDescription } from "@/lib/data/applications"
 import { getPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
-import type { AiErrorCode } from "@/types/db"
 
 /**
- * S-46 **"채용 공고" 탭** = S-15 규칙 그대로 (v5.20 재정의, CF-7·CF-A12 — ID 유지).
- * 옛 `/applications/{id}/jd` 페이지의 판정을 그대로 옮겼고 바뀐 것은 세 가지다:
- * - 화면 머리(`PageHeader`)·이동 경로를 그리지 않는다 — S-46 머리가 하나뿐이다.
- * - 공고 원문 패널 머리에 `source_url`이 있으면 "원래 공고 열기"가 붙는다 (CF-A16).
+ * S-46 **"채용 공고" 탭** = S-15 규칙 그대로 (v5.20 재정의, CF-7·CF-A12 — ID 유지 · v5.21, JR-1·JR-7·JR-Q1).
+ * - 공고 원문 + 근거 문장 하이라이트(`?tab=jd&s=S3,S4`)만 있다 — 요건 목록·"요건 정리하기"·추출 실패 안내는 없다.
+ *   AI 진입점이 없어 키 없이 전부 된다(C-18·C-19·C-20 없음).
+ * - [공고 내용 수정]은 늘 보이고, 인사이트가 대기·실행 중일 때만 비활성(`rawTextLockedReason = job_in_progress`).
+ * - 공고 원문 패널 머리에 `source_url`이 있으면 "원래 공고 열기" (CF-A16).
  * - "돌아가기"는 **{인사이트 / 자소서} 탭으로** 간다(`?from=insight|cover_letter`, CF-A12).
  *
- * 공고 원문 수정(Q53-2·Q53-11)의 "저장"/"취소"는 **탭 안의 버튼**이고 상단 바 "저장하기"와 섞지 않는다.
+ * 공고 내용 수정의 "저장"/"취소"는 **탭 안의 버튼**이고 상단 바 "저장하기"와 섞지 않는다.
+ *
+ * `?state=`: `raw-edit` (수정 중) · `raw-save-failed` · `raw-save-refused` (`jd_job_in_progress`) ·
+ * `raw-save-no-sentences` (`jd_no_sentences`) · `raw-saved` · `raw-locked` (인사이트 진행 중 — 버튼 비활성)
  */
 type SP = Record<string, string | string[] | undefined>
 
@@ -28,24 +32,23 @@ function returnLabel(from: string | undefined): string | null {
   return null
 }
 
+const RAW_PREVIEWS = ["raw-edit", "raw-save-failed", "raw-save-refused", "raw-save-no-sentences", "raw-saved", "raw-locked"]
+
 export async function JdTab({ applicationProjectId: id, searchParams: sp }: { applicationProjectId: string; searchParams: SP }) {
   const state = getPreviewState(sp)
   const jd = await getJobDescription(id)
   if (!jd) return <p className="text-sm text-muted-foreground">공고를 찾을 수 없어요</p>
 
-  // Q53-2 미리 보기는 저장소를 바꾸지 않는다
-  const rawPreview = state === "raw-editable" || state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || state === "raw-saved"
-  const previewSave = state === "raw-save-failed" ? "failed" : state === "raw-save-refused" ? "refused" : rawPreview ? "ok" : null
-  // R17: no requirement extraction — no "요건 정리하기" / 분석 중 / 추출 실패 상태. The tab shows the raw text.
-  const editable = rawPreview ? state !== "raw-saved" && one(sp.refused) !== "1" : jd.raw_text_editable
-  // Q53-9 "요건이 있는 공고" lock notice: R17 (JR-7) the raw text is always editable (no requirement rows), so it is
-  // a `?state=raw-has-requirements` preview only (UI 요청 — remove with the S-46 채용 공고 탭 rework)
-  const lockedCause: AiErrorCode | null = state === "raw-has-requirements" ? "input_too_long" : null
-  const back = !lockedCause ? returnLabel(one(sp.from)) : null
+  // 공고 내용 수정 미리 보기는 저장소를 바꾸지 않는다
+  const rawPreview = !!state && RAW_PREVIEWS.includes(state)
+  const previewSave =
+    state === "raw-save-failed" ? "failed" : state === "raw-save-refused" ? "refused" : state === "raw-save-no-sentences" ? "no_sentences" : rawPreview ? "ok" : null
+  const locked = rawPreview ? state === "raw-locked" || one(sp.refused) === "1" : !jd.raw_text_editable
+  const lockedReason = locked ? (rawPreview ? "job_in_progress" : jd.raw_text_locked_reason) : null
+  const back = returnLabel(one(sp.from))
 
   return (
     <div className="space-y-6">
-      {lockedCause ? <JdLockedNotice cause={lockedCause} /> : null}
       {back ? (
         <Button asChild variant="outline" size="sm">
           <Link href={routes.coverLetter(id, one(sp.from) === "insight" ? { tab: "insight" } : undefined)}>
@@ -56,20 +59,18 @@ export async function JdTab({ applicationProjectId: id, searchParams: sp }: { ap
       ) : null}
       <JdRawEditProvider
         key={state ?? "stored"}
-        editable={editable}
-        initialEditing={state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || one(sp.edit) === "1"}
+        editable={!locked}
+        lockedReason={lockedReason}
+        initialEditing={!locked && (state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || state === "raw-save-no-sentences" || one(sp.edit) === "1")}
         initialSaved={state === "raw-saved"}
       >
-        {/* R17: the legacy requirement / keyword / seniority columns are not shown (JD = raw text) */}
         <JdView
           applicationProjectId={id}
           previewSave={previewSave}
           rawText={jd.raw_text}
           sentences={jd.sentences}
-          requirements={[]}
-          techKeywords={[]}
-          seniority={null}
           sourceUrl={jd.source_url ?? null}
+          highlight={parseSentenceParam(sp.s)}
         />
       </JdRawEditProvider>
     </div>

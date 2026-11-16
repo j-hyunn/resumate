@@ -3,7 +3,7 @@
 /**
  * Dev-only gallery of the common components and ST-xx states (UQ-23). Route: /dev/states.
  * `?state=` narrows to one section (ai-pending, ai-waiting, ai-stream, ai-failed*, ai-locked,
- * key-invalid, key-check, key-missing, insufficient*, wait-jd, move-failed, save-failed, ai-sync,
+ * key-invalid, key-check, key-missing, insufficient*, move-failed, save-failed, ai-sync,
  * consent, ai-outage …); no state shows everything. v4: ST-LIMIT removed.
  */
 import * as React from "react"
@@ -27,7 +27,7 @@ import { BlockFlagBadges, PlaceholderText } from "./placeholders"
 import { usePreviewState } from "./preview-state-client"
 import { DraftBadge, DraftNotice, SaveStatus } from "./save-status"
 import { StageCardMenu, StageChip, useStageMove } from "./stage-menu"
-import { AiFailedInline, AiOutageAlert, EmptyState, WaitJd } from "./state-views"
+import { AiFailedInline, AiOutageAlert, EmptyState } from "./state-views"
 import { PendingBlock, StreamingBlock, StreamingHeader, StreamRegion, useAiStream } from "./streaming"
 import { DevStateGalleryV53 } from "./dev-state-gallery-v53"
 
@@ -141,7 +141,7 @@ export function DevStateGallery({
         <Section id="ai-sync" title="ST-AI-SYNC (버튼 안 스피너)" show={show("ai-sync")}>
           <Button disabled={syncing} onClick={() => setSyncing(true)}>
             {syncing ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            요건 다시 추출
+            공고 가져오기
           </Button>
         </Section>
 
@@ -181,7 +181,6 @@ export function DevStateGallery({
           <AiErrorNotice code="safety_blocked" provider="gemini" onRetry={() => undefined} inputHref="/applications/new" inputLabel="입력으로 이동" />
           <AiErrorNotice code="schema_invalid" onRetry={() => undefined} />
           <AiErrorNotice code="timeout" onRetry={() => undefined} />
-          <AiErrorNotice code="not_a_jd" inputHref="/applications/new" />
           <h3 className="text-sm font-semibold">inline (대화 턴·섹션·답변 카드)</h3>
           <AiErrorNotice code="rate_limited" provider="gemini" size="inline" retryLabel="다시 보내기" retryAfter={at(45)} onRetry={() => undefined} />
           <AiErrorNotice code="provider_unavailable" provider="anthropic" size="inline" retryLabel="다시 생성" onRetry={() => undefined} />
@@ -197,7 +196,6 @@ export function DevStateGallery({
 
         <Section id="ai-locked" title="C-18 AI 잠금 (ST-AI-LOCKED)" show={show("ai-locked")}>
           <AiLock entry="insight" size="area" featureLabel="인사이트" alternativeHref="/career" />
-          <AiLock entry="requirements" size="area" featureLabel="요건 정리" alternativeNote="공고 원문은 그대로 볼 수 있어요" />
           <AiLock entry="usage" size="area" featureLabel="AI 사용량" />
           <AiLock entry="writing_chat" size="inline" actionName="AI와 대화하며 정리" alternativeHref={routes.projectPageNew({ experience: "00000000-0000-4e01-8000-000000000001" })} />
           <AiLock entry="draft" size="inline" actionName="초안 생성" />
@@ -262,11 +260,6 @@ export function DevStateGallery({
             />
           ) : null}
           <p className="text-sm text-muted-foreground">실제 준비 상태: 인사이트 {readiness.features.insight.ready ? "준비됨" : "부족"}</p>
-        </Section>
-
-        <Section id="wait-jd" title="ST-WAIT-JD" show={show("wait-jd")}>
-          <Button disabled>인사이트 생성</Button>
-          <WaitJd />
         </Section>
 
         <Section id="move-failed" title="C-12 단계 이동 · C-13 (ST-MOVE-FAILED)" show={show("move-failed")}>

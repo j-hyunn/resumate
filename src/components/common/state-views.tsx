@@ -1,6 +1,6 @@
 /**
  * ST-xx state views (design-system 4): EmptyState, ErrorState (S-28), skeletons (ST-LOADING),
- * WaitJd (ST-WAIT-JD), 공급자 장애 배너 (S-28). C-20 / C-18 live in ai-error-notice / ai-lock.
+ * 공급자 장애 배너 (S-28). C-20 / C-18 live in ai-error-notice / ai-lock.
  * Server-safe except where noted; interactive pieces take callbacks or hrefs.
  */
 import * as React from "react"
@@ -10,7 +10,6 @@ import {
   CloudAlert,
   FileQuestion,
   Layers,
-  Loader2,
   LockKeyhole,
   RotateCcw,
   type LucideIcon,
@@ -267,18 +266,7 @@ export function AiFailedInline({
 }
 
 
-// ---------------------------------------------------------------------------
-// ST-WAIT-JD
-// ---------------------------------------------------------------------------
-
-export function WaitJd({ className }: { className?: string }) {
-  return (
-    <p className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)} role="status">
-      <Loader2 className="size-4 animate-spin text-ai" aria-hidden />
-      공고 분석이 끝나면 시작할 수 있어요
-    </p>
-  )
-}
+// (v5.21, R-JR-9) ST-WAIT-JD ("공고 분석이 끝나면 시작할 수 있어요") is retired — there is no JD analysis to wait for.
 
 // ---------------------------------------------------------------------------
 // S-28 공급자 장애 배너 (v2: per provider; dismiss handled by AiOutageBanner client wrapper)

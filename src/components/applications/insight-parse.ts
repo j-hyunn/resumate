@@ -36,13 +36,14 @@ export function parseMatchStage(value: unknown): MatchRow[] | null {
 
 /**
  * v5.3 S-16 (AI 명세 v4.3 C-3): stored sentences must not show internal context aliases (EXP-1, PRJ-3,
- * DET-2, EDU-1, REQ-4, S12 …) — the backend replaces them with project / requirement names. This is a
+ * DET-2, EDU-1, MT-4, S12 …) — the backend replaces them with project / requirement names. This is a
  * display guard for anything that slips through: an alias in parentheses / brackets is dropped, a bare
  * alias becomes "해당 항목". // [UI-가정] 대체어
  */
-// 03 C-3 aliases: EXP·EDU·PRJ·DET·ACH·SKL-n, requirements REQ-n, JD sentences Sn (UQ-517).
+// 03 C-3 aliases: EXP·EDU·PRJ·DET·ACH·SKL-n, (v5.21) insight match rows MT-n, JD sentences Sn (UQ-517). `REQ-n` (the
+// retired AI-01 requirement alias) stays in the guard for stored schema-2 text that may still carry one.
 // `Sn` is only removed inside brackets — a bare "S3" can be real text (e.g. "AWS S3"). // [UI-가정]
-const ALIAS = String.raw`(?:EXP|PRJ|DET|EDU|ACH|SKL|REQ)-\d+`
+const ALIAS = String.raw`(?:EXP|PRJ|DET|EDU|ACH|SKL|REQ|MT)-\d+`
 const ALIAS_OR_SENTENCE = String.raw`(?:${ALIAS}|S\d+)`
 const ALIAS_WRAPPED = new RegExp(String.raw`\s?[(\[]\s*${ALIAS_OR_SENTENCE}(?:\s*[,·/]\s*${ALIAS_OR_SENTENCE})*\s*[)\]]`, "g")
 const ALIAS_BARE = new RegExp(String.raw`\b${ALIAS}\b`, "g")

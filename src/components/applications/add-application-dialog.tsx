@@ -1,28 +1,28 @@
 "use client"
 
 /**
- * S-14 자기소개서 추가 — **2단계 모달** (`AddApplicationDialog`, UX v5.20 S-14 / design-system 5.6.2,
- * CF-8·CF-10·CF-A6·CF-A7·CF-A15·CF-A16·CF-A17). v5.18까지의 전체 페이지 `/applications/new`를 대체한다.
+ * S-14 자기소개서 추가 — **2단계 모달** (`AddApplicationDialog`, UX v5.21 S-14 / design-system 5.6.2,
+ * CF-8·CF-10·CF-A7·CF-A16 · JR-1·JR-2·JR-6). v5.18까지의 전체 페이지 `/applications/new`를 대체한다.
  *
- * ① JD 입력: 공고 URL **또는** 직접 입력 → [다음] = (URL이면) 서버 가져오기 → 미리 보기 추출(AI-01,
- *    행 없음). **Q53-1 게이트는 ①의 [다음]**에서 판정한다(CF-A6) — `consent_required`는 C-21,
- *    `key_status = 'invalid'`는 버튼 아래 C-20. **"AI 없이 계속" 버튼은 두지 않는다(CF-U1).**
- * ② 지원 기업 / 포지션: 기업명·포지션명·공고 내용(채움 순서 AI-01 → `JobPosting` → 빈 칸, CF-A6).
- *    **마감일 칸은 없다**(CF-2 — S-46 머리에서 정한다). [자기소개서 작성] = 생성(`previewJobId`·
- *    `source_url` 함께) → S-46 문항 설정 상태. 보드에서 열었으면 라벨이 "추가하기"이고 보드에 남는다.
+ * (v5.21, JR-1·JR-2) **모달에서 AI가 돌지 않는다** — 키 유무·동의·키 상태와 관계없이 하나의 모양이다.
+ * ① JD 입력: 공고 URL **또는** 직접 입력 → [다음] = URL이면 서버 가져오기(`{rawText}`만, AI 아님)를 기다리고,
+ *    직접 입력이면 서버 요청 없이 바로 ②로 `[가정]`.
+ * ② 지원 기업 / 포지션: 지원 기업·지원 포지션·**마감일**(일 단위, 포지션 아래 `[가정]`)은 빈 칸에서 시작해 사용자가
+ *    직접 입력하고(모두 선택), 공고 내용만 필수. [자기소개서 작성] = 생성(`source_url`·`deadline` 함께) → S-46
+ *    문항 설정 상태. 보드에서 열었으면 라벨이 "추가하기"이고 보드에 남는다.
+ *    (JR-6) AI가 연결돼 있으면 생성 직후 인사이트가 자동으로 시작되므로 버튼 위에 안내 한 줄 + C-19 배지.
  *
  * (58 런) 틀은 공통 `FormDialog`(S-08 커리어 추가 모달과 같은 틀 — 폭 602 · 데스크톱 고정 높이, 두 단계 같은 크기)이고,
- * 칸은 공통 `FormSection`·`FormField`·`FormFieldError`다. 단계 표시는 두지 않는다(시안 1). 좁은 화면은 그 틀 그대로
- * (화면 폭 − 2rem)이다 — 옛 전체 화면 시트(UQ-745)는 커리어 모달과 맞추며 버렸다 `[UI-가정]`.
+ * 칸은 공통 `FormSection`·`FormField`·`FormFieldError`다. 단계 표시는 두지 않는다(시안 1).
  *
- * 작성 중 자동 저장 없음(CF-A17): 입력이 있는 채로 닫으면 확인 한 줄. C-21·키 교체로 떠날 때만
- * 브라우저 세션에 입력을 남긴다(`form-draft.ts`의 규칙 그대로, 주소에는 넣지 않는다).
+ * 작성 중 자동 저장 없음: 입력이 있는 채로 닫으면 확인 한 줄 "입력한 내용이 사라져요". (v5.21) 모달이 C-21·키 교체로
+ * 떠나는 길이 없어져 브라우저 세션 입력 보존도 없앴다.
  */
 import { cn } from "@/lib/utils"
 import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CloudAlert, Info, Sparkles, TriangleAlert } from "lucide-react"
+import { CloudAlert, Info, Sparkles, TriangleAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -37,7 +37,6 @@ import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { AiErrorNotice } from "@/components/common/ai-error-notice"
 import {
   FormDialog,
   FormDialogBody,
@@ -49,15 +48,23 @@ import {
   FormFieldError,
   FormSection,
 } from "@/components/common/form-dialog"
-import { useAiConsentGate } from "@/components/common/consent-gate"
 import { CharCount } from "@/components/common/input-guide"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
-import { readAiConnectReturn } from "@/components/common/ai-connect-return"
+import { useAiConnection } from "@/components/common/ai-connection-context"
+import { ProviderBadge } from "@/components/common/provider-badge"
 import { setNavOrigin } from "@/components/common/return-target"
+import { getDataReadinessAction } from "@/lib/data/actions"
 import { JD_FETCH_FAILED_MESSAGE } from "@/lib/data/cover-letter-copy"
-import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
+import {
+  JD_LONG_WARNING,
+  JD_NO_SENTENCES_MESSAGE,
+  JD_RAW_TEXT_EDITABLE_NOTE,
+  JD_RAW_TEXT_LONG,
+  JD_RAW_TEXT_MAX,
+  JD_RAW_TEXT_SHORT,
+  JD_SHORT_WARNING,
+} from "@/lib/data/jd-raw-text"
 import { routes } from "@/lib/routes"
-import { keepsFormDraftOnLeave } from "./form-draft"
 import { createApplicationAction, fetchJobPostingAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 
 /** v5.3 S-14: 지원 기업·지원 포지션 각 200자 (구현 값 `[가정]`) */
@@ -65,7 +72,10 @@ const FIELD_MAX = 200
 /** URL은 2,048자까지 `[가정]` (UX S-14 입력 검사) */
 const URL_MAX = 2_048
 
-type Phase = "idle" | "fetching" | "extracting" | "creating"
+/** (v5.21, JR-6) [자기소개서 작성] 위 안내 — AI가 연결돼 있을 때만 (`[가정]` 문구 그대로) */
+export const AUTO_INSIGHT_NOTE = "만들면 인사이트를 바로 만들기 시작해요"
+
+type Phase = "idle" | "fetching" | "creating"
 
 export interface AddApplicationDialogProps {
   open: boolean
@@ -78,31 +88,42 @@ export interface AddApplicationDialogProps {
 
 export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, previewState = null }: AddApplicationDialogProps) {
   const router = useRouter()
-  const consent = useAiConsentGate()
   const previewWrite = usePreviewWriteGuard()
+  const connection = useAiConnection()
+  // (JR-6) "연결됨" = 활성 공급자 있음 · 키 무효 아님 · 동의 필요 없음 (`needs_check`는 연결됨) `[가정]`
+  const aiConnected = Boolean(connection?.active_provider) && connection?.key_status !== "invalid" && !connection?.consent_required
+  // UQ-617 `[UI-가정]`: the create action skips the auto-start when D-01 is not met (`insufficient_data`), so the line is
+  // shown only once readiness says the insight can run (read when the dialog opens; unknown → hidden)
+  const [insightReady, setInsightReady] = React.useState<boolean | null>(null)
+  React.useEffect(() => {
+    if (!open || !aiConnected) return
+    let alive = true
+    void getDataReadinessAction()
+      .then((r) => alive && setInsightReady(r.features.insight.ready))
+      .catch(() => alive && setInsightReady(null))
+    return () => {
+      alive = false
+    }
+  }, [open, aiConnected])
+  const autoInsight = aiConnected && insightReady === true
 
   // --- `?state=` 미리 보기 ---------------------------------------------------
   const pv = previewState
-  const [step, setStep] = React.useState<0 | 1>(() => (pv && STEP2_STATES.includes(pv) ? 1 : 0))
+  const step2Preview = Boolean(pv && STEP2_STATES.includes(pv))
+  const [step, setStep] = React.useState<0 | 1>(() => (step2Preview ? 1 : 0))
   const [url, setUrl] = React.useState("")
-  const [direct, setDirect] = React.useState(() => (pv && STEP2_STATES.includes(pv) ? MOCK_PASTED : ""))
+  const [direct, setDirect] = React.useState(() => (step2Preview ? MOCK_PASTED : ""))
   const [company, setCompany] = React.useState("")
   const [position, setPosition] = React.useState("")
-  const [raw, setRaw] = React.useState(() => (pv && STEP2_STATES.includes(pv) ? MOCK_PASTED : ""))
+  const [deadline, setDeadline] = React.useState("")
+  // 가져오기 실패는 공고 내용 칸을 비운 채 연다 (S-14 "가져오기 실패 안내")
+  const [raw, setRaw] = React.useState(() => (step2Preview && pv !== "fetch-failed" ? MOCK_PASTED : ""))
   const [phase, setPhase] = React.useState<Phase>(() => previewPhase(pv))
   const [fetchFailed, setFetchFailed] = React.useState(pv === "fetch-failed")
-  const [previewJobId, setPreviewJobId] = React.useState<string | null>(null)
-  const [previewDeadline, setPreviewDeadline] = React.useState<string | null>(null)
-  const [requirementCount, setRequirementCount] = React.useState<number | null>(pv === "step2" ? 6 : null)
-  /** ②에서 공고 내용을 고쳤는가 — 서버가 원문 해시를 대조하므로 미리 보기가 버려진다 (CF-A17) */
-  const [rawEdited, setRawEdited] = React.useState(false)
-  const [keyInvalidShown, setKeyInvalidShown] = React.useState(pv === "key-invalid" || pv === "ai-failed-key-invalid")
-  /** ② 머리의 C-20 축약 — [다음]의 AI-01이 실패했을 때 (막지 않는다) */
-  const [extractFailed, setExtractFailed] = React.useState(pv === "extract-failed")
   const [createFailed, setCreateFailed] = React.useState(pv === "create-failed")
   const [invalidUrlRefused, setInvalidUrlRefused] = React.useState(pv === "invalid-source-url")
+  const [noSentences, setNoSentences] = React.useState(pv === "jd-no-sentences")
   const [closeConfirm, setCloseConfirm] = React.useState(pv === "close-confirm")
-  const [restored, setRestored] = React.useState(false)
   const [urlTouched, setUrlTouched] = React.useState(false)
 
   // 단계가 바뀌면 포커스를 옮긴다 (UQ-746): ②로 가면 ② 첫 칸(지원 기업), ①로 돌아오면 쓰던 입력칸.
@@ -116,54 +137,13 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     return () => window.clearTimeout(t)
   }, [step])
 
-
-  // --- 입력 보존 (C-21·키 교체 왕복만, UX S-14 "입력 보존") ------------------
-  React.useEffect(() => {
-    if (!open) return
-    const d = readFormDraft(fromBoard)
-    if (!d) return
-    queueMicrotask(() => {
-      setUrl(d.url)
-      setDirect(d.direct)
-      setCompany(d.company)
-      setPosition(d.position)
-      setRaw(d.raw)
-      setStep(d.step === 1 ? 1 : 0)
-      setPreviewJobId(d.preview_job_id)
-      setPreviewDeadline(d.preview_deadline)
-      setRequirementCount(d.requirement_count)
-      setRestored(true)
-    })
-  }, [open, fromBoard])
-  React.useEffect(() => {
-    if (!open) return
-    writeFormDraft(fromBoard, {
-      step,
-      url,
-      direct,
-      company,
-      position,
-      raw,
-      preview_job_id: previewJobId,
-      preview_deadline: previewDeadline,
-      requirement_count: requirementCount,
-    })
-  }, [open, fromBoard, step, url, direct, company, position, raw, previewJobId, previewDeadline, requirementCount])
-  // B-6: 키 교체 / AI 연결 왕복으로 떠날 때만 남긴다 — 그 밖의 길은 버린다
-  React.useEffect(() => {
-    const here = window.location.pathname
-    return () => {
-      if (!keepsFormDraftOnLeave(readAiConnectReturn()?.href, here)) clearFormDraft(fromBoard)
-    }
-  }, [fromBoard])
-
   const urlTrimmed = url.trim()
   const directTrimmed = direct.trim()
   const rawTrimmed = raw.trim()
   const urlInvalid = urlTrimmed.length > 0 && !/^https?:\/\/\S+$/i.test(urlTrimmed)
   const busy = phase !== "idle"
 
-  const anyInput = Boolean(urlTrimmed || directTrimmed || rawTrimmed || company.trim() || position.trim())
+  const anyInput = Boolean(urlTrimmed || directTrimmed || rawTrimmed || company.trim() || position.trim() || deadline)
 
   const reset = () => {
     setStep(0)
@@ -171,60 +151,39 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     setDirect("")
     setCompany("")
     setPosition("")
+    setDeadline("")
     setRaw("")
     setPhase("idle")
     setFetchFailed(false)
-    setPreviewJobId(null)
-    setPreviewDeadline(null)
-    setRequirementCount(null)
-    setRawEdited(false)
-    setKeyInvalidShown(false)
-    setExtractFailed(false)
     setCreateFailed(false)
     setInvalidUrlRefused(false)
-    setRestored(false)
+    setNoSentences(false)
     setUrlTouched(false)
   }
 
   const close = (next: boolean) => {
     if (next) return onOpenChange(true)
-    // 아무것도 입력하지 않았으면 확인 없이 닫는다 (CF-A17)
+    // 아무것도 입력하지 않았으면 확인 없이 닫는다
     if (anyInput && !busy) return setCloseConfirm(true)
-    clearFormDraft(fromBoard)
     reset()
     onOpenChange(false)
   }
 
   // --- ① [다음] -------------------------------------------------------------
+  /** (v5.21, JR-1·JR-2) URL이면 가져오기만 기다린다 — 성공·실패 모두 ②로. 직접 입력이면 서버 요청 없이 ②로 `[가정]` */
   const goNext = async () => {
-    setExtractFailed(false)
-    setKeyInvalidShown(false)
-    let text = directTrimmed
-    let failedFetch = false
-
-    if (urlTrimmed) {
-      setPhase("fetching")
-      const got = await fetchJobPostingAction(urlTrimmed).catch(() => null)
-      if (!got) {
-        // 실패 6종을 화면에서 나누지 않는다 (CF-10) — ②로 가서 직접 붙여넣게 한다
-        failedFetch = true
-        text = ""
-      } else {
-        // R17 4.24 #15: the fetch answers `{ rawText }` only — 지원 기업·포지션 stay what the user types
-        text = got.rawText
-      }
+    if (!urlTrimmed) {
+      setFetchFailed(false)
+      setRaw(directTrimmed ? direct : "")
+      setStep(1)
+      return
     }
-
-    // R17: no AI-01 requirement preview — ② uses what the user types (JR-2)
-    setFetchFailed(failedFetch)
-    setRaw(text)
-    setRawEdited(false)
-    setPreviewJobId(null)
-    setPreviewDeadline(null)
-    setRequirementCount(null)
-    // JR-2 (4.24 #15): no `JobPosting` pre-fill — ② starts empty
-    setCompany("")
-    setPosition("")
+    setPhase("fetching")
+    const got = await fetchJobPostingAction(urlTrimmed).catch(() => null)
+    // 실패 코드 5종을 화면에서 나누지 않는다 (CF-10) — ②로 가서 직접 붙여넣게 한다.
+    // 지원 기업·포지션·마감일은 가져오기 결과와 관계없이 빈 칸에서 시작한다 (JR-2, 응답 `{rawText}`만)
+    setFetchFailed(!got)
+    setRaw(got ? got.rawText : "")
     setPhase("idle")
     setStep(1)
   }
@@ -233,8 +192,8 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
     e.preventDefault()
     setUrlTouched(true)
     if (urlInvalid || (!urlTrimmed && !directTrimmed) || busy) return
-    // R17 [가정 R17-9]: ① [다음] calls no AI any more — no key / consent gate here
-    if (previewWrite.stop()) return
+    // 직접 입력은 서버를 부르지 않아 미리 보기에서도 그대로 ②로 간다
+    if (urlTrimmed && previewWrite.stop()) return
     void goNext()
   }
 
@@ -242,20 +201,22 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
   const create = async (opts: { withoutUrl?: boolean } = {}) => {
     setCreateFailed(false)
     setInvalidUrlRefused(false)
+    setNoSentences(false)
     setPhase("creating")
     const result = await createApplicationAction({
       raw_text: raw,
       name: null,
-      deadline: null,
+      deadline: deadline || null,
       company_name: company.trim() || null,
       position_title: position.trim() || null,
       source_url: opts.withoutUrl ? null : urlTrimmed || null,
     }).catch(() => null)
 
-    // `invalid_source_url`(400)은 값으로 온다 — 던진 오류는 Server Action 경계에서 `code`를 잃는다
+    // 입력 거부(400)는 값으로 온다 — 던진 오류는 Server Action 경계에서 `code`를 잃는다
     if (result && "refused" in result) {
       setPhase("idle")
-      setInvalidUrlRefused(true)
+      if (result.refused === "jd_no_sentences") setNoSentences(true)
+      else setInvalidUrlRefused(true)
       return
     }
     if (!result) {
@@ -263,8 +224,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       setCreateFailed(true)
       return
     }
-    // R17 [가정 R17-9]: creation has no AI gate (no `{ rejected }`) and no preview result
-    clearFormDraft(fromBoard)
     const id = result.id
     reset()
     onOpenChange(false)
@@ -281,6 +240,7 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
       })
       router.refresh()
     } else {
+      // (JR-6) 자동 시작한 인사이트는 S-46이 진행 중 작업으로 읽어 "인사이트를 만드는 중이에요"를 보인다 (FL-10)
       router.push(routes.coverLetter(id))
     }
   }
@@ -293,7 +253,7 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
   }
 
   const primaryLabel = fromBoard ? "추가하기" : "자기소개서 작성"
-  const nextLabel = phase === "fetching" ? "공고를 가져오는 중" : phase === "extracting" ? "공고 내용을 정리하는 중" : "다음"
+  const nextLabel = phase === "fetching" ? "공고를 가져오는 중" : "다음"
 
   return (
     <>
@@ -308,51 +268,43 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
 
           <FormDialogBody>
             {step === 0 ? (
-              <>
-                {restored ? (
-                  // [UI-가정] 복원 안내 (C-21·키 교체 왕복에서 돌아왔을 때만)
-                  <p className="text-sm text-muted-foreground" role="status">
-                    작성하던 내용을 불러왔어요
-                  </p>
-                ) : null}
-                <FormSection title="JD 입력" fill>
-                  <FormField id="add-ap-url" label="포지션 공고" error={urlTouched && urlInvalid ? "공고 주소를 확인해 주세요" : undefined}>
-                    <Input
-                      id="add-ap-url"
-                      type="url"
-                      inputMode="url"
-                      placeholder="https://www.jd.com"
-                      value={url}
-                      maxLength={URL_MAX}
-                      disabled={busy || directTrimmed.length > 0}
-                      aria-invalid={urlTouched && urlInvalid ? true : undefined}
-                      aria-describedby={urlTouched && urlInvalid ? "add-ap-url-error" : "add-ap-exclusive"}
-                      onChange={(e) => setUrl(e.target.value)}
-                      onBlur={() => setUrlTouched(true)}
-                    />
-                    {/* [UI-가정] 배타 안내 — 상시 줄 대신 화면 낭독기용 설명으로만 (시안에 보조 문구 없음) */}
-                    <span id="add-ap-exclusive" className="sr-only">
-                      URL과 직접 입력은 하나만 쓸 수 있어요
-                    </span>
-                  </FormField>
-                  {/* 마지막 칸이 남은 높이를 채운다 (커리어 모달의 내용 칸과 같은 방식) */}
-                  <FormField id="add-ap-direct" label="직접 입력" fill>
-                    <Textarea
-                      id="add-ap-direct"
-                      className="min-h-48 flex-1 resize-none text-base leading-[1.75]"
-                      placeholder="포지션 공고 내용을 입력해주세요."
-                      value={direct}
-                      disabled={busy || urlTrimmed.length > 0}
-                      aria-describedby="add-ap-exclusive"
-                      onChange={(e) => setDirect(e.target.value)}
-                    />
-                    <InputChecks text={directTrimmed} />
-                  </FormField>
-                </FormSection>
-              </>
+              <FormSection title="JD 입력" fill>
+                <FormField id="add-ap-url" label="포지션 공고" error={urlTouched && urlInvalid ? "공고 주소를 확인해 주세요" : undefined}>
+                  <Input
+                    id="add-ap-url"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://www.jd.com"
+                    value={url}
+                    maxLength={URL_MAX}
+                    disabled={busy || directTrimmed.length > 0}
+                    aria-invalid={urlTouched && urlInvalid ? true : undefined}
+                    aria-describedby={urlTouched && urlInvalid ? "add-ap-url-error" : "add-ap-exclusive"}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onBlur={() => setUrlTouched(true)}
+                  />
+                  {/* [UI-가정] 배타 안내 — 상시 줄 대신 화면 낭독기용 설명으로만 (시안에 보조 문구 없음) */}
+                  <span id="add-ap-exclusive" className="sr-only">
+                    URL과 직접 입력은 하나만 쓸 수 있어요
+                  </span>
+                </FormField>
+                {/* 마지막 칸이 남은 높이를 채운다 (커리어 모달의 내용 칸과 같은 방식) */}
+                <FormField id="add-ap-direct" label="직접 입력" fill>
+                  <Textarea
+                    id="add-ap-direct"
+                    className="min-h-48 flex-1 resize-none text-base leading-[1.75]"
+                    placeholder="포지션 공고 내용을 입력해주세요."
+                    value={direct}
+                    disabled={busy || urlTrimmed.length > 0}
+                    aria-describedby="add-ap-exclusive"
+                    onChange={(e) => setDirect(e.target.value)}
+                  />
+                  <InputChecks text={directTrimmed} />
+                </FormField>
+              </FormSection>
             ) : (
               <>
-                {/* 상황이 생겼을 때만 — 입력 거부·만들기 실패·미리 보기 추출 실패 */}
+                {/* 상황이 생겼을 때만 — 입력 거부·만들기 실패 */}
                 {invalidUrlRefused ? (
                   <div className="space-y-1">
                     {/* `invalid_source_url`(400) — AI 실패가 아니라 입력 거부라 C-20을 쓰지 않는다 `[UI-가정]` */}
@@ -364,15 +316,37 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
                   </div>
                 ) : null}
                 {createFailed ? <FormFieldError id="add-ap-create-error" message="만들지 못했어요. 다시 시도해 주세요" /> : null}
-                {extractFailed ? <AiErrorNotice code="provider_unavailable" size="inline" /> : null}
 
                 <FormSection title="지원 기업 / 포지션">
-                  {/* 미리 채운 값도 보통 글자로 — 출처 배지를 두지 않는다 (CF-A6) */}
+                  {/* (JR-2) 모두 선택 · 빈 칸에서 시작해 직접 입력한다 */}
                   <FormField id="add-ap-company" label="지원 기업">
                     <Input id="add-ap-company" placeholder="기업 명" value={company} maxLength={FIELD_MAX} onChange={(e) => setCompany(e.target.value)} />
                   </FormField>
                   <FormField id="add-ap-position" label="지원 포지션">
                     <Input id="add-ap-position" placeholder="포지션 명" value={position} maxLength={FIELD_MAX} onChange={(e) => setPosition(e.target.value)} />
+                  </FormField>
+                  {/* (v5.21, JR-2) 마감일 — 일 단위(CF-4), 선택. 자리는 지원 포지션 아래 `[가정]`, "비우기" 가능 `[가정]`.
+                      입력 모양은 S-46 머리 마감일과 같다 (날짜 칸 + 비우기) */}
+                  <FormField id="add-ap-deadline" label="마감일">
+                    <div className="flex items-center gap-1">
+                      <Input
+                        id="add-ap-deadline"
+                        type="date"
+                        className="w-[11rem]"
+                        value={deadline}
+                        disabled={busy}
+                        onChange={(e) => setDeadline(e.target.value)}
+                      />
+                      {deadline ? (
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label="마감일 비우기" disabled={busy} onClick={() => {
+                            setDeadline("")
+                            // UQ-618: the × disappears — keep focus on the date field
+                            document.getElementById("add-ap-deadline")?.focus()
+                          }}>
+                          <X aria-hidden />
+                        </Button>
+                      ) : null}
+                    </div>
                   </FormField>
                 </FormSection>
 
@@ -393,27 +367,14 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
                       </>
                     }
                   >
-                    {requirementCount !== null && requirementCount > 0 ? (
-                      rawEdited ? (
-                        <p className="flex items-center gap-1.5 text-sm text-warning-subtle-foreground">
-                          <TriangleAlert className="size-3.5 text-warning" aria-hidden />
-                          공고 내용을 고쳐서 요건은 만든 뒤 다시 정리해요
-                        </p>
-                      ) : (
-                        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Sparkles className="size-3.5 text-ai" aria-hidden />
-                          공고에서 요건 {requirementCount}개를 미리 정리해 두었어요
-                        </p>
-                      )
-                    ) : null}
                     <div className="group/raw flex min-h-0 flex-1 flex-col gap-2">
                       {/* (2026-11-10) 가져온 공고는 마크다운이라 같은 공통 마크다운 편집기로 보인다 — 공통 Textarea와 같은 테두리 틀.
-                          편집기는 사용자가 고치기 전에는 값을 다시 내보내지 않아(emitUpdate:false) 가져온 원문 그대로 저장된다 →
-                          미리 보기 해시 대조(CF-A17)가 그대로 맞는다 */}
+                          편집기는 사용자가 고치기 전에는 값을 다시 내보내지 않아(emitUpdate:false) 가져온 원문 그대로 저장된다 */}
                       <div
                         className={cn(
                           "flex min-h-48 flex-1 flex-col overflow-y-auto rounded-control border border-input bg-transparent px-2.5 py-2 transition-colors dark:bg-input/30",
                           busy && "cursor-not-allowed bg-input/50 opacity-50",
+                          noSentences && "border-destructive",
                         )}
                       >
                         <DocTextarea
@@ -421,20 +382,23 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
                           placeholder="포지션 공고 내용을 입력해주세요."
                           value={raw}
                           readOnly={busy}
-                          aria-describedby="add-ap-raw-note"
+                          aria-invalid={noSentences ? true : undefined}
+                          aria-describedby={noSentences ? "add-ap-raw-error add-ap-raw-note" : "add-ap-raw-note"}
                           onValueChange={(v) => {
                             setRaw(v)
-                            setRawEdited(true)
+                            setNoSentences(false)
                           }}
                           grow
                           className="mx-0 min-h-0 flex-1 px-0 py-0 hover:bg-transparent"
                         />
                       </div>
+                      {/* (v5.21) `jd_no_sentences`(400) — 공고 내용 칸 아래, 입력 유지 */}
+                      {noSentences ? <FormFieldError id="add-ap-raw-error" message={JD_NO_SENTENCES_MESSAGE} /> : null}
                       <InputChecks text={rawTrimmed} />
-                      {/* U-6 (예외 Q53-2) — 공고 칸에 포커스가 있을 때만 보인다 `[UI-가정]`(시안에 상시 보조 문구 없음). 낭독기는 늘 읽는다 */}
-                      <p id="add-ap-raw-note" className="sr-only flex items-start gap-1.5 text-sm text-muted-foreground group-focus-within/raw:not-sr-only">
+                      {/* (v5.21, JR-7) 공고 원문 안내 — 스펙대로 공고 내용 칸 아래에 늘 보인다 (UQ-619) */}
+                      <p id="add-ap-raw-note" className="flex items-start gap-1.5 text-sm text-muted-foreground">
                         <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                        만든 뒤에는 공고 내용을 바꿀 수 없어요. 요건 정리에 실패한 공고만 고칠 수 있어요
+                        {JD_RAW_TEXT_EDITABLE_NOTE}
                       </p>
                     </div>
                   </FormField>
@@ -451,35 +415,41 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
               </Button>
             ) : null}
             <div className="flex flex-col items-end gap-1.5">
+              {step === 1 && autoInsight ? (
+                // (v5.21, JR-6) 생성 직후 인사이트가 자동으로 시작된다 — 공급자 토큰을 쓰므로 미리 알린다 (NFR-AI-08) `[가정]`
+                <p className="flex flex-wrap items-center justify-end gap-1.5 text-sm text-muted-foreground" id="add-ap-auto-insight">
+                  <Sparkles className="size-3.5 text-ai" aria-hidden />
+                  {AUTO_INSIGHT_NOTE}
+                  <ProviderBadge connection={connection} />
+                </p>
+              ) : null}
               {step === 0 ? (
                 <FormDialogSubmit pending={busy} disabled={urlInvalid || (!urlTrimmed && !directTrimmed)}>
                   {nextLabel}
                 </FormDialogSubmit>
               ) : (
-                <FormDialogSubmit pending={phase === "creating"} disabled={!rawTrimmed}>
+                <FormDialogSubmit pending={phase === "creating"} disabled={!rawTrimmed} aria-describedby={autoInsight ? "add-ap-auto-insight" : undefined}>
                   {phase === "creating" ? "만드는 중…" : primaryLabel}
                 </FormDialogSubmit>
               )}
-              {/* Q53-1 게이트 — 생겼을 때만 (키 무효 C-20) */}
-              {keyInvalidShown ? <AiErrorNotice code="key_invalid" size="inline" /> : null}
             </div>
           </FormDialogFooter>
         </FormDialogForm>
       </FormDialog>
 
-      {/* 닫기 확인 (CF-A17) — 미리 보기에 이미 토큰을 썼기 때문에 묻는다 */}
+      {/* 닫기 확인 — 긴 공고를 붙여넣은 뒤 실수로 닫는 일이 잦다 (v5.21 문구 "입력한 내용이 사라져요" `[가정]`) */}
       <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>입력한 내용과 정리한 결과가 사라져요</AlertDialogTitle>
-            <AlertDialogDescription>지금 닫으면 붙여넣은 공고와 미리 정리한 요건이 남지 않아요</AlertDialogDescription>
+            <AlertDialogTitle>입력한 내용이 사라져요</AlertDialogTitle>
+            {/* [UI-가정] 화면 낭독기용 설명 (스펙은 한 줄) */}
+            <AlertDialogDescription className="sr-only">지금 닫으면 입력한 공고가 남지 않아요</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <Button
               variant="destructive-ghost"
               onClick={() => {
                 setCloseConfirm(false)
-                clearFormDraft(fromBoard)
                 reset()
                 onOpenChange(false)
               }}
@@ -492,7 +462,6 @@ export function AddApplicationDialog({ open, onOpenChange, fromBoard = false, pr
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {consent.dialog}
     </>
   )
 }
@@ -525,12 +494,12 @@ function LengthWarning({ text }: { text: string }) {
   )
 }
 
-
 // ---------------------------------------------------------------------------
-// `?state=` 미리 보기
+// `?state=` 미리 보기 (v5.21: `extracting`·`extract-failed`·`key-invalid`·`ai-failed-key-invalid` 삭제,
+// `jd-no-sentences` 추가)
 // ---------------------------------------------------------------------------
 
-const STEP2_STATES = ["step2", "fetch-failed", "extract-failed", "creating", "create-failed", "invalid-source-url"]
+const STEP2_STATES = ["step2", "fetch-failed", "creating", "create-failed", "invalid-source-url", "jd-no-sentences"]
 const MOCK_PASTED = [
   "[그린뱅크] 결제 백엔드 엔지니어 채용",
   "주요 업무",
@@ -541,54 +510,6 @@ const MOCK_PASTED = [
 
 function previewPhase(state: string | null): Phase {
   if (state === "fetching") return "fetching"
-  if (state === "extracting") return "extracting"
   if (state === "creating") return "creating"
   return "idle"
-}
-
-// ---------------------------------------------------------------------------
-// 입력 보존 (sessionStorage, 진입 경로별). 주소에는 아무것도 넣지 않는다.
-// 키 교체로 떠날 때만 남고(`keepsFormDraftOnLeave`), 생성 성공 때 지운다.
-// ---------------------------------------------------------------------------
-
-interface FormDraft {
-  step: number
-  url: string
-  direct: string
-  company: string
-  position: string
-  raw: string
-  preview_job_id: string | null
-  preview_deadline: string | null
-  requirement_count: number | null
-}
-
-const draftKey = (fromBoard: boolean) => `resumate.a3.add-application.${fromBoard ? "board" : "list"}`
-
-function readFormDraft(fromBoard: boolean): FormDraft | null {
-  try {
-    const stored = window.sessionStorage.getItem(draftKey(fromBoard))
-    if (!stored) return null
-    const d = JSON.parse(stored) as FormDraft
-    return d.url || d.direct || d.raw || d.company || d.position ? d : null
-  } catch {
-    return null
-  }
-}
-
-function writeFormDraft(fromBoard: boolean, d: FormDraft) {
-  try {
-    if (d.url || d.direct || d.raw || d.company || d.position) window.sessionStorage.setItem(draftKey(fromBoard), JSON.stringify(d))
-    else window.sessionStorage.removeItem(draftKey(fromBoard))
-  } catch {
-    /* storage unavailable */
-  }
-}
-
-function clearFormDraft(fromBoard: boolean) {
-  try {
-    window.sessionStorage.removeItem(draftKey(fromBoard))
-  } catch {
-    /* storage unavailable */
-  }
 }

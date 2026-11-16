@@ -13,12 +13,12 @@
  * - every retry runs on the provider active **now**; a C-19 badge (active provider) sits right after
  *   the retry button, and a same-row retry whose job ran on another provider / tier adds
  *   "{활성 공급자}로 처음부터 다시 해요" (`sameRow` + `jobTier`, filled by aiErrorFromJob)
- * - input-caused failures (input_too_long / safety_blocked / not_a_jd) have no retry: "{대상}으로 이동"
+ * - input-caused failures (input_too_long / safety_blocked) have no retry: "{대상}으로 이동"
  *   + "고친 뒤 {rerunLabel}로 새로 실행해 주세요"
  * - key_missing re-reads the connection first; consent needed → consent cause + "동의하기" (C-21) →
  *   then the retry button
  * - `refusal` (retry 409, 04 §2.11.7 ②) swaps only the action row (G-34)
- * - `requestPath` (chat turn / document stream / JD extraction, A14): "{N}초 뒤 다시 보낼 수 있어요"
+ * - `requestPath` (chat turn / document stream, A14): "{N}초 뒤 다시 보낼 수 있어요"
  *   countdown until `retryAfter`
  * - a retry is consent-gated too (consent_required → C-21 before the request)
  */
@@ -31,7 +31,6 @@ import {
   CircleAlert,
   CloudAlert,
   CreditCard,
-  FileWarning,
   Hourglass,
   ArrowLeftRight,
   KeyRound,
@@ -197,8 +196,7 @@ export function aiErrorTitle(
       return "시간이 오래 걸려 중단됐어요"
     case "schema_invalid":
       return "결과를 정리하지 못했어요"
-    case "not_a_jd":
-      return "채용 공고가 아닌 텍스트로 보여요"
+    // (v5.21, JR-1) `not_a_jd` (AI-01 "채용 공고가 아닌 텍스트로 보여요") is gone from C-20 — no screen produces it
     case "insufficient_data":
       return "커리어가 조금 더 필요해요"
     case "canceled":
@@ -236,8 +234,6 @@ function copyFor(code: AiErrorCode, title: string): Copy {
       return w(TextCursorInput)
     case "safety_blocked":
       return w(ShieldAlert)
-    case "not_a_jd":
-      return w(FileWarning)
     case "timeout":
     case "stalled":
       return d(TimerOff)
@@ -356,7 +352,7 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   retrying?: boolean
   /** "다시 시도" (default) / "다시 보내기" (대화 턴) */
   retryLabel?: string
-  /** input_rejected / not_a_jd / key_missing: "{대상}으로 이동" / "입력 화면으로" / "입력으로 돌아가기" */
+  /** input_rejected / key_missing: "{대상}으로 이동" / "입력 화면으로" / "입력으로 돌아가기" */
   inputHref?: string
   onFocusInput?: () => void
   inputLabel?: string
@@ -366,12 +362,12 @@ export interface AiErrorNoticeProps extends AiErrorInfo {
   hidePreserved?: boolean
   /**
    * v5.3 input-caused failures: the run button to press after fixing the input — "고친 뒤
-   * {rerunLabel}로 새로 실행해 주세요" (인사이트 "다시 생성", 요건 "요건 정리하기" …)
+   * {rerunLabel}로 새로 실행해 주세요" (인사이트 "다시 생성" …)
    */
   rerunLabel?: string
-  /** no "고친 뒤 …" caption: the input can't be fixed here (Q53-9 "요건이 있는 공고") */
+  /** no "고친 뒤 …" caption: the input can't be fixed here */
   hideFixCaption?: boolean
-  /** v5.3 A14: request-path failure (chat turn / document stream / JD extraction) — countdown line */
+  /** v5.3 A14: request-path failure (chat turn / document stream) — countdown line */
   requestPath?: boolean
   /** v5.3: a same-row retry was refused (HTTP 409, 04 §2.11.7 ②) — swaps the action row only */
   refusal?: AiRetryRefusalCode | null
@@ -666,11 +662,8 @@ export function AiErrorNotice({
         </>
       )
       break
-    case "not_a_jd":
-      actions = inputAction(inputLabel ?? "입력 화면으로", "link")
-      break
     default:
-      // system (timeout / stalled / schema_invalid / unknown)
+      // system (timeout / stalled / schema_invalid / unknown). (v5.21, JR-1) the `not_a_jd` row is gone
       actions = retry(btn)
       hasRetry = true
   }

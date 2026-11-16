@@ -18,11 +18,12 @@ import * as React from "react"
 import { AiPanel } from "@/components/career/ai-panel"
 import { AI_LOCK_ENTRIES } from "@/components/common/ai-lock"
 import type { DocPanelPlacement } from "@/components/common/shell/doc-body"
-import { PANEL_COPY, PANEL_FIXED_NOTE } from "@/lib/data/cover-letter-chat-types"
+import { PANEL_COPY } from "@/lib/data/cover-letter-chat-types"
 import { QuestionProposalCard, type QuestionFill } from "./question-proposal-card"
 import type { CoverLetterPanelController } from "./use-cover-letter-panel"
 import { useCoverLetterAiPanel } from "./use-cover-letter-ai-panel"
 import { coverLetterClosedCopy } from "./panel-rules"
+import { PanelStartNotice, type CoverLetterInsightState } from "./insight-notice"
 
 export function CoverLetterPanel({
   panel,
@@ -31,6 +32,8 @@ export function CoverLetterPanel({
   filled,
   onFill,
   onDirectInput,
+  insight,
+  onOpenInsight,
 }: {
   panel: CoverLetterPanelController
   placement: DocPanelPlacement
@@ -39,14 +42,20 @@ export function CoverLetterPanel({
   onFill: (fills: QuestionFill[]) => void
   /** C-18 대안 "직접 입력" → 첫 문항 내용 칸 */
   onDirectInput?: () => void
+  /** (v5.21, JR-5) 이 자기소개서의 인사이트 — 시작 영역 안내 줄 */
+  insight: CoverLetterInsightState
+  /** [인사이트 탭 열기] */
+  onOpenInsight: () => void
 }) {
   const common = useCoverLetterAiPanel(panel, placement)
+  // (v5.21, JR-5) "AI가 읽는 내용" = 커리어 + 최신 인사이트 + 이 대화 (공고 원문 없음). 인사이트가 없거나 만드는 중이면 한 줄
+  const notice = <PanelStartNotice insight={insight} canOpenInsight={!panel.locked} onOpenInsight={onOpenInsight} />
   return (
     <AiPanel
       panel={common}
       lockEntry="draft"
       // closed: 서류 대화는 39개에서 막는다 — 이전 S-46 문구 그대로 (UQ-764)
-      copy={{ lock: AI_LOCK_ENTRIES.draft.description, notice: PANEL_FIXED_NOTE, closed: coverLetterClosedCopy(panel.messages.length) }}
+      copy={{ lock: AI_LOCK_ENTRIES.draft.description, notice, closed: coverLetterClosedCopy(panel.messages.length) }}
       proposalInline
       // 초안 턴 실패는 제안 카드가 C-20 + 다시 시도를 그린다 (지금 본문·이전 제안 유지)
       hideDraftTurnFailure={() => panel.draftFailed}

@@ -205,13 +205,13 @@ describe.skipIf(!ready)("W3 wired data layer (local stack)", { timeout: 60_000 }
   });
 
   it("S-15 raw text (JR-7): a new JD is editable; refusals map to the screen's codes", async () => {
-    const { createApplicationProject, updateFailedJdRawText, getJobDescription } = await apps();
+    const { createApplicationProject, updateJdRawText, getJobDescription } = await apps();
     const ap = await createApplicationProject({ raw_text: KO_BACKEND.raw });
-    expect(await updateFailedJdRawText(ap.id, KO_BACKEND.raw)).toEqual({ refused: "jd_raw_text_unchanged" });
-    expect(await updateFailedJdRawText(ap.id, "----\n• • •")).toEqual({ refused: "jd_no_sentences" });
-    expect(await updateFailedJdRawText(crypto.randomUUID(), "새 공고")).toEqual({ refused: "job_description_not_found" });
-    expect(await updateFailedJdRawText(ap.id, "   ")).toEqual({ refused: "invalid_raw_text" });
-    const saved = await updateFailedJdRawText(ap.id, "또 다른 공고 내용입니다.");
+    expect(await updateJdRawText(ap.id, KO_BACKEND.raw)).toEqual({ refused: "jd_raw_text_unchanged" });
+    expect(await updateJdRawText(ap.id, "----\n• • •")).toEqual({ refused: "jd_no_sentences" });
+    expect(await updateJdRawText(crypto.randomUUID(), "새 공고")).toEqual({ refused: "job_description_not_found" });
+    expect(await updateJdRawText(ap.id, "   ")).toEqual({ refused: "invalid_raw_text" });
+    const saved = await updateJdRawText(ap.id, "또 다른 공고 내용입니다.");
     expect(saved).toEqual({ application_project_id: ap.id, job_description_id: expect.any(String), raw_text_edited_at: expect.any(String) });
     expect(await getJobDescription(ap.id)).toMatchObject({ raw_text: "또 다른 공고 내용입니다.", raw_text_editable: true });
     await (await deletion()).deleteApplicationProject(ap.id);

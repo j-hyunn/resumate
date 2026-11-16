@@ -43,18 +43,18 @@ function Section({ id, title, show, children }: { id: string; title: string; sho
  * S-14는 **S-13 위 모달**(`?new=1`)이다. S-17 전용 줄(Q53-4·Q53-7·Q53-8)은 지웠다.
  */
 const Q53_LINKS: Array<{ label: string; href: string }> = [
-  { label: "Q53-1 S-14 동의 필요 → C-21", href: `${routes.applicationNew()}&state=consent-required` },
-  { label: "Q53-1 S-14 키 무효 → C-20", href: `${routes.applicationNew()}&state=key-invalid` },
-  { label: "Q53-1 S-14 서버 거부 (동의)", href: `${routes.applicationNew()}&state=create-refused-consent` },
-  { label: "Q53-1 S-14 서버 거부 (키 무효)", href: `${routes.applicationNew()}&state=create-refused-key-invalid` },
-  { label: "Q53-2 픽스처: 입력 원인 실패 JD", href: routes.coverLetter(IDS.ap(7), { tab: "jd" }) },
-  { label: "Q53-11 픽스처: 요건 0개로 성공한 JD", href: routes.coverLetter(IDS.ap(8), { tab: "jd" }) },
-  { label: "Q53-2 S-15 수정 중", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-edit` },
-  { label: "Q53-2 S-15 저장 실패", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-failed` },
-  { label: "Q53-2 S-15 저장 거부", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-refused` },
-  { label: "Q53-2 S-15 저장 뒤", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-saved` },
-  { label: "Q53-2 S-15 원인 모름", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-unknown-cause` },
-  { label: "Q53-2 S-16 공고를 고친 뒤", href: `${routes.coverLetter(IDS.ap(1), { tab: "insight" })}&state=raw-edited` },
+  // (v5.21, JR-1) Q53-1 (S-14 [다음] 게이트)·Q53-2/11 픽스처(추출 실패·요건 0개 JD)는 폐기 — 모달에 AI가 없고 공고는 언제든 고친다
+  { label: "JR-7 S-15 공고 내용 수정 중", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-edit` },
+  { label: "JR-7 S-15 저장 실패", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-failed` },
+  { label: "JR-7 S-15 저장 거부 (인사이트 진행 중)", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-refused` },
+  { label: "JR-7 S-15 저장 거부 (문장 없음)", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-save-no-sentences` },
+  { label: "JR-7 S-15 저장 뒤", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-saved` },
+  { label: "JR-7 S-15 수정 잠김 (인사이트 진행 중)", href: `${routes.coverLetter(IDS.ap(1), { tab: "jd" })}&state=raw-locked` },
+  { label: "JR-Q1 S-15 문장 하이라이트 (S2·S3)", href: routes.coverLetter(IDS.ap(1), { tab: "jd", s: "S2,S3" }) },
+  { label: "JR-Q1 S-15 문장을 찾지 못함", href: routes.coverLetter(IDS.ap(1), { tab: "jd", s: "S999" }) },
+  { label: "JR-7 S-16 공고가 바뀐 인사이트", href: `${routes.coverLetter(IDS.ap(1), { tab: "insight" })}&state=raw-text-stale` },
+  { label: "JR-Q3 S-16 옛 인사이트 (schema 1)", href: `${routes.coverLetter(IDS.ap(1), { tab: "insight" })}&state=schema-v1` },
+  { label: "S-16 0문장 공고로 생성 거부", href: `${routes.coverLetter(IDS.ap(1), { tab: "insight" })}&state=jd-no-sentences` },
   { label: "Q53-8 C-09 project_fields", href: `${routes.coverLetter(IDS.ap(1))}?state=insufficient-project-fields` },
 ]
 
@@ -71,9 +71,8 @@ const COVER_LETTER_LINKS: Array<{ label: string; href: string }> = [
   { label: "S-14 ① JD 입력", href: `${routes.applicationNew()}&state=step1` },
   { label: "S-14 ① 공고 가져오는 중", href: `${routes.applicationNew()}&state=fetching` },
   { label: "S-14 ① 가져오기 실패", href: `${routes.applicationNew()}&state=fetch-failed` },
-  { label: "S-14 ① 공고 내용 정리하는 중", href: `${routes.applicationNew()}&state=extracting` },
-  { label: "S-14 ① 미리 보기 추출 실패", href: `${routes.applicationNew()}&state=extract-failed` },
-  { label: "S-14 ② 지원 기업 / 포지션", href: `${routes.applicationNew()}&state=step2` },
+  { label: "S-14 ② 지원 기업 / 포지션 / 마감일", href: `${routes.applicationNew()}&state=step2` },
+  { label: "S-14 ② 문장 없는 공고 (jd_no_sentences)", href: `${routes.applicationNew()}&state=jd-no-sentences` },
   { label: "S-14 닫기 확인", href: `${routes.applicationNew()}&state=close-confirm` },
   { label: "S-14 만드는 중", href: `${routes.applicationNew()}&state=creating` },
   { label: "S-14 생성 실패", href: `${routes.applicationNew()}&state=create-failed` },
@@ -81,8 +80,7 @@ const COVER_LETTER_LINKS: Array<{ label: string; href: string }> = [
   // S-46 문항 설정 상태
   { label: "S-46 문항 설정 (기본 3문항)", href: `${routes.coverLetter(IDS.ap(3))}?state=questions` },
   { label: "S-46 문항 설정 검증 오류", href: `${routes.coverLetter(IDS.ap(3))}?state=questions-invalid` },
-  { label: "S-46 문항 설정 요건 정리 중", href: `${routes.coverLetter(IDS.ap(3))}?state=extracting` },
-  { label: "S-46 문항 설정 요건 추출 실패", href: `${routes.coverLetter(IDS.ap(3))}?state=extract-failed` },
+  { label: "S-46 문항 설정 인사이트 만드는 중 (자동 시작)", href: `${routes.coverLetter(IDS.ap(3))}?state=questions-insight-generating` },
   { label: "S-46 문항 5개 (추가 비활성)", href: `${routes.coverLetter(IDS.ap(3))}?state=questions-max` },
   // S-46 작성 상태
   { label: "S-46 작성 상태 (픽스처: 일부 채움)", href: routes.coverLetter(IDS.ap(1)) },
@@ -97,6 +95,8 @@ const COVER_LETTER_LINKS: Array<{ label: string; href: string }> = [
   { label: "S-46 패널 초안 실패", href: `${routes.coverLetter(IDS.ap(1))}?state=draft-failed` },
   { label: "S-46 패널 초안 상한 (6회)", href: `${routes.coverLetter(IDS.ap(1))}?state=draft-limit` },
   { label: "S-46 패널 AI 잠금 (C-18)", href: `${routes.coverLetter(IDS.ap(1))}?state=ai-locked` },
+  { label: "S-46 패널 인사이트 없음 안내", href: `${routes.coverLetter(IDS.ap(1))}?state=insight-none` },
+  { label: "S-46 패널 인사이트 만드는 중 안내", href: `${routes.coverLetter(IDS.ap(1))}?state=insight-generating` },
   // 탭
   { label: "S-46 채용 공고 탭 (S-15)", href: routes.coverLetter(IDS.ap(1), { tab: "jd" }) },
   { label: "S-46 인사이트 탭 (S-16)", href: routes.coverLetter(IDS.ap(1), { tab: "insight" }) },
@@ -209,9 +209,8 @@ export function DevStateGalleryV53({
       </Section>
 
       <Section id="input-failed" title="C-20 입력 원인 실패 — 다시 시도 없음 (R-69)" show={show("input-failed")}>
-        <AiErrorNotice code="input_too_long" provider="gemini" reduceTarget="공고 원문" inputHref={routes.career()} rerunLabel="다시 생성" onRetry={ranOnce} />
+        <AiErrorNotice code="input_too_long" provider="gemini" reduceTarget="공고 원문이나 커리어" inputHref={routes.career()} inputLabel="공고 원문 고치기" rerunLabel="다시 생성" onRetry={ranOnce} />
         <AiErrorNotice code="safety_blocked" provider="gemini" inputHref={routes.career()} inputLabel="입력으로 이동" rerunLabel="시작하기" />
-        <AiErrorNotice code="not_a_jd" inputHref={routes.applicationNew()} rerunLabel="요건 정리하기" />
         <AiErrorNotice code="input_too_long" size="inline" reduceTarget="문항 메모" onFocusInput={() => undefined} rerunLabel="생성" />
       </Section>
 
@@ -368,21 +367,12 @@ export function DevStateGalleryV53({
           <Button size="sm" variant="outline" onClick={() => void control({ next_send_refusal: "key_invalid" }, "다음 대화 보내기 → 서버 key_invalid")}>
             다음 대화 보내기 거부: key_invalid
           </Button>
-          <Button size="sm" variant="outline" onClick={() => void control({ next_jd_extraction_failure: "rate_limited" }, "다음 요건 추출 → rate_limited 실패")}>
-            다음 요건 추출 실패: rate_limited
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void control({ next_jd_extraction_failure: "not_a_jd" }, "다음 요건 추출 → not_a_jd 실패")}>
-            다음 요건 추출 실패: not_a_jd
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void control({ next_jd_extraction_failure: "input_too_long" }, "다음 요건 추출 → input_too_long 실패")}>
-            다음 요건 추출 실패: input_too_long
-          </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() =>
               void control(
-                { account_deletion_state: "active", account_deletion_failure: null, next_retry_refusal: null, next_send_refusal: null, next_jd_extraction_failure: null },
+                { account_deletion_state: "active", account_deletion_failure: null, next_retry_refusal: null, next_send_refusal: null },
                 "mock 제어 초기화",
               )
             }

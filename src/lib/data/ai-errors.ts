@@ -19,6 +19,7 @@ export function errorCategoryOf(code: AiErrorCode): AiErrorCategory {
     case "input_too_long":
     case "safety_blocked":
     case "insufficient_data":
+    // 4.24 #8: the legacy AI-01 value stays in the DB `error_category` expression (old rows only) — mirrored here
     case "not_a_jd":
       return "input"
     default:
@@ -74,15 +75,18 @@ export function failureTimestamps(code: AiErrorCode, now = Date.now()) {
   }
 }
 
-/** Input-caused failures (R-69): no "다시 시도" — fix the input, then run again */
+/**
+ * Input-caused failures (R-69): no "다시 시도" — fix the input, then run again. (v5.21, JR-1) `not_a_jd` was AI-01's
+ * cause and no screen shows it any more — it is left out of the C-20 table.
+ */
 export function isInputCausedFailure(code: AiErrorCode | null | undefined): boolean {
-  return code === "input_too_long" || code === "safety_blocked" || code === "not_a_jd" || code === "insufficient_data"
+  return code === "input_too_long" || code === "safety_blocked" || code === "insufficient_data"
 }
 
 /** Async job types retried on the same row (POST /api/ai-jobs/{id}/retry, 04 §2.9.1 경우 (1)) */
 export const SAME_ROW_RETRY_JOB_TYPES: readonly AiJobType[] = ["insight"]
 
-/** Request-path failures that wait for retry_after (A14): chat turn, document stream, JD extraction */
+/** Request-path failures that wait for retry_after (A14): chat turn, document stream */
 export function isRequestPathWait(code: AiErrorCode | null | undefined): boolean {
   return code === "rate_limited" || code === "provider_unavailable"
 }
@@ -95,7 +99,7 @@ export function isRequestPathWait(code: AiErrorCode | null | undefined): boolean
  * - `refusal` (v5.3): the exact 04 §2.11.7 code when the path has one — ① new job start
  *   ai_not_connected / ai_consent_required / key_invalid, ② same-row retry ai_job_not_retryable /
  *   key_missing / key_invalid / ai_consent_required / ai_connection_changed. Paths ④⑤ (chat turn,
- *   documents, JD extraction) only give `rejected` (consent folds into key_missing — re-read
+ *   documents) only give `rejected` (consent folds into key_missing — re-read
  *   readiness: `consent_required` tells the consent cause apart).
  */
 export interface AiRejected {

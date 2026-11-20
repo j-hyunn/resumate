@@ -5,8 +5,8 @@
  * CF-5·CF-A10·CF-A11·CF-U2·CF-S3).
  *
  * 왼쪽 탭도 AI 패널도 그리지 않는다 — 문항을 정하는 단계이고 AI를 쓰지 않는다. C-18·C-19도 없다
- * (CL-8). (58 런) 시안 2에 맞춰 [자기소개서 작성 시작] 옆 C-19 배지도 뺐다 — 선행 추출이 돌면 버튼 아래
- * ST-WAIT-JD 줄이 공급자 없이 진행을 알린다 `[UI-가정]`.
+ * (CL-8). (v5.21, JR-3) 요건 선행 추출이 없어 **예외 없이** 키 없이 전부 된다. (JR-6) 생성 직후 인사이트가 자동으로
+ * 시작됐으면 머리 아래 한 줄 "인사이트를 만드는 중이에요. …"(FL-10).
  *
  * 모양 (58 런, 시안 2): 가운데 좁은 열 · 제목 "자기소개서 문항 추가" + 회색 부제 · 문항 한 줄 =
  * [문항 입력(안쪽 끝 ⋯)][글자 수 "자"] · 마지막 줄 왼쪽 "+ 문항 추가 n/5", 오른쪽 [자기소개서 작성 시작].
@@ -14,11 +14,9 @@
  *
  * **CF-S3**: 정본 행을 만드는 첫 저장은 **[자기소개서 작성 시작] 하나**다. 상단 바 "저장하기"는 이
  * 상태에서 늘 비활성이고 ⌘S도 아무 일을 하지 않는다 — 화면(`cover-letter-screen.tsx`)이 그 규칙을
- * 들고 있다. 순서는 **추출 → 성공 뒤 저장**이다(v5.20 정정, DM-3).
+ * 들고 있다. (v5.21, JR-3) 순서는 **검증 → 저장**뿐이다 — AI를 부르지 않는다.
  */
 import { toast } from "sonner"
-import { isAiRejected, notifyAiRejected } from "@/components/common/ai-rejection"
-import { useAiConnection, useAiConnectionLoaded } from "@/components/common/ai-connection-context"
 import { submitFailedMessage } from "@/lib/data/labels"
 import * as React from "react"
 import { Info, Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react"
@@ -33,26 +31,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { AiErrorCode, CountBasis } from "@/types/db"
+import type { CountBasis } from "@/types/db"
 import { COVER_LETTER_DEFAULT_COUNT_BASIS, COVER_LETTER_DEFAULT_QUESTIONS, COVER_LETTER_MAX_QUESTIONS } from "@/lib/data/cover-letter-defaults"
 import { CHAR_LIMIT_A12_NOTE, QUESTION_MAX_NOTE, QUESTION_MIN_NOTE } from "@/lib/data/cover-letter-copy"
 import { COUNT_BASIS_LABELS } from "../labels"
-import { useRequirementsFirst } from "../extract-first"
+import { QuestionsInsightLine, type CoverLetterInsightState } from "./insight-notice"
 import { CharLimitInput, QuestionNoteField, QuestionTextField } from "./question-fields"
 import { DeleteQuestionDialog } from "./delete-question-dialog"
 import type { QuestionErrors, QuestionForm } from "./question-form"
 import { newQuestionForm } from "./question-form"
 
 export function QuestionSetup({
-  applicationProjectId,
   allocateSlot,
   forms,
   errors,
   onChange,
   onStart,
   starting,
-  extractFirst,
-  extractFailPreview = null,
+  insight,
   focusIndex,
 }: {
   applicationProjectId: string
@@ -61,12 +57,11 @@ export function QuestionSetup({
   forms: QuestionForm[]
   errors: Record<number, QuestionErrors>
   onChange: (next: QuestionForm[]) => void
-  /** 요건 추출이 성공한 뒤 호출된다 — 저장(정본 행 생성)은 화면이 한다 */
+  /** 검증 → 저장(정본 행 생성)은 화면이 한다 */
   onStart: () => Promise<unknown>
   starting: boolean
-  /** 키가 있고 요건이 아직 없다 → [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 (FL-03) */
-  extractFirst: boolean
-  extractFailPreview?: AiErrorCode | null
+  /** (v5.21, JR-6) 자동 시작한 인사이트가 만드는 중이면 머리 아래 한 줄 */
+  insight: CoverLetterInsightState
   /** 검증 오류 뒤 포커스를 줄 문항 (L-02 규칙: 첫 오류 칸) */
   focusIndex: number | null
 }) {
@@ -85,31 +80,13 @@ export function QuestionSetup({
     else if (e?.char_limit) limitRefs.current[focusIndex]?.focus()
   }, [focusIndex, errors])
 
-  // FL-03 "키가 있고 요건이 아직 없으면 AI-01을 먼저": `extractFirst`(jd-state)는 **요건이 없는지만** 본다 — AI 연결
-  // 여부는 보지 않는다(옛 S-17·S-19는 AiRunButton의 C-18 잠금이 막아 줬다). 그래서 키 없는 사용자가 [작성 시작]을
-  // 누르면 추출이 `ai_not_connected`로 거절돼 시작이 안 됐다(2026-11-10 사용자 보고 — 처음엔 조용히, 거절을 알리게 한
-  // 뒤엔 "AI 연결하면 사용할 수 있어요" 토스트). AI를 지금 쓸 수 있을 때만 먼저 추출하고, 아니면(키 없음·키 무효·
-  // 동의 필요 `[UI-가정]`) 건너뛰고 바로 저장한다 — 요건은 나중에 채용 공고 탭에서 정리한다.
-  const connection = useAiConnection()
-  const connectionLoaded = useAiConnectionLoaded()
-  const aiUsable = Boolean(connection?.active_provider) && connection?.key_status !== "invalid" && !connection?.consent_required
-  const req = useRequirementsFirst(applicationProjectId, {
-    needed: extractFirst && aiUsable,
-    rerunLabel: "자기소개서 작성 시작",
-    previewFail: extractFailPreview,
-    jdEditFrom: { from: "cover_letter" },
-  })
-
   /**
-   * [자기소개서 작성 시작] — 요건 선행 추출(필요할 때) → 저장. 결과를 버리지 않는다(2026-11-10 사용자 보고
-   * "누르면 아무 동작도 안 해"): 추출이 AI 동의·키 문제로 **거절되면 `run`이 거절 값을 돌려줄 뿐 아무것도 그리지
-   * 않아**, 버튼이 잠깐 돌고 멈춘 것처럼 보였다. 거절은 공통 `notifyAiRejected`(C-20 제목 토스트 + 연결 다시 읽기,
-   * 버튼은 다음 클릭에 C-18/C-21로 바뀐다)로, 던진 오류는 저장 실패 문구로 알린다.
+   * [자기소개서 작성 시작] — (v5.21, JR-3) 검증 → 저장. AI를 부르지 않아 키 유무와 관계없이 같다. 던진 오류는
+   * 저장 실패 문구로 알린다(2026-11-10 사용자 보고 "누르면 아무 동작도 안 해" — 실패를 삼키지 않는다).
    */
   const startWriting = async () => {
     try {
-      const r = await req.run(onStart)
-      if (isAiRejected(r)) notifyAiRejected(r)
+      await onStart()
     } catch {
       toast.error(submitFailedMessage("자기소개서"))
     }
@@ -126,6 +103,7 @@ export function QuestionSetup({
       <div className="space-y-1.5">
         <h2 className="text-lg leading-7 font-semibold">자기소개서 문항 추가</h2>
         <p className="text-base text-muted-foreground">작성하고자 하는 자기소개서 문항을 입력해주세요</p>
+        <QuestionsInsightLine insight={insight} />
       </div>
 
       {/* 문항 한 줄 = [문항 입력(넓게, 안쪽 끝 ⋯)] [글자 수 + "자"] — 라벨 없음(sr-only, 번호 포함), 자리 표시 = 기본 문항 문구.
@@ -230,15 +208,13 @@ export function QuestionSetup({
             <Plus aria-hidden />
             문항 추가 <span className="tabular-nums">{forms.length}/{COVER_LETTER_MAX_QUESTIONS}</span>
           </Button>
-          <Button disabled={starting || req.busy || (extractFirst && !connectionLoaded)} onClick={() => void startWriting()}>
-            {starting || req.busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button disabled={starting} onClick={() => void startWriting()}>
+            {starting ? <Loader2 className="animate-spin" aria-hidden /> : null}
             자기소개서 작성 시작
           </Button>
         </div>
         {full ? <p className="text-sm text-muted-foreground">{QUESTION_MAX_NOTE}</p> : null}
         {forms.length <= 1 ? <p className="text-xs text-muted-foreground">{QUESTION_MIN_NOTE}</p> : null}
-        {/* ST-WAIT-JD("공고 요건 정리 중") · 실패는 같은 자리 C-20 inline (입력 원인이면 "공고 원문 고치기") */}
-        <div className="flex justify-end empty:hidden">{req.slot}</div>
       </div>
 
       <DeleteQuestionDialog

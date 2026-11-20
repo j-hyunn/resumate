@@ -1,31 +1,37 @@
 import type { AliasMap } from "../context-pack/aliases";
 import { isActionResultEvidence, isCareerSupportEvidence, isReflectionEvidence } from "../evidence-rules";
-import type {
-  Ai02Gap,
-  Ai02Match,
-  Ai02MatchOutput,
-  Ai02Strength,
-  Ai02SynthesisOutput,
-  InsightActionType,
-  InsightGapKind,
-  InsightMatchStatus,
-} from "../schemas/AI-02";
+import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
+import type { Ai02Gap, Ai02MatchOutput, Ai02Strength, Ai02SynthesisOutput, InsightActionType, InsightGapKind, InsightMatchStatus } from "../schemas/AI-02";
 import { checkEvidence, validateItem, type EvidenceContext, type ModelEvidence, type ValidatedEvidence } from "./evidence";
-import { replaceAliasesInText } from "./alias-text";
-import { findUnsupportedNumbers, guardNumbers } from "./numbers";
+import { ALIAS_LABEL_MAX, replaceAliasesInText } from "./alias-text";
+import { buildAllowedNumbers, findUnsupportedNumbers, guardNumbers } from "./numbers";
 import { emptyReport, mergeReports, type ValidationReport } from "./report";
 
 /**
- * AI-02 server validation (AI spec AI-02 "실패 유형·가드레일", C-3, C-9).
- * Pure functions; the pipeline (pipelines/AI-02.ts) wires them to calls.
+ * AI-02 server validation (AI spec v4.16 AI-02 "단계 1 서버 검증", "실패
+ * 유형·가드레일", C-3, C-9). Pure functions; the pipeline (pipelines/AI-02.ts)
+ * wires them to calls.
  *
- * Stage 1 (per batch, right after the call):
- *   requirement_ref in the batch (else the verdict is dropped) → one verdict
- *   per requirement (duplicates dropped, missing ones filled as no_evidence
- *   [가정 S6-2]) → V-1/V-2/V-3/V-8 per evidence (learnings forbidden, C-9) →
- *   V-4 (met/partial with no career evidence → no_evidence) → met rule (no
- *   affiliated action/result, standalone description or deliverable body → partial) → V-5 replacement in
- *   rationale / missing_aspect (no regeneration at this stage, see notes).
+ * Stage 1 (v4.16 임시안 — one call, right after it): the model identified the
+ * requirements itself from the raw sentences. In the card's order, before the
+ * evidence rules:
+ *   1. `sids`: only S-n of this JD (unknown ones dropped, duplicates merged);
+ *      none left → the item is dropped (`dropped_requirements` — a requirement
+ *      with no sentence is invented); more than 5 → the first 5.
+ *   2. `requirement_text`: whitespace collapsed, empty → dropped, > 120 chars →
+ *      cut at 120 (no V-6 retry). V-5 against **that item's sentences only**:
+ *      a violation replaces the text with its first sentence (≤ 120), no
+ *      regeneration. Leftover aliases → display labels.
+ *   3. duplicates (same normalized text and same sids) → the later one dropped.
+ *   4. more than AI02_MAX_MATCHES (15) → the first 15 in model order
+ *      (`truncated_requirements`).
+ *   then per item: V-1/V-2/V-3/V-8 per evidence (learnings forbidden, C-9; JD
+ *   evidence is dropped — the sentences are `sids`) → V-4 (met/partial with no
+ *   career evidence → no_evidence, fixed rationale) → met rule (no affiliated
+ *   action/result, standalone description or deliverable body → partial) →
+ *   V-5 + alias labels in rationale / missing_aspect.
+ *   5. keys: items sorted by first sid number (ties: model order) → `MT-1`, `MT-2` …
+ *   (6. zero items → the pipeline calls stage 1 once more, then schema_invalid.)
  *
  * Stage 2 (finalize, after the synthesize call and its V-5 regeneration):
  *   strengths (V-4 drop; requirement_refs must reach a met/partial verdict;
@@ -40,15 +46,24 @@ export const INSIGHT_MAX_PRIORITIES = 5;
 
 /** Shown when V-4 turns a met/partial verdict into no_evidence (the model's reason cited evidence that failed validation). */
 export const NO_EVIDENCE_RATIONALE = "입력된 데이터에서 이 요건을 뒷받침하는 근거를 찾지 못했습니다.";
-/** Missing aspect set when the met rule downgrades and the model gave none. */
-export const MET_DOWNGRADE_MISSING_ASPECT = "본인이 한 행동·결과 또는 성과로 확인되는 서술";
+/** Missing aspect set when the met rule downgrades and the model gave none (AI-02 card wording). */
+export const MET_DOWNGRADE_MISSING_ASPECT = "본인이 한 행동이나 결과·성과로 확인되는 서술";
 
 /** AI-02 counters on top of the common validation_report (counts only, C-7). */
 export const AI02_REPORT_EXTRA_KEYS = [
   "requirements_total",
-  "matches_dropped_unknown_ref",
-  "matches_dropped_duplicate",
-  "matches_filled_missing",
+  /** Card name: items whose sids were all invalid (invented requirement). */
+  "dropped_requirements",
+  /** Card name: items over AI02_MAX_MATCHES. */
+  "truncated_requirements",
+  "requirements_dropped_empty",
+  "requirements_duplicate",
+  "requirement_text_clipped",
+  "requirement_text_replaced",
+  "sids_dropped",
+  "sids_truncated",
+  "stage1_empty_retried",
+  "match_jd_evidence_dropped",
   "met_downgraded_partial",
   "evidence_lost_on_restore",
   "strengths_dropped_no_match",
@@ -83,12 +98,27 @@ export function mergeAi02Reports(...reports: ReadonlyArray<Partial<Record<string
 
 const LEARNINGS_FORBIDDEN = "forbidden" as const; // C-9: AI-02 allows no learnings evidence at all.
 
+/** (v4.16) Server match key `MT-n`: model refs, item_key suffix and stored key are the same string (DM 2.7.0). */
+export function matchKey(n: number): string {
+  return `MT-${n}`;
+}
+export const MATCH_KEY_PATTERN = /^MT-(\d+)$/;
+
+/** AI-02 card "단계 1 서버 검증" 2: requirement_text 1–120 chars (cut, no ellipsis). */
+export const REQUIREMENT_TEXT_MAX = 120;
+/** Card 1: sids 1–5 (the first five are kept). */
+export const MATCH_MAX_SIDS = 5;
+
 /** Verdict in alias form (internal to one context). */
 export type ValidatedMatch = {
-  ref: string;
-  requirementId: string;
+  /** `MT-n` — model ref and stored key alike. */
+  key: string;
+  requirementText: string;
+  /** S-n of this JD, 1–5, ascending. */
+  sids: string[];
   status: InsightMatchStatus;
-  modelStatus: InsightMatchStatus | null;
+  /** The model's verdict before server rules. */
+  modelStatus: InsightMatchStatus;
   rationale: string;
   missingAspect: string | null;
   evidence: ValidatedEvidence[];
@@ -125,48 +155,107 @@ export function applyMatchRules(
   return { status: modelStatus, evidence, downgradedTo: null };
 }
 
+export function sidNumber(sid: string): number {
+  return Number(/^S(\d+)$/.exec(sid)?.[1] ?? Number.MAX_SAFE_INTEGER);
+}
+
+function collapse(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 /**
- * Stage 1: one batch output → exactly one verdict per batch requirement, in
- * batch order. `batch` = [{ref, requirementId}] of this call.
+ * Stage 1 (v4.16): the single match output → validated verdicts with keys
+ * MT-1… in JD order. `maxMatches` = AI02_MAX_MATCHES. Zero items is returned
+ * as is; the pipeline decides on the retry (card 6).
  */
-export function validateMatchBatch(
+export function validateMatchStage(
   output: Ai02MatchOutput,
-  batch: ReadonlyArray<{ ref: string; requirementId: string }>,
   aliases: AliasMap,
   guard: TextGuard,
+  maxMatches: number,
 ): { matches: ValidatedMatch[]; report: Ai02ValidationReport } {
   const report = emptyAi02Report();
-  report.requirements_total = batch.length;
   const ctx: EvidenceContext = { aliases, learnings: LEARNINGS_FORBIDDEN };
-  const byRef = new Map<string, Ai02Match>();
-  for (const m of output.matches) {
-    const ref = m.requirement_ref.trim();
-    if (!batch.some((b) => b.ref === ref)) {
-      report.matches_dropped_unknown_ref++;
-      continue;
-    }
-    if (byRef.has(ref)) {
-      report.matches_dropped_duplicate++;
-      continue;
-    }
-    byRef.set(ref, m);
-  }
 
-  const matches: ValidatedMatch[] = [];
-  for (const b of batch) {
-    const m = byRef.get(b.ref);
-    if (!m) {
-      // [가정 S6-2] the model skipped this requirement → no_evidence with no evidence.
-      report.matches_filled_missing++;
-      matches.push({ ref: b.ref, requirementId: b.requirementId, status: "no_evidence", modelStatus: null, rationale: NO_EVIDENCE_RATIONALE, missingAspect: null, evidence: [] });
-      continue;
+  // ---- card 1–4: sids → text → duplicates → count ----
+  type Candidate = { order: number; text: string; sids: string[]; item: Ai02MatchOutput["matches"][number] };
+  const candidates: Candidate[] = [];
+  const seen = new Set<string>();
+  output.matches.forEach((m, order) => {
+    const sids: string[] = [];
+    for (const raw of m.sids) {
+      const sid = raw.trim();
+      const entry = aliases.get(sid);
+      if (!entry || entry.sourceType !== "jd_sentence") {
+        report.sids_dropped++;
+        continue;
+      }
+      if (!sids.includes(sid)) sids.push(sid);
     }
+    if (sids.length === 0) {
+      report.dropped_requirements++;
+      return;
+    }
+    if (sids.length > MATCH_MAX_SIDS) {
+      report.sids_truncated += sids.length - MATCH_MAX_SIDS;
+      sids.length = MATCH_MAX_SIDS;
+    }
+    sids.sort((a, b) => sidNumber(a) - sidNumber(b));
+
+    let text = collapse(m.requirement_text);
+    if (!text) {
+      report.requirements_dropped_empty++;
+      return;
+    }
+    if (Array.from(text).length > REQUIREMENT_TEXT_MAX) {
+      report.requirement_text_clipped++;
+      text = cut(text, REQUIREMENT_TEXT_MAX);
+    }
+    // V-5 source = this item's sentences only; a violation → the first sentence (no regeneration).
+    const sentenceTexts = sids.map((sid) => aliases.get(sid)?.fields[WHOLE_SOURCE_FIELD] ?? "");
+    const bad = findUnsupportedNumbers(text, buildAllowedNumbers({ texts: sentenceTexts }));
+    if (bad.length) {
+      report.number_violations += bad.length;
+      report.requirement_text_replaced++;
+      text = cut(collapse(sentenceTexts[0]), REQUIREMENT_TEXT_MAX);
+    }
+    text = labelAliases(text, guard, aliases, report);
+    if (!text) {
+      report.requirements_dropped_empty++;
+      return;
+    }
+
+    const dupKey = `${text.toLowerCase()}|${sids.join(",")}`;
+    if (seen.has(dupKey)) {
+      report.requirements_duplicate++;
+      return;
+    }
+    seen.add(dupKey);
+    if (candidates.length >= maxMatches) {
+      report.truncated_requirements++;
+      return;
+    }
+    candidates.push({ order, text, sids, item: m });
+  });
+
+  // ---- card 5: keys in JD order ----
+  candidates.sort((a, b) => sidNumber(a.sids[0]) - sidNumber(b.sids[0]) || a.order - b.order);
+
+  const matches: ValidatedMatch[] = candidates.map((c, i) => {
+    const m = c.item;
     let evidence: ValidatedEvidence[] = [];
     if (m.status !== "no_evidence") {
       // "reference" = per-evidence checks only; V-4 and the met rule are applyMatchRules (single counter).
-      const item = validateItem({ key: b.ref, kind: "reference", evidence: m.evidence }, ctx);
+      const item = validateItem({ key: `matches.${i}`, kind: "reference", evidence: m.evidence }, ctx);
       Object.assign(report, mergeReports(report, item.report));
-      evidence = item.outcome.evidence;
+      evidence = item.outcome.evidence.filter((e) => {
+        // JD sentences belong in sids; the match's evidence is the user's career only.
+        if (e.source_type === "jd_sentence") {
+          report.match_jd_evidence_dropped++;
+          return false;
+        }
+        return true;
+      });
     }
     const ruled = applyMatchRules(m.status, evidence, report);
     let rationale = m.rationale.trim();
@@ -174,19 +263,38 @@ export function validateMatchBatch(
     if (ruled.downgradedTo === "no_evidence") rationale = NO_EVIDENCE_RATIONALE;
     if (ruled.downgradedTo === "partial" && !missingAspect) missingAspect = MET_DOWNGRADE_MISSING_ASPECT;
     if (!rationale) rationale = ruled.status === "no_evidence" ? NO_EVIDENCE_RATIONALE : rationale;
-    const guardedRationale = cleanText(rationale, guard, aliases, report);
-    const guardedMissing = missingAspect === null ? null : cleanText(missingAspect, guard, aliases, report);
-    matches.push({
-      ref: b.ref,
-      requirementId: b.requirementId,
+    return {
+      key: matchKey(i + 1),
+      requirementText: c.text,
+      sids: c.sids,
       status: ruled.status,
       modelStatus: m.status,
-      rationale: guardedRationale,
-      missingAspect: guardedMissing,
+      rationale: cleanText(rationale, guard, aliases, report),
+      missingAspect: missingAspect === null ? null : cleanText(missingAspect, guard, aliases, report),
       evidence: ruled.evidence,
-    });
-  }
+    };
+  });
+  report.requirements_total = matches.length;
   return { matches, report };
+}
+
+/** Cut at `max` characters (code points), no ellipsis (card: "120자에서 자른다"). */
+function cut(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? chars.slice(0, max).join("").trimEnd() : text;
+}
+
+function clipChars(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
+}
+
+/** Aliases → display labels only (no number guard): the requirement text had its own V-5 above. */
+function labelAliases(text: string, guard: TextGuard, aliases: AliasMap, report: Ai02ValidationReport): string {
+  const { text: out, stats } = replaceAliasesInText(text, aliases, guard.literalAliasTokens);
+  report.aliases_replaced += stats.replaced;
+  report.aliases_removed += stats.removed;
+  return collapse(out);
 }
 
 /** What the prose of one context is checked against. */
@@ -195,6 +303,11 @@ export type TextGuard = {
   allowedNumbers: ReadonlySet<string>;
   /** Alias-shaped tokens that occur in the user's own data (kept in prose). */
   literalAliasTokens: ReadonlySet<string>;
+  /**
+   * Stage 2: `MT-n` → requirement text. Match keys are not source aliases,
+   * so they would otherwise be removed as unknown tokens.
+   */
+  requirementLabels?: ReadonlyMap<string, string>;
 };
 
 /**
@@ -202,7 +315,17 @@ export type TextGuard = {
  * extraction), then aliases → display labels (QA-S6-04).
  */
 export function cleanText(text: string, guard: TextGuard, aliases: AliasMap, report: Ai02ValidationReport): string {
-  const numbersChecked = guardText(text, guard.allowedNumbers, report);
+  let numbersChecked = guardText(text, guard.allowedNumbers, report);
+  const labels = guard.requirementLabels;
+  if (labels?.size) {
+    numbersChecked = numbersChecked.replace(/\bMT-\d+\b/g, (token) => {
+      if (guard.literalAliasTokens.has(token)) return token;
+      const label = labels.get(token);
+      if (!label) return token; // unknown → removed by replaceAliasesInText
+      report.aliases_replaced++;
+      return `'${clipChars(label.replace(/\s+/g, " ").trim(), ALIAS_LABEL_MAX)}'`;
+    });
+  }
   const { text: out, stats } = replaceAliasesInText(numbersChecked, aliases, guard.literalAliasTokens);
   report.aliases_replaced += stats.replaced;
   report.aliases_removed += stats.removed;
@@ -254,11 +377,12 @@ export function validateSynthesis(
   output: Ai02SynthesisOutput,
   matches: readonly ValidatedMatch[],
   aliases: AliasMap,
-  guard: TextGuard,
+  guardIn: TextGuard,
 ): { value: FinalSynthesis; report: Ai02ValidationReport } {
   const report = emptyAi02Report();
   const ctx: EvidenceContext = { aliases, learnings: LEARNINGS_FORBIDDEN };
-  const statusByRef = new Map(matches.map((m) => [m.ref, m.status]));
+  const statusByRef = new Map(matches.map((m) => [m.key, m.status]));
+  const guard: TextGuard = { ...guardIn, requirementLabels: new Map(matches.map((m) => [m.key, m.requirementText])) };
   const add = (r: ValidationReport) => Object.assign(report, mergeAi02Reports(report, r));
 
   const keepRefs = (refs: readonly string[], allowed: (s: InsightMatchStatus) => boolean): string[] => {

@@ -10,14 +10,16 @@ insert into auth.users (id, email, aud, role) values
 -- ── ⑪ policy_versions.policy_type = 'ai_data_use' (D-UX-31, R-SD-14) ──
 -- 2026-11-08: 본문 원문(docs/legal/ai-data-use.md)이 생겨 새 버전 행을 더했다 (UI42-8, 20261113002900).
 -- 2026-11-09: CF-S6 (R15) — 경력기술서 문구 삭제 개정판.
-select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 4,
-          'ai_data_use rows: 2026-11-05 + 2026-11-08 + 2026-11-08.1 (R14) + 2026-11-09 (R15, CF-S6)');
+-- 2026-11-20: UI60-E (R17) — 요건 문구 삭제·인사이트 자동 시작 개정판.
+select is((select count(*)::int from public.policy_versions where policy_type = 'ai_data_use'), 5,
+          'ai_data_use rows: 2026-11-05 + 2026-11-08 + 2026-11-08.1 (R14) + 2026-11-09 (R15, CF-S6) + 2026-11-20 (R17, UI60-E)');
 select results_eq($$select version, requires_reconsent, document_path from public.policy_versions
                      where policy_type = 'ai_data_use' order by version$$,
   $$values ('2026-11-05', false, '/policies/ai_data_use/2026-11-05'),
            ('2026-11-08', false, '/policies/ai_data_use/2026-11-08'),
            ('2026-11-08.1', false, '/policies/ai_data_use/2026-11-08.1'),
-           ('2026-11-09', false, '/policies/ai_data_use/2026-11-09')$$,
+           ('2026-11-09', false, '/policies/ai_data_use/2026-11-09'),
+           ('2026-11-20', false, '/policies/ai_data_use/2026-11-20')$$,
   'document_path follows /policies/{type}/{version}, no reconsent (R-SD-14)');
 select ok((select pg_get_constraintdef(oid) like '%ai_data_use%'
             from pg_constraint where conname = 'policy_versions_policy_type_check'),
@@ -46,8 +48,8 @@ reset role;
 -- the shared validators refuse a profile source
 select is(private.insight_payload_valid(jsonb_build_object(
             'result', '{}'::jsonb, 'match_stage_result', '{}'::jsonb,
-            'hashes', '{"requirements_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
-            'meta', '{"schema_version":1,"prompt_version":"p","provider":"gemini","model":"m",
+            'hashes', '{"raw_text_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
+            'meta', '{"schema_version":2,"prompt_version":"p","provider":"gemini","model":"m",
                       "model_tier":"default","connection_tier":"free"}'::jsonb,
             'evidence', jsonb_build_array(jsonb_build_object(
               'item_key', 'strengths.0', 'sort_order', 0, 'source_type', 'profile',
@@ -55,8 +57,8 @@ select is(private.insight_payload_valid(jsonb_build_object(
           false, 'insight payload with a profile source is invalid');
 select is(private.insight_payload_valid(jsonb_build_object(
             'result', '{}'::jsonb, 'match_stage_result', '{}'::jsonb,
-            'hashes', '{"requirements_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
-            'meta', '{"schema_version":1,"prompt_version":"p","provider":"gemini","model":"m",
+            'hashes', '{"raw_text_hash":"r","career_snapshot_hash":"c","input_hash":"i"}'::jsonb,
+            'meta', '{"schema_version":2,"prompt_version":"p","provider":"gemini","model":"m",
                       "model_tier":"default","connection_tier":"free"}'::jsonb,
             'evidence', jsonb_build_array(jsonb_build_object(
               'item_key', 'strengths.0', 'sort_order', 0, 'source_type', 'experience',

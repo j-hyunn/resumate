@@ -17,7 +17,7 @@
  * - key_invalid failure marks the key row invalid (RPC mark_provider_key_invalid).
  * - each finished job writes ai_usage_records rows (tokens + estimated cost, also on failure).
  *
- * Sync mode (AI-01, AI-11, key check) is `mockSyncCall`; streaming lives in ai-stream.ts.
+ * Sync mode (key check) is `mockSyncCall`; streaming lives in ai-stream.ts.
  */
 import type {
   AiErrorCode,
@@ -25,7 +25,6 @@ import type {
   AiJob,
   AiJobProgress,
   AiJobType,
-  AiProgressStage,
   AiUsageFeature,
   ConnectionTier,
 } from "@/types/db"
@@ -48,11 +47,11 @@ export interface MockJobOptions {
   units?: number
   /** inject a failure (error_code) */
   fail?: AiErrorCode | null
-  /** the injected failure happened in `prepare` (요건 추출 실패, Q53-9): the job ends on its first read, nothing saved */
+  /** the injected failure happened in `prepare`: the job ends on its first read, nothing saved */
   fail_at_prepare?: boolean
   /** simulate a rate-limit auto-retry wait window */
   rate_wait?: boolean
-  /** gate path (04 §2.11.7): "start" ① new job (default) / "request" ⑤ request-scoped (JD extraction) */
+  /** gate path (04 §2.11.7): "start" ① new job (default) / "request" ④⑤ request-scoped (chat turn) */
   path?: AiGatePath
   params?: Record<string, unknown>
 }
@@ -86,7 +85,6 @@ const DEFAULT_DURATION: Partial<Record<AiJobType, number>> = {
   career_description: 8_000,
   cover_letter: 8_000,
   draft_source_ranking: 3_000,
-  jd_extraction: 4_000,
   writing_chat_turn: 4_000,
   key_verification: 2_000,
 }
@@ -96,13 +94,14 @@ const DEFAULT_DURATION: Partial<Record<AiJobType, number>> = {
  * (synthesize_regen) → validate.
  */
 export function stagePlan(jobType: AiJobType, units = 2, opts?: { regen?: boolean }): AiJobProgress[] {
-  const counted = (stage: AiProgressStage, n: number) =>
-    Array.from({ length: n + 1 }, (_, i) => ({ stage, done: i, total: n }))
+  // `units` (done/total stages) — no job type counts units since the insight stage 1 became one call (v5.21)
+  void units
   switch (jobType) {
     case "insight":
       return [
         { stage: "prepare" },
-        ...counted("match", units),
+        // (v5.21, JR-Q2 보류) stage 1 = one call (requirement identification + judgement) — no processing units
+        { stage: "match" },
         { stage: "synthesize" },
         ...(opts?.regen ? [{ stage: "synthesize_regen" as const }] : []),
         { stage: "validate" },
@@ -359,15 +358,15 @@ export function retryMockJob(
   return job
 }
 
-/** Sync AI call (AI-01, AI-11, key check): resolves after `ms`, or rejects with an error_code. */
+/** Sync AI call (key check): resolves after `ms`, or rejects with an error_code. */
 export async function mockSyncCall<T>(result: T, opts?: { ms?: number; fail?: AiErrorCode | null }): Promise<T> {
   await new Promise((resolve) => setTimeout(resolve, opts?.ms ?? 1_500))
   if (opts?.fail) throw new MockAiError(opts.fail)
   return result
 }
 
+// (v5.21, JR-1) no `jd_extraction` jobs run any more — the legacy usage rows come from the fixtures only
 const FEATURE_OF: Partial<Record<AiJobType, AiUsageFeature>> = {
-  jd_extraction: "jd_extraction",
   insight: "insight",
   career_description: "career_description",
   draft_source_ranking: "career_description",
@@ -378,7 +377,6 @@ const FEATURE_OF: Partial<Record<AiJobType, AiUsageFeature>> = {
 
 /** Mock token counts per call (rough AI spec 7장 sizes) */
 const TOKENS: Partial<Record<AiUsageFeature, [number, number]>> = {
-  jd_extraction: [3_500, 900],
   insight: [11_500, 2_500],
   career_description: [10_500, 5_000],
   cover_letter: [9_000, 2_200],

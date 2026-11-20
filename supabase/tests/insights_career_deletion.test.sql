@@ -34,7 +34,7 @@ insert into public.application_projects (id, user_id, name, name_source) values
 create function pg_temp.ready_insight(p_id uuid, p_user uuid, p_project uuid, p_version int, p_latest boolean)
 returns void language sql as $f$
   insert into public.insights (id, user_id, application_project_id, version_no, is_latest, status, result,
-                               match_stage_result, requirements_hash, career_snapshot_hash, input_hash, schema_version,
+                               match_stage_result, raw_text_hash, career_snapshot_hash, input_hash, schema_version,
                                prompt_version, provider, model, model_tier, connection_tier, completed_at)
   values (p_id, p_user, p_project, p_version, p_latest, 'ready', '{}', '{}', 'rh', 'ch', 'ih', 1, 'pv', 'gemini', 'm',
           'default', 'free', now());

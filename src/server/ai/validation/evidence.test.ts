@@ -8,14 +8,8 @@ import { buildSelectionScope, checkEvidence, validateItem, type EvidenceContext,
 
 const pack = buildCareerPack(careerRowsFixture(), { asOf: { year: 2026, month: 10 } });
 const jdRaw = "결제 API 운영 경험이 필요합니다.\nKafka 경험 우대";
-const jd = buildJdContext({
-  jobDescriptionId: "jd-1",
-  sentences: splitJdSentences(jdRaw),
-  requirements: [
-    { id: "req-uuid-1", category: "required", content: "결제 API 운영 경험", importance: "high", source_sids: ["S1"], sort_order: 1, updated_at: null },
-  ],
-  includeSentences: "all",
-});
+const jd = buildJdContext({ jobDescriptionId: "jd-1", sentences: splitJdSentences(jdRaw), rawTextHash: "h" });
+// (v4.16, 4.24 #5) `jd_requirement` (REQ-n) is gone from the source types; JD evidence is `jd_sentence` only.
 const aliases = AliasMap.merge(pack.aliases, jd.aliases);
 const ctx: EvidenceContext = { aliases, learnings: "forbidden" };
 
@@ -65,7 +59,6 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
     ["period", { source_type: "experience", ref: "EXP-1", field: "period" }],
     ["jd sentence without field", { source_type: "jd_sentence", ref: "S1" }],
     ["jd sentence with quote", { source_type: "jd_sentence", ref: "S1", field: null, quote: "결제 API 운영 경험" }],
-    ["jd requirement", { source_type: "jd_requirement", ref: "REQ-1" }],
   ])("%s → kept", (_, raw) => {
     const result = checkEvidence(raw, ctx);
     expect(result.ok).toBe(true);
@@ -93,7 +86,16 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
       ok: true,
       evidence: { source_type: "project", ref: "PRJ-2", field: "action", quote: "병목 쿼리를 찾아 인덱스를 재설계했다", quote_adjusted: false },
     });
-    expect(checkEvidence({ source_type: "jd_requirement", ref: "REQ-1", field: "" }, ctx)).toMatchObject({ ok: true, evidence: { field: null } });
+    expect(checkEvidence({ source_type: "jd_sentence", ref: "S1", field: "" }, ctx)).toMatchObject({ ok: true, evidence: { field: null } });
+  });
+
+  it("V-1 by the feature allow list (AI-04: career 5 + user_note — no jd_sentence, JR-5) even when the alias exists", () => {
+    const allow = new Set<EvidenceSourceType>(["experience", "education", "project", "project_deliverable", "skill", "user_note"]);
+    const narrowed: EvidenceContext = { ...ctx, allowedSourceTypes: allow };
+    expect(checkEvidence({ source_type: "jd_sentence", ref: "S1" }, ctx).ok).toBe(true);
+    expect(checkEvidence({ source_type: "jd_sentence", ref: "S1" }, narrowed)).toEqual({ ok: false, rule: "v1_ref" });
+    expect(checkEvidence(action, narrowed).ok).toBe(true);
+    expect(checkEvidence({ source_type: "jd_requirement" as never, ref: "REQ-1" }, ctx)).toEqual({ ok: false, rule: "v1_ref" });
   });
 
   it("learnings are valid under reflection_only", () => {
@@ -110,7 +112,7 @@ describe("checkEvidence V-1 → V-2 → V-3 → V-8 → V-7", () => {
 
 describe("validateItem V-4", () => {
   const bad: ModelEvidence = { ...action, ref: "PRJ-99" };
-  const jdOnly: ModelEvidence = { source_type: "jd_requirement", ref: "REQ-1" };
+  const jdOnly: ModelEvidence = { source_type: "jd_sentence", ref: "S1" };
   const learn: ModelEvidence = { source_type: "project", ref: "PRJ-2", field: "learnings", quote: "측정 없이 최적화하면 안 된다는 것을 배웠다" };
   // (v4.12, SD-6) `profile` is not a source type any more: V-2 drops it whatever the field.
   const wish = { source_type: "profile" as never, ref: "PROFILE", field: "desired_job_title", quote: "백엔드 개발자" } as ModelEvidence;
@@ -120,13 +122,13 @@ describe("validateItem V-4", () => {
     ["judgment with evidence → keep", { key: "strengths.0", kind: "judgment", evidence: [action] }, "keep", []],
     ["judgment loses all evidence → drop", { key: "strengths.0", kind: "judgment", evidence: [bad] }, "drop", []],
     ["judgment with JD evidence only → drop", { key: "strengths.0", kind: "judgment", evidence: [jdOnly] }, "drop", []],
-    ["match without evidence → downgrade", { key: "requirement_matches.REQ-1", kind: "match", evidence: [bad] }, "downgrade", []],
+    ["match without evidence → downgrade", { key: "requirement_matches.MT-1", kind: "match", evidence: [bad] }, "downgrade", []],
     ["draft block without evidence → flag", { key: "p3-b1", kind: "draft_block", evidence: [], text: "x" }, "flag", ["evidence_check_needed"]],
     ["reference item may have none", { key: "gaps.0", kind: "reference", evidence: [jdOnly] }, "keep", []],
     // (v4.12, SD-6) V-4 has no profile exception left: every profile evidence is
     // dropped by V-2, so an item that rests on one has zero evidence.
     ["judgment on a profile source only → drop (SD-6)", { key: "strategy.positioning", kind: "judgment", evidence: [wish] }, "drop", []],
-    ["match on a profile source only → downgrade (SD-6)", { key: "requirement_matches.REQ-1", kind: "match", evidence: [wish, years] }, "downgrade", []],
+    ["match on a profile source only → downgrade (SD-6)", { key: "requirement_matches.MT-1", kind: "match", evidence: [wish, years] }, "downgrade", []],
     ["draft block on a profile source only → flag (SD-6)", { key: "q1-p1", kind: "draft_block", evidence: [wish], text: "x" }, "flag", ["evidence_check_needed"]],
     ["judgment on profile + action → keep (the action carries it)", { key: "strengths.0", kind: "judgment", evidence: [wish, action] }, "keep", []],
     [
@@ -179,12 +181,12 @@ describe("validateItem V-4", () => {
 describe("buildSelectionScope (V-7)", () => {
   it("an affiliated project is its own STAR scope (no DET/ACH in v4.5), plus JD — (v4.12, SD-6) no profile", () => {
     const scope = buildSelectionScope(aliases, { refs: ["PRJ-2"] });
-    expect([...scope].sort()).toEqual(["PRJ-2", "REQ-1", "S1", "S2"].sort());
+    expect([...scope].sort()).toEqual(["PRJ-2", "S1", "S2"].sort());
   });
 
   it("a selected standalone project brings its deliverables and skills, not other projects'", () => {
     const scope = buildSelectionScope(aliases, { refs: ["PRJ-4"] });
-    expect([...scope].sort()).toEqual(["DLV-1", "DLV-2", "PRJ-4", "REQ-1", "S1", "S2", "SKL-1", "SKL-2"].sort());
+    expect([...scope].sort()).toEqual(["DLV-1", "DLV-2", "PRJ-4", "S1", "S2", "SKL-1", "SKL-2"].sort());
     expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("DLV-1")).toBe(false);
     expect(buildSelectionScope(aliases, { refs: ["PRJ-2"] }).has("SKL-1")).toBe(false);
   });
@@ -210,7 +212,7 @@ describe("isCareerSupportEvidence (A10)", () => {
     ["removed type project_detail", { source_type: "project_detail", field: "action" }, false],
     ["skill", { source_type: "skill", field: "name" }, true],
     ["jd sentence", { source_type: "jd_sentence", field: null }, false],
-    ["jd requirement", { source_type: "jd_requirement", field: null }, false],
+    ["jd requirement (removed type)", { source_type: "jd_requirement", field: null }, false],
     ["unknown type", { source_type: "nope", field: null }, false],
   ])("%s → %s", (_, e, expected) => {
     expect(isCareerSupportEvidence(e)).toBe(expected);

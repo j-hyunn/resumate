@@ -55,6 +55,11 @@ export type EvidenceContext = {
   scope?: ReadonlySet<string> | null;
   /** AI-12 only: `writing_chat_message` evidence is valid (stored in structured_draft, not evidence_links). */
   allowWritingChatMessage?: boolean;
+  /**
+   * Feature allow list of source types (DM 2.8 허용 출처, e.g. AI-04 = career 5 + user_note).
+   * A source type outside it fails V-1 even when an alias of that type exists. Omitted = every C-3 type.
+   */
+  allowedSourceTypes?: ReadonlySet<EvidenceSourceType> | null;
 };
 
 export type EvidenceRemoval = "v1_ref" | "v2_field" | "v3_quote" | "v8_learnings" | "v7_scope";
@@ -73,6 +78,7 @@ export function checkEvidence(raw: ModelEvidence, ctx: EvidenceContext): Evidenc
 
   // V-1: ref exists in this call's alias map, with the claimed source type.
   if (sourceType === "writing_chat_message" && !ctx.allowWritingChatMessage) return { ok: false, rule: "v1_ref" };
+  if (ctx.allowedSourceTypes && !ctx.allowedSourceTypes.has(sourceType)) return { ok: false, rule: "v1_ref" };
   const entry = ctx.aliases.get(raw.ref);
   if (!rule.ref.test(raw.ref) || !entry || entry.sourceType !== sourceType) return { ok: false, rule: "v1_ref" };
 
@@ -223,7 +229,6 @@ export function buildSelectionScope(aliases: AliasMap, selection: { refs: readon
   const scope = new Set<string>();
   const alwaysAllowed: ReadonlySet<EvidenceSourceType> = new Set<EvidenceSourceType>([
     "jd_sentence",
-    "jd_requirement",
     "user_note",
   ]);
   const entries = [...aliases.values()];

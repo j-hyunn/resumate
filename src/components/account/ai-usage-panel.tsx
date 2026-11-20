@@ -203,7 +203,8 @@ function FeatureTable({ rows: source }: { rows: UsageRow[] }) {
     const list = [...source]
     // 정렬 기준은 비용 1줄 값 (토큰 아님)
     const val = (r: UsageRow) => (sort === "input" ? r.inputCost : sort === "output" ? r.outputCost : r.calls)
-    if (sort !== "order") list.sort((a, b) => val(b) - val(a) || a.order - b.order)
+    // (v5.21, JR-Q5) the legacy "JD 요건 추출(종료)" row stays last in every sort
+    if (sort !== "order") list.sort((a, b) => Number(a.legacy) - Number(b.legacy) || val(b) - val(a) || a.order - b.order)
     return list
   }, [source, sort])
   const zero = (r: UsageRow) => r.calls === 0 && r.inputCost === 0 && r.outputCost === 0

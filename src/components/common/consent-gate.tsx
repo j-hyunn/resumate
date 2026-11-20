@@ -13,8 +13,8 @@
  *
  *   consent.open(retry)   // retry refusal ai_consent_required / C-20 key_missing consent cause
  *
- * AiRunButton and AiErrorNotice use it internally; screens with their own run buttons (S-36 보내기,
- * 요건 정리하기 …) use the hook directly.
+ * AiRunButton and AiErrorNotice use it internally; screens with their own run buttons (AI 패널 보내기 …)
+ * use the hook directly.
  */
 import * as React from "react"
 import type { AiConnection } from "@/types/db"

@@ -14,11 +14,13 @@ import {
   JD_FETCH_TIMEOUT_MS,
   jdFetchError,
   jdFetchTooManyRequests,
-  type FetchJobDescriptionResult,
   type JdFetchErrorCode,
 } from "@/lib/contracts/jd-fetch";
 import { isAppError } from "@/lib/contracts/errors";
 import { assertSafeUrl, defaultLookup, type LookupFn } from "../ssrf";
+
+/** The R16 response shape (R17 4.24 #15 trimmed the live contract to `{ rawText }`). Test reference only. */
+type FetchJobDescriptionResult = { rawText: string; companyName: string | null; positionTitle: string | null };
 
 /**
  * R15 A1 — 공고 URL 가져오기 (CF-10). Fetches a job posting page and turns it

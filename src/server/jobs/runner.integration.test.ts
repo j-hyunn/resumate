@@ -7,7 +7,7 @@ import type { Database } from "@/server/db/database.types";
 import { resetServerEnvCache } from "@/server/env";
 import { requestCancel } from "@/server/services/ai-jobs";
 import { CreateApplicationProjectInput } from "@/lib/contracts/application";
-import { KO_BACKEND } from "@/server/ai/__fixtures__/AI-01/jds";
+import { KO_BACKEND } from "@/test/jd-fixtures";
 import { resolveModel } from "@/server/ai/providers/models";
 import { withdrawAiDataUseConsent } from "@/server/services/ai-connection/consent";
 import { deleteProviderKey } from "@/server/services/ai-connection/keys";

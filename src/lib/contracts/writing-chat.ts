@@ -191,7 +191,12 @@ export const ReturnTarget = z.object({
 });
 export type ReturnTarget = z.infer<typeof ReturnTarget>;
 
-/** What the client sends; the server stamps `created_at`. */
+/**
+ * What the client sends; the server stamps `created_at`. A gate chat opened from an S-16 보완점 puts
+ * `params.insight_id` (uuid) + `params.insight_item_key` (`gaps.{n}`) here (DM v4.16 2.7.0, 4.24 #14):
+ * `start_writing_chat` checks both (mine, that project's insight, else `invalid_return_target` →
+ * `invalid_input` 400) and the AI-12 reply reads that gap as `gateGaps`.
+ */
 export const ReturnTargetInput = z.object({
   applicationProjectId: uuid,
   feature: z.enum(RETURN_TARGET_FEATURES),

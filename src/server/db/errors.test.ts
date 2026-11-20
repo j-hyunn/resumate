@@ -51,18 +51,26 @@ describe("QA-W0-05 program errors", () => {
   });
 });
 
-describe("W0 refusals", () => {
-  it.each(["jd_job_in_progress", "jd_raw_text_locked", "jd_failure_not_input", "jd_has_results", "jd_raw_text_unchanged"])("%s → 409 under its own code, Korean message", (raise) => {
+describe("update_jd_raw_text refusals (R17 JR-7, DM 2.6.1)", () => {
+  it.each(["jd_job_in_progress", "jd_raw_text_unchanged"])("%s → 409 under its own code, Korean message", (raise) => {
     const err = mapDbError({ code: "P0001", message: raise });
     expect(err).toMatchObject({ code: raise, status: 409 });
     expect(err.message).toMatch(/[가-힣]/);
   });
 
-  it("a W0 refusal carries no details", () => {
-    expect(mapDbError({ code: "P0001", message: "jd_has_results", details: "x" }).details).toBeUndefined();
+  it("jd_no_sentences → 400 under its own code", () => {
+    expect(mapDbError({ code: "P0001", message: "jd_no_sentences" })).toMatchObject({ code: "jd_no_sentences", status: 400 });
   });
 
-  it.each(["key_invalid", "ai_consent_required"])("create_application_project gate %s → 409 (Q53-1)", (raise) => {
+  it.each(["jd_has_results", "jd_raw_text_locked", "jd_failure_not_input", "jd_not_extracted"])("retired raise %s has no own mapping any more", (raise) => {
+    expect(mapDbError({ code: "P0001", message: raise })).toMatchObject({ code: "internal_error", status: 500 });
+  });
+
+  it("a refusal carries no details", () => {
+    expect(mapDbError({ code: "P0001", message: "jd_job_in_progress", details: "x" }).details).toBeUndefined();
+  });
+
+  it.each(["key_invalid", "ai_consent_required"])("connection gate raise %s → 409 (Q53-1; R17: no longer raised by create_application_project)", (raise) => {
     expect(mapDbError({ code: "P0001", message: raise })).toMatchObject({ code: raise, status: 409 });
   });
 

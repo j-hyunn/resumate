@@ -109,13 +109,11 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_source_url: { message: "공고 주소를 확인해 주세요. http 또는 https로 시작하는 주소만 가져올 수 있어요.", status: 400 },
   invalid_outcome: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요." },
   not_closed: { message: "전형 결과는 전형 종료 단계에서만 기록할 수 있어요.", status: 409 },
-  already_extracted: { message: "이미 요건을 정리한 공고예요.", status: 409 },
-  extraction_in_progress: { message: "공고를 분석하고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  user_edited_requirements_exist: { message: "직접 수정한 요건이 있어 다시 정리할 수 없어요.", status: 409 },
+  // R17: the AI-01 raises (already_extracted, extraction_in_progress, user_edited_requirements_exist,
+  // jd_not_extracted, invalid_extraction_result) are gone with their RPCs.
   // S6 insights (db notes "RPC 시그니처")
   insight_not_found: { message: "인사이트를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", status: 404 },
   insight_in_progress: { message: "인사이트를 만들고 있어요. 잠시 후 다시 확인해 주세요.", status: 409 },
-  jd_not_extracted: { message: "공고 요건을 먼저 정리해야 해요.", status: 409 },
   invalid_insight_payload: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   /**
    * R15-DB-9: the per-owner allowed-source check moved from a `23514` CHECK into
@@ -142,7 +140,6 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   // QA-W0-05: program errors, unreachable from the app paths (server-built values, no user update grant)
   job_description_immutable: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sentences: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  invalid_extraction_result: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // apply_structured_draft_patch: user-session rule violations (db notes "거부 사유")
   invalid_patch: { message: "입력값을 확인해 주세요." },
   invalid_value: { message: "입력값을 확인해 주세요." },
@@ -162,12 +159,13 @@ const RAISE_MESSAGES: Record<string, { message: string; status?: number }> = {
   invalid_message_state: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   message_not_found: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   invalid_sequence: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
-  // W0 Q53-2 / Q53-11 update_failed_jd_raw_text (DM 2.6.1)
-  jd_job_in_progress: { message: "이 자기소개서에서 AI 작업이 진행 중이에요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
-  jd_raw_text_locked: { message: "지금은 공고 원문을 고칠 수 없어요. 새로고침 후 확인해 주세요.", status: 409 },
-  jd_failure_not_input: { message: "공고 내용이 원인인 실패가 아니라 원문을 고칠 수 없어요. 요건을 다시 정리해 보세요.", status: 409 },
-  jd_has_results: { message: "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요.", status: 409 },
-  jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 원문을 고친 뒤 저장해 주세요.", status: 409 },
+  // R17 (JR-7, DM 2.6.1) update_jd_raw_text. `jd_has_results`, `jd_raw_text_locked`, `jd_failure_not_input`
+  // and `jd_not_extracted` are gone with update_failed_jd_raw_text / begin_jd_extraction.
+  jd_job_in_progress: { message: "인사이트를 만드는 중에는 공고 내용을 수정할 수 없어요. 끝난 뒤 다시 시도해 주세요.", status: 409 },
+  jd_raw_text_unchanged: { message: "바뀐 내용이 없어요. 공고 내용을 고친 뒤 저장해 주세요.", status: 409 },
+  // create_application_project / update_jd_raw_text: the text has no sentence (DM 2.6 / 2.6.1, 400).
+  // begin_insight raises it too (job path → stalled; the start route answers its own 409 first).
+  jd_no_sentences: { message: "공고 내용에서 문장을 찾지 못했어요. 공고 내용을 확인해 주세요.", status: 400 },
   // S9 delete_account: the server computes the hash, so a bad one is our bug.
   invalid_subject_hash: { message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", status: 500 },
   // R1 get_account_deletion_state / server-only key RPCs: the server passes the session user id,
@@ -237,7 +235,6 @@ const RAISE_CODE_ALIASES: Record<string, string> = {
   invalid_raw_text_hash: "internal_error",
   job_description_immutable: "internal_error",
   invalid_sentences: "internal_error",
-  invalid_extraction_result: "internal_error",
   invalid_insight_payload: "internal_error",
   // UQ-759: `invalid_source_url` keeps its own code (no alias) — S-14 "주소 없이 만들기" keys on it.
   direct_write_not_allowed: "forbidden",

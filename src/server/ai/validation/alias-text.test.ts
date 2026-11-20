@@ -16,7 +16,6 @@ function map(): AliasMap {
   const m = new AliasMap();
   m.add(entry("PRJ-3", "project", { name: "정산 배치 재설계" }));
   m.add(entry("DLV-5", "project_deliverable", { title: "배치 설계 문서", body: "본문" }, "배치 설계 문서"));
-  m.add(entry("REQ-2", "jd_requirement", { "": "Kotlin 사용 경험" }));
   m.add(entry("SKL-1", "skill", { name: "Spring Boot" }));
   m.add(entry("EXP-1", "experience", {}, "예시페이"));
   m.add(entry("S12", "jd_sentence", { "": "Kafka 등 메시지 큐 운영 경험이 있으면 좋습니다 그리고 이 문장은 꽤 깁니다" }));
@@ -29,13 +28,14 @@ describe("replaceAliasesInText (QA-S6-04)", () => {
     ["project with field suffix", "PRJ-3.action에서 보듯", "'정산 배치 재설계'에서 보듯", { replaced: 1, removed: 0 }],
     ["deliverable → title", "DLV-5.body에 나온 대로", "'배치 설계 문서'에 나온 대로", { replaced: 1, removed: 0 }],
     ["leftover DET-n / ACH-n removed (v4.5)", "결제 경험(DET-2, ACH-1)이 있습니다.", "결제 경험이 있습니다.", { replaced: 0, removed: 2 }],
-    ["requirement", "REQ-2 요건은 부분 충족입니다.", "'Kotlin 사용 경험' 요건은 부분 충족입니다.", { replaced: 1, removed: 0 }],
+    ["leftover REQ-n removed (v4.16: no requirement aliases)", "REQ-2 요건은 부분 충족입니다.", "요건은 부분 충족입니다.", { replaced: 0, removed: 1 }],
+    ["unknown MT-n removed (match keys are labelled by AI-02, not the alias map)", "MT-3 요건과 연결", "요건과 연결", { replaced: 0, removed: 1 }],
     ["skill (unquoted)", "SKL-1 태그만 있습니다.", "Spring Boot 태그만 있습니다.", { replaced: 1, removed: 0 }],
     ["experience label", "EXP-1에서", "'예시페이'에서", { replaced: 1, removed: 0 }],
     ["PROFILE is not an alias any more (v4.12, SD-6)", "PROFILE 기준", "PROFILE 기준", { replaced: 0, removed: 0 }],
     ["long sentence clipped", "S12 문장", "'Kafka 등 메시지 큐 운영 경험이 있으면 좋습니다 그리고 이 문장은…' 문장", { replaced: 1, removed: 0 }],
     ["unknown alias removed, parens tidied", "결제 경험(PRJ-99)이 있습니다.", "결제 경험이 있습니다.", { replaced: 0, removed: 1 }],
-    ["several", "PRJ-3, REQ-2", "'정산 배치 재설계', 'Kotlin 사용 경험'", { replaced: 2, removed: 0 }],
+    ["several", "PRJ-3, SKL-1", "'정산 배치 재설계', Spring Boot", { replaced: 2, removed: 0 }],
     ["no alias untouched", "  그대로  둡니다 ", "  그대로  둡니다 ", { replaced: 0, removed: 0 }],
     ["alias-like inside a word untouched", "EC2와 K8s, OAuth2", "EC2와 K8s, OAuth2", { replaced: 0, removed: 0 }],
   ])("%s", (_, input, expected, stats) => {

@@ -16,7 +16,7 @@ export interface ReturnTargetInput {
    * 진행 중 설정 restored on return. Settled keys (A2 request 7):
    * - cover_letter: `{ draft_id }` (S-18 문항 설정 화면의 초안)
    * - (v5.20, CF-1) career_description 폐기
-   * - insight (보완점): `{ gap_item_key, requirement_ids }`
+   * - insight (보완점): `{ insight_id, insight_item_key }` (`gaps.{n}`, DM v4.16 2.7.0 — start_writing_chat checks both)
    */
   params?: Record<string, unknown>
   /** display name "{회사명 – 포지션명}" (kept in session storage only) */

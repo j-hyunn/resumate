@@ -16,7 +16,7 @@ export class AiError extends AppError {
   readonly retryable: boolean;
 
   constructor(code: AiErrorCode, options?: { cause?: unknown; message?: string; retryable?: boolean }) {
-    super(code, options?.message ?? AI_ERROR_MESSAGES[code], { status: AI_ERROR_STATUS[code], cause: options?.cause });
+    super(code, options?.message ?? aiErrorMessage(code), { status: aiErrorStatus(code), cause: options?.cause });
     this.name = "AiError";
     this.retryable = options?.retryable ?? isRetryableAiErrorCode(code);
   }
@@ -181,7 +181,22 @@ export function signalReason(signal?: AbortSignal): "canceled" | "timeout" | nul
 
 // ---------- messages ----------
 
-const AI_ERROR_MESSAGES: Record<AiErrorCode, string> = {
+/**
+ * (R17) `not_a_jd` is gone with AI-01 (JD AI processing removed). The tables
+ * exclude it so they compile both before and after `lib/contracts/errors.ts`
+ * drops the code; a code without an entry falls back to `stalled`.
+ */
+type LiveAiErrorCode = Exclude<AiErrorCode, "not_a_jd">;
+
+function aiErrorMessage(code: AiErrorCode): string {
+  return (AI_ERROR_MESSAGES as Partial<Record<AiErrorCode, string>>)[code] ?? AI_ERROR_MESSAGES.stalled;
+}
+
+function aiErrorStatus(code: AiErrorCode): number {
+  return (AI_ERROR_STATUS as Partial<Record<AiErrorCode, number>>)[code] ?? AI_ERROR_STATUS.stalled;
+}
+
+const AI_ERROR_MESSAGES: Record<LiveAiErrorCode, string> = {
   rate_limited: "AI 공급자의 분당 요청 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요.",
   daily_quota_exhausted: "AI 공급자의 오늘 사용 한도를 모두 썼습니다. 한도가 초기화된 뒤 다시 시도해 주세요.",
   billing_required: "AI 공급자 계정의 잔액이나 결제 상태를 확인해 주세요.",
@@ -192,14 +207,13 @@ const AI_ERROR_MESSAGES: Record<AiErrorCode, string> = {
   input_too_long: "입력이 너무 깁니다.",
   safety_blocked: "AI 공급자의 안전 정책으로 이 요청을 처리하지 못했습니다. 내용을 바꿔 다시 시도해 주세요.",
   insufficient_data: "커리어 데이터가 부족합니다.",
-  not_a_jd: "채용 공고가 아닌 것 같습니다. 내용을 확인해 주세요.",
   schema_invalid: "AI 응답을 처리하지 못했습니다. 다시 시도해 주세요.",
   timeout: "응답 시간이 초과되었습니다. 다시 시도해 주세요.",
   stalled: "작업이 중단되었습니다. 다시 시도해 주세요.",
   canceled: "작업이 취소되었습니다.",
 };
 
-const AI_ERROR_STATUS: Record<AiErrorCode, number> = {
+const AI_ERROR_STATUS: Record<LiveAiErrorCode, number> = {
   rate_limited: 429,
   daily_quota_exhausted: 429,
   billing_required: 402,
@@ -210,7 +224,6 @@ const AI_ERROR_STATUS: Record<AiErrorCode, number> = {
   input_too_long: 413,
   safety_blocked: 422,
   insufficient_data: 422,
-  not_a_jd: 422,
   schema_invalid: 502,
   timeout: 504,
   stalled: 504,

@@ -30,9 +30,9 @@ import { AI_FEATURE_NAMES, type AiFeatureKey } from "@/lib/data/labels"
 import { AiConnectLink } from "./ai-connect-link"
 import { markAiConnectReturn } from "./ai-connect-return"
 
+/** (v5.21, JR-1) the "요건 정리하기" (S-15) entry is gone — the 채용 공고 tab has no AI entry */
 export type AiLockEntry =
   | "writing_chat"
-  | "requirements"
   | "insight"
   | "draft"
   | "usage"
@@ -40,7 +40,6 @@ export type AiLockEntry =
 /** Entry-point table (02 C-18): 기능 설명 1줄 + 기본 대안 */
 export const AI_LOCK_ENTRIES: Record<AiLockEntry, { description: string; alternative?: string }> = {
   writing_chat: { description: "질문에 답하면 AI가 STAR(상황·역할·행동·결과/성과·배운 점)에 넣을 내용을 제안해요", alternative: "직접 입력" }, // C-18 (v5.13)
-  requirements: { description: "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요" },
   insight: { description: "이 공고와 내 커리어를 비교해 충족 요건·강점·보완점을 정리해요", alternative: "커리어 정리하기" },
   draft: { description: "커리어를 바탕으로 자소서 문항 초안을 써 드려요" }, // C-18 (v5.20, CF-1·CF-A13 — 경력기술서 폐기)
   usage: { description: "AI를 연결하면 Resumate에서 쓴 토큰과 예상 비용을 여기서 볼 수 있어요" },
@@ -49,7 +48,6 @@ export const AI_LOCK_ENTRIES: Record<AiLockEntry, { description: string; alterna
 /** UQ-350: default FL-19 feature per entry ((v5.20, CF-1) "draft" → 자소서 — 서류가 하나다) */
 const ENTRY_FEATURE: Record<AiLockEntry, AiFeatureKey> = {
   writing_chat: "writing_chat",
-  requirements: "requirements",
   insight: "insight",
   draft: "cover_letter",
   usage: "usage",

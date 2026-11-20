@@ -141,9 +141,16 @@ export const READINESS_NEXT_ACTIONS = ["writing_chat", "form", "create_project"]
 
 // --- S3 / S3a: AI infrastructure v4 BYOK (DM §2.8–2.9, A.14–A.16, AI C-6, C-10–C-13) ---
 
-/** ai_jobs.job_type = ai_usage_records.job_type CHECK (DM §2.9.1; R14 RM-1: 9 values, CHECK order). */
+/**
+ * R17 (plan R17-7): `jd_extraction` (AI-01) no longer runs. The DB CHECK keeps it for the rows
+ * written before R17 (jobs within the 90-day retention, usage records for 13 months) until the
+ * phase-2 migration narrows it. `AI_JOB_TYPE_CHECK_VALUES` is the full CHECK mirror.
+ */
+export const LEGACY_AI_JOB_TYPES = ["jd_extraction"] as const;
+export type LegacyAiJobType = (typeof LEGACY_AI_JOB_TYPES)[number];
+
+/** Runnable ai_jobs.job_type values (DM §2.9.1; R14 RM-1, R17: `jd_extraction` moved to LEGACY_AI_JOB_TYPES). */
 export const AI_JOB_TYPES = [
-  "jd_extraction",
   "insight",
   "career_description",
   "draft_source_ranking",
@@ -154,6 +161,9 @@ export const AI_JOB_TYPES = [
   "chat_reply",
 ] as const;
 export type AiJobType = (typeof AI_JOB_TYPES)[number];
+
+/** ai_jobs.job_type = ai_usage_records.job_type CHECK, in CHECK order (QA compares with the DB). */
+export const AI_JOB_TYPE_CHECK_VALUES = [...LEGACY_AI_JOB_TYPES, ...AI_JOB_TYPES] as const;
 
 /** ai_jobs.status CHECK (DM A.15). */
 export const AI_JOB_STATUSES = ["queued", "running", "succeeded", "failed", "canceled"] as const;
@@ -179,7 +189,7 @@ export const KEY_STATUSES = ["valid", "invalid", "needs_check"] as const;
 export type KeyStatus = (typeof KEY_STATUSES)[number];
 
 /** ai_jobs.error_code CHECK — same list as AI_ERROR_CODES in errors.ts (AI C-11.1). */
-export { AI_ERROR_CODES, type AiErrorCode } from "./errors";
+export { AI_ERROR_CODES, LEGACY_AI_ERROR_CODES, type AiErrorCode, type LegacyAiErrorCode } from "./errors";
 
 /** ai_jobs.error_category (generated column) values (C-11.1). Screens pick ST-AI-FAILED copy by this. */
 export const ERROR_CATEGORIES = ["provider_limit", "user_account", "transient", "input", "system"] as const;
@@ -215,7 +225,11 @@ export const AI_PROGRESS_STAGES = [
 ] as const;
 export type AiProgressStage = (typeof AI_PROGRESS_STAGES)[number];
 
-/** ai_usage_records.feature CHECK (DM §2.9.2, C-13; R14 RM-A2: 8 values, CHECK order). */
+/**
+ * ai_usage_records.feature CHECK (DM §2.9.2, C-13; R14 RM-A2: 8 values, CHECK order).
+ * R17 (R17-7): `jd_extraction` is legacy — nothing records it any more, but usage rows written
+ * before R17 keep it and the usage meter still labels them ("채용 공고 분석(이전)").
+ */
 export const USAGE_FEATURES = [
   "jd_extraction",
   "insight",
@@ -254,10 +268,12 @@ export type EvidenceOwnerType = (typeof EVIDENCE_OWNER_TYPES)[number];
  * insert trigger and `save_application_document` read. Outside the list → `invalid_evidence_source`
  * (`P0001`, no longer a `23514` CHECK violation — spec-gaps R15-DB-9).
  * `profile` is refused for every owner (SD-A19); `chat_message` is unconstrained (no producer).
+ * R17 (4.24 #12, JR-Q1·JR-5): `insight` = career 5 + `jd_sentence`; `application_document` = career
+ * 5 + `user_note` — the 자기소개서 never cites the posting (it reads the insight instead).
  */
 export const EVIDENCE_ALLOWED_SOURCE_TYPES = {
-  insight: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence"],
-  application_document: ["experience", "education", "project", "project_deliverable", "skill", "jd_requirement", "jd_sentence", "user_note"],
+  insight: ["experience", "education", "project", "project_deliverable", "skill", "jd_sentence"],
+  application_document: ["experience", "education", "project", "project_deliverable", "skill", "user_note"],
 } as const satisfies Partial<Record<EvidenceOwnerType, readonly string[]>>;
 
 /**
@@ -271,7 +287,7 @@ export function documentSourceItemKey(slot: string, n: number): string {
   return `${slot}.sources.${n}`;
 }
 
-/** evidence_links.source_type CHECK (DM §2.8). */
+/** evidence_links.source_type CHECK (DM §2.8; R17 4.24 #5: `jd_requirement` removed). */
 export const EVIDENCE_SOURCE_TYPES = [
   "profile",
   "experience",
@@ -279,7 +295,6 @@ export const EVIDENCE_SOURCE_TYPES = [
   "project",
   "project_deliverable",
   "skill",
-  "jd_requirement",
   "jd_sentence",
   "user_note",
 ] as const;
@@ -357,14 +372,15 @@ export type WritingChatSlot = (typeof WRITING_CHAT_SLOTS)[number];
 
 /**
  * `ai_jobs.target_type` values (no global CHECK — a per-`job_type` combination CHECK, db notes ④).
- * `jd_preview` is R15 (CF-A17): a row with no target yet, linked by `create_application_project`.
+ * R17: `jd_preview` (R15 요건 미리 보기) is gone with AI-01; old rows keep it (output cleared by
+ * migration A) until the 90-day purge, and the combination CHECK keeps it (4.24 #8).
+ * `job_description` stays for pre-R17 `jd_extraction` rows.
  * `draft` / `draft_section` stay for rows inside the 90-day retention window.
  */
 export const AI_JOB_TARGET_TYPES = [
   "writing_chat",
   "application_project",
   "job_description",
-  "jd_preview",
   "draft",
   "draft_section",
 ] as const;
@@ -447,21 +463,8 @@ export type NameSource = (typeof NAME_SOURCES)[number];
 export const JD_FIELD_SOURCES = ["user", "ai"] as const;
 export type JdFieldSource = (typeof JD_FIELD_SOURCES)[number];
 
-/** job_descriptions.extraction_status CHECK (pending = 추출 전, 키 없음 포함; D-30). */
-export const JD_EXTRACTION_STATUSES = ["pending", "running", "succeeded", "failed"] as const;
-export type JdExtractionStatus = (typeof JD_EXTRACTION_STATUSES)[number];
-
-/** jd_requirements.category CHECK (주요 업무 / 자격요건 / 우대사항). */
-export const REQUIREMENT_CATEGORIES = ["responsibility", "required", "preferred"] as const;
-export type RequirementCategory = (typeof REQUIREMENT_CATEGORIES)[number];
-
-/** jd_requirements.importance CHECK. */
-export const REQUIREMENT_IMPORTANCES = ["high", "normal"] as const;
-export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
-
-/** jd_requirements.origin CHECK. */
-export const REQUIREMENT_ORIGINS = ["ai", "user"] as const;
-export type RequirementOrigin = (typeof REQUIREMENT_ORIGINS)[number];
+// R17 (4.24 #1·#2): `job_descriptions.extraction_status` and the `jd_requirements` CHECK mirrors
+// (category / importance / origin) are gone with their columns and table.
 
 // --- S7: drafts (DM A.9–A.11, AI-03 / AI-04 / AI-11) ---
 

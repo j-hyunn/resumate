@@ -1,5 +1,5 @@
 import type { CountBasis, QuestionClass } from "@/lib/contracts/enums";
-import { WHOLE_SOURCE_FIELD } from "../evidence-rules";
+import { WHOLE_SOURCE_FIELD, type EvidenceSourceType } from "../evidence-rules";
 import type { AiTextBlock } from "../providers/types";
 import type { SensitiveCategory } from "../schemas/AI-12";
 import { COVER_LETTER_DRAFT_LIMIT, parseCoverLetterDraft, type CoverLetterDraft, type CoverLetterFact } from "../schemas/cover-letter-draft";
@@ -12,19 +12,24 @@ import { AliasMap } from "./aliases";
 import { buildCareerPack, type CareerPack } from "./career-pack";
 import type { CareerRows } from "./career-rows";
 import { bodyForModel, bodyHash, charLength, esc, factAlias, isComposeRequest, type BodyForModel } from "./deliverable-chat";
-import { buildJdContext, type JdRequirementInput, type JdSentence } from "./jd";
+import { readInsightResultV2, requirementTextsOf, type InsightResultV2 } from "./insight-result";
 import type { YearMonth } from "./months";
 import { sourceLabel } from "./selection";
 import type { WritingChatMessageRow } from "./writing-chat";
 
 /**
- * AI-04 자소서 문항 답변 작성 AI 채팅 — 입력 컨텍스트 (AI spec v4.15 AI-04,
- * C-1·C-2·C-15, DM 2.5.0b·2.7.3).
+ * AI-04 자소서 문항 답변 작성 AI 채팅 — 입력 컨텍스트 (AI spec v4.16 AI-04,
+ * C-1·C-15, DM 2.5.0b·2.7.0·2.7.3).
+ *
+ * (v4.16, JR-5) **공고 원문은 읽지 않는다** — 공고는 인사이트를 만드는 용도로만
+ * 쓰이고, 이 대화가 공고를 아는 경로는 최신 ready 인사이트(`schema_version` 2)
+ * 하나다. 인사이트는 입력 신호이지 근거 출처가 아니다(근거 = 커리어 5종 + 메모).
  *
  * | 원천 | 쓰는 호출 |
  * |------|-----------|
  * | 커리어 컨텍스트 팩 **전체** (`EXP`·`EDU`·`PRJ`·`DLV`·`SKL`) | extract(참조 없음) · reply · compose |
- * | JD 요건 (`REQ-n`) + 회사·직무 소개 문장 (`S-n`) | reply · compose |
+ * | 지원 건 메타 (`company_name`·`position_title`, 사용자 입력) | reply · compose |
+ * | 최신 ready 인사이트 (요건 판정·강점·보완점·지원 방향, 없으면 생략) | reply · compose |
  * | 문항 정의와 **지금 답변**(`form_snapshot` 우선, 없으면 정본) | reply · compose |
  * | 문항 메모 (`NOTE-{문항 번호}`) | reply · compose |
  * | 대화 메시지 (`M{sequence}`) · 정리된 사실 (`F{n}`) | extract · reply · compose |
@@ -94,20 +99,30 @@ export type CoverLetterFormSnapshot = {
   }>;
 };
 
-export type CoverLetterJdInput = {
-  jobDescriptionId: string;
-  jobDescriptionUpdatedAt: string | null;
-  sentences: readonly JdSentence[];
-  /** `job_descriptions.extraction.other_sids` (회사·직무 소개 문장). */
-  companySids: readonly string[];
-  requirements: readonly JdRequirementInput[];
-  positionTitle: string | null;
+/** 지원 건 메타 — `job_descriptions.company_name`·`position_title` (사용자가 입력한 값, 공고 원문 아님). */
+export type CoverLetterApplicationMeta = { companyName: string | null; positionTitle: string | null };
+
+/**
+ * (v4.16, JR-5) 그 지원 건의 `insights where is_latest and status = 'ready' and
+ * schema_version = 2` 한 행 + 비교용 JD 해시 (DM 2.7.0 "AI-04가 인사이트를 읽는 경로").
+ * 없으면 null — 커리어 데이터만으로 진행한다.
+ */
+export type CoverLetterInsightInput = {
+  insightId: string;
+  /** `insights.schema_version` — 2가 아니면 없는 것으로 다룬다. */
+  schemaVersion: number;
+  /** `insights.result`. */
+  result: unknown;
+  /** `insights.career_snapshot_hash`. */
+  careerSnapshotHash: string;
+  /** `insights.raw_text_hash`. */
+  rawTextHash: string;
+  /** 지금 `job_descriptions.raw_text_hash`. */
+  currentRawTextHash: string;
 };
 
-export type CoverLetterInsightSignal = {
-  strengths: ReadonlyArray<{ title: string; description: string }>;
-  positioning: string | null;
-} | null;
+export type CoverLetterInsightState = "ready" | "stale" | "none";
+export type CoverLetterInsightStaleReasons = { career: boolean; rawText: boolean };
 
 export type CoverLetterChatTurnInput = {
   messages: readonly WritingChatMessageRow[];
@@ -119,8 +134,8 @@ export type CoverLetterChatTurnInput = {
   formSnapshot?: CoverLetterFormSnapshot | null;
   careerRows: CareerRows;
   asOf?: YearMonth;
-  jd: CoverLetterJdInput;
-  insightSignal?: CoverLetterInsightSignal;
+  application: CoverLetterApplicationMeta;
+  insight: CoverLetterInsightInput | null;
   /** 턴 요청: 이 문항만 / 이 문항부터. */
   requestedSlot?: string | null;
   /** 턴 요청 `requested_action`. */
@@ -173,10 +188,16 @@ export type CoverLetterChatContext = {
   /** V-1..V-5 환경 (문항별 scope는 compose 단계에서 더한다). */
   env: DraftCheckEnv;
   packText: string;
-  jdText: string;
-  referenceText: string | null;
+  /** `<application>` block or null (no company / position entered). */
+  applicationText: string | null;
+  /** `<insight>` block or null (no usable insight). Never log it. */
+  insightText: string | null;
+  insightId: string | null;
+  /** ready = schema-2 insight, current · stale = used, but career or JD changed since · none = no block. */
+  insightState: CoverLetterInsightState;
+  /** null when insightState is none. career = insight.career_snapshot_hash ≠ this pack, rawText = insight.raw_text_hash ≠ JD now. */
+  staleReasons: CoverLetterInsightStaleReasons | null;
   careerSnapshotHash: string;
-  requirementsHash: string;
   /** usable facts by alias (`F{n}` over draft.facts). */
   factAliases: ReadonlyMap<string, CoverLetterFact>;
   messages: ReadonlyMap<string, V9Message>;
@@ -190,7 +211,7 @@ export type CoverLetterChatContext = {
   delegationRequested: boolean;
   composeRequested: "requested_action" | "text" | null;
   lastMessage: boolean;
-  /** 프롬프트 공통 접두 블록 (C-8 캐시 순서): pack → jd → reference. */
+  /** 프롬프트 공통 접두 블록 (C-8 캐시 순서): pack → application → insight. */
   sharedBlocks: AiTextBlock[];
   /** 대화 블록 (<chat> + messages), extract·reply만 쓴다. */
   chatBlocks: AiTextBlock[];
@@ -239,16 +260,17 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
   // ① 커리어 컨텍스트 팩 — 전체 (CL-Q1). 이 호출이 유일한 조립 지점이다.
   const pack = buildCareerPack(input.careerRows, { asOf: input.asOf });
 
-  // ② JD: 요건 전부 + 회사·직무 소개 문장만 (AI-04 입력 컨텍스트).
-  const companySids = new Set(input.jd.companySids);
-  const jd = buildJdContext({
-    jobDescriptionId: input.jd.jobDescriptionId,
-    jobDescriptionUpdatedAt: input.jd.jobDescriptionUpdatedAt,
-    sentences: input.jd.sentences.filter((s) => companySids.has(s.sid)),
-    requirements: input.jd.requirements,
-    includeSentences: "all",
-    positionTitle: input.jd.positionTitle,
-  });
+  // ② 공고: 원문은 읽지 않는다 (JR-5). 지원 건 메타 + 최신 ready 인사이트(schema 2)만.
+  const insight = input.insight ? readInsightResultV2(input.insight.schemaVersion, input.insight.result) : null;
+  const staleReasons: CoverLetterInsightStaleReasons | null =
+    insight && input.insight
+      ? { career: input.insight.careerSnapshotHash !== pack.careerSnapshotHash, rawText: input.insight.rawTextHash !== input.insight.currentRawTextHash }
+      : null;
+  const stale = !!staleReasons && (staleReasons.career || staleReasons.rawText);
+  const insightText = insight ? renderInsight(insight, stale, pack) : null;
+  // An insight with nothing to show (all lists empty) is the same as none.
+  const insightState: CoverLetterInsightState = !insightText ? "none" : stale ? "stale" : "ready";
+  const applicationText = renderApplication(input.application);
 
   // ③ 문항 (정본 + 폼 스냅숏) + 메모 별칭.
   const merged = mergeQuestions(input.questions, input.formSnapshot);
@@ -290,21 +312,25 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
     };
   });
 
-  const aliases = AliasMap.merge(pack.aliases, jd.aliases, noteMap);
+  // 공고 문장 별칭(S-n)은 없다 — 모델이 jd_sentence 근거를 달면 V-1에서 지워진다.
+  const aliases = AliasMap.merge(pack.aliases, noteMap);
 
-  // ④ 숫자·용어 허용 범위: 팩 + JD + 메모 + 문항 문구 + 지금 답변 (V-5, 스킬명 가드).
-  const numberTexts = [
+  // ④ 숫자·용어 허용 범위: 팩 + 메모 + 문항 문구 + 지금 답변 + 사실 (V-5, 스킬명 가드).
+  const userTexts = [
     ...pack.numberSources.factualTexts,
-    ...jd.numberTexts,
     ...questions.flatMap((q) => [q.questionText, q.userNote, q.body].filter((t): t is string => !!t)),
     ...draft.facts.map((f) => f.text),
   ];
+  // (v4.16, JR-5) V-5 원천에만 인사이트 requirement_text를 더한다 — AI-02가 원문 숫자 가드를
+  // 통과시킨 공고 사실("5년 이상")이다. 인사이트의 다른 문장과 용어 가드 원천에는 넣지 않는다
+  // (공고의 기술명이 사용자 경험의 근거가 되면 안 된다).
+  const requirementTexts = insight ? insight.requirement_matches.map((m) => m.requirement_text) : [];
   const env: DraftCheckEnv = {
     aliases,
-    ctx: { aliases, learnings: "forbidden", scope: null },
-    allowedNumbers: buildAllowedNumbers({ texts: numberTexts, numbers: pack.numberSources.computedNumbers }),
-    literalAliasTokens: literalAliasTokens(numberTexts),
-    termCorpus: buildTermCorpus(numberTexts),
+    ctx: { aliases, learnings: "forbidden", scope: null, allowedSourceTypes: AI04_EVIDENCE_SOURCE_TYPES },
+    allowedNumbers: buildAllowedNumbers({ texts: [...userTexts, ...requirementTexts], numbers: pack.numberSources.computedNumbers }),
+    literalAliasTokens: literalAliasTokens(userTexts),
+    termCorpus: buildTermCorpus(userTexts),
   };
 
   // ⑤ 대화 메시지·사실.
@@ -332,9 +358,9 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
         ? "text"
         : null;
 
-  const referenceText = buildReference(input.insightSignal ?? null);
-  const sharedBlocks: AiTextBlock[] = [{ text: pack.text, cache: true }, { text: jd.text, cache: true }];
-  if (referenceText) sharedBlocks.push({ text: referenceText });
+  const sharedBlocks: AiTextBlock[] = [{ text: pack.text, cache: true }];
+  if (applicationText) sharedBlocks.push({ text: applicationText, cache: !insightText });
+  if (insightText) sharedBlocks.push({ text: insightText, cache: true });
 
   const chatBlocks: AiTextBlock[] = [
     {
@@ -357,10 +383,12 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
     aliases,
     env,
     packText: pack.text,
-    jdText: jd.text,
-    referenceText,
+    applicationText,
+    insightText,
+    insightId: insightText && input.insight ? input.insight.insightId : null,
+    insightState,
+    staleReasons: insightText ? staleReasons : null,
     careerSnapshotHash: pack.careerSnapshotHash,
-    requirementsHash: jd.requirementsHash,
     factAliases,
     messages,
     messageAliasById,
@@ -380,12 +408,83 @@ export function buildCoverLetterChatContext(input: CoverLetterChatTurnInput): Co
 
 export const NOTE_LABEL = "내 메모";
 
-function buildReference(signal: CoverLetterInsightSignal): string | null {
-  if (!signal) return null;
-  const lines: string[] = [];
-  if (signal.positioning) lines.push(`인사이트 지원 방향: ${escLine(signal.positioning)}`);
-  for (const s of signal.strengths) lines.push(`인사이트 강점: ${escLine(s.title)} — ${escLine(s.description)}`);
-  return lines.length ? ["<reference>", ...lines, "</reference>"].join("\n") : null;
+/**
+ * (v4.16, JR-5) AI-04 근거 허용 목록 = 커리어 5종 + `user_note` (DM 2.8 `application_document`).
+ * `jd_sentence`는 인사이트 근거에서만 — 여기서는 V-1로 지운다.
+ */
+export const AI04_EVIDENCE_SOURCE_TYPES: ReadonlySet<EvidenceSourceType> = new Set([
+  "experience",
+  "education",
+  "project",
+  "project_deliverable",
+  "skill",
+  "user_note",
+]);
+
+const STATUS_LABEL: Record<string, string> = { met: "충족", partial: "부분 충족", no_evidence: "근거 없음" };
+const GAP_KIND_LABEL: Record<string, string> = { partial: "부분 충족", no_evidence: "근거 없음" };
+
+/** 인사이트 블록 상한 (토큰 보호, `[가정]` C-14 범위 안). */
+export const INSIGHT_BLOCK_LIMITS = { matches: 15, strengths: 3, gaps: 8, priorities: 5 } as const;
+
+/** `<application>`: 사용자가 입력한 지원 기업·포지션 (공고 원문이 아니다). */
+function renderApplication(meta: CoverLetterApplicationMeta): string | null {
+  const company = meta.companyName?.trim();
+  const position = meta.positionTitle?.trim();
+  if (!company && !position) return null;
+  return ["<application>", company ? `company_name: ${escLine(company)}` : null, position ? `position_title: ${escLine(position)}` : null, "</application>"]
+    .filter((l): l is string => l !== null)
+    .join("\n");
+}
+
+/**
+ * `<insight>` (AI spec v4.16 AI-04 입력 "인사이트"): 요건 판정(`requirement_text`·
+ * 판정·부족한 측면 — 이유·근거 제외), 강점(제목·설명), 보완점(요건 문구·판정·설명),
+ * 지원 방향·어필 프로젝트 우선순위. 키(`MT-n`)·문장 번호는 넣지 않는다 — 근거로 달 수
+ * 있는 것처럼 보이지 않게. 우선순위 프로젝트는 팩에 있으면 그 `PRJ` 별칭으로 적는다(커리어 근거다).
+ */
+function renderInsight(insight: InsightResultV2, stale: boolean, pack: CareerPack): string | null {
+  const lines: string[] = ["<insight>"];
+  if (stale) lines.push("참고: 이 인사이트는 이전 공고·경력 기준일 수 있습니다(사용자가 아직 다시 만들지 않음).");
+  const matches = insight.requirement_matches.slice(0, INSIGHT_BLOCK_LIMITS.matches);
+  if (matches.length) {
+    lines.push("요건 판정:");
+    for (const m of matches) {
+      const missing = m.missing_aspect ? ` (부족한 측면: ${escLine(m.missing_aspect)})` : "";
+      lines.push(`- [${STATUS_LABEL[m.status] ?? m.status}] ${escLine(m.requirement_text)}${missing}`);
+    }
+  }
+  const strengths = insight.strengths.slice(0, INSIGHT_BLOCK_LIMITS.strengths);
+  if (strengths.length) {
+    lines.push("강점:");
+    for (const s of strengths) lines.push(`- ${escLine(s.title)}${s.description ? ` — ${escLine(s.description)}` : ""}`);
+  }
+  const gaps = insight.gaps.slice(0, INSIGHT_BLOCK_LIMITS.gaps);
+  if (gaps.length) {
+    lines.push("보완점:");
+    for (const g of gaps) {
+      const reqs = requirementTextsOf(insight, g.match_keys);
+      lines.push(`- [${GAP_KIND_LABEL[g.gap_kind] ?? g.gap_kind}] ${reqs.length ? `${reqs.map(escLine).join(" / ")}: ` : ""}${escLine(g.description)}`);
+    }
+  }
+  if (insight.strategy.positioning) lines.push(`지원 방향: ${escLine(insight.strategy.positioning)}`);
+  const priorities = [...insight.strategy.project_priorities]
+    .sort((a, b) => a.rank - b.rank)
+    .flatMap((p) => {
+      const alias = pack.aliases.aliasOf("project", p.project_id);
+      return alias ? [{ alias, reason: p.reason }] : [];
+    })
+    .slice(0, INSIGHT_BLOCK_LIMITS.priorities);
+  if (priorities.length) {
+    lines.push("어필 프로젝트 우선순위:");
+    priorities.forEach((p, i) => {
+      const label = pack.aliases.get(p.alias)?.label ?? "";
+      lines.push(`${i + 1}. ${p.alias} '${escLine(label)}'${p.reason ? ` — ${escLine(p.reason)}` : ""}`);
+    });
+  }
+  if (lines.length === (stale ? 2 : 1)) return null;
+  lines.push("</insight>");
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------

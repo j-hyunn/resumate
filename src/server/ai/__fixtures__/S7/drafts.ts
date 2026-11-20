@@ -1,7 +1,7 @@
 import type { AliasMap } from "../../context-pack/aliases";
 import type { CareerRows } from "../../context-pack/career-rows";
 import type { EvidenceSourceType } from "../../evidence-rules";
-import { koInput, JD_ID, JD_UPDATED_AT } from "../AI-02/insight";
+import { JD_ID, JD_UPDATED_AT } from "../AI-02/insight";
 import { careerRowsFixture, IDS, project } from "../career-rows";
 
 /**
@@ -12,11 +12,6 @@ import { careerRowsFixture, IDS, project } from "../career-rows";
 
 export { careerRowsFixture, IDS, JD_ID, JD_UPDATED_AT };
 export const AS_OF = { year: 2026, month: 10 } as const;
-
-export function jdParts() {
-  const input = koInput();
-  return { sentences: input.sentences, requirements: input.requirements, positionTitle: input.positionTitle };
-}
 
 export function a(aliases: AliasMap, type: EvidenceSourceType, id: string): string {
   const alias = aliases.aliasOf(type, id);

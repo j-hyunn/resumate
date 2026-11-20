@@ -16,7 +16,7 @@ export const maxDuration = 60;
  * target is in flight, that job is returned (`inProgress: true`).
  * Refusals (409, DM 2.11.7 path ②): `key_missing` (no active provider / key),
  * `ai_consent_required`, `key_invalid`; request-scoped job types → `ai_job_not_retryable`.
- * Input-category failures (`input_too_long`, `safety_blocked`, `insufficient_data`, `not_a_jd`) → 409 `ai_job_not_retryable`.
+ * Input-category failures (`input_too_long`, `safety_blocked`, `insufficient_data`; legacy `not_a_jd` rows, R17) → 409 `ai_job_not_retryable`.
  */
 export async function POST(_request: Request, ctx: RouteContext<"/api/ai-jobs/[id]/retry">) {
   try {

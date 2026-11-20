@@ -1,7 +1,7 @@
 import { AliasMap } from "../context-pack/aliases";
 import { buildCareerPack, type CareerPack } from "../context-pack/career-pack";
 import type { CareerRows } from "../context-pack/career-rows";
-import { buildJdContext, type JdContext, type JdRequirementInput, type JdSentence } from "../context-pack/jd";
+import { buildJdContext, type JdContext, type JdSentence } from "../context-pack/jd";
 import type { YearMonth } from "../context-pack/months";
 import type { EvidenceSourceType } from "../evidence-rules";
 import { computeInputHash } from "../input-hash";
@@ -9,6 +9,7 @@ import type { Llm } from "../llm";
 import { silentAiLogger, type AiLogger } from "../log";
 import {
   AI02_MATCH_PROMPT_VERSION,
+  AI02_MAX_MATCHES,
   AI02_PROMPT_VERSION,
   AI02_SYNTHESIZE_PROMPT_VERSION,
   matchUserBlocks,
@@ -16,14 +17,10 @@ import {
   systemBlocks,
 } from "../prompts/AI-02";
 import { addUsage, type ConnectionTier, type ModelTier, type NormalizedUsage, type ProviderId } from "../providers/types";
-import {
-  Ai02MatchOutputSchema,
-  Ai02SynthesisOutputSchema,
-  type Ai02SynthesisOutput,
-  type InsightMatchStatus,
-} from "../schemas/AI-02";
+import { Ai02MatchOutputSchema, Ai02SynthesisOutputSchema, type Ai02SynthesisOutput, type InsightMatchStatus } from "../schemas/AI-02";
 import { toCompleteInsightPayload, type CompleteInsightPayload, type InsightDataSufficiency, type InsightSummaryCounts } from "../storage/insight";
-import { generateStructured } from "../structured";
+import { AiError } from "../errors";
+import { generateStructured, type StructuredResult } from "../structured";
 import type { ModelEvidence, ValidatedEvidence } from "../validation/evidence";
 import {
   applyMatchRules,
@@ -31,8 +28,9 @@ import {
   mergeAi02Reports,
   recheckEvidence,
   synthesisNumberViolations,
-  validateMatchBatch,
+  validateMatchStage,
   validateSynthesis,
+  MATCH_KEY_PATTERN,
   MET_DOWNGRADE_MISSING_ASPECT,
   NO_EVIDENCE_RATIONALE,
   type Ai02ValidationReport,
@@ -46,31 +44,40 @@ import { buildAllowedNumbers } from "../validation/numbers";
  * AI-02 JD 인사이트 (F-P2-04, F-P2-05, F-P2-07, F-P2-09). Two-stage chain run
  * as an async job (C-6, job_type `insight`), default tier:
  *
- *   buildInsightContext (every step, deterministic)
- *   → matchRequirements × batches  (stage 1, low reasoning, validated at once,
- *                                    result serializable for the job step output)
- *   → synthesizeInsight             (stage 2, medium reasoning, one V-5 regeneration)
- *   → finalizeInsight               (pure: merge → validate → complete_insight p_payload)
+ *   buildInsightContext (every step, deterministic; JD = raw sentences S-n)
+ *   → matchRequirements   (stage 1, ONE call `insight.match.1`, low reasoning: the
+ *                          model identifies ≤ 15 requirements from the sentences and
+ *                          judges them; validated at once, keys MT-n; result
+ *                          serializable for the job step output; latency measured)
+ *   → synthesizeOnce      (stage 2, medium reasoning) → regenerateSynthesis (one V-5 regeneration)
+ *   → finalizeInsight     (pure: merge → validate → complete_insight p_payload)
+ *
+ * (AI spec v4.16, JR-Q2 보류 — 임시안) The AI-01 requirement extraction is
+ * gone: no REQ-n list, no batches, no seniority line. Requirements get
+ * insight-internal keys MT-1…MT-n (stored as is, DM 2.7.0).
  *
  * Plain async functions: no request, DB, or after(). The job runner
  * (api-engineer) loads rows, calls these, persists step outputs, and calls
  * begin/complete_insight. Usage records come from createLlm's onCall.
  *
  * Throws (stage functions): ProviderError (C-11) as is; AiError("schema_invalid",
- * retryable: false) after the single V-6 retry. finalizeInsight makes no call
+ * retryable: false) after the single V-6 retry, and from stage 1 when no
+ * requirement survives validation twice (card "단계 1 서버 검증" 6). finalizeInsight makes no call
  * and throws plain Errors only for caller bugs.
  */
 
 export const AI02_TIER = "default" as const;
-/** Card 처리 방식: "요건을 최대 8개씩 배치" [가정]. */
-export const AI02_BATCH_SIZE = 8;
-/** Stage 1 output per batch ≈ 2k tokens incl. reasoning (card 비용); headroom. */
-export const AI02_MATCH_MAX_OUTPUT_TOKENS = 8192;
+/** Stage 1 output for ≤ 15 requirements incl. reasoning (one call, ≈ 4–4.5k); headroom. */
+export const AI02_MATCH_MAX_OUTPUT_TOKENS = 16_000;
 /** Stage 2 output ≈ 3k tokens incl. reasoning; headroom. */
 export const AI02_SYNTHESIZE_MAX_OUTPUT_TOKENS = 12_000;
 export const AI02_JOB_TYPE = "insight";
+/** DM 2.7.0 `call_key`s (the runner records usage rows under these). */
+export const AI02_CALL_KEYS = { match: "insight.match.1", synthesize: "insight.synthesize", regen: "insight.synthesize.regen" } as const;
+/** Card 6: zero requirements after validation → stage 1 once more, then schema_invalid. */
+export const AI02_MATCH_EMPTY_RETRIES = 1;
 
-export { AI02_PROMPT_VERSION, AI02_MATCH_PROMPT_VERSION, AI02_SYNTHESIZE_PROMPT_VERSION };
+export { AI02_PROMPT_VERSION, AI02_MATCH_PROMPT_VERSION, AI02_SYNTHESIZE_PROMPT_VERSION, AI02_MAX_MATCHES };
 
 /**
  * [가정] C-14 (v4.5, CR-11) data_sufficiency `thin` = complete projects ≤ 2,
@@ -89,6 +96,8 @@ export type Ai02Deps = {
   signal?: AbortSignal;
   logger?: AiLogger;
   jobId?: string | null;
+  /** Wall clock for the stage-1 latency measurement (default Date.now). */
+  clock?: () => number;
 };
 
 // ---------- context ----------
@@ -98,24 +107,25 @@ export type InsightContextInput = {
   asOf?: YearMonth;
   jobDescriptionId: string;
   jobDescriptionUpdatedAt: string | null;
+  /** job_descriptions.sentences (all of them). */
   sentences: readonly JdSentence[];
-  requirements: readonly JdRequirementInput[];
+  /** User-entered position title (may be null). */
   positionTitle: string | null;
-  /** job_descriptions.extraction.seniority.label (card JD 메타). */
-  seniorityLabel: string | null;
+  /** job_descriptions.raw_text_hash. */
+  rawTextHash: string;
 };
 
 export type InsightContext = {
   pack: CareerPack;
   jd: JdContext;
-  /** <jd> block as sent (requirements + cited sentences + seniority). Never log it. */
+  /** <jd> block as sent (title + every sentence). Never log it. */
   jdText: string;
   /** Pack + JD aliases of this call. */
   aliases: AliasMap;
-  /** sort_order order; REQ-n = index + 1. */
-  requirements: ReadonlyArray<{ id: string; ref: string }>;
   careerSnapshotHash: string;
-  requirementsHash: string;
+  /** = job_descriptions.raw_text_hash (C-6 JD part; copied to insights.raw_text_hash). */
+  rawTextHash: string;
+  sentenceCount: number;
   /** V-5 allowed set: pack factual text + computed durations + JD text. */
   allowedNumbers: ReadonlySet<string>;
   /** Prose checks (V-5 numbers, alias tokens → labels, QA-S6-04). */
@@ -129,34 +139,22 @@ export function buildInsightContext(input: InsightContextInput): InsightContext 
     jobDescriptionId: input.jobDescriptionId,
     jobDescriptionUpdatedAt: input.jobDescriptionUpdatedAt,
     sentences: input.sentences,
-    requirements: input.requirements,
-    // Stage 1 needs each requirement's source sentences (card 입력 컨텍스트); stage 2 reuses the same block for the cache.
-    includeSentences: "cited",
     positionTitle: input.positionTitle,
+    rawTextHash: input.rawTextHash,
   });
-  const seniority = input.seniorityLabel?.trim() || null;
-  const jdText = seniority
-    ? jd.text.replace(/<\/jd>$/, `seniority: ${seniority.replace(/</g, "＜").replace(/>/g, "＞").replace(/\n/g, " ")}\n</jd>`)
-    : jd.text;
   const aliases = AliasMap.merge(pack.aliases, jd.aliases);
-
-  const requirements = [...aliases.values()]
-    .filter((e) => e.sourceType === "jd_requirement")
-    .map((e) => ({ id: e.id, ref: e.alias }))
-    .sort((a, b) => Number(a.ref.slice(4)) - Number(b.ref.slice(4)));
-
-  const sourceTexts = [...pack.numberSources.factualTexts, ...jd.numberTexts, ...(seniority ? [seniority] : [])];
+  const sourceTexts = [...pack.numberSources.factualTexts, ...jd.numberTexts];
   const allowedNumbers = buildAllowedNumbers({ texts: sourceTexts, numbers: pack.numberSources.computedNumbers });
   const textGuard: TextGuard = { allowedNumbers, literalAliasTokens: literalAliasTokens(sourceTexts) };
 
   return {
     pack,
     jd,
-    jdText,
+    jdText: jd.text,
     aliases,
-    requirements,
     careerSnapshotHash: pack.careerSnapshotHash,
-    requirementsHash: jd.requirementsHash,
+    rawTextHash: jd.rawTextHash,
+    sentenceCount: jd.sentenceCount,
     allowedNumbers,
     textGuard,
     dataSufficiency: computeDataSufficiency(input.careerRows, pack),
@@ -177,7 +175,8 @@ export function computeInsightInputHash(parts: {
   /** resolveModel(provider, "default") — the mapped id the call uses. */
   model: string;
   careerSnapshotHash: string;
-  requirementsHash: string;
+  /** job_descriptions.raw_text_hash. */
+  rawTextHash: string;
 }): string {
   return computeInputHash({
     feature: AI02_JOB_TYPE,
@@ -185,26 +184,21 @@ export function computeInsightInputHash(parts: {
     provider: parts.provider,
     model: parts.model,
     careerSnapshotHash: parts.careerSnapshotHash,
-    requirementsHash: parts.requirementsHash,
+    rawTextHash: parts.rawTextHash,
   });
 }
 
-export function batchRequirements<T>(requirements: readonly T[], size: number = AI02_BATCH_SIZE): T[][] {
-  if (!Number.isInteger(size) || size < 1) throw new Error("batchRequirements: size must be a positive integer");
-  const out: T[][] = [];
-  for (let i = 0; i < requirements.length; i += size) out.push(requirements.slice(i, i + size));
-  return out;
-}
-
 /**
- * The JD requirement list (ids) differs from the one stage 1 judged
- * (requirements added/removed mid-job, QA-S6-09). Not an AiError: no C-11
+ * The JD raw text differs from the one stage 1 read (`rawTextHash`
+ * changed mid-job), so the match keys / sids no longer describe the
+ * current JD. Name and `code` are kept from v1 (then: requirement list
+ * changed, QA-S6-09) so the runner mapping stays. Not an AiError: no C-11
  * code fits; the runner ends the job with its own code (api notes).
  */
 export class InsightRequirementsChangedError extends Error {
   readonly code = "requirements_changed" as const;
   constructor() {
-    super("insight: requirement list changed since stage 1");
+    super("insight: JD text changed since stage 1");
     this.name = "InsightRequirementsChangedError";
   }
 }
@@ -222,83 +216,130 @@ export type StoredEvidence = {
   quote_adjusted: boolean;
 };
 
-export type StoredMatch = {
-  requirement_id: string;
+export type StoredMatchItem = {
+  /** `MT-n`. */
+  match_key: string;
+  /** 1–120 chars after validation. */
+  requirement_text: string;
+  /** S-n of the JD, 1–5, ascending. */
+  sids: string[];
   status: InsightMatchStatus;
-  model_status: InsightMatchStatus | null;
+  model_status: InsightMatchStatus;
   rationale: string;
   missing_aspect: string | null;
+  /** Career evidence only (JD sentences are `sids`). */
   evidence: StoredEvidence[];
 };
 
-/** Stage-1 output of one batch. JSON-safe (plain objects only) for the job step output. */
-export type MatchBatchResult = {
-  v: 1;
-  batchIndex: number;
+/**
+ * Stage-1 output (one call). JSON-safe (plain objects only) for the job step
+ * output. `v: 3` = this shape (R17b); any other value is an older checkpoint
+ * the runner must not continue from.
+ */
+export type MatchStageResult = {
+  v: 3;
   promptVersion: string;
   model: string;
+  /** All stage-1 provider calls (V-6 retries and the empty-result retry included). */
   usage: NormalizedUsage;
   attempts: number;
+  /** Logical stage-1 calls: 1, or 2 when the first answer left no requirement. */
+  calls: number;
+  /**
+   * Wall time of stage 1 in ms, retries included — the measurement 4.24 #18
+   * asks for (input to the insight redesign cycle). Also logged as `ai_stage_timing`.
+   */
+  latencyMs: number;
   careerSnapshotHash: string;
-  requirementsHash: string;
-  matches: StoredMatch[];
+  rawTextHash: string;
+  /** ≥ 1 (zero after the retry throws schema_invalid). */
+  items: StoredMatchItem[];
   report: Record<string, number>;
 };
 
-export async function matchRequirements(
-  input: { context: InsightContext; batchIndex: number; requirementIds: readonly string[] },
-  deps: Ai02Deps,
-): Promise<MatchBatchResult> {
+/**
+ * Stage 1: the whole JD in one call (`insight.match.1`). Zero requirements
+ * after validation → one more call, then AiError("schema_invalid") — the
+ * synthesis is never called (card "단계 1 서버 검증" 6).
+ */
+export async function matchRequirements(input: { context: InsightContext }, deps: Ai02Deps): Promise<MatchStageResult> {
   const { context } = input;
-  if (input.requirementIds.length === 0) throw new Error("matchRequirements: empty batch");
-  const batch = input.requirementIds.map((id) => {
-    const req = context.requirements.find((r) => r.id === id);
-    if (!req) throw new Error("matchRequirements: requirement not in context");
-    return { ref: req.ref, requirementId: req.id };
-  });
+  const clock = deps.clock ?? Date.now;
+  const started = clock();
+  let usage: NormalizedUsage | null = null;
+  let attempts = 0;
+  let calls = 0;
+  let last: StructuredResult<unknown> | null = null;
+  let validated: ReturnType<typeof validateMatchStage> | null = null;
+  let emptyRetries = 0;
 
-  const structured = await generateStructured(
-    deps.llm,
-    {
-      feature: "AI-02.match",
-      promptVersion: AI02_MATCH_PROMPT_VERSION,
-      callKey: `insight.match.${input.batchIndex + 1}`,
-      tier: AI02_TIER,
-      systemBlocks: systemBlocks(),
-      userBlocks: matchUserBlocks({ packText: context.pack.text, jdText: context.jdText, batchRefs: batch.map((b) => b.ref) }),
-      maxOutputTokens: AI02_MATCH_MAX_OUTPUT_TOKENS,
-      reasoningLevel: "low",
-      signal: deps.signal,
-    },
-    Ai02MatchOutputSchema,
-  );
-
-  const { matches, report } = validateMatchBatch(structured.value, batch, context.aliases, context.textGuard);
-  log(deps, AI02_MATCH_PROMPT_VERSION, "AI-02.match", report);
-  return {
-    v: 1,
-    batchIndex: input.batchIndex,
+  while (calls <= AI02_MATCH_EMPTY_RETRIES) {
+    calls++;
+    const structured = await generateStructured(
+      deps.llm,
+      {
+        feature: "AI-02.match",
+        promptVersion: AI02_MATCH_PROMPT_VERSION,
+        callKey: AI02_CALL_KEYS.match,
+        tier: AI02_TIER,
+        systemBlocks: systemBlocks(),
+        userBlocks: matchUserBlocks({ packText: context.pack.text, jdText: context.jdText }),
+        maxOutputTokens: AI02_MATCH_MAX_OUTPUT_TOKENS,
+        reasoningLevel: "low",
+        signal: deps.signal,
+      },
+      Ai02MatchOutputSchema,
+    );
+    last = structured;
+    usage = usage ? addUsage(usage, structured.meta.usage) : structured.meta.usage;
+    attempts += structured.attempts;
+    validated = validateMatchStage(structured.value, context.aliases, context.textGuard, AI02_MAX_MATCHES);
+    if (validated.matches.length > 0) break;
+    if (calls <= AI02_MATCH_EMPTY_RETRIES) emptyRetries++;
+  }
+  const latencyMs = Math.max(0, Math.round(clock() - started));
+  (deps.logger ?? silentAiLogger)({
+    event: "ai_stage_timing",
+    jobId: deps.jobId ?? null,
+    feature: "AI-02.match",
+    callKey: AI02_CALL_KEYS.match,
     promptVersion: AI02_MATCH_PROMPT_VERSION,
-    model: structured.meta.model,
-    usage: structured.meta.usage,
-    attempts: structured.attempts,
+    latencyMs,
+    calls,
+    attempts,
+  });
+  if (!validated || !last || !usage) throw new Error("matchRequirements: no call made");
+  const report = { ...validated.report, stage1_empty_retried: emptyRetries };
+  log(deps, AI02_MATCH_PROMPT_VERSION, "AI-02.match", report);
+  if (validated.matches.length === 0) throw new AiError("schema_invalid", { retryable: false });
+
+  return {
+    v: 3,
+    promptVersion: AI02_MATCH_PROMPT_VERSION,
+    model: last.meta.model,
+    usage,
+    attempts,
+    calls,
+    latencyMs,
     careerSnapshotHash: context.careerSnapshotHash,
-    requirementsHash: context.requirementsHash,
-    matches: matches.map((m) => toStoredMatch(m, context.aliases)),
-    report: { ...report },
+    rawTextHash: context.rawTextHash,
+    items: validated.matches.map((m) => toStoredItem(m, context.aliases)),
+    report,
   };
 }
 
-function toStoredMatch(m: ValidatedMatch, aliases: AliasMap): StoredMatch {
+function toStoredItem(m: ValidatedMatch, aliases: AliasMap): StoredMatchItem {
   return {
-    requirement_id: m.requirementId,
+    match_key: m.key,
+    requirement_text: m.requirementText,
+    sids: [...m.sids],
     status: m.status,
     model_status: m.modelStatus,
     rationale: m.rationale,
     missing_aspect: m.missingAspect,
     evidence: m.evidence.map((e) => {
       const entry = aliases.get(e.ref);
-      if (!entry) throw new Error("toStoredMatch: evidence not in alias map");
+      if (!entry) throw new Error("toStoredItem: evidence not in alias map");
       return {
         source_type: e.source_type,
         source_id: entry.id,
@@ -312,28 +353,24 @@ function toStoredMatch(m: ValidatedMatch, aliases: AliasMap): StoredMatch {
 }
 
 /**
- * Stage-1 batches → one verdict per context requirement (alias form of the
- * current context). Sources that vanished between steps (deleted / back to
- * draft) are dropped, then V-4 and the met rule run again. Throws
- * InsightRequirementsChangedError when the batches don't cover exactly the
- * context's requirements (the requirement list changed mid-job, QA-S6-09).
+ * Stage-1 result → verdicts in the alias form of the current context. Throws
+ * InsightRequirementsChangedError when the JD raw text changed since stage 1.
+ * Sentences that are gone are dropped (an item with none left is dropped);
+ * career sources that vanished between steps (deleted / back to draft) are
+ * dropped, then V-4 and the met rule run again. Keys stay as stage 1 gave them.
  */
-export function restoreMatches(
-  batches: readonly MatchBatchResult[],
-  context: InsightContext,
-): { matches: ValidatedMatch[]; report: Ai02ValidationReport } {
+export function restoreMatches(stage: MatchStageResult, context: InsightContext): { matches: ValidatedMatch[]; report: Ai02ValidationReport } {
+  if (stage.v !== 3) throw new Error("restoreMatches: stage-1 output of another version");
+  if (stage.rawTextHash !== context.rawTextHash) throw new InsightRequirementsChangedError();
   const report = emptyAi02Report();
-  const stored = new Map<string, StoredMatch>();
-  for (const b of batches) {
-    for (const m of b.matches) {
-      if (stored.has(m.requirement_id)) throw new Error("restoreMatches: requirement judged twice");
-      stored.set(m.requirement_id, m);
+  const matches: ValidatedMatch[] = [];
+  for (const m of stage.items) {
+    if (!MATCH_KEY_PATTERN.test(m.match_key)) throw new Error("restoreMatches: bad match key");
+    const sids = m.sids.filter((sid) => context.aliases.get(sid)?.sourceType === "jd_sentence");
+    if (sids.length === 0) {
+      report.dropped_requirements++;
+      continue;
     }
-  }
-  if (stored.size !== context.requirements.length) throw new InsightRequirementsChangedError();
-  const matches = context.requirements.map(({ id, ref }) => {
-    const m = stored.get(id);
-    if (!m) throw new InsightRequirementsChangedError();
     const raw: ModelEvidence[] = [];
     const adjusted: boolean[] = [];
     let lost = 0;
@@ -358,8 +395,17 @@ export function restoreMatches(
       if (ruled.downgradedTo === "no_evidence") rationale = NO_EVIDENCE_RATIONALE;
       if (ruled.downgradedTo === "partial" && !missingAspect) missingAspect = MET_DOWNGRADE_MISSING_ASPECT;
     }
-    return { ref, requirementId: id, status, modelStatus: m.model_status, rationale, missingAspect, evidence };
-  });
+    matches.push({
+      key: m.match_key,
+      requirementText: m.requirement_text,
+      sids,
+      status,
+      modelStatus: m.model_status,
+      rationale,
+      missingAspect,
+      evidence,
+    });
+  }
   return { matches, report };
 }
 
@@ -384,7 +430,7 @@ export type StoredRef = { source_type: EvidenceSourceType; source_id: string; si
  * the data changed between steps.
  */
 export type SynthesisAttempt = {
-  v: 1;
+  v: 3;
   kind: "first" | "regen";
   promptVersion: string;
   model: string;
@@ -392,7 +438,7 @@ export type SynthesisAttempt = {
   usage: NormalizedUsage;
   attempts: number;
   careerSnapshotHash: string;
-  requirementsHash: string;
+  rawTextHash: string;
   output: Ai02SynthesisOutput;
   refs: Record<string, StoredRef>;
   /** V-5: unsupported numbers (raw text, deduplicated) in `output`. Non-empty after "first" → run regenerateSynthesis. */
@@ -401,14 +447,16 @@ export type SynthesisAttempt = {
 
 function synthesisCall(
   context: InsightContext,
-  batches: readonly MatchBatchResult[],
+  stage: MatchStageResult,
   deps: Ai02Deps,
   kind: SynthesisAttempt["kind"],
   unsupportedNumbers?: readonly string[],
 ): Promise<SynthesisAttempt> {
-  const { matches } = restoreMatches(batches, context);
+  const { matches } = restoreMatches(stage, context);
   const lines = matches.map((m) => ({
-    ref: m.ref,
+    ref: m.key,
+    requirementText: m.requirementText,
+    sids: m.sids,
     status: m.status,
     rationale: m.rationale,
     missingAspect: m.missingAspect,
@@ -419,7 +467,7 @@ function synthesisCall(
     {
       feature: "AI-02.synthesize",
       promptVersion: AI02_SYNTHESIZE_PROMPT_VERSION,
-      callKey: kind === "first" ? "insight.synthesize" : "insight.synthesize.regen",
+      callKey: kind === "first" ? AI02_CALL_KEYS.synthesize : AI02_CALL_KEYS.regen,
       tier: AI02_TIER,
       systemBlocks: systemBlocks(),
       userBlocks: synthesizeUserBlocks({ packText: context.pack.text, jdText: context.jdText, matches: lines, unsupportedNumbers }),
@@ -429,14 +477,14 @@ function synthesisCall(
     },
     Ai02SynthesisOutputSchema,
   ).then((r) => ({
-    v: 1 as const,
+    v: 3 as const,
     kind,
     promptVersion: AI02_SYNTHESIZE_PROMPT_VERSION,
     model: r.meta.model,
     usage: r.meta.usage,
     attempts: r.attempts,
     careerSnapshotHash: context.careerSnapshotHash,
-    requirementsHash: context.requirementsHash,
+    rawTextHash: context.rawTextHash,
     output: r.value,
     refs: collectRefs(r.value, context.aliases),
     violations: synthesisNumberViolations(r.value, context.allowedNumbers),
@@ -444,8 +492,8 @@ function synthesisCall(
 }
 
 /** Stage 2, first answer: one logical call (V-6 retry inside). */
-export async function synthesizeOnce(input: { context: InsightContext; batches: readonly MatchBatchResult[] }, deps: Ai02Deps): Promise<SynthesisAttempt> {
-  return synthesisCall(input.context, input.batches, deps, "first");
+export async function synthesizeOnce(input: { context: InsightContext; match: MatchStageResult }, deps: Ai02Deps): Promise<SynthesisAttempt> {
+  return synthesisCall(input.context, input.match, deps, "first");
 }
 
 /**
@@ -454,11 +502,11 @@ export async function synthesizeOnce(input: { context: InsightContext; batches: 
  * `first.violations` is non-empty. What is still unsupported is replaced in finalize.
  */
 export async function regenerateSynthesis(
-  input: { context: InsightContext; batches: readonly MatchBatchResult[]; violations: readonly string[] },
+  input: { context: InsightContext; match: MatchStageResult; violations: readonly string[] },
   deps: Ai02Deps,
 ): Promise<SynthesisAttempt> {
   if (input.violations.length === 0) throw new Error("regenerateSynthesis: nothing to regenerate");
-  return synthesisCall(input.context, input.batches, deps, "regen", input.violations);
+  return synthesisCall(input.context, input.match, deps, "regen", input.violations);
 }
 
 /** Every alias token in a synthesis output (structural refs and prose) that exists in the map. */
@@ -519,10 +567,12 @@ const GONE_REF = "GONE";
  * prose. Prose aliases the attempt didn't know stay for replaceAliasesInText.
  */
 export function adaptSynthesisOutput(attempt: SynthesisAttempt, context: InsightContext): { output: Ai02SynthesisOutput; remapped: boolean } {
-  if (attempt.careerSnapshotHash === context.careerSnapshotHash && attempt.requirementsHash === context.requirementsHash) {
+  if (attempt.careerSnapshotHash === context.careerSnapshotHash && attempt.rawTextHash === context.rawTextHash) {
     return { output: attempt.output, remapped: false };
   }
   const translate = (alias: string): string | null => {
+    // Match keys (MT-n) are fixed by the stage-1 result, not by the data: kept as is.
+    if (MATCH_KEY_PATTERN.test(alias)) return alias;
     const stored = attempt.refs[alias];
     if (!stored) return null;
     return aliasFor({ ...stored, field: null, quote: null, quote_adjusted: false }, context.aliases);
@@ -564,10 +614,10 @@ export type FinalizedInsight = {
  */
 export function finalizeInsight(input: {
   context: InsightContext;
-  batches: readonly MatchBatchResult[];
+  match: MatchStageResult;
   first: SynthesisAttempt;
   regen: SynthesisAttempt | null;
-  snapshot: { careerSnapshotHash: string; requirementsHash: string };
+  snapshot: { careerSnapshotHash: string; rawTextHash: string };
   /** The job's fixed values (ai_jobs.provider / model_tier / connection_tier). */
   provider: ProviderId;
   modelTier: ModelTier;
@@ -578,33 +628,34 @@ export function finalizeInsight(input: {
 }): FinalizedInsight {
   const { context, first, regen } = input;
   if (first.kind !== "first" || (regen && regen.kind !== "regen")) throw new Error("finalizeInsight: attempts out of order");
+  if (first.v !== 3 || (regen && regen.v !== 3)) throw new Error("finalizeInsight: synthesis attempt of another version");
   const chosen = regen ?? first;
   const adapted = adaptSynthesisOutput(chosen, context);
-  const restored = restoreMatches(input.batches, context);
+  const restored = restoreMatches(input.match, context);
   const validated = validateSynthesis(adapted.output, restored.matches, context.aliases, context.textGuard);
-  const report = mergeAi02Reports(...input.batches.map((b) => b.report), restored.report, validated.report);
+  const report = mergeAi02Reports(input.match.report, restored.report, validated.report);
+  report.requirements_total = restored.matches.length;
   // V-5 counts: the first answer's violations (regenerated or replaced) are part of number_violations.
   if (regen) report.number_violations += first.violations.length;
   report.synthesis_regenerated = regen ? 1 : 0;
 
   const synthUsage = regen ? addUsage(first.usage, regen.usage) : first.usage;
-  const usage = input.batches.reduce((acc, b) => addUsage(acc, b.usage), synthUsage);
+  const usage = addUsage(input.match.usage, synthUsage);
   const inputHash = computeInsightInputHash({
     provider: input.provider,
     model: chosen.model,
     careerSnapshotHash: input.snapshot.careerSnapshotHash,
-    requirementsHash: input.snapshot.requirementsHash,
+    rawTextHash: input.snapshot.rawTextHash,
   });
   const payload = toCompleteInsightPayload({
     matches: restored.matches,
     synthesis: validated.value,
     aliases: context.aliases,
     dataSufficiency: context.dataSufficiency,
-    hashes: { requirementsHash: input.snapshot.requirementsHash, careerSnapshotHash: input.snapshot.careerSnapshotHash, inputHash },
+    hashes: { rawTextHash: input.snapshot.rawTextHash, careerSnapshotHash: input.snapshot.careerSnapshotHash, inputHash },
     meta: {
       promptVersion: AI02_PROMPT_VERSION,
       matchPromptVersion: AI02_MATCH_PROMPT_VERSION,
-      batches: input.batches.length,
       provider: input.provider,
       model: chosen.model,
       modelTier: input.modelTier,

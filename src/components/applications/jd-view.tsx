@@ -1,219 +1,154 @@
 "use client"
 
 /**
- * S-15 JD·요건 (F-P2-02): 왼쪽 "공고 원문"(문장 하이라이트) / 오른쪽 요건 목록(카테고리별, 핵심 배지,
- * 직접 수정 표시) + 기술 키워드. 요건마다 원문 문장(source_sids)이 연결된다.
- * 요건 수정(F-P2-03)은 Could라 MVP에서 읽기 전용.
+ * S-15 채용 공고 탭 본문 (v5.21, JR-1·JR-Q1 — 02 S-15 "채용 공고 탭 구성"): **공고 원문 + 문장 하이라이트**만 있다.
+ * 요건 목록·기술 키워드·경력 조건·"요건 정리하기"는 없어졌다(AI-01 폐기). 이 탭에는 AI 진입점이 없다.
+ *
+ * - 공고 원문 = `job_descriptions.raw_text` 그대로(정규화된 원문, 줄바꿈·불릿 포함). 문장 위치는 `sentences`
+ *   원소 `{sid, text, start, end}`(UTF-16 오프셋)로 알고, 하이라이트는 그 구간을 강조한다. 문장 ID는 보이지 않는다.
+ * - 하이라이트: 인사이트 근거 칩(`jd_sentence`, 문장 하나 `?tab=jd&s=S3`)이나 S-16 요건 행 "공고 원문"
+ *   링크(`sids` 전체 `?tab=jd&s=S3,S4`)에서 오면 그 문장들을 강조하고 첫 문장으로 스크롤한다. 탭을 떠나거나 원문을
+ *   누르면 지운다 `[가정]`. 가리키는 문장이 지금 원문에 없으면 강조 없이 "이 근거가 가리키던 문장을 찾지 못했어요" `[가정]`.
  */
 import { DocTextarea } from "@/components/common/doc-markdown-editor"
 import * as React from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ArrowUpRight, Loader2, PenLine, TextSearch } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { ArrowUpRight, SearchX } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { AiErrorNotice } from "@/components/common/ai-error-notice"
-import { AiRunButton } from "@/components/common/ai-run-button"
-import { useAiConnection } from "@/components/common/ai-connection-context"
-import { isAiRejected } from "@/components/common/ai-rejection"
-import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
-import { isInputCausedFailure } from "@/lib/data/ai-errors"
-import { refusalOf } from "./extract-first"
-import { JdRawEditButton, JdRawEditor, JdRawPanelTitle, JdRawSavedNote, useJdRawEdit } from "./jd-raw-edit"
-import type { AiErrorCode, AiJob, AiRetryRefusalCode, JdRequirement, JdSentence } from "@/types/db"
+import { JdRawEditButton, JdRawEditor, JdRawPanelTitle, JdRawSavedNote, useJdRawEdit, type JdRawPreviewSave } from "./jd-raw-edit"
+import type { JdSentence } from "@/types/db"
 import { cn } from "@/lib/utils"
-import { IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS, REQUIREMENT_CATEGORY_ORDER } from "./labels"
-import { retryJdExtractionAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
-
-/** "started here" marker for the running view (UQ-530); keeps `from` so the return link survives */
-function useExtractingUrl() {
-  const pathname = usePathname()
-  const params = useSearchParams()
-  return () => {
-    const next = new URLSearchParams(params.toString())
-    next.set("extracting", "self")
-    return `${pathname}?${next.toString()}`
-  }
-}
-
-/** S-15 수정 중: "요건 정리하기" 자리 (명세 문구) */
-function SaveFirstNote() {
-  return <p className="text-sm text-muted-foreground">저장한 뒤 정리할 수 있어요</p>
-}
+import { JD_TAB_LEFT_EVENT, SENTENCE_NOT_FOUND } from "./jd-highlight"
+import { useJdHighlightRequest } from "./jd-highlight-context"
 
 export function JdView({
   applicationProjectId,
   previewSave = null,
   rawText,
   sentences,
-  requirements,
-  techKeywords,
-  seniority,
   sourceUrl = null,
-  requirementsSlot,
+  highlight = [],
 }: {
   applicationProjectId: string
   /** `?state=raw-*` previews of the save */
-  previewSave?: "ok" | "failed" | "refused" | null
-  /** job_descriptions.raw_text — shown as is; sentences are highlighted by start/end offsets (C-2, A3 UQ-73) */
+  previewSave?: JdRawPreviewSave
+  /** job_descriptions.raw_text — shown as is; sentences are highlighted by start/end offsets (DM v4.16 2.6) */
   rawText: string
   sentences: JdSentence[]
-  requirements: JdRequirement[]
-  techKeywords: Array<{ keyword: string; source_sids: string[] }>
-  seniority: string | null
   /**
    * (v5.20, CF-A16) 공고 URL로 만든 자기소개서면 `job_descriptions.source_url` — 원문 패널 머리에
-   * "원래 공고 열기"를 둔다. 원문 수정(Q53-2)은 이 주소를 바꾸지 않는다 `[가정]`.
+   * "원래 공고 열기"를 둔다. 공고 내용 수정은 이 주소를 바꾸지 않는다 `[가정]`.
    */
   sourceUrl?: string | null
-  /**
-   * 요건 영역 replacement while there are no requirements yet (v4): C-18 영역형 / "요건 정리하기" /
-   * C-20 block / 분석 중. The 공고 원문 panel always stays (02 S-15 v5).
-   */
-  requirementsSlot?: React.ReactNode
+  /** `?s=S3,S4` — the sentences to highlight */
+  highlight?: string[]
 }) {
-  const [active, setActive] = React.useState<{ key: string; sids: string[] } | null>(null)
-  const sentenceRefs = React.useRef<Record<string, HTMLSpanElement | null>>({})
   const edit = useJdRawEdit()
+  const sentenceRefs = React.useRef<Record<string, HTMLSpanElement | null>>({})
+  // UQ-614: an in-page click (S-46 → `JdHighlightRequestContext`, new nonce each time) wins over the server `?s=`, so the
+  // same link clicked again — or after leaving the tab — highlights again
+  const request = useJdHighlightRequest()
+  const key = request ? `r${request.nonce}` : `s${highlight.join(",")}`
+  const wanted = request ? request.sids : highlight
+  const [active, setActive] = React.useState<{ key: string; sids: string[] }>({ key, sids: wanted })
+  // a new request / `?s=` (another chip / link) replaces the highlight — adjust during render, no effect round
+  if (active.key !== key) setActive({ key, sids: wanted })
 
-  const show = (key: string, sids: string[]) => {
-    setActive((cur) => (cur?.key === key ? null : { key, sids }))
-    const first = sids[0] && sentenceRefs.current[sids[0]]
-    if (first) first.scrollIntoView({ block: "nearest", behavior: "smooth" })
-  }
+  const known = React.useMemo(() => new Set(sentences.map((s) => s.sid)), [sentences])
+  const shown = active.sids.filter((sid) => known.has(sid))
+  const missing = active.sids.length > 0 && shown.length < active.sids.length
+
+  const clear = React.useCallback(() => setActive((cur) => (cur.sids.length ? { key: cur.key, sids: [] } : cur)), [])
+  React.useEffect(() => {
+    window.addEventListener(JD_TAB_LEFT_EVENT, clear)
+    return () => window.removeEventListener(JD_TAB_LEFT_EVENT, clear)
+  }, [clear])
+
+  const first = shown[0] ?? null
+  // UQ-620: scroll to the first highlighted sentence and move focus there (tabIndex -1), so screen readers start at it
+  React.useEffect(() => {
+    if (!first) return
+    const t = window.setTimeout(() => {
+      const el = sentenceRefs.current[first]
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.scrollIntoView({ block: "center", behavior: "smooth" })
+    }, 50)
+    return () => window.clearTimeout(t)
+  }, [first, active.key])
 
   return (
-    // (2026-11-10 사용자 요청) 원문은 카드 없이 컨테이너 폭 전체를 쓴다. 오른쪽 열(요건)이 비면 — 예: AI 미연결로
-    // "요건 정리하기"가 아무것도 그리지 않을 때 — 그 div를 감춰(`empty:hidden`) 원문만 꽉 차게 보인다
-    <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-      <section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3 xl:flex-1">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
-          <span className="flex items-center gap-1">
-            {sourceUrl ? (
-              <Button variant="link" size="sm" className="h-auto px-0" asChild>
-                <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
-                  원래 공고 열기
-                  <ArrowUpRight className="size-3.5" aria-hidden />
-                  <span className="sr-only">새 창에서 열림</span>
-                </a>
-              </Button>
-            ) : null}
-            <JdRawEditButton />
-          </span>
-        </div>
-        <JdRawSavedNote />
-        {edit.editing ? (
-          <JdRawEditor applicationProjectId={applicationProjectId} rawText={rawText} previewSave={previewSave} />
-        ) : !active ? (
-          // 공고 원문은 마크다운으로 보인다 (2026-11-10 사용자 요청 — "일반 텍스트 입력창이 아니라 마크다운 형식으로").
-          // 공통 마크다운 편집기를 읽기 전용으로 쓴다. 요건 근거를 눌러 문장을 강조할 때는 글자 위치(offset)로 강조해야
-          // 해서 아래 일반 글 보기로 바꾼다 `[UI-가정]`
-          <DocTextarea value={rawText} onValueChange={() => {}} readOnly grow aria-label="공고 원문" className="min-h-0" />
-        ) : (
-        <p className="text-base leading-[1.75] whitespace-pre-wrap">
+    // (2026-11-10 사용자 요청) 원문은 카드 없이 컨테이너 폭 전체를 쓴다
+    <section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <JdRawPanelTitle>공고 원문</JdRawPanelTitle>
+        <span className="flex flex-wrap items-center gap-2">
+          {sourceUrl ? (
+            <Button variant="link" size="sm" className="h-auto px-0" asChild>
+              <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                원래 공고 열기
+                <ArrowUpRight className="size-3.5" aria-hidden />
+                <span className="sr-only">새 창에서 열림</span>
+              </a>
+            </Button>
+          ) : null}
+          <JdRawEditButton />
+        </span>
+      </div>
+      <JdRawSavedNote />
+      {missing && !edit.editing ? (
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground" role="status">
+          <SearchX className="size-4 shrink-0" aria-hidden />
+          {SENTENCE_NOT_FOUND}
+        </p>
+      ) : null}
+      {/* UQ-623: the live region stays mounted; only its text changes, so the first highlight is announced */}
+      <span className="sr-only" role="status">
+        {shown.length > 0 && !edit.editing ? `근거 문장 ${shown.length}개를 강조했어요` : ""}
+      </span>
+      {edit.editing ? (
+        <JdRawEditor applicationProjectId={applicationProjectId} rawText={rawText} previewSave={previewSave} />
+      ) : shown.length === 0 ? (
+        // 공고 원문은 마크다운으로 보인다 (2026-11-10 사용자 요청 — "일반 텍스트 입력창이 아니라 마크다운 형식으로").
+        // 공통 마크다운 편집기를 읽기 전용으로 쓴다. 문장을 강조할 때는 글자 위치(offset)로 강조해야 해서 아래 일반 글
+        // 보기로 바꾼다 `[UI-가정]`
+        <DocTextarea value={rawText} onValueChange={() => {}} readOnly grow aria-label="공고 원문" className="min-h-0" />
+      ) : (
+        // 원문을 누르면 강조를 지운다 `[가정]` (선택·복사는 그대로 — 클릭만, 드래그 선택은 지우지 않는다)
+        <p
+          // UQ-621: long URLs / tokens wrap on narrow screens (no horizontal scroll)
+          className="text-base leading-[1.75] break-words whitespace-pre-wrap [overflow-wrap:anywhere]"
+          onClick={() => {
+            if (!window.getSelection()?.toString()) clear()
+          }}
+        >
           {segments(rawText, sentences).map((seg, i) => {
             if (!seg.sid) return <React.Fragment key={`t${i}`}>{seg.text}</React.Fragment>
             const sid = seg.sid
-            const on = active?.sids.includes(sid)
+            const on = shown.includes(sid)
             return (
               <span
                 key={sid}
                 ref={(el) => {
                   sentenceRefs.current[sid] = el
                 }}
-                className={cn("rounded-sm transition-colors", on && "bg-ai-subtle text-ai-subtle-foreground")}
+                tabIndex={sid === first ? -1 : undefined}
+                className={cn("rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring", on && "bg-ai-subtle text-ai-subtle-foreground")}
               >
-                {on ? <mark className="bg-transparent text-inherit">{seg.text}</mark> : seg.text}
+                {on ? (
+                  <mark className="bg-transparent text-inherit">
+                    {/* UQ-620: `<mark>` is not read by most screen readers — say what it is `[UI-가정]` */}
+                    <span className="sr-only">근거 문장: </span>
+                    {seg.text}
+                  </mark>
+                ) : (
+                  seg.text
+                )}
               </span>
             )
           })}
         </p>
-        )}
-      </section>
-
-      {requirementsSlot ? (
-        <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">{requirementsSlot}</div>
-      ) : (
-      <div className="min-w-0 space-y-6 empty:hidden xl:flex-1">
-        {seniority ? (
-          <p className="text-sm text-muted-foreground">
-            경력 조건: <span className="text-foreground">{seniority}</span>
-          </p>
-        ) : null}
-        {REQUIREMENT_CATEGORY_ORDER.map((cat) => {
-          const items = requirements.filter((r) => r.category === cat)
-          return (
-            <section key={cat} className="space-y-2" aria-labelledby={`req-${cat}`}>
-              <h2 id={`req-${cat}`} className="text-base leading-6 font-semibold">
-                {REQUIREMENT_CATEGORY_LABELS[cat]} <span className="text-sm font-normal text-muted-foreground tabular-nums">{items.length}</span>
-              </h2>
-              {items.length === 0 ? (
-                // [UI-가정] 카테고리 빈 상태 문구
-                <p className="text-sm text-muted-foreground">공고에서 찾지 못했어요</p>
-              ) : (
-                <ul className="divide-y rounded-lg border bg-card">
-                  {items.map((r) => (
-                    <li key={r.id} className="flex items-start gap-3 px-3 py-2.5">
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="flex flex-wrap items-center gap-2">
-                          {r.importance === "high" ? <Badge variant="secondary">{IMPORTANCE_HIGH_LABEL}</Badge> : null}
-                          <span>{r.content}</span>
-                          {r.origin === "user" || r.is_user_edited ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <PenLine className="size-3" aria-hidden />
-                              직접 수정
-                            </span>
-                          ) : null}
-                        </p>
-                        {r.keywords.length ? <p className="text-sm text-muted-foreground">{r.keywords.join(", ")}</p> : null}
-                      </div>
-                      {r.source_sids.length ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-pressed={active?.key === r.id}
-                          onClick={() => show(r.id, r.source_sids)}
-                          aria-label={`${r.content} 원문 문장 보기`}
-                        >
-                          <TextSearch aria-hidden />
-                          원문
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )
-        })}
-        <section className="space-y-2" aria-labelledby="req-tech">
-          <h2 id="req-tech" className="text-base leading-6 font-semibold">
-            기술 키워드
-          </h2>
-          {techKeywords.length === 0 ? (
-            <p className="text-sm text-muted-foreground">공고에서 찾지 못했어요</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {techKeywords.map((k) => (
-                <button
-                  key={k.keyword}
-                  type="button"
-                  onClick={() => show(`kw-${k.keyword}`, k.source_sids)}
-                  aria-pressed={active?.key === `kw-${k.keyword}`}
-                  className="focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Badge variant="secondary" className="h-7 px-2.5 text-sm">
-                    {k.keyword}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -231,168 +166,4 @@ function segments(raw: string, sentences: JdSentence[]): Array<{ sid: string | n
   }
   if (pos < raw.length) out.push({ sid: null, text: raw.slice(pos) })
   return out
-}
-
-/**
- * AI-01 실패 → C-20 block in the 요건 영역 (not_a_jd → "채용 공고가 아닌 텍스트로 보여요"). v5.3: request
- * path (A14 countdown "{N}초 뒤 다시 보낼 수 있어요"), input-caused failures have no retry (R-69) —
- * "고친 뒤 요건 정리하기로 새로 실행해 주세요". The retry is a **new** extraction on the active provider.
- * Q53-2: an editable JD's C-20 button is "공고 원문 고치기" (C-20 "입력 원인 실패의 이동"); the cause line
- * stays until the save.
- */
-export function ExtractionFailed({
-  applicationProjectId,
-  code,
-  job,
-  previewRefusal = null,
-  rerunnable = true,
-}: {
-  applicationProjectId: string
-  code: AiErrorCode
-  /** false: `succeeded` + 요건 0개 — begin_jd_extraction refuses `succeeded`, so only the text edit moves on (Q53-11) */
-  rerunnable?: boolean
-  /** failed ai_jobs row (provider / retry_after / quota_resets_at) */
-  job?: Pick<AiJob, "provider" | "retry_after" | "quota_resets_at"> | null
-  /** `?state=retry-*` preview of a refused retry */
-  previewRefusal?: AiRetryRefusalCode | null
-}) {
-  const router = useRouter()
-  const extractingUrl = useExtractingUrl()
-  const edit = useJdRawEdit()
-  const previewWrite = usePreviewWriteGuard()
-  const [retrying, setRetrying] = React.useState(false)
-  const [refusal, setRefusal] = React.useState<AiRetryRefusalCode | null>(previewRefusal)
-  const [already, setAlready] = React.useState(false)
-  const retry = async () => {
-    if (previewWrite.stop()) return
-    setRefusal(null)
-    setRetrying(true)
-    const r = await retryJdExtractionAction(applicationProjectId)
-    if (isAiRejected(r)) {
-      setRefusal(await refusalOf(r))
-      setRetrying(false)
-      return
-    }
-    if (typeof r === "object" && "already" in r) setAlready(true)
-    router.replace(extractingUrl())
-    router.refresh()
-  }
-  const inputCaused = isInputCausedFailure(code)
-  // [UI-가정] previews without a job: request-path wait of 20 s (A14 mock default)
-  const [fallbackWait] = React.useState(() => new Date(Date.now() + 20_000).toISOString())
-  return (
-    <div className="space-y-2">
-      <AiErrorNotice
-        code={code}
-        provider={job?.provider}
-        retryAfter={job?.retry_after ?? (code === "rate_limited" || code === "provider_unavailable" ? fallbackWait : null)}
-        quotaResetsAt={job?.quota_resets_at}
-        onRetry={inputCaused ? undefined : () => void retry()}
-        retrying={retrying}
-        refusal={refusal}
-        lockEntry="requirements"
-        requestPath
-        rerunLabel="요건 정리하기"
-        reduceTarget="공고 원문"
-        onFocusInput={edit.editable && !edit.editing ? edit.start : undefined}
-        inputLabel="공고 원문 고치기"
-      />
-      {/*
-        UQ-513: input-caused failures have no "다시 시도" (R-69) — the run button "요건 정리하기" (+ C-19)
-        starts a new extraction instead of a dead end. 수정 중에는 비활성 (Q53-2).
-      */}
-      {inputCaused && !already && rerunnable ? (
-        retrying ? (
-          <ExtractingLine />
-        ) : (
-          <>
-            <AiRunButton
-              lock={{ entry: "requirements" }}
-              variant="outline"
-              disabled={edit.editing}
-              onRun={async () => {
-                if (previewWrite.stop()) return undefined
-                const r = await retryJdExtractionAction(applicationProjectId)
-                if (isAiRejected(r)) return r
-                setRetrying(true)
-                if (typeof r === "object" && "already" in r) setAlready(true)
-                router.replace(extractingUrl())
-                router.refresh()
-                return undefined
-              }}
-            >
-              요건 정리하기
-            </AiRunButton>
-            {edit.editing ? <SaveFirstNote /> : null}
-          </>
-        )
-      ) : null}
-      {already ? <ExtractingLine already /> : null}
-    </div>
-  )
-}
-
-/** "공고 요건 정리 중" spinner in the run button's place; "이미 정리하고 있어요" when another path runs it (02 S-15 v5.3) */
-export function ExtractingLine({ already = false }: { already?: boolean }) {
-  return (
-    <p className="flex items-center gap-2 text-sm font-medium text-ai-subtle-foreground" role="status">
-      <Loader2 className="size-4 animate-spin text-ai" aria-hidden />
-      {already ? "이미 정리하고 있어요" : "공고 요건 정리 중"}
-    </p>
-  )
-}
-
-/**
- * v4: JD registered without a key (extraction pending, no job) → C-18 영역형, or "요건 정리하기"
- * once a key is connected (02 C-18 진입점 "요건 정리하기 (S-15)"). Raw text stays visible below.
- * v5.3: while the request runs the button's place shows "공고 요건 정리 중"; a start refusal goes back to
- * AiRunButton (C-18 / C-21 / key_invalid).
- */
-export function RunExtraction({
-  applicationProjectId,
-  unknownFailure = false,
-}: {
-  applicationProjectId: string
-  /** S-15 "원인을 알 수 없는 실패" (실패 기록이 정리됨, 04 §2.6.1): no edit button, 다시 정리만 */
-  unknownFailure?: boolean
-}) {
-  const router = useRouter()
-  const extractingUrl = useExtractingUrl()
-  const connection = useAiConnection()
-  const edit = useJdRawEdit()
-  const previewWrite = usePreviewWriteGuard()
-  const [pending, setPending] = React.useState<false | "running" | "already">(false)
-  // AI 미연결이면 원문 오른쪽에 잠금 안내를 두지 않는다 (2026-11-10 사용자 요청) — 원문만 보인다
-  if (connection && !connection.active_provider) return null
-  return (
-    <Card className="max-w-xl gap-3 p-5">
-      <h2 className="text-lg leading-7 font-semibold">요건 정리 전</h2>
-      {/* D-30: 키를 연결해도 자동으로 추출하지 않음 — 사용자가 누를 때만 */}
-      <p className="text-base text-muted-foreground">
-        {unknownFailure ? "요건을 정리하지 못했어요. 다시 정리해 보세요" : "공고에서 주요 업무·자격요건·우대사항을 정리해 드려요"}
-      </p>
-      {pending ? (
-        <ExtractingLine already={pending === "already"} />
-      ) : (
-        <AiRunButton
-          lock={{ entry: "requirements" }}
-          disabled={edit.editing}
-          onRun={async () => {
-            if (previewWrite.stop()) return undefined
-            const r = await retryJdExtractionAction(applicationProjectId)
-            if (isAiRejected(r)) return r
-            setPending(typeof r === "object" && "already" in r ? "already" : "running")
-            edit.clearSaved()
-            // UQ-530: mark "started here" so the running view says "공고 요건 정리 중" (not "이미 정리하고 있어요")
-            router.replace(extractingUrl())
-            router.refresh()
-            return undefined
-          }}
-        >
-          요건 정리하기
-        </AiRunButton>
-      )}
-      {edit.editing ? <SaveFirstNote /> : null}
-    </Card>
-  )
 }

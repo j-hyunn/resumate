@@ -425,23 +425,19 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   }
   const jdIds = db.job_descriptions.filter((j) => j.application_project_id === applicationProjectId).map((j) => j.id)
   const draftIds = db.drafts.filter((d) => d.application_project_id === applicationProjectId).map((d) => d.id)
-  const requirementIds = new Set(db.jd_requirements.filter((r) => jdIds.includes(r.job_description_id)).map((r) => r.id))
   db.application_projects = db.application_projects.filter((a) => a.id !== applicationProjectId)
   db.application_stage_events = db.application_stage_events.filter((e) => e.application_project_id !== applicationProjectId)
   db.job_descriptions = db.job_descriptions.filter((j) => !jdIds.includes(j.id))
-  db.jd_requirements = db.jd_requirements.filter((r) => !jdIds.includes(r.job_description_id))
   db.insights = db.insights.filter((i) => i.application_project_id !== applicationProjectId)
   db.drafts = db.drafts.filter((d) => !draftIds.includes(d.id))
   db.application_documents = db.application_documents.filter((d) => d.application_project_id !== applicationProjectId)
   db.draft_sections = db.draft_sections.filter((s) => !draftIds.includes(s.draft_id))
   db.draft_section_sources = db.draft_section_sources.filter((s) => s.application_project_id !== applicationProjectId)
   db.evidence_links = db.evidence_links.filter((e) => e.application_project_id !== applicationProjectId)
-  // Same as the real trigger (evidence_mark_source_deleted, DM 2.7.2): links to the deleted JD / requirements
-  // read as "원본 삭제됨".
+  // Same as the real trigger (evidence_mark_source_deleted, DM 2.7.2): links to the deleted JD read as "원본 삭제됨".
+  // R17 (4.24 #1·#5): no `jd_requirement` source any more.
   for (const e of db.evidence_links) {
-    const jdSourceGone =
-      (e.source_type === "jd_requirement" && e.source_id !== null && requirementIds.has(e.source_id)) ||
-      (e.source_type === "jd_sentence" && e.source_id !== null && jdIds.includes(e.source_id))
+    const jdSourceGone = e.source_type === "jd_sentence" && e.source_id !== null && jdIds.includes(e.source_id)
     if (jdSourceGone && !e.source_deleted_at) {
       e.quote = null
       e.source_deleted_at = now

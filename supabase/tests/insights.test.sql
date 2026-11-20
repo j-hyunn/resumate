@@ -1,6 +1,6 @@
 -- S6 insights (AI-02; DM A.8, §2.8, §5): RLS, begin / complete / fail_insight (job matching, versioning, latest
 -- swap, run-generation guard, payload shape, evidence storage), the ai_jobs end trigger, stalled-row takeover,
--- JD evidence source guard (jd_requirement / jd_sentence), cross-user isolation, and deletion cascades.
+-- JD evidence source guard (jd_sentence; R17: jd_requirement refused), cross-user isolation, and deletion cascades.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant usage on schema extensions to app_ai_writer;
@@ -32,31 +32,22 @@ insert into public.application_projects (id, user_id, name, name_source) values
   ('a0000000-aaaa-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', '에이 – 백엔드', 'ai'),
   ('a0000000-aaaa-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', '대기', 'user'),
   ('a0000000-aaaa-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', '씨', 'user'),
+  -- R17: P4 has no JD row at all (not reachable through create_application_project; tests the gate).
+  ('a0000000-aaaa-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', '공고 없음', 'user'),
   ('b0000000-aaaa-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'B', 'user');
 update public.application_projects set last_activity_at = '2026-01-01' where id = 'a0000000-aaaa-0000-0000-000000000001';
-insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
-                                     extraction_status, extraction, tech_keywords, requirements_hash,
-                                     extraction_provider, extraction_model) values
+-- R17: the insight's raw_text_hash must equal the JD's (complete_insight stale_run guard).
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences) values
   ('a0000000-dddd-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   '결제 API 설계 Kafka 경험 우대', 'h',
-   '[{"sid":"S1","text":"결제 API 설계","start":0,"end":9},{"sid":"S2","text":"Kafka 경험 우대","start":10,"end":21}]',
-   'succeeded', '{}', '[]', 'rh', 'gemini', 'm'),
+   '결제 API 설계 Kafka 경험 우대', 'rh',
+   '[{"sid":"S1","text":"결제 API 설계","start":0,"end":9},{"sid":"S2","text":"Kafka 경험 우대","start":10,"end":21}]'),
   ('a0000000-dddd-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000003',
-   '다른 공고', 'h', '[{"sid":"S1","text":"다른 공고","start":0,"end":5}]',
-   'succeeded', '{}', '[]', 'rh3', 'gemini', 'm'),
+   '다른 공고', 'rh3', '[{"sid":"S1","text":"다른 공고","start":0,"end":5}]'),
   ('b0000000-dddd-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'b0000000-aaaa-0000-0000-000000000001',
-   'B 공고', 'h', '[{"sid":"S1","text":"B 공고","start":0,"end":4}]',
-   'succeeded', '{}', '[]', 'rhb', 'gemini', 'm');
+   'B 공고', 'rhb', '[{"sid":"S1","text":"B 공고","start":0,"end":4}]');
 insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences) values
   ('a0000000-dddd-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000002',
    '대기 공고', 'h', '[{"sid":"S1","text":"대기 공고","start":0,"end":5}]');
-insert into public.jd_requirements (id, user_id, job_description_id, category, content, source_sids, sort_order) values
-  ('a0000000-8888-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-dddd-0000-0000-000000000001',
-   'responsibility', '결제 API 설계', '{S1}', 0),
-  ('a0000000-8888-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'a0000000-dddd-0000-0000-000000000001',
-   'preferred', 'Kafka', '{S2}', 1),
-  ('a0000000-8888-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'a0000000-dddd-0000-0000-000000000003',
-   'required', '다른 요건', '{S1}', 0);
 
 -- complete_insight payload template (S6 db notes). Extra owner keys in an evidence row must be ignored.
 create temp table t_payload (v jsonb);
@@ -70,8 +61,8 @@ insert into t_payload values ('{
                             "requirement_ids": ["a0000000-8888-0000-0000-000000000001"]}],
              "gaps": [], "strategy": {"positioning": "p", "item_key": "strategy.positioning", "project_priorities": []}},
   "match_stage_result": {"schema_version": 1, "matches": []},
-  "hashes": {"requirements_hash": "rh", "career_snapshot_hash": "ch1", "input_hash": "ih1"},
-  "meta": {"schema_version": 1, "prompt_version": "ai-02.match.v1+ai-02.synthesize.v1+common.v1",
+  "hashes": {"raw_text_hash": "rh", "career_snapshot_hash": "ch1", "input_hash": "ih1"},
+  "meta": {"schema_version": 2, "prompt_version": "ai-02.match.v1+ai-02.synthesize.v1+common.v1",
            "provider": "gemini", "model": "gemini-x", "model_tier": "default", "connection_tier": "free",
            "validation_report": {"removed_evidence": 0}, "usage": {"input_tokens": 10, "output_tokens": 5}},
   "unknown_top_level": true,
@@ -83,8 +74,9 @@ insert into t_payload values ('{
     {"item_key": "requirement_matches.a0000000-8888-0000-0000-000000000001", "sort_order": 1,
      "source_type": "jd_sentence", "source_id": "a0000000-dddd-0000-0000-000000000001", "source_field": null,
      "quote": null, "source_locator": {"sid": "S1", "start": 0, "end": 9}},
-    {"item_key": "strengths.0", "sort_order": 0, "source_type": "jd_requirement",
-     "source_id": "a0000000-8888-0000-0000-000000000001", "source_field": null},
+    {"item_key": "strengths.0", "sort_order": 0, "source_type": "jd_sentence",
+     "source_id": "a0000000-dddd-0000-0000-000000000001", "source_field": null,
+     "source_locator": {"sid": "S2", "start": 10, "end": 21}},
     {"item_key": "strengths.0", "sort_order": 1, "source_type": "skill",
      "source_id": "a0000000-6666-0000-0000-000000000001", "source_field": "name",
      "source_snapshot_at": "2026-10-01T00:00:00Z", "quote_adjusted": true,
@@ -108,7 +100,9 @@ insert into public.ai_jobs (id, job_type, application_project_id, target_type, t
    'a0000000-dddd-0000-0000-000000000001', 'running', 1, 'gemini', 'light', 'free'),
   -- insight job whose target is another project
   ('a0000000-7777-0000-0000-000000000004', 'insight', 'a0000000-aaaa-0000-0000-000000000001', 'application_project',
-   'a0000000-aaaa-0000-0000-000000000003', 'running', 1, 'gemini', 'default', 'free');
+   'a0000000-aaaa-0000-0000-000000000003', 'running', 1, 'gemini', 'default', 'free'),
+  ('a0000000-7777-0000-0000-000000000005', 'insight', 'a0000000-aaaa-0000-0000-000000000004', 'application_project',
+   'a0000000-aaaa-0000-0000-000000000004', 'running', 1, 'gemini', 'default', 'free');
 
 select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000003')$$,
                  'P0001', 'invalid_ai_job', 'begin: jd_extraction job refused');
@@ -118,8 +112,9 @@ select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-00000000
                  'P0001', 'invalid_ai_job', 'begin: job of another project refused');
 select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000001', gen_random_uuid())$$,
                  'P0001', 'invalid_ai_job', 'begin: unknown job');
-select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000002', 'a0000000-7777-0000-0000-000000000002')$$,
-                 'P0001', 'jd_not_extracted', 'begin: JD not extracted (D-30 runs extraction first)');
+-- R17: no extraction gate; a project without a JD row -> job_description_not_found, 0 sentences -> jd_no_sentences (r17_jd_raw_text.test.sql).
+select throws_ok($$select public.begin_insight('a0000000-aaaa-0000-0000-000000000004', 'a0000000-7777-0000-0000-000000000005')$$,
+                 'P0001', 'job_description_not_found', 'begin: project without a JD row');
 select throws_ok($$select public.begin_insight('b0000000-aaaa-0000-0000-000000000001', 'a0000000-7777-0000-0000-000000000001')$$,
                  'P0001', 'application_project_not_found', 'begin: another user''s project');
 
@@ -155,7 +150,14 @@ union all select 'empty input_hash', (select jsonb_set(v, '{hashes,input_hash}',
 union all select 'long career hash', (select jsonb_set(v, '{hashes,career_snapshot_hash}', to_jsonb(repeat('x', 129))) from t_payload)
 union all select 'hashes missing', (select v - 'hashes' from t_payload)
 union all select 'schema_version 0', (select jsonb_set(v, '{meta,schema_version}', '0') from t_payload)
-union all select 'schema_version string', (select jsonb_set(v, '{meta,schema_version}', '"1"') from t_payload)
+union all select 'schema_version string', (select jsonb_set(v, '{meta,schema_version}', '"2"') from t_payload)
+-- R17: only the schema 2 shape is written; the hash key is raw_text_hash (no requirements_hash / jd_text_hash).
+union all select 'schema_version 1', (select jsonb_set(v, '{meta,schema_version}', '1') from t_payload)
+union all select 'schema_version 3', (select jsonb_set(v, '{meta,schema_version}', '3') from t_payload)
+union all select 'raw_text_hash missing', (select jsonb_set(v, '{hashes}', (v -> 'hashes') - 'raw_text_hash') from t_payload)
+union all select 'old requirements_hash only', (select jsonb_set(v, '{hashes}', ((v -> 'hashes') - 'raw_text_hash')
+                                                 || '{"requirements_hash":"rh"}') from t_payload)
+union all select 'evidence jd_requirement', (select jsonb_set(v, '{evidence,2,source_type}', '"jd_requirement"') from t_payload)
 union all select 'prompt_version empty', (select jsonb_set(v, '{meta,prompt_version}', '""') from t_payload)
 union all select 'validation_report array', (select jsonb_set(v, '{meta,validation_report}', '[]') from t_payload)
 union all select 'evidence not array', (select jsonb_set(v, '{evidence}', '{}') from t_payload)
@@ -202,8 +204,12 @@ select throws_ok($$select public.complete_insight(current_setting('t.i1')::uuid,
                      jsonb_set((select v from t_payload), '{evidence,1,source_locator}', '{"sid":"S9","start":0,"end":9}'))$$,
                  'P0001', 'invalid_evidence_source', 'complete: jd_sentence sid not in the JD');
 select throws_ok($$select public.complete_insight(current_setting('t.i1')::uuid, 'a0000000-7777-0000-0000-000000000001', 1,
-                     jsonb_set((select v from t_payload), '{evidence,2,source_id}', '"a0000000-8888-0000-0000-000000000003"'))$$,
-                 'P0001', 'invalid_evidence_source', 'complete: jd_requirement of another project');
+                     jsonb_set((select v from t_payload), '{evidence,2,source_id}', '"a0000000-dddd-0000-0000-000000000003"'))$$,
+                 'P0001', 'invalid_evidence_source', 'complete: jd_sentence of another project');
+-- R17 (DM §2.6.1): the posting changed after prepare read it -> stale_run, nothing stored.
+select is(public.complete_insight(current_setting('t.i1')::uuid, 'a0000000-7777-0000-0000-000000000001', 1,
+            jsonb_set((select v from t_payload), '{hashes,raw_text_hash}', '"rh-old"')),
+          '{"applied": false, "reason": "stale_run"}'::jsonb, 'complete: JD raw_text_hash mismatch -> stale_run');
 select is((select count(*)::int from public.evidence_links), 0, 'failed completes stored no evidence');
 select is((select status from public.insights where id = current_setting('t.i1')::uuid), 'generating',
           'failed completes left the row generating');
@@ -215,12 +221,12 @@ select is((current_setting('t.r1')::jsonb) - 'completed_at' - 'insight_id',
           '{"applied": true, "application_project_id": "a0000000-aaaa-0000-0000-000000000001", "version_no": 1,
             "status": "ready", "is_latest": true, "previous_latest_id": null, "evidence_count": 4}'::jsonb,
           'complete: applied, latest, 4 evidence rows');
-select results_eq($$select status, is_latest, requirements_hash, career_snapshot_hash, input_hash, schema_version, prompt_version,
+select results_eq($$select status, is_latest, raw_text_hash, career_snapshot_hash, input_hash, schema_version, prompt_version,
                            provider, model, model_tier, connection_tier, completed_at is not null,
                            result ->> 'basis_note', match_stage_result ->> 'schema_version',
                            validation_report ->> 'removed_evidence', usage ->> 'input_tokens'
                       from public.insights where id = current_setting('t.i1')::uuid$$,
-                  $$values ('ready'::text, true, 'rh'::text, 'ch1'::text, 'ih1'::text, 1,
+                  $$values ('ready'::text, true, 'rh'::text, 'ch1'::text, 'ih1'::text, 2,
                             'ai-02.match.v1+ai-02.synthesize.v1+common.v1'::text, 'gemini'::text, 'gemini-x'::text,
                             'default'::text, 'free'::text, true, '입력된 경력 데이터 기준 분석입니다'::text, '1'::text,
                             '0'::text, '10'::text)$$,
@@ -232,7 +238,8 @@ select results_eq($$select item_key, sort_order, source_type, source_field, quot
                            source_deleted_at is null, source_label
                       from public.evidence_links order by item_key desc, sort_order$$,
                   $$values
-                    ('strengths.0'::text, 0, 'jd_requirement'::text, null::text, null::text, false, null::jsonb,
+                    ('strengths.0'::text, 0, 'jd_sentence'::text, null::text, null::text, false,
+                     '{"sid":"S2","start":10,"end":21}'::jsonb,
                      'insight'::text, current_setting('t.i1'), 'a0000000-aaaa-0000-0000-000000000001'::text,
                      'a0000000-0000-0000-0000-000000000001'::text, true, null::text),
                     ('strengths.0', 1, 'skill', 'name', null, true, null,
@@ -249,7 +256,7 @@ select results_eq($$select item_key, sort_order, source_type, source_field, quot
                   'complete: evidence rows mapped (owner / project / user from the row, not the payload)');
 select is((select source_snapshot_at from public.evidence_links where source_type = 'skill'), '2026-10-01 00:00:00+00'::timestamptz,
           'complete: source_snapshot_at from the payload');
-select ok((select source_snapshot_at is not null from public.evidence_links where source_type = 'jd_requirement'),
+select ok((select source_snapshot_at is not null from public.evidence_links where item_key = 'strengths.0' and sort_order = 0),
           'complete: missing source_snapshot_at -> now()');
 select ok((select last_activity_at > '2026-01-02' from public.application_projects where id = 'a0000000-aaaa-0000-0000-000000000001'),
           'complete: project last_activity_at bumped');
@@ -464,21 +471,10 @@ select set_config('t.e', pg_temp.ins_jd('jd_sentence', 'b0000000-dddd-0000-0000-
                                                                  '{"sid":"S1","start":0,"end":4}')::text, true);
 select ok((select source_deleted_at is not null and quote is null from public.evidence_links where id = current_setting('t.e')::uuid),
           'jd_sentence: B''s JD = not found for A -> stored as deleted');
-select set_config('t.e', pg_temp.ins_jd('jd_requirement', 'a0000000-8888-0000-0000-000000000002', null)::text, true);
-select ok((select source_deleted_at is null and quote = 'q' from public.evidence_links where id = current_setting('t.e')::uuid),
-          'jd_requirement: same project accepted');
-select throws_ok($$select pg_temp.ins_jd('jd_requirement', 'a0000000-8888-0000-0000-000000000003', null)$$,
-                 'P0001', 'invalid_evidence_source', 'jd_requirement: another project');
-select set_config('t.e', pg_temp.ins_jd('jd_requirement', gen_random_uuid(), null)::text, true);
-select ok((select source_deleted_at is not null and quote is null from public.evidence_links where id = current_setting('t.e')::uuid),
-          'jd_requirement: missing row -> stored as deleted');
+-- R17 (4.24 #5): jd_requirement is not an evidence source any more (insight allow list first, then the CHECK).
+select throws_ok($$select pg_temp.ins_jd('jd_requirement', gen_random_uuid(), null)$$,
+                 'P0001', 'invalid_evidence_source', 'jd_requirement: refused');
 reset role;
-
--- Requirement deletion marks its links (not an MVP path, rule only).
-delete from public.jd_requirements where id = 'a0000000-8888-0000-0000-000000000002';
-select is((select count(*)::int from public.evidence_links
-            where source_id = 'a0000000-8888-0000-0000-000000000002' and source_deleted_at is not null and quote is null), 1,
-          'jd_requirements delete marks its links');
 
 -- ── deletion cascades ───────────────────────────────────────────────────
 select ok((select count(*) from public.evidence_links where owner_type = 'insight'

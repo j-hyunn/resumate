@@ -4,15 +4,19 @@ import {
   enInput,
   ev,
   koInput,
-  koMatchOutputs,
+  koMatchOutput,
   koSynthesis,
   match,
   matchOutput,
-  reqId,
+  req,
+  sidOf,
   thinRows,
   JD_ID,
+  KO_JD_HASH,
+  KO_JD_RAW,
 } from "../__fixtures__/AI-02/insight";
 import { careerRowsFixture, IDS } from "../__fixtures__/career-rows";
+import { splitJdSentences } from "../context-pack/jd";
 import { AiError } from "../errors";
 import { createFakeLlm, type FakeLlm } from "../fake-llm";
 import type { AiLogEntry } from "../log";
@@ -22,12 +26,12 @@ import { resolveModel } from "../providers/models";
 import { Ai02MatchOutputSchema, Ai02SynthesisOutputSchema, type Ai02SynthesisOutput } from "../schemas/AI-02";
 import { INSIGHT_ITEM_KEYS } from "../storage/insight";
 import { NUMBER_CHECK_TOKEN } from "../validation/numbers";
-import { MET_DOWNGRADE_MISSING_ASPECT, NO_EVIDENCE_RATIONALE } from "../validation/insight";
+import { MATCH_MAX_SIDS, MET_DOWNGRADE_MISSING_ASPECT, NO_EVIDENCE_RATIONALE, REQUIREMENT_TEXT_MAX } from "../validation/insight";
 import {
-  AI02_BATCH_SIZE,
+  AI02_CALL_KEYS,
+  AI02_MAX_MATCHES,
   AI02_TIER,
   THIN_HINTS,
-  batchRequirements,
   buildInsightContext,
   computeInsightInputHash,
   finalizeInsight,
@@ -38,23 +42,26 @@ import {
   InsightRequirementsChangedError,
   type SynthesisAttempt,
   type InsightContext,
-  type MatchBatchResult,
+  type MatchStageResult,
 } from "./AI-02";
 
 const NOW = new Date("2026-11-01T00:00:00.000Z");
+const M = (n: number) => `MT-${n}`;
 
 function ctxKo(rows = careerRowsFixture()): InsightContext {
   return buildInsightContext(koInput(rows));
 }
 
-async function runStage1(ctx: InsightContext, outputs: readonly unknown[], llm?: FakeLlm): Promise<{ batches: MatchBatchResult[]; llm: FakeLlm }> {
-  const fake = llm ?? createFakeLlm(outputs.map((json) => ({ json })));
-  const ids = ctx.requirements.map((r) => r.id);
-  const batches: MatchBatchResult[] = [];
-  for (const [i, batch] of batchRequirements(ids).entries()) {
-    batches.push(await matchRequirements({ context: ctx, batchIndex: i, requirementIds: batch }, { llm: fake }));
-  }
-  return { batches, llm: fake };
+async function runStage1(ctx: InsightContext, output: unknown, llm?: FakeLlm): Promise<{ match: MatchStageResult; llm: FakeLlm }> {
+  const fake = llm ?? createFakeLlm([{ json: output }]);
+  const match = await matchRequirements({ context: ctx }, { llm: fake, clock: fakeClock() });
+  return { match, llm: fake };
+}
+
+/** Deterministic clock: every read advances 1,000 ms. */
+function fakeClock(step = 1000): () => number {
+  let t = 0;
+  return () => (t += step);
 }
 
 /** JSON round trip, as the job runner stores step outputs. */
@@ -81,45 +88,33 @@ async function rejectsWith(promise: Promise<unknown>, code: string, retryable = 
 type Synthesis = { first: SynthesisAttempt; regen: SynthesisAttempt | null };
 
 /** The job's step order: synthesize → synthesize_regen (only with violations), each a separate step (QA-S6-03). */
-async function synthesizeSteps(ctx: InsightContext, batches: readonly MatchBatchResult[], llm: FakeLlm, logger?: (e: AiLogEntry) => void): Promise<Synthesis> {
-  const first = roundTrip(await synthesizeOnce({ context: ctx, batches }, { llm, logger }));
-  const regen = first.violations.length ? roundTrip(await regenerateSynthesis({ context: ctx, batches, violations: first.violations }, { llm, logger })) : null;
+async function synthesizeSteps(ctx: InsightContext, match: MatchStageResult, llm: FakeLlm, logger?: (e: AiLogEntry) => void): Promise<Synthesis> {
+  const first = roundTrip(await synthesizeOnce({ context: ctx, match }, { llm, logger }));
+  const regen = first.violations.length ? roundTrip(await regenerateSynthesis({ context: ctx, match, violations: first.violations }, { llm, logger })) : null;
   return { first, regen };
 }
 
-function finalize(ctx: InsightContext, batches: readonly MatchBatchResult[], s: Synthesis, snapshot = { careerSnapshotHash: ctx.careerSnapshotHash, requirementsHash: ctx.requirementsHash }) {
-  return finalizeInsight({ context: ctx, batches, first: s.first, regen: s.regen, snapshot, provider: "anthropic", modelTier: "default", connectionTier: "paid", now: NOW });
+function finalize(ctx: InsightContext, match: MatchStageResult, s: Synthesis, snapshot = { careerSnapshotHash: ctx.careerSnapshotHash, rawTextHash: ctx.rawTextHash }) {
+  return finalizeInsight({ context: ctx, match, first: s.first, regen: s.regen, snapshot, provider: "anthropic", modelTier: "default", connectionTier: "paid", now: NOW });
 }
 
-describe("batchRequirements", () => {
-  it("splits into batches of 8 by default", () => {
-    const ids = Array.from({ length: 17 }, (_, i) => i);
-    expect(batchRequirements(ids).map((b) => b.length)).toEqual([8, 8, 1]);
-    expect(batchRequirements(ids.slice(0, 8)).map((b) => b.length)).toEqual([8]);
-    expect(batchRequirements([])).toEqual([]);
-    expect(AI02_BATCH_SIZE).toBe(8);
-  });
-
-  it("rejects a non-positive size", () => {
-    expect(() => batchRequirements([1], 0)).toThrow();
-  });
-});
-
-describe("buildInsightContext", () => {
-  it("is deterministic and numbers requirements REQ-1.. by sort_order", () => {
+describe("buildInsightContext (v4.16: raw JD)", () => {
+  it("is deterministic; the JD block is the title + every sentence, no REQ-n / seniority", () => {
     const a = ctxKo();
     const b = ctxKo();
     expect(a.pack.text).toBe(b.pack.text);
     expect(a.jdText).toBe(b.jdText);
-    expect(a.requirements.map((r) => r.ref)).toEqual(Array.from({ length: 10 }, (_, i) => `REQ-${i + 1}`));
-    expect(a.requirements[0].id).toBe(reqId(1));
     expect(a.careerSnapshotHash).toBe(b.careerSnapshotHash);
+    const sentences = splitJdSentences(KO_JD_RAW);
+    expect(a.sentenceCount).toBe(sentences.length);
+    for (const s of sentences) expect(a.jdText).toContain(`${s.sid}: ${s.text}`);
+    expect(a.jdText).toContain("position_title: 결제 백엔드 엔지니어");
+    expect(a.jdText).not.toMatch(/REQ-\d|seniority|<requirements>/);
+    expect(a.rawTextHash).toBe(KO_JD_HASH);
   });
 
-  it("puts the seniority label in the JD block and allows its numbers (V-5)", () => {
+  it("allows JD numbers for V-5 (the seniority sentence is just a sentence now)", () => {
     const ctx = ctxKo();
-    expect(ctx.jdText).toContain("seniority: 백엔드 개발 경력 5년 이상");
-    expect(ctx.jdText.endsWith("</jd>")).toBe(true);
     expect(ctx.allowedNumbers.has("5")).toBe(true);
     expect(ctx.allowedNumbers.has("1.2")).toBe(true);
     // learnings-only number (99%) is not a fact (C-9)
@@ -144,9 +139,7 @@ describe("buildInsightContext", () => {
       description: p.description ? "문자 파싱으로 자동 기록을 만들었다" : null,
     }));
     rows.deliverables = [];
-    const ctx = ctxKo(rows);
-    // situation "1.2초" and learnings "99%" still have numbers, but only results/descriptions/deliverables count.
-    expect(ctx.dataSufficiency).toEqual({ level: "thin", hints: [THIN_HINTS.noQuantitative] });
+    expect(ctxKo(rows).dataSufficiency).toEqual({ level: "thin", hints: [THIN_HINTS.noQuantitative] });
   });
 
   it("data_sufficiency: a number only in a deliverable body counts", () => {
@@ -156,208 +149,339 @@ describe("buildInsightContext", () => {
   });
 });
 
-describe("matchRequirements (stage 1)", () => {
-  it("one call per batch: default tier, low reasoning, structured output, shared cache prefix", async () => {
+describe("matchRequirements (stage 1, one call)", () => {
+  it("ONE call insight.match.1: default tier, low reasoning, structured output, [pack] → [jd] → [task]", async () => {
     const ctx = ctxKo();
-    const { batches, llm } = await runStage1(ctx, koMatchOutputs(ctx));
-    expect(llm.requests).toHaveLength(2);
-    const [r1, r2] = llm.requests;
-    expect(r1.tier).toBe(AI02_TIER);
-    expect(r1.reasoningLevel).toBe("low");
-    expect(r1.outputSchema).not.toBeNull();
-    expect(r1.callKey).toBe("insight.match.1");
-    expect(r2.callKey).toBe("insight.match.2");
-    // C-8: system + pack + JD identical across batches; only the task differs.
-    expect(r1.systemBlocks).toEqual(r2.systemBlocks);
-    expect(r1.userBlocks.slice(0, 2)).toEqual(r2.userBlocks.slice(0, 2));
-    expect(r1.userBlocks[2].text).toContain("REQ-1, REQ-2");
-    expect(r2.userBlocks[2].text).toContain("REQ-9, REQ-10");
-    expect(batches.map((b) => b.matches.length)).toEqual([8, 2]);
-    expect(llm.records).toHaveLength(2);
+    const { match, llm } = await runStage1(ctx, koMatchOutput(ctx));
+    expect(llm.requests).toHaveLength(1);
+    const [r] = llm.requests;
+    expect(r.tier).toBe(AI02_TIER);
+    expect(r.reasoningLevel).toBe("low");
+    expect(r.outputSchema).not.toBeNull();
+    expect(r.callKey).toBe("insight.match.1");
+    expect(AI02_CALL_KEYS.match).toBe("insight.match.1");
+    expect(r.userBlocks[0].text).toBe(ctx.pack.text);
+    expect(r.userBlocks[1].text).toBe(ctx.jdText);
+    expect(r.userBlocks[2].text).toContain(`최대 ${AI02_MAX_MATCHES}개`);
+    expect(AI02_MAX_MATCHES).toBe(15);
+    expect(match.items).toHaveLength(10);
+    expect(match.items.map((m) => m.match_key)).toEqual(Array.from({ length: 10 }, (_, i) => M(i + 1)));
+    expect(llm.records).toHaveLength(1);
+    expect(match).toMatchObject({ v: 3, calls: 1, attempts: 1, rawTextHash: KO_JD_HASH, careerSnapshotHash: ctx.careerSnapshotHash });
   });
 
-  it("stage-1 output survives a JSON round trip unchanged (job step output)", async () => {
+  it("measures stage-1 latency (4.24 #18) and logs it as ai_stage_timing — ids and numbers only", async () => {
     const ctx = ctxKo();
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
-    expect(roundTrip(batches)).toEqual(batches);
-    // UUIDs, not aliases
-    const ev1 = batches[0].matches[0].evidence[0];
-    expect(ev1.source_id).toBe(IDS.prjPay);
-    expect(batches[0].matches[0].requirement_id).toBe(reqId(1));
+    const logs: AiLogEntry[] = [];
+    const llm = createFakeLlm([{ json: koMatchOutput(ctx) }]);
+    const match = await matchRequirements({ context: ctx }, { llm, clock: fakeClock(1500), logger: (e) => logs.push(e), jobId: "job-1" });
+    expect(match.latencyMs).toBe(1500);
+    const timing = logs.find((l) => l.event === "ai_stage_timing");
+    expect(timing).toEqual({ event: "ai_stage_timing", jobId: "job-1", feature: "AI-02.match", callKey: "insight.match.1", promptVersion: match.promptVersion, latencyMs: 1500, calls: 1, attempts: 1 });
   });
 
-  it("applies the verdict rules (met downgrade, V-4, V-8, fill, V-3 adjust)", async () => {
+  it("stage-1 output survives a JSON round trip unchanged (job step output); evidence in UUID form", async () => {
     const ctx = ctxKo();
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
-    const all = batches.flatMap((b) => b.matches);
-    const byReq = (n: number) => all.find((m) => m.requirement_id === reqId(n))!;
-    expect(byReq(1).status).toBe("met");
-    expect(byReq(2).status).toBe("met");
-    // v4.5: a deliverable body of a standalone project supports met (C-1.1)
-    expect(byReq(3)).toMatchObject({ status: "met", evidence: [{ source_type: "project_deliverable", source_id: IDS.dlvSide1, field: "body" }] });
-    // skill tag only → partial (card 가드레일)
-    expect(byReq(4).status).toBe("partial");
-    expect(byReq(4).model_status).toBe("met");
-    expect(byReq(4).missing_aspect).toBe(MET_DOWNGRADE_MISSING_ASPECT);
-    expect(byReq(5).status).toBe("partial");
-    // situation only → partial
-    expect(byReq(6).status).toBe("partial");
-    // partial quote → closest source span, quote_adjusted
-    expect(byReq(7).status).toBe("met");
-    expect(byReq(7).evidence[0].quote_adjusted).toBe(true);
-    expect(byReq(8).status).toBe("no_evidence");
-    // learnings only → V-8 removes it → V-4 no_evidence
-    expect(byReq(9).status).toBe("no_evidence");
-    expect(byReq(9).evidence).toEqual([]);
-    expect(byReq(9).rationale).toBe(NO_EVIDENCE_RATIONALE);
-    // skipped by the model → filled [가정 S6-2]
-    expect(byReq(10)).toMatchObject({ status: "no_evidence", model_status: null, evidence: [] });
-
-    expect(batches[0].report.met_downgraded_partial).toBe(2);
-    expect(batches[0].report.quotes_adjusted).toBe(1);
-    expect(batches[1].report.evidence_removed_v8_learnings).toBe(1);
-    expect(batches[1].report.items_downgraded).toBe(1);
-    expect(batches[1].report.matches_filled_missing).toBe(1);
+    const { match } = await runStage1(ctx, koMatchOutput(ctx));
+    expect(roundTrip(match)).toEqual(match);
+    expect(match.items[0].evidence[0].source_id).toBe(IDS.prjPay);
+    expect(match.items[0]).toMatchObject({ match_key: "MT-1", requirement_text: "결제 승인 API 설계 및 운영", sids: [sidOf(ctx, "결제 승인 API")] });
+    expect(match.items[0]).not.toHaveProperty("category");
+    expect(match.items[0]).not.toHaveProperty("importance");
   });
 
-  it("drops unknown requirement refs and duplicates, removes bad evidence (V-1/V-2/V-3)", async () => {
+  it("applies the verdict rules (met downgrade, V-4, V-8, V-3 adjust)", async () => {
     const ctx = ctxKo();
-    const ids = ctx.requirements.slice(0, 2).map((r) => r.id);
-    const out = matchOutput([
-      match("REQ-1", "met", [
-        { source_type: "project", ref: "PRJ-99", field: "action", quote: "없는 프로젝트" },
-        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "outcome", quote: "응답 시간이 0.7초로 줄었다" },
-        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "result", quote: "전혀 다른 문장이 인용되었다고 가정한다" },
-        ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다"),
-      ]),
-      match("REQ-1", "no_evidence"),
-      match("REQ-9", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")]),
-      match("REQ-2", "no_evidence", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")]),
-    ]);
-    const llm = createFakeLlm([{ json: out }]);
-    const result = await matchRequirements({ context: ctx, batchIndex: 0, requirementIds: ids }, { llm });
-    expect(result.matches.map((m) => m.status)).toEqual(["met", "no_evidence"]);
-    expect(result.matches[0].evidence).toHaveLength(1);
-    // no_evidence verdicts cite nothing
-    expect(result.matches[1].evidence).toEqual([]);
-    expect(result.report).toMatchObject({
-      matches_dropped_unknown_ref: 1,
-      matches_dropped_duplicate: 1,
-      evidence_removed_v1_ref: 1,
-      evidence_removed_v2_field: 1,
-      evidence_removed_v3_quote: 1,
+    const { match } = await runStage1(ctx, koMatchOutput(ctx));
+    const byKey = (n: number) => match.items.find((m) => m.match_key === M(n))!;
+    expect(byKey(1).status).toBe("met");
+    expect(byKey(2).status).toBe("met");
+    expect(byKey(3)).toMatchObject({ status: "met", evidence: [{ source_type: "project_deliverable", source_id: IDS.dlvSide1, field: "body" }] });
+    expect(byKey(4)).toMatchObject({ status: "partial", model_status: "met", missing_aspect: MET_DOWNGRADE_MISSING_ASPECT });
+    expect(byKey(5).status).toBe("partial");
+    expect(byKey(6).status).toBe("partial");
+    expect(byKey(7).status).toBe("met");
+    expect(byKey(7).evidence[0].quote_adjusted).toBe(true);
+    expect(byKey(8).status).toBe("no_evidence");
+    expect(byKey(9)).toMatchObject({ status: "no_evidence", evidence: [], rationale: NO_EVIDENCE_RATIONALE });
+    expect(byKey(10)).toMatchObject({ status: "no_evidence", model_status: "no_evidence", evidence: [] });
+    expect(match.report).toMatchObject({
+      requirements_total: 10,
+      met_downgraded_partial: 2,
+      quotes_adjusted: 1,
+      evidence_removed_v8_learnings: 1,
+      items_downgraded: 1,
     });
   });
 
-  it("V-5 in rationale: an invented number is replaced (no regeneration in stage 1)", async () => {
+  it("card 1 — sids: unknown / non-sentence refs dropped, duplicates merged, > 5 cut; no valid sid → dropped_requirements", async () => {
     const ctx = ctxKo();
+    const s1 = sidOf(ctx, "결제 승인 API");
+    const many = ["결제 승인 API", "정산 배치", "장애 대응", "Spring Boot", "Kotlin", "대용량 트래픽", "RDBMS"].map((n) => sidOf(ctx, n));
     const out = matchOutput([
-      match("REQ-1", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
-        rationale: "응답 시간을 45% 줄이고 1.2초 병목을 해결했습니다.",
-      }),
+      match(ctx, req(1), "no_evidence", [], { sids: [s1, "S999", "PRJ-1", s1] }),
+      match(ctx, req(2), "no_evidence", [], { sids: ["S999"] }),
+      match(ctx, req(3), "no_evidence", [], { sids: [] }),
+      match(ctx, req(4), "no_evidence", [], { sids: [...many].reverse() }),
     ]);
-    const llm = createFakeLlm([{ json: out }]);
-    const result = await matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [reqId(1)] }, { llm });
-    expect(result.matches[0].rationale).toBe(`응답 시간을 ${NUMBER_CHECK_TOKEN} 줄이고 1.2초 병목을 해결했습니다.`);
-    expect(result.report.number_violations).toBe(1);
-    expect(result.report.numbers_replaced).toBe(1);
+    const { match: result } = await runStage1(ctx, out);
+    expect(result.items.map((m) => m.requirement_text)).toEqual(["결제 승인 API 설계 및 운영", "Spring Boot 기반 서버 개발 경험"]);
+    expect(result.items[0].sids).toEqual([s1]);
+    // ascending, first five of the model's list (the last five reversed)
+    expect(result.items[1].sids).toHaveLength(MATCH_MAX_SIDS);
+    expect(result.items[1].sids).toEqual([...many].reverse().slice(0, MATCH_MAX_SIDS).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))));
+    expect(result.report).toMatchObject({ sids_dropped: 3, sids_truncated: 2, dropped_requirements: 2, requirements_total: 2 });
+  });
+
+  it("card 2 — requirement_text: whitespace collapsed, empty dropped, cut at 120 without ellipsis", async () => {
+    const ctx = ctxKo();
+    const long = "결제 승인 API 설계 ".repeat(30);
+    const out = matchOutput([
+      match(ctx, req(1), "no_evidence", [], { requirement_text: long }),
+      match(ctx, req(2), "no_evidence", [], { requirement_text: "  정산   배치\n 시스템 개선 " }),
+      match(ctx, req(3), "no_evidence", [], { requirement_text: "   " }),
+    ]);
+    const { match: result } = await runStage1(ctx, out);
+    expect(Array.from(result.items[0].requirement_text).length).toBeLessThanOrEqual(REQUIREMENT_TEXT_MAX);
+    expect(result.items[0].requirement_text.endsWith("…")).toBe(false);
+    expect(result.items[1].requirement_text).toBe("정산 배치 시스템 개선");
+    expect(result.items).toHaveLength(2);
+    expect(result.report).toMatchObject({ requirement_text_clipped: 1, requirements_dropped_empty: 1 });
+  });
+
+  it("card 2 — V-5 on requirement_text uses only its own sentences; a violation → its first sentence (no regeneration)", async () => {
+    const ctx = ctxKo();
+    const seniority = sidOf(ctx, "5년 이상");
+    const sentence = splitJdSentences(KO_JD_RAW).find((x) => x.sid === seniority)!.text;
+    const out = matchOutput([
+      // 5 is in its sentence → kept
+      { ...match(ctx, req(1), "no_evidence"), requirement_text: "백엔드 개발 경력 5년 이상", sids: [seniority] },
+      // 1.2 exists elsewhere in the pack, but not in this item's sentence → replaced
+      match(ctx, req(4), "no_evidence", [], { requirement_text: "Spring Boot 1.2 이상 서버 개발 경험" }),
+      // invented 7년 on the seniority sentence → replaced by the sentence itself
+      { ...match(ctx, req(1), "no_evidence"), requirement_text: "백엔드 개발 경력 7년 이상", sids: [seniority] },
+    ]);
+    const { match: result, llm } = await runStage1(ctx, out);
+    expect(ctx.allowedNumbers.has("1.2")).toBe(true);
+    const texts = result.items.map((m) => m.requirement_text);
+    expect(texts).toContain("백엔드 개발 경력 5년 이상");
+    expect(texts).toContain(splitJdSentences(KO_JD_RAW).find((x) => x.sid === sidOf(ctx, "Spring Boot"))!.text);
+    // the 7년 item became the same text + sids as the 5년 item → dropped as a duplicate (card 3)
+    expect(texts.filter((t) => t === sentence)).toHaveLength(1);
+    expect(result.report).toMatchObject({ requirement_text_replaced: 2, requirements_duplicate: 1, number_violations: 2 });
     expect(llm.requests).toHaveLength(1);
   });
 
-  it("aliases in stage-1 prose become labels (QA-S6-04)", async () => {
+  it("card 3 — duplicates: same normalized text and same sids → the later one dropped; same text, other sids → kept", async () => {
+    const ctx = ctxKo();
+    const out = matchOutput([
+      match(ctx, req(5), "partial", [ev.skill(ctx, IDS.sklKotlin)]),
+      match(ctx, req(5), "no_evidence", [], { requirement_text: "Kotlin  사용 경험" }),
+      match(ctx, req(5), "no_evidence", [], { sids: [sidOf(ctx, "Spring Boot")] }),
+    ]);
+    const { match: result } = await runStage1(ctx, out);
+    expect(result.items.map((m) => [m.requirement_text, m.status])).toEqual([
+      ["Kotlin 사용 경험", "no_evidence"],
+      ["Kotlin 사용 경험", "partial"],
+    ]);
+    expect(result.report.requirements_duplicate).toBe(1);
+  });
+
+  it(`card 4·5 — keeps the first ${AI02_MAX_MATCHES} in model order (truncated_requirements), then keys MT-n by first sid`, async () => {
+    const ctx = ctxKo();
+    // model order: reversed JD order, 10 distinct + 8 extra with distinct text
+    const distinct = [...Array.from({ length: 10 }, (_, i) => req(10 - i))].map((d) => match(ctx, d, "no_evidence"));
+    const suffix = ["가", "나", "다", "라", "마", "바", "사", "아"];
+    const extra = suffix.map((x) => match(ctx, req(1), "no_evidence", [], { requirement_text: `결제 승인 API 세부 요건 ${x}` }));
+    const { match: result } = await runStage1(ctx, matchOutput([...distinct, ...extra]));
+    expect(result.items).toHaveLength(AI02_MAX_MATCHES);
+    expect(result.report.truncated_requirements).toBe(3);
+    // MT-1 … in JD order: the 결제 승인 API sentence first (its six items in model order), 쿠버네티스 last
+    expect(result.items[0].requirement_text).toBe("결제 승인 API 설계 및 운영");
+    expect(result.items.slice(1, 6).map((m) => m.requirement_text)).toEqual(suffix.slice(0, 5).map((x) => `결제 승인 API 세부 요건 ${x}`));
+    expect(result.items.at(-1)!.requirement_text).toBe("쿠버네티스 운영 경험");
+    expect(result.items.map((m) => m.match_key)).toEqual(Array.from({ length: AI02_MAX_MATCHES }, (_, i) => M(i + 1)));
+    const firstSid = result.items.map((m) => Number(m.sids[0].slice(1)));
+    expect([...firstSid].sort((a, b) => a - b)).toEqual(firstSid);
+  });
+
+  it("card 6 — zero items after validation: stage 1 runs once more; the retry's items are used", async () => {
+    const ctx = ctxKo();
+    const llm = createFakeLlm([{ json: matchOutput([match(ctx, req(1), "no_evidence", [], { sids: ["S999"] })]) }, { json: koMatchOutput(ctx) }]);
+    const result = await matchRequirements({ context: ctx }, { llm, clock: fakeClock() });
+    expect(llm.requests.map((r) => r.callKey)).toEqual(["insight.match.1", "insight.match.1"]);
+    expect(result).toMatchObject({ calls: 2, attempts: 2 });
+    expect(result.items).toHaveLength(10);
+    expect(result.usage.inputTokens).toBe(200);
+    expect(result.report.stage1_empty_retried).toBe(1);
+  });
+
+  it("card 6 — zero items twice → schema_invalid, not retryable; the synthesis is never called", async () => {
+    const ctx = ctxKo();
+    const llm = createFakeLlm([{ json: matchOutput([]) }, { json: matchOutput([]) }]);
+    await rejectsWith(matchRequirements({ context: ctx }, { llm }), "schema_invalid");
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it("removes bad evidence (V-1/V-2/V-3) and moves JD evidence out of the match", async () => {
+    const ctx = ctxKo();
+    const out = matchOutput([
+      match(ctx, req(1), "met", [
+        { source_type: "project", ref: "PRJ-99", field: "action", quote: "없는 프로젝트" },
+        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "outcome", quote: "응답 시간이 0.7초로 줄었다" },
+        { source_type: "project", ref: alias(ctx, "project", IDS.prjPay), field: "result", quote: "전혀 다른 문장이 인용되었다고 가정한다" },
+        ev.sentence(ctx, "결제 승인 API"),
+        ev.result(ctx, IDS.prjPay, "응답 시간이 0.7초로 줄었다"),
+      ]),
+      match(ctx, req(2), "no_evidence", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")]),
+    ]);
+    const { match: result } = await runStage1(ctx, out);
+    expect(result.items.map((m) => m.status)).toEqual(["met", "no_evidence"]);
+    expect(result.items[0].evidence).toEqual([expect.objectContaining({ source_type: "project", field: "result" })]);
+    expect(result.items[1].evidence).toEqual([]);
+    expect(result.report).toMatchObject({
+      evidence_removed_v1_ref: 1,
+      evidence_removed_v2_field: 1,
+      evidence_removed_v3_quote: 1,
+      match_jd_evidence_dropped: 1,
+    });
+  });
+
+  it("a jd_requirement (REQ-n) source is no longer part of the output schema (V-6)", () => {
+    const ctx = ctxKo();
+    const out = matchOutput([match(ctx, req(1), "met", [{ source_type: "jd_requirement" as never, ref: "REQ-1", field: null, quote: null }])]);
+    expect(Ai02MatchOutputSchema.safeParse(out).success).toBe(false);
+  });
+
+  it("V-5 and alias labels in rationale / missing_aspect; aliases in requirement_text become labels", async () => {
     const ctx = ctxKo();
     const prj = alias(ctx, "project", IDS.prjPay);
     const dlv = alias(ctx, "project_deliverable", IDS.dlvSide1);
     const out = matchOutput([
-      match("REQ-1", "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
-        rationale: `${prj}의 ${dlv}.body이 REQ-1을 뒷받침합니다(PRJ-99).`,
-        missing_aspect: "REQ-1 운영 규모",
+      match(ctx, req(1), "met", [ev.action(ctx, IDS.prjPay, "결제 승인 API의 병목 쿼리를 찾아 인덱스를 재설계했다")], {
+        requirement_text: `결제 승인 API 설계 및 운영(${prj})`,
+        rationale: `${prj}의 ${dlv}.body이 응답 시간을 45% 줄이고 1.2초 병목을 해결했습니다(PRJ-99).`,
+        missing_aspect: "MT-1 운영 규모",
       }),
     ]);
-    const result = await matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [reqId(1)] }, { llm: createFakeLlm([{ json: out }]) });
-    expect(result.matches[0].rationale).toBe("'결제 승인 API 개선'의 '문자 파싱 설계'이 '결제 승인 API 설계 및 운영'을 뒷받침합니다.");
-    expect(result.matches[0].missing_aspect).toBe("'결제 승인 API 설계 및 운영' 운영 규모");
-    expect(result.report).toMatchObject({ aliases_replaced: 4, aliases_removed: 1 });
+    const { match: result, llm } = await runStage1(ctx, out);
+    expect(result.items[0].requirement_text).toBe("결제 승인 API 설계 및 운영('결제 승인 API 개선')");
+    expect(result.items[0].rationale).toBe(`'결제 승인 API 개선'의 '문자 파싱 설계'이 응답 시간을 ${NUMBER_CHECK_TOKEN} 줄이고 1.2초 병목을 해결했습니다.`);
+    expect(result.items[0].missing_aspect).toBe("운영 규모");
+    expect(result.report).toMatchObject({ number_violations: 1, numbers_replaced: 1, aliases_replaced: 3, aliases_removed: 2 });
+    expect(llm.requests).toHaveLength(1);
   });
 
-  it("V-6: schema mismatch twice → schema_invalid, not retryable", async () => {
+  it("V-6: schema mismatch twice → schema_invalid, not retryable (v1 / R17-first-cut output shapes are a miss)", async () => {
     const ctx = ctxKo();
-    const llm = createFakeLlm([{ json: { schema_version: 1 } }, { text: "not json" }]);
-    await rejectsWith(matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [reqId(1)] }, { llm }), "schema_invalid");
+    const v1 = { schema_version: 1, matches: [{ requirement_ref: "REQ-1", status: "met", rationale: "x", missing_aspect: null, evidence: [] }] };
+    const r17a = { schema_version: 2, matches: [{ requirement: "x", category: "required", importance: "high", sentence_refs: ["S1"], status: "met", rationale: "x", missing_aspect: null, evidence: [] }] };
+    const llm = createFakeLlm([{ json: v1 }, { json: r17a }]);
+    await rejectsWith(matchRequirements({ context: ctx }, { llm }), "schema_invalid");
     expect(llm.requests).toHaveLength(2);
   });
 
   it("provider errors propagate as is", async () => {
     const ctx = ctxKo();
     const llm = createFakeLlm([{ error: "rate_limited", retryAfterMs: 1000 }]);
-    await rejectsWith(matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [reqId(1)] }, { llm }), "rate_limited", true);
+    await rejectsWith(matchRequirements({ context: ctx }, { llm }), "rate_limited", true);
   });
 
-  it("rejects an empty batch or an unknown requirement id (caller bug)", async () => {
-    const ctx = ctxKo();
-    const llm = createFakeLlm([]);
-    await expect(matchRequirements({ context: ctx, batchIndex: 0, requirementIds: [] }, { llm })).rejects.toThrow();
-    await expect(matchRequirements({ context: ctx, batchIndex: 0, requirementIds: ["nope"] }, { llm })).rejects.toThrow();
-  });
-
-  it("English JD requirement: one batch, skill-only evidence stays partial", async () => {
+  it("English JD: skill-only evidence stays partial", async () => {
     const ctx = buildInsightContext(enInput());
-    expect(ctx.requirements).toHaveLength(1);
-    const out = matchOutput([match("REQ-1", "met", [ev.skill(ctx, IDS.sklManual)], { missing_aspect: null })]);
-    const { batches } = await runStage1(ctx, [out]);
-    expect(batches[0].matches[0].status).toBe("partial");
     expect(ctx.jdText).toContain("Experience tuning PostgreSQL queries in production.");
+    const out = matchOutput([
+      {
+        requirement_text: "PostgreSQL 쿼리 튜닝 운영 경험",
+        sids: [sidOf(ctx, "PostgreSQL")],
+        status: "met",
+        rationale: "관련 스킬이 있습니다.",
+        missing_aspect: null,
+        evidence: [ev.skill(ctx, IDS.sklManual)],
+      },
+    ]);
+    const { match: result } = await runStage1(ctx, out);
+    expect(result.items[0].status).toBe("partial");
   });
 });
 
 describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () => {
   async function fullRun(synthOutputs: unknown[] = [], rows = careerRowsFixture()) {
     const ctx = ctxKo(rows);
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
+    const { match } = await runStage1(ctx, koMatchOutput(ctx));
     const llm = createFakeLlm((synthOutputs.length ? synthOutputs : [koSynthesis(ctx)]).map((json) => ({ json })));
-    const synthesis = await synthesizeSteps(ctx, roundTrip(batches), llm);
-    return { ctx, batches, llm, synthesis, final: finalize(ctx, roundTrip(batches), synthesis) };
+    const synthesis = await synthesizeSteps(ctx, roundTrip(match), llm);
+    return { ctx, match, llm, synthesis, final: finalize(ctx, roundTrip(match), synthesis) };
   }
 
-  it("medium reasoning, same cache prefix as stage 1, verdicts in <match_results>", async () => {
-    const { llm, synthesis } = await fullRun();
-    const req = llm.requests[0];
-    expect(req.reasoningLevel).toBe("medium");
-    expect(req.callKey).toBe("insight.synthesize");
-    expect(req.systemBlocks[1].text).toBe(AI02_SYSTEM);
-    const results = req.userBlocks[2].text;
+  it("medium reasoning, same cache prefix as stage 1, verdicts with requirement text in <match_results>", async () => {
+    const { ctx, llm, synthesis } = await fullRun();
+    const r = llm.requests[0];
+    expect(r.reasoningLevel).toBe("medium");
+    expect(r.callKey).toBe("insight.synthesize");
+    expect(r.systemBlocks[1].text).toBe(AI02_SYSTEM);
+    expect(r.userBlocks[1].text).toBe(ctx.jdText);
+    const results = r.userBlocks[2].text;
     expect(results).toContain("<match_results>");
-    expect(results).toContain("REQ-4 | status: partial");
-    expect(results).toContain("REQ-10 | status: no_evidence");
+    expect(results).toContain(`MT-4 | Spring Boot 기반 서버 개발 경험 | 문장: ${sidOf(ctx, "Spring Boot")} | status: partial`);
+    expect(results).toContain(`MT-1 | 결제 승인 API 설계 및 운영 | 문장: ${sidOf(ctx, "결제 승인 API")} | status: met`);
+    expect(results).toContain("MT-10 | 쿠버네티스 운영 경험");
+    expect(results).not.toMatch(/자격 요건|주요 업무|우대 사항|중요/);
     expect(synthesis.regen).toBeNull();
     expect(synthesis.first.violations).toEqual([]);
   });
 
-  it("payload: complete_insight shape, item_keys, UUIDs, no evidence in result", async () => {
-    const { final } = await fullRun();
+  it("payload v2 (DM 2.7.0): match_key / requirement_text / sids, match_keys, item_keys, UUIDs, no evidence in result", async () => {
+    const { ctx, final } = await fullRun();
     const { payload } = final;
     expect(hasKeyDeep(payload.result, "evidence")).toBe(false);
     expect(hasKeyDeep(payload.result, "positioning_evidence")).toBe(false);
     expect(hasKeyDeep(payload.match_stage_result, "evidence")).toBe(false);
+    expect(payload.result.schema_version).toBe(2);
 
     expect(payload.result.requirement_matches).toHaveLength(10);
-    expect(payload.result.requirement_matches[0]).toMatchObject({ item_key: `requirement_matches.${reqId(1)}`, requirement_id: reqId(1), status: "met" });
+    expect(payload.result.requirement_matches[0]).toEqual({
+      item_key: "requirement_matches.MT-1",
+      match_key: "MT-1",
+      requirement_text: "결제 승인 API 설계 및 운영",
+      sids: [sidOf(ctx, "결제 승인 API")],
+      status: "met",
+      rationale: "관련 경험이 데이터에 있습니다.",
+      missing_aspect: null,
+    });
     expect(payload.result.summary_counts).toEqual({ met: 4, partial: 3, no_evidence: 3 });
     expect(payload.result.data_sufficiency).toEqual({ level: "ok", hints: [] });
     expect(payload.result.basis_note).toBe("입력된 경력 데이터 기준 분석입니다");
 
     expect(payload.result.strengths.map((s) => s.item_key)).toEqual(["strengths.0", "strengths.1"]);
-    expect(payload.result.strengths[0].requirement_ids).toEqual([reqId(1), reqId(7)]);
-    expect(payload.result.gaps[0]).toMatchObject({ item_key: "gaps.0", requirement_ids: [reqId(8)], gap_kind: "no_evidence" });
+    expect(payload.result.strengths[0].match_keys).toEqual([M(1), M(7)]);
+    expect(payload.result.gaps[0]).toMatchObject({ item_key: "gaps.0", match_keys: [M(8)], gap_kind: "no_evidence" });
     expect(payload.result.gaps[0].actions.map((a) => a.item_key)).toEqual(["gaps.0.actions.0", "gaps.0.actions.1"]);
     expect(payload.result.strategy.positioning_item_key).toBe(INSIGHT_ITEM_KEYS.positioning);
-    expect(payload.result.strategy.project_priorities[0]).toMatchObject({ item_key: "strategy.project_priorities.0", rank: 1, project_id: IDS.prjPay });
+    expect(payload.result.strategy.project_priorities[0]).toMatchObject({ item_key: "strategy.project_priorities.0", rank: 1, project_id: IDS.prjPay, match_keys: [M(1), M(3)] });
+    for (const key of ["requirement_id", "requirement_ids", "requirement", "category", "importance", "sentence_ids"]) expect(hasKeyDeep(payload.result, key)).toBe(false);
 
-    // evidence rows: UUIDs, item keys that exist in result, JD sentence locator
+    expect(Object.keys(payload.match_stage_result).sort()).toEqual(["items", "prompt_version"]);
+    expect(payload.match_stage_result.prompt_version).toBe("ai-02.match.v6+common.v5");
+    expect(payload.match_stage_result.items[3]).toEqual({
+      match_key: "MT-4",
+      requirement_text: "Spring Boot 기반 서버 개발 경험",
+      sids: [sidOf(ctx, "Spring Boot")],
+      status: "partial",
+      model_status: "met",
+      rationale: "관련 경험이 데이터에 있습니다.",
+      missing_aspect: MET_DOWNGRADE_MISSING_ASPECT,
+    });
+  });
+
+  it("evidence rows (DM 2.8): requirement rows are career evidence only (sids are no rows); jd_sentence only on stage-2 items", async () => {
+    const { ctx, final } = await fullRun();
+    const { payload } = final;
     const keys = new Set(payload.evidence.map((e) => e.item_key));
     expect(keys).toEqual(
       new Set([
-        ...[1, 2, 3, 4, 5, 6, 7].map((n) => `requirement_matches.${reqId(n)}`),
+        // matches with career evidence after validation (MT-8 · MT-9 · MT-10 are no_evidence)
+        ...[1, 2, 3, 4, 5, 6, 7].map((n) => `requirement_matches.MT-${n}`),
         "strengths.0",
         "strengths.1",
         "gaps.0",
@@ -367,33 +491,43 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
       ]),
     );
     for (const e of payload.evidence) expect(e.source_id).toMatch(/^[0-9a-f-]{36}$/);
-    const sentence = payload.evidence.find((e) => e.source_type === "jd_sentence")!;
-    expect(sentence.source_id).toBe(JD_ID);
-    expect(sentence.source_locator).toMatchObject({ sid: expect.stringMatching(/^S\d+$/), start: expect.any(Number), end: expect.any(Number) });
-    const req = payload.evidence.find((e) => e.source_type === "jd_requirement")!;
-    expect(req.source_id).toBe(reqId(1));
-    expect(req.source_field).toBeNull();
+    expect(payload.evidence.some((e) => e.source_type === "jd_requirement")).toBe(false);
+
+    const matchRows = payload.evidence.filter((e) => e.item_key.startsWith("requirement_matches."));
+    expect(matchRows.some((e) => e.source_type === "jd_sentence")).toBe(false);
+    expect(payload.evidence.filter((e) => e.item_key === "requirement_matches.MT-1").map((e) => e.source_type)).toEqual(["project", "project"]);
+    // the strength's cited sentence is a jd_sentence row with its locator
+    const sentence = payload.evidence.find((e) => e.item_key === "strengths.0" && e.source_type === "jd_sentence")!;
+    const s = splitJdSentences(KO_JD_RAW).find((x) => x.sid === sidOf(ctx, "결제 승인 API"))!;
+    expect(sentence).toMatchObject({ source_id: JD_ID, source_field: null, source_locator: { sid: s.sid, start: s.start, end: s.end } });
     // sort_order restarts per item
     expect(payload.evidence.filter((e) => e.item_key === "strengths.0").map((e) => e.sort_order)).toEqual([0, 1, 2]);
   });
 
-  it("payload meta and hashes: input_hash equals the route's reuse hash", async () => {
+  it("payload meta and hashes: {raw_text_hash, career_snapshot_hash, input_hash}; input_hash equals the route's reuse hash", async () => {
     const { ctx, final } = await fullRun();
     const { payload } = final;
-    expect(payload.meta).toMatchObject({ schema_version: 1, prompt_version: AI02_PROMPT_VERSION, provider: "anthropic", model_tier: "default", connection_tier: "paid" });
+    expect(payload.meta).toMatchObject({ schema_version: 2, prompt_version: AI02_PROMPT_VERSION, provider: "anthropic", model_tier: "default", connection_tier: "paid" });
     expect(payload.meta.model).toBe(resolveModel("anthropic", "default"));
     const routeHash = computeInsightInputHash({
       provider: "anthropic",
       model: resolveModel("anthropic", "default"),
       careerSnapshotHash: ctx.careerSnapshotHash,
-      requirementsHash: ctx.requirementsHash,
+      rawTextHash: KO_JD_HASH,
     });
-    expect(payload.hashes).toEqual({ requirements_hash: ctx.requirementsHash, career_snapshot_hash: ctx.careerSnapshotHash, input_hash: routeHash });
-    // usage = 2 batches + 1 synthesize call
-    expect(payload.meta.usage.inputTokens).toBe(300);
+    expect(payload.hashes).toEqual({ raw_text_hash: KO_JD_HASH, career_snapshot_hash: ctx.careerSnapshotHash, input_hash: routeHash });
+    expect(payload.meta.prompt_version).toBe("ai-02.match.v6+ai-02.synthesize.v6+common.v5");
+    expect(final.inputHash).toBe(routeHash);
+    // usage = 1 match call + 1 synthesize call
+    expect(payload.meta.usage.inputTokens).toBe(200);
     expect(payload.meta.validation_report.met_downgraded_partial).toBe(2);
-    expect(payload.match_stage_result.batches).toBe(2);
+    expect(payload.meta.validation_report.requirements_total).toBe(10);
     expect(Object.values(payload.meta.validation_report).every((v) => typeof v === "number")).toBe(true);
+  });
+
+  it("input_hash changes with the JD raw_text_hash", () => {
+    const base = { provider: "anthropic" as const, model: "m", careerSnapshotHash: "c" };
+    expect(computeInsightInputHash({ ...base, rawTextHash: "a" })).not.toBe(computeInsightInputHash({ ...base, rawTextHash: "b" }));
   });
 
   it("strengths: dropped without career evidence (V-4/V-8) or without a met/partial requirement", async () => {
@@ -407,16 +541,15 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
         { ...good, title: "근거 없음", evidence: [] },
         { ...good, title: "회고만", evidence: [ev.learnings(ctx, IDS.prjPay, "측정 없이 최적화하면 안 된다는 것을 배웠다")] },
         { ...good, title: "JD만", evidence: [ev.sentence(ctx, "Kafka")] },
-        { ...good, title: "no_evidence 요건만", requirement_refs: ["REQ-8", "REQ-99"] },
-        { ...good, title: "둘째", requirement_refs: ["REQ-8", "REQ-4"] },
+        { ...good, title: "no_evidence 요건만", requirement_refs: ["MT-8", "MT-99"] },
+        { ...good, title: "둘째", requirement_refs: ["MT-8", "MT-4", "M-1"] },
       ],
     };
     const { final } = await fullRun([out]);
     const strengths = final.payload.result.strengths;
     expect(strengths.map((s) => s.title)).toEqual(["정산 배치 재설계", "둘째"]);
-    // mixed refs: the no_evidence one is removed
-    expect(strengths[1].requirement_ids).toEqual([reqId(4)]);
-    expect(final.report).toMatchObject({ strengths_dropped_no_match: 1, evidence_removed_v8_learnings: 2 /* 1 from stage 1 (REQ-9) */, requirement_refs_dropped: 3 });
+    expect(strengths[1].match_keys).toEqual([M(4)]);
+    expect(final.report).toMatchObject({ strengths_dropped_no_match: 1, evidence_removed_v8_learnings: 2 /* 1 from stage 1 (MT-9) */, requirement_refs_dropped: 4 });
     expect(final.report.items_dropped).toBe(4);
   });
 
@@ -436,9 +569,9 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
     const out: Ai02SynthesisOutput = {
       ...base,
       gaps: [
-        { ...base.gaps[0], requirement_refs: ["REQ-1"] },
+        { ...base.gaps[0], requirement_refs: ["MT-1"] },
         {
-          requirement_refs: ["REQ-1", "REQ-6"],
+          requirement_refs: ["MT-1", "MT-6"],
           gap_kind: "no_evidence",
           description: "대용량 트래픽에서 본인 기여가 불명확합니다.",
           actions: [
@@ -453,7 +586,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
     const { final } = await fullRun([out]);
     const gaps = final.payload.result.gaps;
     expect(gaps).toHaveLength(1);
-    expect(gaps[0]).toMatchObject({ item_key: "gaps.0", requirement_ids: [reqId(6)], gap_kind: "partial" });
+    expect(gaps[0]).toMatchObject({ item_key: "gaps.0", match_keys: [M(6)], gap_kind: "partial" });
     expect(gaps[0].actions.map((a) => a.type)).toEqual(["add_data"]);
     expect(final.report).toMatchObject({ gaps_dropped_no_requirement: 1, gap_kind_corrected: 1, actions_dropped: 2 });
   });
@@ -468,9 +601,9 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
         positioning: "결제 엔지니어로 포지셔닝합니다.",
         positioning_evidence: [ev.sentence(ctx, "결제 승인 API")],
         project_priorities: [
-          { rank: 3, ref: prj(IDS.prjSettle), reason: "정산", requirement_refs: ["REQ-2"] },
+          { rank: 3, ref: prj(IDS.prjSettle), reason: "정산", requirement_refs: ["MT-2"] },
           { rank: 1, ref: "PRJ-99", reason: "없음", requirement_refs: [] },
-          { rank: 2, ref: prj(IDS.prjPay), reason: "결제", requirement_refs: ["REQ-1", "REQ-8"] },
+          { rank: 2, ref: prj(IDS.prjPay), reason: "결제", requirement_refs: ["MT-1", "MT-8"] },
           { rank: 4, ref: prj(IDS.prjPay), reason: "중복", requirement_refs: [] },
           { rank: 5, ref: alias(ctx, "project_deliverable", IDS.dlvSide1), reason: "산출물은 프로젝트가 아님", requirement_refs: [] },
           { rank: 6, ref: prj(IDS.prjEdu), reason: "캡스톤", requirement_refs: [] },
@@ -487,8 +620,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
       [3, IDS.prjEdu],
       [4, IDS.prjSide],
     ]);
-    // no_evidence requirement refs removed from a priority
-    expect(strategy.project_priorities[0].requirement_ids).toEqual([reqId(1)]);
+    expect(strategy.project_priorities[0].match_keys).toEqual([M(1)]);
     expect(final.report).toMatchObject({ positioning_dropped: 1, priorities_dropped: 3 });
     expect(final.payload.evidence.some((e) => e.item_key === "strategy.positioning")).toBe(false);
   });
@@ -504,7 +636,7 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
     expect(synthesis.regen).toMatchObject({ kind: "regen", violations: [] });
     expect(final.payload.result.strategy.positioning).toBe(base.strategy.positioning);
     expect(final.report).toMatchObject({ number_violations: 1, numbers_replaced: 0, synthesis_regenerated: 1 });
-    expect(final.usage.inputTokens).toBe(400); // 2 batches + first + regen
+    expect(final.usage.inputTokens).toBe(300); // match + first + regen
   });
 
   it("V-5: still invented after the regeneration → replaced with [수치 확인 필요]", async () => {
@@ -523,22 +655,29 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
     expect(final.report.number_violations).toBe(4);
   });
 
-  it("aliases in stage-2 prose become labels; none reach the stored result (QA-S6-04)", async () => {
+  it("aliases and match refs in stage-2 prose become labels; none reach the stored result (QA-S6-04)", async () => {
     const ctx = ctxKo();
     const base = koSynthesis(ctx);
     const prj = alias(ctx, "project", IDS.prjEdu);
     const out: Ai02SynthesisOutput = {
       ...base,
-      gaps: [{ ...base.gaps[0], actions: [base.gaps[0].actions[0], { ...base.gaps[0].actions[1], text: `${prj}의 무효화 메시지 발행(DET-99)을 REQ-8 질문에 대비해 정리하세요.` }] }],
+      gaps: [{ ...base.gaps[0], actions: [base.gaps[0].actions[0], { ...base.gaps[0].actions[1], text: `${prj}의 무효화 메시지 발행(DET-99)을 MT-8 질문에 대비해 정리하세요(MT-77, REQ-2).` }] }],
       strategy: { ...base.strategy, positioning: `${alias(ctx, "project", IDS.prjPay)} 중심으로 포지셔닝합니다.` },
     };
     const { final } = await fullRun([out]);
     const r = final.payload.result;
     expect(r.gaps[0].actions[1].text).toBe("'캡스톤 분산 캐시'의 무효화 메시지 발행을 'Kafka 등 메시지 큐 운영 경험' 질문에 대비해 정리하세요.");
     expect(r.strategy.positioning).toBe("'결제 승인 API 개선' 중심으로 포지셔닝합니다.");
-    const prose = JSON.stringify(r);
-    expect(prose).not.toMatch(/\b(?:EXP|EDU|PRJ|DET|ACH|SKL|REQ)-\d+\b/);
-    expect(final.report).toMatchObject({ aliases_replaced: 3, aliases_removed: 1 });
+    // MT-n stays only in the key fields (match_key, match_keys, item_key) — never in prose.
+    const prose = JSON.stringify([
+      r.requirement_matches.map((m) => [m.requirement_text, m.rationale, m.missing_aspect]),
+      r.strengths.map((x) => [x.title, x.description]),
+      r.gaps.map((g) => [g.description, g.actions.map((a) => a.text)]),
+      r.strategy.positioning,
+      r.strategy.project_priorities.map((p) => p.reason),
+    ]);
+    expect(prose).not.toMatch(/\b(?:EXP|EDU|PRJ|DET|ACH|SKL|REQ|MT|M)-\d+\b/);
+    expect(final.report).toMatchObject({ aliases_replaced: 3, aliases_removed: 3 });
   });
 
   it("an alias-shaped token from the user's own data is kept (AWS S3)", async () => {
@@ -553,42 +692,40 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
 
   it("V-6 on stage 2 → schema_invalid after one retry", async () => {
     const ctx = ctxKo();
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
-    const llm = createFakeLlm([{ json: { schema_version: 1, strengths: [] } }, { json: { nope: true } }]);
-    await rejectsWith(synthesizeOnce({ context: ctx, batches }, { llm }), "schema_invalid");
+    const { match } = await runStage1(ctx, koMatchOutput(ctx));
+    const llm = createFakeLlm([{ json: { schema_version: 2, strengths: [] } }, { json: { nope: true } }]);
+    await rejectsWith(synthesizeOnce({ context: ctx, match }, { llm }), "schema_invalid");
   });
 
-  it("career data changed between stage 1 and stage 2: vanished evidence is dropped and verdicts re-ruled", async () => {
+  it("career data changed between stage 1 and stage 2: vanished evidence is dropped and verdicts re-ruled; sentences stay", async () => {
     const ctx1 = ctxKo();
-    const { batches } = await runStage1(ctx1, koMatchOutputs(ctx1));
-    // prjPay goes back to draft → its STAR leaves the pack.
+    const { match } = await runStage1(ctx1, koMatchOutput(ctx1));
     const rows = careerRowsFixture();
     rows.projects = rows.projects.map((p) => (p.id === IDS.prjPay ? { ...p, status: "draft" } : p));
     const ctx2 = ctxKo(rows);
-    const restored = restoreMatches(roundTrip(batches), ctx2);
-    const byReq = (n: number) => restored.matches.find((m) => m.requirementId === reqId(n))!;
-    expect(byReq(1).status).toBe("no_evidence"); // action + result both gone
-    expect(byReq(1).rationale).toBe(NO_EVIDENCE_RATIONALE);
-    expect(byReq(6).status).toBe("no_evidence"); // situation of prjPay gone
-    expect(byReq(7).status).toBe("no_evidence");
-    expect(byReq(2).status).toBe("met"); // untouched
+    const restored = restoreMatches(roundTrip(match), ctx2);
+    const byId = (n: number) => restored.matches.find((m) => m.key === M(n))!;
+    expect(restored.matches).toHaveLength(10);
+    expect(byId(1)).toMatchObject({ key: "MT-1", status: "no_evidence", rationale: NO_EVIDENCE_RATIONALE });
+    expect(byId(1).sids).toEqual([sidOf(ctx2, "결제 승인 API")]);
+    expect(byId(6).status).toBe("no_evidence");
+    expect(byId(7).status).toBe("no_evidence");
+    expect(byId(2).status).toBe("met");
     expect(restored.report.evidence_lost_on_restore).toBe(4);
-    // aliases were renumbered but restored evidence points at the same rows
-    expect(byReq(2).evidence[0].ref).toBe(alias(ctx2, "project", IDS.prjSettle));
+    expect(byId(2).evidence[0].ref).toBe(alias(ctx2, "project", IDS.prjSettle));
   });
 
-  it("career data changed between synthesize and validate: the stored attempt is re-mapped by row id", async () => {
-    const { batches, synthesis } = await fullRun();
-    // A new project sorts first → every PRJ alias shifts; prjSettle's action is rewritten (old quote no longer matches).
+  it("career data changed between synthesize and validate: the stored attempt is re-mapped by row id; MT-n keys stay", async () => {
+    const { match, synthesis } = await fullRun();
     const rows = careerRowsFixture();
     rows.projects.push({ ...rows.projects.find((p) => p.id === IDS.prjSettle)!, id: "30000000-0000-4000-8000-0000000000ff", name: "새 프로젝트", start_month: "2025-01-01" });
     rows.projects = rows.projects.map((p) => (p.id === IDS.prjSettle ? { ...p, action: "야간 작업을 줄였다" } : p));
     const ctx2 = ctxKo(rows);
     expect(alias(ctx2, "project", IDS.prjPay)).not.toBe(synthesis.first.output.strategy.project_priorities[0].ref);
-    const final = finalize(ctx2, roundTrip(batches), synthesis);
+    const final = finalize(ctx2, roundTrip(match), synthesis);
     const r = final.payload.result;
-    // strengths.1 cited only prjSettle's old action → dropped; priorities still point at the same projects
     expect(r.strengths.map((s) => s.title)).toEqual(["결제 승인 API 성능 개선"]);
+    expect(r.strengths[0].match_keys).toEqual([M(1), M(7)]);
     expect(r.strategy.project_priorities.map((p) => p.project_id)).toEqual([IDS.prjPay, IDS.prjSettle]);
     const ids = new Set(final.payload.evidence.map((e) => e.source_id));
     expect(ids.has(IDS.prjSettle)).toBe(false);
@@ -596,68 +733,62 @@ describe("synthesizeOnce / regenerateSynthesis + finalizeInsight (stage 2)", () 
   });
 
   it("finalize stores the prepare-time snapshot hashes (QA-S6-09)", async () => {
-    const { ctx, batches, synthesis } = await fullRun();
-    const snapshot = { careerSnapshotHash: "career-at-prepare", requirementsHash: "reqs-at-prepare" };
-    const final = finalize(ctx, batches, synthesis, snapshot);
-    expect(final.payload.hashes).toMatchObject({ career_snapshot_hash: "career-at-prepare", requirements_hash: "reqs-at-prepare" });
+    const { ctx, match, synthesis } = await fullRun();
+    const snapshot = { careerSnapshotHash: "career-at-prepare", rawTextHash: "jd-at-prepare" };
+    const final = finalize(ctx, match, synthesis, snapshot);
+    expect(final.payload.hashes).toEqual({ career_snapshot_hash: "career-at-prepare", raw_text_hash: "jd-at-prepare", input_hash: final.inputHash });
     expect(final.inputHash).toBe(
-      computeInsightInputHash({ provider: "anthropic", model: resolveModel("anthropic", "default"), careerSnapshotHash: "career-at-prepare", requirementsHash: "reqs-at-prepare" }),
+      computeInsightInputHash({ provider: "anthropic", model: resolveModel("anthropic", "default"), careerSnapshotHash: "career-at-prepare", rawTextHash: "jd-at-prepare" }),
     );
   });
 
-  it("requirement list changed mid-job → InsightRequirementsChangedError (QA-S6-09)", async () => {
-    const { batches, synthesis } = await fullRun();
-    const input = koInput();
-    const ctx2 = buildInsightContext({ ...input, requirements: input.requirements.slice(0, 9) });
-    expect(() => finalize(ctx2, batches, synthesis)).toThrow(InsightRequirementsChangedError);
+  it("JD raw text changed mid-job → InsightRequirementsChangedError (code kept)", async () => {
+    const { match, synthesis } = await fullRun();
+    const ctx2 = buildInsightContext({ ...koInput(), rawTextHash: "another-hash" });
+    expect(() => finalize(ctx2, match, synthesis)).toThrow(InsightRequirementsChangedError);
+    await expect(synthesizeOnce({ context: ctx2, match }, { llm: createFakeLlm([]) })).rejects.toMatchObject({ code: "requirements_changed" });
   });
 
-  it("regenerateSynthesis refuses an empty violation list; finalize refuses swapped attempts", async () => {
-    const { ctx, batches, synthesis } = await fullRun();
-    await expect(regenerateSynthesis({ context: ctx, batches, violations: [] }, { llm: createFakeLlm([]) })).rejects.toThrow();
-    expect(() => finalize(ctx, batches, { first: { ...synthesis.first, kind: "regen" }, regen: null })).toThrow();
+  it("regenerateSynthesis refuses an empty violation list; finalize refuses swapped or older-version attempts", async () => {
+    const { ctx, match, synthesis } = await fullRun();
+    await expect(regenerateSynthesis({ context: ctx, match, violations: [] }, { llm: createFakeLlm([]) })).rejects.toThrow();
+    expect(() => finalize(ctx, match, { first: { ...synthesis.first, kind: "regen" }, regen: null })).toThrow();
+    expect(() => finalize(ctx, match, { first: { ...synthesis.first, v: 2 as never }, regen: null })).toThrow();
+    expect(() => finalize(ctx, { ...match, v: 2 as never }, synthesis)).toThrow();
   });
 
-  it("restore refuses batches that don't cover the requirements", async () => {
-    const ctx = ctxKo();
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
-    expect(() => restoreMatches([batches[0]], ctx)).toThrow();
-    expect(() => restoreMatches([batches[0], batches[0], batches[1]], ctx)).toThrow();
-  });
-
-  it("thin data: data_sufficiency thin goes to the result", async () => {
+  it("thin data, all no_evidence: data_sufficiency thin, empty synthesis stored", async () => {
     const rows = thinRows();
     const ctx = ctxKo(rows);
-    const outputs = [
-      matchOutput([match("REQ-2", "met", [ev.action(ctx, IDS.prjSettle, "정산 배치를 청크 단위로 재설계했다")])]),
-      matchOutput([]),
-    ];
-    const { batches } = await runStage1(ctx, outputs);
+    const { match: stage } = await runStage1(ctx, matchOutput([match(ctx, req(8), "no_evidence")]));
     const synthesisOut: Ai02SynthesisOutput = {
-      schema_version: 1,
+      schema_version: 2,
       strengths: [],
       gaps: [],
       strategy: { positioning: "", positioning_evidence: [], project_priorities: [] },
     };
     const llm = createFakeLlm([{ json: synthesisOut }]);
-    const synthesis = await synthesizeSteps(ctx, batches, llm);
-    const final = finalize(ctx, batches, synthesis);
+    const synthesis = await synthesizeSteps(ctx, stage, llm);
+    expect(llm.requests[0].userBlocks[2].text).toContain("MT-1 | Kafka 등 메시지 큐 운영 경험");
+    const final = finalize(ctx, stage, synthesis);
     expect(final.payload.result.data_sufficiency.level).toBe("thin");
-    expect(final.summaryCounts).toEqual({ met: 1, partial: 0, no_evidence: 9 });
+    expect(final.summaryCounts).toEqual({ met: 0, partial: 0, no_evidence: 1 });
+    expect(final.payload.result.requirement_matches.map((m) => m.match_key)).toEqual(["MT-1"]);
     expect(final.payload.result.strategy.positioning).toBeNull();
+    expect(final.payload.evidence).toEqual([]);
   });
 
   it("logs counts only (C-7)", async () => {
     const ctx = ctxKo();
     const logs: AiLogEntry[] = [];
-    const { batches } = await runStage1(ctx, koMatchOutputs(ctx));
+    const { match } = await runStage1(ctx, koMatchOutput(ctx));
     const llm = createFakeLlm([{ json: koSynthesis(ctx) }]);
-    const synthesis = await synthesizeSteps(ctx, batches, llm, (e) => logs.push(e));
+    const synthesis = await synthesizeSteps(ctx, match, llm, (e) => logs.push(e));
     finalizeInsight({
       context: ctx,
-      batches,
+      match,
       ...synthesis,
-      snapshot: { careerSnapshotHash: ctx.careerSnapshotHash, requirementsHash: ctx.requirementsHash },
+      snapshot: { careerSnapshotHash: ctx.careerSnapshotHash, rawTextHash: ctx.rawTextHash },
       provider: "anthropic",
       modelTier: "default",
       connectionTier: "paid",

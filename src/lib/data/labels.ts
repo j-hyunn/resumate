@@ -55,8 +55,10 @@ export const OUTCOME_LABELS: Record<StageOutcome | "none", string> = {
  * Use aiStageLabel(jobType, progress) instead of reading this map directly.
  */
 export const AI_STAGE_LABELS: Record<AiProgressStage, string> = {
-  prepare: "공고 요건 정리 중",
-  match: "요건 대조 중",
+  // (v5.21, JR-1·JR-3) no requirement extraction in `prepare` — "준비 중" `[가정]` (AI 호출 없음)
+  prepare: "준비 중",
+  // (v5.21, JR-Q2 보류) stage 1 = requirement identification + judgement in one call `[가정]` (UX C-03 문구)
+  match: "공고에서 요건을 찾아 내 커리어와 맞춰 보는 중",
   synthesize: "강점·지원 방향 정리 중",
   validate: "근거 확인 중",
   rank: "쓸 경력·프로젝트 고르는 중",
@@ -80,7 +82,8 @@ export function aiStageLabel(
 
 /** S-42 기능별 표 기능 이름 (ai_usage_records.feature, 02 S-42) */
 export const AI_USAGE_FEATURE_LABELS: Record<AiUsageFeature, string> = {
-  jd_extraction: "요건 추출",
+  // (v5.21, JR-Q5) legacy AI-01 rows only — S-42 shows it as the last row, only in months that have such records
+  jd_extraction: "JD 요건 추출(종료)",
   insight: "인사이트",
   // (v5.20, CF-1) 경력기술서 폐기. 값은 과거 사용량 행 보존용으로 CHECK에 남아 있고(decisions 4.23
   // 백엔드 7), S-42 표는 usage-display.ts가 두 값을 한 줄로 합쳐 보인다
@@ -184,7 +187,6 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   project_detail: "상세 내용",
   achievement: "삭제된 근거", // 정량 성과 폐기 (CR-11, UQ-430): an old row only ever shows as deleted
   skill: "스킬",
-  jd_requirement: "JD 요건",
   jd_sentence: "공고 원문",
   user_note: "내 메모",
 }
@@ -397,7 +399,7 @@ export const AI_TRAINING_NOTICE =
  * Particles: directionParticle(name).
  */
 export const AI_FEATURE_NAMES = {
-  requirements: "요건 정리",
+  // (v5.21, JR-1) "요건 정리" (AI-01) is gone — C-18 has no "요건 정리하기" entry any more
   insight: "인사이트",
   // (v5.20, CF-U3 확정 2026-11-08 (사용자)) 기능 이름 = **"자소서"** — 지원 건·서류 자체는
   // "자기소개서"(CR-23)이고 S-46의 탭 이름도 "자소서"다. v5.14의 "자소서 문항 답변"(U36-6)은 이것으로

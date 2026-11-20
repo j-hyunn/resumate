@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { DRAFT_SOURCE_ROLES, QUESTION_CLASSES } from "@/lib/contracts/enums";
-import { DraftEvidence, DraftRef, DraftRefs, NotesForUser, PlaceholdersOutput } from "./drafts-common";
+import { DraftEvidence, DraftRef, NotesForUser, PlaceholdersOutput } from "./drafts-common";
 
 /**
- * AI-04 자소서 문항 답변 작성 AI 채팅 — model output, **schema_version 4**
- * (AI spec v4.15 AI-04 "출력 스키마"; 3 → 4 adds `answer_title`, CF-6).
+ * AI-04 자소서 문항 답변 작성 AI 채팅 — model output, **schema_version 5**
+ * (AI spec v4.15 AI-04 "출력 스키마"; 3 → 4 adds `answer_title`, CF-6;
+ * 4 → 5 drops `requirement_refs`, R17).
  *
  * Three calls, three shapes:
  * - `compose` (초안 턴): `questions[]` — this turn's questions only (≤ 3, CL-10),
@@ -18,7 +19,8 @@ import { DraftEvidence, DraftRef, DraftRefs, NotesForUser, PlaceholdersOutput } 
  * `question_ref` (`CLQ-n`) → `question_slot` (`q_{n}`, DM 2.5.0b).
  */
 
-export const AI04_OUTPUT_SCHEMA_VERSION = 4;
+/** 5 (R17): `requirement_refs` dropped from sources and paragraphs (no JD requirement aliases). */
+export const AI04_OUTPUT_SCHEMA_VERSION = 5;
 
 /** DM 2.5.0b 슬롯 키: `q_{n}`, ≤ 3 digits. */
 export const QUESTION_SLOT_PATTERN = /^q_[0-9]{1,3}$/;
@@ -45,7 +47,6 @@ export const Ai04SourceSchema = z.object({
   education_ref: DraftRef.nullable(),
   role: z.enum(DRAFT_SOURCE_ROLES),
   rationale: z.string().max(600),
-  requirement_refs: DraftRefs,
   reuse_reason: z.string().max(300).nullable(),
   evidence: DraftEvidence,
 });
@@ -61,7 +62,6 @@ export const Ai04ParagraphSchema = z.object({
   evidence: DraftEvidence,
   source_fact_ids: z.array(DraftRef).max(20),
   source_body_quotes: z.array(z.string().max(1000)).max(20),
-  requirement_refs: DraftRefs,
   placeholders: PlaceholdersOutput,
 });
 

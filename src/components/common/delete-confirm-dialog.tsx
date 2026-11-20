@@ -308,7 +308,7 @@ function ImpactSummary({ target, impact }: { target: DeleteTarget; impact: Impac
     const d = impact.data
     // K-2 (v5.13) · (v5.19, RM-1) · (v5.20, CF-A14·CF-U3): 서류가 자기소개서와 1:1이라 "서류 {N}"을
     // 쓰지 않는다 — 명세 문구 그대로. 계약 키는 `d.documents`(백엔드 정본)이고 그 수는 보이지 않는다.
-    lines.push(`JD·요건, 인사이트 ${d.insights}, 자소서 문항·답변, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
+    lines.push(`공고, 인사이트 ${d.insights}, 자소서 문항·답변, 전형 이력이 함께 삭제돼요. 커리어 데이터는 그대로예요`)
     if (target.kind === "application_project" && target.unsavedChanges) lines.push("저장하지 않은 수정도 함께 사라져요")
   }
   if (impact.kind === "api_key" && target.kind === "api_key") {

@@ -33,7 +33,8 @@ import { assertSafeUrl, defaultLookup, type LookupFn } from "./ssrf";
 
 /**
  * R15 A1 — 공고 URL 가져오기 (CF-10). Fetches a job posting page and turns it
- * into `{rawText, companyName, positionTitle}` for S-14 단계 1.
+ * into `{rawText}` for S-14 단계 1 (R17 4.24 #15: the JobPosting company / title are not returned;
+ * JSON-LD is still read for its description body).
  *
  * Reads, in order: ① schema.org `JobPosting` JSON-LD (title / hiringOrganization
  * / description) ② the page's own body frame on 사람인·잡코리아 ③ generic main
@@ -815,7 +816,8 @@ export async function fetchJobDescription(
     if (markdownTextLength(rawText) < JD_FETCH_MIN_CHARS) throw jdFetchError("fetch_too_short");
 
     d.log("jd_fetch.succeeded", { host, code: "ok", bytes, elapsedMs: d.now() - startedAt });
-    return { rawText, companyName: posting.companyName, positionTitle: posting.title };
+    // JR-2·JR-4 (4.24 #15): only the text — the JobPosting company / title no longer pre-fill S-14 ②.
+    return { rawText };
   } catch (err) {
     // Host, code, bytes, elapsed only — never the path, the query, or any page text (CF-A16).
     d.log("jd_fetch.failed", { host, code: codeOf(err), bytes, elapsedMs: d.now() - startedAt });

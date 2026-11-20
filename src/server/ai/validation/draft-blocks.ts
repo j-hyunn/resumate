@@ -65,7 +65,6 @@ export type RawDraftBlock = {
   text: string;
   evidence: readonly ModelEvidence[];
   placeholders: ReadonlyArray<{ token: string; hint?: string | null }>;
-  requirement_refs?: readonly string[];
 };
 
 export type CheckedDraftBlock = {
@@ -121,20 +120,14 @@ export function checkDraftBlock(
     addToReport(report, { skill_terms_flagged: 1 });
   }
 
-  const requirementIds: string[] = [];
-  for (const ref of raw.requirement_refs ?? []) {
-    const id = env.aliases.resolveId(ref.trim(), "jd_requirement");
-    if (id === null) addToReport(report, { requirement_refs_dropped: 1 });
-    else if (!requirementIds.includes(id)) requirementIds.push(id);
-  }
-
   return {
     block: {
       block_id: meta.blockId,
       block_kind: meta.kind,
       project_id: meta.projectId,
       text,
-      requirement_ids: requirementIds,
+      // [가정 R17-10] JD requirement refs are gone (no model field); [] keeps the block contract shape.
+      requirement_ids: [],
       placeholders: checked.placeholders,
       flags: [...new Set(flags)],
       generated_by: "ai",

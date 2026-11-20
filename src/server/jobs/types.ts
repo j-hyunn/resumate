@@ -1,4 +1,4 @@
-import type { StoredAiJobProgress } from "@/lib/contracts/ai";
+import type { JobErrorCode, StoredAiJobProgress } from "@/lib/contracts/ai";
 import type {
   AiErrorCode,
   AiJobStatus,
@@ -73,7 +73,8 @@ export type JobRecord = {
   nextRunAt: string | null;
   retryAfter: string | null;
   quotaResetsAt: string | null;
-  errorCode: AiErrorCode | null;
+  /** R17 (QA-02): a pre-R17 row may carry a legacy code (`not_a_jd`). */
+  errorCode: JobErrorCode | null;
   inputHash: string | null;
   cancelRequestedAt: string | null;
   heartbeatAt: string | null;

@@ -27,8 +27,7 @@ export type StructuredResult<T> = {
 
 export type StructuredOptions<T> = {
   /**
-   * Feature-level acceptance after zod (e.g. AI-01 "0 requirements left after
-   * validation"): false spends the same single V-6 retry; the second miss
+   * Feature-level acceptance after zod: false spends the same single V-6 retry; the second miss
    * throws schema_invalid. It may throw its own AiError to stop at once.
    */
   accept?: (value: T) => boolean;

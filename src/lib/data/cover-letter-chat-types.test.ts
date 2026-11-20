@@ -30,11 +30,11 @@ describe("S-46 패널 문구·상한", () => {
     expect(firstTurnOffer(5)).toContain("먼저 1~3번 문항을")
   })
 
-  it("시작 인사는 form_snapshot으로 갈린다 (시작 영역 ①~④)", () => {
-    expect(coverLetterGreeting({ answered: 0, total: 3, requirementsPending: true })).toContain("공고 요건")
-    expect(coverLetterGreeting({ answered: 0, total: 3, requirementsPending: false })).toContain("초안을 제안")
-    expect(coverLetterGreeting({ answered: 1, total: 3, requirementsPending: false })).toContain("이어서")
-    expect(coverLetterGreeting({ answered: 3, total: 3, requirementsPending: false })).toContain("다듬어")
+  it("시작 인사는 form_snapshot으로 갈린다 (시작 영역 ①~③, v5.21 JR-3: ④ 요건 추출 전 없음)", () => {
+    expect(coverLetterGreeting({ answered: 0, total: 3 })).toContain("초안을 제안")
+    expect(coverLetterGreeting({ answered: 0, total: 3 })).not.toContain("공고 요건")
+    expect(coverLetterGreeting({ answered: 1, total: 3 })).toContain("이어서")
+    expect(coverLetterGreeting({ answered: 3, total: 3 })).toContain("다듬어")
   })
 
   it('4~5문항이면 첫 초안 턴 뒤 "남은 문항" 칩이 붙는다', () => {

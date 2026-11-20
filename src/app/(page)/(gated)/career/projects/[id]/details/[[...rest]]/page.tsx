@@ -15,11 +15,10 @@ async function Redirect({ params, searchParams }: Props): Promise<null> {
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const focus = one(sp.focus)
-  // known queries carry over (QA UQ-S10-9): STAR focus (C-02), S-16 관련 요건, the open chat
+  // known queries carry over (QA UQ-S10-9): STAR focus (C-02), the open chat. (v5.21) `requirement_id` is gone
   redirect(
     routes.projectPage(id, {
       focus: focus && STAR.includes(focus) ? (focus as (typeof STAR_FIELDS)[number]) : undefined,
-      requirement_id: one(sp.requirement_id),
       chat: one(sp.chat),
     }),
   )

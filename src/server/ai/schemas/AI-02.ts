@@ -2,10 +2,16 @@ import { z } from "zod";
 import { ModelEvidenceSchema } from "../validation/evidence";
 
 /**
- * AI-02 JD 인사이트 model output, schema_version 1 (AI spec AI-02 "출력 스키마").
+ * AI-02 JD 인사이트 model output, **schema_version 2** (R17: JD AI 처리 제거).
  * Two schemas for the two-stage chain:
- * - stage 1 (`match`, one per batch): `matches[]`
- * - stage 2 (`synthesize`): `strengths`, `gaps`, `strategy`
+ * - stage 1 (`match`, ONE call): `matches[]` — the model reads the requirements
+ *   straight from the raw JD sentences (S-n) and judges each one:
+ *   `requirement_text` (≤ 120 after the server trims), `sids` (1–5), verdict,
+ *   rationale, missing aspect, career evidence. No category / importance
+ *   (AI spec v4.16 AI-02 "요건 종류·중요도는 출력하지 않는다"). v1 judged an
+ *   AI-01 requirement list in batches.
+ * - stage 2 (`synthesize`): `strengths`, `gaps`, `strategy`; `requirement_refs`
+ *   point at the server-assigned match keys `MT-n` (stored as `match_keys`).
  * `basis_note`, `data_sufficiency`, `requirement_matches`, `summary_counts`
  * of the final form are server-built (card: "summary_counts는 서버가 계산").
  *
@@ -14,7 +20,7 @@ import { ModelEvidenceSchema } from "../validation/evidence";
  * (V-6); the server trims (strengths ≤ 3, priorities ≤ 5) after validation.
  */
 
-export const AI02_OUTPUT_SCHEMA_VERSION = 1;
+export const AI02_OUTPUT_SCHEMA_VERSION = 2;
 
 /** Screen labels: 충족 / 부분 충족 / 근거 없음. */
 export const INSIGHT_MATCH_STATUSES = ["met", "partial", "no_evidence"] as const;
@@ -35,7 +41,14 @@ const Evidence = z.array(ModelEvidenceSchema).max(12);
 // ---------- stage 1 ----------
 
 export const Ai02MatchSchema = z.object({
-  requirement_ref: Ref,
+  /**
+   * Short requirement in the posting's own words. The spec's canonical
+   * maxLength is 120 but no provider enforces lengths (C-10.2 strips them), so
+   * zod accepts more and the server cuts at 120 — no V-6 retry for length.
+   */
+  requirement_text: z.string().max(600),
+  /** The JD sentences (S-n) the requirement is read from; 1–5 after validation, else the item is dropped. */
+  sids: Refs,
   status: z.enum(INSIGHT_MATCH_STATUSES),
   rationale: z.string().max(800),
   missing_aspect: z.string().max(400).nullable(),
@@ -44,7 +57,8 @@ export const Ai02MatchSchema = z.object({
 
 export const Ai02MatchOutputSchema = z.object({
   schema_version: z.literal(AI02_OUTPUT_SCHEMA_VERSION),
-  matches: z.array(Ai02MatchSchema).max(30),
+  // Generous for V-6; the server keeps the first AI02_MAX_MATCHES (15).
+  matches: z.array(Ai02MatchSchema).max(40),
 });
 
 export type Ai02Match = z.infer<typeof Ai02MatchSchema>;

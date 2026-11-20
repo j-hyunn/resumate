@@ -31,9 +31,9 @@ describe("situation/task-only self claim", () => {
     [[ev("project", "task"), ev("project", "result")], false],
     [[ev("project", "role"), ev("project", "description")], false],
     [[ev("project", "role"), ev("project_deliverable", "body")], false],
-    [[ev("project", "situation"), ev("jd_requirement", null)], true],
+    [[ev("project", "situation"), ev("jd_sentence", null)], true],
     [[ev("project", "situation"), ev("project", "learnings")], true],
-    [[ev("jd_requirement", null)], false],
+    [[ev("jd_sentence", null)], false],
     [[], false],
   ] as const)("%j → %s", (evidence, expected) => {
     expect(isSituationTaskOnly(evidence)).toBe(expected);

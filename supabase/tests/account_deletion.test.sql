@@ -49,7 +49,7 @@ select set_eq(
   array['ai_data_use_consents', 'ai_jobs', 'ai_provider_keys', 'ai_usage_records',
         'application_documents', 'application_projects', 'application_stage_events', 'consents',
         'educations', 'evidence_links', 'experiences',
-        'insights', 'jd_requirements',
+        'insights',
         'job_descriptions', 'profile_job_interests', 'project_deliverables', 'project_skills', 'projects',
         'skills',
         'writing_chat_messages', 'writing_chats'],
@@ -106,8 +106,6 @@ insert into public.application_stage_events (user_id, application_project_id, ev
 insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences) values
   ('a0000000-1d00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
    'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]');
-insert into public.jd_requirements (user_id, job_description_id, category, content, source_sids) values
-  ('a0000000-0000-0000-0000-000000000001', 'a0000000-1d00-0000-0000-000000000001', 'required', 'Go', '{S1}');
 
 insert into public.ai_jobs (id, user_id, job_type, application_project_id, target_type, target_id, status, run_generation,
                             provider, model_tier, connection_tier) values
@@ -125,7 +123,7 @@ insert into public.ai_jobs (id, user_id, job_type, application_project_id, targe
 update public.ai_jobs set heartbeat_at = now() where id = 'a0000000-7777-0000-0000-000000000002';
 
 insert into public.insights (id, user_id, application_project_id, version_no, is_latest, status, result,
-                             match_stage_result, requirements_hash, career_snapshot_hash, input_hash, schema_version,
+                             match_stage_result, raw_text_hash, career_snapshot_hash, input_hash, schema_version,
                              prompt_version, provider, model, model_tier, connection_tier, completed_at, ai_job_id)
 values ('a0000000-1a51-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
         'a0000000-aaaa-0000-0000-000000000001', 1, true, 'ready', '{}', '{}', 'rh', 'ch', 'ih', 1, 'pv', 'gemini', 'm',
@@ -155,9 +153,9 @@ update public.profiles set active_ai_provider = 'gemini', display_name = 'A'
 insert into public.ai_data_use_consents (user_id, provider, connection_tier, disclosure_version, free_tier_acknowledged)
 values ('a0000000-0000-0000-0000-000000000001', 'gemini', 'free', 'v2026-11-05', true);
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  -- fixture consents at the current versions (R15, CF-S6: terms·privacy 2026-11-09)
-  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-09', true),
-  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-09', true);
+  -- fixture consents at the current versions (R15, UI60-E: terms·privacy 2026-11-20)
+  ('a0000000-0000-0000-0000-000000000001', 'terms', '2026-11-20', true),
+  ('a0000000-0000-0000-0000-000000000001', 'privacy_required', '2026-11-20', true);
 insert into public.ai_usage_records (user_id, occurred_at, feature, job_type, ai_job_id, application_project_id, provider,
                                      model, model_tier, connection_tier, usage_source, outcome, price_table_version,
                                      estimated_cost_usd) values
@@ -181,7 +179,7 @@ insert into public.ai_provider_keys (id, user_id, provider, connection_tier, key
   ('b0000000-9999-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002', 'gemini', 'free', '\x01', '\x02', '\x03',
    'env-v1', 'bg01', 'valid');
 insert into public.consents (user_id, consent_type, policy_version, agreed) values
-  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-09', true);
+  ('b0000000-0000-0000-0000-000000000002', 'terms', '2026-11-20', true);
 insert into public.writing_chats (id, user_id, project_id, status) values
   ('b0000000-c4a7-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
    'b0000000-3333-0000-0000-000000000001', 'active');

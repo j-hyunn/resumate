@@ -17,7 +17,7 @@ export async function countRunningJobs(supabase: UserSupabaseClient, provider?: 
 
 export type ShellRows = {
   activeChat: boolean;
-  /** application-screen jobs in flight (jd_extraction and chat turns have their own UI). */
+  /** application-screen jobs in flight (chat turns have their own UI; `jd_extraction` = R17 legacy rows, excluded). */
   runningApplicationJobs: number;
 };
 

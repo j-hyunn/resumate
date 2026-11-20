@@ -9,7 +9,6 @@ import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { advanceMockJob, recordMockUsage, retryMockJob } from "@/lib/mock/ai"
 import { routes } from "@/lib/routes"
-import { ensureJdRequirementsInDb } from "./applications"
 import { applicationDisplayName } from "./labels"
 import { isPreviewRequest } from "./source"
 import { isAppError } from "@/lib/contracts/errors"
@@ -67,14 +66,19 @@ async function realJobById(jobId: string): Promise<AiJobView | null> {
   return row ? realJobView(row) : null
 }
 
-/** Mock AI-02 stage-1 matches for an application's requirements (deterministic by order). */
+/**
+ * Mock AI-02 stage-1 matches (R17 schema 2, DM 2.7.0): one `MT-n` per JD sentence after the title (≤ 15),
+ * deterministic by order — the mock reads the requirements from the raw text like the real stage 1.
+ */
 function mockMatches(db: MockDb, applicationProjectId: string) {
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  const reqs = db.jd_requirements.filter((r) => r.job_description_id === jd?.id).sort((a, b) => a.sort_order - b.sort_order)
+  const sentences = (jd?.sentences ?? []).slice(1, 16)
   const statuses = ["met", "partial", "no_evidence"] as const
-  return reqs.map((r, i) => ({
-    item_key: `requirement_matches.${r.id}`,
-    requirement_id: r.id,
+  return sentences.map((sentence, i) => ({
+    item_key: `requirement_matches.MT-${i + 1}`,
+    match_key: `MT-${i + 1}`,
+    requirement_text: sentence.text.slice(0, 120),
+    sids: [sentence.sid],
     status: statuses[i % 3],
     rationale: "입력된 경력 데이터 기준 판단입니다.",
     missing_aspect: i % 3 === 0 ? null : "구체적인 본인 기여",
@@ -85,21 +89,24 @@ function mockMatches(db: MockDb, applicationProjectId: string) {
 function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
   const now = new Date().toISOString()
 
-  // AI-02 stage 1 partial result: fill match_stage_result per finished batch (A3 UQ-65)
+  // AI-02 stage 1 partial result (A3 UQ-65): stage 1 is one call (R17), so the whole list appears once it is done
   if (job.job_type === "insight") {
     const insight = db.insights.find((i) => i.ai_job_id === job.id)
     const p = job.progress
-    if (insight && p && p.stage !== "prepare") {
-      const total = p.stage === "match" ? (p.total ?? 1) : (job.params?.mock_units as number | undefined) ?? p.total ?? 1
-      const done = p.stage === "match" ? (p.done ?? 0) : total
-      if (done > 0 && (insight.match_stage_result?.batches_done ?? 0) < done) {
-        const all = mockMatches(db, insight.application_project_id)
-        const per = Math.ceil(all.length / Math.max(1, total))
+    if (insight && p && p.stage !== "prepare" && !insight.match_stage_result) {
+      const done = p.stage === "match" ? (p.done ?? 0) : 1
+      if (done > 0) {
         insight.match_stage_result = {
-          schema_version: 1,
-          batches_done: done,
-          batches_total: total,
-          requirement_matches: all.slice(0, Math.min(all.length, per * done)),
+          prompt_version: "ai-02.match.v6+common.v5",
+          items: mockMatches(db, insight.application_project_id).map((m) => ({
+            match_key: m.match_key,
+            requirement_text: m.requirement_text,
+            sids: m.sids,
+            status: m.status,
+            model_status: m.status,
+            rationale: m.rationale,
+            missing_aspect: m.missing_aspect,
+          })),
         }
       }
     }
@@ -110,8 +117,7 @@ function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
   // C-13: one usage row per provider call (failed calls too). No reserve/charge (D-34).
   if (job.status !== "canceled")
     recordMockUsage(db, {
-      // a `prepare` failure never reached this job's own AI call: the failed call is the requirement extraction
-      job_type: job.params?.mock_fail_at_prepare === true ? "jd_extraction" : job.job_type,
+      job_type: job.job_type,
       ai_job_id: job.id,
       application_project_id: job.application_project_id,
       provider: job.provider,
@@ -131,8 +137,9 @@ function syncEffects(db: MockDb, job: AiJob, terminalNow: boolean) {
         is_latest: true,
         completed_at: now,
         updated_at: now,
+        schema_version: 2,
         result: {
-          schema_version: 1,
+          schema_version: 2,
           basis_note: "입력된 경력 데이터 기준 분석입니다",
           data_sufficiency: { level: "ok", hints: [] },
           requirement_matches: matches,
@@ -185,7 +192,7 @@ export async function listActiveAiJobs(sinceMs = 15_000): Promise<AiJobView[]> {
   const cutoff = Date.now() - sinceMs
   const out: AiJobView[] = []
   for (const job of db.ai_jobs) {
-    if (job.job_type === "writing_chat_turn" || job.job_type === "jd_extraction") continue
+    if (job.job_type === "writing_chat_turn") continue
     const wasActive = job.status === "queued" || job.status === "running"
     if (wasActive) refresh(db, job)
     const recent = job.finished_at && Date.parse(job.finished_at) >= cutoff
@@ -260,13 +267,8 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
     refresh(db, job)
     return clone(jobView(db, job))
   }
-  const prepareFailed = job.params?.mock_fail_at_prepare === true
+  // R17: no requirement extraction in `prepare` any more — a retry just runs the job again
   retryMockJob(job, opts, db)
-  // `prepare`부터 다시 (S-16): the requirements are extracted again; the same failure ends the job the same way
-  if (prepareFailed && job.application_project_id) {
-    const extraction = await ensureJdRequirementsInDb(db, job.application_project_id)
-    if (extraction.failed) Object.assign(job, { params: { ...job.params, mock_fail: extraction.failed, mock_fail_at_prepare: true } })
-  }
   // the rows the job produces go back to their in-progress state (UQ-49, R-63)
   if (job.job_type === "insight") {
     const insight = db.insights.find((i) => i.ai_job_id === job.id)
@@ -277,11 +279,11 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
 
 /**
  * Mock: advances this application's running async jobs and writes what they produced. For rules that
- * read "no job is running" (update_failed_jd_raw_text condition 1). AI-01 jobs have their own path.
+ * read "no insight is running" (update_jd_raw_text condition 3).
  */
 export function refreshApplicationJobs(db: MockDb, applicationProjectId: string) {
   for (const job of db.ai_jobs) {
-    if (job.application_project_id !== applicationProjectId || job.job_type === "jd_extraction") continue
+    if (job.application_project_id !== applicationProjectId) continue
     if (job.status === "queued" || job.status === "running") refresh(db, job)
   }
 }

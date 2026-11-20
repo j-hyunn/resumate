@@ -55,7 +55,6 @@ const SOURCE_TABLES = {
   project: "projects",
   project_deliverable: "project_deliverables",
   skill: "skills",
-  jd_requirement: "jd_requirements",
 } as const satisfies Partial<Record<EvidenceSourceType, string>>;
 type TrackedSourceType = keyof typeof SOURCE_TABLES;
 
@@ -146,8 +145,6 @@ function targetOf(row: EvidenceLinkRow, type: EvidenceSourceType, info: SourceIn
       return { type: "project_deliverable", deliverableId: row.source_id, projectId: info?.projectId ?? null };
     case "skill":
       return { type: "skill", skillId: row.source_id };
-    case "jd_requirement":
-      return { type: "jd_requirement", requirementId: row.source_id };
     case "jd_sentence":
       return { type: "jd_sentence", jobDescriptionId: row.source_id, ...locatorOf(row.source_locator) };
     default:

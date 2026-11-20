@@ -25,7 +25,7 @@ export const EVIDENCE_KIND_LABELS: Record<EvidenceSourceType, string> = {
   project: "프로젝트",
   project_deliverable: "산출물",
   skill: "스킬",
-  jd_requirement: "JD 요건",
+  // R17 (4.24 #5): `jd_requirement` ("JD 요건") is gone from the CHECK; `jd_sentence` is insight-only.
   jd_sentence: "공고 원문",
   user_note: "내 메모",
 };
@@ -56,7 +56,6 @@ export type EvidenceTarget =
   | { type: "project"; projectId: string; field: string | null; standalone: boolean | null }
   | { type: "project_deliverable"; deliverableId: string; projectId: string | null }
   | { type: "skill"; skillId: string }
-  | { type: "jd_requirement"; requirementId: string }
   | { type: "jd_sentence"; jobDescriptionId: string; sid: string | null; start: number | null; end: number | null }
   | { type: "other"; sourceId: string };
 

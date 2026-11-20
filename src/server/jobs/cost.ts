@@ -86,9 +86,9 @@ export function estimateCostUsd(usage: NormalizedUsage, price: PriceRow): number
 /**
  * ai_usage_records.feature by job type (C-13, DM §2.9.2): AI-11 기본 선택 is
  * counted under career_description, AI-12 turns under writing_chat.
+ * R17: `jd_extraction` no longer runs, so nothing records the legacy `jd_extraction` feature.
  */
 export const USAGE_FEATURE_BY_JOB_TYPE: Record<AiJobType, UsageFeature> = {
-  jd_extraction: "jd_extraction",
   insight: "insight",
   career_description: "career_description",
   draft_source_ranking: "career_description",

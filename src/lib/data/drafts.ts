@@ -25,14 +25,13 @@ import type {
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { newId, USER_ID } from "@/lib/mock/ids"
-import { activeKey, assertAiRunnable, createMockJob, MockAiError, mockSyncCall, recordMockUsage } from "@/lib/mock/ai"
+import { activeKey, assertAiRunnable, MockAiError, mockSyncCall, recordMockUsage } from "@/lib/mock/ai"
 import { consentRequired } from "@/lib/mock/consent"
-import { errorCategoryOf, failureCauseOf, failureTimestamps, type AiRejected } from "./ai-errors"
+import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { formatPeriod } from "./labels"
 import { educationDisplayName } from "@/server/services/career/education-name"
 import { computeReadiness } from "./readiness"
-import { realRetryJdExtraction } from "./applications-real"
 import { AppError } from "@/lib/contracts/errors"
 import { previewOr } from "./source"
 
@@ -1009,48 +1008,7 @@ async function mockSettleAbandonedGeneration(draftId: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// S-15: JD extraction retry (AI-01 실패 재시도 — JD 교체는 불가, D-19)
-// ---------------------------------------------------------------------------
-
-/**
- * AI-01 (re)run: retry after a failure, or "요건 정리하기" for a JD created without a key
- * (D-30, `extraction_status = 'pending'`). Needs an active key → false otherwise (C-18).
- */
-/**
- * "요건 정리하기" / 다시 정리 (S-15, D-30). v5.3 (UQ-402): request-scoped work = 04 §2.11.7 path ⑤ —
- * the gate runs first (no key / consent needed → `{ rejected: "key_missing" }`, invalid →
- * `{ rejected: "key_invalid" }`, nothing changed; the screen re-reads readiness to tell the consent
- * cause apart) and every run is a **new** jd_extraction job on the active provider (DM 2.9.1 (2)).
- * Returns true when started, "already" when an extraction is running, false when there is no JD.
- * mock_controls.next_jd_extraction_failure makes the started run fail with that cause.
- */
-async function mockRetryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
-  const db = await mockRequest()
-  const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  if (!jd) return false
-  try {
-    assertAiRunnable(db, "request")
-  } catch (e) {
-    if (e instanceof MockAiError) return { rejected: e.error_code, refusal: e.refusal }
-    throw e
-  }
-  const running = db.ai_jobs.find((j) => j.id === jd.extraction_job_id && (j.status === "queued" || j.status === "running"))
-  // A3 request 2: "이미 정리하고 있어요" is told apart from a new start
-  if (running) return "already"
-  const failNext = db.mock_controls.next_jd_extraction_failure
-  db.mock_controls.next_jd_extraction_failure = null
-  jd.extraction_status = "running"
-  jd.extraction_job_id = createMockJob(db, {
-    job_type: "jd_extraction",
-    application_project_id: applicationProjectId,
-    target_type: "job_description",
-    target_id: jd.id,
-    path: "request",
-    fail: failNext,
-  }).id
-  return true
-}
+// R17: the S-15 JD extraction retry ("요건 정리하기", AI-01) is gone — the JD is used as raw text.
 
 // ---------------------------------------------------------------------------
 // R15: 연결 대기 — `?state=` previews run on the mock store, the real branch refuses.
@@ -1144,15 +1102,3 @@ export function markDraftEdited(draftId: string): Promise<void> {
 export function settleAbandonedGeneration(draftId: string): Promise<void> {
   return previewOr(() => mockSettleAbandonedGeneration(draftId), async () => {})
 }
-
-/**
- * **Wired, not 연결 대기**: this is JD requirement extraction (S-15 "요건 정리하기", D-30), not a
- * 서류 function — it only lives in this file for historical reasons. It keeps its real path
- * (`applications-real.ts`), so S-15 stays working. `[가정]` (R15 api notes).
- */
-export function retryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
-  return previewOr(() => mockRetryJdExtraction(applicationProjectId), () => realRetryJdExtraction(applicationProjectId))
-}
-
-/** "요건 정리하기" (S-15, D-30) — same as retryJdExtraction */
-export const runJdExtraction = retryJdExtraction

@@ -2,18 +2,19 @@ import "server-only"
 /**
  * 자기소개서 흐름 data layer (UX v5.20 S-13 · S-14 · S-46, DM v4.15 2.6.2 · 2.7.3).
  *
- * **모든 함수가 실제 경로다** (R15 + R15 후속): `fetchJobPosting` · `extractJdPreview` ·
+ * **모든 함수가 실제 경로다** (R15 + R15 후속): `fetchJobPosting` ·
  * `saveCoverLetterDocument` · `getCoverLetterDocument` · `listCoverLetterSlotCounts` ·
  * `markCoverLetterCopied`. `?state=` mock 분기는 그대로 둔다(이 프로젝트 방식).
  *
  * **근거를 저장 요청에 싣지 않는다** (CF-S1): 문항 근거의 원천은 그 문항 초안 제안의 `sources[]`이고,
  * 저장 RPC가 `p_applied_proposals`로 받은 제안에서 `evidence_links`를 만든다. 화면·데이터 계층은
  * 근거 목록을 올려 보내지 않는다.
+ *
+ * R17: `extractJdPreview`(S-14 ① 요건 미리 보기, AI-01)는 없어졌다 — 공고는 원문 그대로 쓴다.
  */
 import type { ApplicationDocument, CoverLetterBody, Uuid } from "@/types/db"
 // 저장 입력·반환·거부 코드·가져오기·미리 보기의 **정본은 R15 계약**이다 (손 타입을 두지 않는다)
 import type { SaveApplicationDocumentResult } from "@/lib/contracts/application-document"
-import type { ExtractJdPreviewResult } from "@/lib/contracts/application"
 import type { FetchJobDescriptionResult } from "@/lib/contracts/jd-fetch"
 import {
   getApplicationDocument as getApplicationDocumentAction,
@@ -22,22 +23,17 @@ import {
   saveApplicationDocument as saveApplicationDocumentAction,
 } from "@/server/actions/application-document"
 import { fetchJobDescription } from "@/server/services/job-description/fetch"
-import { extractJdPreview as extractJdPreviewService } from "@/server/services/application/preview"
-import { createJdPreviewDeps } from "@/server/jobs/jd-preview"
 import { logJobEvent } from "@/server/jobs/log"
 import { requireConsentedUser } from "@/server/auth/session"
 import { unwrap } from "./source"
 import { AppError } from "@/lib/contracts/errors"
 import { clone, mockRequest } from "@/lib/mock/store"
 import { newId, USER_ID } from "@/lib/mock/ids"
-import { activeKey, MockAiError } from "@/lib/mock/ai"
-import { consentRequired } from "@/lib/mock/consent"
 import {
   COVER_LETTER_MAX_QUESTIONS,
 } from "./cover-letter-defaults"
 import { composeCoverLetterName } from "./labels"
 import { listApplicationProjects } from "./applications"
-import { rememberJdPreview } from "./jd-preview-store"
 import {
   filledSlotCount,
   JD_FETCH_FAILED_MESSAGE,
@@ -132,43 +128,6 @@ const MOCK_FETCHED_JD = [
   "- Kubernetes 운영 경험",
   "접수 마감: 2026년 12월 15일",
 ].join("\n")
-
-/**
- * S-14 ① [다음]의 미리 보기 추출 — **행을 만들지 않는 AI-01**(DM 2.6.2).
- * Q53-1 게이트를 여기서 판정한다 (CF-A6 · R-CF-4): 동의 필요·키 무효면 거부하고 ①에 머문다.
- * 활성 공급자가 없으면 돌리지 않고 호출하는 쪽이 바로 ②로 간다 (CL-8 · D-30).
- *
- * 실제: `POST /api/job-descriptions/extract-preview`의 서비스 (DM v4.15 2.6.2)
- */
-export async function extractJdPreview(rawText: string): Promise<ExtractJdPreviewResult> {
-  return previewOr(
-    async () => {
-      const db = await mockRequest(600)
-      const key = activeKey(db)
-      if (!key) throw MockAiError.refuse("ai_not_connected")
-      if (key.status === "invalid") throw MockAiError.refuse("key_invalid")
-      if (consentRequired(db, key.provider, key.connection_tier)) throw MockAiError.refuse("ai_consent_required")
-      const lines = rawText.split(/\n+/).filter((l) => l.trim().length >= 8)
-      const previewJobId = newId()
-      // 생성 때 서버가 하는 원문 대조를 재현하려고 이 원문을 기억한다 (mock 전용)
-      rememberJdPreview(previewJobId, rawText)
-      return {
-        previewJobId,
-        companyName: /그린뱅크/.test(rawText) ? "그린뱅크" : null,
-        positionTitle: /엔지니어|개발/.test(rawText) ? "결제 백엔드 엔지니어" : null,
-        // AI-01 `deadline.value` — 연도 없는 날짜·"상시 채용"은 비운다 (CF-A5)
-        deadline: /마감/.test(rawText) ? "2026-12-15" : null,
-        requirementCount: Math.min(lines.length, 6),
-      }
-    },
-    // real: 행 없는 AI-01. Q53-1 게이트는 서비스가 409(`key_invalid`·`ai_consent_required`·`key_missing`)로
-    // 거부하고 `ai_jobs`·사용량에 0행을 남긴다 — `withAiGuard`가 그 거부를 `AiRejected`로 바꾼다.
-    async () => {
-      const { user } = await requireConsentedUser()
-      return extractJdPreviewService(createJdPreviewDeps(user.id), rawText)
-    },
-  )
-}
 
 // ---------------------------------------------------------------------------
 // S-46 자소서 정본 (application_documents)

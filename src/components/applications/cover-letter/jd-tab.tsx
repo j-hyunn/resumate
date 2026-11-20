@@ -1,27 +1,25 @@
 import Link from "next/link"
-import { ArrowLeft, TriangleAlert } from "lucide-react"
-import { Alert, AlertTitle } from "@/components/ui/alert"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { TextSkeleton } from "@/components/common/state-views"
-import { JdLockedNotice, JdRawEditProvider } from "@/components/applications/jd-raw-edit"
-import { ExtractingLine, ExtractionFailed, JdView, RunExtraction } from "@/components/applications/jd-view"
-import { AutoRefresh } from "@/components/applications/shared"
+import { JdRawEditProvider } from "@/components/applications/jd-raw-edit"
+import { JdView } from "@/components/applications/jd-view"
+import { parseSentenceParam } from "@/components/applications/jd-highlight"
 import { getJobDescription } from "@/lib/data/applications"
-import { getAiJob } from "@/lib/data/ai-jobs"
-import { isInputCausedJdFailure } from "@/lib/data/jd-raw-text"
-import { getPreviewState, previewErrorCode, previewRetryRefusal } from "@/lib/preview-state"
+import { getPreviewState } from "@/lib/preview-state"
 import { routes } from "@/lib/routes"
-import type { AiErrorCode } from "@/types/db"
 
 /**
- * S-46 **"채용 공고" 탭** = S-15 규칙 그대로 (v5.20 재정의, CF-7·CF-A12 — ID 유지).
- * 옛 `/applications/{id}/jd` 페이지의 판정을 그대로 옮겼고 바뀐 것은 세 가지다:
- * - 화면 머리(`PageHeader`)·이동 경로를 그리지 않는다 — S-46 머리가 하나뿐이다.
- * - 공고 원문 패널 머리에 `source_url`이 있으면 "원래 공고 열기"가 붙는다 (CF-A16).
+ * S-46 **"채용 공고" 탭** = S-15 규칙 그대로 (v5.20 재정의, CF-7·CF-A12 — ID 유지 · v5.21, JR-1·JR-7·JR-Q1).
+ * - 공고 원문 + 근거 문장 하이라이트(`?tab=jd&s=S3,S4`)만 있다 — 요건 목록·"요건 정리하기"·추출 실패 안내는 없다.
+ *   AI 진입점이 없어 키 없이 전부 된다(C-18·C-19·C-20 없음).
+ * - [공고 내용 수정]은 늘 보이고, 인사이트가 대기·실행 중일 때만 비활성(`rawTextLockedReason = job_in_progress`).
+ * - 공고 원문 패널 머리에 `source_url`이 있으면 "원래 공고 열기" (CF-A16).
  * - "돌아가기"는 **{인사이트 / 자소서} 탭으로** 간다(`?from=insight|cover_letter`, CF-A12).
  *
- * 공고 원문 수정(Q53-2·Q53-11)의 "저장"/"취소"는 **탭 안의 버튼**이고 상단 바 "저장하기"와 섞지 않는다.
+ * 공고 내용 수정의 "저장"/"취소"는 **탭 안의 버튼**이고 상단 바 "저장하기"와 섞지 않는다.
+ *
+ * `?state=`: `raw-edit` (수정 중) · `raw-save-failed` · `raw-save-refused` (`jd_job_in_progress`) ·
+ * `raw-save-no-sentences` (`jd_no_sentences`) · `raw-saved` · `raw-locked` (인사이트 진행 중 — 버튼 비활성)
  */
 type SP = Record<string, string | string[] | undefined>
 
@@ -34,68 +32,23 @@ function returnLabel(from: string | undefined): string | null {
   return null
 }
 
+const RAW_PREVIEWS = ["raw-edit", "raw-save-failed", "raw-save-refused", "raw-save-no-sentences", "raw-saved", "raw-locked"]
+
 export async function JdTab({ applicationProjectId: id, searchParams: sp }: { applicationProjectId: string; searchParams: SP }) {
   const state = getPreviewState(sp)
-  // UQ-530: 다른 경로가 추출 중이면 "이미 정리하고 있어요", 이 탭에서 시작했으면 "공고 요건 정리 중"
-  const startedHere = one(sp.extracting) === "self"
   const jd = await getJobDescription(id)
   if (!jd) return <p className="text-sm text-muted-foreground">공고를 찾을 수 없어요</p>
 
-  // Q53-2 미리 보기는 저장소를 바꾸지 않는다
-  const rawPreview = state === "raw-editable" || state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || state === "raw-saved"
-  const previewSave = state === "raw-save-failed" ? "failed" : state === "raw-save-refused" ? "refused" : rawPreview ? "ok" : null
-  const previewFail: AiErrorCode | null = rawPreview && state !== "raw-saved" ? "not_a_jd" : previewErrorCode(state)
-  const job = jd.extraction_status === "failed" && jd.extraction_job_id ? await getAiJob(jd.extraction_job_id) : null
-  // "원인을 알 수 없는 실패": 실패 기록이 정리됐다 (DM 2.6.1) → 수정 버튼 없음, "요건 정리하기"만
-  const unknownFailure = state === "raw-unknown-cause" || (!previewFail && !rawPreview && jd.extraction_status === "failed" && !job?.error_code)
-  // Q53-11: 추출은 됐는데 요건이 0개 → not_a_jd 문구 + 공고 원문 고치기
-  const emptySuccess = !state && jd.extraction_status === "succeeded" && jd.requirements.length === 0
-  const failCode = previewFail ?? (emptySuccess ? "not_a_jd" : jd.extraction_status === "failed" && !unknownFailure ? (job?.error_code ?? null) : null)
-  const notStarted =
-    state === "ai-locked" ||
-    state === "raw-saved" ||
-    unknownFailure ||
-    (jd.extraction_status === "pending" && !jd.extraction_job_id && state !== "wait-jd" && state !== "ai-sync")
-  const running = !notStarted && (state === "wait-jd" || state === "ai-sync" || jd.extraction_status === "running" || jd.extraction_status === "pending")
-  const notJd = jd.extraction?.is_likely_jd === false
-  const hasRequirements = jd.requirements.length > 0 && jd.extraction_status === "succeeded"
-  const editable = rawPreview ? state !== "raw-saved" && one(sp.refused) !== "1" : !unknownFailure && jd.raw_text_editable
-  // Q53-9 "요건이 있는 공고": 입력 원인 실패로 왔는데 요건이 있으면 읽기 전용 + 안내
-  const causeParam = one(sp.cause)
-  const lockedCause: AiErrorCode | null =
-    state === "raw-has-requirements"
-      ? "input_too_long"
-      : hasRequirements && isInputCausedJdFailure(causeParam as AiErrorCode)
-        ? (causeParam as AiErrorCode)
-        : null
-  const back = hasRequirements && !lockedCause && !previewFail ? returnLabel(one(sp.from)) : null
-
-  const slot =
-    hasRequirements && !previewFail && state !== "ai-locked" && state !== "raw-saved" && state !== "raw-unknown-cause" && state !== "wait-jd" && state !== "ai-sync" ? null : notStarted ? (
-      <RunExtraction applicationProjectId={id} unknownFailure={unknownFailure} />
-    ) : emptySuccess && jd.raw_text_lock === "jd_has_results" ? (
-      <JdLockedNotice cause="not_a_jd" hasResults />
-    ) : failCode && failCode !== "canceled" ? (
-      <ExtractionFailed applicationProjectId={id} code={failCode} job={job} previewRefusal={previewRetryRefusal(state)} rerunnable={!emptySuccess} />
-    ) : running ? (
-      <>
-        <AutoRefresh active={state !== "wait-jd" && state !== "ai-sync"} />
-        <Card className="gap-4 p-5" aria-busy="true">
-          <ExtractingLine already={!startedHere && state !== "wait-jd" && state !== "ai-sync"} />
-          <TextSkeleton lines={4} />
-        </Card>
-      </>
-    ) : null
+  // 공고 내용 수정 미리 보기는 저장소를 바꾸지 않는다
+  const rawPreview = !!state && RAW_PREVIEWS.includes(state)
+  const previewSave =
+    state === "raw-save-failed" ? "failed" : state === "raw-save-refused" ? "refused" : state === "raw-save-no-sentences" ? "no_sentences" : rawPreview ? "ok" : null
+  const locked = rawPreview ? state === "raw-locked" || one(sp.refused) === "1" : !jd.raw_text_editable
+  const lockedReason = locked ? (rawPreview ? "job_in_progress" : jd.raw_text_locked_reason) : null
+  const back = returnLabel(one(sp.from))
 
   return (
     <div className="space-y-6">
-      {notJd && !slot ? (
-        <Alert variant="warning">
-          <TriangleAlert aria-hidden />
-          <AlertTitle className="font-normal">채용 공고가 아닌 텍스트로 보여요. 요건이 정확하지 않을 수 있어요</AlertTitle>
-        </Alert>
-      ) : null}
-      {lockedCause ? <JdLockedNotice cause={lockedCause} /> : null}
       {back ? (
         <Button asChild variant="outline" size="sm">
           <Link href={routes.coverLetter(id, one(sp.from) === "insight" ? { tab: "insight" } : undefined)}>
@@ -106,8 +59,9 @@ export async function JdTab({ applicationProjectId: id, searchParams: sp }: { ap
       ) : null}
       <JdRawEditProvider
         key={state ?? "stored"}
-        editable={editable}
-        initialEditing={state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || one(sp.edit) === "1"}
+        editable={!locked}
+        lockedReason={lockedReason}
+        initialEditing={!locked && (state === "raw-edit" || state === "raw-save-failed" || state === "raw-save-refused" || state === "raw-save-no-sentences" || one(sp.edit) === "1")}
         initialSaved={state === "raw-saved"}
       >
         <JdView
@@ -115,11 +69,8 @@ export async function JdTab({ applicationProjectId: id, searchParams: sp }: { ap
           previewSave={previewSave}
           rawText={jd.raw_text}
           sentences={jd.sentences}
-          requirements={jd.requirements}
-          techKeywords={jd.tech_keywords}
-          seniority={jd.extraction?.seniority?.label ?? null}
           sourceUrl={jd.source_url ?? null}
-          requirementsSlot={slot}
+          highlight={parseSentenceParam(sp.s)}
         />
       </JdRawEditProvider>
     </div>

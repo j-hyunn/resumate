@@ -18,18 +18,17 @@ import { AddProjectDialog, type AffiliationOption } from "@/components/career/ad
 import { listProjectAffiliationsAction } from "@/lib/data/career-v45-actions"
 import { routes } from "@/lib/routes"
 
-export function useChooseProjectAffiliation(): { open: (opts?: { requirementId?: string | null }) => void; loading: boolean; dialog: React.ReactNode } {
+export function useChooseProjectAffiliation(): { open: () => void; loading: boolean; dialog: React.ReactNode } {
   const router = useRouter()
   const [isOpen, setOpen] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [options, setOptions] = React.useState<{ affiliations: AffiliationOption[]; defaultId: string | null } | null>(null)
-  // S-16 보완점: the requirement travels to the S-10 새 페이지 ("관련 요건" 줄) via AddProjectDialog `requirementId`
-  const [requirementId, setRequirementId] = React.useState<string | null>(null)
+  // (v5.21, JR-1·JR-5) the S-16 보완점 no longer carries a `requirement_id` — its gap travels in the return target
+  // (`insight_id`·`insight_item_key`, markCareerReturn) and the S-10 gate chat reads it
   // "소속 없음" → the 독립 프로젝트 추가 모달
   const [addingStandalone, setAddingStandalone] = React.useState(false)
 
-  const open = React.useCallback((opts?: { requirementId?: string | null }) => {
-    setRequirementId(opts?.requirementId ?? null)
+  const open = React.useCallback(() => {
     setLoading(true)
     void listProjectAffiliationsAction()
       .then((r) => {
@@ -49,7 +48,6 @@ export function useChooseProjectAffiliation(): { open: (opts?: { requirementId?:
           onOpenChange={setOpen}
           affiliations={options.affiliations}
           defaultAffiliationId={options.defaultId}
-          requirementId={requirementId}
           onStandalone={() => setAddingStandalone(true)}
         />
       ) : null}

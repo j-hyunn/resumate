@@ -28,7 +28,11 @@ export async function loadLatestJobViewRow(supabase: UserSupabaseClient, targetT
   return data;
 }
 
-/** C-03 watcher: jobs in flight + jobs that ended since `sinceIso` (completion toasts). Chat turns and AI-01 have their own UI. */
+/**
+ * C-03 watcher: jobs in flight + jobs that ended since `sinceIso` (completion toasts). Chat turns
+ * and key checks have their own UI. `jd_extraction` stays excluded: R17 legacy rows (AI-01 is
+ * gone) must not show up as completion toasts.
+ */
 export async function loadActiveJobViewRows(supabase: UserSupabaseClient, sinceIso: string) {
   const { data, error } = await supabase
     .from("ai_jobs")

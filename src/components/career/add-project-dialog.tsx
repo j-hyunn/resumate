@@ -33,8 +33,6 @@ export type AddProjectDialogProps = {
   affiliations: AffiliationOption[]
   /** [가정] 완료 경력이 있으면 가장 최근 경력을 미리 선택 — the caller knows which */
   defaultAffiliationId?: string | null
-  /** S-16 보완점: carried to the S-10 새 페이지 on "계속" (`requirement_id`, "관련 요건" 맥락) */
-  requirementId?: string | null
   /** "소속 없음" → "계속": the dialog has closed; open the 독립 프로젝트 추가 모달 */
   onStandalone: () => void
 }
@@ -58,8 +56,7 @@ function AddProjectForm(props: AddProjectDialogProps) {
     props.onOpenChange(false)
     if (!affiliation) return props.onStandalone()
     // "계속": no row — S-10 새 프로젝트 빈 페이지
-    const requirement = props.requirementId ? { requirement_id: props.requirementId } : {}
-    router.push(routes.projectPageNew(affiliation.type === "experience" ? { experience: affiliation.id, ...requirement } : { education: affiliation.id, ...requirement }))
+    router.push(routes.projectPageNew(affiliation.type === "experience" ? { experience: affiliation.id } : { education: affiliation.id }))
   }
 
   const groups = (["experience", "education"] as const).map((t) => ({ t, rows: props.affiliations.filter((a) => a.type === t) }))

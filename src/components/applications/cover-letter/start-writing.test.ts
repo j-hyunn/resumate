@@ -4,17 +4,17 @@
  * **거절**되면 버튼이 잠깐 돌고 멈출 뿐 아무것도 보이지 않았다. 또 문항 설정 상태는 저장 상태 표시가 `idle`로
  * 고정(CF-S3·S5)이라 저장 실패도 보이지 않았다.
  */
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const read = (p: string) => readFileSync(join(__dirname, p), "utf8")
 
 describe("[자기소개서 작성 시작]은 실패를 삼키지 않는다", () => {
-  it("선행 추출 결과를 버리지 않고 거절을 알린다", () => {
+  it("저장 실패(던진 오류)를 알린다", () => {
     const src = read("question-setup.tsx")
-    expect(src).not.toMatch(/void\s+req\.run\(/)
-    expect(src).toMatch(/isAiRejected\(r\)\)\s*notifyAiRejected\(r\)/)
+    expect(src).toMatch(/await onStart\(\)/)
+    expect(src).toMatch(/toast\.error\(submitFailedMessage\("자기소개서"\)\)/)
   })
 
   it("문항 설정 상태의 첫 저장 실패(정본 행 만들기)를 알린다", () => {
@@ -22,9 +22,11 @@ describe("[자기소개서 작성 시작]은 실패를 삼키지 않는다", () 
     expect(src).toMatch(/if \(opts\.createRow\) toast\.error\(submitFailedMessage\("자기소개서"\)\)/)
   })
 
-  it("선행 추출 요청이 던져도 '정리 중'에 묶이지 않는다", () => {
-    const src = read("../extract-first.tsx")
-    expect(src).toMatch(/catch \(err\) \{\s*\/\/[^\n]*\n\s*setBusy\(false\)\s*\n\s*throw err/)
+  // (v5.21, JR-3) the requirements-first extraction is gone — [자기소개서 작성 시작] = 검증 → 저장, no AI
+  it("v5.21: 선행 추출이 없다 — AI를 부르지 않는다", () => {
+    const src = read("question-setup.tsx")
+    expect(src).not.toMatch(/useRequirementsFirst|extractFirst|req\.run/)
+    expect(existsSync(join(__dirname, "../extract-first.tsx"))).toBe(false)
   })
 })
 
@@ -49,11 +51,11 @@ describe("문항 설정 상태의 첫 문항 id는 서버가 준 값을 쓴다 (
   })
 })
 
-// 회귀 가드 — 2026-11-10 "작성 시작 누르면 AI 연결해야만 쓸 수 있다고 토스트": 요건 선행 추출 판정이 AI 연결을 보지 않았다.
-describe("요건 선행 추출은 AI를 쓸 수 있을 때만 (FL-03)", () => {
-  it("needed = 요건 없음 && AI 사용 가능 — 키 없으면 추출 없이 바로 저장", () => {
+// 회귀 가드 — 2026-11-10 "작성 시작 누르면 AI 연결해야만 쓸 수 있다고 토스트". (v5.21, JR-3) 선행 추출 자체가 없어져
+// 문항 설정 상태는 AI 연결을 보지 않는다.
+describe("문항 설정 상태는 AI 연결을 보지 않는다 (CL-8, v5.21 JR-3)", () => {
+  it("useAiConnection을 읽지 않는다", () => {
     const src = read("question-setup.tsx")
-    expect(src).toMatch(/needed:\s*extractFirst && aiUsable/)
-    expect(src).toMatch(/aiUsable = Boolean\(connection\?\.active_provider\)/)
+    expect(src).not.toMatch(/useAiConnection/)
   })
 })

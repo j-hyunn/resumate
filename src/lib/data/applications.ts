@@ -1,52 +1,51 @@
 /**
- * 지원 프로젝트 data layer: application_projects, job_descriptions, jd_requirements,
- * application_stage_events, insights, drafts (+ sections/sources). Server only.
+ * 지원 프로젝트 data layer: application_projects, job_descriptions, application_stage_events,
+ * insights, drafts (+ sections/sources). Server only. R17 (4.24 #1): `jd_requirements` is dropped —
+ * the JD is used as raw text (JR-1), and the mock store no longer keeps requirement rows.
  * Board RPCs: move_application_stage / set_application_outcome (04 §2.6).
  */
 import type {
   AiJobType,
   AiErrorCode,
-  AiJob,
   ApplicationProject,
   ApplicationStage,
   Draft,
   DraftSection,
   DraftSectionSource,
   Insight,
-  JdRequirement,
   JdRawTextRefusalCode,
   JobDescription,
+  InsightSkipReason,
   MoveApplicationStageResult,
   StageOutcome,
 } from "@/types/db"
+import { AppError } from "@/lib/contracts/errors"
 import { clone, mockRequest } from "@/lib/mock/store"
 import type { MockDb } from "@/lib/mock/fixtures"
 import { newId, USER_ID } from "@/lib/mock/ids"
-import { activeKey, assertAiRunnable, createMockJob, MockAiError } from "@/lib/mock/ai"
+import { activeKey, assertAiRunnable, createMockJob } from "@/lib/mock/ai"
 import { consentRequired } from "@/lib/mock/consent"
 import { mockAiMeta } from "@/lib/mock/ai-meta"
 import { STAGE_ORDER, composeCoverLetterName, countsAsDraft, defaultApplicationName } from "./labels"
 import { resolveAiFeatureStatus, type AiFeatureStatusView } from "./ai-feature-status"
-import { errorCategoryOf, failureCauseOf, failureTimestamps } from "./ai-errors"
 import { refreshApplicationJobs } from "./ai-jobs"
-import { isInputCausedJdFailure, JD_RAW_TEXT_MAX } from "./jd-raw-text"
+import { JD_RAW_TEXT_MAX } from "./jd-raw-text"
+import { computeReadiness } from "./readiness"
 import { previewOr } from "./source"
-import { checkJdPreview, type PreviewSkipReason } from "./jd-preview-store"
 import { realMoveApplicationStage, realSetApplicationOutcome, realUpdateApplicationProject } from "./board-real"
 import {
   realCreateApplicationProject,
   realGetApplicationProject,
   realGetInsightState,
-  realGetJdRequirement,
   realGetJobDescription,
   realListApplicationProjects,
   realStartInsight,
-  realUpdateFailedJdRawText,
+  realUpdateJdRawText,
 } from "./applications-real"
 
 /** List/board/hub summary of one application project (S-13 행, S-39 카드, S-31 헤더) */
 export interface ApplicationSummary extends ApplicationProject {
-  job_description: Pick<JobDescription, "id" | "company_name" | "position_title" | "extraction_status"> | null
+  job_description: Pick<JobDescription, "id" | "company_name" | "position_title"> | null
   /** 인사이트 없음 / 생성 중 / 있음 */
   insight_state: "none" | "generating" | "ready"
   /** @deprecated (v5.20, CF-A14) 화면 "서류 수" 폐기 — S-39 카드는 `listCoverLetterSlotCounts()`를 쓴다 */
@@ -59,128 +58,12 @@ export interface ApplicationSummary extends ApplicationProject {
   insight_status: AiFeatureStatusView
 }
 
-/**
- * Mock: a running AI-01 extraction finishes after its simulated duration (the real backend
- * updates the row itself). Called wherever a JD is read, so no screen has to poke it.
- */
-function advanceJdExtraction(db: MockDb, applicationProjectId: string) {
-  const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  if (!jd || jd.extraction_status !== "running") return
-  const job = db.ai_jobs.find((j) => j.id === jd.extraction_job_id)
-  if (!job || Date.now() - Date.parse(job.created_at) <= 4_000) return
-  const injected = (job.params?.mock_fail as AiErrorCode | null | undefined) ?? null
-  if (injected) failJdExtraction(db, jd, job, injected)
-  else completeJdExtraction(db, jd, job)
-}
+// R17: the mock AI-01 extraction (advance / complete / fail, and the "요건 추출 먼저" step before AI
+// features) is gone — the JD is used as raw text, like the real backend.
 
-/**
- * fail_jd_extraction (04 §2.6 v4.2): JD `failed`, job `failed` with the cause, and a null name gets
- * the same rule as creation — "회사명 – 포지션명" when both were entered, else the default name.
- * Reproduce with mock_controls.next_jd_extraction_failure (A3 request 2).
- */
-function failJdExtraction(db: MockDb, jd: JobDescription, job: AiJob, code: AiErrorCode) {
-  const now = new Date().toISOString()
-  jd.extraction_status = "failed"
-  Object.assign(job, {
-    status: "failed",
-    error_code: code,
-    error_category: errorCategoryOf(code),
-    failure_cause: failureCauseOf(code),
-    ...failureTimestamps(code),
-    // A14: request-path wait — same 20 s window the screens count down
-    retry_after: code === "rate_limited" || code === "provider_unavailable" ? new Date(Date.now() + 20_000).toISOString() : null,
-    finished_at: now,
-    updated_at: now,
-  })
-  const ap = db.application_projects.find((a) => a.id === jd.application_project_id)
-  if (ap && !ap.name) {
-    // (v5.20, CF-A7) 실패해도 이름 규칙은 같다: 기업 명이 있으면 "{기업 명} 자기소개서", 없으면 기본 이름
-    const composed = composeCoverLetterName(jd.company_name)
-    ap.name = composed ?? defaultApplicationName(ap.created_at)
-    ap.name_source = composed ? "user" : "default"
-  }
-}
-
-/** Mock AI-01 result: marks the JD extracted and, if it has no requirements yet, derives them from the raw text. */
-function completeJdExtraction(db: MockDb, jd: JobDescription, job: AiJob) {
-  const now = new Date().toISOString()
-  jd.extraction_status = "succeeded"
-  jd.extraction = { is_likely_jd: true, seniority: null }
-  jd.extraction_provider = job.provider
-  jd.extraction_model = job.model
-  jd.company_name = jd.company_name ?? "새 회사"
-  jd.position_title = jd.position_title ?? "새 포지션"
-  Object.assign(job, { status: "succeeded", finished_at: now, updated_at: now })
-  if (!db.jd_requirements.some((r) => r.job_description_id === jd.id)) {
-    // [UI-가정] mock: one requirement per substantial raw-text line (max 6), first half 자격요건
-    const lines = jd.raw_text
-      .split(/\n+/)
-      .map((l) => l.replace(/^[\s•\-*·]+/, "").trim())
-      .filter((l) => l.length >= 8)
-      .slice(0, 6)
-    lines.forEach((content, i) =>
-      db.jd_requirements.push({
-        id: newId(),
-        user_id: USER_ID,
-        created_at: now,
-        updated_at: now,
-        job_description_id: jd.id,
-        category: i < Math.ceil(lines.length / 2) ? "required" : "preferred",
-        content,
-        keywords: [],
-        importance: i === 0 ? "high" : "normal",
-        source_sids: [],
-        sort_order: i + 1,
-        origin: "ai",
-        is_user_edited: false,
-      }),
-    )
-    jd.requirements_hash = `mock-${jd.id}-${lines.length}`
-  }
-  const ap = db.application_projects.find((a) => a.id === jd.application_project_id)
-  // (v5.20, CF-A7) 추출이 회사명을 찾으면 "{AI 추출 회사명} 자기소개서"로. 사용자가 고친 이름(`user`)은 그대로
-  if (ap && (!ap.name || ap.name_source === "default")) {
-    const composed = composeCoverLetterName(jd.company_name)
-    if (composed) {
-      ap.name = composed
-      ap.name_source = "ai"
-    }
-  }
-}
-
-/**
- * D-30 / UQ-232: "요건 추출 먼저" as one server-side flow. Before an AI feature that needs
- * requirements (인사이트·서류), a JD whose extraction has not succeeded (created without a key,
- * or failed) is extracted **inline** (AI-01, ~1.5 s mock) and only then does the caller create its
- * own job. Checks the key first (throws MockAiError before any change). No-op when already extracted.
- * `failed`: mock_controls.next_jd_extraction_failure — the `prepare` step failed with that cause, so the
- * caller's job ends there the same way, nothing saved (`fail_at_prepare`; S-16 → C-20 "입력 원인
- * 실패의 이동", Q53-9).
- */
-export async function ensureJdRequirementsInDb(db: MockDb, applicationProjectId: string): Promise<{ ran: boolean; failed: AiErrorCode | null }> {
-  const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  if (!jd || jd.extraction_status === "succeeded") return { ran: false, failed: null }
-  assertAiRunnable(db)
-  let job = db.ai_jobs.find((j) => j.id === jd.extraction_job_id)
-  if (!job || job.status === "failed" || job.status === "canceled") {
-    job = createMockJob(db, { job_type: "jd_extraction", application_project_id: applicationProjectId, target_type: "job_description", target_id: jd.id })
-    jd.extraction_job_id = job.id
-  }
-  jd.extraction_status = "running"
-  await new Promise((r) => setTimeout(r, 1_500))
-  const failNext = db.mock_controls.next_jd_extraction_failure
-  if (failNext) {
-    db.mock_controls.next_jd_extraction_failure = null
-    failJdExtraction(db, jd, job, failNext)
-    return { ran: true, failed: failNext }
-  }
-  completeJdExtraction(db, jd, job)
-  return { ran: true, failed: null }
-}
-
-/** `advanceMock: false` = real rows (applications-real.ts): the same rules, no simulated extraction. */
+/** `advanceMock: false` = real rows (applications-real.ts): the same rules. R17: nothing to advance (no extraction). */
 export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMock: boolean } = { advanceMock: true }): ApplicationSummary {
-  if (opts.advanceMock) advanceJdExtraction(db, ap.id)
+  void opts
   const jd = db.job_descriptions.find((j) => j.application_project_id === ap.id) ?? null
   const insights = db.insights.filter((i) => i.application_project_id === ap.id)
   return {
@@ -189,7 +72,6 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
       id: jd.id,
       company_name: jd.company_name,
       position_title: jd.position_title,
-      extraction_status: jd.extraction_status,
     },
     insight_state: insights.some((i) => i.status === "ready")
       ? "ready"
@@ -198,6 +80,7 @@ export function summarize(db: MockDb, ap: ApplicationProject, opts: { advanceMoc
         : "none",
     draft_count: db.drafts.filter((d) => d.application_project_id === ap.id && countsAsDraft(d)).length,
     running_job_ids: db.ai_jobs
+      // R17: `jd_extraction` = legacy rows only
       .filter((j) => j.application_project_id === ap.id && (j.status === "queued" || j.status === "running") && j.job_type !== "jd_extraction")
       .map((j) => j.id),
     insight_job_id:
@@ -269,73 +152,60 @@ export async function getBoard(): Promise<Record<ApplicationStage, ApplicationSu
   return board
 }
 
-/** [{ sid, text, start, end }] per non-empty line (splitJdSentences of create and update_failed_jd_raw_text) */
+/**
+ * [{ sid, text, start, end }] per line with readable text (mock of the server's sentence split for create and
+ * update_jd_raw_text). Offsets are UTF-16 positions in `rawText`; a line of symbols only is no sentence, so a
+ * text without any → `jd_no_sentences` (DM v4.16).
+ */
 function splitJdSentences(rawText: string) {
-  const lines = rawText.split(/\n+/).filter(Boolean)
+  const out: Array<{ sid: string; text: string; start: number; end: number }> = []
   let pos = 0
-  return lines.map((text, i) => {
+  for (const line of rawText.split("\n")) {
     const start = pos
-    pos += text.length + 1
-    return { sid: `S${i + 1}`, text, start, end: start + text.length }
-  })
+    pos += line.length + 1
+    if (!/[\p{L}\p{N}]/u.test(line)) continue
+    out.push({ sid: `S${out.length + 1}`, text: line, start, end: start + line.length })
+  }
+  return out
 }
 
 /**
- * RPC create_application_project — JD 필수·교체 불가 (U-6). AI-01 extraction runs automatically.
- * Q53-1 (04 §2.11.7 경로 ⑥): the gate is checked **before any insert**. No active provider → passes
- * (추출 없이 저장, D-30); invalid key → `key_invalid`; consent needed → `ai_consent_required`
- * (MockAiError, no row). `needs_check` passes. The screen normally stops earlier from readiness.
+ * RPC create_application_project — JD 필수·교체 불가 (U-6). R17: the JD is stored as raw text only
+ * (no AI-01, no requirement preview) and creation has no AI gate ([가정 R17-9]).
  */
 export interface CreateApplicationInput {
   raw_text: string
   name?: string | null
   deadline?: string | null
   /**
-   * A3 request 1: S-14 회사명·포지션명 입력란 (키 없음: 펼침). Stored on the JD with source 'user';
-   * the AI extraction keeps user values (it only fills empty ones).
-   * v5.3 name rule (S-14): `name` given → that; else **both** company and position → "회사명 –
-   * 포지션명" (user, first 100 chars); else no key → default "새 자기소개서 (YYYY-MM-DD)", key →
-   * null (추출 대기, the AI name on success / the same rule on failure).
+   * S-14 회사명·포지션명 입력란. Stored on the JD with source 'user'.
+   * Name rule (R17 [가정 R17-8]): `name` → "{회사명} 자기소개서" → default "새 자기소개서 (YYYY-MM-DD)".
    */
   company_name?: string | null
   position_title?: string | null
-  /**
-   * R15 (CF-10·CF-A16·CF-A17): ①에서 붙여넣은 공고 URL(JD에 저장)과, 생성 RPC가 요건을 읽어 오는
-   * **요건 미리 보기 작업 id**다. 둘 다 선택이고 real 경로가 그대로 넘긴다.
-   * **이름 규칙(R15 D12)**: `name`이 있으면 그것 / 없고 회사명이 있으면 "{회사명} 자기소개서"(user,
-   * 키 연결과 무관) / 회사명도 없으면 키 없음은 기본 이름, 키 있음은 null(추출 대기).
-   */
+  /** R15 (CF-10·CF-A16): ①에서 붙여넣은 공고 URL (JD에 저장). R17: the requirement preview is gone. */
   source_url?: string | null
-  preview_job_id?: string | null
-  /**
-   * **mock 전용**: 미리 보기가 찾은 마감일. real 경로에서는 서버가 미리 보기 작업 행의 `output`에서
-   * 읽으므로 보내지 않는다 — mock은 작업 행이 없어 모달이 들고 있던 값을 받는다 `[UI-가정]`.
-   */
-  preview_deadline?: string | null
 }
 
 /**
- * (v5.20, CF-A17 — R15 계약 정본 2026-11-09) `create_application_project` 반환에 붙는 미리 보기 적용 결과.
- * 서버가 **원문 sha256을 다시 계산해 대조**하므로 모달 ②에서 공고 내용을 한 글자라도 고치면
- * `preview_mismatch`로 미리 보기가 버려지고 생성은 계속된다(마감일·요건이 적용되지 않는다).
- * real 분기(`realCreateApplicationProject`)는 아직 이 키를 돌려주지 않으므로 optional이다.
+ * The created row + JR-6 (4.24 #10): the insight job the create action started right after the new row
+ * (null when it did not — `insight_skip_reason` says why; both null on a same-id replay).
  */
 export type CreateApplicationResult = ApplicationProject & {
-  preview_applied?: boolean
-  preview_skip_reason?: PreviewSkipReason | null
+  insight_job_id: string | null
+  insight_skip_reason: InsightSkipReason | null
 }
-
-export type { PreviewSkipReason }
 
 async function mockCreateApplicationProject(input: CreateApplicationInput): Promise<CreateApplicationResult> {
   const company = input.company_name?.trim() || null
   const position = input.position_title?.trim() || null
   // (v5.20, CF-A7) 이름 = "{기업 명} 자기소개서" — ②에서 사용자가 확인한 값이라 `name_source = 'user'`
   const name = input.name?.trim() || composeCoverLetterName(company)
+  const sentences = splitJdSentences(input.raw_text)
+  // DM v4.16 2.6: a raw text without any sentence is refused before any row is written (400)
+  if (sentences.length === 0) throw new AppError("jd_no_sentences", undefined, { status: 400 })
   const db = await mockRequest()
-  const key = activeKey(db)
-  if (key?.status === "invalid") throw MockAiError.refuse("key_invalid")
-  if (key && consentRequired(db, key.provider, key.connection_tier)) throw MockAiError.refuse("ai_consent_required")
+  // R17 [가정 R17-9]: registering a JD uses no AI — no key / consent gate
   const now = new Date().toISOString()
   const ap: ApplicationProject = {
     id: newId(),
@@ -353,21 +223,8 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     duplicated_from_id: null,
   }
   const jdId = newId()
-  // v4 (D-30): with a key AI-01 runs automatically; without one the JD stays `pending` (요건 정리하기
-  // later) and the name is the user's or the default "새 자기소개서 (날짜)".
-  const failNext = db.mock_controls.next_jd_extraction_failure
-  if (key && failNext) db.mock_controls.next_jd_extraction_failure = null
-  const job = key
-    ? createMockJob(db, {
-        job_type: "jd_extraction",
-        application_project_id: ap.id,
-        target_type: "job_description",
-        target_id: jdId,
-        path: "request",
-        fail: failNext,
-      })
-    : null
-  if (!job && !ap.name) {
+  // R17 [가정 R17-8]: no name and no company → the default "새 자기소개서 (날짜)", key or not
+  if (!ap.name) {
     ap.name = defaultApplicationName(now)
     ap.name_source = "default"
   }
@@ -380,30 +237,15 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     application_project_id: ap.id,
     raw_text: input.raw_text,
     raw_text_hash: `hash-${jdId}`,
-    sentences: splitJdSentences(input.raw_text),
-    detected_language: "ko",
+    sentences,
     company_name: company,
     company_name_source: company ? "user" : null,
     position_title: position,
     position_title_source: position ? "user" : null,
-    extraction_status: job ? "running" : "pending",
-    extraction: null,
-    extraction_job_id: job?.id ?? null,
-    extraction_provider: null,
-    extraction_model: null,
-    tech_keywords: [],
-    requirements_hash: null,
     raw_text_edited_at: null,
     // R15: 생성 RPC가 `p_source_url`을 받는다 (CF-10·CF-A16)
     source_url: input.source_url?.trim() || null,
   })
-  // (CF-A17 · R15) 미리 보기 적용: 서버가 원문을 다시 해시해 대조한다 — ②에서 공고 내용을 고치면
-  // `preview_mismatch`로 버려지고 생성은 계속된다(마감일·요건이 적용되지 않는다)
-  const preview = checkJdPreview(input.preview_job_id, input.raw_text)
-  if (preview.applied && !ap.deadline && input.preview_deadline) {
-    // CF-2·CF-A5: AI-01 `deadline.value`는 비어 있을 때만 채운다 (사용자 값을 덮지 않는다)
-    ap.deadline = input.preview_deadline
-  }
   db.application_stage_events.push({
     id: newId(),
     user_id: USER_ID,
@@ -415,7 +257,33 @@ async function mockCreateApplicationProject(input: CreateApplicationInput): Prom
     to_outcome: null,
     created_at: now,
   })
-  return { ...clone(ap), preview_applied: preview.applied, preview_skip_reason: preview.skipReason }
+  // JR-6 (4.24 #10): a new row may start the insight right away — same order as services/insight/auto-start.ts
+  const auto = mockAutoStartInsight(db, ap.id)
+  return clone({ ...ap, ...auto })
+}
+
+/**
+ * Mock of the create action's insight auto-start (JR-6, DM 2.6.2): connection (no key → `ai_not_connected`,
+ * invalid → `key_invalid`, consent → `consent_required`) → D-01 (`insufficient_data`) → sentences ≥ 1
+ * (`no_sentences`) → no insight job in progress (`in_progress`) → the same start as the manual button.
+ * Any failure of the start itself is swallowed (`start_failed`) — the creation stays a success.
+ */
+function mockAutoStartInsight(db: MockDb, applicationProjectId: string): { insight_job_id: string | null; insight_skip_reason: InsightSkipReason | null } {
+  const skip = (reason: InsightSkipReason) => ({ insight_job_id: null, insight_skip_reason: reason })
+  const key = activeKey(db)
+  if (!key) return skip("ai_not_connected")
+  if (key.status === "invalid") return skip("key_invalid")
+  if (consentRequired(db, key.provider, key.connection_tier)) return skip("consent_required")
+  if (!computeReadiness(db).features.insight.ready) return skip("insufficient_data")
+  const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
+  if (!jd || jd.sentences.length === 0) return skip("no_sentences")
+  if (db.ai_jobs.some((j) => j.application_project_id === applicationProjectId && j.job_type === "insight" && (j.status === "queued" || j.status === "running")))
+    return skip("in_progress")
+  try {
+    return { insight_job_id: startMockInsight(db, applicationProjectId).job_id, insight_skip_reason: null }
+  } catch {
+    return skip("start_failed")
+  }
 }
 
 /** S-31 헤더 인라인 수정 (name, deadline, memo only) */
@@ -510,112 +378,69 @@ export async function setApplicationOutcome(id: string, outcome: StageOutcome | 
 }
 
 // ---------------------------------------------------------------------------
-// JD · 요건 (S-15)
+// 채용 공고 (S-15) — 공고 원문 그대로 (JR-1)
 // ---------------------------------------------------------------------------
 
-export interface JobDescriptionWithRequirements extends JobDescription {
-  requirements: JdRequirement[]
-  /** getJdView.rawTextEditable (04 §2.6.1 조건 1~5): S-15 "공고 원문 고치기" */
+export interface JobDescriptionView extends JobDescription {
+  /**
+   * getJdView.rawTextEditable (04 §2.6.1, JR-7): [공고 내용 수정] is always shown, disabled while an insight
+   * job is queued / running
+   */
   raw_text_editable: boolean
-  /** why it can't be edited. `jd_has_results` on a succeeded JD with no requirements → 새 자기소개서 안내 (Q53-11) */
-  raw_text_lock: JdRawTextRefusalCode | null
+  /** `job_in_progress` when not editable, else null */
+  raw_text_locked_reason: "job_in_progress" | null
 }
 
-async function mockGetJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+async function mockGetJobDescription(applicationProjectId: string): Promise<JobDescriptionView | null> {
   const db = await mockRequest()
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return null
-  advanceJdExtraction(db, applicationProjectId)
-  const rawTextLock = jdRawTextLock(db, jd)
+  const locked = jdRawTextLockedReason(db, jd)
   return clone({
     ...jd,
     raw_text_edited_at: jd.raw_text_edited_at ?? null,
-    requirements: db.jd_requirements
-      .filter((r) => r.job_description_id === jd.id)
-      .sort((a, b) => a.sort_order - b.sort_order),
-    raw_text_editable: rawTextLock === null,
-    raw_text_lock: rawTextLock,
+    raw_text_editable: locked === null,
+    raw_text_locked_reason: locked,
   })
 }
 
-/** Conditions 1~5 of update_failed_jd_raw_text (04 §2.6.1), in order. null = the text may be edited. */
-function jdRawTextLock(db: MockDb, jd: JobDescription): JdRawTextRefusalCode | null {
+/** update_jd_raw_text condition 3 (04 §2.6.1): an insight job queued / running on this project. Mirrors the RPC only. */
+function jdRawTextLockedReason(db: MockDb, jd: JobDescription): "job_in_progress" | null {
   const apId = jd.application_project_id
   refreshApplicationJobs(db, apId)
-  // 1. no job queued / running on this application (any type)
-  if (db.ai_jobs.some((j) => j.application_project_id === apId && (j.status === "queued" || j.status === "running"))) return "jd_job_in_progress"
-  // 2. extraction failed (`running` whose job already failed counts: same as the read rule), or succeeded (Q53-11)
-  const job = db.ai_jobs.find((j) => j.id === jd.extraction_job_id) ?? null
-  const failed = jd.extraction_status === "failed" || (jd.extraction_status === "running" && job?.status === "failed")
-  if (!failed && jd.extraction_status !== "succeeded") return "jd_raw_text_locked"
-  // 3. no requirements
-  if (db.jd_requirements.some((r) => r.job_description_id === jd.id)) return "jd_raw_text_locked"
-  // 4. a failed extraction failed for an input cause (job gone after 90 days → cause unknown)
-  if (failed && (!job || job.job_type !== "jd_extraction" || job.status !== "failed" || !isInputCausedJdFailure(job.error_code))) return "jd_failure_not_input"
-  // 5. nothing was built from this text
-  const draftIds = db.drafts.filter((d) => d.application_project_id === apId).map((d) => d.id)
-  const hasResults =
-    db.insights.some((i) => i.application_project_id === apId && i.status === "ready") ||
-    db.draft_sections.some((s) => draftIds.includes(s.draft_id) && s.ai_content) ||
-    db.evidence_links.some((e) => e.application_project_id === apId && (e.source_type === "jd_requirement" || e.source_type === "jd_sentence"))
-  return hasResults ? "jd_has_results" : null
+  return db.ai_jobs.some((j) => j.application_project_id === apId && j.job_type === "insight" && (j.status === "queued" || j.status === "running")) ? "job_in_progress" : null
 }
 
-export type UpdateFailedJdRawTextResult =
-  | { application_project_id: string; job_description_id: string; extraction_status: "pending"; raw_text_edited_at: string; ai_run_allowed: boolean }
+export type UpdateJdRawTextResult =
+  | { application_project_id: string; job_description_id: string; raw_text_edited_at: string }
   | { refused: JdRawTextRefusalCode }
 
 /**
- * RPC update_failed_jd_raw_text (Q53-2, 04 §2.6.1): the one exception to "JD 교체 불가". Replaces the text
- * and sentences, sends the JD back to `pending`. No AI call, no tokens (D-30); works without a key.
- * name / name_source / stage / deadline don't change; earlier ai_jobs rows stay untouched.
+ * RPC update_jd_raw_text (JR-7, 04 §2.6.1): the raw text can be edited any time except while an insight
+ * runs. Replaces the text and sentences; insights stay (they read "공고가 바뀌었어요"). No AI call, no tokens;
+ * works without a key. name / name_source / stage / deadline don't change.
  */
-async function mockUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
+async function mockUpdateJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateJdRawTextResult> {
   const db = await mockRequest()
   const text = rawText.trim()
   if (!text || text.length > JD_RAW_TEXT_MAX) return { refused: "invalid_raw_text" }
+  const sentences = splitJdSentences(text)
+  if (sentences.length === 0) return { refused: "jd_no_sentences" }
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
   if (!jd) return { refused: "job_description_not_found" }
-  advanceJdExtraction(db, applicationProjectId)
-  const lock = jdRawTextLock(db, jd)
-  if (lock) return { refused: lock }
+  if (jdRawTextLockedReason(db, jd)) return { refused: "jd_job_in_progress" }
   if (text === jd.raw_text.trim()) return { refused: "jd_raw_text_unchanged" }
   const now = new Date().toISOString()
   Object.assign(jd, {
     raw_text: text,
     raw_text_hash: `hash-${jd.id}-${now}`,
-    sentences: splitJdSentences(text),
-    detected_language: null,
-    extraction: null,
-    tech_keywords: [],
-    requirements_hash: null,
-    extraction_status: "pending",
-    extraction_job_id: null,
-    extraction_provider: null,
-    extraction_model: null,
+    sentences,
     raw_text_edited_at: now,
     updated_at: now,
   })
-  // AI-filled values belong to the previous text; what the user typed stays
-  if (jd.company_name_source === "ai") Object.assign(jd, { company_name: null, company_name_source: null })
-  if (jd.position_title_source === "ai") Object.assign(jd, { position_title: null, position_title_source: null })
   const ap = db.application_projects.find((a) => a.id === applicationProjectId)
   if (ap) ap.last_activity_at = now
-  const key = activeKey(db)
-  return {
-    application_project_id: applicationProjectId,
-    job_description_id: jd.id,
-    extraction_status: "pending",
-    raw_text_edited_at: now,
-    ai_run_allowed: Boolean(key && key.status !== "invalid" && !consentRequired(db, key.provider, key.connection_tier)),
-  }
-}
-
-/** One requirement (S-10 "관련 요건: {요건 content}" from an S-16 보완점) */
-async function mockGetJdRequirement(id: string): Promise<JdRequirement | null> {
-  const db = await mockRequest(0)
-  const r = db.jd_requirements.find((x) => x.id === id)
-  return r ? clone(r) : null
+  return { application_project_id: applicationProjectId, job_description_id: jd.id, raw_text_edited_at: now }
 }
 
 // ---------------------------------------------------------------------------
@@ -646,12 +471,23 @@ async function mockStartInsight(
   opts?: { fail?: AiErrorCode | null; rate_wait?: boolean },
 ): Promise<{ insight_id: string; job_id: string }> {
   const db = await mockRequest()
-  // validate first (key), then D-30 extraction → insight as one flow (UQ-232)
+  return startMockInsight(db, applicationProjectId, opts)
+}
+
+/** The manual start and the create auto-start share this (JR-6: "수동 시작과 같은 서비스") */
+function startMockInsight(
+  db: MockDb,
+  applicationProjectId: string,
+  opts?: { fail?: AiErrorCode | null; rate_wait?: boolean },
+): { insight_id: string; job_id: string } {
+  // validate first (key). R17: no requirement extraction first — AI-02 reads the JD raw text (one stage-1 call)
   assertAiRunnable(db)
-  const extraction = await ensureJdRequirementsInDb(db, applicationProjectId)
   const now = new Date().toISOString()
   const jd = db.job_descriptions.find((j) => j.application_project_id === applicationProjectId)
-  const units = Math.max(1, Math.ceil(db.jd_requirements.filter((r) => r.job_description_id === jd?.id).length / 8))
+  // DM 2.7.0 begin_insight: a JD without sentences is refused before a job is made (409)
+  if (!jd || jd.sentences.length === 0) throw new AppError("jd_no_sentences", undefined, { status: 409 })
+  // (v5.21, JR-Q2 보류) stage 1 is one call — no batch units
+  const units = 1
   const insightId = newId()
   const job = createMockJob(db, {
     job_type: "insight",
@@ -660,9 +496,7 @@ async function mockStartInsight(
     target_type: "application_project",
     target_id: applicationProjectId,
     units,
-    // a failed `prepare` extraction ends the job with the same cause, before any match (S-16, Q53-2)
-    fail: extraction.failed ?? opts?.fail,
-    fail_at_prepare: !!extraction.failed,
+    fail: opts?.fail,
     rate_wait: opts?.rate_wait,
   })
   const prev = db.insights.filter((i) => i.application_project_id === applicationProjectId)
@@ -682,11 +516,11 @@ async function mockStartInsight(
     status: "generating",
     result: null,
     match_stage_result: null,
-    requirements_hash: jd?.requirements_hash ?? null,
+    // DM 2.7.0: the JD raw-text hash the run reads (prepare)
+    raw_text_hash: jd?.raw_text_hash ?? null,
+    schema_version: null,
     completed_at: null,
   })
-  // no job left running on this JD: S-15 can edit the text right away (04 §2.6.1 조건 1)
-  if (extraction.failed) refreshApplicationJobs(db, applicationProjectId)
   return { insight_id: insightId, job_id: job.id }
 }
 
@@ -754,16 +588,13 @@ export function createApplicationProject(input: CreateApplicationInput): Promise
   return previewOr(() => mockCreateApplicationProject(input), () => realCreateApplicationProject(input))
 }
 
-export function getJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+export function getJobDescription(applicationProjectId: string): Promise<JobDescriptionView | null> {
   return previewOr(() => mockGetJobDescription(applicationProjectId), () => realGetJobDescription(applicationProjectId))
 }
 
-export function updateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
-  return previewOr(() => mockUpdateFailedJdRawText(applicationProjectId, rawText), () => realUpdateFailedJdRawText(applicationProjectId, rawText))
-}
-
-export function getJdRequirement(id: string): Promise<JdRequirement | null> {
-  return previewOr(() => mockGetJdRequirement(id), () => realGetJdRequirement(id))
+/** RPC update_jd_raw_text (JR-7) — the same contract as before (R17b-api-8 kept the old name; renamed in the UI run 60) */
+export function updateJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateJdRawTextResult> {
+  return previewOr(() => mockUpdateJdRawText(applicationProjectId, rawText), () => realUpdateJdRawText(applicationProjectId, rawText))
 }
 
 export function getInsightState(applicationProjectId: string): Promise<{ latest: Insight | null; generating: Insight | null }> {

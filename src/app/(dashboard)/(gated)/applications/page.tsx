@@ -17,9 +17,9 @@ import { listCoverLetters } from "@/lib/data/cover-letters"
  * 검색·"보드로 보기"는 없다(CF-9). 행 → S-46.
  *
  * `?state=`: empty · loading · error · unauth · not-found
- * S-14 모달: `?new=1[&from=board]` + 모달 자신의 `?state=`(5절 표 — step1 · fetching · fetch-failed ·
- * extracting · extract-failed · step2 · close-confirm · creating · create-failed · invalid-source-url ·
- * consent-required · key-invalid · key-missing)
+ * S-14 모달: `?new=1[&from=board]` + 모달 자신의 `?state=`(step1 · fetching · fetch-failed · step2 · close-confirm ·
+ * creating · create-failed · invalid-source-url · jd-no-sentences). (v5.21, JR-1) 모달에 AI가 없어 `extracting`·
+ * `extract-failed`·`consent-required`·`key-invalid`·`key-missing` 키는 없어졌다
  */
 type Props = { params: Promise<Record<string, never>>; searchParams: Promise<Record<string, string | string[] | undefined>> }
 

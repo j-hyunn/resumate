@@ -145,12 +145,6 @@ export function validateSources(
       addToReport(report, { sources_dropped_no_evidence: 1 });
       continue;
     }
-    const requirementIds: string[] = [];
-    for (const ref of s.requirement_refs) {
-      const id = aliases.resolveId(ref.trim(), "jd_requirement");
-      if (!id) addToReport(report, { requirement_refs_dropped: 1 });
-      else if (!requirementIds.includes(id)) requirementIds.push(id);
-    }
     const parentEntry = r.parentAlias ? aliases.get(r.parentAlias) : undefined;
     const view: SelectedSourceView = {
       sort_order: 0,
@@ -161,7 +155,8 @@ export function validateSources(
       label: sourceLabel(aliases, r),
       rationale: clip(cleanProse(s.rationale, env, report), RATIONALE_MAX) ?? "",
       reuse_reason: s.reuse_reason ? clip(cleanProse(s.reuse_reason, env, report), RATIONALE_MAX) : null,
-      requirement_ids: requirementIds,
+      // [가정 R17-10] no JD requirement rows any more; kept as [] for the contract shape.
+      requirement_ids: [],
     };
     if (view.project_id && senv.otherPrimaryProjectIds.has(view.project_id) && !view.reuse_reason) addToReport(report, { reuse_without_reason: 1 });
     out.push({ ...r, view, evidence: outcome });
@@ -232,7 +227,7 @@ export type ParagraphsEnv = SourcesEnv & {
 };
 
 function toRawBlock(p: Ai04Paragraph, blockId: string): RawDraftBlock {
-  return { block_id: blockId, text: p.text, evidence: p.evidence, placeholders: p.placeholders, requirement_refs: p.requirement_refs };
+  return { block_id: blockId, text: p.text, evidence: p.evidence, placeholders: p.placeholders };
 }
 
 /**

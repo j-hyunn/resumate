@@ -50,7 +50,7 @@ insert into public.ai_jobs (id, user_id, job_type, application_project_id, targe
 update public.ai_jobs set finished_at = null where id = 'a0000000-7777-0000-0000-000000000003';
 
 insert into public.insights (id, user_id, application_project_id, version_no, is_latest, status, result,
-                             match_stage_result, requirements_hash, career_snapshot_hash, input_hash, schema_version,
+                             match_stage_result, raw_text_hash, career_snapshot_hash, input_hash, schema_version,
                              prompt_version, provider, model, model_tier, connection_tier, completed_at, ai_job_id)
 values ('a0000000-1a51-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
         'a0000000-aaaa-0000-0000-000000000001', 1, true, 'ready', '{"k":1}', '{}', 'rh', 'ch', 'ih', 1, 'pv', 'gemini', 'm',
@@ -62,10 +62,10 @@ values ('a0000000-0e5e-0000-0000-000000000001', 'a0000000-0000-0000-0000-0000000
         'succeeded', 'v1', 0.01);
 
 -- QA-S9-05 (b): every column that references ai_jobs points at the purged job 0001 (catalog-driven check below).
-insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
-                                     extraction_job_id) values
+-- R17: job_descriptions.extraction_job_id dropped; the JD row stays so the "no row deleted" count keeps its shape.
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences) values
   ('a0000000-1d00-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-aaaa-0000-0000-000000000001',
-   'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]', 'a0000000-7777-0000-0000-000000000001');
+   'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]');
 -- R15: the drafts tables are gone; application_documents has no ai_job_id column (DM §2.7.3).
 
 -- Rows per (table, column) of every FK that references ai_jobs, matching p_job_id.
@@ -91,7 +91,7 @@ end;
 $$;
 
 select set_eq($$select ref from pg_temp.job_refs(null)$$,
-              array['insights.ai_job_id', 'job_descriptions.extraction_job_id'],
+              array['insights.ai_job_id'],
               'FKs referencing ai_jobs = the list this test covers (new FK: add a fixture row here)');
 select is_empty($$select ref from pg_temp.job_refs('a0000000-7777-0000-0000-000000000001') where n = 0$$,
                 'fixture: every ai_jobs FK column points at the job to purge');
@@ -167,8 +167,7 @@ select set_eq(
        and has_function_privilege(r.rolname, p.oid, 'execute')$$,
   array['purge_old_ai_jobs:service_role',
         'purge_old_ai_usage_records:service_role', 'purge_old_account_deletion_logs:service_role',
-        -- R15 (CF-A17): the unused preview result cleanup.
-        'purge_unused_jd_preview_outputs:service_role',
+        -- R17: purge_unused_jd_preview_outputs dropped with the preview extraction.
         'purge_inactive_account:service_role'],
   'purge RPCs: service_role only');
 select is_empty($$select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace

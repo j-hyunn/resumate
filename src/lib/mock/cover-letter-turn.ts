@@ -59,7 +59,8 @@ function mockBlocks(slot: string, questionText: string, limit: number): CoverLet
       basis: "new",
       source_fact_ids: [],
       source_body_quotes: [],
-      requirement_ids: ["req-1"],
+      // (v5.21, JR-5) 자소서 근거에 공고 쪽 출처 없음
+      requirement_ids: [],
       placeholders: [],
       flags: [],
       review: "ok",

@@ -66,9 +66,10 @@ export const FetchJobDescriptionInput = z.object({
 });
 export type FetchJobDescriptionInput = z.infer<typeof FetchJobDescriptionInput>;
 
-/** 200 body: `{ data: FetchJobDescriptionResult }`. `null` = not found on the page. */
+/**
+ * 200 body: `{ data: FetchJobDescriptionResult }`. R17 (JR-2·JR-4, DM 2.6.2): the posting text only —
+ * 지원 기업·포지션 are typed by the user in S-14 ② (no `JobPosting` pre-fill).
+ */
 export type FetchJobDescriptionResult = {
   rawText: string;
-  companyName: string | null;
-  positionTitle: string | null;
 };

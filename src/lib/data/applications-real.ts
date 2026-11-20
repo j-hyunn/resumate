@@ -2,31 +2,28 @@ import "server-only"
 /**
  * W3: the real branch of applications.ts (S-13 / S-14 / S-15 / S-16 / S-17~S-19 reads). The screens read table
  * rows, so the summaries run the same rules as the mock (`summarize`) over real rows and take the
- * values the services decide (effective extraction status, progress counts) from the services.
+ * values the services decide (progress counts) from the services. R17: no extraction state, the JD's
+ * raw text is editable unless an insight runs (JR-7), creation may start the insight (JR-6).
  */
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
 import { JD_RAW_TEXT_REFUSAL_CODES, type ApplicationProjectListItem } from "@/lib/contracts/application"
-import { AppError, isAppError } from "@/lib/contracts/errors"
+import { AppError } from "@/lib/contracts/errors"
 import type { MockDb } from "@/lib/mock/fixtures"
 import * as applicationActions from "@/server/actions/application"
 import * as insightActions from "@/server/actions/insight"
 import { requireConsentedUser } from "@/server/auth/session"
 import { mapDbError } from "@/server/db/errors"
 import type { UserSupabaseClient } from "@/server/db/types"
-import { startJdExtractionInBackground } from "@/server/jobs/jd-extraction"
 import type {
-  AiGateRefusalCode,
   ApplicationProject,
   ApplicationStage,
   Insight,
   InsightResult,
   JdRawTextRefusalCode,
-  JdRequirement,
   JobDescription,
 } from "@/types/db"
-import type { AiRejected } from "./ai-errors"
-import type { ApplicationSummary, JobDescriptionWithRequirements, ListApplicationsOptions, UpdateFailedJdRawTextResult } from "./applications"
+import type { ApplicationSummary, CreateApplicationResult, JobDescriptionView, ListApplicationsOptions, UpdateJdRawTextResult } from "./applications"
 import { summarize } from "./applications"
 import { refusalOf, unwrap } from "./source"
 
@@ -45,7 +42,7 @@ async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProje
   const ids = items.map((i) => i.id)
   const [projects, jds, insights, jobs] = await Promise.all([
     supabase.from("application_projects").select("*").in("id", ids),
-    supabase.from("job_descriptions").select("id, application_project_id, company_name, position_title, extraction_status, raw_text_edited_at").in("application_project_id", ids),
+    supabase.from("job_descriptions").select("id, application_project_id, company_name, position_title, raw_text_edited_at").in("application_project_id", ids),
     supabase.from("insights").select("id, application_project_id, status, is_latest, completed_at, updated_at, ai_job_id").in("application_project_id", ids),
     supabase.from("ai_jobs").select(FEATURE_JOB_COLUMNS).in("application_project_id", ids).order("created_at", { ascending: true }),
   ])
@@ -64,7 +61,7 @@ async function toSummaries(supabase: UserSupabaseClient, items: ApplicationProje
     return [
       {
         ...summary,
-        job_description: summary.job_description && { ...summary.job_description, extraction_status: item.extractionStatus },
+        job_description: summary.job_description,
         insight_state: item.progress.insight,
         draft_count: item.progress.draftCount,
       },
@@ -89,17 +86,19 @@ export async function realGetApplicationProject(id: string): Promise<Application
 
 // ---------------- S-14 ----------------
 
-/** Gate refusals (Q53-1) come back from the RPC as 409 `AppError`s: nothing was inserted. */
+/**
+ * No AI gate on creation (4.24 #9). JR-6: the create action may start the insight right after a new
+ * row — `insight_job_id` / `insight_skip_reason` carry what happened (4.24 #10).
+ */
 export async function realCreateApplicationProject(input: {
   raw_text: string
   name?: string | null
   deadline?: string | null
   company_name?: string | null
   position_title?: string | null
-  /** R15: the posting URL (CF-10) and the 요건 미리 보기 작업 (CF-A17), both optional. */
+  /** R15: the posting URL (CF-10), optional. */
   source_url?: string | null
-  preview_job_id?: string | null
-}): Promise<ApplicationProject> {
+}): Promise<CreateApplicationResult> {
   const created = unwrap(
     await applicationActions.createApplicationProject({
       id: randomUUID(),
@@ -109,47 +108,36 @@ export async function realCreateApplicationProject(input: {
       name: input.name ?? undefined,
       deadline: input.deadline ?? undefined,
       sourceUrl: input.source_url ?? undefined,
-      previewJobId: input.preview_job_id ?? undefined,
     }),
   )
-  const { supabase, user } = await requireConsentedUser()
-  // D-30: with a usable key AI-01 starts right away. A failed start leaves the JD `pending` ("요건 정리하기").
-  if (created.shouldExtract) await startJdExtractionInBackground(supabase, user.id, created.applicationProjectId).catch(() => null)
+  const { supabase } = await requireConsentedUser()
   const { data, error } = await supabase.from("application_projects").select("*").eq("id", created.applicationProjectId).single()
   if (error) throw mapDbError(error)
-  return data as unknown as ApplicationProject
+  return { ...(data as unknown as ApplicationProject), insight_job_id: created.insightJobId, insight_skip_reason: created.insightSkipReason }
 }
 
 // ---------------- S-15 ----------------
 
-export async function realGetJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+export async function realGetJobDescription(applicationProjectId: string): Promise<JobDescriptionView | null> {
   if (!isUuid(applicationProjectId)) return null
   const view = await applicationActions.getJdView({ id: applicationProjectId })
   if ("error" in view && view.error.code === "not_found") return null
   const jd = unwrap(view)
   const { supabase } = await requireConsentedUser()
-  const [row, requirements] = await Promise.all([
-    supabase.from("job_descriptions").select("*").eq("id", jd.jobDescriptionId).single(),
-    supabase.from("jd_requirements").select("*").eq("job_description_id", jd.jobDescriptionId).order("sort_order"),
-  ])
+  const row = await supabase.from("job_descriptions").select("*").eq("id", jd.jobDescriptionId).single()
   if (row.error) throw mapDbError(row.error)
   return {
     ...(row.data as unknown as JobDescription),
-    // pending JDs have no keywords yet (null in the DB, W0)
-    tech_keywords: (row.data.tech_keywords ?? []) as unknown as JobDescription["tech_keywords"],
-    // a `running` row whose job already ended reads failed (resolveExtraction)
-    extraction_status: jd.extractionStatus,
-    requirements: rowsOf(requirements) as unknown as JdRequirement[],
     raw_text_editable: jd.rawTextEditable,
-    raw_text_lock: jd.rawTextLock,
+    raw_text_locked_reason: jd.rawTextLockedReason,
   }
 }
 
 const RAW_TEXT_REFUSALS = [...JD_RAW_TEXT_REFUSAL_CODES, "not_found", "invalid_input"] as const
 
-/** spec-gaps ⑰: the DM's codes → the screen's refusal names. */
-export async function realUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
-  const r = refusalOf(await applicationActions.updateFailedJdRawText({ id: applicationProjectId, rawText }), RAW_TEXT_REFUSALS)
+/** RPC update_jd_raw_text (JR-7): the DM's codes → the screen's refusal names. */
+export async function realUpdateJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateJdRawTextResult> {
+  const r = refusalOf(await applicationActions.updateJdRawText({ id: applicationProjectId, rawText }), RAW_TEXT_REFUSALS)
   if ("refused" in r) {
     const refused: JdRawTextRefusalCode = r.refused === "not_found" ? "job_description_not_found" : r.refused === "invalid_input" ? "invalid_raw_text" : r.refused
     return { refused }
@@ -157,37 +145,7 @@ export async function realUpdateFailedJdRawText(applicationProjectId: string, ra
   return {
     application_project_id: r.data.applicationProjectId,
     job_description_id: r.data.jobDescriptionId,
-    extraction_status: "pending",
     raw_text_edited_at: r.data.rawTextEditedAt,
-    ai_run_allowed: r.data.aiRunAllowed,
-  }
-}
-
-export async function realGetJdRequirement(id: string): Promise<JdRequirement | null> {
-  if (!isUuid(id)) return null
-  const { supabase } = await requireConsentedUser()
-  const { data, error } = await supabase.from("jd_requirements").select("*").eq("id", id).maybeSingle()
-  if (error) throw mapDbError(error)
-  return data as unknown as JdRequirement | null
-}
-
-/**
- * "요건 정리하기" (S-15, S-17~S-19). Starts the sync extraction without holding the screen (it polls the JD).
- * Path ⑤: a connection refusal changes nothing and goes back to the run button.
- */
-export async function realRetryJdExtraction(applicationProjectId: string): Promise<boolean | "already" | AiRejected> {
-  if (!isUuid(applicationProjectId)) return false
-  const { supabase, user } = await requireConsentedUser()
-  try {
-    const started = await startJdExtractionInBackground(supabase, user.id, applicationProjectId)
-    if (started.status === "failed" && (started.jobId === null || started.code === "key_missing" || started.code === "key_invalid")) {
-      return { rejected: started.code, refusal: started.code === "key_invalid" ? ("key_invalid" satisfies AiGateRefusalCode) : null }
-    }
-    return true
-  } catch (err) {
-    if (isAppError(err) && err.code === "extraction_in_progress") return "already"
-    if (isAppError(err) && err.code === "not_found") return false
-    throw err
   }
 }
 
@@ -202,28 +160,32 @@ const str = (v: unknown): string => (typeof v === "string" ? v : "")
 /**
  * The stored result, with the keys evidence hangs on filled the way services/insight/read.ts fills them
  * (`item_key` may be absent in stored rows), so a chip lookup and the service read agree.
+ * Schema 2 only (DM 2.7.0): a schema-1 result is not converted — it comes back with its version and empty
+ * lists (the screen shows "다시 만들어야 해요", UI 요청).
  */
-export function normalizeInsightResult(value: unknown): InsightResult | null {
+export function normalizeInsightResult(value: unknown, schemaVersion: number | null = 2): InsightResult | null {
   if (!value || typeof value !== "object") return null
-  const r = value as Obj
+  const version = schemaVersion ?? 1
+  const r = (version === 2 ? value : {}) as Obj
   const strategy = obj(r.strategy)
   const counts = obj(r.summary_counts)
   const count = (k: string) => (typeof counts[k] === "number" ? (counts[k] as number) : 0)
   const sufficiency = obj(r.data_sufficiency)
   return {
-    schema_version: typeof r.schema_version === "number" ? r.schema_version : 1,
+    schema_version: version,
     basis_note: str(r.basis_note),
     data_sufficiency: { level: sufficiency.level === "thin" ? "thin" : "ok", hints: strs(sufficiency.hints) },
     requirement_matches: arr(r.requirement_matches).flatMap((raw) => {
       const m = obj(raw)
-      const requirementId = str(m.requirement_id)
-      if (!requirementId || (m.status !== "met" && m.status !== "partial" && m.status !== "no_evidence")) return []
-      return [{ item_key: str(m.item_key) || `requirement_matches.${requirementId}`, requirement_id: requirementId, status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
+      const matchKey = str(m.match_key)
+      const text = str(m.requirement_text)
+      if (!matchKey || !text || (m.status !== "met" && m.status !== "partial" && m.status !== "no_evidence")) return []
+      return [{ item_key: str(m.item_key) || `requirement_matches.${matchKey}`, match_key: matchKey, requirement_text: text, sids: strs(m.sids), status: m.status, rationale: str(m.rationale), missing_aspect: typeof m.missing_aspect === "string" ? m.missing_aspect : null }]
     }),
     summary_counts: { met: count("met"), partial: count("partial"), no_evidence: count("no_evidence") },
     strengths: arr(r.strengths).map((raw, n) => {
       const s = obj(raw)
-      return { item_key: str(s.item_key) || `strengths.${n}`, title: str(s.title), description: str(s.description), requirement_ids: strs(s.requirement_ids) }
+      return { item_key: str(s.item_key) || `strengths.${n}`, title: str(s.title), description: str(s.description), match_keys: strs(s.match_keys) }
     }),
     gaps: arr(r.gaps).flatMap((raw, n) => {
       const g = obj(raw)
@@ -231,7 +193,7 @@ export function normalizeInsightResult(value: unknown): InsightResult | null {
       return [
         {
           item_key: str(g.item_key) || `gaps.${n}`,
-          requirement_ids: strs(g.requirement_ids),
+          match_keys: strs(g.match_keys),
           gap_kind: g.gap_kind,
           description: str(g.description),
           actions: arr(g.actions).flatMap((rawAction, m) => {
@@ -248,7 +210,7 @@ export function normalizeInsightResult(value: unknown): InsightResult | null {
         const p = obj(raw)
         const projectId = str(p.project_id)
         if (!projectId) return []
-        return [{ item_key: str(p.item_key) || `strategy.project_priorities.${n}`, rank: typeof p.rank === "number" ? p.rank : n + 1, project_id: projectId, reason: str(p.reason), requirement_ids: strs(p.requirement_ids) }]
+        return [{ item_key: str(p.item_key) || `strategy.project_priorities.${n}`, rank: typeof p.rank === "number" ? p.rank : n + 1, project_id: projectId, reason: str(p.reason), match_keys: strs(p.match_keys) }]
       }),
     },
   }
@@ -282,7 +244,8 @@ export async function realGetInsightState(applicationProjectId: string): Promise
           version_no: 0,
           result: null,
           match_stage_result: null,
-          requirements_hash: null,
+          raw_text_hash: null,
+          schema_version: null,
           completed_at: null,
           provider: job.provider,
           model_tier: job.model_tier,
@@ -291,7 +254,7 @@ export async function realGetInsightState(applicationProjectId: string): Promise
           updated_at: job.created_at,
         } as unknown as Insight)
       : null
-  return { latest: latest ? ({ ...latest, result: normalizeInsightResult(latest.result) } as unknown as Insight) : null, generating }
+  return { latest: latest ? ({ ...latest, result: normalizeInsightResult(latest.result, latest.schema_version) } as unknown as Insight) : null, generating }
 }
 
 /**

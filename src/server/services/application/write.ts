@@ -8,14 +8,13 @@ import {
   type DeleteApplicationProjectResult,
   type MoveApplicationStageInput,
   type MoveApplicationStageResult,
-  type PreviewSkipReason,
   type SetApplicationOutcomeInput,
   type StageChangeResult,
   type UpdateApplicationProjectInput,
-  type UpdateFailedJdRawTextInput,
-  type UpdateFailedJdRawTextResult,
+  type UpdateJdRawTextInput,
+  type UpdateJdRawTextResult,
 } from "@/lib/contracts/application";
-import type { ApplicationStage, JdExtractionStatus, NameSource, StageOutcome } from "@/lib/contracts/enums";
+import type { ApplicationStage, NameSource, StageOutcome } from "@/lib/contracts/enums";
 import { AppError } from "@/lib/contracts/errors";
 import { splitJdSentences } from "@/server/ai/context-pack/jd";
 import { sha256Hex } from "@/server/ai/hash";
@@ -28,9 +27,10 @@ import { normalizeJdRawText } from "./raw-text";
 /**
  * S5 writes through the user session (DM §5: career-side writes are the
  * user's; the RPCs are definer with an auth.uid() owner check). No AI call
- * here (F-ST-04: stage moves never call AI). Creation is separate from
- * extraction, so saving the raw JD always succeeds (PRD "원문 저장은 성공,
- * 추출은 실패 안내"); `shouldExtract` tells the screen to call the sync route.
+ * here (F-ST-04: stage moves never call AI). R17: the JD is stored as raw
+ * text only and creation needs no AI connection (`create_application_project` has no key /
+ * consent gate, 4.24 #9). The automatic insight start after creation (JR-6) is a separate step
+ * of the create Server Action (`services/insight/auto-start.ts`), never inside the RPC.
  */
 
 const notFound = () => new AppError("not_found", "자기소개서를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.", { status: 404 });
@@ -44,12 +44,15 @@ function str(v: unknown): string | null {
 
 // ---------------- create (S-14) ----------------
 
+/** The RPC part of S-14 만들기; the action adds `insightJobId` / `insightSkipReason`. */
+export type CreatedApplicationProject = Omit<CreateApplicationProjectResult, "insightJobId" | "insightSkipReason">;
+
 export async function createApplicationProject(
   supabase: UserSupabaseClient,
   input: z.output<typeof CreateApplicationProjectInput>,
-): Promise<CreateApplicationProjectResult> {
-  // A3 (R15): one normalized string feeds the split, the hash and the stored raw text — the same
-  // function the preview route uses, so `p_preview_job_id` can match (D11 hash recomputation).
+): Promise<CreatedApplicationProject> {
+  // A3 (R15): one normalized string feeds the split, the hash and the stored raw text (the raw-text
+  // edit path uses the same function).
   const rawText = normalizeJdRawText(input.rawText);
   // C-2: deterministic server split; offsets index the raw text exactly as stored (never trimmed).
   const sentences = splitJdSentences(rawText);
@@ -68,7 +71,6 @@ export async function createApplicationProject(
     ...(input.name ? { p_name: input.name } : {}),
     ...(input.deadline ? { p_deadline: input.deadline } : {}),
     ...(input.sourceUrl ? { p_source_url: input.sourceUrl } : {}),
-    ...(input.previewJobId ? { p_preview_job_id: input.previewJobId } : {}),
   });
   if (error) throw mapDbError(error);
   const row = obj(data);
@@ -76,40 +78,30 @@ export async function createApplicationProject(
   const jobDescriptionId = str(row.job_description_id);
   if (!applicationProjectId || !jobDescriptionId) throw new AppError("internal_error", undefined, { status: 500 });
   const name = str(row.name);
-  const extractionStatus = (str(row.extraction_status) ?? "pending") as JdExtractionStatus;
   return {
     applicationProjectId,
     jobDescriptionId,
     name,
     nameSource: str(row.name_source) as NameSource | null,
     displayName: applicationDisplayName(name, input.companyName ?? null, input.positionTitle ?? null),
-    extractionStatus,
-    // The DB applies the same rule as check_ai_run_allowed (active provider, key not invalid, consent).
-    // D-30: with a usable preview applied there is nothing left to extract.
-    shouldExtract: row.ai_run_allowed === true && (extractionStatus === "pending" || extractionStatus === "failed"),
     created: row.created !== false,
-    // R15 D11: whether the `jd_preview` job's output was applied, and why it wasn't.
-    previewApplied: row.preview_applied === true,
-    previewSkipReason: str(row.preview_skip_reason) as PreviewSkipReason | null,
     warnings: jdInputWarnings(rawText),
   };
 }
 
-// ---------------- raw text edit (S-15, Q53-2 / Q53-11) ----------------
+// ---------------- raw text edit (S-15, JR-7) ----------------
 
 /**
- * DM 2.6.1: the one exception to "JD 교체 불가". Sentences and hash come from the same server
- * code as creation. Refusals (AppError 409): `jd_job_in_progress`, `jd_raw_text_locked`,
- * `jd_failure_not_input`, `jd_has_results`, `jd_raw_text_unchanged`; `not_found`, `invalid_input`.
- * No AI call and no key needed: re-extraction is the user's separate "요건 정리하기" (D-30).
+ * DM 2.6.1 (v4.16, JR-7): the raw text can be edited at any time except while an insight job is
+ * queued / running. Sentences and hash come from the same server code as creation. Refusals:
+ * `jd_no_sentences` (400), `jd_job_in_progress` / `jd_raw_text_unchanged` (409), `not_found`
+ * (404), `invalid_input` (400). Existing insights and their evidence stay — they read
+ * "공고가 바뀌었어요" (`staleReasons.rawText`). No AI call and no key needed.
  */
-export async function updateFailedJdRawText(
-  supabase: UserSupabaseClient,
-  input: z.output<typeof UpdateFailedJdRawTextInput>,
-): Promise<UpdateFailedJdRawTextResult> {
+export async function updateJdRawText(supabase: UserSupabaseClient, input: z.output<typeof UpdateJdRawTextInput>): Promise<UpdateJdRawTextResult> {
   // A3 (R15): the edit path normalizes with the same function as creation.
   const rawText = normalizeJdRawText(input.rawText);
-  const { data, error } = await supabase.rpc("update_failed_jd_raw_text", {
+  const { data, error } = await supabase.rpc("update_jd_raw_text", {
     p_application_project_id: input.id,
     p_raw_text: rawText,
     p_raw_text_hash: sha256Hex(rawText),
@@ -120,14 +112,7 @@ export async function updateFailedJdRawText(
   const jobDescriptionId = str(row.job_description_id);
   const rawTextEditedAt = str(row.raw_text_edited_at);
   if (!jobDescriptionId || !rawTextEditedAt) throw new AppError("internal_error", undefined, { status: 500 });
-  return {
-    applicationProjectId: input.id,
-    jobDescriptionId,
-    extractionStatus: "pending",
-    rawTextEditedAt,
-    aiRunAllowed: row.ai_run_allowed === true,
-    warnings: jdInputWarnings(rawText),
-  };
+  return { applicationProjectId: input.id, jobDescriptionId, rawTextEditedAt, warnings: jdInputWarnings(rawText) };
 }
 
 // ---------------- update (S-31 inline edit) ----------------
@@ -162,7 +147,7 @@ export async function updateApplicationProject(
 
 /**
  * F-AP-05 / FL-06: request cancel on the project's in-flight AI jobs, then
- * delete (cascade: JD, requirements, stage events, ai_jobs, evidence_links;
+ * delete (cascade: JD, stage events, insights, ai_jobs, evidence_links;
  * ai_usage_records keep their rows with application_project_id null). A runner
  * still holding a deleted job sees zero-row writes and stops as canceled.
  */

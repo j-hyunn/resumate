@@ -1,13 +1,22 @@
 import { z } from "zod";
-import type { AiJobStatus, AiProvider, ConnectionTier, ModelTier, RequirementCategory, RequirementImportance } from "./enums";
+import type { AiJobStatus, AiProvider, ConnectionTier, ModelTier } from "./enums";
 import type { AiFailure } from "./application";
 import type { ReadinessFeature } from "./career";
 import type { EvidenceChip } from "./evidence";
 
 /**
- * S6 insight contracts (AI-02; F-P2-04/05/07/09, F-AP-06, D-30; DM A.8, §6;
+ * S6 insight contracts (AI-02; F-P2-04/05/07/09, F-AP-06; DM A.8, §6;
  * UX S-16, C-01/C-02/C-03/C-20).
+ *
+ * R17 (DM v4.16 2.7.0, decisions 4.24 #13·#18): the JD is used as raw text. AI-02 stage 1 reads
+ * the requirements from the JD sentences itself, so a schema-2 result carries its own requirement
+ * list: `requirement_matches[] = { match_key: "MT-n", requirement_text, sids, … }`, and stage 2
+ * points at them with `match_keys`. A schema-1 insight (before R17, made from the dropped
+ * `jd_requirements` rows) is never shown: `schemaVersion: 1` → "다시 만들어야 해요" + 다시 생성.
  */
+
+/** The only result shape the screens render (DM 2.7.0). */
+export const INSIGHT_SCHEMA_VERSION = 2;
 
 // ---------- enums (insights.status CHECK, AI-02 output) ----------
 
@@ -39,7 +48,7 @@ export type StartInsightInput = z.input<typeof StartInsightInput>;
 /**
  * 200 `{ data }`:
  * - `reused: true` — the same input (provider, model, career snapshot,
- *   requirements, prompt version) already has a ready insight: show it, no
+ *   JD raw text, prompt version) already has a ready insight: show it, no
  *   job, no provider call, no usage record (C-6, NFR-AI-08).
  * - `reused: false` — a job was started (`inProgress: false`) or one is
  *   already running for this project (`inProgress: true`, D-34). Poll
@@ -63,17 +72,18 @@ export type InsufficientDataResponse = {
 // ---------- job status partial (GET /api/ai-jobs/{id}, job_type = insight) ----------
 
 /**
- * `AiJobStatusResponse.partial` for an insight job (S-16 부분 결과, C-03):
- * stage-1 verdicts as soon as batches finish — before the insight is saved,
- * so no evidence chips yet. Requirement text comes from `InsightView.requirements`.
+ * `AiJobStatusResponse.partial` for an insight job (S-16 부분 결과, C-03): the stage-1 verdicts
+ * once the single match call finished (step output `match`, ai `MatchStageResult.items`) — before
+ * the insight is saved, so no evidence chips yet.
  */
 export type InsightJobPartial = {
   kind: "insight_matches";
-  batchesDone: number;
-  /** Null until the match stage knows its batch count. */
-  batchesTotal: number | null;
   requirementMatches: Array<{
-    requirementId: string;
+    /** `MT-n` (per insight). */
+    matchKey: string;
+    requirementText: string;
+    /** JD sentences (`S{n}`) the requirement was read from — "공고 원문" link. */
+    sentenceIds: string[];
     status: MatchStatus;
     rationale: string;
     missingAspect: string | null;
@@ -82,22 +92,18 @@ export type InsightJobPartial = {
 
 // ---------- read: getInsight (S-16) ----------
 
-export type InsightRequirement = {
-  id: string;
-  category: RequirementCategory;
-  content: string;
-  importance: RequirementImportance;
-  sortOrder: number;
-};
-
 export type InsightRequirementMatch = {
+  /** `requirement_matches.MT-n` */
   itemKey: string;
-  requirementId: string;
-  /** Null when the requirement row no longer exists. */
-  requirement: InsightRequirement | null;
+  /** `MT-n` — strengths / gaps / priorities point here with `matchKeys`. */
+  matchKey: string;
+  requirementText: string;
+  /** JD sentences (`S{n}`) — "공고 원문" link highlights all of them (UX S-16). */
+  sentenceIds: string[];
   status: MatchStatus;
   rationale: string;
   missingAspect: string | null;
+  /** Career evidence only (DM 2.8: the JD link of a requirement row is `sentenceIds`). */
   evidence: EvidenceChip[];
 };
 
@@ -105,7 +111,7 @@ export type InsightStrength = {
   itemKey: string;
   title: string;
   description: string;
-  requirementIds: string[];
+  matchKeys: string[];
   evidence: EvidenceChip[];
 };
 
@@ -115,16 +121,17 @@ export type InsightGapAction = {
   text: string;
   evidence: EvidenceChip[];
   /**
-   * F-P2-09: for `add_data`, the requirements to show as "관련 요건: …" when
-   * the user opens S-36 (AI와 대화하며 추가) or S-10 (직접 입력). The chat
-   * start uses `returnTarget = { applicationProjectId, feature: 'insight' }` (S4).
+   * F-P2-09: for `add_data`, the gap's requirements ("관련 요건: …"). The chat start passes
+   * `returnTarget = { applicationProjectId, feature: 'insight', params: { insight_id, insight_item_key } }`
+   * (DM 2.7.0 AI-12 게이트 진입, 4.24 #14).
    */
-  relatedRequirementIds: string[];
+  relatedMatchKeys: string[];
 };
 
 export type InsightGap = {
+  /** `gaps.{n}` — the `insight_item_key` of a gate chat started from this gap. */
   itemKey: string;
-  requirementIds: string[];
+  matchKeys: string[];
   gapKind: GapKind;
   description: string;
   evidence: EvidenceChip[];
@@ -138,7 +145,7 @@ export type InsightProjectPriority = {
   /** Current project name (→ S-10); null when the project was deleted. */
   projectName: string | null;
   reason: string;
-  requirementIds: string[];
+  matchKeys: string[];
   evidence: EvidenceChip[];
 };
 
@@ -154,11 +161,22 @@ export type InsightResultView = {
   connectionTier: ConnectionTier | null;
   promptVersion: string | null;
   /**
-   * F-P2-07 MVP "데이터 변경됨": the current career snapshot or requirement
-   * list differs from what this insight was made from. Show it with "다시 생성".
+   * `insights.schema_version`. 2 = the shape below. 1 = an insight made from the dropped
+   * requirement list (JR-Q3 (b)): the body fields are empty and the screen shows
+   * "공고 처리 방식이 바뀌어 다시 만들어야 해요" + [다시 생성] (UX DM-12).
+   */
+  schemaVersion: number;
+  /**
+   * F-P2-07 MVP "데이터 변경됨": the current career snapshot or the JD raw text differs from what
+   * this insight was made from. Show it with "다시 생성".
    */
   stale: boolean;
-  staleReasons: { career: boolean; requirements: boolean };
+  /**
+   * `career` = `career_snapshot_hash` ≠ now; `rawText` = `insights.raw_text_hash` ≠
+   * `job_descriptions.raw_text_hash` ("공고가 바뀌었어요 — 다시 생성", DM 2.6.1 / 2.7.0). The
+   * insight's `jd_sentence` chips read the same `rawText` value (no highlight when true).
+   */
+  staleReasons: { career: boolean; rawText: boolean };
   basisNote: string;
   dataSufficiency: { level: (typeof INSIGHT_DATA_SUFFICIENCY_LEVELS)[number]; hints: string[] };
   summaryCounts: Record<MatchStatus, number>;
@@ -185,10 +203,7 @@ export type InsightLastFailure = AiFailure & { jobId: string; failedAt: string |
 
 export type InsightView = {
   applicationProjectId: string;
-  /** JD requirements now (contents instead of REQ-n aliases), sort_order order. */
-  requirements: InsightRequirement[];
-  extractionStatus: "pending" | "running" | "succeeded" | "failed";
-  /** S-16 "공고를 고쳤어요…" (only while extractionStatus = pending, DM 2.6.1). */
+  /** Last JD raw-text edit (DM 2.6.1; failures before it are not shown). */
   rawTextEditedAt: string | null;
   /** Latest ready insight (or the requested version); null = 아직 없음. */
   insight: InsightResultView | null;

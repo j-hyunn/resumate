@@ -12,18 +12,16 @@ insert into public.application_projects (id, user_id, name, name_source) values
   ('c0000000-aaaa-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'C1', 'user'),
   ('c0000000-aaaa-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'C2', 'user'),
   ('c0000000-aaaa-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'C3', 'user');
-insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences,
-                                     extraction_status, extraction, tech_keywords, requirements_hash,
-                                     extraction_provider, extraction_model)
+-- R17: raw_text_hash = the payload's hashes.raw_text_hash (complete_insight stale_run guard).
+insert into public.job_descriptions (id, user_id, application_project_id, raw_text, raw_text_hash, sentences)
 select ('c0000000-dddd-0000-0000-00000000000' || n)::uuid, 'c0000000-0000-0000-0000-000000000001',
-       ('c0000000-aaaa-0000-0000-00000000000' || n)::uuid, 'x', 'h', '[{"sid":"S1","text":"x","start":0,"end":1}]',
-       'succeeded', '{}', '[]', 'rh', 'gemini', 'm'
+       ('c0000000-aaaa-0000-0000-00000000000' || n)::uuid, 'x', 'rh', '[{"sid":"S1","text":"x","start":0,"end":1}]'
   from generate_series(1, 3) n;
 
 create temp table t_payload (v jsonb);
 insert into t_payload values ('{"result":{"schema_version":1},"match_stage_result":{"matches":[]},
-  "hashes":{"requirements_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"},
-  "meta":{"schema_version":1,"prompt_version":"pv","provider":"gemini","model":"m","model_tier":"default",
+  "hashes":{"raw_text_hash":"rh","career_snapshot_hash":"ch","input_hash":"ih"},
+  "meta":{"schema_version":2,"prompt_version":"pv","provider":"gemini","model":"m","model_tier":"default",
           "connection_tier":"free","validation_report":null,"usage":null},"evidence":[]}');
 grant select on t_payload to app_ai_writer;
 

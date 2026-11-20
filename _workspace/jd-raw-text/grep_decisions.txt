@@ -1,0 +1,16 @@
+154:| 팀 D-30 | JD 요건 추출은 키가 있으면 생성 직후, 없으면 첫 AI 기능 실행 때. 키 연결 시 일괄 실행하지 않음 |
+192:| A13 | 요건 추출이 필요하면 화면이 추출을 먼저 끝낸 뒤 생성 시작. 생성 요청 안에서는 추출 안 함 | UX FL-03·S-17, AI C-
+195:| A16 | JD 연차 숫자 검사 안 함. 근거 문장 존재만 확인 | AI AI-01 | |
+212:| 2026-11-06 거부 코드 | (사용자가 판단 위임 → 리더 판단, 2026-11-06) DM 2.11.7: 경로 ② 같은 행 다시 시도에 409 `ai_connection
+214:| R-69 | 같은 행 다시 시도 `ai_job_not_retryable`(409) 대상을 구현에 맞춤: 요청 범위 작업, 입력 원인 실패(`input_too_long`·`safe
+217:| R-52 | D-30: 서류 3종(경력기술서·자기소개서·AI-11) 모두 생성 전 별도 요청으로 요건 추출. 인사이트·면접은 작업 첫 
+228:| Q53-1 | S-14: 동의 필요·키 무효면 만들기 전에 막음(C-21 / 키 교체), 동의 뒤 만들면서 추출. 입력 보존, 키 없음 흐름은
+229:| Q53-2 | 입력 원인으로 요건 추출이 실패해 요건이 없는 JD는 공고 원문 수정 허용. U-6·D-19의 예외 | PRD F-AP-01·D-19, UX S-1
+238:| Q53-11 | 추출은 성공했는데 요건이 0개인 JD도 공고 원문 수정 허용. 이 원문으로 만든 결과가 있으면 잠금(2026-11-01, UQ-
+700:| A13 | 경력기술서 생성 요청 안의 요건 추출 제거, 화면이 추출 선행 |
+1057:| 2 | CF-10·CF-A17 | `create_application_project`에 `p_source_url`·`p_preview_job_id` 추가, 미리 보기 결과 적용(원문 sha256 재계산 + 문�
+1059:| 4 | CF-2·CF-A5 | `apply_jd_extraction`이 AI-01 `deadline.value`를 `deadline is null`일 때만 기록(`source_sids`·기간 검사) | ★ | 아니다 
+1061:| 6 | CF-A17 | `ai_jobs_jd_extraction_check` 완화(`target_type = 'jd_preview'`), 쓰이지 않은 미리 보기 `output` 24시간 뒤 비우기(정리 �
+1063:| 8 | CF-10·CF-A15 | **새 API** `POST /api/job-descriptions/fetch`(서버 가져오기 — SSRF 차단·10초·2MB·리다이렉트 3회 재검사, 사�
+1075:**AI** (`resumate-backend` ai-pipeline): AI-01 출력 schema 1→**2**(`deadline {value, source_sids}`), 프롬프트 `ai-01.extract.v2`, [다음]의 미�
+1082:| 2 | CF-8·CF-10·CF-A6·CF-A17 | **S-14 → 2단계 모달** — ① URL 또는 직접 입력 → [다음](가져오기 → 미리 보기 추출, 진행 

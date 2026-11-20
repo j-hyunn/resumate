@@ -81,3 +81,12 @@ U1 S-14 마감일 칸·자동 시작 안내 · U2 채용 공고 탭 요건 열 �
 2. `release-counts.md`의 읽기 전용 집계 10항목 실행·기록
 3. `supabase db push`로 A(`…004800`)·B(`…004810`)·C(`…004820`) 함께 → **바로 코드 머지·배포**(옛 코드는 삭제된 RPC·컬럼을 부른다. A~B 사이 수 초 동안 옛 `complete_insight` 실패 가능)
 4. C 단언이 멈추면 A·B는 적용된 상태 — 해당 행을 고친 뒤 C만 다시 push
+
+---
+
+# 후속 (2026-11-20) — UI 60 런 기획 확인 (decisions 3.30·4.25, 기획 PR #77 `ba9fc10`)
+
+- **4.25 백엔드 #1 완료**: `20261113004790_r17_policy_versions_ui60e.sql`(비파괴) — `policy_versions`에 terms·privacy·ai_data_use **2026-11-20** 행, `requires_reconsent = false`(CF-S6 004695 패턴). 번호는 원격 마지막 `004700` 뒤, 파괴 A(`004800`)보다 앞(파괴가 마지막). pgTAP: 새 판 단언 2개 추가, "현재 판" 단언·동의 픽스처를 2026-11-20으로(`policy_versions`·`consents`·`account_deletion`·`r12_ui36_followups`·`r13_settings_dialog`). pgTAP 65/2,650 · Vitest 160/2,666 · typecheck 0.
+- **UI #3과 같은 머지**: `src/components/account/policy-content.ts`(UI 소유, ui-u1-u9 세션)가 2026-11-20판 본문으로 바뀐 뒤 함께 나가야 한다. push ~ 머지 사이에는 화면이 옛 본문에 새 시행일을 보인다.
+- **출시 전 법무 확인**: ai_data_use 2026-11-20판의 "자기소개서를 만들 때 인사이트 자동 시작" 문장과 재동의 생략(UI60-E `[가정]`).
+- 4.25 백엔드 #2(인사이트 항목 읽기 함수 만들지 않음)·#3(G16 — 시작 인사 DB 3종, 상태 줄은 화면) — 변경 없음, 지금 구현이 정본. `spec-gaps-R17.md` G16 해소.

@@ -10,13 +10,13 @@ select plan(25);
 select is((select count(*)::int from public.policy_versions
             where version = '2026-11-05' and not requires_reconsent and policy_type <> 'ai_data_use'), 3,
           'three 2026-11-05 policy versions without reconsent');
--- Current versions (R15, CF-S6 2026-11-09): terms·privacy·ai_data_use moved to 2026-11-09; 국외 이전 stays at
+-- Current versions (R17, UI60-E 2026-11-20): terms·privacy·ai_data_use moved to 2026-11-20; 국외 이전 stays at
 -- 2026-11-08 (not part of that revision).
 select is(private.current_policy_version('cross_border_transfer'), '2026-11-08',
           '2026-11-08 is still current for 국외 이전 (R14, RM-1; not revised by CF-S6)');
-select is(private.current_policy_version('privacy'), '2026-11-09', 'privacy is current at 2026-11-09 (CF-S6)');
-select is(private.current_policy_version('ai_data_use'), '2026-11-09', 'ai_data_use is current at 2026-11-09 (CF-S6)');
-select is(private.current_policy_version('terms'), '2026-11-09', 'terms is current at 2026-11-09 (CF-S6)');
+select is(private.current_policy_version('privacy'), '2026-11-20', 'privacy is current at 2026-11-20 (UI60-E)');
+select is(private.current_policy_version('ai_data_use'), '2026-11-20', 'ai_data_use is current at 2026-11-20 (UI60-E)');
+select is(private.current_policy_version('terms'), '2026-11-20', 'terms is current at 2026-11-20 (UI60-E)');
 -- The R14 tie-break rule (two versions on one effective_at -> the later revision, byte order, wins) is no longer
 -- visible through "the current version", so it is checked on the two tied rows directly, with the same ORDER BY
 -- the function uses, and on the function's own definition.

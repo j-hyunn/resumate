@@ -52,7 +52,7 @@ export interface RequirementInfo {
   content: string
 }
 
-/** (v5.21, JR-Q2 보류) S-16 머리 "임시 상태" 줄 — 문구는 명세에 없다 `[UI-가정]` */
+/** (v5.21, JR-Q2 보류) S-16 머리 "임시 상태" 줄 — 문구 출처 UX v5.21 5.1o "UI60" 표(UI60-D, decisions 3.30·4.25 UI #2) */
 export const INSIGHT_INTERIM_NOTE = "지금 인사이트는 임시 구성이에요. AI가 공고 원문에서 요건을 찾아 내 커리어와 맞춰 봐요"
 /** (v5.21, JR-Q3 (b)) 옛 인사이트 `[가정: 문구]` */
 export const INSIGHT_OLD_SCHEMA_NOTE = "공고 처리 방식이 바뀌어 다시 만들어야 해요"

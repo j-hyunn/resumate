@@ -21,10 +21,9 @@ import type {
   Insight,
   InsightResult,
   JdRawTextRefusalCode,
-  JdRequirement,
   JobDescription,
 } from "@/types/db"
-import type { ApplicationSummary, CreateApplicationResult, JobDescriptionWithRequirements, ListApplicationsOptions, UpdateFailedJdRawTextResult } from "./applications"
+import type { ApplicationSummary, CreateApplicationResult, JobDescriptionView, ListApplicationsOptions, UpdateJdRawTextResult } from "./applications"
 import { summarize } from "./applications"
 import { refusalOf, unwrap } from "./source"
 
@@ -119,7 +118,7 @@ export async function realCreateApplicationProject(input: {
 
 // ---------------- S-15 ----------------
 
-export async function realGetJobDescription(applicationProjectId: string): Promise<JobDescriptionWithRequirements | null> {
+export async function realGetJobDescription(applicationProjectId: string): Promise<JobDescriptionView | null> {
   if (!isUuid(applicationProjectId)) return null
   const view = await applicationActions.getJdView({ id: applicationProjectId })
   if ("error" in view && view.error.code === "not_found") return null
@@ -137,7 +136,7 @@ export async function realGetJobDescription(applicationProjectId: string): Promi
 const RAW_TEXT_REFUSALS = [...JD_RAW_TEXT_REFUSAL_CODES, "not_found", "invalid_input"] as const
 
 /** RPC update_jd_raw_text (JR-7): the DM's codes → the screen's refusal names. */
-export async function realUpdateFailedJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateFailedJdRawTextResult> {
+export async function realUpdateJdRawText(applicationProjectId: string, rawText: string): Promise<UpdateJdRawTextResult> {
   const r = refusalOf(await applicationActions.updateJdRawText({ id: applicationProjectId, rawText }), RAW_TEXT_REFUSALS)
   if ("refused" in r) {
     const refused: JdRawTextRefusalCode = r.refused === "not_found" ? "job_description_not_found" : r.refused === "invalid_input" ? "invalid_raw_text" : r.refused
@@ -148,12 +147,6 @@ export async function realUpdateFailedJdRawText(applicationProjectId: string, ra
     job_description_id: r.data.jobDescriptionId,
     raw_text_edited_at: r.data.rawTextEditedAt,
   }
-}
-
-/** R17 (4.24 #1): `jd_requirements` is dropped — there is no requirement row to show (S-10 "관련 요건", UI 요청). */
-export async function realGetJdRequirement(id: string): Promise<JdRequirement | null> {
-  void id
-  return null
 }
 
 // ---------------- S-16 ----------------

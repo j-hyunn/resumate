@@ -133,7 +133,12 @@ function stageRow(stages: AiProgressStage[], stage: AiProgressStage | undefined)
   return i < 0 ? 0 : i
 }
 
-function countText(progress: AiJobProgress | null | undefined) {
+/**
+ * "(2/6)" done/total units. (v5.21, JR-Q2 보류) insight `match` is one call — no processing units are shown, even
+ * when an old job row still carries a count.
+ */
+function countText(progress: AiJobProgress | null | undefined, jobType?: AiJobType | null) {
+  if (jobType === "insight") return null
   return progress && progress.total ? `${progress.done ?? 0}/${progress.total}` : null
 }
 
@@ -142,8 +147,8 @@ function countText(progress: AiJobProgress | null | undefined) {
  * // [UI-가정] baseline values — spec only gives the insight example ("1분 30초" on free).
  */
 const PAID_ESTIMATE_SEC: Partial<Record<AiJobType, number>> = {
-  jd_extraction: 15,
-  insight: 45,
+  // (v5.21, JR-Q2 보류) stage 1 is one long call — free tier "2분 정도 걸려요" `[가정]` (C-03 무료 등급 순차 모드)
+  insight: 60,
   career_description: 40,
   cover_letter: 45,
   draft_source_ranking: 15,
@@ -156,10 +161,14 @@ function formatDuration(sec: number): string {
   return s ? `${m}분 ${s}초` : `${m}분`
 }
 
-/** "무료 등급이라 하나씩 처리해요 · 1분 30초 정도 걸려요" */
+/**
+ * "무료 등급이라 하나씩 처리해요 · 1분 30초 정도 걸려요". (v5.21, JR-Q2 보류) insight has no processing units —
+ * "무료 등급이라 조금 더 걸려요 · 2분 정도 걸려요" `[가정]` (C-03 무료 등급 순차 모드)
+ */
 export function freeTierLine(jobType: AiJobType): string {
   const paid = PAID_ESTIMATE_SEC[jobType]
-  return paid ? `무료 등급이라 하나씩 처리해요 · ${formatDuration(paid * 2)} 정도 걸려요` : "무료 등급이라 하나씩 처리해요"
+  const lead = jobType === "insight" ? "무료 등급이라 조금 더 걸려요" : "무료 등급이라 하나씩 처리해요"
+  return paid ? `${lead} · ${formatDuration(paid * 2)} 정도 걸려요` : lead
 }
 
 /** Seconds left of the provider rate-limit wait (progress.waiting_retry_until), null when not waiting */
@@ -197,11 +206,11 @@ export function AiProgress({
   const waitSec = useRetryWait(progress)
   const stages = STAGE_SEQUENCE[jobType] ?? (progress ? [progress.stage] : [])
   const currentIndex = stageRow(stages, progress?.stage)
-  const count = countText(progress)
+  const count = countText(progress, jobType)
   const percent =
     stages.length === 0
       ? 0
-      : ((Math.max(0, currentIndex) + (progress?.total ? (progress.done ?? 0) / progress.total : 0)) / stages.length) * 100
+      : ((Math.max(0, currentIndex) + (count && progress?.total ? (progress.done ?? 0) / progress.total : 0)) / stages.length) * 100
 
   return (
     <section
@@ -278,7 +287,7 @@ export function AiProgressInline({
   jobType?: AiJobType | null
   className?: string
 }) {
-  const count = countText(progress)
+  const count = countText(progress, jobType)
   const waitSec = useRetryWait(progress)
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-sm text-ai-subtle-foreground", className)} role="status">

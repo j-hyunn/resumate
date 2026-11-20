@@ -43,14 +43,15 @@ export const routes = {
     // `edit` [UI-가정] = open the S-43 edit on arrival (C-09 project_fields → 내용)
     `/career?item=${kind}:${encodeURIComponent(id)}${query?.edit ? `&edit=${query.edit}` : ""}`, // S-08 (id encoded, UQ-428)
   /**
-   * S-10 새 프로젝트 (UX v5.6 URL [가정]): `?experience={id}` or `?education={id}`; `requirement_id` = S-16 관련 요건
+   * S-10 새 프로젝트 (UX v5.6 URL [가정]): `?experience={id}` or `?education={id}`. (v5.21, JR-1) the S-16
+   * `requirement_id` is gone — a 보완점 gap travels in the return target (`insight_id`·`insight_item_key`).
    */
-  projectPageNew: (affiliation: ({ experience: Id } | { education: Id }) & { requirement_id?: Id }) => withQuery("/career/projects/new", affiliation), // S-10
+  projectPageNew: (affiliation: { experience: Id } | { education: Id }) => withQuery("/career/projects/new", affiliation), // S-10
   /**
    * S-10 프로젝트 상세. `chat` = the open panel chat (`?chat=`, [가정]); `focus` = a STAR 칸 (C-02 → that 칸) or
-   * `star` (C-09 project_star → the first empty STAR 칸); `requirement_id` = S-16 관련 요건.
+   * `star` (C-09 project_star → the first empty STAR 칸).
    */
-  projectPage: (id: Id, query?: { chat?: Id; focus?: ProjectStarField | "star"; requirement_id?: Id }) => withQuery(`/career/projects/${id}`, query), // S-10
+  projectPage: (id: Id, query?: { chat?: Id; focus?: ProjectStarField | "star" }) => withQuery(`/career/projects/${id}`, query), // S-10
   /** S-44 새 산출물 (`/career/projects/{project_id}/deliverables/new`, [가정]) */
   deliverableNew: (projectId: Id) => `/career/projects/${projectId}/deliverables/new`, // S-44
   /**
@@ -79,7 +80,9 @@ export const routes = {
    * 서류 id는 주소에 넣지 않는다(지원 프로젝트당 정본 1행, CF-A2).
    * `tab` = 왼쪽 탭(없으면 자소서): `jd` = S-15 채용 공고 · `insight` = S-16 인사이트 `[가정]`.
    * `chat` = 연 대화(`?chat={writing_chat_id}`) `[가정]`.
-   * `edit`·`from`·`cause` = Q53-2 "입력 원인 실패의 이동"으로 채용 공고 탭을 원문 수정 상태로 열 때
+   * `s` = 채용 공고 탭에서 강조할 문장(`?tab=jd&s=S3,S4` — v5.21, JR-Q1 `[가정: 주소 모양]`): C-01 `jd_sentence` 칩은
+   * 문장 하나, S-16 요건 행 "공고 원문" 링크는 `sids` 전체.
+   * `edit`·`from` = C-20 "입력 원인 실패의 이동"으로 채용 공고 탭을 공고 내용 수정 상태로 열 때
    * (`from`은 "{인사이트 / 자소서} 탭으로 돌아가기" 링크를 고른다 — v5.20, CF-A12).
    */
   coverLetter: (
@@ -87,9 +90,9 @@ export const routes = {
     query?: {
       tab?: "jd" | "insight"
       chat?: Id
+      s?: string
       edit?: 1
       from?: "insight" | "cover_letter"
-      cause?: "not_a_jd" | "input_too_long" | "safety_blocked"
     },
   ) => withQuery(`/applications/${id}/cover-letter`, query), // S-46 (+ S-15 · S-16 탭, S-18 문항 설정 상태)
 

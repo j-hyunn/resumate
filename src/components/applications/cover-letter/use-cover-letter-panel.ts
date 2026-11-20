@@ -105,8 +105,6 @@ export interface CoverLetterPanelOptions {
   formSnapshot: Array<{ slot: string; question_text: string; char_limit: number; count_basis: string; user_note: string | null; answer_title: string | null; body: string }>
   /** `?state=` 미리 보기 */
   preview: { state: string | null; autoplay: "draft" | null; turnError: AiErrorCode | null }
-  /** 요건이 아직 없다 → 시작 인사 ④ ("공고 요건 정리 중") */
-  requirementsPending: boolean
   onChatChange: (chatId: string | null) => void
   /**
    * CF-S8: 턴을 보내기 **직전**에 부른다. 저장하지 않은 문항 구성 변경이 있으면 화면이 저장하고, 성공하면
@@ -203,7 +201,7 @@ export function useCoverLetterPanel(opts: CoverLetterPanelOptions): CoverLetterP
   const messageLimitReached = coverLetterMessageLimitReached(messageCount)
 
   const answered = opts.formSnapshot.filter((q) => q.body.trim()).length
-  const greeting = coverLetterGreeting({ answered, total: opts.formSnapshot.length, requirementsPending: opts.requirementsPending })
+  const greeting = coverLetterGreeting({ answered, total: opts.formSnapshot.length })
   const offer = firstTurnOffer(opts.formSnapshot.length)
   const chips = coverLetterChips({ total: opts.formSnapshot.length, firstDraftDone: draftCount > 0 })
 

@@ -265,13 +265,14 @@ export function QuestionProposalCard({ panel, questions, filled, onFill }: Quest
                             <p className="text-sm leading-[1.7]">{b.text}</p>
                             {/*
                               블록별 출처 칩 3종 (C-15, 3.26). 공용 `SourceChip`에는 `evidence` 종류
-                              ("커리어에서" / "공고 요건에서")가 없어 여기서 같은 칩 모양(`CHIP_CLASS`)으로
-                              그린다 — 공용에 그 종류를 더하는 쪽이 깔끔하다(보고서 파운데이션 요청).
+                              ("커리어에서")가 없어 여기서 같은 칩 모양(`CHIP_CLASS`)으로 그린다 — 공용에 그 종류를
+                              더하는 쪽이 깔끔하다(보고서 파운데이션 요청). (v5.21, JR-5) 자소서 근거에는 공고 쪽 출처가
+                              없다 — `evidence` 칩은 "커리어에서" 한 갈래다(서버가 `jd_*` 출처를 거부한다).
                             */}
                             <SourceChips>
                               {b.evidence.map((e) => (
                                 <span key={`${e.source_type}-${e.source_id}`} className={cn(CHIP_CLASS, "cursor-default")} tabIndex={0}>
-                                  <span className="truncate">{e.source_type === "jd_requirement" ? "공고 요건에서" : "커리어에서"}</span>
+                                  <span className="truncate">커리어에서</span>
                                 </span>
                               ))}
                               {b.source_fact_ids.length > 0 ? (

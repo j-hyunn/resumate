@@ -153,13 +153,15 @@ export type CoverLetterTurnEvent =
 
 export const PANEL_NAME = "Resumate AI"
 
-/** 고정 안내 `[UI-가정]` (UX S-46 시작 영역) */
-export const PANEL_FIXED_NOTE = "AI는 모아 둔 커리어와 공고 요건으로 문항 초안을 제안하고, 반영은 내가 정해요"
+/** 고정 안내 `[가정]` (UX v5.21 S-46 시작 영역 — JR-5: 공고 요건 → 인사이트) */
+export const PANEL_FIXED_NOTE = "AI는 모아 둔 커리어와 인사이트로 문항 초안을 제안하고, 반영은 내가 정해요"
 
-/** 시작 인사 — `form_snapshot`으로 분기한다 (UX S-46 시작 영역 ①~④) */
-export function coverLetterGreeting(state: { answered: number; total: number; requirementsPending: boolean }): string {
-  if (state.requirementsPending) return "공고 요건을 먼저 정리하고 있어요. 끝나면 초안을 만들어 드릴게요"
-  if (state.answered === 0) return "자기소개서 문항을 함께 채워 볼까요? 모아 둔 커리어와 공고 요건으로 초안을 제안해 드려요"
+/**
+ * 시작 인사 — `form_snapshot`으로 분기한다 (UX S-46 시작 영역 ①~③). (v5.21, JR-3) ④ "요건 추출 전"은 없어졌다 —
+ * 대화는 선행 조건 없이 바로 열린다. 서버 인사(`private.writing_chat_document_greeting`, 3종)와 같은 뜻으로 맞춘다 `[UI-가정]`.
+ */
+export function coverLetterGreeting(state: { answered: number; total: number }): string {
+  if (state.answered === 0) return "자기소개서 문항을 함께 채워 볼까요? 모아 둔 커리어와 인사이트로 초안을 제안해 드려요"
   if (state.answered < state.total) return "쓰던 답변을 이어서 채워 볼게요. 비어 있는 문항부터 초안을 제안해 드릴까요?"
   return "지금 답변을 바탕으로 더 다듬어 볼게요"
 }
@@ -192,7 +194,6 @@ export const PANEL_COPY = {
   slowDraft: "긴 글이라 조금 더 걸려요",
   drafting: "초안 작성 중",
   adjusting: "글자 수 맞추는 중",
-  requirementsFirst: "공고 요건 정리 중",
   sensitive: "민감정보·회사 기밀·다른 사람의 개인정보는 쓰지 마세요",
   needsReviewBlock: "본인이 한 일이 맞는지, 원래 말과 같은지 확인해 주세요",
 } as const

@@ -27,17 +27,19 @@ const provider = (byFeature: Feature[]): Provider => ({
   priceTableVersions: [],
 })
 
-describe("usageRowsOf (S-42 5행)", () => {
-  it("always returns the 5 display rows in the fixed order, zero when there is no record", () => {
+describe("usageRowsOf (S-42 기본 4행 + 과거 기록 행, v5.21 JR-Q5)", () => {
+  it("always returns the 4 base rows in the fixed order, zero when there is no record", () => {
     const rows = usageRowsOf(undefined)
-    expect(rows.map((r) => r.label)).toEqual([
-      "프로젝트/산출물 작성 AI 채팅",
-      "채용 공고 분석(이전)",
-      "인사이트",
-      "자기소개서 작성 AI 채팅",
-      "연결 확인",
-    ])
+    expect(rows.map((r) => r.label)).toEqual(["프로젝트/산출물 작성 AI 채팅", "인사이트", "자기소개서 작성 AI 채팅", "연결 확인"])
     expect(rows.every((r) => r.calls === 0 && r.inputCost === 0 && r.outputCost === 0)).toBe(true)
+  })
+
+  it("adds the legacy 'JD 요건 추출(종료)' row last, only when the month has jd_extraction records", () => {
+    const rows = usageRowsOf(provider([bucket("insight"), bucket("jd_extraction")]))
+    expect(rows.map((r) => r.label).at(-1)).toBe("JD 요건 추출(종료)")
+    expect(rows.at(-1)?.legacy).toBe(true)
+    expect(rows).toHaveLength(5)
+    expect(usageRowsOf(provider([bucket("jd_extraction", { calls: 0 })])).map((r) => r.label)).not.toContain("JD 요건 추출(종료)")
   })
 
   it("folds career_description + cover_letter into one row and sums the stored cost columns", () => {

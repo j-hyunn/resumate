@@ -6,7 +6,7 @@
  * **한 주소 두 상태**(CF-A11): 자소서 정본 행(`application_documents`)이 없으면 **문항 설정 상태**,
  * 있으면 **작성 상태**. 행을 만드는 길은 `save_application_document` 첫 호출 하나이고, 그 호출은
  * **[자기소개서 작성 시작]**에서만 일어난다(**CF-S3** — 문항 설정 상태의 상단 바 "저장하기"는 늘
- * 비활성이고 ⌘S도 끈다). 대화 시작·턴·요건 추출은 행을 만들지 않는다.
+ * 비활성이고 ⌘S도 끈다). 대화 시작·턴은 행을 만들지 않는다((v5.21, JR-1) 요건 추출은 없어졌다).
  *
  * 작성 상태 본문은 왼쪽 탭 3개(**자소서** / **채용 공고**(S-15) / **인사이트**(S-16))다. 탭은 `?tab=`과
  * 짝이지만 **클라이언트 상태로 바꾸고 주소는 `replaceState`로만 맞춘다** — 서버 재렌더가 일어나면
@@ -56,6 +56,9 @@ import { CoverLetterPanel } from "./cover-letter-panel"
 import { useCoverLetterPanel } from "./use-cover-letter-panel"
 import type { QuestionFill } from "./question-proposal-card"
 import { QuestionSetup } from "./question-setup"
+import { JD_TAB_LEFT_EVENT, parseSentenceParam } from "../jd-highlight"
+import { JdHighlightRequestContext, type JdHighlightRequest } from "../jd-highlight-context"
+import type { CoverLetterInsightState } from "./insight-notice"
 import { expectedVersion, restorableCopy, staleDialogReloadOnly } from "./save-version"
 import {
   createSlotAllocator,
@@ -97,13 +100,16 @@ export interface CoverLetterScreenData {
   seed_question_ids: string[]
   /** `getEvidence("application_document", doc.id)` — C-11 */
   evidence: Record<string, EvidenceView[]>
-  /** 키가 있고 요건이 아직 없다 → [자기소개서 작성 시작]이 AI-01을 먼저 돌린다 */
-  extract_first: boolean
+  /**
+   * (v5.21, JR-5·JR-6) 이 자기소개서의 인사이트 — 문항 설정 상태의 "만드는 중" 줄(자동 시작, FL-10)과 패널 시작 영역의
+   * 안내 줄. 자소서 대화는 공고 원문이 아니라 최신 인사이트를 읽는다
+   */
+  insight: CoverLetterInsightState
   /** 패널 머리 "대화 기록 목록" (이 자기소개서의 대화) */
   chats: import("@/lib/data/cover-letter-chat-types").CoverLetterChatSummary[]
   /** `?chat=`으로 연 대화 */
   open_chat: import("@/lib/data/cover-letter-chat-types").CoverLetterChatView | null
-  preview: { state: string | null; extractFail: import("@/types/db").AiErrorCode | null }
+  preview: { state: string | null }
 }
 
 const PANEL_OPEN_KEY = "resumate:l02:cover_letter:panel"
@@ -231,14 +237,61 @@ export function CoverLetterScreen({
 
   // ---------- 탭 (주소는 replaceState로만 맞춘다) ----------
   const [tab, setTab] = React.useState<CoverLetterTab>(initialTab)
+  // A link to this page with another `?tab=` (C-02 공고 원문 칩 → `?tab=jd&s=S3`, S-16 요건 행 "공고 원문") re-renders the
+  // server part; the client state keeps the forms, so only the tab follows the new address
+  const [seenInitialTab, setSeenInitialTab] = React.useState(initialTab)
+  if (seenInitialTab !== initialTab) {
+    setSeenInitialTab(initialTab)
+    setTab(initialTab)
+  }
   const changeTab = React.useCallback((next: string) => {
     const value = (next === "jd" || next === "insight" ? next : "cover_letter") as CoverLetterTab
     setTab(value)
     const url = new URL(window.location.href)
     if (value === "cover_letter") url.searchParams.delete("tab")
     else url.searchParams.set("tab", value)
+    // (v5.21) leaving the 채용 공고 tab clears its sentence highlight `[가정]`
+    if (value !== "jd") {
+      url.searchParams.delete("s")
+      window.dispatchEvent(new Event(JD_TAB_LEFT_EVENT))
+    }
     window.history.replaceState(window.history.state, "", url.pathname + url.search)
   }, [])
+
+  // ---------- 채용 공고 탭 문장 하이라이트 (UQ-614) ----------
+  // "공고 원문" 링크(S-16 요건 행)·`jd_sentence` 근거 칩(C-01 → C-02)은 이 페이지의 `?tab=jd[&s=…]` 주소다. 서버 재렌더에
+  // 기대면 같은 링크를 다시 누르거나(주소가 같다) 탭을 떠났다 돌아온 뒤에는 탭·강조가 따라오지 않는다 → 클릭을 여기서 받아
+  // 클라이언트에서 탭을 바꾸고 nonce 붙은 요청으로 강조를 다시 건다. 이 리스너는 이탈 확인(`useLeaveGuard`, 아래)보다
+  // **먼저** 등록돼야 한다 — 같은 페이지 안의 이동이라 "저장하지 않고 떠날까요?"를 묻지 않는다.
+  const [jdRequest, setJdRequest] = React.useState<JdHighlightRequest | null>(null)
+  const openJd = React.useCallback(
+    (sids: string[]) => {
+      changeTab("jd")
+      setJdRequest((prev) => ({ sids, nonce: (prev?.nonce ?? 0) + 1 }))
+      const url = new URL(window.location.href)
+      if (sids.length) url.searchParams.set("s", sids.join(","))
+      else url.searchParams.delete("s")
+      window.history.replaceState(window.history.state, "", url.pathname + url.search)
+    },
+    [changeTab],
+  )
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null
+      if (!a || a.target === "_blank") return
+      const url = new URL(a.href, window.location.href)
+      if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.searchParams.get("tab") !== "jd") return
+      // `edit=1` (C-20 "공고 원문 고치기") needs the server to open the editor — let it navigate
+      if (url.searchParams.get("edit") === "1") return
+      // preventDefault only (UQ-622): the link's own onClick must still run (e.g. C-02 "원본으로 이동" closes its panel).
+      // Next Link skips navigation for a prevented click, and the leave guard skips prevented clicks too.
+      e.preventDefault()
+      openJd(parseSentenceParam(url.searchParams.get("s")))
+    }
+    document.addEventListener("click", onClick, true)
+    return () => document.removeEventListener("click", onClick, true)
+  }, [openJd])
 
   // ---------- 저장 (save_application_document 한 번 — 본문 + 머리 제목·마감일) ----------
   const formsRef = React.useRef(forms)
@@ -418,7 +471,6 @@ export function CoverLetterScreen({
       autoplay: previewState === "draft-stream" || previewState === "draft-failed" ? "draft" : null,
       turnError: previewState === "draft-failed" ? "provider_unavailable" : null,
     },
-    requirementsPending: data.extract_first,
     // CF-S8 (확정 2026-11-10, 사용자): 저장하지 않은 문항 **구성** 변경(추가·삭제·순서)이 있으면 턴 전에
     // "저장하기"와 **같은 경로**(`runSave`)로 먼저 저장한다 — 기대 버전·CF-S7·slot_high_water·question_id 보존·
     // 반영한 제안(`applied_proposals`)이 평소 저장 그대로 적용된다. 실패하면 `false` → 턴을 보내지 않는다.
@@ -530,6 +582,7 @@ export function CoverLetterScreen({
         <FieldRow label="마감일" labelId="cl-deadline-label">
           {/* 일 단위 (CF-4) — 시안의 연·월 두 셀렉트 대신 같은 높이·테두리의 날짜 칸 하나 */}
           <Input
+            id="cl-deadline"
             type="date"
             aria-labelledby="cl-deadline-label"
             className="w-[11rem]"
@@ -540,7 +593,16 @@ export function CoverLetterScreen({
             }}
           />
           {deadline ? (
-            <Button variant="ghost" size="icon-xs" aria-label="마감일 비우기" onClick={() => setDeadline("")}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="마감일 비우기"
+              onClick={() => {
+                setDeadline("")
+                // UQ-618: the × disappears — keep focus on the date field
+                document.getElementById("cl-deadline")?.focus()
+              }}
+            >
               <X aria-hidden />
             </Button>
           ) : null}
@@ -668,14 +730,13 @@ export function CoverLetterScreen({
               }}
               onStart={async () => {
                 setStarting(true)
-                // 순서 = 추출(요건 선행, QuestionSetup이 먼저 돌린다) → **성공 뒤** 저장 (v5.20 정정, DM-3)
+                // (v5.21, JR-3) 검증 → 저장만 — AI를 부르지 않는다(키 유무와 관계없이 같다)
                 const ok = await runSave({ createRow: true })
                 setStarting(false)
                 return ok
               }}
               starting={starting}
-              extractFirst={data.extract_first}
-              extractFailPreview={data.preview.extractFail}
+              insight={data.insight}
               focusIndex={focusIndex}
             />
           </div>
@@ -710,7 +771,7 @@ export function CoverLetterScreen({
                       {answerTab}
                     </TabsContent>
                     <TabsContent value="jd" forceMount className={cn(tab !== "jd" && "hidden")}>
-                      {jdTab}
+                      <JdHighlightRequestContext.Provider value={jdRequest}>{jdTab}</JdHighlightRequestContext.Provider>
                     </TabsContent>
                     <TabsContent value="insight" forceMount className={cn(tab !== "insight" && "hidden")}>
                       {insightTab}
@@ -725,6 +786,8 @@ export function CoverLetterScreen({
                     questions={forms.map((f) => ({ slot: f.slot, question_text: f.question_text, answer_title: f.answer_title, body: f.body }))}
                     filled={applied.map((a) => ({ slot: a.slot, rev: a.rev }))}
                     onFill={onFill}
+                    insight={data.insight}
+                    onOpenInsight={() => changeTab("insight")}
                   />
                 }
               />
@@ -767,7 +830,7 @@ export function CoverLetterScreen({
 
 /**
  * `?state=` 미리 보기로 폼을 만든다 (화면 모양만 바꾸고 저장소는 건드리지 않는다):
- * - `questions` / `extracting` / `extract-failed*` → 기본 3문항(문항 설정 상태)
+ * - `questions` / `questions-insight-generating` → 기본 3문항(문항 설정 상태)
  * - `questions-invalid` → 문항 1개를 비우고 글자 수 제한도 비운다(검증 오류)
  * - `questions-max` → 5문항("+ 문항 추가" 비활성)
  * - `empty-answers` → 정본 행의 제목·답변을 비운 작성 상태(빈 상태 상자)

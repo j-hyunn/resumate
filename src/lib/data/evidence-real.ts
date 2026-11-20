@@ -47,7 +47,6 @@ export async function loadEvidenceRows(ownerType: EvidenceOwnerType, ownerIds: s
     project_details: [],
     achievements: [],
     skills,
-    jd_requirements: [],
     /**
      * R15 (CF-1): `user_note` evidence no longer points at a `draft_sections` row — its
      * `source_id` is `application_documents.body.questions[].question_id` (CF-S1), which has no

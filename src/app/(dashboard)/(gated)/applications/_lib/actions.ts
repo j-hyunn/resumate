@@ -10,7 +10,7 @@
  * `markDraftCopiedAction` — S-17·S-19·S-45가 없어지고 초안은 S-46 패널의 초안 턴이 만든다.
  */
 import type { AiErrorCode, ApplicationProject, InsightSkipReason } from "@/types/db"
-import { createApplicationProject, startInsight, updateApplicationProject, updateFailedJdRawText } from "@/lib/data/applications"
+import { createApplicationProject, startInsight, updateApplicationProject, updateJdRawText } from "@/lib/data/applications"
 import { deleteApplicationProject } from "@/lib/data/deletion"
 import { withAiGuard } from "@/lib/data/ai-guard"
 // (v5.20, CF-1·CF-5) 폐기된 `draft_sections` 행 단위 문항 액션은 쓰는 화면이 없어졌다.
@@ -40,19 +40,23 @@ export async function createApplicationAction(input: {
   /** (v5.20, CF-10·CF-A16) ①의 공고 URL → `p_source_url` */
   source_url?: string | null
   fail?: boolean
-}): Promise<CreateApplicationOutcome | { refused: "invalid_source_url" }> {
+}): Promise<CreateApplicationOutcome | { refused: CreateApplicationRefusal }> {
   if (input.fail) throw new Error("save failed (mock)")
   const raw = input.raw_text.trim()
   if (!raw) throw new Error("raw_text required")
   try {
     return await createApplicationGuarded(input, raw)
   } catch (e) {
-    // `invalid_source_url`(400)은 값으로 돌려준다 — 던지면 Server Action 경계에서 `code`를 잃어
-    // 화면이 "주소 없이 만들기"를 띄울 수 없다 (UX S-14 "주소 저장 불가")
+    // 입력 거부(400)는 값으로 돌려준다 — 던지면 Server Action 경계에서 `code`를 잃어 화면이 그 자리 문구를 띄울 수 없다:
+    // `invalid_source_url` → "주소 없이 만들기"(UX S-14 "주소 저장 불가"), (v5.21) `jd_no_sentences` → 공고 내용 칸 아래 문구
     if (isAppError(e) && e.code === "invalid_source_url") return { refused: "invalid_source_url" }
+    if (isAppError(e) && e.code === "jd_no_sentences") return { refused: "jd_no_sentences" }
     throw e
   }
 }
+
+/** S-14 생성 입력 거부 (CREATE_APPLICATION_ERROR_CODES, DM v4.16) */
+export type CreateApplicationRefusal = "invalid_source_url" | "jd_no_sentences"
 
 async function createApplicationGuarded(input: Parameters<typeof createApplicationAction>[0], raw: string): Promise<CreateApplicationOutcome> {
   // (v5.20, CF-A7) 이름 규칙 "{기업 명} 자기소개서"는 data layer(createApplicationProject)가 정한다
@@ -70,7 +74,7 @@ async function createApplicationGuarded(input: Parameters<typeof createApplicati
 
 /**
  * S-14 ② [자기소개서 작성]의 결과 (R17: 미리 보기 적용 결과 키 삭제). JR-6 (4.24 #10): 생성 직후 자동으로 시작한
- * 인사이트 작업 id(없으면 null)와 건너뛴 이유 — 화면 표시는 UI 요청
+ * 인사이트 작업 id(없으면 null)와 건너뛴 이유. S-46은 진행 중 인사이트 작업을 읽어 "만드는 중"을 보인다(FL-10)
  */
 export interface CreateApplicationOutcome {
   id: string
@@ -79,8 +83,8 @@ export interface CreateApplicationOutcome {
 }
 
 /** 채용 공고 탭 공고 원문 저장 (JR-7, RPC update_jd_raw_text): `{ refused }` = nothing changed */
-export async function updateFailedJdRawTextAction(applicationProjectId: string, rawText: string) {
-  return updateFailedJdRawText(applicationProjectId, rawText)
+export async function updateJdRawTextAction(applicationProjectId: string, rawText: string) {
+  return updateJdRawText(applicationProjectId, rawText)
 }
 
 export async function updateApplicationAction(
@@ -100,10 +104,17 @@ export async function deleteApplicationAction(id: string) {
 
 /**
  * v4: key checked first on the server (`{ rejected }` → nothing changed). R17: no AI-01 first — AI-02
- * reads the JD raw text. No service limit (D-34).
+ * reads the JD raw text. No service limit (D-34). (v5.21) A JD without sentences is refused (409
+ * `jd_no_sentences`, no job) — returned as `{ refused }` so S-16 can show its line (a thrown code is lost
+ * at the Server Action boundary).
  */
 export async function startInsightAction(applicationProjectId: string, fail?: AiErrorCode, opts?: { rate_wait?: boolean }) {
-  return withAiGuard(() => startInsight(applicationProjectId, { fail: fail ?? null, rate_wait: opts?.rate_wait }))
+  try {
+    return await withAiGuard(() => startInsight(applicationProjectId, { fail: fail ?? null, rate_wait: opts?.rate_wait }))
+  } catch (e) {
+    if (isAppError(e) && e.code === "jd_no_sentences") return { refused: "jd_no_sentences" as const }
+    throw e
+  }
 }
 
 // --- S-46 문항 설정 (옛 S-18 — A3가 다시 쓴다) ------------------------------------------------

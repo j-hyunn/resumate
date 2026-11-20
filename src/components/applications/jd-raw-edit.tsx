@@ -1,18 +1,15 @@
 "use client"
 
 /**
- * S-15 공고 원문 수정 (Q53-2, 02 S-15 표 · 04 §2.6.1). The one exception to "JD 교체 불가": a JD whose
- * extraction failed for an input cause and has no requirements. Not an AI run: works without a key,
- * saves on "저장" only, never starts an extraction (D-30).
- *
- * The provider wraps the panel and the 요건 영역 so both know the edit state: while editing,
- * "요건 정리하기" is disabled and the C-20 keeps showing the cause.
+ * S-15 공고 내용 수정 (v5.21, JR-7 — 02 S-15 "공고 내용 수정" 표 · DM v4.16 2.6.1 `update_jd_raw_text`).
+ * **공고 원문은 언제든 고칠 수 있다** — [공고 내용 수정]은 늘 보이고, 이 자기소개서의 인사이트가 대기·실행 중일 때만
+ * 비활성 + "인사이트를 만드는 중에는 수정할 수 없어요"(`rawTextLockedReason = job_in_progress`). Not an AI run:
+ * works without a key, saves on "저장" only, never starts AI (인사이트 자동 시작은 자기소개서를 만들 때만, JR-6).
  */
 import * as React from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { CircleAlert, CircleCheck, Loader2, PenLine, TriangleAlert } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,20 +21,38 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { aiErrorTitle } from "@/components/common/ai-error-notice"
 import { CharCount } from "@/components/common/input-guide"
 import { DocTextarea } from "@/components/common/doc-markdown-editor"
-import { JD_LONG_WARNING, JD_RAW_TEXT_LONG, JD_RAW_TEXT_MAX, JD_RAW_TEXT_SHORT, JD_SHORT_WARNING } from "@/lib/data/jd-raw-text"
-import { routes } from "@/lib/routes"
-import type { AiErrorCode } from "@/types/db"
-import { updateFailedJdRawTextAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
+import {
+  JD_LOCKED_IN_PROGRESS_MESSAGE,
+  JD_LONG_WARNING,
+  JD_NO_SENTENCES_MESSAGE,
+  JD_RAW_TEXT_LONG,
+  JD_RAW_TEXT_MAX,
+  JD_RAW_TEXT_SHORT,
+  JD_SHORT_WARNING,
+} from "@/lib/data/jd-raw-text"
+import type { JdRawTextRefusalCode } from "@/types/db"
+import { updateJdRawTextAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { jdRawEditReducer, jdRawEditView, jdRawFocusTarget } from "./jd-raw-edit-state"
 
-/** S-15 "저장 성공" (명세 문구) */
-const SAVED_NOTE = "저장했어요. '요건 정리하기'를 누르면 고친 공고로 다시 정리해요"
-/** S-15 "저장 실패" (명세 문구) */
+/** S-15 "저장 성공" (v5.21 `[가정]` 문구) */
+const SAVED_NOTE = "저장했어요"
+/** S-15 "저장 실패" (`[가정]` 문구) */
 const SAVE_FAILED = "저장하지 못했어요. 다시 시도해 주세요"
-const SAVE_REFUSED = "이 공고는 지금 고칠 수 없어요"
+/** [UI-가정] `jd_raw_text_unchanged` — 화면은 바뀐 내용이 없으면 "저장"을 끄지만 서버가 같다고 볼 때(앞뒤 공백 등) */
+const SAVE_UNCHANGED = "바뀐 내용이 없어요"
+
+/** `?state=raw-save-*` → the refusal the preview answers */
+export type JdRawPreviewSave = "ok" | "failed" | "refused" | "no_sentences" | null
+
+/** S-15 "저장 실패" 표: refusal code → the line under the editor (DM v4.16 codes) */
+export function jdRawRefusalCopy(code: JdRawTextRefusalCode): string {
+  if (code === "jd_job_in_progress") return JD_LOCKED_IN_PROGRESS_MESSAGE
+  if (code === "jd_no_sentences") return JD_NO_SENTENCES_MESSAGE
+  if (code === "jd_raw_text_unchanged") return SAVE_UNCHANGED
+  return SAVE_FAILED
+}
 /** [UI-가정] 저장하지 않고 떠날 때 확인 (S-15 "수정 중" 문구 없음). 떠나는 경로마다 문구가 다르다 */
 const LEAVE_COPY = {
   cancel: { title: "고친 내용을 버릴까요?", action: "버리기" },
@@ -49,8 +64,10 @@ const LEAVE_BODY = "저장하지 않은 내용은 사라져요"
 type LeaveAsk = { kind: "cancel" } | { kind: "link"; href: string } | { kind: "back" }
 
 interface JdRawEditValue {
-  /** 04 §2.6.1 조건 1~5 (getJdView.rawTextEditable), and no refused save; false → no button anywhere */
+  /** getJdView.rawTextEditable (JR-7: false only while an insight job is queued / running), and no refused save */
   editable: boolean
+  /** getJdView.rawTextLockedReason — why [공고 내용 수정] is disabled */
+  lockedReason: "job_in_progress" | null
   editing: boolean
   start: () => void
   stop: () => void
@@ -71,6 +88,7 @@ export function useJdRawEdit(): JdRawEditValue {
   return (
     React.useContext(JdRawEditContext) ?? {
       editable: false,
+      lockedReason: null,
       editing: false,
       start: none,
       stop: none,
@@ -85,12 +103,14 @@ export function useJdRawEdit(): JdRawEditValue {
 
 export function JdRawEditProvider({
   editable,
+  lockedReason = null,
   initialEditing,
   initialSaved = false,
   children,
 }: {
   editable: boolean
-  /** `?edit=1` from a C-20 "공고 원문 고치기" (S-16 · S-17 · S-18) */
+  lockedReason?: "job_in_progress" | null
+  /** `?edit=1` from a C-20 "공고 원문 고치기" (S-16 인사이트 입력 원인 실패) */
   initialEditing: boolean
   /** `?state=raw-saved` */
   initialSaved?: boolean
@@ -99,9 +119,12 @@ export function JdRawEditProvider({
   const [state, dispatch] = React.useReducer(jdRawEditReducer, { editing: initialEditing, refused: false, saved: initialSaved })
   const view = jdRawEditView(state, editable)
   const pendingFocus = React.useRef(false)
+  // a refused save (`jd_job_in_progress`) reads as locked until the server says otherwise
+  const reason = lockedReason ?? (state.refused ? "job_in_progress" : null)
   const value = React.useMemo<JdRawEditValue>(
     () => ({
       editable: view.editable,
+      lockedReason: reason,
       editing: view.editorOpen,
       start: () => dispatch("start"),
       stop: () => {
@@ -121,32 +144,49 @@ export function JdRawEditProvider({
         return take
       },
     }),
-    [view.editable, view.editorOpen, state.saved],
+    [view.editable, view.editorOpen, state.saved, reason],
   )
   return <JdRawEditContext.Provider value={value}>{children}</JdRawEditContext.Provider>
 }
 
-/** Head of the 공고 원문 panel: "공고 원문 고치기" (no key needed) */
+/**
+ * Head of the 공고 원문 panel: **[공고 내용 수정]** (v5.21, JR-7) — always shown (no key needed). Disabled while an
+ * insight is queued / running, with the reason next to it `[가정]` 문구.
+ */
 export function JdRawEditButton() {
   const edit = useJdRawEdit()
   const button = React.useRef<HTMLButtonElement>(null)
-  const shown = edit.editable && !edit.editing
   // UQ-608: 취소 → the textarea is gone; after 저장 the saved note takes it instead
   React.useEffect(() => {
     if (jdRawFocusTarget(edit) === "button" && edit.takeFocus()) button.current?.focus()
   }, [edit])
-  if (!shown) return null
+  if (edit.editing) return null
+  const locked = !edit.editable
   return (
-    <Button ref={button} variant="outline" size="sm" onClick={edit.start}>
-      <PenLine aria-hidden />
-      공고 원문 고치기
-    </Button>
+    <span className="flex flex-wrap items-center justify-end gap-2">
+      {locked && edit.lockedReason === "job_in_progress" ? (
+        <span id="jd-raw-locked-reason" className="text-sm text-muted-foreground">
+          {JD_LOCKED_IN_PROGRESS_MESSAGE}
+        </span>
+      ) : null}
+      <Button
+        ref={button}
+        variant="outline"
+        size="sm"
+        disabled={locked}
+        aria-describedby={locked && edit.lockedReason ? "jd-raw-locked-reason" : undefined}
+        onClick={edit.start}
+      >
+        <PenLine aria-hidden />
+        공고 내용 수정
+      </Button>
+    </span>
   )
 }
 
 /**
- * Title of the 공고 원문 panel. UQ-608 remaining case: after a refused save (the condition was taken away)
- * "취소" closes the textarea and there is no "공고 원문 고치기" to take focus — the title does, not <body>.
+ * Title of the 공고 원문 panel. UQ-608 remaining case: after a refused save (an insight started meanwhile)
+ * "취소" closes the textarea and the disabled [공고 내용 수정] can't take focus — the title does, not <body>.
  */
 export function JdRawPanelTitle({ children }: { children: React.ReactNode }) {
   const edit = useJdRawEdit()
@@ -161,36 +201,7 @@ export function JdRawPanelTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-/**
- * S-15 "요건이 있는 공고" (Q53-9): reached from an input-caused 인사이트 failure. The text can't
- * be edited (Q53-2 범위 밖), so this says what to do instead of a dead end. [가정 명세]
- */
-export function JdLockedNotice({ cause, hasResults = false }: { cause: AiErrorCode; hasResults?: boolean }) {
-  return (
-    <Alert variant="warning">
-      <TriangleAlert aria-hidden />
-      <AlertTitle>{aiErrorTitle(cause, { reduceTarget: "공고 원문" })}</AlertTitle>
-      <AlertDescription className="space-y-2">
-        <p>
-          {hasResults
-            ? // [UI-가정] Q53-11 `succeeded` + 요건 0개 + 이 원문으로 만든 결과 있음
-              "이 공고로 만든 결과가 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가해 주세요"
-            : "이 공고는 요건이 정리되어 있어 원문을 고칠 수 없어요. 공고가 원인이면 새 자기소개서로 추가하고, 커리어가 길면 줄인 뒤 다시 실행해 주세요"}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={routes.applicationNew()}>새 자기소개서 추가</Link>
-          </Button>
-          {hasResults ? null : (
-            <Button asChild variant="outline" size="sm">
-              <Link href={routes.career()}>커리어 정리하기</Link>
-            </Button>
-          )}
-        </div>
-      </AlertDescription>
-    </Alert>
-  )
-}
+// (v5.21, JR-7) `JdLockedNotice` ("요건이 있는 공고", Q53-9·Q53-11) is gone — the raw text is always editable.
 
 export function JdRawSavedNote() {
   const edit = useJdRawEdit()
@@ -217,7 +228,7 @@ export function JdRawEditor({
   applicationProjectId: string
   rawText: string
   /** `?state=raw-*`: no write. "ok" pretends it saved; the others show that answer */
-  previewSave?: "ok" | "failed" | "refused" | null
+  previewSave?: JdRawPreviewSave
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -310,17 +321,21 @@ export function JdRawEditor({
     setError(null)
     try {
       if (previewSave === "failed") throw new Error("save failed (preview)")
-      const result =
+      const result: { refused: JdRawTextRefusalCode } | Awaited<ReturnType<typeof updateJdRawTextAction>> | null =
         previewSave === "refused"
-          ? { refused: "jd_raw_text_locked" as const }
-          : previewSave === "ok"
-            ? null
-            : await updateFailedJdRawTextAction(applicationProjectId, trimmed)
+          ? { refused: "jd_job_in_progress" }
+          : previewSave === "no_sentences"
+            ? { refused: "jd_no_sentences" }
+            : previewSave === "ok"
+              ? null
+              : await updateJdRawTextAction(applicationProjectId, trimmed)
       if (result && "refused" in result) {
-        // 조건에서 벗어남 (다른 탭에서 추출 중·성공): input kept + 최신 상태 다시 읽기.
+        setError(jdRawRefusalCopy(result.refused))
+        // `jd_no_sentences` / `jd_raw_text_unchanged`: input kept, fix and save again
+        if (result.refused !== "jd_job_in_progress") return
+        // 그 사이 인사이트가 시작됨 (다른 탭): input kept + 최신 상태 다시 읽기.
         // The refusal is recorded first so the read-back can't close the editor (UQ-601)
         edit.markRefused()
-        setError(SAVE_REFUSED)
         if (previewSave === "refused") {
           // same read-back, driven by the URL: the page answers `editable = false`
           const next = new URLSearchParams(params.toString())

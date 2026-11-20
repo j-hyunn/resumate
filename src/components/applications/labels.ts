@@ -1,18 +1,8 @@
 /**
  * 자기소개서 관리 표시 라벨 (client-safe). 문구는 명세가 주면 그대로, `[UI-가정]`은 명세에 없는 것.
+ * (v5.21, JR-1) AI-01 요건 카테고리·"핵심" 배지 라벨은 없어졌다 — 요건 목록이 없다.
  */
-import type { CountBasis, GapActionType, JdRequirementCategory } from "@/types/db"
-
-/** AI-01 카테고리 기준 (03 AI-01: 주요 업무 / 자격요건 / 우대사항) */
-export const REQUIREMENT_CATEGORY_LABELS: Record<JdRequirementCategory, string> = {
-  responsibility: "주요 업무",
-  required: "자격요건",
-  preferred: "우대사항",
-}
-export const REQUIREMENT_CATEGORY_ORDER: JdRequirementCategory[] = ["responsibility", "required", "preferred"]
-
-/** importance = 'high' — // [UI-가정] design-system P-3 */
-export const IMPORTANCE_HIGH_LABEL = "핵심"
+import type { CountBasis, GapActionType } from "@/types/db"
 
 /**
  * (v5.20, CF-1·CF-7) 폐기된 라벨: `DRAFT_TYPE_LABELS`(서류 2종) · `DRAFT_STATUS_LABELS`(S-17 초안

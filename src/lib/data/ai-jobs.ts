@@ -192,7 +192,7 @@ export async function listActiveAiJobs(sinceMs = 15_000): Promise<AiJobView[]> {
   const cutoff = Date.now() - sinceMs
   const out: AiJobView[] = []
   for (const job of db.ai_jobs) {
-    if (job.job_type === "writing_chat_turn" || job.job_type === "jd_extraction") continue
+    if (job.job_type === "writing_chat_turn") continue
     const wasActive = job.status === "queued" || job.status === "running"
     if (wasActive) refresh(db, job)
     const recent = job.finished_at && Date.parse(job.finished_at) >= cutoff
@@ -279,11 +279,11 @@ export async function retryAiJob(id: string, opts?: { fail?: AiErrorCode | null;
 
 /**
  * Mock: advances this application's running async jobs and writes what they produced. For rules that
- * read "no insight is running" (update_jd_raw_text condition 3). `jd_extraction` = R17 legacy rows, skipped.
+ * read "no insight is running" (update_jd_raw_text condition 3).
  */
 export function refreshApplicationJobs(db: MockDb, applicationProjectId: string) {
   for (const job of db.ai_jobs) {
-    if (job.application_project_id !== applicationProjectId || job.job_type === "jd_extraction") continue
+    if (job.application_project_id !== applicationProjectId) continue
     if (job.status === "queued" || job.status === "running") refresh(db, job)
   }
 }

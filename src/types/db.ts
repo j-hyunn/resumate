@@ -85,12 +85,6 @@ export type StageOutcome = "passed" | "failed"
 export type StageEventType = "created" | "stage_changed" | "outcome_changed"
 
 export type FieldSource = "user" | "ai"
-/** @deprecated R17 (4.24 #1): `jd_requirements` was dropped — mock fixtures / legacy screens only. */
-export type JdRequirementCategory = "responsibility" | "required" | "preferred"
-/** @deprecated R17 (4.24 #1): mock fixtures / legacy screens only. */
-export type JdRequirementImportance = "high" | "normal"
-/** @deprecated R17 (4.24 #1): mock fixtures / legacy screens only. */
-export type JdRequirementOrigin = "ai" | "user"
 
 export type InsightStatus = "generating" | "ready" | "failed"
 export type DraftType = "career_description" | "cover_letter"
@@ -731,26 +725,7 @@ export type JobDescription = Row<"job_descriptions", {
   source_url?: string | null
 }>
 
-/**
- * @deprecated R17 (4.24 #1): the `jd_requirements` table is dropped. Kept as a plain shape only for
- * the mock fixtures and the legacy S-15 requirement column / S-10 "관련 요건" line (UI 요청) —
- * the real data layer never returns one.
- */
-export interface JdRequirement {
-  id: Uuid
-  user_id: Uuid
-  created_at: Timestamp
-  updated_at: Timestamp
-  job_description_id: Uuid
-  category: JdRequirementCategory
-  content: string
-  keywords: string[]
-  importance: JdRequirementImportance
-  source_sids: string[]
-  sort_order: number
-  origin: JdRequirementOrigin
-  is_user_edited: boolean
-}
+// R17 (4.24 #1) · UI run 60 (4.24 UI #9): `JdRequirement` and its enums are gone — `jd_requirements` is dropped.
 
 // ---------------------------------------------------------------------------
 // 2.7 인사이트·서류

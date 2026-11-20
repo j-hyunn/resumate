@@ -40,7 +40,7 @@ export const PREVIEW_STATES = [
   "insufficient",
   "insufficient-no-experience",
   "save-failed",
-  "wait-jd",
+  // (v5.21, R-JR-9) ST-WAIT-JD `wait-jd` retired
   "move-failed",
   "ai-outage",
   "return-banner",

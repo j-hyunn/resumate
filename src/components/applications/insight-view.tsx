@@ -3,15 +3,20 @@
 /**
  * S-16 인사이트 (FL-11, AI-02 비동기 작업). v4 BYOK: 키 없음 + 결과 없음 → C-18 영역형, 결과 있음 →
  * 결과는 그대로(D-36) + "다시 생성" 자리만 C-18 인라인. 생성 = AiRunButton(C-19) → C-03 진행(무료 등급
- * 순차 줄·요청 한도 대기 줄, 부분 결과 판정 표) → 요건별 판정 표 · 핵심 강점 · 보완점 · 지원 방향.
- * 실패 = C-20 block. 요건이 아직 없으면(키 없이 만든 JD) 요건 추출 먼저(D-30).
+ * 줄·요청 한도 대기 줄, 부분 결과 판정 표) → 요건별 판정 표 · 핵심 강점 · 보완점 · 지원 방향. 실패 = C-20 block.
+ *
+ * (v5.21) **요건 추출 선행 없음**(JR-3) — AI-02가 공고 원문 문장을 그대로 읽는다. AI 연결 시 자기소개서를 만들면
+ * **자동으로 시작**된다(JR-6): 작업이 있으면 처음부터 C-03 진행 표시, 끝나면 셸의 완료 토스트, 실패하면 C-20 + 다시 시도.
+ * **임시 상태**(JR-Q2 보류): 요건별 판정 표 = 단계 1 원소(`requirement_text` + "공고 원문" 링크 `sids`), 카테고리·
+ * "핵심" 배지 없음. **옛 인사이트**(`schemaVersion = 1`, JR-Q3 (b))는 본문 없이 "다시 만들어야 해요" + [다시 생성].
+ * **공고가 바뀐 인사이트**(`staleReasons.rawText`, JR-7)는 "공고가 바뀌었어요 — 다시 생성".
  */
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Circle, CircleCheck, CircleDot, Info, RefreshCw, Sparkles } from "lucide-react"
+import { Circle, CircleCheck, CircleDot, FileWarning, Info, RefreshCw, Sparkles, TextSearch } from "lucide-react"
 import { toast } from "sonner"
-import { Alert, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -21,50 +26,48 @@ import { AiProgress, useAiJob } from "@/components/common/ai-progress"
 import { DataInsufficientGate } from "@/components/common/data-gate"
 import { EvidenceChips, EvidenceProvider } from "@/components/common/evidence"
 import { markCareerReturn, type ReturnTargetInput } from "@/components/common/return-target"
-import { WaitJd } from "@/components/common/state-views"
 import { useAiConnection } from "@/components/common/ai-connection-context"
 import { AiErrorNotice, aiErrorFromJob, type AiErrorInfo } from "@/components/common/ai-error-notice"
 import { AiLock } from "@/components/common/ai-lock"
 import { AiRunButton } from "@/components/common/ai-run-button"
 import { ProviderResultTag } from "@/components/common/provider-badge"
-import type {
-  AiErrorCode,
-  AiProviderName,
-  AiRetryRefusalCode,
-  DataReadiness,
-  Insight,
-  JdRequirementCategory,
-  JdRequirementImportance,
-  RequirementMatchStatus,
-} from "@/types/db"
+import type { AiErrorCode, AiProviderName, AiRetryRefusalCode, DataReadiness, Insight, RequirementMatchStatus } from "@/types/db"
 import type { EvidenceView } from "@/lib/data/evidence"
 import type { AiFeatureStatusView } from "@/lib/data/ai-feature-status"
 import { MATCH_STATUS_LABELS, formatDate } from "@/lib/data/labels"
 import { routes } from "@/lib/routes"
 import { useChooseProjectAffiliation } from "@/components/common/choose-project-affiliation"
-import { GAP_ACTION_LABELS, IMPORTANCE_HIGH_LABEL, REQUIREMENT_CATEGORY_LABELS } from "./labels"
+import { GAP_ACTION_LABELS } from "./labels"
 import { useRestoreReturnParams } from "./shared"
-import { refusalOf } from "./extract-first"
-import { EXTRACT_FIRST_NOTE } from "@/app/(dashboard)/(gated)/applications/_lib/jd-state"
+import { refusalOf } from "./start-refusal"
 import { hideInternalAliases as plain, type MatchRow } from "./insight-parse"
 import { isInputCausedFailure } from "@/lib/data/ai-errors"
-import { isInputCausedJdFailure } from "@/lib/data/jd-raw-text"
+import { JD_NO_SENTENCES_MESSAGE, isJdFixableFailure } from "@/lib/data/jd-raw-text"
 import { usePreviewWriteGuard } from "@/components/common/preview-write-guard"
 import { startInsightAction } from "@/app/(dashboard)/(gated)/applications/_lib/actions"
 import { isAiRejected } from "@/components/common/ai-rejection"
 
-/** R17 (schema 2): a requirement is its `requirement_text` (keyed by `match_key`, `MT-n`) — no category / importance */
+/** R17 (schema 2): a requirement is its `requirement_text` (keyed by `match_key`, `MT-n`) */
 export interface RequirementInfo {
   content: string
-  category?: JdRequirementCategory
-  importance?: JdRequirementImportance
 }
+
+/** (v5.21, JR-Q2 보류) S-16 머리 "임시 상태" 줄 — 문구 출처 UX v5.21 5.1o "UI60" 표(UI60-D, decisions 3.30·4.25 UI #2) */
+export const INSIGHT_INTERIM_NOTE = "지금 인사이트는 임시 구성이에요. AI가 공고 원문에서 요건을 찾아 내 커리어와 맞춰 봐요"
+/** (v5.21, JR-Q3 (b)) 옛 인사이트 `[가정: 문구]` */
+export const INSIGHT_OLD_SCHEMA_NOTE = "공고 처리 방식이 바뀌어 다시 만들어야 해요"
+/** (v5.21, JR-7) 공고가 바뀐 인사이트 `[가정: 문구]` */
+export const INSIGHT_RAW_TEXT_STALE = "공고가 바뀌었어요 — 다시 생성"
 
 export interface InsightViewProps {
   applicationProjectId: string
   applicationName: string
   requirements: Record<string, RequirementInfo>
   latest: Insight | null
+  /** JR-Q3 (b): the latest ready insight was made with the retired requirement list (`schemaVersion = 1`) — no body */
+  oldSchema: boolean
+  /** JR-7 `staleReasons.rawText`: the posting changed after this insight */
+  rawTextStale: boolean
   generatingJobId: string | null
   /** stage-1 partial result of the generating row (`insights.match_stage_result`, A3 UQ-65) */
   partialMatches: MatchRow[] | null
@@ -74,14 +77,9 @@ export interface InsightViewProps {
   projectNames: Record<string, string>
   readiness: DataReadiness
   activeChatId: string | null
-  waitJd: boolean
-  /** 요건 없음(추출 전·실패) → 작업 첫 단계 `prepare`에서 추출 (D-30, 02 S-16 v5.3) */
-  extractFirst: boolean
-  /** Q53-2: 공고 원문을 고친 뒤 아직 재추출 전 (raw_text_edited_at + extraction_status = 'pending') */
-  rawTextEdited?: boolean
   /** C-09 대화 시작 실패 분기 (?state=insufficient-chat-failed) */
   gateChatFailure?: AiErrorCode | null
-  /** F-P2-07 "데이터 변경됨" (근거 원본이 바뀌었거나 삭제됨) */
+  /** F-P2-07 "데이터 변경됨" (커리어 근거 원본이 바뀌었거나 삭제됨) */
   careerChanged: boolean
   /**
    * v5.3 C-03 진행 표시 우선순위: a failure that ended after the visible result (from
@@ -97,16 +95,21 @@ export interface InsightViewProps {
     refusal?: AiRetryRefusalCode | null
     /** `?state=retry-other-provider`: the failed job ran on another provider / tier */
     otherProvider?: boolean
+    /** `?state=jd-no-sentences`: the start was refused (409 `jd_no_sentences`) */
+    noSentences?: boolean
   }
 }
 
 export function InsightView(props: InsightViewProps) {
-  const { applicationProjectId: apId, applicationName, latest, readiness, waitJd, preview } = props
+  const { applicationProjectId: apId, applicationName, latest, readiness, preview } = props
   const router = useRouter()
   // v5.3 (UQ-520): a late failure with a job row is the same row "다시 시도" target (aiErrorFromJob + useAiJob.retry)
   const lateJobId = props.generatingJobId ? null : (props.lateFailure?.job?.id ?? null)
   const [jobId, setJobId] = React.useState<string | null>(props.generatingJobId ?? lateJobId)
+  // JR-6: an insight started by the create action (or another tab) shows up on a later read — follow it
+  if (props.generatingJobId && props.generatingJobId !== jobId && !jobId) setJobId(props.generatingJobId)
   const [starting, setStarting] = React.useState(false)
+  const [noSentences, setNoSentences] = React.useState(Boolean(preview.noSentences))
   const job = useAiJob(jobId, { onDone: () => router.refresh() })
   useRestoreReturnParams(apId, "insight")
 
@@ -119,11 +122,9 @@ export function InsightView(props: InsightViewProps) {
     if (stage === "synthesize" || stage === "validate") router.refresh()
   }, [stage, router])
 
-  // ?state=ai-pending / ai-waiting: static progress (ai-waiting = 요청 한도 대기 줄, C-03 v2)
+  // ?state=ai-pending / ai-waiting: static progress (ai-waiting = 요청 한도 대기 줄, C-03 v2). Stage 1 is one call.
   const [previewProgress] = React.useState(() => ({
     stage: "match" as const,
-    done: 1,
-    total: connectionTierIsFree(readiness) ? 6 : 2,
     waiting_retry_until: preview.waiting ? new Date(Date.now() + 12_000).toISOString() : null,
   }))
   const returnTarget: ReturnTargetInput = {
@@ -142,9 +143,15 @@ export function InsightView(props: InsightViewProps) {
   const start = async () => {
     if (previewWrite.stop()) return undefined
     setStarting(true)
+    setNoSentences(false)
     try {
       const r = await startInsightAction(apId, preview.fail ?? undefined)
       if (isAiRejected(r)) return r
+      if ("refused" in r) {
+        // 0문장 공고 (DM v4.16 `begin_insight` 409) — 작업은 만들어지지 않았다
+        setNoSentences(true)
+        return undefined
+      }
       setDismissedLate(true)
       setJobId(r.job_id)
     } catch {
@@ -182,9 +189,9 @@ export function InsightView(props: InsightViewProps) {
         ? { ...aiErrorFromJob(late.job) }
         : { provider: late?.provider ?? null }
   const inputCaused = isInputCausedFailure(failedCategory)
-  const hasRequirements = Object.keys(props.requirements).length > 0
+  const editJdHref = routes.coverLetter(apId, { tab: "jd", edit: 1, from: "insight" })
 
-  // ---- action area: gate / wait-jd / button (C-18 inline when no key) ----
+  // ---- action area: gate / button (C-18 inline when no key) ----
   const locked = !!connection && !connection.active_provider
   // FL-08: 키 확인이 데이터 준비 상태보다 먼저 (키 없음 → C-18, 게이트는 키가 있을 때만)
   const action = (label: string, rerun = false) =>
@@ -202,25 +209,22 @@ export function InsightView(props: InsightViewProps) {
       />
     ) : (
       <div className="space-y-2">
-        <AiRunButton
-          lock={{ entry: "insight", alternativeHref: routes.career() }}
-          onRun={start}
-          pending={starting}
-          disabled={waitJd}
-          rerun={rerun}
-          connection={connection}
-          footer={props.extractFirst && !locked ? <p className="text-sm leading-5 text-muted-foreground">{EXTRACT_FIRST_NOTE}</p> : null}
-        >
+        <AiRunButton lock={{ entry: "insight", alternativeHref: routes.career() }} onRun={start} pending={starting} rerun={rerun} connection={connection}>
           {label}
         </AiRunButton>
-        {/* UQ-519: 추출 실패 JD도 실행하면 `prepare`에서 다시 추출한다 (S-15로 보내지 않음) */}
-        {waitJd ? <WaitJd /> : null}
+        {noSentences ? <NoSentencesNotice href={editJdHref} /> : null}
       </div>
     )
 
   return (
     <EvidenceProvider returnTarget={returnTarget}>
       <div className="space-y-8">
+        {/* (v5.21, JR-Q2 보류) 임시 상태 줄 — 재설계 사이클 전까지 이 탭은 임시 구조다 `[UI-가정]` 문구 */}
+        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+          {INSIGHT_INTERIM_NOTE}
+        </p>
+
         {running ? (
           <div className="space-y-4">
             <AiProgress
@@ -231,7 +235,7 @@ export function InsightView(props: InsightViewProps) {
             />
             {/* 부분 결과 — 단계 1 판정 표가 나오면 먼저 보여 준다 (FL-11) */}
             {props.partialMatches ? (
-              <MatchTable matches={props.partialMatches} requirements={props.requirements} evidence={props.partialEvidence} partial />
+              <MatchTable apId={apId} matches={props.partialMatches} requirements={props.requirements} evidence={props.partialEvidence} partial rawTextStale={false} />
             ) : null}
             <Card className="gap-3 p-5">
               <Skeleton className="h-5 w-40" />
@@ -243,9 +247,10 @@ export function InsightView(props: InsightViewProps) {
         ) : failedCategory ? (
           <div className="space-y-4">
             {/*
-              v5.3 S-16: input-caused failures (not_a_jd · input_too_long · safety_blocked) have no retry —
-              fix the JD, then "다시 생성" (R-76). Other causes: same-row retry on the active provider
-              (restarts from prepare when it differs, A1). A refused retry (409) swaps the action row.
+              v5.3 S-16: input-caused failures (input_too_long · safety_blocked · insufficient_data) have no retry —
+              fix the input, then "다시 생성" (R-76). (v5.21, JR-7) the 공고 원문 can always be edited, so the move
+              opens S-15 in its edit state. Other causes: same-row retry on the active provider (restarts from prepare
+              when it differs, A1) — the auto-started job too (JR-6 "실패 다시 시도"). A refused retry (409) swaps the action row.
             */}
             <AiErrorNotice
               code={failedCategory}
@@ -255,23 +260,25 @@ export function InsightView(props: InsightViewProps) {
               retrying={job.retrying || (!job.error && starting)}
               refusal={preview.refusal ?? job.refusal ?? startRefusal}
               rerunLabel="다시 생성"
-              // Q53-2 · C-20 "입력 원인 실패의 이동": 요건이 없으면 S-15 공고 원문 수정, 있으면 S-15 "요건이 있는 공고" 안내
-              inputHref={
-                !isInputCausedJdFailure(failedCategory)
-                  ? routes.coverLetter(apId, { tab: "jd" })
-                  : hasRequirements
-                    ? routes.coverLetter(apId, { tab: "jd", from: "insight", cause: failedCategory as "not_a_jd" | "input_too_long" | "safety_blocked" })
-                    : routes.coverLetter(apId, { tab: "jd", edit: 1, from: "insight" })
-              }
-              inputLabel={isInputCausedJdFailure(failedCategory) ? (hasRequirements ? "공고 확인하기" : "공고 원문 고치기") : "채용 공고 보기"}
-              hideFixCaption={isInputCausedJdFailure(failedCategory) && hasRequirements}
-              reduceTarget="공고 원문"
+              // C-20 "입력 원인 실패의 이동" 인사이트 행 (v5.21, JR-7): S-15 공고 내용 수정 상태 + "커리어 정리하기"
+              inputHref={isJdFixableFailure(failedCategory) ? editJdHref : routes.coverLetter(apId, { tab: "jd" })}
+              inputLabel={isJdFixableFailure(failedCategory) ? "공고 원문 고치기" : "채용 공고 보기"}
+              reduceTarget="공고 원문이나 커리어"
             />
             {inputCaused && !latest?.result ? <div className="max-w-xl">{action("다시 생성", true)}</div> : null}
           </div>
         ) : null}
 
-        {!running && !latest && !failedCategory && connection && !connection.active_provider ? (
+        {!running && props.oldSchema ? (
+          // JR-Q3 (b): the old insight's body is not shown or converted — only the way to make a new one
+          <Card className="max-w-2xl gap-4 p-6">
+            <p className="flex items-start gap-2 text-base">
+              <FileWarning className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
+              {INSIGHT_OLD_SCHEMA_NOTE}
+            </p>
+            {action("다시 생성", true)}
+          </Card>
+        ) : !running && !latest && !failedCategory && connection && !connection.active_provider ? (
           // C-18 영역형 (기존 결과 없음)
           // 카드 안이 아니라 컨테이너에 바로 (2026-11-10 사용자 요청)
           <AiLock entry="insight" size="area" bare featureLabel="인사이트" alternativeHref={routes.career()} />
@@ -281,15 +288,30 @@ export function InsightView(props: InsightViewProps) {
             <p className="text-base text-muted-foreground">
               요건별 충족 판정, 핵심 강점, 보완점과 대응 방안, 지원 방향을 근거와 함께 보여 줘요. 인사이트 없이도 서류는 바로 쓸 수 있어요
             </p>
-            {/* S-15 "이전 실패 안내" (Q53-2): extraction_status = 'pending'일 때만. 재추출 성공 뒤에는 문구 없이 버튼만 */}
-            {props.rawTextEdited ? <p className="text-sm text-muted-foreground">공고를 고쳤어요. 생성하면 요건부터 다시 정리해요</p> : null}
             {action("인사이트 생성")}
           </Card>
         ) : null}
 
-        {latest?.result && !running ? <InsightResultView {...props} latest={latest} regenerate={action("다시 생성", true)} returnTarget={returnTarget} /> : null}
+        {latest?.result && !running && !props.oldSchema ? (
+          <InsightResultView {...props} latest={latest} regenerate={action("다시 생성", true)} returnTarget={returnTarget} />
+        ) : null}
       </div>
     </EvidenceProvider>
+  )
+}
+
+/** (v5.21) `jd_no_sentences` on start — fix the posting first `[가정]` 문구 */
+function NoSentencesNotice({ href }: { href: string }) {
+  return (
+    <Alert variant="warning">
+      <FileWarning aria-hidden />
+      <AlertTitle className="font-normal">{JD_NO_SENTENCES_MESSAGE}</AlertTitle>
+      <AlertDescription>
+        <Button asChild variant="outline" size="sm">
+          <Link href={href}>공고 원문 고치기</Link>
+        </Button>
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -315,23 +337,25 @@ const STATUS_BADGE: Record<RequirementMatchStatus, React.ReactNode> = {
 }
 
 function InsightResultView({
+  applicationProjectId: apId,
   latest,
   requirements,
   evidence,
   projectNames,
   careerChanged,
+  rawTextStale,
   regenerate,
   returnTarget,
 }: InsightViewProps & { latest: Insight; regenerate: React.ReactNode; returnTarget: ReturnTargetInput }) {
   const r = latest.result!
-  const reqLabel = (id: string) => requirements[id]?.content ?? "삭제된 요건"
+  const reqLabel = (id: string) => plain(requirements[id]?.content ?? "") || "삭제된 요건"
   // F-P2-09 보완점 "관련 경험 추가하기" (UX v5.9 C-23): 소속을 고른 뒤 S-10 새 페이지 / 독립 프로젝트 추가 모달
   const choose = useChooseProjectAffiliation()
 
   return (
     <div className="space-y-8">
       {choose.dialog}
-      {/* 머리: 기준 안내 + 데이터 변경됨(F-P2-07) + 다시 생성 */}
+      {/* 머리: 기준 안내 + 데이터 변경됨(F-P2-07) + 공고가 바뀜(JR-7) + 다시 생성 */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -342,11 +366,22 @@ function InsightResultView({
           <p className="text-sm tabular-nums">
             충족 {r.summary_counts.met} · 부분 충족 {r.summary_counts.partial} · 근거 없음 {r.summary_counts.no_evidence}
           </p>
-          {careerChanged ? (
-            <Badge variant="warning">
-              <RefreshCw aria-hidden />
-              커리어가 바뀌었어요
-            </Badge>
+          {/* 커리어 변경과 겹치면 두 줄을 함께 보인다 `[가정]` — 같은 자리·모양 */}
+          {careerChanged || rawTextStale ? (
+            <div className="flex flex-wrap gap-1.5">
+              {careerChanged ? (
+                <Badge variant="warning">
+                  <RefreshCw aria-hidden />
+                  커리어가 바뀌었어요
+                </Badge>
+              ) : null}
+              {rawTextStale ? (
+                <Badge variant="warning">
+                  <RefreshCw aria-hidden />
+                  {INSIGHT_RAW_TEXT_STALE}
+                </Badge>
+              ) : null}
+            </div>
           ) : null}
         </div>
         <div className="lg:max-w-xl">{regenerate}</div>
@@ -359,8 +394,8 @@ function InsightResultView({
         </Alert>
       ) : null}
 
-      {/* 요건별 판정 */}
-      <MatchTable matches={r.requirement_matches} requirements={requirements} evidence={evidence} />
+      {/* 요건별 판정 (임시 — 단계 1 원소) */}
+      <MatchTable apId={apId} matches={r.requirement_matches} requirements={requirements} evidence={evidence} rawTextStale={rawTextStale} />
 
       {/* 핵심 강점 */}
       <section className="space-y-3" aria-labelledby="ins-strengths">
@@ -407,15 +442,15 @@ function InsightResultView({
                         {/* F-P2-09: "관련 경험이 있다면 추가하기" → 두 선택지 + C-10 */}
                         <p className="text-sm">관련 경험이 있다면 추가하기</p>
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* v5.6: both go through C-23 소속 선택 (the chat is S-10's panel; the return target stays in the session) */}
+                          {/* v5.6: both go through C-23 소속 선택 (the chat is S-10's panel; the return target stays in the session).
+                              (v5.21, JR-5) the gate chat's start context = this gap (`insight_id`·`insight_item_key`, AI-12) */}
                           <AiRunButton
                             lock={{ entry: "writing_chat" }}
                             variant="outline"
                             size="sm"
                             onRun={() => {
-                              // DM 2.7.0 AI-12 게이트 진입: the gate chat reads this gap (start_writing_chat checks both keys)
                               markCareerReturn({ ...returnTarget, params: { insight_id: latest.id, insight_item_key: g.item_key } })
-                              choose.open({ requirementId: null })
+                              choose.open()
                             }}
                           >
                             <Sparkles aria-hidden />
@@ -426,9 +461,8 @@ function InsightResultView({
                             size="sm"
                             disabled={choose.loading}
                             onClick={() => {
-                              // DM 2.7.0 AI-12 게이트 진입: the gate chat reads this gap (start_writing_chat checks both keys)
                               markCareerReturn({ ...returnTarget, params: { insight_id: latest.id, insight_item_key: g.item_key } })
-                              choose.open({ requirementId: null })
+                              choose.open()
                             }}
                           >
                             직접 입력
@@ -486,97 +520,103 @@ function InsightResultView({
   )
 }
 
-function RequirementText({ info, fallback }: { info: RequirementInfo | undefined; fallback: string }) {
-  return (
-    <div className="space-y-0.5">
-      <p className="flex flex-wrap items-center gap-1.5">
-        {info?.importance === "high" ? <Badge variant="secondary">{IMPORTANCE_HIGH_LABEL}</Badge> : null}
-        <span>{info?.content ?? fallback}</span>
-      </p>
-      {info?.category ? <p className="text-sm text-muted-foreground">{REQUIREMENT_CATEGORY_LABELS[info.category]}</p> : null}
-    </div>
-  )
-}
-
+/** 강점·보완점·지원 방향이 가리키는 요건 — `match_keys`(값 `MT-n`)로 표의 행을 찾아 요건 문구로 (S-16) */
 function RequirementRefs({ ids, label }: { ids: string[]; label: (id: string) => string }) {
   if (!ids.length) return null
+  return <p className="text-sm text-muted-foreground">관련 요건: {ids.map(label).join(" · ")}</p>
+}
+
+/**
+ * "공고 원문" link of a requirement row — all its `sids` highlighted on the 채용 공고 tab (S-15, `?tab=jd&s=S3,S4`).
+ * The only place that highlights several sentences at once (AI-5). When the posting changed (JR-7) the old sentence
+ * ids may point at other text, so the link opens the tab without a highlight `[UI-가정]` (C-02 칩 규칙과 같게).
+ */
+function SourceLink({ apId, row, rawTextStale }: { apId: string; row: MatchRow; rawTextStale: boolean }) {
+  if (!row.sids.length) return null
+  const href = routes.coverLetter(apId, { tab: "jd", s: rawTextStale ? undefined : row.sids.join(",") })
   return (
-    <p className="text-sm text-muted-foreground">
-      관련 요건: {ids.map(label).join(" · ")}
-    </p>
+    <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+      <Link href={href} aria-label={`${plain(row.requirement_text)} 공고 원문 보기`}>
+        <TextSearch aria-hidden />
+        공고 원문
+      </Link>
+    </Button>
   )
 }
 
-
-/** 요건별 판정 표 — final result and the stage-1 partial result (A3 UQ-65) */
+/** 요건별 판정 표 — final result and the stage-1 partial result (A3 UQ-65). (v5.21) 행 = 단계 1 원소(임시) */
 function MatchTable({
+  apId,
   matches,
   requirements,
   evidence,
   partial = false,
+  rawTextStale,
 }: {
+  apId: string
   matches: MatchRow[]
   requirements: Record<string, RequirementInfo>
   evidence: Record<string, EvidenceView[]>
   partial?: boolean
+  rawTextStale: boolean
 }) {
-  const reqLabel = (id: string) => requirements[id]?.content ?? "삭제된 요건"
+  const text = (m: MatchRow) => plain(m.requirement_text || requirements[m.match_key]?.content || "") || "삭제된 요건"
   return (
-      <section className="space-y-3" aria-labelledby="ins-matches">
-        <h2 id="ins-matches" className="text-lg leading-7 font-semibold">
-          요건별 판정
-        </h2>
-        {partial ? (
-          // [UI-가정] 부분 결과 안내 문구
-          <p className="text-sm text-muted-foreground">요건 대조가 끝난 결과를 먼저 보여 드려요. 강점·보완점·지원 방향은 정리 중이에요</p>
-        ) : null}
-        <div className="hidden rounded-lg border bg-card md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[38%]">요건</TableHead>
-                <TableHead>판정</TableHead>
-                <TableHead>판단 이유 · 근거</TableHead>
+    <section className="space-y-3" aria-labelledby="ins-matches">
+      <h2 id="ins-matches" className="text-lg leading-7 font-semibold">
+        요건별 판정
+      </h2>
+      {partial ? (
+        // [UI-가정] 부분 결과 안내 문구
+        <p className="text-sm text-muted-foreground">요건 대조가 끝난 결과를 먼저 보여 드려요. 강점·보완점·지원 방향은 정리 중이에요</p>
+      ) : null}
+      <div className="hidden rounded-lg border bg-card md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[38%]">요건</TableHead>
+              <TableHead>판정</TableHead>
+              <TableHead>판단 이유 · 근거</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {matches.map((m) => (
+              <TableRow key={m.item_key}>
+                <TableCell className="align-top whitespace-normal">
+                  <div className="space-y-1">
+                    <p>{text(m)}</p>
+                    <SourceLink apId={apId} row={m} rawTextStale={rawTextStale} />
+                  </div>
+                </TableCell>
+                <TableCell className="align-top">{STATUS_BADGE[m.status]}</TableCell>
+                <TableCell className="align-top whitespace-normal">
+                  <p className="text-sm">{plain(m.rationale)}</p>
+                  {m.missing_aspect ? <p className="text-sm text-muted-foreground">부족한 점: {plain(m.missing_aspect)}</p> : null}
+                  <EvidenceChips items={evidence[m.item_key]} max={2} />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {matches.map((m) => (
-                <TableRow key={m.item_key}>
-                  <TableCell className="align-top whitespace-normal">
-                    <RequirementText info={requirements[m.match_key]} fallback={m.requirement_text || reqLabel(m.match_key)} />
-                  </TableCell>
-                  <TableCell className="align-top">{STATUS_BADGE[m.status]}</TableCell>
-                  <TableCell className="align-top whitespace-normal">
-                    <p className="text-sm">{plain(m.rationale)}</p>
-                    {m.missing_aspect ? <p className="text-sm text-muted-foreground">부족한 점: {plain(m.missing_aspect)}</p> : null}
-                    <EvidenceChips items={evidence[m.item_key]} max={2} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <ul className="space-y-2 md:hidden">
-          {matches.map((m) => (
-            <li key={m.item_key}>
-              <Card size="sm" className="gap-2 px-4">
-                <div className="flex items-start justify-between gap-2">
-                  <RequirementText info={requirements[m.match_key]} fallback={m.requirement_text || reqLabel(m.match_key)} />
-                  {STATUS_BADGE[m.status]}
-                </div>
-                <p className="text-sm">{plain(m.rationale)}</p>
-                {m.missing_aspect ? <p className="text-sm text-muted-foreground">부족한 점: {plain(m.missing_aspect)}</p> : null}
-                <EvidenceChips items={evidence[m.item_key]} max={2} />
-              </Card>
-            </li>
-          ))}
-        </ul>
-      </section>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <ul className="space-y-2 md:hidden">
+        {matches.map((m) => (
+          <li key={m.item_key}>
+            <Card size="sm" className="gap-2 px-4">
+              <div className="flex items-start justify-between gap-2">
+                <p>{text(m)}</p>
+                {STATUS_BADGE[m.status]}
+              </div>
+              <p className="text-sm">{plain(m.rationale)}</p>
+              {m.missing_aspect ? <p className="text-sm text-muted-foreground">부족한 점: {plain(m.missing_aspect)}</p> : null}
+              <EvidenceChips items={evidence[m.item_key]} max={2} />
+              <SourceLink apId={apId} row={m} rawTextStale={rawTextStale} />
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
-}
-
-function connectionTierIsFree(readiness: DataReadiness): boolean {
-  return readiness.ai_connection.connection_tier === "free"
 }
 
 /** `?state=retry-other-provider`: a provider other than the active one (the failed job's provider) */

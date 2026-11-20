@@ -24,7 +24,6 @@ import type {
   EvidenceLink,
   Experience,
   Insight,
-  JdRequirement,
   JobDescription,
   Profile,
   Project,
@@ -76,8 +75,8 @@ export interface MockDb {
   writing_chat_messages: WritingChatMessage[]
   application_projects: ApplicationProject[]
   application_stage_events: ApplicationStageEvent[]
+  /** R17 (4.24 #1): `jd_requirements` is dropped — the JD is raw text + sentences (JR-1) */
   job_descriptions: JobDescription[]
-  jd_requirements: JdRequirement[]
   insights: Insight[]
   /** (v4.15, CF-A2) 자소서 정본 — 지원 프로젝트당 0 또는 1행 (S-46 두 상태의 판정 근거) */
   application_documents: ApplicationDocument[]
@@ -111,7 +110,7 @@ export interface MockDb {
 }
 
 export function defaultMockControls(): MockControls {
-  return { next_retry_refusal: null, account_deletion_failure: null, account_deletion_state: "active", next_send_refusal: null, next_jd_extraction_failure: null }
+  return { next_retry_refusal: null, account_deletion_failure: null, account_deletion_state: "active", next_send_refusal: null }
 }
 
 export interface MockControls {
@@ -123,8 +122,6 @@ export interface MockControls {
   account_deletion_state: import("@/types/db").AccountDeletionState
   /** the next writing-chat send / 다시 보내기 is refused server-side (path ④), once (UQ-493) */
   next_send_refusal: "key_missing" | "key_invalid" | null
-  /** the next JD requirement extraction (S-14 / S-15 / S-17 선행 추출) fails with this cause, once */
-  next_jd_extraction_failure: import("@/types/db").AiErrorCode | null
 }
 
 const u = USER_ID
@@ -762,45 +759,11 @@ export function createFixtures(): MockDb {
     jd(4, 4, ["별빛증권 백엔드 개발자", "주문 체결 시스템 개발"], "별빛증권", "백엔드 개발"),
     jd(5, 5, ["Stellar Labs Senior Backend Engineer", "Design distributed systems"], "스텔라랩스", "Senior Backend Engineer"),
     jd(6, 6, ["(붙여넣은 공고 원문)"], null, null),
-    // Q53-2: S-15 공고 원문 수정 대상 (job 15 = legacy not_a_jd). 회사명·포지션명 없음
+    // C-20 "입력 원인 실패의 이동" 인사이트 행 대상 (job 17 = input_too_long → S-15 공고 내용 수정). 회사명·포지션명 없음
     jd(7, 7, ["안녕하세요, 이번 주 팀 회의록입니다.", "다음 주 일정은 금요일에 다시 공유드릴게요."], null, null),
     jd(8, 8, ["담당 업무와 자격 요건은 추후 안내드립니다."], null, null),
   ]
-
-  const req = (
-    n: number,
-    jdN: number,
-    category: JdRequirement["category"],
-    content: string,
-    importance: JdRequirement["importance"],
-    sids: string[],
-    sort: number,
-  ): JdRequirement => ({
-    ...base(IDS.req(n), 39),
-    job_description_id: IDS.jd(jdN),
-    category,
-    content,
-    keywords: [],
-    importance,
-    source_sids: sids,
-    sort_order: sort,
-    origin: "ai",
-    is_user_edited: false,
-  })
-  const jd_requirements: JdRequirement[] = [
-    req(1, 1, "responsibility", "대규모 결제 승인 API 설계·운영", "high", ["S2"], 1),
-    req(2, 1, "required", "Java/Kotlin 기반 Spring 서버 개발 5년 이상", "high", ["S3"], 2),
-    req(3, 1, "required", "RDBMS 성능 튜닝 경험", "normal", ["S4"], 3),
-    req(4, 1, "preferred", "Kafka 등 메시지 큐 기반 비동기 처리 경험", "normal", ["S5"], 4),
-    req(5, 1, "preferred", "정산 시스템 개발 경험", "normal", ["S6"], 5),
-    req(6, 2, "responsibility", "주문·결제 서버 개발", "high", ["S2"], 1),
-    req(7, 2, "required", "Spring 경력 3년 이상", "high", ["S3"], 2),
-    req(8, 2, "preferred", "AWS 운영 경험", "normal", ["S4"], 3),
-    req(9, 3, "required", "쿠버네티스 운영 경험", "high", ["S2"], 1),
-    req(10, 3, "preferred", "IaC 경험", "normal", ["S3"], 2),
-    req(11, 4, "responsibility", "주문 체결 시스템 개발", "high", ["S2"], 1),
-    req(12, 5, "responsibility", "Design distributed systems", "high", ["S2"], 1),
-  ]
+  // R17 (4.24 #1): no `jd_requirements` rows — the insight finds the requirements in the raw text (JR-Q2 보류, 임시)
 
   // --- AI jobs (time-based mock progress, see mock/ai.ts) -------------------
   const job = (
@@ -826,7 +789,7 @@ export function createFixtures(): MockDb {
     progress,
     params,
     provider: "gemini",
-    model_tier: job_type === "jd_extraction" ? "light" : "default",
+    model_tier: "default",
     connection_tier: "free",
     retry_count: 0,
     next_run_at: null,
@@ -838,7 +801,7 @@ export function createFixtures(): MockDb {
     retry_after: null,
     input_hash: null,
     prompt_version: "mock.v1",
-    model: MOCK_MODELS.gemini[job_type === "jd_extraction" ? "light" : "default"],
+    model: MOCK_MODELS.gemini.default,
     usage: null,
     output: null,
     step_outputs: {},
@@ -855,13 +818,13 @@ export function createFixtures(): MockDb {
     failure_cause: failureCauseOf(code),
     finished_at: minutesAgo(startedMinutesAgo - 1),
   })
+  // R17 (JR-1): no `jd_extraction` sample jobs — AI-01 no longer runs (legacy rows exist only in old accounts)
   const ai_jobs: AiJob[] = [
-    job(1, "jd_extraction", 1, "job_description", IDS.jd(1), "succeeded", null, 60 * 24 * 39),
-    job(6, "jd_extraction", 6, "job_description", IDS.jd(6), "running", { stage: "extract" }, 0),
-    job(10, "insight", 1, "insight", IDS.ins(1), "succeeded", { stage: "validate", done: 1, total: 1 }, 60 * 24 * 6),
-    // running jobs advance with wall-clock time in mock/ai.ts (mock_duration_ms)
-    job(11, "insight", 2, "insight", IDS.ins(2), "running", { stage: "match", done: 0, total: 2 }, 0, {
+    job(10, "insight", 1, "insight", IDS.ins(1), "succeeded", { stage: "validate" }, 60 * 24 * 6),
+    // running jobs advance with wall-clock time in mock/ai.ts (mock_duration_ms). Stage 1 is one call (JR-Q2 보류)
+    job(11, "insight", 2, "insight", IDS.ins(2), "running", { stage: "match" }, 0, {
       mock_duration_ms: 10 * 60_000,
+      mock_units: 1,
     }),
     // v4.2 A4: failed career description generation (request-scoped, not same-row retryable)
     {
@@ -870,9 +833,8 @@ export function createFixtures(): MockDb {
       error_category: "system",
       finished_at: minutesAgo(60 * 48 - 1),
     },
-    // Q53-2 · 9: 입력 원인 실패 JD (AP 7). 추출 · 인사이트 선행 추출이 같은 원인으로 실패
-    failedJob(15, "jd_extraction", 7, "job_description", IDS.jd(7), "not_a_jd", 60 * 26),
-    failedJob(17, "insight", 7, "insight", IDS.ins(3), "not_a_jd", 60 * 24),
+    // C-20 입력 원인 실패 (AP 7): 인사이트가 입력 원인으로 실패 → "공고 원문 고치기" (S-15 공고 내용 수정, JR-7)
+    failedJob(17, "insight", 7, "insight", IDS.ins(3), "input_too_long", 60 * 24),
   ]
 
   // --- insights --------------------------------------------------------------
@@ -1369,6 +1331,7 @@ export function createFixtures(): MockDb {
   })
   const ai_usage_records: AiUsageRecord[] = [
     rec(1, "key_verification", "key_verification", 20, 5, 20),
+    // (v5.21, JR-Q5) a legacy AI-01 record (4.24 #8 keeps it) — S-42 shows "JD 요건 추출(종료)" for this month only
     rec(2, "jd_extraction", "jd_extraction", 3_500, 900, 6),
     rec(3, "insight", "insight", 11_500, 2_400, 6),
     rec(4, "insight", "insight", 11_200, 2_600, 6),
@@ -1488,7 +1451,6 @@ export function createFixtures(): MockDb {
     application_projects,
     application_stage_events,
     job_descriptions,
-    jd_requirements,
     insights,
     application_documents,
     cover_letter_chats: [],

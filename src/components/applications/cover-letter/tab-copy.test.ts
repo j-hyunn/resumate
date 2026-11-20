@@ -16,17 +16,17 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).not.toMatch(/<InputGuide guide="G-2"/)
   })
 
-  // R17: the 요건 영역 ("요건 정리하기") is gone — with nothing to show the right column isn't drawn.
-  it("② 채용 공고 탭: 요건 영역이 비면 원문 오른쪽 열을 그리지 않는다 (R17)", () => {
+  // (v5.21, JR-1) the 요건 영역 ("요건 정리하기", 요건 목록) is gone — the tab is the raw text only.
+  it("② 채용 공고 탭: 요건 목록 열·AI 진입점이 없다 (v5.21)", () => {
     const src = read("../jd-view.tsx")
-    expect(src).toMatch(/requirements\.length === 0 && techKeywords\.length === 0 && !seniority \? null/)
-    expect(src).not.toMatch(/<AiLock entry="requirements" size="area"/)
+    expect(src).not.toMatch(/requirements|techKeywords|seniority/)
+    expect(src).not.toMatch(/<AiLock\b/)
     expect(src).not.toMatch(/retryJdExtractionAction/)
   })
 
   it("③ 채용 공고 원문은 읽기 전용 마크다운으로 보인다 (강조할 문장이 있을 때만 일반 글)", () => {
     const src = read("../jd-view.tsx")
-    expect(src).toMatch(/!active \? \(/)
+    expect(src).toMatch(/shown\.length === 0 \? \(/)
     expect(src).toMatch(/<DocTextarea value=\{rawText\}.*\breadOnly\b/)
   })
 
@@ -36,11 +36,10 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).not.toMatch(/<Textarea\b/)
   })
 
-  it("⑤ 채용 공고 탭: 원문은 카드 없이 전체 폭, 빈 오른쪽 열은 감춘다", () => {
+  it("⑤ 채용 공고 탭: 원문은 카드 없이 전체 폭", () => {
     const src = read("../jd-view.tsx")
     expect(src).not.toMatch(/xl:grid-cols-2/)
-    expect(src).toMatch(/<section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3 xl:flex-1">/)
-    expect(src.match(/empty:hidden xl:flex-1/g)?.length).toBe(2)
+    expect(src).toMatch(/<section aria-label="공고 원문" className="flex min-w-0 flex-col gap-3">/)
   })
 
   it("⑥ 자기소개서 추가 모달에도 AI 잠금 안내를 두지 않는다 (R17: 요건 미리 보기 호출이 없다)", () => {
@@ -49,7 +48,7 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).not.toMatch(/extractJdPreviewAction/)
   })
 
-  it("⑦ 추가 모달 ② 공고 내용 칸은 마크다운 편집기 — 고치기 전에는 값을 다시 내보내지 않는다(해시 대조 유지)", () => {
+  it("⑦ 추가 모달 ② 공고 내용 칸은 마크다운 편집기 — 고치기 전에는 값을 다시 내보내지 않는다(가져온 원문 그대로)", () => {
     const src = read("../add-application-dialog.tsx")
     expect(src).toMatch(/<DocTextarea\s+id="add-ap-raw"/)
     const editor = readFileSync(join(__dirname, "../../common/doc-markdown-editor.tsx"), "utf8")
@@ -62,5 +61,20 @@ describe("S-46 탭 안내 정리", () => {
     expect(src).toMatch(/<AiLock entry="insight" size="area" bare /)
     const lock = readFileSync(join(__dirname, "../../common/ai-lock.tsx"), "utf8")
     expect(lock).toMatch(/return bare \? <div \{\.\.\.props\} \/> : <Card \{\.\.\.props\} \/>/)
+  })
+
+  it("UQ-614: 같은 페이지의 채용 공고 탭 링크는 클라이언트에서 탭을 바꾸고 nonce로 강조를 다시 건다 — 이탈 확인보다 먼저", () => {
+    const src = read("cover-letter-screen.tsx")
+    const listener = src.indexOf('document.addEventListener("click", onClick, true)')
+    const guard = src.indexOf("useLeaveGuard({")
+    expect(listener).toBeGreaterThan(0)
+    expect(listener).toBeLessThan(guard)
+    // UQ-622: preventDefault only — the link's own onClick (e.g. C-02 panel close) must still run
+    expect(src).toMatch(/e\.preventDefault\(\)/)
+    expect(src).not.toMatch(/e\.stopImmediatePropagation\(\)/)
+    expect(src).toMatch(/nonce: \(prev\?\.nonce \?\? 0\) \+ 1/)
+    const view = read("../jd-view.tsx")
+    expect(view).toMatch(/useJdHighlightRequest\(\)/)
+    expect(view).toMatch(/tabIndex=\{sid === first \? -1 : undefined\}/)
   })
 })

@@ -84,8 +84,8 @@ export interface AiPanelProps {
 export interface AiPanelCopy {
   /** C-18 description (area + inline lock) */
   lock?: string
-  /** start-area fixed notice (Info line) */
-  notice?: string
+  /** start-area fixed notice (Info line). S-46 adds its insight line (v5.21, JR-5), so it may be a node */
+  notice?: React.ReactNode
   /**
    * the closed-chat box line. Omitted = the S-10 / S-44 rule (≥ 40 messages → `PANEL_COPY.messageLimit`, else
    * `chatClosed`). S-46 closes at 39 and passes its own message-limit line (UQ-764).
@@ -365,7 +365,7 @@ function MessageList({
   onUserMessageClick?: (m: WritingChatMessageView) => void
   onDeleteChat: () => void
   /** start-area fixed notice */
-  notice: string
+  notice: React.ReactNode
   lockEntry: AiLockEntry
   /** inline proposal (proposalInline): after the latest AI turn, streaming reply included */
   proposal?: React.ReactNode

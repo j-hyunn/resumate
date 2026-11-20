@@ -428,7 +428,6 @@ export async function deleteApplicationProject(applicationProjectId: string): Pr
   db.application_projects = db.application_projects.filter((a) => a.id !== applicationProjectId)
   db.application_stage_events = db.application_stage_events.filter((e) => e.application_project_id !== applicationProjectId)
   db.job_descriptions = db.job_descriptions.filter((j) => !jdIds.includes(j.id))
-  db.jd_requirements = db.jd_requirements.filter((r) => !jdIds.includes(r.job_description_id))
   db.insights = db.insights.filter((i) => i.application_project_id !== applicationProjectId)
   db.drafts = db.drafts.filter((d) => !draftIds.includes(d.id))
   db.application_documents = db.application_documents.filter((d) => d.application_project_id !== applicationProjectId)

@@ -79,3 +79,23 @@ select (select count(*) from public.evidence_links where source_type::text = 'jd
 
 - A·B·C는 파일마다 한 트랜잭션이다. A가 끝나고 B가 적용되기 전 몇 초 동안 옛 `complete_insight`(`requirements_hash`를 쓰는 판)는 실패한다 — 같은 `db push` 안에서 이어서 적용되므로 그 사이 인사이트 완료가 겹칠 확률은 낮다. push 직후 같은 PR의 앱 코드를 바로 배포한다(옛 코드는 10인자 생성 RPC·추출 RPC·`update_failed_jd_raw_text`를 불러 실패한다).
 - C가 단언으로 멈추면 A·B는 이미 적용된 상태다. 원인 행을 확인하고(위 SQL), 사용자 확인을 받아 처리한 뒤 C만 다시 push한다.
+
+## 운영 실행 기록 (2026-11-20)
+
+| # | 항목 | 운영 값 (push 전) |
+|---|------|-------------------|
+| ① | `jd_requirements` 행 | 18 |
+| ② | `extraction_status`별 | succeeded=1 |
+| ③ | `insights` `schema_version`/`status`별 | 1/ready=1 |
+| ④ | `jd_requirement` 근거 | 0 |
+| ⑤ | 자소서 `jd_sentence` 근거 | 0 |
+| ⑥ | JD 출처가 든 서류 대화 | 0 |
+| ⑦ | 진행 중 `jd_extraction` 작업 | 0 |
+| ⑧ | 출력이 남은 `jd_preview` 작업 | 0 |
+| ⑨ | `name is null` 지원 프로젝트 | 0 |
+| ⑩ | 문장 0개 JD | 0 |
+
+- 백업: push 직전 `supabase db dump --linked`로 스키마·데이터 덤프(저장소 밖 로컬 보관).
+- push: `20261113004790` → `004800` → `004810` → `004820` 4개 적용 성공, C 최종 단언 통과.
+- push 뒤 확인: 위 "push 뒤 확인" 5개 모두 0, `jd_requirements` 테이블·추출 컬럼 없음, `insights.raw_text_hash`·`update_jd_raw_text` 존재, 2026-11-20 약관 3행.
+- 코드: PR #78 merge commit `b5310eb`, push 직후 머지, Vercel 운영 배포 성공.
